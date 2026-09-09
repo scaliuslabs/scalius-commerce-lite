@@ -63,6 +63,10 @@ let retrySelection: {
   methodId: string;
   gateway: CheckoutConfig["gateways"][number];
 } | null = null;
+let samePageStripeRetry: {
+  orderId: string;
+  paymentRequest: ReturnType<typeof resolveCheckoutPaymentRequest>;
+} | null = null;
 let initVersion = 0;
 let checkoutCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA };
 
@@ -830,6 +834,7 @@ async function selectMethod(
   gw: CheckoutConfig["gateways"][number],
 ): Promise<void> {
   if (isProcessing) return;
+  if (methodId !== "stripe") samePageStripeRetry = null;
   const selectionId = ++selectionVersion;
   retrySelection = null;
   selectedMethod = null;
@@ -913,12 +918,23 @@ async function processPayment(): Promise<void> {
     !authoritativeTaxQuote
   ) return;
 
+  const processingMethod = selectedMethod;
   const existingRecovery = readHostedPaymentRecoverySession();
-  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData.cartItems)) {
+  const recoveryMatches = matchesCheckoutRecoverySession(
+    existingRecovery,
+    checkoutData.cartItems,
+  );
+  const stripeRetry =
+    processingMethod === "stripe" &&
+    recoveryMatches &&
+    existingRecovery?.gateway === "stripe" &&
+    samePageStripeRetry?.orderId === existingRecovery.orderId
+      ? samePageStripeRetry
+      : null;
+  if (recoveryMatches && !stripeRetry) {
     window.location.replace(existingRecovery!.href);
     return;
   }
-  const processingMethod = selectedMethod;
   isProcessing = true;
   setPaymentControlsDisabled(true);
   hideError();
@@ -961,11 +977,17 @@ async function processPayment(): Promise<void> {
     const ctx: PaymentContext = {
       checkoutData,
       config: checkoutConfig,
-      orderId: "", // Will be set by each handler's createOrder call
+      orderId: stripeRetry?.orderId ?? "",
       totalAmount,
       advanceAmount,
+      paymentType: stripeRetry?.paymentRequest.paymentType,
+      depositAmount: stripeRetry?.paymentRequest.paymentType === "deposit"
+        ? stripeRetry.paymentRequest.depositAmount
+        : undefined,
+      replaceExistingAttempt: stripeRetry ? false : undefined,
       currencySymbol: (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
       onOrderCreated: (orderId, gateway) => {
+        if (gateway === "stripe") samePageStripeRetry = { orderId, paymentRequest };
         writeHostedPaymentRecoverySession(
           checkoutRecoveryHref(orderId, gateway),
           checkoutData ?? undefined,
@@ -1073,6 +1095,7 @@ export async function initCheckoutPage(): Promise<void> {
   authoritativeTaxQuote = null;
   isProcessing = false;
   retrySelection = null;
+  samePageStripeRetry = null;
   selectionVersion += 1;
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
   const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
