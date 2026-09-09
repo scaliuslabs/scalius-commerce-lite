@@ -95503,10 +95503,12 @@
                                   "type": "number"
                                 },
                                 "orderGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenueGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "orderStatus": {
                                   "type": "object",
@@ -95694,10 +95696,12 @@
                                   "type": "number"
                                 },
                                 "orderGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenueGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "orderStatus": {
                                   "type": "object",
@@ -95846,10 +95850,12 @@
                                   "type": "number"
                                 },
                                 "orderGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenueGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "orderStatus": {
                                   "type": "object",
@@ -96155,10 +96161,12 @@
                                   "type": "number"
                                 },
                                 "orderGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "revenueGrowth": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "orderStatus": {
                                   "type": "object",

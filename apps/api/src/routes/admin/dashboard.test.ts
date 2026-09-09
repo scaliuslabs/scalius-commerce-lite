@@ -164,6 +164,26 @@ describe("admin dashboard routes", () => {
         expect(responseText).not.toContain(recentOrderId);
     });
 
+    it("preserves unavailable growth baselines as null", async () => {
+        const unavailableStats = {
+            ...homeStats,
+            currentMonth: {
+                ...homeStats.currentMonth,
+                orderGrowth: null,
+                revenueGrowth: null,
+            },
+        };
+        mocks.getDashboardSummaryStats.mockResolvedValue(unavailableStats);
+        const { app } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/dashboard/metrics-summary");
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(body.data.stats.currentMonth.orderGrowth).toBeNull();
+        expect(body.data.stats.currentMonth.revenueGrowth).toBeNull();
+    });
+
     it("serves full summary data without running the activity query", async () => {
         mocks.getDashboardStats.mockResolvedValue(stats);
         mocks.getRecentOrders.mockResolvedValue(recentOrders);
