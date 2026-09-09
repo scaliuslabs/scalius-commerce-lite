@@ -3,10 +3,17 @@ import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
-import { bulkShipOrders, reconcileOrderShipment } from "../orders/orders.fulfillment";
-import { deleteShipmentRecord } from "./delivery.service";
+import {
+  bulkShipOrders,
+  lookupUnknownOrderShipment,
+  reconcileOrderShipment,
+  resolveUnknownOrderShipment,
+} from "../orders/orders.fulfillment";
+import { checkShipmentStatus, deleteShipmentRecord } from "./delivery.service";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
+import { mapProviderStatus } from "./status-mapper";
+import { updateOrderStatusFromShipment } from "./tracking";
 
 // Keep the real provider, delivery service, claims and database; inventory is a separate boundary.
 vi.mock("../inventory/inventory-transitions", () => ({
@@ -126,6 +133,14 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       if (url === "https://courier.invalid/aladdin/api/v1/issue-token") {
         return Response.json({ access_token: "synthetic-token", expires_in: 86400 });
       }
+      const statusUrl = providerType === "pathao"
+        ? "/aladdin/api/v1/orders/confirmed-consignment/info"
+        : "/status_by_cid/confirmed-consignment";
+      if (url === `https://courier.invalid${statusUrl}` && init?.method === "GET") {
+        return Response.json(providerType === "pathao"
+          ? { code: 200, data: { order_status: "Delivered" } }
+          : { status: 200, delivery_status: "delivered" });
+      }
       const createUrl = providerType === "pathao" ? "/aladdin/api/v1/orders" : "/create_order";
       if (url !== `https://courier.invalid${createUrl}` || init?.method !== "POST") {
         throw new Error("Unexpected local test endpoint");
@@ -151,7 +166,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     }));
   }
   const create = () => bulkShipOrders(db as never, ["order_local"], "provider_local", {}, key);
-  const orderState = () => sqlite.prepare("SELECT status, inventory_action, shipment_claim_id, shipment_claim_expires_at FROM orders WHERE id='order_local'").get();
+  const orderState = () => sqlite.prepare("SELECT status, version, inventory_action, shipment_claim_id, shipment_claim_expires_at FROM orders WHERE id='order_local'").get();
   const shipmentRows = () => sqlite.prepare("SELECT id, status, raw_status, external_id, metadata FROM delivery_shipments ORDER BY created_at,id").all();
 
   it.each(["network", "invalid-json", "http-502", "missing-id", "http-408", "http-409", "http-429"] as const)("holds %s without another POST, deletion, or false finalization", async (outcome) => {
@@ -173,6 +188,222 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     expect(orderState()?.status).toBe("confirmed");
     expect(applyInventoryForStatusChangeWithImpact).not.toHaveBeenCalled();
   });
+
+  it("records accountable existing-booking confirmation before finalizing locally", async () => {
+    mockProvider("network");
+    await create();
+    const shipmentId = String(shipmentRows()[0]!.id);
+    const expectedOrderVersion = Number(orderState()!.version);
+    const result = await resolveUnknownOrderShipment(db as never, {
+      orderId: "order_local",
+      shipmentId,
+      expectedOrderVersion,
+      operationKey: "00000000-0000-4000-8000-000000000001",
+      outcome: "confirmed_existing",
+      evidenceSource: "courier_support",
+      evidenceNote: "Courier support confirmed this consignment belongs to order_local.",
+      confirmationAccepted: true,
+      externalId: "confirmed-consignment",
+      trackingId: "confirmed-tracking",
+      actorId: "admin_local",
+      encryptionKey: key,
+    });
+    expect(result).toMatchObject({ status: "repaired", resolution: "merchant_confirmed_existing", claimCleared: true });
+    expect(orderState()).toMatchObject({ status: "shipped", shipment_claim_id: null });
+    expect(shipmentRows()[0]).toMatchObject({ status: "pending", external_id: "confirmed-consignment" });
+    expect(JSON.parse(String(shipmentRows()[0]!.metadata))).toMatchObject({
+      unknownOutcomeResolution: {
+        method: "merchant_attestation",
+        outcome: "confirmed_existing",
+        actorId: "admin_local",
+        operationKey: "00000000-0000-4000-8000-000000000001",
+      },
+    });
+    await expect(checkShipmentStatus(db as never, shipmentId, key)).resolves.toMatchObject({
+      shipmentId,
+      status: expect.any(String),
+    });
+    expect(JSON.parse(String(shipmentRows()[0]!.metadata))).toMatchObject({
+      unknownOutcomeResolution: {
+        method: "merchant_attestation",
+        outcome: "confirmed_existing",
+        actorId: "admin_local",
+        operationKey: "00000000-0000-4000-8000-000000000001",
+      },
+    });
+    expect(createPosts).toBe(1);
+  });
+
+  it("releases only the current claimed attempt after confirmed non-creation", async () => {
+    mockProvider("network");
+    await create();
+    const shipmentId = String(shipmentRows()[0]!.id);
+    const expectedOrderVersion = Number(orderState()!.version);
+    const result = await resolveUnknownOrderShipment(db as never, {
+      orderId: "order_local",
+      shipmentId,
+      expectedOrderVersion,
+      operationKey: "00000000-0000-4000-8000-000000000002",
+      outcome: "confirmed_not_created",
+      evidenceSource: "courier_portal",
+      evidenceNote: "Courier portal and support confirmed no booking was created.",
+      confirmationAccepted: true,
+      actorId: "admin_local",
+      encryptionKey: key,
+    });
+    expect(result).toMatchObject({ status: "released", resolution: "merchant_confirmed_not_created", claimCleared: true });
+    expect(orderState()).toMatchObject({ status: "confirmed", version: expectedOrderVersion + 1, shipment_claim_id: null });
+    expect(shipmentRows()[0]).toMatchObject({ status: "failed", raw_status: "confirmed_not_created" });
+    expect(JSON.parse(String(shipmentRows()[0]!.metadata))).toMatchObject({
+      unknownOutcomeResolution: { actorId: "admin_local", outcome: "confirmed_not_created" },
+    });
+    mockProvider("success");
+    expect((await create())[0]?.success).toBe(true);
+    expect(createPosts).toBe(2);
+  });
+
+  it("keeps the lock when the order version changed before confirmation", async () => {
+    mockProvider("network");
+    await create();
+    const shipmentId = String(shipmentRows()[0]!.id);
+    const staleVersion = Number(orderState()!.version);
+    sqlite.exec("UPDATE orders SET version = version + 1 WHERE id = 'order_local'");
+    await expect(resolveUnknownOrderShipment(db as never, {
+      orderId: "order_local",
+      shipmentId,
+      expectedOrderVersion: staleVersion,
+      operationKey: "00000000-0000-4000-8000-000000000003",
+      outcome: "confirmed_cancelled",
+      evidenceSource: "courier_support",
+      evidenceNote: "Courier support confirmed cancellation after reviewing the order.",
+      confirmationAccepted: true,
+      actorId: "admin_local",
+      encryptionKey: key,
+    })).rejects.toThrow("Order changed");
+    expect(orderState()?.shipment_claim_id).toBe(shipmentId);
+    expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
+  });
+
+  if (providerType === "steadfast") {
+    it("does not permit rebooking while Steadfast cancellation awaits approval", async () => {
+      mockProvider("success");
+      expect((await create())[0]?.success).toBe(true);
+      const shipmentId = String(shipmentRows()[0]!.id);
+      const pendingCancellation = mapProviderStatus("steadfast", "cancelled_approval_pending");
+      await updateOrderStatusFromShipment(db as never, shipmentId, pendingCancellation);
+      expect(orderState()?.status).toBe("shipped");
+      expect((await create())[0]).toMatchObject({ success: true, message: "Order already shipped; inventory reconciled" });
+      expect(createPosts).toBe(1);
+
+      await updateOrderStatusFromShipment(db as never, shipmentId, mapProviderStatus("steadfast", "cancelled"));
+      expect(orderState()?.status).toBe("confirmed");
+      mockProvider("success");
+      expect((await create())[0]?.success).toBe(true);
+      expect(createPosts).toBe(2);
+    });
+
+    it("uses invoice lookup only as positive existing-booking proof", async () => {
+      mockProvider("network");
+      await create();
+      const shipmentId = String(shipmentRows()[0]!.id);
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("https://courier.invalid/status_by_invoice/order_local");
+        expect(init?.method).toBe("GET");
+        return Response.json({ status: 200, delivery_status: "in_review" });
+      }));
+      const result = await lookupUnknownOrderShipment(db as never, {
+        orderId: "order_local",
+        shipmentId,
+        expectedOrderVersion: Number(orderState()!.version),
+        operationKey: "00000000-0000-4000-8000-000000000004",
+        actorId: "admin_local",
+        encryptionKey: key,
+      });
+      expect(result).toMatchObject({ status: "repaired", resolution: "provider_confirmed_existing" });
+      expect(orderState()).toMatchObject({ status: "shipped", shipment_claim_id: null });
+      expect(JSON.parse(String(shipmentRows()[0]!.metadata))).toMatchObject({
+        unknownOutcomeResolution: {
+          method: "provider_lookup",
+          evidenceSource: "provider_api_invoice_lookup",
+          actorId: "admin_local",
+        },
+      });
+    });
+
+    it.each(["unknown", "unknown_approval_pending", "provider_added_a_new_state"])(
+      "retains the lock for unrecognized Steadfast invoice state %s",
+      async (deliveryStatus) => {
+        mockProvider("network");
+        await create();
+        const shipmentId = String(shipmentRows()[0]!.id);
+        vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: 200, delivery_status: deliveryStatus })));
+        await expect(lookupUnknownOrderShipment(db as never, {
+          orderId: "order_local",
+          shipmentId,
+          expectedOrderVersion: Number(orderState()!.version),
+          operationKey: "00000000-0000-4000-8000-000000000008",
+          actorId: "admin_local",
+          encryptionKey: key,
+        })).rejects.toThrow("recognized shipment state");
+        expect(orderState()).toMatchObject({ status: "confirmed", shipment_claim_id: shipmentId });
+        expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
+      },
+    );
+
+    it("never converts a failed invoice lookup into confirmed absence", async () => {
+      mockProvider("network");
+      await create();
+      const shipmentId = String(shipmentRows()[0]!.id);
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", { status: 404 })));
+      await expect(lookupUnknownOrderShipment(db as never, {
+        orderId: "order_local",
+        shipmentId,
+        expectedOrderVersion: Number(orderState()!.version),
+        operationKey: "00000000-0000-4000-8000-000000000005",
+        actorId: "admin_local",
+        encryptionKey: key,
+      })).rejects.toThrow("lock remains active");
+      expect(orderState()?.shipment_claim_id).toBe(shipmentId);
+      expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
+    });
+
+    it("requires an explicit cancellation record when invoice lookup reports final cancellation", async () => {
+      mockProvider("network");
+      await create();
+      const shipmentId = String(shipmentRows()[0]!.id);
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: 200, delivery_status: "cancelled" })));
+      await expect(lookupUnknownOrderShipment(db as never, {
+        orderId: "order_local",
+        shipmentId,
+        expectedOrderVersion: Number(orderState()!.version),
+        operationKey: "00000000-0000-4000-8000-000000000007",
+        actorId: "admin_local",
+        encryptionKey: key,
+      })).rejects.toThrow("Record a courier-confirmed cancellation");
+      expect(orderState()).toMatchObject({ status: "confirmed", shipment_claim_id: shipmentId });
+      expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
+    });
+
+    it("blocks a not-created attestation when invoice lookup confirms a booking", async () => {
+      mockProvider("network");
+      await create();
+      const shipmentId = String(shipmentRows()[0]!.id);
+      vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: 200, delivery_status: "pending" })));
+      await expect(resolveUnknownOrderShipment(db as never, {
+        orderId: "order_local",
+        shipmentId,
+        expectedOrderVersion: Number(orderState()!.version),
+        operationKey: "00000000-0000-4000-8000-000000000006",
+        outcome: "confirmed_not_created",
+        evidenceSource: "courier_support",
+        evidenceNote: "Support initially reported that the booking did not exist.",
+        confirmationAccepted: true,
+        actorId: "admin_local",
+        encryptionKey: key,
+      })).rejects.toThrow("Steadfast confirms a shipment");
+      expect(orderState()?.shipment_claim_id).toBe(shipmentId);
+    });
+  }
 
   it("releases a known validation rejection for a safe corrected retry", async () => {
     mockProvider("rejected");

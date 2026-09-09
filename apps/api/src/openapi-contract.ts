@@ -1000,6 +1000,8 @@ const COMMERCE_OPERATION_TUPLES: readonly DashboardOperationTuple[] = [
   ["dashboard.orders.shipment_delete", "destructive", true, "none", "none", "forbidden"],
   ["dashboard.orders.shipment_refresh", "write", true, "none", "none", "forbidden"],
   ["dashboard.orders.shipment_reconcile", "write", true, "none", "none", "forbidden"],
+  ["dashboard.orders.shipment_unknown_lookup", "write", true, "required", "required", "forbidden"],
+  ["dashboard.orders.shipment_unknown_resolve", "write", true, "required", "required", "forbidden"],
   ["dashboard.orders.refund", "financial", true, "none", "none", "forbidden"],
   ["dashboard.orders.refund_reconcile", "financial", true, "none", "none", "forbidden"],
   ["dashboard.orders.invoice_get", "read", false, "none", "none", "parallel"],

@@ -219,6 +219,7 @@ export const orderShipmentRecoverySchema = z.object({
   canRefresh: z.boolean(),
   canRetryCreate: z.boolean(),
   canRepair: z.boolean(),
+  unknownOutcome: z.boolean(),
   updatedAt: nullableTimestampSchema,
 });
 

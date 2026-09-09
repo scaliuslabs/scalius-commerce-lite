@@ -21,6 +21,17 @@ export interface ShipmentStatus {
   metadata?: Record<string, unknown>;
 }
 
+export type MerchantOrderShipmentLookup =
+  | {
+    confirmed: true;
+    status: string;
+    rawStatus: string;
+  }
+  | {
+    confirmed: false;
+    message: string;
+  };
+
 // Pathao specific interfaces
 export interface PathaoTokenResponse {
   token_type: string;
