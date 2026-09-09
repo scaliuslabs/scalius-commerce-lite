@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   read: vi.fn(), add: vi.fn(), rename: vi.fn(), remove: vi.fn(),
   success: vi.fn(), error: vi.fn(), close: vi.fn(),
 }));
+let focusBeforeOpen: Element | null = null;
 vi.mock("~/lib/api-functions/attributes", () => ({
   getAttributeValues: api.read, addAttributeValue: api.add,
   renameAttributeValue: api.rename, removeAttributeValue: api.remove,
@@ -48,7 +49,7 @@ describe("attribute value commands", () => {
   async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function render(id: string | null = "attribute-a") {
     await act(async () => root.render(<QueryClientProvider client={client}>
-      <AttributeValueEditor key={id ?? "closed"} attributeId={id} attributeName="QA attribute" onClose={api.close} />
+      <AttributeValueEditor key={id ?? "closed"} attributeId={id} attributeName="QA attribute" onClose={api.close} openerRef={{ current: null }} />
     </QueryClientProvider>));
     await settle();
   }
@@ -67,6 +68,31 @@ describe("attribute value commands", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(node, value);
       node.dispatchEvent(new Event("input", { bubbles: true }));
     });
+  }
+
+  function FocusHarness() {
+    const [open, setOpen] = useState(false);
+    const openerRef = useRef<HTMLElement | null>(null);
+    return (
+      <>
+        <button
+          type="button"
+          onClick={(event) => {
+            focusBeforeOpen = document.activeElement;
+            openerRef.current = event.currentTarget;
+            setOpen(true);
+          }}
+        >
+          Edit values
+        </button>
+        <AttributeValueEditor
+          attributeId={open ? "attribute-a" : null}
+          attributeName="QA attribute"
+          onClose={() => setOpen(false)}
+          openerRef={openerRef}
+        />
+      </>
+    );
   }
   function key(node: HTMLElement, value: string) {
     node.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
@@ -176,5 +202,34 @@ describe("attribute value commands", () => {
     expect(field.value).toBe("Submitted");
     expect(isDisabled(field)).toBe(false);
     expect(api.rename).not.toHaveBeenCalled();
+  });
+
+  it.each(["Cancel", "Escape"])("returns focus to its opener after %s", async (closeMethod) => {
+    await act(async () => root.render(<QueryClientProvider client={client}><FocusHarness /></QueryClientProvider>));
+    const opener = document.querySelector<HTMLButtonElement>("button")!;
+    const priorInput = document.createElement("input");
+    document.body.append(priorInput);
+    priorInput.focus();
+    act(() => opener.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    expect(focusBeforeOpen).toBe(priorInput);
+    await settle();
+    const dialog = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+
+    if (closeMethod === "Cancel") {
+      const close = [...dialog.querySelectorAll("button")].find(
+        (button) => button.textContent?.trim() === "Close",
+      )!;
+      act(() => close.click());
+    } else {
+      act(() => dialog.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      })));
+    }
+    await settle();
+
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
   });
 });

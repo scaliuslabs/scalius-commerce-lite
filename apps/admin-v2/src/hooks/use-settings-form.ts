@@ -47,6 +47,8 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     queryKey: queryKey as unknown[],
     queryFn: fetchFn,
   });
+  const dataUpdateCount =
+    queryClient.getQueryState(queryKey as unknown[])?.dataUpdateCount ?? 0;
   const hasLoaded = data !== undefined && !isError;
 
   const defaultValuesRef = useRef(defaultValues);
@@ -54,22 +56,27 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     values: defaultValues,
     savedValues: defaultValues,
   }));
+  const ignoredReadUpdates = useRef(-1);
 
   // A refresh may acknowledge normalization even when structural sharing keeps
   // the same data object. Preserve local edits against the prior saved snapshot.
   useEffect(() => {
-    if (data) {
+    if (data && dataUpdateCount > ignoredReadUpdates.current) {
       const nextValues = { ...defaultValuesRef.current, ...data } as T;
       setDraft((current) => ({
         values: mergeUneditedFields(current.values, current.savedValues, nextValues),
         savedValues: nextValues,
       }));
     }
-  }, [data, dataUpdatedAt]);
+  }, [data, dataUpdatedAt, dataUpdateCount]);
 
   const mutation = useMutation({
     mutationFn: saveFn,
     onSuccess: async (result, submittedValues) => {
+      // Ignore reads published before this write was acknowledged, even if
+      // their React effects are still queued.
+      ignoredReadUpdates.current =
+        queryClient.getQueryState(queryKey as unknown[])?.dataUpdateCount ?? 0;
       const canonicalValues = resolveSavedValues?.(result, submittedValues);
       const nextValues = canonicalValues ?? submittedValues;
       // Compare with what this request submitted, including edits that revert

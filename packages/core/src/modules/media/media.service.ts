@@ -6,6 +6,12 @@ import {
     productMedia,
     products,
     orderItems,
+    siteSettings,
+    settings,
+    heroSliders,
+    pages,
+    categories,
+    user,
 } from "@scalius/database/schema";
 import {
     buildBatchGuard,
@@ -56,6 +62,10 @@ export type MediaDependencyConflictDetails = {
         count: number;
         samples: Array<{ orderId: string; orderItemId: string }>;
     };
+    savedReferences: {
+        count: number;
+        samples: Array<{ surface: string }>;
+    };
 };
 
 export class MediaDependencyConflictError extends AppError {
@@ -63,7 +73,7 @@ export class MediaDependencyConflictError extends AppError {
         super(
             409,
             "MEDIA_DEPENDENCY_CONFLICT",
-            "Remove this media from every product and video poster. Retained order snapshots cannot be deleted.",
+            "Remove this media from every saved storefront surface, product, and video poster. Retained order snapshots cannot be deleted.",
             details,
         );
         this.name = "MediaDependencyConflictError";
@@ -724,6 +734,84 @@ async function loadMediaDeleteDependencies(
         .where(eq(orderItems.productImageMediaId, id))
         .orderBy(asc(orderItems.orderId), asc(orderItems.id))
         .limit(5);
+    const objectKey = await db
+        .select({ objectKey: media.objectKey })
+        .from(media)
+        .where(eq(media.id, id))
+        .get();
+    const savedReferences: Array<{ surface: string }> = [];
+    let savedReferenceCount = 0;
+    if (objectKey) {
+        const siteCounts = await db.select({
+            logo: sql<number>`sum(case when instr(coalesce(${siteSettings.logo}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            favicon: sql<number>`sum(case when instr(coalesce(${siteSettings.favicon}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            header: sql<number>`sum(case when instr(coalesce(${siteSettings.headerConfig}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            footer: sql<number>`sum(case when instr(coalesce(${siteSettings.footerConfig}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            social: sql<number>`sum(case when instr(coalesce(${siteSettings.socialLinks}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(siteSettings).get();
+        const savedSurfaces = [
+            ["site_logo", siteCounts?.logo], ["site_favicon", siteCounts?.favicon],
+            ["site_header", siteCounts?.header], ["site_footer", siteCounts?.footer],
+            ["site_social", siteCounts?.social],
+        ] as const;
+        for (const [surface, count] of savedSurfaces) {
+            if (count && count > 0) {
+                savedReferences.push({ surface });
+                savedReferenceCount += count;
+            }
+        }
+
+        const invoiceCount = await db.select({
+            count: sql<number>`sum(case when instr(${settings.value}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(settings).where(and(
+            eq(settings.category, "business_info"),
+            eq(settings.key, "invoice_logo_url"),
+        )).get();
+        if (invoiceCount?.count && invoiceCount.count > 0) {
+            savedReferences.push({ surface: "business_invoice" });
+            savedReferenceCount += invoiceCount.count;
+        }
+
+        const heroCount = await db.select({
+            count: sql<number>`sum(case when instr(${heroSliders.images}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(heroSliders).get();
+        if (heroCount?.count && heroCount.count > 0) {
+            savedReferences.push({ surface: "hero_slider" });
+            savedReferenceCount += heroCount.count;
+        }
+
+        const pageCounts = await db.select({
+            featured: sql<number>`sum(case when instr(coalesce(${pages.featuredImage}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            content: sql<number>`sum(case when instr(${pages.content}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(pages).get();
+        const pageSurfaces = [["page_featured_image", pageCounts?.featured], ["page_content", pageCounts?.content]] as const;
+        for (const [surface, count] of pageSurfaces) {
+            if (count && count > 0) {
+                savedReferences.push({ surface });
+                savedReferenceCount += count;
+            }
+        }
+
+        const categoryCounts = await db.select({
+            image: sql<number>`sum(case when instr(coalesce(${categories.imageUrl}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+            content: sql<number>`sum(case when instr(coalesce(${categories.content}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(categories).get();
+        const categorySurfaces = [["category_image", categoryCounts?.image], ["category_content", categoryCounts?.content]] as const;
+        for (const [surface, count] of categorySurfaces) {
+            if (count && count > 0) {
+                savedReferences.push({ surface });
+                savedReferenceCount += count;
+            }
+        }
+
+        const profileCount = await db.select({
+            count: sql<number>`sum(case when instr(coalesce(${user.image}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(user).get();
+        if (profileCount?.count && profileCount.count > 0) {
+            savedReferences.push({ surface: "admin_profile" });
+            savedReferenceCount += profileCount.count;
+        }
+    }
     return {
         posterReferences: {
             count: posterRows[0]?.total ?? 0,
@@ -741,13 +829,48 @@ async function loadMediaDeleteDependencies(
             count: orderRows[0]?.total ?? 0,
             samples: orderRows.map(({ orderId, orderItemId }) => ({ orderId, orderItemId })),
         },
+        savedReferences: {
+            count: savedReferenceCount,
+            samples: savedReferences.slice(0, 5),
+        },
     };
 }
 
 function hasMediaDeleteDependencies(details: MediaDependencyConflictDetails): boolean {
     return details.posterReferences.count > 0
         || details.productReferences.count > 0
-        || details.orderReferences.count > 0;
+        || details.orderReferences.count > 0
+        || details.savedReferences.count > 0;
+}
+
+function noSavedMediaReferences(objectKey: string) {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${siteSettings}
+        WHERE instr(coalesce(${siteSettings.logo}, ''), ${objectKey}) > 0
+           OR instr(coalesce(${siteSettings.favicon}, ''), ${objectKey}) > 0
+           OR instr(coalesce(${siteSettings.headerConfig}, ''), ${objectKey}) > 0
+           OR instr(coalesce(${siteSettings.footerConfig}, ''), ${objectKey}) > 0
+           OR instr(coalesce(${siteSettings.socialLinks}, ''), ${objectKey}) > 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${settings}
+        WHERE ${settings.category} = 'business_info'
+          AND ${settings.key} = 'invoice_logo_url'
+          AND instr(${settings.value}, ${objectKey}) > 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${heroSliders}
+        WHERE instr(${heroSliders.images}, ${objectKey}) > 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${pages}
+        WHERE instr(coalesce(${pages.featuredImage}, ''), ${objectKey}) > 0
+           OR instr(${pages.content}, ${objectKey}) > 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${categories}
+        WHERE instr(coalesce(${categories.imageUrl}, ''), ${objectKey}) > 0
+           OR instr(coalesce(${categories.content}, ''), ${objectKey}) > 0
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${user}
+        WHERE instr(coalesce(${user.image}, ''), ${objectKey}) > 0
+    )`;
 }
 
 export async function permanentlyDeleteMediaFile(
@@ -785,6 +908,7 @@ export async function permanentlyDeleteMediaFile(
                 SELECT 1 FROM ${orderItems}
                 WHERE ${orderItems.productImageMediaId} = ${id}
             )`,
+            noSavedMediaReferences(current.objectKey),
         ))
             .returning().get();
         if (!claimed) {

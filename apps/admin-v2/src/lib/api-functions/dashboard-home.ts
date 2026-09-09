@@ -7,8 +7,8 @@ export interface DashboardHomeStatsPayload {
   currentMonth: {
     orders: number;
     revenue: number;
-    orderGrowth: number;
-    revenueGrowth: number;
+    orderGrowth: number | null;
+    revenueGrowth: number | null;
     orderStatus: {
       delivered: number;
       processing: number;

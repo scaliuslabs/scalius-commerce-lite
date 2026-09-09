@@ -147,14 +147,13 @@ describe("delivery provider durable readiness summary", () => {
     secretKey: "steadfast-secret-9417",
   };
 
-  it("invalidates permissive Steadfast proofs without changing Pathao fingerprint bytes", async () => {
-    const key = Buffer.alloc(32, 7).toString("base64");
-    const steadfastSetup = {
+  it.each([
+    {
       type: "steadfast",
       credentials: completeSteadfastCredentials,
       config: {},
-    };
-    const pathaoSetup = {
+    },
+    {
       type: "pathao",
       credentials: {
         baseUrl: "https://api-hermes.pathao.com",
@@ -163,24 +162,19 @@ describe("delivery provider durable readiness summary", () => {
         username: "merchant",
         password: "merchant-password-7813",
       },
-      config: { storeId: "store_1" },
-    };
-
-    const legacySteadfastFingerprint = legacySetupFingerprint(steadfastSetup, key);
-    const currentSteadfastFingerprint = await getDeliveryProviderSetupFingerprint(
-      steadfastSetup,
-      key,
-    );
-    expect(currentSteadfastFingerprint).not.toBe(legacySteadfastFingerprint);
-    expect(await getDeliveryProviderSetupFingerprint(pathaoSetup, key)).toBe(
-      legacySetupFingerprint(pathaoSetup, key),
-    );
+      config: { storeId: "232926" },
+    },
+  ])("invalidates permissive $type connection proofs", async (setup) => {
+    const key = Buffer.alloc(32, 7).toString("base64");
+    const legacyFingerprint = legacySetupFingerprint(setup, key);
+    const currentFingerprint = await getDeliveryProviderSetupFingerprint(setup, key);
+    expect(currentFingerprint).not.toBe(legacyFingerprint);
     expect(getDeliveryProviderReadinessSummary({
-      ...steadfastSetup,
+      ...setup,
       isActive: true,
-      currentFingerprint: currentSteadfastFingerprint,
+      currentFingerprint,
       lastTestSuccessAt: 100,
-      lastTestSuccessFingerprint: legacySteadfastFingerprint,
+      lastTestSuccessFingerprint: legacyFingerprint,
     })).toMatchObject({
       status: "blocked",
       tested: false,
