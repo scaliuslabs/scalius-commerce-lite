@@ -11,6 +11,7 @@ import {
   cancelOrderReturn,
   createFulfillmentShipment,
   createOrder,
+  confirmManualOrderAmendment,
   createOrderReturn,
   createOrderShipment,
   issueOrderPaymentRecoveryLink,
@@ -31,6 +32,7 @@ import {
   type BulkShipOrdersPayload,
   type CreateFulfillmentShipmentInput,
   type CreateOrderInput,
+  type ConfirmManualOrderAmendmentInput,
   type CreateOrderShipmentInput,
   type IssueOrderPaymentRecoveryLinkInput,
   type RefundOrderInput,
@@ -129,6 +131,30 @@ export function useCreateOrder() {
       invalidateDashboardQueries(queryClient);
       invalidateOrderInventoryQueries(queryClient);
       toast.success("Confirmed order created");
+    },
+  });
+}
+
+export function useConfirmManualOrderAmendment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ConfirmManualOrderAmendmentInput) =>
+      confirmManualOrderAmendment({ data }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.formData(variables.id),
+      });
+      invalidateDashboardQueries(queryClient);
+      invalidateOrderInventoryQueries(queryClient);
+      toast.success("Order amendment confirmed");
+    },
+    onError: (err) => {
+      invalidateOrderInventoryQueries(queryClient);
+      toast.error(getServerFnError(err, "Failed to confirm amendment"));
     },
   });
 }

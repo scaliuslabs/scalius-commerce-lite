@@ -247,6 +247,31 @@ export const adminOrderCreateAttempts = sqliteTable("admin_order_create_attempts
     index("admin_order_create_attempts_actor_created_idx").on(table.actorId, table.createdAt),
 ]);
 
+/** Immutable evidence and replay authority for a confirmed manual-order amendment. */
+export const orderAmendments = sqliteTable("order_amendments", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    actorId: text("actor_id"),
+    idempotencyKeyHash: text("idempotency_key_hash").notNull(),
+    requestHash: text("request_hash").notNull(),
+    expectedVersion: integer("expected_version").notNull(),
+    resultingVersion: integer("resulting_version").notNull(),
+    beforeSnapshot: text("before_snapshot").notNull(),
+    afterSnapshot: text("after_snapshot").notNull(),
+    responsePayload: text("response_payload").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_amendments_idempotency_key_unique").on(table.idempotencyKeyHash),
+    uniqueIndex("order_amendments_order_version_unique").on(table.orderId, table.resultingVersion),
+    index("order_amendments_order_created_idx").on(table.orderId, table.createdAt),
+    check("order_amendments_version_sequence", sql`${table.expectedVersion} >= 1 AND ${table.resultingVersion} = ${table.expectedVersion} + 1`),
+    check("order_amendments_snapshot_bounds", sql`length(${table.beforeSnapshot}) BETWEEN 2 AND 200000 AND length(${table.afterSnapshot}) BETWEEN 2 AND 200000`),
+]);
+
 export const orderReceipts = sqliteTable("order_receipts", {
     tokenHash: text("token_hash").primaryKey(),
     orderId: text("order_id")
@@ -957,6 +982,7 @@ export const abandonedCheckouts = sqliteTable(
 export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type AdminOrderCreateAttempt = InferSelectModel<typeof adminOrderCreateAttempts>;
+export type OrderAmendment = InferSelectModel<typeof orderAmendments>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type InvoiceSequence = InferSelectModel<typeof invoiceSequences>;
 export type OrderInvoice = InferSelectModel<typeof orderInvoices>;

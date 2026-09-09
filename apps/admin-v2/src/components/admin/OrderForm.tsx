@@ -16,13 +16,21 @@ import {
   updateDiscountAmount,
 } from "@/store/orderStore";
 import { getDeliveryLocations } from "@/lib/api-functions/delivery";
-import { useCreateOrder, useUpdateOrder } from "@/lib/api-mutations/orders";
+import {
+  useConfirmManualOrderAmendment,
+  useCreateOrder,
+  useUpdateOrder,
+} from "@/lib/api-mutations/orders";
 import type {
   CreateOrderInput,
+  ManualOrderAmendmentInput,
   QuoteManualOrderInput,
   UpdateOrderInput,
 } from "@/lib/api-functions/orders";
-import { quoteManualOrder } from "@/lib/api-functions/orders";
+import {
+  previewManualOrderAmendment,
+  quoteManualOrder,
+} from "@/lib/api-functions/orders";
 
 // Imports for our new, refactored components and types
 import {
@@ -111,10 +119,31 @@ function toUpdateOrderInput(
   };
 }
 
+function toManualOrderAmendmentInput(
+  values: OrderFormValues,
+  id: string,
+): ManualOrderAmendmentInput {
+  if (!values.version) {
+    throw new Error("Order version is missing. Reload the amendment before confirming.");
+  }
+  return {
+    id,
+    expectedVersion: values.version,
+    ...toOrderBaseContentInput(values),
+    items: values.items.map(({ orderItemId, productId, variantId, quantity }) => ({
+      orderItemId,
+      productId,
+      variantId,
+      quantity,
+    })),
+  };
+}
+
 export function OrderForm({
   products,
   defaultValues,
   isEdit = false,
+  isAmend = false,
 }: OrderFormProps) {
   const navigate = useNavigate();
   const { code: currencyCode } = useCurrency();
@@ -124,6 +153,8 @@ export function OrderForm({
     : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
   const updateMutation = useUpdateOrder();
+  const amendMutation = useConfirmManualOrderAmendment();
+  const amendmentRequest = React.useRef<{ key: string; payload: string } | null>(null);
   const createRequestKey = React.useRef<string | null>(
     isEdit ? null : getOrCreateAdminOrderRequestKey(),
   );
@@ -181,27 +212,40 @@ export function OrderForm({
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
-    () => isEdit
+    () => isEdit && !isAmend
       ? null
       : calculateManualOrderDiscountLimit(
           quoteItems,
           quoteDiscount,
           currencyDecimalPlaces,
         ),
-    [currencyDecimalPlaces, isEdit, quoteDiscount, quoteItems],
+    [currencyDecimalPlaces, isAmend, isEdit, quoteDiscount, quoteItems],
   );
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
-  const hasQuotePrerequisites = !isEdit
+  const hasQuotePrerequisites = (!isEdit || isAmend)
     && Boolean(quoteInput.city && quoteInput.zone)
     && quoteInput.items.length > 0
     && quoteInput.items.every((item) => Boolean(item.variantId));
   const canRequestQuote = hasQuotePrerequisites
     && quoteInputIsCurrent;
   const quoteQuery = useQuery({
-    queryKey: queryKeys.orders.manualQuote(debouncedQuoteInput),
-    queryFn: () => quoteManualOrder({ data: debouncedQuoteInput }),
+    queryKey: [
+      ...queryKeys.orders.manualQuote(debouncedQuoteInput),
+      isAmend ? `amend:${String(defaultValues?.id)}:${String(defaultValues?.version)}` : "create",
+    ],
+    queryFn: () => {
+      if (!isAmend) return quoteManualOrder({ data: debouncedQuoteInput });
+      const orderId = String(defaultValues?.id ?? "");
+      const values = form.getValues();
+      return previewManualOrderAmendment({
+        data: {
+          ...toManualOrderAmendmentInput(values, orderId),
+          ...debouncedQuoteInput,
+        },
+      });
+    },
     enabled: canRequestQuote,
     retry: false,
     staleTime: 0,
@@ -228,10 +272,10 @@ export function OrderForm({
       return {
         data: quoteQuery.data ?? null,
         isCurrent:
-          isEdit ||
+          (isEdit && !isAmend) ||
           (canRequestQuote && quoteInputIsCurrent && quoteQuery.isSuccess),
         isLoading:
-          !isEdit &&
+          (!isEdit || isAmend) &&
           hasQuotePrerequisites &&
           (!quoteInputIsCurrent || quoteQuery.isFetching),
         discountLimit,
@@ -257,6 +301,7 @@ export function OrderForm({
       currentQuoteError,
       hasQuotePrerequisites,
       isEdit,
+      isAmend,
       localDiscountLimit,
       quoteDiscount,
       quoteInputIsCurrent,
@@ -264,7 +309,9 @@ export function OrderForm({
     ],
   );
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending
+    || updateMutation.isPending
+    || amendMutation.isPending;
   const [locations, setLocations] = React.useState<{
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
@@ -328,8 +375,8 @@ export function OrderForm({
   // --- FORM SUBMISSION ---
 
   const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>(async (values) => {
-    if (!isEdit && !manualQuote.isCurrent) {
-      toast.error("Wait for the final tax and total before creating this order.");
+    if ((!isEdit || isAmend) && !manualQuote.isCurrent) {
+      toast.error("Wait for the authoritative tax and total before continuing.");
       return;
     }
     // Find the location objects from state based on the selected IDs
@@ -346,7 +393,40 @@ export function OrderForm({
       areaName: area?.name ?? null,
     };
 
-    if (isEdit) {
+    if (isAmend) {
+      const orderId = enrichedValues.id || defaultValues?.id;
+      if (!orderId) {
+        toast.error("Missing order ID. Please reload the amendment.");
+        return;
+      }
+      const input = toManualOrderAmendmentInput(enrichedValues, orderId);
+      const quote = manualQuote.data;
+      if (!quote || !("quoteFingerprint" in quote) || typeof quote.quoteFingerprint !== "string" || !quote.quoteFingerprint) {
+        toast.error("Refresh the authoritative quote before confirming this amendment.");
+        return;
+      }
+      const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
+      if (amendmentRequest.current?.payload !== payload) {
+        amendmentRequest.current = { key: crypto.randomUUID(), payload };
+      }
+      const confirmed = window.confirm(
+        `Confirm this amendment? The revised order total and COD balance due will be ${quote?.currencyCode ?? ""} ${quote?.totalAmount.toLocaleString() ?? "unavailable"}.`,
+      );
+      if (!confirmed) return;
+      try {
+        await amendMutation.mutateAsync({
+          ...input,
+          requestKey: amendmentRequest.current.key,
+          quoteFingerprint: quote.quoteFingerprint,
+        });
+        void navigate({
+          to: "/admin/orders/$orderId",
+          params: { orderId },
+        });
+      } catch {
+        // Mutation feedback is shown by the shared hook; retain the key for safe retry.
+      }
+    } else if (isEdit) {
       const orderId = enrichedValues.id || defaultValues?.id;
       if (!orderId) {
         toast.error("Missing order ID. Please refresh and try again.");
@@ -408,7 +488,7 @@ export function OrderForm({
       }
       toast.error(getServerFnError(result.error, "Failed to create order"));
     }
-  }, [createMutation, defaultValues?.id, isEdit, locations, manualQuote.isCurrent, navigate, updateMutation]);
+  }, [amendMutation, createMutation, defaultValues?.id, isAmend, isEdit, locations, manualQuote.data, manualQuote.isCurrent, navigate, updateMutation]);
 
   // --- DATA LOADING AND SIDE EFFECTS ---
 
@@ -470,7 +550,7 @@ export function OrderForm({
             <h1 className="text-lg font-semibold leading-none tracking-tight text-foreground">
               {isEdit ? (
                 <>
-                  Edit order
+                  {isAmend ? "Amend order" : "Edit order"}
                   {defaultValues?.id ? (
                     <>
                       {" "}
@@ -487,6 +567,7 @@ export function OrderForm({
             form={form}
             products={products}
             isEdit={isEdit}
+            isAmend={isAmend}
             locations={locations}
             setLocations={setLocations}
             isLoading={isLoading}
@@ -516,7 +597,11 @@ export function OrderForm({
         newLabel="New order"
         canCreateNew={orderActions.canCreateOrders}
         canSave={canSubmit}
-        saveLabel={isEdit ? undefined : "Create confirmed order"}
+        saveLabel={isAmend
+          ? "Review and confirm amendment"
+          : isEdit
+            ? undefined
+            : "Create confirmed order"}
         saveDisabledReason={!canSave
           ? isEdit
             ? "You do not have permission to edit orders."

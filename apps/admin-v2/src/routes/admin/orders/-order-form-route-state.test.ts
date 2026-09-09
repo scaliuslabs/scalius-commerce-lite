@@ -64,6 +64,10 @@ describe("order form route data", () => {
       productsWithVariants: [],
       defaultValues: { id: "order_1", items: [] },
       fullEditReadiness: editable,
+      amendmentReadiness: {
+        allowed: false,
+        reason: "Order amendment readiness is unavailable. Refresh after the API update completes.",
+      },
     });
 
     expect(() => buildEditOrderFormRouteData({
