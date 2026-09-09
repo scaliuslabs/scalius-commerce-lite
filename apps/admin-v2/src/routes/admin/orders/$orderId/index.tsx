@@ -144,6 +144,7 @@ function toOrderViewModel(
     paymentRecovery: order.paymentRecovery,
     supportRequests: order.supportRequests ?? [],
     fullEditReadiness: order.fullEditReadiness,
+    amendmentReadiness: order.amendmentReadiness,
   };
 }
 
