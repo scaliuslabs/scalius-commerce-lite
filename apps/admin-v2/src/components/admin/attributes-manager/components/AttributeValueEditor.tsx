@@ -200,10 +200,10 @@ export function AttributeValueEditor({
           className="max-w-3xl overflow-y-auto flex flex-col"
           showCloseButton={!pending}
           onCloseAutoFocus={(event) => {
-            if (openerRef.current?.isConnected) {
-              event.preventDefault();
-              openerRef.current.focus();
-            }
+            event.preventDefault();
+            requestAnimationFrame(() => {
+              if (openerRef.current?.isConnected) openerRef.current.focus();
+            });
           }}
         >
           <DialogHeader className="shrink-0">

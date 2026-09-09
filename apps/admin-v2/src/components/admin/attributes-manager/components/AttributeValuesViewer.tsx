@@ -75,10 +75,10 @@ export function AttributeValuesViewer({
       <DialogContent
         className="max-w-3xl overflow-y-auto flex flex-col"
         onCloseAutoFocus={(event) => {
-          if (openerRef.current?.isConnected) {
-            event.preventDefault();
-            openerRef.current.focus();
-          }
+          event.preventDefault();
+          requestAnimationFrame(() => {
+            if (openerRef.current?.isConnected) openerRef.current.focus();
+          });
         }}
       >
         <DialogHeader className="shrink-0">
