@@ -118,15 +118,15 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                 class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
               />
             ) : (
-              <div class="h-12 sm:h-14 w-auto bg-gray-700 flex items-center justify-center px-4 rounded">
-                <span class="text-white text-sm">{logo.alt}</span>
+              <div class="h-12 sm:h-14 w-auto flex items-center justify-center px-4 rounded border border-current">
+                <span class="text-sm">{logo.alt}</span>
               </div>
             )
           }
         </a>
         {
           tagline && (
-            <p class="mt-3 text-base font-medium text-white/90 leading-relaxed max-w-md">
+            <p class="mt-3 text-base font-medium leading-relaxed max-w-md">
               {tagline}
             </p>
           )
@@ -136,7 +136,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         {
           description && (
             <div
-              class="mt-2 text-base text-white/80 leading-relaxed max-w-md prose prose-base prose-invert prose-p:my-1 prose-p:leading-relaxed prose-a:text-white prose-a:underline hover:prose-a:text-white/90"
+              class="mt-2 text-base text-inherit leading-relaxed max-w-md prose prose-base [&_*]:text-inherit prose-p:my-1 prose-p:leading-relaxed prose-a:underline prose-pre:bg-transparent"
               set:html={optimizedDescription}
             />
           )
@@ -148,7 +148,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           {
             menus.map((menu) => (
               <div class="flex flex-col gap-4">
-                <h2 class="text-sm font-bold tracking-widest text-white uppercase opacity-90">
+                <h2 class="text-sm font-bold tracking-widest uppercase">
                   {menu.title}
                 </h2>
 
@@ -175,13 +175,13 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                   <a
                     href={href}
                     data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
-                    class="group text-white transition-all duration-300"
+                    class="group transition-all duration-300"
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={displayTitle}
                     title={displayTitle}
                   >
-                    <div class="relative p-2.5 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                    <div class="relative p-2.5 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
                       {item.optimizedIconUrl ? (
                         <img
                           src={item.optimizedIconUrl}
@@ -205,12 +205,12 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
       }
     </div>
 
-    <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-white/20">
+    <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-primary-foreground/20">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
         <span
-          class="text-sm text-white/80 font-normal text-center sm:text-left [text-shadow:0_1px_2px_rgba(0,0,0,0.3)]"
+          class="text-sm font-normal text-center sm:text-left"
         >
-          © {new Date().getFullYear()} <span class="text-white font-semibold">{copyrightText || "Store"}</span>. All rights reserved.
+          © {new Date().getFullYear()} <span class="font-semibold">{copyrightText || "Store"}</span>. All rights reserved.
         </span>
 
         {
@@ -227,13 +227,13 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                   <a
                     href={href}
                     data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
-                    class="group text-white transition-all duration-300"
+                    class="group transition-all duration-300"
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={displayTitle}
                     title={displayTitle}
                   >
-                    <div class="relative p-2.5 rounded-full bg-white/10 backdrop-blur-sm group-hover:bg-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                    <div class="relative p-2.5 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
                       {item.optimizedIconUrl ? (
                         <img
                           src={item.optimizedIconUrl}
