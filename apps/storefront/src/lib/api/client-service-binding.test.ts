@@ -55,7 +55,24 @@ afterEach(() => {
 });
 
 describe("storefront API service-binding boundary", () => {
-  it("does not retry or start HTTPS fallback after a binding timeout", async () => {
+  it("uses one HTTPS fallback after a safe public binding read times out", async () => {
+    const bindingFetch = vi.fn((request: Request) =>
+      new Promise<Response>((_resolve, reject) => {
+        request.signal.addEventListener("abort", () => reject(request.signal.reason));
+      }));
+    const httpFetch = vi.fn(async () => new Response("fallback ok"));
+    vi.stubGlobal("fetch", httpFetch);
+
+    const response = await runWithBackend(fetcher(bindingFetch), () =>
+      fetchWithRetry(`${apiBaseUrl}/seo`, {}, 3, 5, false, false),
+    );
+
+    expect(await response.text()).toBe("fallback ok");
+    expect(bindingFetch).toHaveBeenCalledTimes(1);
+    expect(httpFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fall back after a sensitive public binding read times out", async () => {
     const bindingFetch = vi.fn((request: Request) =>
       new Promise<Response>((_resolve, reject) => {
         request.signal.addEventListener("abort", () => reject(request.signal.reason));
@@ -63,26 +80,32 @@ describe("storefront API service-binding boundary", () => {
     const httpFetch = vi.fn();
     vi.stubGlobal("fetch", httpFetch);
 
-    await expect(runWithBackend(fetcher(bindingFetch), () =>
-      fetchWithRetry(`${apiBaseUrl}/seo`, {}, 3, 5, false, false),
-    )).rejects.toThrow("Storefront API service binding timed out");
+    await expect(runWithBackend(fetcher(bindingFetch), () => fetchWithRetry(
+      `${apiBaseUrl}/seo`,
+      { headers: { Cookie: "session=placeholder" } },
+      3,
+      5,
+      false,
+      false,
+    ))).rejects.toThrow("Storefront API service binding timed out");
 
     expect(bindingFetch).toHaveBeenCalledTimes(1);
     expect(httpFetch).not.toHaveBeenCalled();
   });
 
-  it("uses at most one terminal HTTPS fallback after an immediate binding failure", async () => {
+  it("bounds a single HTTPS fallback after an immediate binding failure", async () => {
     const bindingFetch = vi.fn(async () => {
       throw new Error("binding unavailable");
     });
-    const httpFetch = vi.fn(async () => {
-      throw new Error("origin unavailable");
-    });
+    const httpFetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      }));
     vi.stubGlobal("fetch", httpFetch);
 
     await expect(runWithBackend(fetcher(bindingFetch), () =>
-      fetchWithRetry(`${apiBaseUrl}/seo`, {}, 3, 50, false, false),
-    )).rejects.toThrow("origin unavailable");
+      fetchWithRetry(`${apiBaseUrl}/seo`, {}, 3, 5, false, false),
+    )).rejects.toThrow("Storefront API HTTPS fallback timed out");
 
     expect(bindingFetch).toHaveBeenCalledTimes(1);
     expect(httpFetch).toHaveBeenCalledTimes(1);

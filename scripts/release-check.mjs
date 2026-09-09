@@ -237,6 +237,20 @@ function responsePreview(body) {
   return body.replace(/\s+/g, " ").trim().slice(0, MAX_BODY_PREVIEW_LENGTH);
 }
 
+export function responseFailureContext(response) {
+  let route = "unknown";
+  try {
+    route = new URL(response.url).pathname;
+  } catch {
+    // Keep diagnostics useful for synthetic responses with an invalid URL.
+  }
+  const cfRay = response.headers?.get?.("cf-ray")
+    ?.trim()
+    .replace(/[^a-zA-Z0-9.-]/g, "")
+    .slice(0, 100) || "unavailable";
+  return `route=${route} status=${response.statusCode} cf-ray=${cfRay}`;
+}
+
 function appendUnique(list, values) {
   for (const value of values) {
     if (typeof value === "string" && value && !list.includes(value)) {
@@ -327,7 +341,7 @@ async function fetchText(url, {
 function requireStatus(response, label, allowed) {
   if (!allowed(response.statusCode)) {
     throw new Error(
-      `${label} returned HTTP ${response.statusCode}: ${responsePreview(response.body)}`,
+      `${label} failed (${responseFailureContext(response)}): ${responsePreview(response.body)}`,
     );
   }
 }

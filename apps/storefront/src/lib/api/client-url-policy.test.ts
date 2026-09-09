@@ -42,9 +42,6 @@ describe("storefront browser API URL policy", () => {
       "/^\\/api\\/v1\\/(auth|customer|checkout|orders?|payments?|refunds?|webhooks?|scanner|setup)\\b/i",
     );
     expect(source).toContain(
-      "!canFallbackToHttp || error instanceof StorefrontFetchTimeoutError",
-    );
-    expect(source).toContain(
       "!usedServiceBinding &&",
     );
     expect(source).toContain("throw error;");
