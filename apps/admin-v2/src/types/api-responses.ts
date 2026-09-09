@@ -357,6 +357,10 @@ export interface OrderDetail extends Order {
   items: OrderItem[];
   latestShipment: unknown;
   itemCount: number;
+  amendmentReadiness: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 export interface OrderFormData {
