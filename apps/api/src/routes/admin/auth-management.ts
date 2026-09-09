@@ -26,6 +26,9 @@ import {
     adminPrincipalExists,
 } from "@scalius/core/auth/admin-setup";
 import {
+    noDeletingMediaReferences,
+} from "@scalius/core/modules/media/media-reference-guard";
+import {
     AUTH_PASSWORD_MAX_LENGTH,
     AUTH_PASSWORD_MIN_LENGTH,
     claimAdminSetup,
@@ -965,7 +968,14 @@ app.openapi(updateProfileRoute, async (c) => {
         if (name !== undefined) updateData.name = name.trim();
         if (image !== undefined) updateData.image = image;
 
-        await db.update(user).set(updateData).where(eq(user.id, sessionUser.id));
+        const mediaGuard = typeof image === "string" ? noDeletingMediaReferences(image) : undefined;
+        const updated = await db.update(user).set(updateData).where(and(
+            eq(user.id, sessionUser.id),
+            ...(mediaGuard ? [mediaGuard] : []),
+        )).returning({ id: user.id }).get();
+        if (!updated && mediaGuard) {
+            throw new ConflictError("The selected profile image is being deleted. Choose another image and try again.");
+        }
 
         const updatedUser = await db
             .select({ id: user.id, name: user.name, email: user.email, image: user.image })

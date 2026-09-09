@@ -13,7 +13,7 @@ const chartConfig = {
     color: "var(--chart-2)",
   },
   revenue: {
-    label: "Revenue (\u09F3)",
+    label: "Order value (\u09F3)",
     color: "var(--chart-1)",
   },
   newCustomers: {
@@ -105,7 +105,7 @@ describe("DashboardChart SVG model", () => {
     expect(path).not.toMatch(/NaN|Infinity/);
     expect(
       formatDashboardChartPointLabel(unsafeData[0]!, "\u09F3", chartConfig),
-    ).toContain("Revenue (\u09F3): \u09F30, Orders: 0, New Customers: 0");
+    ).toContain("Order value (\u09F3): \u09F30, Orders: 0, New Customers: 0");
   });
 
   it("formats focus labels with every visible metric", () => {
@@ -116,7 +116,7 @@ describe("DashboardChart SVG model", () => {
         chartConfig,
       ),
     ).toContain(
-      "Revenue (\u09F3): \u09F32,400, Orders: 4, New Customers: 3",
+      "Order value (\u09F3): \u09F32,400, Orders: 4, New Customers: 3",
     );
   });
 
