@@ -6,7 +6,10 @@ import {
   type DeliveryProviderType,
 } from "./ProviderIcon";
 import { ProviderListSidebar } from "./ProviderListSidebar";
-import { ProviderDetailPanel } from "./ProviderDetailPanel";
+import {
+  ProviderDetailPanel,
+  type DeliveryProviderEnvironment,
+} from "./ProviderDetailPanel";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   saveDeliveryProvider,
@@ -17,10 +20,20 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
+export const DELIVERY_PROVIDER_ENDPOINTS = {
+  pathao: {
+    production: "https://api-hermes.pathao.com",
+    sandbox: "https://courier-api-sandbox.pathao.com",
+  },
+  steadfast: {
+    production: "https://portal.packzy.com/api/v1",
+  },
+} as const;
+
 // Default credentials structure per provider type
 const DEFAULT_CREDENTIALS = {
   pathao: {
-    baseUrl: "https://api-hermes.pathao.com",
+    baseUrl: DELIVERY_PROVIDER_ENDPOINTS.pathao.production,
     clientId: "",
     clientSecret: "",
     username: "",
@@ -28,12 +41,22 @@ const DEFAULT_CREDENTIALS = {
     webhookSecret: "",
   },
   steadfast: {
-    baseUrl: "https://portal.packzy.com/api/v1",
+    baseUrl: DELIVERY_PROVIDER_ENDPOINTS.steadfast.production,
     apiKey: "",
     secretKey: "",
     webhookSecret: "",
   },
 };
+
+export function getDeliveryProviderEnvironment(
+  type: DeliveryProviderType,
+  baseUrl: string,
+): DeliveryProviderEnvironment {
+  const normalized = baseUrl.trim().replace(/\/+$/u, "");
+  if (normalized === DELIVERY_PROVIDER_ENDPOINTS[type].production) return "production";
+  if (type === "pathao" && normalized === DELIVERY_PROVIDER_ENDPOINTS.pathao.sandbox) return "sandbox";
+  return "custom";
+}
 
 const DEFAULT_CONFIG = {
   pathao: {
@@ -47,10 +70,38 @@ const DEFAULT_CONFIG = {
   },
 };
 
-type DeliveryProviderDraft = Omit<
+export type DeliveryProviderDraft = Omit<
   DeliveryProviderRecord,
   "createdAt" | "updatedAt"
 >;
+
+export function updateDeliveryProviderCredential(
+  draft: DeliveryProviderDraft,
+  field: string,
+  value: string,
+): DeliveryProviderDraft {
+  try {
+    const credentials = JSON.parse(draft.credentials);
+    const config = JSON.parse(draft.config);
+    const endpointChanged = field === "baseUrl" && credentials.baseUrl !== value;
+    credentials[field] = value;
+    if (endpointChanged && draft.type === "pathao") {
+      for (const key of ["clientId", "clientSecret", "username", "password"]) credentials[key] = "";
+      config.storeId = "";
+    } else if (endpointChanged) {
+      credentials.apiKey = "";
+      credentials.secretKey = "";
+    }
+    return {
+      ...draft,
+      credentials: JSON.stringify(credentials),
+      config: JSON.stringify(config),
+      readiness: null,
+    };
+  } catch {
+    return draft;
+  }
+}
 
 function draftsMatch(
   current: DeliveryProviderDraft,
@@ -172,7 +223,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       credentials = JSON.stringify(DEFAULT_CREDENTIALS[type]);
       config = JSON.stringify(DEFAULT_CONFIG[type]);
     }
-    setFormData((prev) => ({ ...prev, type, credentials, config }));
+    setFormData((prev) => ({ ...prev, type, credentials, config, readiness: null }));
   };
 
   const handleChange = (field: string, value: string | boolean) => {
@@ -180,14 +231,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
   };
 
   const handleCredentialChange = (field: string, value: string) => {
-    try {
-      const credentials = JSON.parse(formData.credentials);
-      credentials[field] = value;
-      setFormData((prev) => ({
-        ...prev,
-        credentials: JSON.stringify(credentials),
-      }));
-    } catch { /* empty */ }
+    setFormData((prev) => updateDeliveryProviderCredential(prev, field, value));
   };
 
   const handleConfigChange = (field: string, value: string | number) => {
@@ -197,8 +241,18 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
       setFormData((prev) => ({
         ...prev,
         config: JSON.stringify(config),
+        readiness: null,
       }));
     } catch { /* empty */ }
+  };
+
+  const handleEnvironmentChange = (environment: DeliveryProviderEnvironment) => {
+    const baseUrl = environment === "custom"
+      ? ""
+      : environment === "sandbox" && formData.type === "pathao"
+        ? DELIVERY_PROVIDER_ENDPOINTS.pathao.sandbox
+        : DELIVERY_PROVIDER_ENDPOINTS[formData.type].production;
+    handleCredentialChange("baseUrl", baseUrl);
   };
 
   const handleSave = async () => {
@@ -421,6 +475,8 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         onChangeType={handleTypeChange}
         onChangeCredential={handleCredentialChange}
         onChangeConfig={handleConfigChange}
+        environment={getDeliveryProviderEnvironment(formData.type, String(creds.baseUrl ?? ""))}
+        onChangeEnvironment={handleEnvironmentChange}
         getWebhookUrl={getWebhookUrl}
         onCopyWebhookUrl={handleCopyWebhookUrl}
         onCopySecret={handleCopySecret}
