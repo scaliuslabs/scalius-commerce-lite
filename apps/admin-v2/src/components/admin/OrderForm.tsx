@@ -545,7 +545,8 @@ export function OrderForm({
         if (
           canSave &&
           manualQuote.isCurrent &&
-          !isInteractionLocked &&
+          !isSubmitting &&
+          pendingAmendment === null &&
           form.getValues("items").length > 0
         ) {
           e.preventDefault();
@@ -555,9 +556,9 @@ export function OrderForm({
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [canSave, form, handleSubmit, isInteractionLocked, manualQuote.isCurrent]);
+  }, [canSave, form, handleSubmit, isSubmitting, manualQuote.isCurrent, pendingAmendment]);
 
-  const canSubmit = canSave && manualQuote.isCurrent;
+  const canSubmit = canSave && manualQuote.isCurrent && !isInteractionLocked;
 
   return (
     <>
@@ -645,7 +646,7 @@ export function OrderForm({
       <FormActionBar
         title="Orders"
         isEdit={isEdit}
-        isSubmitting={isInteractionLocked}
+        isSubmitting={isSubmitting}
         isDirty={form.formState.isDirty}
         cancelUrl="/admin/orders"
         newUrl="/admin/orders/new"
