@@ -14,6 +14,54 @@ const existing: ManagerCheckoutLanguage = {
   fieldVisibility: {}, createdAt: 1, updatedAt: 1, deletedAt: null,
 };
 
+function ControlledLanguageDialog({
+  onSubmit,
+}: {
+  onSubmit: (
+    formData: Partial<ManagerCheckoutLanguage>,
+    editingLanguageId: string | null,
+  ) => Promise<boolean>;
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editingLanguage, setEditingLanguage] =
+    React.useState<ManagerCheckoutLanguage | null>(null);
+
+  return (
+    <>
+      <button type="button" onClick={() => {
+        setEditingLanguage(null);
+        setIsOpen(true);
+      }}>Open add</button>
+      <button type="button" onClick={() => {
+        setEditingLanguage(existing);
+        setIsOpen(true);
+      }}>Open edit</button>
+      <LanguageFormDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        editingLanguage={editingLanguage}
+        isActionLoading={false}
+        onSubmit={onSubmit}
+      />
+    </>
+  );
+}
+
+function dialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector('[role="dialog"]');
+  const button = Array.from(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+    .find((candidate) => candidate.textContent?.trim() === label);
+  if (!button) throw new Error(`Expected dialog button labeled ${label}`);
+  return button;
+}
+
+function setInputValue(id: string, value: string) {
+  const input = document.querySelector<HTMLInputElement>(`#${id}`);
+  if (!input) throw new Error(`Expected input #${id}`);
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("checkout language field labels", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -62,5 +110,47 @@ describe("checkout language field labels", () => {
     }
     expect(fieldIds.size).toBe(17);
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("resets on each actual open while preserving a failed draft", async () => {
+    const submit = vi.fn<
+      (formData: Partial<ManagerCheckoutLanguage>, editingLanguageId: string | null) => Promise<boolean>
+    >();
+    submit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await act(async () => root.render(<ControlledLanguageDialog onSubmit={submit} />));
+
+    await act(async () => (document.querySelector("button") as HTMLButtonElement).click());
+    setInputValue("name", "Created language");
+    setInputValue("code", "en-US");
+    await act(async () => dialogButton("Add language").click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    await act(async () => (document.querySelector("button") as HTMLButtonElement).click());
+    expect(document.querySelector<HTMLInputElement>("#name")?.value).toBe("");
+    expect(document.querySelector<HTMLInputElement>("#code")?.value).toBe("");
+    await act(async () => dialogButton("Cancel").click());
+
+    await act(async () => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim() === "Open edit")?.click();
+    });
+    setInputValue("name", "Cancelled draft");
+    await act(async () => dialogButton("Cancel").click());
+    await act(async () => {
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim() === "Open edit")?.click();
+    });
+    expect(document.querySelector<HTMLInputElement>("#name")?.value).toBe(existing.name);
+    expect(document.querySelector<HTMLInputElement>("#code")?.value).toBe(existing.code);
+    await act(async () => dialogButton("Cancel").click());
+
+    await act(async () => (document.querySelector("button") as HTMLButtonElement).click());
+    setInputValue("name", "Failed draft");
+    setInputValue("code", "en-US");
+    await act(async () => dialogButton("Add language").click());
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(document.querySelector<HTMLInputElement>("#name")?.value).toBe("Failed draft");
+    expect(document.querySelector<HTMLInputElement>("#code")?.value).toBe("en-US");
   });
 });
