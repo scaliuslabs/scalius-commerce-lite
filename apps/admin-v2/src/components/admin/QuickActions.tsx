@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
-import { usePermissions } from "@/contexts/PermissionContext";
-import { canAccessAdminPath } from "@/lib/admin-access";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { canAccessAdminPath } from "~/lib/admin-access";
 import {
   Plus,
   Package,

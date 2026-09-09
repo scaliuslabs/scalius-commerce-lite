@@ -4,7 +4,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { PermissionProvider } from "@/contexts/PermissionContext";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import { QuickActions } from "./QuickActions";
 
 vi.mock("@tanstack/react-router", () => ({
