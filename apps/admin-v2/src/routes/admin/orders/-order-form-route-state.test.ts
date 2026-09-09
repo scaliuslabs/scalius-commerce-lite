@@ -15,6 +15,10 @@ const editRouteSource = readFileSync(
   fileURLToPath(new URL("./$orderId/edit.tsx", import.meta.url)),
   "utf8",
 );
+const amendRouteSource = readFileSync(
+  fileURLToPath(new URL("./$orderId/amend.tsx", import.meta.url)),
+  "utf8",
+);
 const errorSource = readFileSync(
   fileURLToPath(new URL("./-OrderFormRouteError.tsx", import.meta.url)),
   "utf8",
@@ -64,6 +68,10 @@ describe("order form route data", () => {
       productsWithVariants: [],
       defaultValues: { id: "order_1", items: [] },
       fullEditReadiness: editable,
+      amendmentReadiness: {
+        allowed: false,
+        reason: "Order amendment readiness is unavailable. Refresh after the API update completes.",
+      },
     });
 
     expect(() => buildEditOrderFormRouteData({
@@ -142,5 +150,10 @@ describe("order form route failure wiring", () => {
     expect(editRouteSource).not.toContain("createFileRoute, redirect");
     expect(errorSource).toContain("Try again");
     expect(errorSource).toContain('<Link to="/admin/orders">Back to orders</Link>');
+  });
+
+  it("refetches invalidated edit and amendment snapshots before rendering", () => {
+    expect(editRouteSource).toContain("await queryClient.fetchQuery({");
+    expect(amendRouteSource).toContain("await queryClient.fetchQuery({");
   });
 });

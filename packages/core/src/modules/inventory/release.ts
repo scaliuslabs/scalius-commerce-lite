@@ -4,7 +4,12 @@
 
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import {
+  buildBatchGuard,
+  isBatchGuardError,
+  safeBatch,
+  type Database,
+} from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
 import { checkAndAlertLowStock } from "./alerts";
@@ -54,6 +59,7 @@ interface StrictReleaseEntry {
 
 export interface ReleaseReservedStockBatchOptions {
   releaseKey?: string;
+  requireExact?: boolean;
 }
 
 export interface ReleaseReservedStockBatchResult {
@@ -66,6 +72,139 @@ export interface ReleaseReservedStockBatchResult {
 const DEFAULT_RELEASE_KEY = "inventory-release:v1";
 const STRICT_RELEASE_RETRIES = 3;
 const STRICT_RELEASE_BACKOFF_MS = 50;
+const INVENTORY_RELEASE_PLAN_CONFLICT = "INVENTORY_RELEASE_PLAN_CONFLICT";
+
+export function isPreparedReservedStockReleaseConflictError(error: unknown): boolean {
+  return isBatchGuardError(error, INVENTORY_RELEASE_PLAN_CONFLICT);
+}
+
+export interface PreparedReservedStockReleaseBatch extends ReleaseReservedStockBatchResult {
+  statements: SQLiteBatchItem[];
+}
+
+/** Prepare strict ledger-v2 release statements for a larger atomic domain batch. */
+export async function prepareReservedStockReleaseBatch(
+  db: Database,
+  entries: ReservationEntry[],
+  orderId: string,
+  options: ReleaseReservedStockBatchOptions = {},
+): Promise<PreparedReservedStockReleaseBatch> {
+  for (const entry of entries) validatePositiveQuantity(entry.quantity);
+  if (entries.length === 0) return { success: true, results: [], statements: [] };
+
+  const mergedEntries = mergeReleaseEntries(entries);
+  const multiPoolVariant = findVariantWithMultipleReleasePools(mergedEntries);
+  if (multiPoolVariant) {
+    return {
+      ...buildStrictReleaseFailure(
+        mergedEntries,
+        `Variant ${multiPoolVariant} cannot release multiple inventory pools in one counter mutation`,
+        true,
+      ),
+      statements: [],
+    };
+  }
+
+  const variantLoad = await loadReleaseVariantStates(db, mergedEntries);
+  if (!variantLoad.success) return { ...variantLoad, statements: [] };
+  const trackedEntries = mergedEntries.filter(
+    (entry) => variantLoad.variants.get(entry.variantId)?.trackInventory !== false,
+  );
+  if (trackedEntries.length === 0) {
+    return {
+      success: true,
+      results: buildReleaseSuccessResults(mergedEntries, variantLoad.variants, new Map()),
+      statements: [],
+    };
+  }
+
+  const stats = await loadReleaseMovementStats(db, orderId, trackedEntries);
+  const entriesToRelease: StrictReleaseEntry[] = [];
+  for (const entry of trackedEntries) {
+    const stat = stats.get(entry.variantId);
+    const outstandingQuantity = stat
+      ? Math.max(0, stat.reservedQuantity - stat.releasedQuantity)
+      : 0;
+    if (
+      !stat
+      || stat.reservedQuantity <= 0
+      || outstandingQuantity <= 0
+      || (options.requireExact && outstandingQuantity < entry.quantity)
+    ) {
+      return {
+        ...buildStrictReleaseFailure(
+          mergedEntries,
+          `Reservation evidence is insufficient for order ${orderId} and variant ${entry.variantId}`,
+          true,
+        ),
+        statements: [],
+      };
+    }
+    entriesToRelease.push({
+      ...entry,
+      quantity: Math.min(entry.quantity, outstandingQuantity),
+    });
+  }
+
+  const releaseKey = options.releaseKey ?? DEFAULT_RELEASE_KEY;
+  const claims = await Promise.all(entriesToRelease.map(async (entry) => {
+    const variant = variantLoad.variants.get(entry.variantId)!;
+    const stat = stats.get(entry.variantId)!;
+    const edge = buildInventoryLedgerV2Edge({
+      pool: entry.pool,
+      reservationGeneration: stat.reservationGeneration,
+      before: variant,
+      after: {
+        ...variant,
+        reservedStock: variant.reservedStock - entry.quantity,
+        preorderStock: entry.pool === "preorder"
+          ? variant.preorderStock + entry.quantity
+          : variant.preorderStock,
+        stockVersion: variant.stockVersion + 1,
+      },
+    });
+    return {
+      id: await createReleaseMovementId({
+        releaseKey,
+        orderId,
+        variantId: entry.variantId,
+        pool: entry.pool,
+        generation: stat.reservationGenerations,
+      }),
+      variantId: entry.variantId,
+      orderId,
+      quantity: -entry.quantity,
+      notes: `Released ${entry.quantity} reserved units for order amendment ${orderId}`,
+      ...edge,
+    } satisfies ReleaseMovementClaim;
+  }));
+
+  const statements: SQLiteBatchItem[] = [];
+  for (let index = 0; index < entriesToRelease.length; index += 1) {
+    const entry = entriesToRelease[index]!;
+    const claim = claims[index]!;
+    statements.push(
+      buildReleaseMovementInsert(db, claim, variantLoad.variants.get(entry.variantId)!),
+      buildReleaseVariantUpdate(db, entry, variantLoad.variants.get(entry.variantId)!),
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${inventoryMovements}
+        INNER JOIN ${productVariants}
+          ON ${productVariants.id} = ${inventoryMovements.variantId}
+        WHERE ${inventoryMovements.id} = ${claim.id}
+          AND ${inventoryMovements.orderId} = ${orderId}
+          AND ${inventoryMovements.stockVersionAfter} = ${productVariants.stockVersion}
+          AND ${inventoryMovements.newReservedStock} = ${productVariants.reservedStock}
+          AND ${inventoryMovements.newPreorderStock} = ${productVariants.preorderStock}
+      )`, INVENTORY_RELEASE_PLAN_CONFLICT),
+    );
+  }
+
+  return {
+    success: true,
+    results: buildReleaseSuccessResults(mergedEntries, variantLoad.variants, stats),
+    statements,
+  };
+}
 
 /**
  * Release a reservation for a single variant.

@@ -398,7 +398,7 @@ function serializeAttemptError(error: unknown): string {
   return message.slice(0, MAX_ATTEMPT_ERROR_LENGTH);
 }
 
-async function sha256Hex(value: string): Promise<string> {
+export async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)]
@@ -406,7 +406,7 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableStringify(item)).join(",")}]`;

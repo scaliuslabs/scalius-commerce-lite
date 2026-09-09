@@ -5,6 +5,8 @@ import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import {
     createOrderSchema,
     quoteManualOrderSchema,
+    previewManualOrderAmendmentSchema,
+    confirmManualOrderAmendmentSchema,
     updateOrderSchema,
     archiveOrdersSchema,
     restoreOrderSchema,
@@ -333,7 +335,13 @@ const orderFullEditReadinessSchema = z.object({
     reason: z.string().nullable(),
 });
 
+const orderAmendmentReadinessSchema = z.object({
+    allowed: z.boolean(),
+    reason: z.string().nullable(),
+});
+
 const formDataItemSchema = z.object({
+    orderItemId: z.string(),
     productId: z.string(),
     variantId: z.string().nullable(),
     quantity: z.number(),
@@ -773,6 +781,21 @@ const manualOrderQuoteSchema = z.object({
     })),
 });
 
+const manualOrderAmendmentPreviewSchema = manualOrderQuoteSchema.extend({
+    orderId: z.string(),
+    expectedVersion: z.number().int().min(1),
+    resultingVersion: z.number().int().min(2),
+    balanceDue: z.number().nonnegative(),
+    quoteFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const manualOrderAmendmentResultSchema = z.object({
+    id: z.string(),
+    version: z.number().int().min(2),
+    totalAmount: z.number().nonnegative(),
+    balanceDue: z.number().nonnegative(),
+});
+
 const quoteManualOrderRoute = createRoute({
     operationId: "dashboard.orders.quote",
     method: "post",
@@ -795,6 +818,85 @@ const quoteManualOrderRoute = createRoute({
 app.openapi(quoteManualOrderRoute, async (c) => {
     const quote = await OrdersService.quoteManualOrder(c.get("db"), c.req.valid("json"));
     return ok(c, quote);
+});
+
+const previewManualOrderAmendmentRoute = createRoute({
+    operationId: "dashboard.orders.amendment_preview",
+    method: "post",
+    path: "/{id}/amendments/preview",
+    tags: ["Admin - Orders"],
+    summary: "Preview a guarded manual COD order amendment",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: previewManualOrderAmendmentSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Authoritative amended money and tax preview",
+            content: { "application/json": { schema: successEnvelope(manualOrderAmendmentPreviewSchema) } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(previewManualOrderAmendmentRoute, async (c) => {
+    const result = await OrdersService.previewManualOrderAmendment(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json"),
+    );
+    return ok(c, result);
+});
+
+const confirmManualOrderAmendmentRoute = createRoute({
+    operationId: "dashboard.orders.amendment_confirm",
+    method: "post",
+    path: "/{id}/amendments",
+    tags: ["Admin - Orders"],
+    summary: "Confirm an idempotent guarded manual COD order amendment",
+    request: {
+        params: z.object({ id: z.string() }),
+        headers: manualOrderIdempotencyHeadersSchema,
+        body: { content: { "application/json": { schema: confirmManualOrderAmendmentSchema.partial({ requestKey: true }) } } },
+    },
+    responses: {
+        200: {
+            description: "Amendment committed or exact idempotent replay",
+            content: { "application/json": { schema: successEnvelope(manualOrderAmendmentResultSchema) } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
+    const { requestKey: bodyRequestKey, ...payload } = c.req.valid("json");
+    const requestKey = resolveCanonicalIdempotencyKey(
+        c.req.valid("header")["idempotency-key"],
+        bodyRequestKey,
+        "requestKey",
+    );
+    const user = c.get("user") as { id?: string } | undefined;
+    const result = await OrdersService.confirmManualOrderAmendment(
+        c.get("db"),
+        c.req.valid("param").id,
+        { ...payload, requestKey },
+        user?.id ?? null,
+    );
+    if (result.inventoryMutationVariantIds.length > 0) {
+        await invalidateProductAvailabilityCaches(
+            c.get("db"),
+            { variantIds: result.inventoryMutationVariantIds },
+            c,
+        );
+    }
+    return ok(c, {
+        id: result.id,
+        version: result.version,
+        totalAmount: result.totalAmount,
+        balanceDue: result.balanceDue,
+    });
 });
 
 const createOrderRoute = createRoute({
@@ -1403,6 +1505,7 @@ const getFormDataRoute = createRoute({
                     schema: successEnvelope(z.object({
                         order: orderFormDataSchema,
                         fullEditReadiness: orderFullEditReadinessSchema,
+                        amendmentReadiness: orderAmendmentReadinessSchema,
                         productsWithVariants: z.array(formDataProductSchema),
                         defaultValues: orderFormDataSchema.extend({
                             discountAmount: z.number().nullable(),
@@ -1445,6 +1548,8 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
 
     let fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
     if (!fullEditReadiness) throw new NotFoundError("Order not found");
+    let amendmentReadiness = await OrdersService.getAdminOrderAmendmentReadiness(db, orderId);
+    if (!amendmentReadiness) throw new NotFoundError("Order not found");
 
     const items = await db
         .select({
@@ -1509,7 +1614,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         variantsByProductId.set(variant.productId, existing);
     }
 
-    if (fullEditReadiness.allowed) {
+    if (fullEditReadiness.allowed || amendmentReadiness.allowed) {
         const productById = new Map(allProducts.map((product) => [product.id, product]));
         const variantById = new Map(allVariants.map((variant) => [variant.id, variant]));
         const hasUnavailableOriginalLine = items.some((item) => {
@@ -1523,10 +1628,12 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
                 || Boolean(variant.deletedAt);
         });
         if (hasUnavailableOriginalLine) {
-            fullEditReadiness = {
+            const unavailable = {
                 allowed: false,
                 reason: "One or more original SKUs are no longer active. The historical order remains viewable, but its contents cannot be safely rewritten.",
             };
+            fullEditReadiness = unavailable;
+            amendmentReadiness = unavailable;
         }
     }
 
@@ -1538,11 +1645,13 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
     return ok(c, {
         order,
         fullEditReadiness,
+        amendmentReadiness,
         productsWithVariants,
         defaultValues: {
             ...order,
             discountAmount: order.discountAmount || null,
             items: items.map((item) => ({
+                orderItemId: item.id,
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,

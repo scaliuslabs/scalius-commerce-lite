@@ -75,6 +75,7 @@ import { Route as AdminCustomersCustomerIdEditRouteImport } from './routes/admin
 import { Route as AdminCustomersCustomerIdHistoryRouteImport } from './routes/admin/customers/$customerId/history'
 import { Route as AdminDiscountsDiscountIdEditRouteImport } from './routes/admin/discounts/$discountId/edit'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
+import { Route as AdminOrdersOrderIdAmendRouteImport } from './routes/admin/orders/$orderId/amend'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/products/$productId/index'
@@ -428,6 +429,11 @@ const AdminOrdersOrderIdIndexRoute = AdminOrdersOrderIdIndexRouteImport.update({
   path: '/orders/$orderId/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminOrdersOrderIdAmendRoute = AdminOrdersOrderIdAmendRouteImport.update({
+  id: '/orders/$orderId/amend',
+  path: '/orders/$orderId/amend',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminOrdersOrderIdEditRoute = AdminOrdersOrderIdEditRouteImport.update({
   id: '/orders/$orderId/edit',
   path: '/orders/$orderId/edit',
@@ -540,6 +546,7 @@ export interface FileRoutesByFullPath {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
+  '/admin/orders/$orderId/amend': typeof AdminOrdersOrderIdAmendRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
@@ -615,6 +622,7 @@ export interface FileRoutesByTo {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
+  '/admin/orders/$orderId/amend': typeof AdminOrdersOrderIdAmendRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
@@ -692,6 +700,7 @@ export interface FileRoutesById {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/customers/$customerId/history': typeof AdminCustomersCustomerIdHistoryRoute
   '/admin/discounts/$discountId/edit': typeof AdminDiscountsDiscountIdEditRoute
+  '/admin/orders/$orderId/amend': typeof AdminOrdersOrderIdAmendRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
@@ -770,6 +779,7 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/edit'
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
+    | '/admin/orders/$orderId/amend'
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
@@ -845,6 +855,7 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/edit'
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
+    | '/admin/orders/$orderId/amend'
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
@@ -921,6 +932,7 @@ export interface FileRouteTypes {
     | '/admin/customers/$customerId/edit'
     | '/admin/customers/$customerId/history'
     | '/admin/discounts/$discountId/edit'
+    | '/admin/orders/$orderId/amend'
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
@@ -1410,6 +1422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrdersOrderIdIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/orders/$orderId/amend': {
+      id: '/admin/orders/$orderId/amend'
+      path: '/orders/$orderId/amend'
+      fullPath: '/admin/orders/$orderId/amend'
+      preLoaderRoute: typeof AdminOrdersOrderIdAmendRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/orders/$orderId/edit': {
       id: '/admin/orders/$orderId/edit'
       path: '/orders/$orderId/edit'
@@ -1537,6 +1556,7 @@ interface AdminRouteChildren {
   AdminCustomersCustomerIdEditRoute: typeof AdminCustomersCustomerIdEditRoute
   AdminCustomersCustomerIdHistoryRoute: typeof AdminCustomersCustomerIdHistoryRoute
   AdminDiscountsDiscountIdEditRoute: typeof AdminDiscountsDiscountIdEditRoute
+  AdminOrdersOrderIdAmendRoute: typeof AdminOrdersOrderIdAmendRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
@@ -1595,6 +1615,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersCustomerIdEditRoute: AdminCustomersCustomerIdEditRoute,
   AdminCustomersCustomerIdHistoryRoute: AdminCustomersCustomerIdHistoryRoute,
   AdminDiscountsDiscountIdEditRoute: AdminDiscountsDiscountIdEditRoute,
+  AdminOrdersOrderIdAmendRoute: AdminOrdersOrderIdAmendRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,

@@ -152159,6 +152159,1010 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/amendments/preview": {
+      "post": {
+        "operationId": "dashboard.orders.amendment_preview",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Preview a guarded manual COD order amendment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerName": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 100
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "minLength": 7,
+                    "maxLength": 16
+                  },
+                  "customerEmail": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "email"
+                  },
+                  "shippingAddress": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "zone": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "area": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "cityName": {
+                    "type": "string"
+                  },
+                  "zoneName": {
+                    "type": "string"
+                  },
+                  "areaName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "discountAmount": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "shippingCharge": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99
+                        },
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "variantId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 99
+                  }
+                },
+                "required": [
+                  "customerName",
+                  "customerPhone",
+                  "customerEmail",
+                  "shippingAddress",
+                  "city",
+                  "zone",
+                  "area",
+                  "notes",
+                  "discountAmount",
+                  "shippingCharge",
+                  "expectedVersion",
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authoritative amended money and tax preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "currencyCode": {
+                          "type": "string"
+                        },
+                        "decimalPlaces": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 3
+                        },
+                        "subtotalAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "shippingAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "discountAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "taxAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "totalAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "taxLabel": {
+                          "type": "string"
+                        },
+                        "pricesIncludeTax": {
+                          "type": "boolean"
+                        },
+                        "taxEnabled": {
+                          "type": "boolean"
+                        },
+                        "settingsVersion": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "unitPrice": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "lineSubtotal": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "productId",
+                              "variantId",
+                              "quantity",
+                              "unitPrice",
+                              "lineSubtotal"
+                            ]
+                          }
+                        },
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "resultingVersion": {
+                          "type": "integer",
+                          "minimum": 2
+                        },
+                        "balanceDue": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "quoteFingerprint": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      },
+                      "required": [
+                        "currencyCode",
+                        "decimalPlaces",
+                        "subtotalAmount",
+                        "shippingAmount",
+                        "discountAmount",
+                        "taxAmount",
+                        "totalAmount",
+                        "taxLabel",
+                        "pricesIncludeTax",
+                        "taxEnabled",
+                        "settingsVersion",
+                        "lines",
+                        "orderId",
+                        "expectedVersion",
+                        "resultingVersion",
+                        "balanceDue",
+                        "quoteFingerprint"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/amendments": {
+      "post": {
+        "operationId": "dashboard.orders.amendment_confirm",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Confirm an idempotent guarded manual COD order amendment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Standard retry key. May replace body.requestKey; if both are sent they must match."
+            },
+            "required": false,
+            "description": "Standard retry key. May replace body.requestKey; if both are sent they must match.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerName": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 100
+                  },
+                  "customerPhone": {
+                    "type": "string",
+                    "minLength": 7,
+                    "maxLength": 16
+                  },
+                  "customerEmail": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "email"
+                  },
+                  "shippingAddress": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 500
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "zone": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "area": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "cityName": {
+                    "type": "string"
+                  },
+                  "zoneName": {
+                    "type": "string"
+                  },
+                  "areaName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "discountAmount": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "shippingCharge": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99
+                        },
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "variantId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 99
+                  },
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "quoteFingerprint": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "customerName",
+                  "customerPhone",
+                  "customerEmail",
+                  "shippingAddress",
+                  "city",
+                  "zone",
+                  "area",
+                  "notes",
+                  "discountAmount",
+                  "shippingCharge",
+                  "expectedVersion",
+                  "items",
+                  "quoteFingerprint"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Amendment committed or exact idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 2
+                        },
+                        "totalAmount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "balanceDue": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "totalAmount",
+                        "balanceDue"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      }
+    },
     "/api/v1/admin/orders/archive": {
       "post": {
         "operationId": "dashboard.orders.archive",
@@ -153849,6 +154853,22 @@
                             "reason"
                           ]
                         },
+                        "amendmentReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "allowed": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "allowed",
+                            "reason"
+                          ]
+                        },
                         "supportRequests": {
                           "type": "array",
                           "items": {
@@ -153988,6 +155008,7 @@
                         "refundAttempts",
                         "activeRefundOperation",
                         "fullEditReadiness",
+                        "amendmentReadiness",
                         "supportRequests"
                       ]
                     }
@@ -156227,6 +157248,22 @@
                             "reason"
                           ]
                         },
+                        "amendmentReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "allowed": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "allowed",
+                            "reason"
+                          ]
+                        },
                         "productsWithVariants": {
                           "type": "array",
                           "items": {
@@ -156519,6 +157556,9 @@
                               "items": {
                                 "type": "object",
                                 "properties": {
+                                  "orderItemId": {
+                                    "type": "string"
+                                  },
                                   "productId": {
                                     "type": "string"
                                   },
@@ -156534,6 +157574,7 @@
                                   }
                                 },
                                 "required": [
+                                  "orderItemId",
                                   "productId",
                                   "variantId",
                                   "quantity",
@@ -156566,6 +157607,7 @@
                       "required": [
                         "order",
                         "fullEditReadiness",
+                        "amendmentReadiness",
                         "productsWithVariants",
                         "defaultValues"
                       ]
@@ -208337,6 +209379,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.notifications.firebase_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.amendment_confirm",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.amendment_confirm"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.amendment_preview",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.amendment_preview"
           ]
         },
         {

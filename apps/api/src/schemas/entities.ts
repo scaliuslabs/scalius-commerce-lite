@@ -243,6 +243,11 @@ export const orderFullEditReadinessSchema = z.object({
   reason: z.string().nullable(),
 });
 
+export const orderAmendmentReadinessSchema = z.object({
+  allowed: z.boolean(),
+  reason: z.string().nullable(),
+});
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z.object({
   id: z.string(),
@@ -425,6 +430,7 @@ export const orderDetailSchema = z.object({
   refundAttempts: z.array(orderRefundAttemptSchema),
   activeRefundOperation: activeRefundOperationSchema.nullable(),
   fullEditReadiness: orderFullEditReadinessSchema,
+  amendmentReadiness: orderAmendmentReadinessSchema,
   supportRequests: z.array(orderSupportRequestSchema),
 });
 
