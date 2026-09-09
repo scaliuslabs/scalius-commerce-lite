@@ -207,14 +207,19 @@ export class PathaoProvider implements DeliveryProviderInterface {
     options?: ShipmentOptions,
   ): Promise<ShipmentResult> {
     try {
-      const token = await this.getAccessToken();
-
-      const itemCount = options?.itemCount || 1;
-
       const amountToCollect =
         options?.codAmount !== undefined
           ? options.codAmount
           : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
+      if (!Number.isSafeInteger(amountToCollect) || amountToCollect < 0) {
+        return {
+          success: false,
+          message: "Pathao requires a whole-taka COD amount. Use another courier for this balance.",
+        };
+      }
+
+      const token = await this.getAccessToken();
+      const itemCount = options?.itemCount || 1;
 
       if (!order.city || !order.zone) {
         return {
