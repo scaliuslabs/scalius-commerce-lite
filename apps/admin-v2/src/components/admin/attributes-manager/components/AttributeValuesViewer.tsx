@@ -1,5 +1,5 @@
 // src/components/admin/attributes-manager/components/AttributeValuesViewer.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -42,6 +42,7 @@ export function AttributeValuesViewer({
 }: AttributeValuesViewerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
+  const openerAttributeId = useRef<string | null>(null);
   const debouncedSearch = useDebounce(searchQuery.trim(), 300);
 
   const valuesQuery = useQuery({
@@ -58,6 +59,7 @@ export function AttributeValuesViewer({
   const isLoading = Boolean(attributeId) && valuesQuery.isPending;
 
   useEffect(() => {
+    if (attributeId) openerAttributeId.current = attributeId;
     setSearchQuery("");
     setPage(1);
   }, [attributeId]);
@@ -76,9 +78,11 @@ export function AttributeValuesViewer({
         className="max-w-3xl overflow-y-auto flex flex-col"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          requestAnimationFrame(() => {
-            if (openerRef.current?.isConnected) openerRef.current.focus();
-          });
+          const replacement = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-attribute-values-opener]"),
+          ).find((node) => node.dataset.attributeValuesOpener === openerAttributeId.current);
+          const target = openerRef.current?.isConnected ? openerRef.current : replacement;
+          target?.focus();
         }}
       >
         <DialogHeader className="shrink-0">
