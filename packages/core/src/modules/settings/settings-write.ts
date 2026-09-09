@@ -1,4 +1,4 @@
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
 import { sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -7,6 +7,12 @@ import {
   encodeEncryptedCredential,
   encryptCredentials,
 } from "@scalius/core/utils/credential-encryption";
+import { ConflictError } from "@scalius/core/errors";
+import {
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media/media-reference-guard";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -16,6 +22,7 @@ export interface SettingAggregateWrite {
   value: string;
   type?: string;
   encrypted?: boolean;
+  rejectDeletingMediaReferences?: boolean;
 }
 
 /**
@@ -74,5 +81,18 @@ export async function saveSettingAggregate(
 ): Promise<void> {
   if (writes.length === 0) return;
   const statements = await prepareSettingAggregateStatements(db, writes, encryptionKey);
-  await safeBatch(db, statements);
+  const mediaGuards = writes
+    .filter((write) => write.rejectDeletingMediaReferences)
+    .flatMap((write) => {
+      const guard = noDeletingMediaReferences(write.value);
+      return guard ? [buildBatchGuard(db, guard, "MEDIA_REFERENCE_DELETING")] : [];
+    });
+  try {
+    await safeBatch(db, [...mediaGuards, ...statements] as never);
+  } catch (error) {
+    if (isMediaReferenceDeletingGuardError(error)) {
+      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
+    }
+    throw error;
+  }
 }

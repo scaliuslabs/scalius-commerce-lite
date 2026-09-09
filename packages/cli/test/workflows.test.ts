@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import { CliError } from "../src/errors.js";
 import type { OpenApiDocument, OpenApiOperation } from "../src/types.js";
 import resolveWorkflow, { prepareWorkflowRead } from "../src/workflows.js";
-import { AGENT_INTENT_EVAL_CASES } from "./fixtures/agent-intents.js";
+import {
+  AGENT_INTENT_EVAL_CASES,
+  AGENT_INTENT_OPERATION_CASES,
+} from "./fixtures/agent-intents.js";
 
 type TestCatalog = {
   version: string;
@@ -313,6 +316,29 @@ describe("CLI workflow resolver adapter", () => {
       }
       expect(new TextEncoder().encode(JSON.stringify(result)).byteLength, testCase.id)
         .toBeLessThanOrEqual(16 * 1024);
+    }
+  }, 45_000);
+
+  it("preserves action and target for focused operation cases", async () => {
+    const liveDocument = await loadLiveDocument();
+
+    for (const testCase of AGENT_INTENT_OPERATION_CASES) {
+      const result = resolveWorkflow(liveDocument, {
+        prompt: testCase.prompt,
+        surface: "dashboard",
+      });
+      const operationIds = result.kind === "plan"
+        ? result.plan.operationIds
+        : result.kind === "control"
+          ? result.safePlan?.operationIds ?? []
+          : [];
+      expect(result.disposition, testCase.id).toBe(testCase.expectedDisposition);
+      if (testCase.expectedOperationIds) {
+        expect(operationIds, testCase.id).toEqual(testCase.expectedOperationIds);
+      }
+      for (const forbiddenOperationId of testCase.forbiddenOperationIds ?? []) {
+        expect(operationIds, `${testCase.id} executed ${forbiddenOperationId}`).not.toContain(forbiddenOperationId);
+      }
     }
   }, 45_000);
 

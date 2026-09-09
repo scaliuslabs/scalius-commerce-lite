@@ -26,6 +26,8 @@ interface LocationFormDialogProps {
   parentLocations: Location[];
   loadingParents: boolean;
   onSubmit: (e: React.SyntheticEvent) => void;
+  openerRef: React.RefObject<HTMLElement | null>;
+  fallbackFocusRef: React.RefObject<HTMLElement | null>;
 }
 
 export function LocationFormDialog({
@@ -39,6 +41,8 @@ export function LocationFormDialog({
   parentLocations,
   loadingParents,
   onSubmit,
+  openerRef,
+  fallbackFocusRef,
 }: LocationFormDialogProps) {
   const locationLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
   const parentLabel = activeTab === "zone" ? "City" : "Zone";
@@ -63,7 +67,15 @@ export function LocationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(event) => {
+          const target = openerRef.current?.isConnected ? openerRef.current : fallbackFocusRef.current;
+          if (target?.isConnected) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {editMode ? "Edit" : "Add New"}{" "}

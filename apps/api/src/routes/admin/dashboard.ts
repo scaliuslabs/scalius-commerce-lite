@@ -59,8 +59,8 @@ const dashboardStatsSchema = z.object({
     currentMonth: z.object({
         orders: z.number(),
         revenue: z.number(),
-        orderGrowth: z.number(),
-        revenueGrowth: z.number(),
+        orderGrowth: z.number().nullable(),
+        revenueGrowth: z.number().nullable(),
         orderStatus: z.object({
             delivered: z.number(),
             processing: z.number(),

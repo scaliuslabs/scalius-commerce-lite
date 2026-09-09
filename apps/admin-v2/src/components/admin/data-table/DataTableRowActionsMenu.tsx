@@ -56,7 +56,7 @@ export function DataTableRowActionsMenu({
         {extraActions?.map((action) => (
           <DropdownMenuItem
             key={action.label}
-            onClick={action.onClick}
+            onClick={() => action.onClick()}
             className={action.destructive ? "text-destructive" : ""}
           >
             {action.icon && <action.icon className="mr-2 h-3.5 w-3.5" />}

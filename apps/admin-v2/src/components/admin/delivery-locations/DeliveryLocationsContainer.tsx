@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Button } from "../../ui/button";
@@ -15,6 +16,8 @@ import {
 
 export function DeliveryLocationsContainer() {
   const state = useDeliveryLocations();
+  const addLocationRef = useRef<HTMLButtonElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const labels = {
     city: { singular: "city", plural: "cities", title: "City" },
     zone: { singular: "zone", plural: "zones", title: "Zone" },
@@ -62,7 +65,15 @@ export function DeliveryLocationsContainer() {
               Clean All Data
             </Button>
 
-            <Button size="sm" className="min-h-11 sm:min-h-9" onClick={() => state.setShowAddDialog(true)}>
+            <Button
+              ref={addLocationRef}
+              size="sm"
+              className="min-h-11 sm:min-h-9"
+              onClick={(event) => {
+                openerRef.current = event.currentTarget;
+                state.setShowAddDialog(true);
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add {labels.title}
             </Button>
@@ -142,7 +153,10 @@ export function DeliveryLocationsContainer() {
               pagination={state.pagination}
               onPageChange={state.handlePageChange}
               onLimitChange={state.handleLimitChange}
-              onEdit={state.handleEditLocation}
+              onEdit={(location, opener) => {
+                openerRef.current = opener;
+                state.handleEditLocation(location);
+              }}
               selectedLocationIds={state.selectedLocationIds}
               onToggleSelectLocation={state.handleToggleSelectLocation}
               onSelectAllLocations={state.handleSelectAllLocations}
@@ -168,6 +182,8 @@ export function DeliveryLocationsContainer() {
         parentLocations={state.parentLocations}
         loadingParents={state.loadingParents}
         onSubmit={state.handleSubmit}
+        openerRef={openerRef}
+        fallbackFocusRef={addLocationRef}
       />
 
       {/* Delete Confirmation Dialogs */}

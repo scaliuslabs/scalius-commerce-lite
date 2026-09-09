@@ -379,7 +379,7 @@ const DailyActivityEmptyState = () => (
         No daily activity yet
       </p>
       <p className="text-xs text-muted-foreground">
-        Orders, revenue, and customer activity will appear here once recorded.
+        Orders, order value, and customer activity will appear here once recorded.
       </p>
     </div>
   </div>
@@ -568,7 +568,7 @@ function DailyActivitySvgChart({
       >
         <title id={titleId}>Daily activity chart</title>
         <desc id={descriptionId}>
-          Daily revenue, orders, and new customers for the selected date range.
+          Daily order value, orders, and new customers for the selected date range.
           Focus the plot area and use arrow keys to hear exact values.
         </desc>
         <defs>
@@ -768,7 +768,7 @@ export function DashboardChart({
       <CardHeader className="flex flex-col items-start gap-2 space-y-0 border-b py-5 sm:flex-row sm:items-center sm:gap-4">
         <div className="grid flex-1 gap-1 text-left">
           <CardTitle>Daily Activity</CardTitle>
-          <CardDescription>Showing daily orders and revenue</CardDescription>
+          <CardDescription>Showing daily orders and order value</CardDescription>
         </div>
         <Select value={timeRange} onValueChange={setTimeRange}>
           <SelectTrigger
