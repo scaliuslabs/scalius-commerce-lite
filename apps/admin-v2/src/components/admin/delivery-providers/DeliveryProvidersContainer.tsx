@@ -72,8 +72,8 @@ const DEFAULT_CONFIG = {
 
 export type DeliveryProviderDraft = Omit<
   DeliveryProviderRecord,
-  "createdAt" | "updatedAt"
->;
+  "createdAt" | "updatedAt" | "type"
+> & { type: DeliveryProviderType };
 
 export function updateDeliveryProviderCredential(
   draft: DeliveryProviderDraft,
