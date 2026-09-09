@@ -49,15 +49,10 @@ export function LanguageFormDialog({
     Partial<ManagerCheckoutLanguage>
   >(() => getInitialFormData(editingLanguage));
 
-  // Reset form data when editingLanguage changes
-  const resetForm = (lang: ManagerCheckoutLanguage | null) => {
-    setCurrentFormData(getInitialFormData(lang));
-  };
-
-  // Sync form data when editingLanguage prop changes (e.g., switching from one language to another)
+  // Initialize a fresh draft whenever the controlled dialog actually opens.
   useEffect(() => {
-    resetForm(editingLanguage);
-  }, [editingLanguage]);
+    if (isOpen) setCurrentFormData(getInitialFormData(editingLanguage));
+  }, [isOpen, editingLanguage]);
 
   const handleFormSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -101,10 +96,7 @@ export function LanguageFormDialog({
   return (
     <Dialog
       open={isOpen}
-      onOpenChange={(open) => {
-        onOpenChange(open);
-        if (open) resetForm(editingLanguage);
-      }}
+      onOpenChange={onOpenChange}
     >
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
