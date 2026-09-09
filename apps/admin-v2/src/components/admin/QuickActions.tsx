@@ -3,6 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { canAccessAdminPath } from "@/lib/admin-access";
 import {
   Plus,
   Package,
@@ -58,6 +60,13 @@ const actions = [
 ] as const;
 
 export function QuickActions() {
+  const { permissions, isSuperAdmin } = usePermissions();
+  const permittedActions = actions.filter((action) =>
+    canAccessAdminPath(action.href, { permissions, isSuperAdmin }),
+  );
+
+  if (permittedActions.length === 0) return null;
+
   return (
     <ErrorBoundary
       fallback={
@@ -80,7 +89,7 @@ export function QuickActions() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 p-0 lg:grid-cols-1">
-          {actions.map((action) => (
+          {permittedActions.map((action) => (
             <Button
               key={action.href}
               variant="outline"
