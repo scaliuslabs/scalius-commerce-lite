@@ -62,6 +62,8 @@ import {
   type DeliveryProviderType,
 } from "./ProviderIcon";
 
+export type DeliveryProviderEnvironment = "production" | "sandbox" | "custom";
+
 interface ProviderDetailPanelProps {
   selectedProvider: DeliveryProviderRecord | null;
   isEditing: boolean;
@@ -85,6 +87,8 @@ interface ProviderDetailPanelProps {
   onChangeType: (type: DeliveryProviderType) => void;
   onChangeCredential: (field: string, value: string) => void;
   onChangeConfig: (field: string, value: string | number) => void;
+  environment: DeliveryProviderEnvironment;
+  onChangeEnvironment: (environment: DeliveryProviderEnvironment) => void;
   getWebhookUrl: (type: string) => string;
   onCopyWebhookUrl: () => void;
   onCopySecret: () => void;
@@ -114,6 +118,8 @@ export function ProviderDetailPanel({
   onChangeType,
   onChangeCredential,
   onChangeConfig,
+  environment,
+  onChangeEnvironment,
   getWebhookUrl,
   onCopyWebhookUrl,
   onCopySecret,
@@ -126,7 +132,7 @@ export function ProviderDetailPanel({
   });
   const hasActivationBlockers = activationBlockers.length > 0;
   const activeSaveBlocked = formData.isActive && hasActivationBlockers;
-  const readiness = resolveProviderReadiness(selectedProvider ?? formData);
+  const readiness = resolveProviderReadiness(isEditing ? formData : selectedProvider ?? formData);
   const readinessMessage = getProviderReadinessMessage(readiness);
 
   if (!selectedProvider && !isCreating) {
@@ -329,17 +335,64 @@ export function ProviderDetailPanel({
             Credentials
           </h4>
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="provider-environment">Environment</Label>
+              <Select
+                value={environment}
+                onValueChange={(value) => onChangeEnvironment(value as DeliveryProviderEnvironment)}
+                disabled={!isEditing}
+              >
+                <SelectTrigger id="provider-environment" className="min-h-11 sm:min-h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="production">Production</SelectItem>
+                  {formData.type === "pathao" && <SelectItem value="sandbox">Sandbox</SelectItem>}
+                  <SelectItem value="custom">Custom endpoint</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="self-end text-xs text-muted-foreground">
+              <p className="break-all font-mono">{creds.baseUrl || "Enter a custom endpoint below."}</p>
+              <p className="mt-1">
+                {formData.type === "pathao"
+                  ? environment === "sandbox"
+                    ? "Sandbox credentials + matching Store ID."
+                    : environment === "production"
+                      ? "Production credentials + matching Store ID."
+                      : "Configured custom endpoint."
+                  : environment === "production"
+                    ? "Production API only."
+                    : "Configured custom endpoint."}
+              </p>
+            </div>
+            {isEditing && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 sm:col-span-2">
+                Changing this clears draft credentials{formData.type === "pathao" ? " and Store ID" : ""}. Changes apply when saved.
+              </p>
+            )}
+            <Accordion type="single" collapsible className="sm:col-span-2">
+              <AccordionItem value="endpoint">
+                <AccordionTrigger className="py-2 text-xs text-muted-foreground hover:no-underline">
+                  Advanced endpoint
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="provider-base-url">Base URL</Label>
+                    <Input
+                      id="provider-base-url"
+                      value={creds.baseUrl || ""}
+                      onChange={(event) => onChangeCredential("baseUrl", event.target.value)}
+                      disabled={!isEditing}
+                      placeholder={formData.type === "pathao" ? "https://api-hermes.pathao.com" : "https://portal.packzy.com/api/v1"}
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+
           {formData.type === "pathao" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Base URL</Label>
-                <Input
-                  value={creds.baseUrl || ""}
-                  onChange={(e) => onChangeCredential("baseUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://api-hermes.pathao.com"
-                />
-              </div>
               <div className="space-y-1.5">
                 <Label>Client ID</Label>
                 <Input
@@ -379,15 +432,6 @@ export function ProviderDetailPanel({
 
           {formData.type === "steadfast" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Base URL</Label>
-                <Input
-                  value={creds.baseUrl || ""}
-                  onChange={(e) => onChangeCredential("baseUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://portal.packzy.com/api/v1"
-                />
-              </div>
               <div className="space-y-1.5">
                 <Label>API Key</Label>
                 <Input
@@ -673,6 +717,7 @@ export function ProviderDetailPanel({
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong className="text-foreground">Credentials:</strong> Obtain your Client ID, Client Secret, Username, and Password from the Pathao Merchant Portal.</li>
                       <li><strong className="text-foreground">Store ID:</strong> Your Pathao Store ID where shipments will be originated.</li>
+                      <li><strong className="text-foreground">Custom endpoint:</strong> Use only for an existing test or proxy setup, with matching credentials and Store ID.</li>
                       <li>
                         <strong className="text-foreground">Location mapping:</strong>{" "}
                         Pathao requires numeric IDs for City and Zone, with Area
@@ -697,6 +742,7 @@ export function ProviderDetailPanel({
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong className="text-foreground">Credentials:</strong> Generate <code>Api-Key</code> and <code>Secret-Key</code> from the Steadfast portal.</li>
                       <li><strong className="text-foreground">Base URL:</strong> <code>https://portal.packzy.com/api/v1</code></li>
+                      <li><strong className="text-foreground">Custom endpoint:</strong> Use only for an existing test or proxy setup with matching credentials.</li>
                       <li><strong className="text-foreground">Location mapping:</strong> Steadfast does not strictly require predefined numeric area codes in the same way, but ensuring full text addresses are passed covers most routing.</li>
                     </ul>
                   </div>
