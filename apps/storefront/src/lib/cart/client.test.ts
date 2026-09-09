@@ -552,4 +552,20 @@ describe("updateCheckoutButtonState", () => {
     expect(submitButton.disabled).toBe(true);
     expect(submitButton.title).toBe("Confirming current total.");
   });
+
+  it("keeps checkout disabled while a discount validation is pending", () => {
+    const submitButton = document.getElementById(
+      "submitButton",
+    ) as HTMLButtonElement;
+    applyCheckoutButtonState(submitButton, {
+      checkoutUnavailable: false,
+      unavailableMessage: "",
+      isEmpty: false,
+      discountValidationPending: true,
+      discountValidationPendingMessage: "Processing…",
+    });
+
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.title).toBe("Processing…");
+  });
 });

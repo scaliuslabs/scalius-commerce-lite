@@ -7,6 +7,8 @@ export function applyCheckoutButtonState(
     cartBlocked?: boolean;
     cartBlockedMessage?: string;
     checkoutPending?: boolean;
+    discountValidationPending?: boolean;
+    discountValidationPendingMessage?: string;
     quoteUnverified?: boolean;
     quoteUnverifiedMessage?: string;
   },
@@ -16,6 +18,7 @@ export function applyCheckoutButtonState(
     options.isEmpty ||
     options.cartBlocked === true ||
     options.checkoutPending === true ||
+    options.discountValidationPending === true ||
     options.quoteUnverified === true;
   submitButton.disabled = disabled;
   submitButton.classList.toggle("opacity-50", disabled);
@@ -28,6 +31,8 @@ export function applyCheckoutButtonState(
         ? options.cartBlockedMessage || "Some cart items need attention"
       : options.checkoutPending
         ? "Continue or review the existing checkout before placing another order"
+      : options.discountValidationPending
+        ? options.discountValidationPendingMessage || "Processing…"
       : options.quoteUnverified
         ? options.quoteUnverifiedMessage || "Wait for the current order total"
       : "";
