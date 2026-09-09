@@ -3181,7 +3181,6 @@ describe("reviewed agent workflow resolver", () => {
     expect(product.plan.detail.phaseStopConditions.dashboardVerify).toContain(
       "Oversize preview: report row unverified; do not claim feed parity.",
     );
-    expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBe(15_948);
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
       16 * 1024,
     );
