@@ -5,6 +5,17 @@ import { useForm, useWatch } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
+import { formatSavedMajorAmount } from "~/lib/order-tax-presentation";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { OrderStatus } from "@/types/api-responses";
 import { FormActionBar } from "@/components/admin/FormStickyHeader";
@@ -155,6 +166,13 @@ export function OrderForm({
   const updateMutation = useUpdateOrder();
   const amendMutation = useConfirmManualOrderAmendment();
   const amendmentRequest = React.useRef<{ key: string; payload: string } | null>(null);
+  const [pendingAmendment, setPendingAmendment] = React.useState<{
+    input: ManualOrderAmendmentInput;
+    orderId: string;
+    quoteFingerprint: string;
+    requestKey: string;
+    formattedTotal: string;
+  } | null>(null);
   const createRequestKey = React.useRef<string | null>(
     isEdit ? null : getOrCreateAdminOrderRequestKey(),
   );
@@ -312,6 +330,7 @@ export function OrderForm({
   const isSubmitting = createMutation.isPending
     || updateMutation.isPending
     || amendMutation.isPending;
+  const isInteractionLocked = isSubmitting || pendingAmendment !== null;
   const [locations, setLocations] = React.useState<{
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
@@ -409,23 +428,13 @@ export function OrderForm({
       if (amendmentRequest.current?.payload !== payload) {
         amendmentRequest.current = { key: crypto.randomUUID(), payload };
       }
-      const confirmed = window.confirm(
-        `Confirm this amendment? The revised order total and COD balance due will be ${quote?.currencyCode ?? ""} ${quote?.totalAmount.toLocaleString() ?? "unavailable"}.`,
-      );
-      if (!confirmed) return;
-      try {
-        await amendMutation.mutateAsync({
-          ...input,
-          requestKey: amendmentRequest.current.key,
-          quoteFingerprint: quote.quoteFingerprint,
-        });
-        void navigate({
-          to: "/admin/orders/$orderId",
-          params: { orderId },
-        });
-      } catch {
-        // Mutation feedback is shown by the shared hook; retain the key for safe retry.
-      }
+      setPendingAmendment({
+        input,
+        orderId,
+        quoteFingerprint: quote.quoteFingerprint,
+        requestKey: amendmentRequest.current.key,
+        formattedTotal: formatSavedMajorAmount(quote.totalAmount, quote),
+      });
     } else if (isEdit) {
       const orderId = enrichedValues.id || defaultValues?.id;
       if (!orderId) {
@@ -488,7 +497,26 @@ export function OrderForm({
       }
       toast.error(getServerFnError(result.error, "Failed to create order"));
     }
-  }, [amendMutation, createMutation, defaultValues?.id, isAmend, isEdit, locations, manualQuote.data, manualQuote.isCurrent, navigate, updateMutation]);
+  }, [createMutation, defaultValues?.id, isAmend, isEdit, locations, manualQuote.data, manualQuote.isCurrent, navigate, updateMutation]);
+
+  const handleConfirmAmendment = useCallback(async () => {
+    const pending = pendingAmendment;
+    if (!pending || amendMutation.isPending) return;
+    try {
+      await amendMutation.mutateAsync({
+        ...pending.input,
+        requestKey: pending.requestKey,
+        quoteFingerprint: pending.quoteFingerprint,
+      });
+      setPendingAmendment(null);
+      void navigate({
+        to: "/admin/orders/$orderId",
+        params: { orderId: pending.orderId },
+      });
+    } catch {
+      // Mutation feedback is shown by the shared hook; retain the key for safe retry.
+    }
+  }, [amendMutation, navigate, pendingAmendment]);
 
   // --- DATA LOADING AND SIDE EFFECTS ---
 
@@ -517,7 +545,7 @@ export function OrderForm({
         if (
           canSave &&
           manualQuote.isCurrent &&
-          !isSubmitting &&
+          !isInteractionLocked &&
           form.getValues("items").length > 0
         ) {
           e.preventDefault();
@@ -527,7 +555,7 @@ export function OrderForm({
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [canSave, form, handleSubmit, isSubmitting, manualQuote.isCurrent]);
+  }, [canSave, form, handleSubmit, isInteractionLocked, manualQuote.isCurrent]);
 
   const canSubmit = canSave && manualQuote.isCurrent;
 
@@ -574,7 +602,7 @@ export function OrderForm({
             setIsLoading={setIsLoading}
             loadZones={loadZones}
             loadAreas={loadAreas}
-            isSubmitting={isSubmitting}
+            isSubmitting={isInteractionLocked}
             manualQuote={manualQuote}
           >
             <CustomerInfoSection />
@@ -587,10 +615,37 @@ export function OrderForm({
           </OrderFormProvider>
         </form>
       </Form>
+      <AlertDialog
+        open={pendingAmendment !== null}
+        onOpenChange={(open) => {
+          if (!open && !amendMutation.isPending) setPendingAmendment(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm order amendment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Revised order total and COD balance due: {pendingAmendment?.formattedTotal}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={amendMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={amendMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmAmendment();
+              }}
+            >
+              {amendMutation.isPending ? "Saving…" : "Confirm amendment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <FormActionBar
         title="Orders"
         isEdit={isEdit}
-        isSubmitting={isSubmitting}
+        isSubmitting={isInteractionLocked}
         isDirty={form.formState.isDirty}
         cancelUrl="/admin/orders"
         newUrl="/admin/orders/new"
