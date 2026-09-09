@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -44,6 +44,7 @@ export function LanguageFormDialog({
   isActionLoading,
   onSubmit,
 }: LanguageFormDialogProps) {
+  const copyFieldPrefix = useId();
   const [currentFormData, setCurrentFormData] = useState<
     Partial<ManagerCheckoutLanguage>
   >(() => getInitialFormData(editingLanguage));
@@ -216,8 +217,9 @@ export function LanguageFormDialog({
                   ["areaLabel", "Area Label"],
                 ].map(([key, label]) => (
                   <div key={key}>
-                    <Label className="text-xs">{label}</Label>
+                    <Label htmlFor={`${copyFieldPrefix}-${key}`} className="text-xs">{label}</Label>
                     <Input
+                      id={`${copyFieldPrefix}-${key}`}
                       value={currentFormData.languageData?.[key] || ""}
                       onChange={(e) => updateLanguageData(key, e.target.value)}
                       className="mt-1 min-h-11 text-sm sm:min-h-9"
@@ -236,8 +238,9 @@ export function LanguageFormDialog({
                   ["processingText", "Processing Text"],
                 ].map(([key, label]) => (
                   <div key={key}>
-                    <Label className="text-xs">{label}</Label>
+                    <Label htmlFor={`${copyFieldPrefix}-${key}`} className="text-xs">{label}</Label>
                     <Input
+                      id={`${copyFieldPrefix}-${key}`}
                       value={currentFormData.languageData?.[key] || ""}
                       onChange={(e) => updateLanguageData(key, e.target.value)}
                       className="mt-1 min-h-11 text-sm sm:min-h-9"
@@ -245,8 +248,9 @@ export function LanguageFormDialog({
                   </div>
                 ))}
                 <div className="col-span-2">
-                  <Label className="text-xs">Terms & Conditions Text</Label>
+                  <Label htmlFor={`${copyFieldPrefix}-termsText`} className="text-xs">Terms & Conditions Text</Label>
                   <Textarea
+                    id={`${copyFieldPrefix}-termsText`}
                     value={currentFormData.languageData?.termsText || ""}
                     onChange={(e) =>
                       updateLanguageData("termsText", e.target.value)
