@@ -50,7 +50,7 @@ function createTestApp(db: Record<string, unknown> = {
 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.getCheckoutDeliveryReadiness.mockResolvedValue({
-    ready: true,
+    status: "ready",
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
     issues: [],
@@ -269,16 +269,19 @@ describe("delivery location cache invalidation", () => {
   it("rejects bulk deleting the last usable city-zone checkout chain", async () => {
     mocks.getCheckoutDeliveryReadiness
       .mockResolvedValueOnce({
-        ready: true,
+        status: "ready",
         hasActiveShippingMethod: true,
         hasActiveDeliveryHierarchy: true,
         issues: [],
       })
       .mockResolvedValueOnce({
-        ready: false,
+        status: "incomplete",
         hasActiveShippingMethod: true,
         hasActiveDeliveryHierarchy: false,
-        issues: ["Add at least one active city with an active zone before checkout can accept orders."],
+        issues: [{
+          code: "missing_active_delivery_location",
+          message: "Add at least one active city with an active zone before checkout can accept orders.",
+        }],
       });
     const db = {
       update: vi.fn(() => ({

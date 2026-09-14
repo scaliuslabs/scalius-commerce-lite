@@ -3,11 +3,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
 }));
 
-vi.mock("@/lib/api/client", () => mocks);
+vi.mock("@/lib/api/transport", () => mocks);
 
 import { GET, POST } from "../../pages/checkout/continue";
 import { isBrowserContinuationRelayPathname } from "../browser-continuation-relay";
@@ -34,7 +33,7 @@ function request(origin: string, cookie?: string) {
 describe("agent storefront body-only bootstrap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.fetchWithRetry.mockResolvedValue(Response.json({
+    mocks.apiFetch.mockResolvedValue(Response.json({
       success: true,
       data: { id: ID, expiresAt: new Date(Date.now() + 600_000).toISOString() },
     }));
@@ -48,13 +47,10 @@ describe("agent storefront body-only bootstrap", () => {
     expect(response.headers.get("Location")).not.toContain(CODE);
     expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/storefront/agent-continuations/bootstrap",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/storefront/agent-continuations/bootstrap",
       expect.objectContaining({ body: JSON.stringify({ continuationCode: CODE }) }),
-      0,
-      12_000,
-      true,
-      false,
+      { retries: 0, timeout: 12_000, auth: true, logTerminalFailure: false },
     );
   });
 
@@ -72,7 +68,7 @@ describe("agent storefront body-only bootstrap", () => {
     async (origin) => {
       const response = await POST(request(origin));
       expect(response.status).toBe(403);
-      expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+      expect(mocks.apiFetch).not.toHaveBeenCalled();
     },
   );
 

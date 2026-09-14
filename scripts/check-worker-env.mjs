@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -28,7 +28,10 @@ export const apps = [
   {
     name: "api",
     configs: ["apps/api/wrangler.jsonc", "apps/api/wrangler.local.jsonc"],
-    envFiles: ["apps/api/src/env.d.ts", "apps/api/src/hono-env.d.ts"],
+    // One Env declaration per Worker. apps/api/src/hono-env.d.ts only augments
+    // Hono's ContextVariableMap and references this same global Env.
+    envFiles: ["apps/api/src/env.d.ts"],
+    envScanDir: "apps/api/src",
     extraEnv: [
       ...INSTALLED_SECRETS,
       ...OPTIONAL_DATABASE_PROVIDER_ENV,
@@ -58,6 +61,7 @@ export const apps = [
     name: "admin-v2",
     configs: ["apps/admin-v2/wrangler.jsonc"],
     envFiles: ["apps/admin-v2/src/env.d.ts"],
+    envScanDir: "apps/admin-v2/src",
     extraEnv: [
       ...INSTALLED_SECRETS,
       ...OPTIONAL_DATABASE_PROVIDER_ENV,
@@ -77,12 +81,24 @@ export const apps = [
     name: "storefront",
     configs: ["apps/storefront/wrangler.jsonc"],
     envFiles: ["apps/storefront/src/env.d.ts"],
+    envScanDir: "apps/storefront/src",
     extraEnv: ["SCALIUS_SECRET"],
   },
 ];
 
 function readText(path) {
   return readFileSync(resolve(root, path), "utf8");
+}
+
+/** Repo-relative paths of every `.d.ts` file under `dir`. */
+function listDeclarationFiles(dir) {
+  const entries = readdirSync(resolve(root, dir), {
+    withFileTypes: true,
+    recursive: true,
+  });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".d.ts"))
+    .map((entry) => `${relative(root, resolve(entry.parentPath ?? entry.path, entry.name))}`);
 }
 
 function stripJsonc(input) {
@@ -291,6 +307,28 @@ function sorted(values) {
   return [...values].sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * A Worker declares its Cloudflare bindings in exactly one file. A second
+ * `Env` interface or type alias anywhere else in the same Worker silently
+ * drifts from the first, so fail closed on it.
+ */
+export function collectDuplicateEnvDeclarations(app, {
+  readTextImpl = readText,
+  listDeclarationFilesImpl = listDeclarationFiles,
+} = {}) {
+  if (!app.envScanDir) return [];
+  const declared = new Set(app.envFiles);
+  const offenders = listDeclarationFilesImpl(app.envScanDir)
+    .filter((path) => !declared.has(path))
+    .filter((path) => extractEnvBlocks(readTextImpl(path)).length > 0);
+
+  return sorted(offenders).map((path) => (
+    `${app.name}:${path} declares a second Env block. `
+    + `Keep exactly one Env declaration per Worker (${app.envFiles.join(", ")}) `
+    + "and reference that global Env instead of redeclaring it."
+  ));
+}
+
 export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
   const errors = [];
   let checkedEnvFileCount = 0;
@@ -317,6 +355,7 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
     }
 
     const allowed = new Set([...expected, ...app.extraEnv]);
+    errors.push(...collectDuplicateEnvDeclarations(app, { readTextImpl }));
 
     for (const envPath of app.envFiles) {
       checkedEnvFileCount += 1;
@@ -338,7 +377,7 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
   return { errors, checkedEnvFileCount };
 }
 
-export { collectConfigNames, extractEnvNames, stripJsonc };
+export { collectConfigNames, extractEnvBlocks, extractEnvNames, stripJsonc };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { errors, checkedEnvFileCount } = runWorkerEnvCheck();

@@ -1,5 +1,5 @@
 // src/lib/api/abandoned-checkouts.ts
-import { getConfiguredSdkClient, getConfiguredSdkAuthClient } from "./client";
+import { getConfiguredSdkClient, getConfiguredSdkAuthClient } from "./transport";
 import {
   postApiV1AbandonedCheckouts,
   postApiV1AbandonedCheckoutsCleanup,
@@ -36,7 +36,7 @@ export async function saveAbandonedCheckout(payload: AbandonedCheckoutPayload): 
       body,
     });
   } catch (error: unknown) {
-    // The error is logged by fetchWithRetry, so we just swallow it here
+    // The error is logged by apiFetch, so we just swallow it here
     // to prevent it from crashing the client application.
     console.error("Error in saveAbandonedCheckout, but swallowing to prevent UI crash:", error);
   }

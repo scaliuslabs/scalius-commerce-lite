@@ -6,6 +6,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import "@scalius/core/modules/payments/gateway-settings";
 import { getCheckoutConfig } from "@scalius/core/modules/settings/checkout-config.service";
 import { successEnvelope, errorResponses, errorResponseSchema } from "../schemas/responses";
+import { readinessSchema } from "../schemas/readiness";
 
 import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
@@ -66,13 +67,11 @@ const checkoutConfigSchema = z.object({
     symbol: z.string(),
     decimalPlaces: z.number().int().min(0).max(3),
   }),
-  checkoutReadiness: z.object({
-    ready: z.boolean(),
+  checkoutReadiness: readinessSchema.extend({
     hasActiveShippingMethod: z.boolean(),
     hasActiveDeliveryHierarchy: z.boolean(),
     customerSignInRequired: z.boolean(),
     hasUsableCustomerSignIn: z.boolean(),
-    issues: z.array(z.string()).max(3),
   }),
   unavailable: z.boolean(),
   unavailableMessage: z.string().optional(),

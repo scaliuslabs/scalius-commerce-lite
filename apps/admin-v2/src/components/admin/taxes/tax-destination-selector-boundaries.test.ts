@@ -21,11 +21,21 @@ describe("tax destination selector boundaries", () => {
   });
 
   it("keeps large saved-destination lists searchable in the rate editor", () => {
-    const rates = source("./TaxRatesPanel.tsx");
+    const rateForm = source("./TaxRateFormSheet.tsx");
 
-    expect(rates).toContain('<SearchableSelect');
-    expect(rates).toContain('id="tax-rate-jurisdiction"');
-    expect(rates).toContain('maxVisibleOptions={100}');
-    expect(rates).not.toContain('<Select value={draft.jurisdictionId}');
+    expect(rateForm).toContain('<SearchableSelect');
+    expect(rateForm).toContain('id="tax-rate-jurisdiction"');
+    expect(rateForm).toContain('maxVisibleOptions={100}');
+    expect(rateForm).not.toContain('<Select value={draft.jurisdictionId}');
+  });
+
+  it("opens the preview from the workspace as a side sheet, not a tab", () => {
+    const workspace = source("./TaxSettingsPage.tsx");
+
+    expect(workspace).toContain("<EditorSheet");
+    expect(workspace).toContain("open={previewOpen}");
+    expect(workspace).toContain("Preview calculation");
+    expect(workspace).toContain("<TaxPreviewPanel configuration={configuration} />");
+    expect(workspace).not.toContain('TabsContent value="preview"');
   });
 });

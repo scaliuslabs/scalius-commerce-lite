@@ -1,20 +1,23 @@
 // packages/core/src/env.d.ts
 // Ambient Cloudflare Workers Env declaration for @scalius/core.
 //
-// The concrete Env interface is declared in each app's own env.d.ts
-// (apps/api/src/env.d.ts, apps/admin-v2/src/env.d.ts, apps/storefront/src/env.d.ts)
-// with app-specific bindings. This file declares the minimal shape that
-// @scalius/core actually accesses, so the package typechecks on its own.
+// The authoritative Env for a deployment is declared once per Worker
+// (apps/api/src/env.d.ts, apps/admin-v2/src/env.d.ts,
+// apps/storefront/src/env.d.ts). This file is a strict SUBSET of those: it
+// lists only the bindings @scalius/core actually reads, so the package
+// typechecks on its own. Every field below must stay assignment-compatible
+// with the Worker declarations.
 //
 // Because this is a .d.ts ambient declaration, consumers (apps) can declare
-// their own Env interface that extends/merges with this one — TypeScript
-// treats same-name global interfaces as declaration-merged.
+// their own Env interface that extends/merges with this one -- TypeScript
+// treats same-name global interfaces as declaration-merged. Never add a
+// binding here that @scalius/core does not read; add it to the owning Worker.
 
 /**
- * Minimal Cloudflare Workers environment bindings used by @scalius/core.
- * App-specific env.d.ts files extend this via declaration merging.
+ * Minimal Cloudflare Workers environment bindings read by @scalius/core.
  */
 interface Env {
+  // integrations/email/*: `context.env.EMAIL` is the Cloudflare send binding.
   EMAIL?: {
     send(message: {
       to: string | { email: string; name?: string } | Array<string | { email: string; name?: string }>;
@@ -25,44 +28,35 @@ interface Env {
     }): Promise<{ messageId: string }>;
   };
 
-  // KV namespace for caching (used by kv-cache, cache-invalidation, etc.)
+  // KV namespace for caching (auth/rbac/api-protection, middleware-helper/csp-handler).
   CACHE: KVNamespace;
 
-  // KV namespace for shared auth token caching (used by firebase/admin.ts)
+  // KV namespace for shared auth token caching (integrations/firebase/admin.ts).
   SHARED_AUTH_CACHE: KVNamespace;
 
-  // Cloudflare Queue bindings (used by queue handlers)
-  PAYMENT_EVENTS_QUEUE: Queue;
+  // Order notification fan-out (modules/orders/orders.ingest.ts).
   ORDER_NOTIFICATIONS_QUEUE: Queue;
-  AUTH_OTP_QUEUE: Queue;
 
-  // D1 database binding
-  DB: D1Database;
+  // Passed through to `getDb(env)` / `resolveDatabaseConfiguration(env)`.
+  DB?: D1Database;
 
-  // R2 storage bucket
-  BUCKET: R2Bucket;
-
-  // Installed secrets. Exactly two per deployment.
-  SCALIUS_SECRET?: string;
+  // Installed secret used for provider credential decryption.
   CREDENTIAL_ENCRYPTION_KEY?: string;
 
-  // Derived at Worker entry from SCALIUS_SECRET. Never installed.
+  // Derived at Worker entry from SCALIUS_SECRET (auth/auth.ts). Never installed.
   BETTER_AUTH_SECRET: string;
-  JWT_SECRET?: string;
-  CUSTOMER_SESSION_HASH_KEY?: string;
 
   // Resolved at Worker entry from Platform settings. Never Wrangler vars.
-  PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
+  // Read by middleware-helper/csp-handler.ts and notifications/orders link building.
   BETTER_AUTH_URL?: string;
   PUBLIC_API_BASE_URL?: string;
   STOREFRONT_URL?: string;
-  CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
   R2_PUBLIC_URL?: string;
   CDN_DOMAIN_URL?: string;
 
-  // Local development only.
+  // Local development only (integrations/email/settings.ts).
   LOCAL_MAILPIT_URL?: string;
 
-  // Allow additional bindings from apps
+  // Allow additional bindings from apps.
   [key: string]: unknown;
 }

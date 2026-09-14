@@ -42,9 +42,25 @@ function createDb(options: {
       ? []
       : [{ storefrontUrl: options.storefrontUrl }];
   });
-  const where = vi.fn(async () => {
-    if (options.fail) throw new Error("D1 unavailable");
-    return options.rows ?? [];
+  // `.get()` reads the settings document row (absent here, so the legacy
+  // per-key rows are assembled and written back); awaiting the builder reads
+  // the legacy rows.
+  const where = vi.fn(() => {
+    const rows = async () => {
+      if (options.fail) throw new Error("D1 unavailable");
+      return options.rows ?? [];
+    };
+    return {
+      all: rows,
+      get: async () => {
+        if (options.fail) throw new Error("D1 unavailable");
+        return undefined;
+      },
+      then: (
+        resolve: (value: Array<{ key: string; value: string }>) => unknown,
+        reject: (reason: unknown) => unknown,
+      ) => rows().then(resolve, reject),
+    };
   });
   return {
     limit,
@@ -52,6 +68,9 @@ function createDb(options: {
     db: {
       select: vi.fn(() => ({
         from: vi.fn(() => ({ limit, where })),
+      })),
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({ onConflictDoUpdate: vi.fn(async () => undefined) })),
       })),
     },
   };
@@ -170,7 +189,8 @@ describe("composeApiRuntimeEnv", () => {
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
     expect(limit).toHaveBeenCalledTimes(1);
-    expect(where).toHaveBeenCalledTimes(1);
+    // Once for the settings document row, once for the legacy per-key rows.
+    expect(where).toHaveBeenCalledTimes(2);
     expect(cache.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(PRODUCTION_CONFIG),

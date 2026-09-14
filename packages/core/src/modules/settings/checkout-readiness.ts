@@ -3,17 +3,35 @@ import { deliveryLocations, settings, shippingMethods, siteSettings } from "@sca
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { normalizeCustomerAuthPolicy } from "@scalius/shared/customer-auth-policy";
+import {
+    isReady,
+    mergeReadiness,
+    readiness,
+    readinessIssue,
+    type Readiness,
+    type ReadinessIssue,
+} from "@scalius/shared/readiness";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 
-export interface CheckoutReadiness {
-    ready: boolean;
+/**
+ * Checkout readiness speaks the one shared vocabulary (`status` + `issues`)
+ * and adds the typed extras the dashboard uses to light up individual rows.
+ */
+export interface CheckoutDeliveryReadiness extends Readiness {
     hasActiveShippingMethod: boolean;
     hasActiveDeliveryHierarchy: boolean;
+}
+
+export interface CheckoutReadiness extends CheckoutDeliveryReadiness {
     customerSignInRequired: boolean;
     hasUsableCustomerSignIn: boolean;
-    issues: string[];
+}
+
+export interface CustomerSignInReadiness extends Readiness {
+    customerSignInRequired: boolean;
+    hasUsableCustomerSignIn: boolean;
 }
 
 export interface CheckoutReadinessOptions {
@@ -25,19 +43,25 @@ export interface CheckoutReadinessOptions {
     customerSignInRequiredOverride?: boolean;
 }
 
-export interface CheckoutDeliveryReadiness {
-    ready: boolean;
-    hasActiveShippingMethod: boolean;
-    hasActiveDeliveryHierarchy: boolean;
-    issues: string[];
-}
+/** Stable issue codes. Consumers match on these, never on merchant copy. */
+export const CHECKOUT_READINESS_CODES = {
+    shipping: "missing_active_shipping_method",
+    deliveryLocation: "missing_active_delivery_location",
+    customerSignIn: "unusable_customer_sign_in",
+} as const;
 
-export const CHECKOUT_READINESS_SHIPPING_ISSUE =
-    "Add at least one active shipping method before checkout can accept orders.";
-export const CHECKOUT_READINESS_LOCATION_ISSUE =
-    "Add at least one active city with an active zone before checkout can accept orders.";
-export const CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE =
-    "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.";
+export const CHECKOUT_READINESS_SHIPPING_ISSUE: ReadinessIssue = readinessIssue(
+    CHECKOUT_READINESS_CODES.shipping,
+    "Add at least one active shipping method before checkout can accept orders.",
+);
+export const CHECKOUT_READINESS_LOCATION_ISSUE: ReadinessIssue = readinessIssue(
+    CHECKOUT_READINESS_CODES.deliveryLocation,
+    "Add at least one active city with an active zone before checkout can accept orders.",
+);
+export const CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: ReadinessIssue = readinessIssue(
+    CHECKOUT_READINESS_CODES.customerSignIn,
+    "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
+);
 
 export const CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE =
     "Checkout is temporarily unavailable while the merchant finishes checkout setup.";
@@ -100,15 +124,15 @@ export async function getCheckoutDeliveryReadiness(
 
     const hasActiveShippingMethod = activeShippingMethodRows.length > 0;
     const hasActiveDeliveryHierarchy = activeHierarchyRows.length > 0;
-    const issues: string[] = [];
+    const issues: ReadinessIssue[] = [];
     if (!hasActiveShippingMethod) issues.push(CHECKOUT_READINESS_SHIPPING_ISSUE);
     if (!hasActiveDeliveryHierarchy) issues.push(CHECKOUT_READINESS_LOCATION_ISSUE);
 
+    const value = readiness.from(issues);
     return {
-        ready: issues.length === 0,
+        ...value,
         hasActiveShippingMethod,
         hasActiveDeliveryHierarchy,
-        issues,
     };
 }
 
@@ -120,25 +144,32 @@ export async function getCheckoutReadiness(
         getCheckoutDeliveryReadiness(db, options),
         getCustomerSignInReadiness(db, options),
     ]);
-    const issues = [...delivery.issues];
-    if (signIn.customerSignInRequired && !signIn.hasUsableCustomerSignIn) {
-        issues.push(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE);
-    }
+    const value = mergeReadiness(delivery, signIn);
 
     return {
-        ready: issues.length === 0,
+        ...value,
         hasActiveShippingMethod: delivery.hasActiveShippingMethod,
         hasActiveDeliveryHierarchy: delivery.hasActiveDeliveryHierarchy,
         customerSignInRequired: signIn.customerSignInRequired,
         hasUsableCustomerSignIn: signIn.hasUsableCustomerSignIn,
-        issues,
     };
+}
+
+function customerSignInReadiness(
+    customerSignInRequired: boolean,
+    hasUsableCustomerSignIn: boolean,
+): CustomerSignInReadiness {
+    // An unusable channel only blocks checkout when accounts are required.
+    const value = customerSignInRequired && !hasUsableCustomerSignIn
+        ? readiness.incomplete([CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE])
+        : readiness.ready();
+    return { ...value, customerSignInRequired, hasUsableCustomerSignIn };
 }
 
 export async function getCustomerSignInReadiness(
     db: Database,
     options: CheckoutReadinessOptions,
-): Promise<{ customerSignInRequired: boolean; hasUsableCustomerSignIn: boolean }> {
+): Promise<CustomerSignInReadiness> {
     const site = await db
         .select({
             guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
@@ -150,10 +181,10 @@ export async function getCustomerSignInReadiness(
     const customerSignInRequired = options.customerSignInRequiredOverride
         ?? site?.guestCheckoutEnabled === false;
     if (!customerSignInRequired && !options.inspectOptionalCustomerSignIn) {
-        return { customerSignInRequired: false, hasUsableCustomerSignIn: true };
+        return customerSignInReadiness(false, true);
     }
     if (!options.encryptionKey?.trim()) {
-        return { customerSignInRequired, hasUsableCustomerSignIn: false };
+        return customerSignInReadiness(customerSignInRequired, false);
     }
 
     const policyRow = await db
@@ -169,23 +200,23 @@ export async function getCustomerSignInReadiness(
     for (const channel of policy.otpChannels) {
         try {
             if (channel === "email") {
-                const readiness = await getEmailProviderReadiness({
+                const emailReadiness = await getEmailProviderReadiness({
                     db,
                     encryptionKey: options.encryptionKey,
                     env: options.runtimeEnv,
                 });
-                if (readiness.configured) {
-                    return { customerSignInRequired, hasUsableCustomerSignIn: true };
+                if (isReady(emailReadiness)) {
+                    return customerSignInReadiness(customerSignInRequired, true);
                 }
             } else if (channel === "sms") {
-                const readiness = await getSmsProviderReadiness(db, options.encryptionKey);
-                if (readiness.configured) {
-                    return { customerSignInRequired, hasUsableCustomerSignIn: true };
+                const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
+                if (isReady(smsReadiness)) {
+                    return customerSignInReadiness(customerSignInRequired, true);
                 }
             } else {
                 const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
                 if (whatsapp.accessToken && whatsapp.phoneNumberId && whatsapp.authTemplateName) {
-                    return { customerSignInRequired, hasUsableCustomerSignIn: true };
+                    return customerSignInReadiness(customerSignInRequired, true);
                 }
             }
         } catch {
@@ -193,7 +224,7 @@ export async function getCustomerSignInReadiness(
         }
     }
 
-    return { customerSignInRequired, hasUsableCustomerSignIn: false };
+    return customerSignInReadiness(customerSignInRequired, false);
 }
 
 function parseCustomerAuthPolicy(value: string | null | undefined): unknown {

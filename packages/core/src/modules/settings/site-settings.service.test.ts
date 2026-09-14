@@ -88,8 +88,8 @@ describe("general site settings", () => {
       headerConfig: {},
       footerConfig: { description: "Support when you need it" },
       navigationReadiness: {
-        header: { state: "ready" },
-        footer: { state: "ready" },
+        header: { status: "ready", issues: [] },
+        footer: { status: "ready", issues: [] },
       },
     });
   });
@@ -117,8 +117,8 @@ describe("general site settings", () => {
     await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
       headerConfig: {},
       navigationReadiness: {
-        header: { state: "ready" },
-        footer: { state: "ready" },
+        header: { status: "ready", issues: [] },
+        footer: { status: "ready", issues: [] },
       },
     });
     expect(update).not.toHaveBeenCalled();

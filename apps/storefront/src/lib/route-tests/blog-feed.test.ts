@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api/articles", () => ({ getArticles: mocks.getArticles }));
 vi.mock("@/lib/api", () => ({ getLayoutData: mocks.getLayoutData }));
-vi.mock("@/lib/api/runtime-env", () => ({
+vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
 }));
 

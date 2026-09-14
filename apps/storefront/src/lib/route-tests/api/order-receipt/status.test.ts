@@ -3,21 +3,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
 }));
 
-vi.mock("@/lib/api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("@/lib/api/transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 import { GET } from "../../../../pages/api/order-receipt/status";
 import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
-  mocks.createApiUrl.mockClear();
-  mocks.fetchWithRetry.mockReset();
+  mocks.apiFetch.mockReset();
 });
 
 function request(orderId = "ord_1", cookie = "receipt_1") {
@@ -60,11 +57,11 @@ describe("receipt payment status proxy", () => {
 
     expect(invalid.status).toBe(400);
     expect(missingProof.status).toBe(404);
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
   it("returns only the derived pending state while payment is unconfirmed", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify(receipt()), {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify(receipt()), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }));
@@ -74,7 +71,7 @@ describe("receipt payment status proxy", () => {
       success: boolean;
       data: { state: string; updatedAt: string };
     };
-    const [, init, retries, timeout, requiresAuth] = mocks.fetchWithRetry.mock.calls[0]!;
+    const [apiPath, init, policy] = mocks.apiFetch.mock.calls[0]!;
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
@@ -87,18 +84,16 @@ describe("receipt payment status proxy", () => {
       },
     });
     expect(JSON.stringify(json)).not.toContain("receipt_1");
-    expect(mocks.createApiUrl).toHaveBeenCalledWith("/orders/receipt/ord_1");
+    expect(apiPath).toBe("/orders/receipt/ord_1");
     expect(init).toMatchObject({
       headers: { "X-Receipt-Token": "receipt_1" },
       cache: "no-store",
     });
-    expect(retries).toBe(1);
-    expect(timeout).toBe(5000);
-    expect(requiresAuth).toBe(false);
+    expect(policy).toEqual({ retries: 1, timeout: 5000, auth: false });
   });
 
   it("returns a settled state after authoritative payment confirmation", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify(receipt({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify(receipt({
       status: "pending",
       paymentStatus: "paid",
       paidAmount: 9100,
@@ -115,7 +110,7 @@ describe("receipt payment status proxy", () => {
   });
 
   it("does not expose backend receipt errors or malformed responses", async () => {
-    mocks.fetchWithRetry
+    mocks.apiFetch
       .mockResolvedValueOnce(new Response("not found", { status: 404 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
 

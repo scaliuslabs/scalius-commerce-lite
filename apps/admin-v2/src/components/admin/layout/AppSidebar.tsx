@@ -40,6 +40,10 @@ import {
 import { usePermissions } from "@/contexts/PermissionContext";
 import { getFilteredNavSections, type NavItem, type NavSubItem } from "./AdminNav";
 import {
+  getVisibleSettingsNavGroups,
+  isSettingsRouteItem,
+} from "../settings/settings-navigation";
+import {
   collectPermissionVisibleRouteHrefs,
   normalizeNavigationPath,
   preloadAdminRouteChunks,
@@ -216,10 +220,22 @@ export function AppSidebar() {
     () => getFilteredNavSections(permissions, isSuperAdmin),
     [permissions, isSuperAdmin],
   );
-  const permissionVisibleRouteHrefs = useMemo(
-    () => collectPermissionVisibleRouteHrefs(navSections),
-    [navSections],
-  );
+  const permissionVisibleRouteHrefs = useMemo(() => {
+    // The settings destinations left the sidebar for the settings area's own
+    // navigation, but their chunks are still worth warming from here: the
+    // sidebar is the only place that knows the operator's permissions before
+    // the settings page itself is opened.
+    const settingsHrefs = getVisibleSettingsNavGroups(permissions, isSuperAdmin)
+      .flatMap((group) => group.items)
+      .filter(isSettingsRouteItem)
+      .map((item) => item.href);
+    return [
+      ...new Set([
+        ...collectPermissionVisibleRouteHrefs(navSections),
+        ...settingsHrefs,
+      ]),
+    ];
+  }, [navSections, permissions, isSuperAdmin]);
 
   useEffect(() => {
     const controller = new AbortController();

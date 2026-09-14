@@ -1,15 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,8 +13,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -36,13 +35,25 @@ import {
   AlertCircle,
   Users,
   RefreshCw,
-  Search,
   UserCheck,
   UserX,
   ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import {
+  EmptyState,
+  FieldError,
+  IndexFilters,
+  IndexTable,
+  InlineHelp,
+  SettingsSection,
+  StatusBadge,
+  type IndexFilterPill,
+  type IndexTableColumn,
+  type StatusTone,
+} from "~/components/admin/shell";
 import { UserPermissionEditor } from "../UserPermissionEditor";
 import { useAdminUsers, type AdminUser } from "./hooks/useAdminUsers";
 import { useHydrated } from "~/hooks/use-hydrated";
@@ -54,6 +65,19 @@ import {
   isAdminUserAuthorityReady,
   type AdminUserStatus,
 } from "./admin-user-status";
+
+/** Status pills above the list. `all` is the unfiltered default. */
+type StatusFilterId = "all" | "ready" | "setup" | "suspended";
+
+const STATUS_TONES: Record<AdminUserStatus, StatusTone> = {
+  ready: "success",
+  suspended: "critical",
+  invite_pending: "attention",
+  invite_expired: "warning",
+  invite_delivery_failed: "critical",
+  password_setup: "attention",
+  two_factor_setup: "attention",
+};
 
 function getInitials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -87,11 +111,26 @@ function splitAdminUsersBySuspension(adminUsers: AdminUser[]): {
   return { activeUsers, suspendedUsers };
 }
 
-function filterAdminUsers(adminUsers: AdminUser[], normalizedQuery: string): AdminUser[] {
-  if (!normalizedQuery) return adminUsers;
+/** The status pill an administrator belongs to, independent of the search text. */
+function matchesStatusFilter(
+  status: AdminUserStatus,
+  filter: StatusFilterId,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "suspended") return status === "suspended";
+  if (filter === "ready") return status === "ready";
+  return status !== "ready" && status !== "suspended";
+}
 
+function filterAdminUsers(
+  adminUsers: AdminUser[],
+  normalizedQuery: string,
+  statusFilter: StatusFilterId,
+): AdminUser[] {
   return adminUsers.filter((adminUser) => {
     const status = getAdminUserStatus(adminUser);
+    if (!matchesStatusFilter(status, statusFilter)) return false;
+    if (!normalizedQuery) return true;
     return [
       adminUser.name,
       adminUser.email,
@@ -136,9 +175,12 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [revokingInvite, setRevokingInvite] = useState<AdminUser | null>(null);
+  const [suspendingUser, setSuspendingUser] = useState<AdminUser | null>(null);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("all");
   const [suspendedOpen, setSuspendedOpen] = useState(false);
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
@@ -154,17 +196,39 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     [adminUsers],
   );
   const filteredActiveUsers = useMemo(
-    () => filterAdminUsers(activeUsers, normalizedQuery),
-    [activeUsers, normalizedQuery],
+    () => filterAdminUsers(activeUsers, normalizedQuery, statusFilter),
+    [activeUsers, normalizedQuery, statusFilter],
   );
   const filteredSuspendedUsers = useMemo(
-    () => filterAdminUsers(suspendedUsers, normalizedQuery),
-    [suspendedUsers, normalizedQuery],
+    () => filterAdminUsers(suspendedUsers, normalizedQuery, statusFilter),
+    [suspendedUsers, normalizedQuery, statusFilter],
   );
   const hasQuery = normalizedQuery.length > 0;
-  // A search that matches a suspended administrator opens the section so the
-  // match is visible without an extra click.
-  const showSuspendedOpen = suspendedOpen || (hasQuery && filteredSuspendedUsers.length > 0);
+  const hasFilter = hasQuery || statusFilter !== "all";
+  // A search or status pill that matches a suspended administrator opens the
+  // section so the match is visible without an extra click.
+  const showSuspendedOpen = suspendedOpen || (hasFilter && filteredSuspendedUsers.length > 0);
+
+  const statusPills: IndexFilterPill[] = useMemo(() => {
+    const counts: Record<StatusFilterId, number> = {
+      all: adminUsers.length,
+      ready: 0,
+      setup: 0,
+      suspended: 0,
+    };
+    for (const adminUser of adminUsers) {
+      const status = getAdminUserStatus(adminUser);
+      if (status === "suspended") counts.suspended += 1;
+      else if (status === "ready") counts.ready += 1;
+      else counts.setup += 1;
+    }
+    return [
+      { id: "all", label: "All", count: counts.all },
+      { id: "ready", label: "Ready", count: counts.ready },
+      { id: "setup", label: "Setup pending", count: counts.setup },
+      { id: "suspended", label: "Suspended", count: counts.suspended },
+    ];
+  }, [adminUsers]);
 
   const resetInviteForm = () => {
     setShowAddForm(false);
@@ -172,6 +236,11 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     setNewUserEmail("");
     setSelectedRoleId("");
     setError(null);
+  };
+
+  const clearFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
   };
 
   const handleResendSetup = async (userId: string) => {
@@ -221,22 +290,205 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     }
   };
 
-  return (
-    <Card className="rounded-xl shadow-none">
-      <CardHeader className="p-4 pb-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4" />
-              Administrators
-              <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
-                {activeUsers.length}
+  const columns: IndexTableColumn<AdminUser>[] = [
+    {
+      id: "administrator",
+      header: "Administrator",
+      mobileLabel: "Administrator",
+      cell: (adminUser) => (
+        <span className="flex min-w-0 items-center gap-3 py-1.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
+            {adminUser.image ? (
+              <img
+                src={getOptimizedImageUrl(
+                  adminUser.image,
+                  ADMIN_IMAGE_PRESETS.avatar,
+                )}
+                alt=""
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span className="text-xs font-medium text-primary">
+                {getInitials(adminUser.name)}
               </span>
-            </CardTitle>
-            <CardDescription>
-              Invite people and review whether their secure setup is complete.
-            </CardDescription>
-          </div>
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-1.5 font-medium">
+              <span className="truncate">{adminUser.name}</span>
+              {adminUser.id === currentUserId && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                  You
+                </span>
+              )}
+              {adminUser.isSuperAdmin && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  Super Admin
+                </span>
+              )}
+            </span>
+            <span className="block break-words text-xs text-muted-foreground">
+              {adminUser.email}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "access",
+      header: "Access",
+      mobileLabel: "Access",
+      cell: (adminUser) => (
+        <span className="flex min-w-0 flex-wrap justify-end gap-1.5 sm:justify-start">
+          {adminUser.roles.length > 0 ? (
+            adminUser.roles.map((role) => (
+              <span
+                key={role.id}
+                className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
+              >
+                {role.displayName}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-muted-foreground">No assigned role</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      mobileLabel: "Status",
+      cell: (adminUser) => (
+        <AdminStatusBadge
+          status={getAdminUserStatus(adminUser)}
+          invitation={adminUser.invitation}
+        />
+      ),
+    },
+  ];
+
+  const renderRowActions = (adminUser: AdminUser) => {
+    const status = getAdminUserStatus(adminUser);
+    const isOther = adminUser.id !== currentUserId && !adminUser.isSuperAdmin;
+    const canResend = canManageTeam && isInvitationStatus(status);
+    const canRestore = canManageTeam && isOther && status === "suspended";
+    const canEditPermissions = canManageRoles && isOther;
+    const canRevokeInvite = canManageTeam && isOther && isInvitationStatus(status);
+    const canSuspend =
+      canManageTeam
+      && isOther
+      && !isInvitationStatus(status)
+      && status !== "password_setup"
+      && status !== "suspended";
+    const hasMenu = canEditPermissions || canRevokeInvite || canSuspend;
+
+    if (!canResend && !canRestore && !hasMenu) return null;
+
+    return (
+      <span className="flex items-center justify-end gap-1">
+        {canRestore && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 text-xs sm:min-h-9"
+            onClick={() => void handleSuspension(adminUser, false)}
+            disabled={!userAuthorityReady || updatingUserId !== null}
+          >
+            {updatingUserId === adminUser.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            Restore access
+          </Button>
+        )}
+        {canResend && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 text-xs sm:min-h-9"
+            onClick={() => void handleResendSetup(adminUser.id)}
+            disabled={!userAuthorityReady || resendingUserId !== null}
+          >
+            {resendingUserId === adminUser.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {getInvitationActionLabel(status)}
+          </Button>
+        )}
+        {hasMenu && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 sm:h-9 sm:w-9"
+                aria-label={`Actions for ${adminUser.name}`}
+                disabled={!userAuthorityReady}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canEditPermissions && (
+                <DropdownMenuItem onSelect={() => setEditingUser(adminUser)}>
+                  <Shield className="h-4 w-4" aria-hidden="true" />
+                  Permissions
+                </DropdownMenuItem>
+              )}
+              {canRevokeInvite && (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => setRevokingInvite(adminUser)}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  Revoke invitation
+                </DropdownMenuItem>
+              )}
+              {canSuspend && (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={updatingUserId !== null}
+                  onSelect={() => setSuspendingUser(adminUser)}
+                >
+                  <UserX className="h-4 w-4" aria-hidden="true" />
+                  Suspend access
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </span>
+    );
+  };
+
+  const showLoadingSkeleton = isLoading && adminUsers.length === 0;
+  const noMatches =
+    !showLoadingSkeleton
+    && adminUsers.length > 0
+    && filteredActiveUsers.length === 0
+    && filteredSuspendedUsers.length === 0;
+
+  return (
+    <SettingsSection
+      title="Administrators"
+      description="People who can sign in to this dashboard, and whether their secure setup is finished."
+      actions={
+        <>
+          <span
+            data-testid="admin-users-count"
+            className="mr-auto rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground"
+          >
+            {activeUsers.length}
+          </span>
           {canManageTeam && (
             <Button
               size="sm"
@@ -244,475 +496,333 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               onClick={() => setShowAddForm(true)}
               disabled={showAddForm || !userAuthorityReady}
             >
-              <UserPlus className="mr-2 h-4 w-4" />
+              <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
               Invite administrator
             </Button>
           )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 pt-0">
-        {canManageTeam && showAddForm && (
-          <form
-            method="post"
-            action="/admin/settings/account"
-            onSubmit={handleAddUser}
-            className="mb-4 space-y-3 rounded-lg border bg-muted/20 p-4"
-            noValidate
-          >
-            <div>
-              <h4 className="text-sm font-semibold">Invite an administrator</h4>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                They receive a one-use setup link and must configure a password and 2FA.
-              </p>
-            </div>
-            {error && (
-              <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="newUserName">Full name</Label>
-                <Input
-                  id="newUserName"
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  placeholder="Samira Rahman"
-                  autoComplete="name"
-                  required
-                  disabled={!isHydrated || isAdding}
-                  className="min-h-11 sm:min-h-9"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newUserEmail">Email address</Label>
-                <Input
-                  id="newUserEmail"
-                  type="email"
-                  value={newUserEmail}
-                  onChange={(e) => setNewUserEmail(e.target.value)}
-                  placeholder="samira@example.com"
-                  autoComplete="email"
-                  required
-                  disabled={!isHydrated || isAdding}
-                  className="min-h-11 sm:min-h-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="roleSelect">Role</Label>
-              <Select
-                value={selectedRoleId}
-                onValueChange={setSelectedRoleId}
-                disabled={!isHydrated || isAdding || !userAuthorityReady || isLoadingRoles || Boolean(rolesError)}
-              >
-                <SelectTrigger id="roleSelect" className="min-h-11 sm:min-h-9">
-                  <SelectValue placeholder={isLoadingRoles ? "Loading roles…" : "Select a role"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableRoles.map((role) => (
-                    <SelectItem key={role.id} value={role.id}>
-                      <div className="flex flex-col">
-                        <span>{role.displayName}</span>
-                        {role.description && (
-                          <span className="text-xs text-muted-foreground">{role.description}</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {rolesError ? (
-                <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-background p-2 text-xs">
-                  <span className="text-destructive">{rolesError}</span>
-                  <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetchRoles()}>
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                    Retry
-                  </Button>
-                </div>
-              ) : availableRoles.length === 0 && !isLoadingRoles ? (
-                <p className="rounded-md border border-destructive/30 bg-background p-2 text-xs text-destructive">
-                  No assignable roles are available. {canManageRoles ? "Create a role in the Roles section first." : "Ask a role manager to create one."}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  The role controls store access and can be changed later.
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={resetInviteForm}
-                disabled={isAdding}
+        </>
+      }
+    >
+      {canManageTeam && showAddForm && (
+        <form
+          method="post"
+          action="/admin/settings/account"
+          onSubmit={handleAddUser}
+          className="mb-4 space-y-3 rounded-lg border bg-muted/20 p-4"
+          noValidate
+        >
+          <div>
+            <h4 className="text-sm font-semibold">Invite an administrator</h4>
+            <InlineHelp>
+              They receive a one-use setup link and must configure a password and 2FA.
+            </InlineHelp>
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="newUserName">Full name</Label>
+              <Input
+                id="newUserName"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+                placeholder="Samira Rahman"
+                autoComplete="name"
+                required
+                disabled={!isHydrated || isAdding}
                 className="min-h-11 sm:min-h-9"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!isHydrated || isAdding || !userAuthorityReady || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
-                className="min-h-11 sm:min-h-9"
-              >
-                {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send invite
-              </Button>
+              />
             </div>
-          </form>
-        )}
-
-        {usersError && adminUsers.length > 0 && (
-          <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-            <span className="text-destructive">{usersError} Showing the last loaded list.</span>
-            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetch()}>
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-              Retry
-            </Button>
+            <div className="space-y-1.5">
+              <Label htmlFor="newUserEmail">Email address</Label>
+              <Input
+                id="newUserEmail"
+                type="email"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                placeholder="samira@example.com"
+                autoComplete="email"
+                required
+                disabled={!isHydrated || isAdding}
+                aria-describedby="newUserEmail-help"
+                className="min-h-11 sm:min-h-9"
+              />
+              <InlineHelp id="newUserEmail-help">
+                The setup link is sent here and expires after first use.
+              </InlineHelp>
+            </div>
           </div>
-        )}
-
-        {adminUsers.length > 0 && (
-          <div className="relative mb-3 max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Find name, email, or role…"
-              aria-label="Find administrators"
-              className="min-h-11 pl-9 sm:min-h-9"
-            />
-          </div>
-        )}
-
-        {isLoading && adminUsers.length === 0 ? (
-          <div className="space-y-2" aria-busy="true" aria-label="Loading administrators">
-            {[0, 1, 2].map((row) => (
-              <div key={row} className="h-16 animate-pulse rounded-lg bg-muted" />
-            ))}
-          </div>
-        ) : usersError && adminUsers.length === 0 ? (
-          <div role="alert" className="rounded-lg border border-destructive/30 p-5">
-            <div className="flex max-w-lg items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-              <div>
-                <p className="text-sm font-semibold">Administrators are unavailable</p>
-                <p className="mt-1 text-sm text-muted-foreground">{usersError}</p>
-                <Button type="button" size="sm" className="mt-3 min-h-11 sm:min-h-9" onClick={() => void refetch()}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
+          <div className="space-y-1.5">
+            <Label htmlFor="roleSelect">Role</Label>
+            <Select
+              value={selectedRoleId}
+              onValueChange={setSelectedRoleId}
+              disabled={!isHydrated || isAdding || !userAuthorityReady || isLoadingRoles || Boolean(rolesError)}
+            >
+              <SelectTrigger
+                id="roleSelect"
+                className="min-h-11 sm:min-h-9"
+                aria-describedby="roleSelect-help"
+              >
+                <SelectValue placeholder={isLoadingRoles ? "Loading roles…" : "Select a role"} />
+              </SelectTrigger>
+              <SelectContent>
+                {availableRoles.map((role) => (
+                  <SelectItem key={role.id} value={role.id}>
+                    <div className="flex flex-col">
+                      <span>{role.displayName}</span>
+                      {role.description && (
+                        <span className="text-xs text-muted-foreground">{role.description}</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {rolesError ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-background p-2">
+                <FieldError id="roleSelect-help">{rolesError}</FieldError>
+                <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetchRoles()}>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   Retry
                 </Button>
               </div>
-            </div>
-          </div>
-        ) : adminUsers.length === 0 ? (
-          <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
-            <Users className="mx-auto mb-2 h-8 w-8 opacity-40" />
-            <p className="text-sm font-medium text-foreground">No administrators found</p>
-            <p className="mt-1 text-xs">Invite someone when this store needs shared access.</p>
-          </div>
-        ) : filteredActiveUsers.length === 0 && filteredSuspendedUsers.length === 0 ? (
-          <div className="rounded-lg border border-dashed py-8 text-center">
-            <p className="text-sm font-medium">No matching administrators</p>
-            <button type="button" onClick={() => setQuery("")} className="mt-1 min-h-9 px-3 text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              Clear search
-            </button>
-          </div>
-        ) : filteredActiveUsers.length === 0 ? (
-          <div
-            data-admin-list="active"
-            className="rounded-lg border border-dashed py-8 text-center"
-          >
-            <p className="text-sm font-medium">
-              {hasQuery ? "No active administrators match" : "No active administrators"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hasQuery ? "Matches are in the Suspended section below." : "Everyone here is suspended."}
-            </p>
-          </div>
-        ) : (
-          <div data-admin-list="active" className="overflow-hidden rounded-lg border">
-            <div className="hidden grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] gap-3 border-b bg-muted/30 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
-              <span>Administrator</span>
-              <span>Access</span>
-              <span className="pr-1 text-right">Status and actions</span>
-            </div>
-            <div className="divide-y">
-              {filteredActiveUsers.map((adminUser) => (
-                <AdminUserRow
-                  key={adminUser.id}
-                  adminUser={adminUser}
-                  currentUserId={currentUserId}
-                  canManageTeam={canManageTeam}
-                  canManageRoles={canManageRoles}
-                  userAuthorityReady={userAuthorityReady}
-                  resendingUserId={resendingUserId}
-                  updatingUserId={updatingUserId}
-                  handleResendSetup={handleResendSetup}
-                  setEditingUser={setEditingUser}
-                  deleteUser={deleteUser}
-                  handleSuspension={handleSuspension}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {suspendedUsers.length > 0 && !(isLoading && adminUsers.length === 0) && (
-          <details
-            data-admin-list="suspended"
-            className="group mt-4 rounded-lg border"
-            open={showSuspendedOpen}
-            onToggle={(event) => setSuspendedOpen(event.currentTarget.open)}
-          >
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center gap-2">
-                <UserX className="h-4 w-4 text-muted-foreground" />
-                Suspended
-                <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
-                  {hasQuery ? `${filteredSuspendedUsers.length} of ${suspendedUsers.length}` : suspendedUsers.length}
-                </span>
-              </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="border-t">
-              <p className="px-3 py-2 text-xs text-muted-foreground">
-                Suspended administrators cannot sign in. Restore access to move them back to the list above.
-              </p>
-              {filteredSuspendedUsers.length === 0 ? (
-                <p className="border-t px-3 py-3 text-sm text-muted-foreground">
-                  No suspended administrators match this search.
-                </p>
-              ) : (
-                <div className="divide-y border-t">
-                  {filteredSuspendedUsers.map((adminUser) => (
-                    <AdminUserRow
-                      key={adminUser.id}
-                      adminUser={adminUser}
-                      currentUserId={currentUserId}
-                      canManageTeam={canManageTeam}
-                      canManageRoles={canManageRoles}
-                      userAuthorityReady={userAuthorityReady}
-                      resendingUserId={resendingUserId}
-                      updatingUserId={updatingUserId}
-                      handleResendSetup={handleResendSetup}
-                      setEditingUser={setEditingUser}
-                      deleteUser={deleteUser}
-                      handleSuspension={handleSuspension}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </details>
-        )}
-
-        {editingUser && userAuthorityReady && (
-          <UserPermissionEditor
-            user={editingUser}
-            isOpen={!!editingUser}
-            onClose={() => setEditingUser(null)}
-            onUpdate={refetch}
-          />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-interface AdminUserRowProps {
-  adminUser: AdminUser;
-  currentUserId: string;
-  canManageTeam: boolean;
-  canManageRoles: boolean;
-  userAuthorityReady: boolean;
-  resendingUserId: string | null;
-  updatingUserId: string | null;
-  handleResendSetup: (userId: string) => Promise<void>;
-  setEditingUser: (adminUser: AdminUser) => void;
-  deleteUser: (userId: string) => Promise<void>;
-  handleSuspension: (adminUser: AdminUser, suspended: boolean) => Promise<void>;
-}
-
-function AdminUserRow({
-  adminUser,
-  currentUserId,
-  canManageTeam,
-  canManageRoles,
-  userAuthorityReady,
-  resendingUserId,
-  updatingUserId,
-  handleResendSetup,
-  setEditingUser,
-  deleteUser,
-  handleSuspension,
-}: AdminUserRowProps) {
-  const status = getAdminUserStatus(adminUser);
-  return (
-      <div
-        className="grid gap-3 p-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] sm:items-center"
-      >
-        <div className="flex min-w-0 items-start gap-3 sm:items-center">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
-            {adminUser.image ? (
-              <img
-                src={getOptimizedImageUrl(
-                  adminUser.image,
-                  ADMIN_IMAGE_PRESETS.avatar,
-                )}
-                alt={adminUser.name}
-                className="h-full w-full object-cover"
-                loading="lazy"
-                decoding="async"
-              />
+            ) : availableRoles.length === 0 && !isLoadingRoles ? (
+              <FieldError id="roleSelect-help">
+                No assignable roles are available. {canManageRoles ? "Create a role in the Roles section first." : "Ask a role manager to create one."}
+              </FieldError>
             ) : (
-              <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
+              <InlineHelp id="roleSelect-help">
+                The role controls store access and can be changed later.
+              </InlineHelp>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-1.5 font-medium">
-              <span className="truncate">{adminUser.name}</span>
-              {adminUser.id === currentUserId && (
-                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                  You
-                </span>
-              )}
-              {adminUser.isSuperAdmin && (
-                <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                  Super Admin
-                </span>
-              )}
-            </p>
-            <p className="break-words text-sm text-muted-foreground">{adminUser.email}</p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={resetInviteForm}
+              disabled={isAdding}
+              className="min-h-11 sm:min-h-9"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!isHydrated || isAdding || !userAuthorityReady || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
+              className="min-h-11 sm:min-h-9"
+            >
+              {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+              Send invite
+            </Button>
           </div>
-        </div>
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          {adminUser.roles.length > 0 ? adminUser.roles.map((role) => (
-            <span key={role.id} className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-              {role.displayName}
-            </span>
-          )) : (
-            <span className="text-xs text-muted-foreground">No assigned role</span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <AdminStatusBadge
-            status={status}
-            invitation={adminUser.invitation}
+        </form>
+      )}
+
+      {usersError && adminUsers.length > 0 && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{usersError} Showing the last loaded list.</span>
+            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetch()}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {adminUsers.length > 0 && (
+        <IndexFilters
+          className="mb-3"
+          label="Find administrators"
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Find administrators"
+          filters={statusPills}
+          activeFilterId={statusFilter}
+          onFilterChange={(id) => setStatusFilter(id as StatusFilterId)}
+        />
+      )}
+
+      {usersError && adminUsers.length === 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertTitle>Administrators are unavailable</AlertTitle>
+          <AlertDescription className="gap-2">
+            <span>{usersError}</span>
+            <Button type="button" size="sm" className="mt-1 min-h-11 sm:min-h-9" onClick={() => void refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : !showLoadingSkeleton && adminUsers.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          heading="No administrators found"
+          body="Invite someone when this store needs shared access."
+          action={
+            canManageTeam
+              ? {
+                  label: "Invite administrator",
+                  icon: UserPlus,
+                  disabled: !userAuthorityReady,
+                  onClick: () => setShowAddForm(true),
+                }
+              : undefined
+          }
+        />
+      ) : noMatches ? (
+        <EmptyState
+          icon={Users}
+          heading="No matching administrators"
+          body="Change the search or pick another status."
+          action={{ label: "Clear filters", variant: "outline", onClick: clearFilters }}
+        />
+      ) : (
+        <div data-admin-list="active">
+          <IndexTable
+            label="Active administrators"
+            items={filteredActiveUsers}
+            columns={columns}
+            getRowId={(adminUser) => adminUser.id}
+            loading={showLoadingSkeleton}
+            loadingRowCount={3}
+            rowActions={renderRowActions}
+            empty={
+              <EmptyState
+                compact
+                icon={Users}
+                heading={
+                  hasFilter ? "No active administrators match" : "No active administrators"
+                }
+                body={
+                  hasFilter
+                    ? "Matches are in the Suspended section below."
+                    : "Everyone here is suspended."
+                }
+              />
+            }
           />
-          {canManageTeam && isInvitationStatus(status) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="min-h-11 text-xs sm:min-h-9"
-              onClick={() => void handleResendSetup(adminUser.id)}
-              disabled={!userAuthorityReady || resendingUserId !== null}
-            >
-              {resendingUserId === adminUser.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              {getInvitationActionLabel(status)}
-            </Button>
-          )}
-          {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-h-11 text-xs sm:min-h-9"
-              onClick={() => setEditingUser(adminUser)}
-              disabled={!userAuthorityReady}
-            >
-              <Shield className="h-3 w-3 mr-1" />
-              Permissions
-            </Button>
-          )}
-          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && isInvitationStatus(status) && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Revoke invitation for ${adminUser.name}`} disabled={!userAuthorityReady}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    <strong>{adminUser.name}</strong> will no longer be able to use the setup link. You can invite them again later.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => deleteUser(adminUser.id)}
-                    variant="destructive"
-                  >
-                    Revoke invitation
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "suspended" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 text-xs sm:min-h-9"
-              onClick={() => void handleSuspension(adminUser, false)}
-              disabled={!userAuthorityReady || updatingUserId !== null}
-            >
-              {updatingUserId === adminUser.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <UserCheck className="h-3.5 w-3.5" />
-              )}
-              Restore access
-            </Button>
-          )}
-          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && !isInvitationStatus(status) && status !== "password_setup" && status !== "suspended" && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
-                  aria-label={`Suspend ${adminUser.name}`}
-                  disabled={!userAuthorityReady || updatingUserId !== null}
-                >
-                  {updatingUserId === adminUser.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserX className="h-4 w-4" />
-                  )}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Suspend administrator?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    <strong>{adminUser.name}</strong> will be signed out on every device and cannot sign in until access is restored. Their role and activity history stay intact.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => void handleSuspension(adminUser, true)}
-                    variant="destructive"
-                  >
-                    Suspend access
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </div>
-      </div>
+      )}
+
+      {suspendedUsers.length > 0 && !showLoadingSkeleton && (
+        <details
+          data-admin-list="suspended"
+          className="group mt-4 rounded-lg border"
+          open={showSuspendedOpen}
+          onToggle={(event) => setSuspendedOpen(event.currentTarget.open)}
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2">
+              <UserX className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              Suspended
+              <span
+                data-testid="suspended-users-count"
+                className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground"
+              >
+                {hasFilter ? `${filteredSuspendedUsers.length} of ${suspendedUsers.length}` : suspendedUsers.length}
+              </span>
+            </span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="border-t p-3">
+            <InlineHelp className="mb-3">
+              Suspended administrators cannot sign in. Restore access to move them
+              back to the list above.
+            </InlineHelp>
+            <IndexTable
+              label="Suspended administrators"
+              items={filteredSuspendedUsers}
+              columns={columns}
+              getRowId={(adminUser) => adminUser.id}
+              rowActions={renderRowActions}
+              empty={
+                <EmptyState
+                  compact
+                  icon={UserX}
+                  heading="No suspended administrators match this search."
+                />
+              }
+            />
+          </div>
+        </details>
+      )}
+
+      <AlertDialog
+        open={revokingInvite !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokingInvite(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{revokingInvite?.name}</strong> will no longer be able to use
+              the setup link. You can invite them again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11 sm:min-h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => {
+                if (revokingInvite) void deleteUser(revokingInvite.id);
+              }}
+            >
+              Revoke invitation
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={suspendingUser !== null}
+        onOpenChange={(open) => {
+          if (!open) setSuspendingUser(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Suspend administrator?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{suspendingUser?.name}</strong> will be signed out on every
+              device and cannot sign in until access is restored. Their role and
+              activity history stay intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11 sm:min-h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => {
+                if (suspendingUser) void handleSuspension(suspendingUser, true);
+              }}
+            >
+              Suspend access
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {editingUser && userAuthorityReady && (
+        <UserPermissionEditor
+          user={editingUser}
+          isOpen={!!editingUser}
+          onClose={() => setEditingUser(null)}
+          onUpdate={refetch}
+        />
+      )}
+    </SettingsSection>
   );
 }
 
@@ -730,19 +840,13 @@ function AdminStatusBadge({
   const title = invitation?.expiresAt && status === "invite_pending"
     ? `Setup link expires ${new Date(invitation.expiresAt).toLocaleString(undefined, { timeZone: "Asia/Dhaka" })}.`
     : copy.description;
-  const tone = status === "ready"
-    ? "border-primary/25 bg-primary/5 text-primary"
-    : status === "suspended" || status === "invite_delivery_failed"
-      ? "border-destructive/25 bg-destructive/5 text-destructive"
-      : "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 
   return (
-    <span
-      title={title}
-      className={`inline-flex min-h-7 items-center rounded-full border px-2 py-1 text-xs font-medium ${tone}`}
-    >
-      {copy.label}
-      {timing ? ` · ${timing}` : ""}
+    <span title={title}>
+      <StatusBadge tone={STATUS_TONES[status]} srLabel="Setup status:">
+        {copy.label}
+        {timing ? ` · ${timing}` : ""}
+      </StatusBadge>
     </span>
   );
 }

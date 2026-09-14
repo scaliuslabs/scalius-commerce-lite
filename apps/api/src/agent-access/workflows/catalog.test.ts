@@ -426,14 +426,16 @@ describe("agent workflow catalog", () => {
 
     const checkout = workflowStep(daily, "readiness", "checkout").output!.selectors;
     expect(checkout.map((selector) => selector.alias)).toEqual([
-      "ready",
+      "status",
       "hasActiveShippingMethod",
       "hasActiveDeliveryHierarchy",
       "customerSignInRequired",
       "hasUsableCustomerSignIn",
       "issues",
     ]);
-    expect(checkout.find((selector) => selector.alias === "issues")?.maxItems).toBe(20);
+    const checkoutIssues = checkout.find((selector) => selector.alias === "issues");
+    expect(checkoutIssues?.maxItems).toBe(20);
+    expect(checkoutIssues?.fields?.map((field) => field.alias)).toEqual(["code", "message"]);
 
     const payments = workflowStep(daily, "readiness", "payments").output!.selectors;
     expect(payments.map((selector) => selector.alias)).toEqual([

@@ -20,9 +20,10 @@ describe("delivery provider readiness UI boundaries", () => {
     const source = readFileSync(ICON_SOURCE, "utf8");
 
     expect(source).toContain("resolveProviderReadiness");
-    expect(source).toContain('status: provider.isActive ? "active" : "draft"');
+    expect(source).toContain('status: provider.isActive ? "ready" : "incomplete"');
+    expect(source).toContain('lifecycle: provider.isActive ? "active" : "draft"');
     expect(source).toContain("canCreateShipment: provider.isActive");
-    expect(source).toContain("FALLBACK_INACTIVE_BLOCKER");
+    expect(source).toContain("FALLBACK_INACTIVE_ISSUE");
   });
 
   it("shows API readiness in the settings sidebar without relying on isActive labels", () => {

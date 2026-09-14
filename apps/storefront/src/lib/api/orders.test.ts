@@ -3,20 +3,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
 }));
 
-vi.mock("./client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("./transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 import { createOrder, getOrderReceipt } from "./orders";
 
 beforeEach(() => {
-  mocks.createApiUrl.mockClear();
-  mocks.fetchWithRetry.mockReset();
+  mocks.apiFetch.mockReset();
 });
 
 function buildOrderPayload() {
@@ -49,7 +46,7 @@ function mockImmediatePollingTimers() {
 
 describe("storefront orders API client", () => {
   it("creates public checkout orders without minting a service JWT", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
         id: "order_1",
@@ -68,8 +65,8 @@ describe("storefront orders API client", () => {
       totalAmount: 125,
       paymentMethod: "cod",
     });
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/orders",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/orders",
       expect.objectContaining({
         method: "POST",
         cache: "no-store",
@@ -78,15 +75,13 @@ describe("storefront orders API client", () => {
           "X-Customer-Session": "customer_session_1",
         }),
       }),
-      0,
-      15000,
-      false,
+      { retries: 0, timeout: 15000, auth: false },
     );
   });
 
   it("polls duplicate processing orders with a status token instead of receipt proof", async () => {
     const timers = mockImmediatePollingTimers();
-    mocks.fetchWithRetry
+    mocks.apiFetch
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
         data: {
@@ -123,10 +118,10 @@ describe("storefront orders API client", () => {
         statusToken: "cst_poll_token",
       });
       expect(result.receiptToken).not.toBe(result.statusToken);
-      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_token");
-      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
-      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
-      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("chk_must_not_be_polled");
+      expect(mocks.apiFetch.mock.calls[1]?.[0]).toBe("/orders/status/cst_poll_token");
+      expect(mocks.apiFetch.mock.calls[2]?.[0]).toBe("/orders");
+      expect(JSON.stringify(mocks.apiFetch.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
+      expect(JSON.stringify(mocks.apiFetch.mock.calls.map((call) => call[0]))).not.toContain("chk_must_not_be_polled");
     } finally {
       timers.mockRestore();
     }
@@ -134,7 +129,7 @@ describe("storefront orders API client", () => {
 
   it("replays a completed duplicate privately instead of expecting receipt proof from status", async () => {
     const timers = mockImmediatePollingTimers();
-    mocks.fetchWithRetry
+    mocks.apiFetch
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
         data: {
@@ -169,9 +164,9 @@ describe("storefront orders API client", () => {
         receiptToken: "chk_replayed_receipt",
         statusToken: "cst_poll_without_receipt",
       });
-      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_without_receipt");
-      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
-      expect(JSON.stringify(mocks.fetchWithRetry.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
+      expect(mocks.apiFetch.mock.calls[1]?.[0]).toBe("/orders/status/cst_poll_without_receipt");
+      expect(mocks.apiFetch.mock.calls[2]?.[0]).toBe("/orders");
+      expect(JSON.stringify(mocks.apiFetch.mock.calls.map((call) => call[0]))).not.toContain("/orders/status/chk_");
     } finally {
       timers.mockRestore();
     }
@@ -179,7 +174,7 @@ describe("storefront orders API client", () => {
 
   it("does not use the status token as receipt proof when private replay lacks a receipt token", async () => {
     const timers = mockImmediatePollingTimers();
-    mocks.fetchWithRetry
+    mocks.apiFetch
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
         data: {
@@ -210,15 +205,15 @@ describe("storefront orders API client", () => {
         error: "Order completed but receipt proof is unavailable. Please check your order history.",
       });
       expect(result.receiptToken).toBeUndefined();
-      expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toBe("https://api.example.test/api/v1/orders/status/cst_poll_without_receipt");
-      expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
+      expect(mocks.apiFetch.mock.calls[1]?.[0]).toBe("/orders/status/cst_poll_without_receipt");
+      expect(mocks.apiFetch.mock.calls[2]?.[0]).toBe("/orders");
     } finally {
       timers.mockRestore();
     }
   });
 
   it("fetches private receipts with header proof instead of URL proof", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
         order: {
@@ -252,21 +247,19 @@ describe("storefront orders API client", () => {
     const receipt = await getOrderReceipt("order_1", "chk_secret");
 
     expect(receipt?.id).toBe("order_1");
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/orders/receipt/order_1",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/orders/receipt/order_1",
       expect.objectContaining({
         cache: "no-store",
         headers: { "X-Receipt-Token": "chk_secret" },
       }),
-      2,
-      5000,
-      false,
+      { retries: 2, timeout: 5000, auth: false },
     );
-    expect(mocks.fetchWithRetry.mock.calls[0]?.[0]).not.toContain("token=");
+    expect(mocks.apiFetch.mock.calls[0]?.[0]).not.toContain("token=");
   });
 
   it("distinguishes expired receipt proof from a retryable outage", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    mocks.apiFetch.mockResolvedValueOnce(new Response(null, { status: 404 }));
 
     await expect(getOrderReceipt("order_1", "chk_expired"))
       .rejects.toEqual(expect.objectContaining({
@@ -276,7 +269,7 @@ describe("storefront orders API client", () => {
   });
 
   it("polls duplicate checkout status with non-bearer status token", async () => {
-    mocks.fetchWithRetry
+    mocks.apiFetch
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
         data: {
@@ -322,8 +315,8 @@ describe("storefront orders API client", () => {
       orderId: "order_1",
       receiptToken: "chk_private_receipt",
     });
-    expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).toContain("/orders/status/cst_");
-    expect(mocks.fetchWithRetry.mock.calls[1]?.[0]).not.toContain("/orders/status/chk_");
-    expect(mocks.fetchWithRetry.mock.calls[2]?.[0]).toBe("https://api.example.test/api/v1/orders");
+    expect(mocks.apiFetch.mock.calls[1]?.[0]).toContain("/orders/status/cst_");
+    expect(mocks.apiFetch.mock.calls[1]?.[0]).not.toContain("/orders/status/chk_");
+    expect(mocks.apiFetch.mock.calls[2]?.[0]).toBe("/orders");
   });
 });

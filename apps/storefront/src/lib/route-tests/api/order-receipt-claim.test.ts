@@ -4,22 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   shouldRejectCrossOriginCookieRequest: vi.fn(),
-  cfEnv: { BACKEND_API: undefined as Fetcher | undefined },
 }));
-
-vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
+import { requestRuntime } from "@/lib/api/runtime";
 import { POST } from "../../../pages/api/order-receipt/claim-account";
 import { getOrderReceiptCookieName } from "../../order-receipt-cookie";
 
 beforeEach(() => {
   mocks.shouldRejectCrossOriginCookieRequest.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
-  mocks.cfEnv.BACKEND_API = undefined;
   vi.unstubAllGlobals();
 });
 
@@ -88,11 +85,13 @@ describe("guest receipt account-claim proxy", () => {
         headers: { "Content-Type": "application/json" },
       });
     });
-    mocks.cfEnv.BACKEND_API = { fetch: bindingFetch } as unknown as Fetcher;
     const httpFetch = vi.fn();
     vi.stubGlobal("fetch", httpFetch);
 
-    const response = await POST({ request: claimRequest() } as never);
+    const response = await requestRuntime.run(
+      { BACKEND_API: { fetch: bindingFetch } as unknown as Fetcher },
+      () => POST({ request: claimRequest() } as never),
+    );
 
     expect(response.status).toBe(200);
     expect(bindingFetch).toHaveBeenCalledWith(

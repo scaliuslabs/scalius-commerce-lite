@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
   shouldRejectCrossOriginCookieRequest: vi.fn(() => false),
 }));
 
-vi.mock("@/lib/api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("@/lib/api/transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
@@ -101,11 +99,8 @@ function storefrontRequest(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.createApiUrl.mockImplementation(
-    (path: string) => `https://api.example.test/api/v1${path}`,
-  );
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
-  mocks.fetchWithRetry.mockResolvedValue(new Response(
+  mocks.apiFetch.mockResolvedValue(new Response(
     JSON.stringify(quoteEnvelope()),
     { status: 200 },
   ));
@@ -120,7 +115,7 @@ describe("checkout tax quote proxy", () => {
     } as never);
 
     expect(response.status).toBe(403);
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
     expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
 
@@ -132,7 +127,7 @@ describe("checkout tax quote proxy", () => {
     } as never);
 
     expect(response.status).toBe(413);
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
   it("forwards only normalized server-resolvable inputs to the exact public endpoint", async () => {
@@ -141,14 +136,10 @@ describe("checkout tax quote proxy", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(mocks.createApiUrl).toHaveBeenCalledWith("/orders/tax-quote");
-    expect(mocks.fetchWithRetry).toHaveBeenCalledTimes(1);
-    const [url, init, retries, timeout, requiresAuth] =
-      mocks.fetchWithRetry.mock.calls[0];
-    expect(url).toBe("https://api.example.test/api/v1/orders/tax-quote");
-    expect(retries).toBe(0);
-    expect(timeout).toBe(8_000);
-    expect(requiresAuth).toBe(false);
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
+    const [apiPath, init, policy] = mocks.apiFetch.mock.calls[0];
+    expect(apiPath).toBe("/orders/tax-quote");
+    expect(policy).toEqual({ retries: 0, timeout: 8_000, auth: false });
     expect(init).toMatchObject({ method: "POST", cache: "no-store" });
 
     const forwarded = JSON.parse(String(init.body)) as Record<string, unknown>;
@@ -170,7 +161,7 @@ describe("checkout tax quote proxy", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    const [, init] = mocks.fetchWithRetry.mock.calls[0];
+    const [, init] = mocks.apiFetch.mock.calls[0];
     expect(new Headers(init.headers).get("X-Customer-Session")).toBe(
       "customer_session_1",
     );
@@ -178,7 +169,7 @@ describe("checkout tax quote proxy", () => {
   });
 
   it("returns a safe error without reflecting upstream details or buyer PII", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: "Phone +8801700000000 rejected by provider",
     }), { status: 422 }));
@@ -196,7 +187,7 @@ describe("checkout tax quote proxy", () => {
   });
 
   it("forwards only bounded cart-repair issues from a validation failure", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
         code: "VALIDATION_ERROR",
@@ -243,7 +234,7 @@ describe("checkout tax quote proxy", () => {
   });
 
   it("fails closed when the upstream success payload violates the quote contract", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       ...quoteEnvelope(),
       data: {
         ...(quoteEnvelope().data as Record<string, unknown>),

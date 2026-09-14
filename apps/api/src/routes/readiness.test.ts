@@ -227,7 +227,7 @@ describe("API readiness route", () => {
     });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing CREDENTIAL_ENCRYPTION_KEY",
+      detail: "CREDENTIAL_ENCRYPTION_KEY is not installed.",
     });
     expect(json.checks?.platform_config).toMatchObject({ status: "ok" });
   });
@@ -247,7 +247,7 @@ describe("API readiness route", () => {
       expect(json.success).toBe(false);
       expect(json.checks?.runtime_config).toMatchObject({
         status: "missing",
-        detail: "missing SCALIUS_SECRET",
+        detail: "SCALIUS_SECRET is not installed.",
       });
     }
   });
@@ -270,7 +270,7 @@ describe("API readiness route", () => {
     expect(withoutConfigJson.checks?.runtime_config).toMatchObject({ status: "ok" });
     expect(withoutConfigJson.checks?.platform_config).toMatchObject({
       status: "missing",
-      detail: "missing storefrontUrl, apiUrl, dashboardUrl, mediaUrl; set them in Settings -> System -> Platform",
+      detail: "Storefront URL is not configured.; API URL is not configured.; Dashboard URL is not configured.; Media URL is not configured.",
     });
 
     const partial = await app.request(
@@ -293,7 +293,7 @@ describe("API readiness route", () => {
     expect(partial.status).toBe(503);
     expect(partialJson.checks?.platform_config).toMatchObject({
       status: "missing",
-      detail: "missing apiUrl, mediaUrl; set them in Settings -> System -> Platform",
+      detail: "API URL is not configured.; Media URL is not configured.",
     });
   });
 
@@ -346,11 +346,11 @@ describe("API readiness route", () => {
     });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing SCALIUS_SECRET, CREDENTIAL_ENCRYPTION_KEY",
+      detail: "SCALIUS_SECRET is not installed.; CREDENTIAL_ENCRYPTION_KEY is not installed.",
     });
     expect(json.checks?.platform_config).toMatchObject({
       status: "missing",
-      detail: "missing storefrontUrl; set them in Settings -> System -> Platform",
+      detail: "Storefront URL is not configured.",
     });
     expect(response.headers.get("X-Request-Id")).toBe("req_readyz_1234");
 

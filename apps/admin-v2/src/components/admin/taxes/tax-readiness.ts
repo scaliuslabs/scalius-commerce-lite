@@ -1,11 +1,16 @@
-import type { TaxConfigurationPayload, TaxRateRecord } from "@/lib/api-functions/taxes";
+import type { TaxConfigurationPayload, TaxRateRecord } from "~/lib/api-functions/taxes";
 import {
   getTaxRateDiagnostics,
   type TaxClassCoverageDiagnostic,
 } from "./tax-rate-diagnostics";
-import type { TaxWorkspaceSection } from "./tax-workspace-sections";
+import type { TaxWorkspaceRouteSection } from "./tax-workspace-sections";
 
-export type TaxWorkspaceTab = TaxWorkspaceSection;
+/**
+ * Readiness points at a deep-linkable destination, not at a rendered tab. The
+ * workspace resolves it through `resolveTaxWorkspaceTarget`, so `policy` opens
+ * the Settings tab and `preview` opens the calculation sheet.
+ */
+export type TaxWorkspaceTab = TaxWorkspaceRouteSection;
 
 export interface TaxReadinessStep {
   id: "default-class" | "rates" | "shipping-rates" | "calculation";

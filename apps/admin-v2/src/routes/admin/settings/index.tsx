@@ -1,7 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import GeneralSettingsPage from "~/components/admin/settings/GeneralSettingsPage";
+import type { SettingsNavLinkProps } from "~/components/admin/settings/SettingsNav";
+import { usePermissions } from "~/contexts/PermissionContext";
 import { generalSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { HeaderConfig } from "~/components/admin/header-builder/types";
@@ -25,14 +27,24 @@ export const Route = createFileRoute("/admin/settings/")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(generalSettingsQueryOptions());
   },
-  head: () => ({ meta: [{ title: "General settings | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Settings | Scalius Admin" }] }),
   component: SettingsPage,
   errorComponent: RouteErrorComponent,
 });
 
+/** Client-side navigation for the standalone settings routes in the nav. */
+export function SettingsNavLink({ href, children, ...rest }: SettingsNavLinkProps) {
+  return (
+    <Link to={href} {...rest}>
+      {children}
+    </Link>
+  );
+}
+
 function SettingsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const { permissions, isSuperAdmin } = usePermissions();
   const { data } = useSuspenseQuery(generalSettingsQueryOptions());
   const result = data as unknown as GeneralSettingsPayload & {
     headerConfig?: HeaderConfig | null;
@@ -76,6 +88,9 @@ function SettingsPage() {
       section={search.section}
       onPanelChange={handlePanelChange}
       onSectionChange={handleSectionChange}
+      permissions={permissions}
+      isSuperAdmin={isSuperAdmin}
+      linkComponent={SettingsNavLink}
     />
   );
 }

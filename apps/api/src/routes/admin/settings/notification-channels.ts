@@ -20,8 +20,15 @@ import {
     getNotificationProviderBlock,
 } from "@scalius/core/modules/notifications/notification-provider-health";
 import type { Database } from "@scalius/database/client";
+import {
+    isReady,
+    readiness,
+    readinessIssue,
+    type Readiness,
+} from "@scalius/shared/readiness";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { readinessSchema } from "../../../schemas/readiness";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { ValidationError } from "../../../utils/api-error";
 
@@ -58,21 +65,26 @@ const wrappedChannelsSchema = z.object({
     channels: adminChannelsSchema,
 }).strict();
 
+/**
+ * Stable issue codes. A channel is blocked when a provider failure paused it,
+ * which is distinct from the provider never having been configured.
+ */
+const NOTIFICATION_READINESS_CODES = {
+    blocked: "notification_provider_blocked",
+    whatsapp: "missing_whatsapp_credentials",
+} as const;
+
 const adminNotificationSettingsSchema = z.object({
     channels: channelsSchema,
-    pushConfigured: z.boolean(),
-    pushError: z.string().nullable(),
+    push: readinessSchema,
 });
 
 const customerNotificationSettingsSchema = z.object({
     channels: channelsSchema,
     whatsappTemplate: whatsappTemplateSchema,
-    whatsappConfigured: z.boolean(),
-    whatsappError: z.string().nullable(),
-    emailConfigured: z.boolean(),
-    emailError: z.string().nullable(),
-    smsProviderConfigured: z.boolean(),
-    smsProviderError: z.string().nullable(),
+    whatsapp: readinessSchema,
+    email: readinessSchema,
+    sms: readinessSchema,
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
@@ -109,12 +121,9 @@ app.openapi(getChannelsRoute, async (c) => {
     return ok(c, {
         channels,
         whatsappTemplate,
-        whatsappConfigured: whatsappReadiness.configured,
-        whatsappError: whatsappReadiness.error,
-        emailConfigured: emailNotificationReadiness.configured,
-        emailError: emailNotificationReadiness.error,
-        smsProviderConfigured: smsNotificationReadiness.configured,
-        smsProviderError: smsNotificationReadiness.error,
+        whatsapp: whatsappReadiness,
+        email: emailNotificationReadiness,
+        sms: smsNotificationReadiness,
     });
 });
 
@@ -156,12 +165,9 @@ app.openapi(updateChannelsRoute, async (c) => {
     return ok(c, {
         channels: updated,
         whatsappTemplate,
-        whatsappConfigured: whatsappReadiness.configured,
-        whatsappError: whatsappReadiness.error,
-        emailConfigured: emailNotificationReadiness.configured,
-        emailError: emailNotificationReadiness.error,
-        smsProviderConfigured: smsNotificationReadiness.configured,
-        smsProviderError: smsNotificationReadiness.error,
+        whatsapp: whatsappReadiness,
+        email: emailNotificationReadiness,
+        sms: smsNotificationReadiness,
     });
 });
 
@@ -189,8 +195,7 @@ app.openapi(getAdminChannelsRoute, async (c) => {
     const pushNotificationReadiness = await getPushNotificationReadiness(db, pushReadiness);
     return ok(c, {
         channels,
-        pushConfigured: pushNotificationReadiness.configured,
-        pushError: pushNotificationReadiness.error,
+        push: pushNotificationReadiness,
     });
 });
 
@@ -219,17 +224,16 @@ app.openapi(updateAdminChannelsRoute, async (c) => {
     const { channels } = c.req.valid("json");
     const pushReadiness = await getFirebaseServiceAccountReadiness(db, encryptionKey);
     const pushNotificationReadiness = await getPushNotificationReadiness(db, pushReadiness);
-    if (adminChannelsRequirePush(channels) && !pushNotificationReadiness.configured) {
+    if (adminChannelsRequirePush(channels) && !isReady(pushNotificationReadiness)) {
         throw new ValidationError(
-            pushNotificationReadiness.error
+            pushNotificationReadiness.issues[0]?.message
                 ?? "Configure Firebase service account credentials before enabling admin push notifications.",
         );
     }
     const updated = await updateAdminNotificationChannels(db, channels);
     return ok(c, {
         channels: updated,
-        pushConfigured: pushNotificationReadiness.configured,
-        pushError: pushNotificationReadiness.error,
+        push: pushNotificationReadiness,
     });
 });
 
@@ -237,74 +241,83 @@ function adminChannelsRequirePush(channels: Record<string, string[]>): boolean {
     return Object.values(channels).some((enabledChannels) => enabledChannels.includes("push"));
 }
 
+/** A paused provider is merchant-actionable setup, not a platform error. */
+function providerBlockedReadiness(block: Parameters<typeof describeNotificationProviderBlock>[0]): Readiness {
+    return readiness.incomplete([readinessIssue(
+        NOTIFICATION_READINESS_CODES.blocked,
+        describeNotificationProviderBlock(block),
+    )]);
+}
+
+/** Drops provider-specific extras so only the shared shape is published. */
+function bareReadiness(value: Readiness): Readiness {
+    return { status: value.status, issues: value.issues };
+}
+
 async function getEmailNotificationReadiness(
     db: Database,
-    readiness: EmailProviderReadiness,
-): Promise<{ configured: boolean; error: string | null }> {
-    if (!readiness.configured) {
-        return { configured: false, error: readiness.error };
-    }
+    providerReadiness: EmailProviderReadiness,
+): Promise<Readiness> {
+    if (!isReady(providerReadiness)) return bareReadiness(providerReadiness);
+
     const providerBlock = await getNotificationProviderBlock(db, {
         channel: "email",
-        provider: readiness.provider,
+        provider: providerReadiness.provider,
     });
-    if (providerBlock) return { configured: false, error: describeNotificationProviderBlock(providerBlock) };
+    if (providerBlock) return providerBlockedReadiness(providerBlock);
 
     const genericBlock = await getNotificationProviderBlock(db, {
         channel: "email",
         provider: "email",
     });
-    if (genericBlock) return { configured: false, error: describeNotificationProviderBlock(genericBlock) };
+    if (genericBlock) return providerBlockedReadiness(genericBlock);
 
-    return { configured: true, error: null };
+    return readiness.ready();
 }
 
 async function getSmsNotificationReadiness(
     db: Database,
-    readiness: SmsProviderReadiness,
-): Promise<{ configured: boolean; error: string | null }> {
-    if (!readiness.configured || !readiness.activeProvider) {
-        return { configured: readiness.configured, error: readiness.error };
+    providerReadiness: SmsProviderReadiness,
+): Promise<Readiness> {
+    if (!isReady(providerReadiness) || !providerReadiness.activeProvider) {
+        return bareReadiness(providerReadiness);
     }
     const block = await getNotificationProviderBlock(db, {
         channel: "sms",
-        provider: readiness.activeProvider,
+        provider: providerReadiness.activeProvider,
     });
-    if (!block) return { configured: true, error: null };
-    return { configured: false, error: describeNotificationProviderBlock(block) };
+    return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
 async function getWhatsAppNotificationReadiness(
     db: Database,
     encryptionKey: string | undefined,
     configuredOverride?: boolean,
-): Promise<{ configured: boolean; error: string | null }> {
+): Promise<Readiness> {
     const configured = configuredOverride ?? await isWhatsAppCloudApiConfigured(db, encryptionKey);
     if (!configured) {
-        return {
-            configured: false,
-            error: "Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.",
-        };
+        return readiness.incomplete([readinessIssue(
+            NOTIFICATION_READINESS_CODES.whatsapp,
+            "Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.",
+        )]);
     }
     const block = await getNotificationProviderBlock(db, {
         channel: "whatsapp",
         provider: "whatsapp",
     });
-    if (!block) return { configured: true, error: null };
-    return { configured: false, error: describeNotificationProviderBlock(block) };
+    return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
 async function getPushNotificationReadiness(
     db: Database,
-    readiness: { configured: boolean; error: string | null },
-): Promise<{ configured: boolean; error: string | null }> {
-    if (!readiness.configured) return readiness;
+    providerReadiness: Readiness,
+): Promise<Readiness> {
+    if (!isReady(providerReadiness)) return bareReadiness(providerReadiness);
     const block = await getNotificationProviderBlock(db, {
         channel: "push",
         provider: "fcm",
     });
-    if (!block) return readiness;
-    return { configured: false, error: describeNotificationProviderBlock(block) };
+    return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
 export { app as notificationChannelsRoutes };

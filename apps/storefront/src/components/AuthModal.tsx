@@ -6,7 +6,7 @@ import { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { X } from "lucide-react";
 import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type AuthState, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
-import { createApiUrl } from "@/lib/api/client";
+import { createApiUrl } from "@/lib/api/transport";
 import type { LocationData } from "@/lib/api";
 import LocationSelector, { type LocationSelection } from "@/components/LocationSelector";
 import PhoneInput, { getCountries } from "react-phone-number-input";

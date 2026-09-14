@@ -10,7 +10,7 @@
  */
 
 // Core client (if needed elsewhere, though typically not directly used)
-export * from "./client";
+export * from "./transport";
 
 // Resource-specific functions
 export * from "./products";

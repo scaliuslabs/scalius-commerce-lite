@@ -11,11 +11,8 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1CollectionsById: mocks.getApiV1CollectionsById,
 }));
 
-vi.mock("./client", () => ({
+vi.mock("@/lib/api/transport", () => ({
   getConfiguredSdkClient: mocks.getConfiguredSdkClient,
-}));
-
-vi.mock("@/lib/edge-cache", () => ({
   CACHE_TTL: { AVAILABILITY: 5, LONG: 86400 },
   withEdgeCache: async <T>(
     _key: string,

@@ -12,6 +12,7 @@ import {
     normalizeCustomerAuthPolicy,
     type CustomerAuthOtpChannel,
 } from "@scalius/shared/customer-auth-policy";
+import { isReady } from "@scalius/shared/readiness";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
@@ -396,7 +397,7 @@ async function assertRecoveryChannelReady(
             env: input.emailEnv,
             encryptionKey: input.credentialEncryptionKey,
         });
-        if (!readiness.configured) {
+        if (!isReady(readiness)) {
             throw new ServiceUnavailableError("Email verification is currently unavailable. Contact store support.");
         }
         return;
@@ -404,7 +405,7 @@ async function assertRecoveryChannelReady(
 
     if (input.channel === "sms") {
         const readiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
-        if (!readiness.configured) {
+        if (!isReady(readiness)) {
             throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");
         }
         return;

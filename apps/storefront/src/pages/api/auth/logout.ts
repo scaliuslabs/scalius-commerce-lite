@@ -8,7 +8,7 @@
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { resolveBackendTarget } from "@/lib/api/backend-target";
+import { resolveBackendTarget } from "@/lib/api/transport";
 
 export const prerender = false;
 

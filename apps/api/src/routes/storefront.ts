@@ -3,14 +3,13 @@
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { settings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
 import {
   getHomepageData,
   getLayoutData,
   getPageRenderData,
 } from "@scalius/core/modules/storefront/storefront.service";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
+import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -381,12 +380,9 @@ const cspRoute = createRoute({
 
 app.openapi(cspRoute, async (c) => {
   const db = c.get("db");
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
-    .get();
-  return ok(c, { cspAllowedDomains: row?.value || "" });
+  // One owner for the CSP row and its KV mirror, shared with the Partytown proxy.
+  const security = await securitySettingsDocument.read(db, { kv: c.env.CACHE });
+  return ok(c, { cspAllowedDomains: security.cspAllowedDomains });
 });
 
 export { app as storefrontRoutes };

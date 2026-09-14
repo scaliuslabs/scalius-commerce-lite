@@ -78,7 +78,10 @@ describe("navigation configuration recovery", () => {
           ...defaultHeaderConfig,
           logo: { src: "/logo.svg", alt: "Store" },
         }}
-        readiness={{ state: "legacy_normalized" }}
+        readiness={{
+          status: "incomplete",
+          issues: [{ code: "navigation.legacy_normalized", message: "Links were converted." }],
+        }}
         initialRevision={1}
       />,
     );
@@ -114,7 +117,10 @@ describe("navigation configuration recovery", () => {
       <FooterBuilder
         activePanel="branding"
         initialConfig={defaultFooterConfig}
-        readiness={{ state: "legacy_normalized" }}
+        readiness={{
+          status: "incomplete",
+          issues: [{ code: "navigation.legacy_normalized", message: "Links were converted." }],
+        }}
         initialRevision={1}
       />,
     );
@@ -135,7 +141,10 @@ describe("navigation configuration recovery", () => {
     render(
       <HeaderBuilder
         initialConfig={defaultHeaderConfig}
-        readiness={{ state: "invalid" }}
+        readiness={{
+          status: "error",
+          issues: [{ code: "navigation.invalid", message: "Saved section could not be read." }],
+        }}
       />,
     );
 
@@ -217,8 +226,8 @@ describe("navigation configuration recovery", () => {
       footerConfig: defaultFooterConfig,
       revisions: { header: 2, footer: 1 },
       navigationReadiness: {
-        header: { state: "ready" },
-        footer: { state: "ready" },
+        header: { status: "ready", issues: [] },
+        footer: { status: "ready", issues: [] },
       },
     });
 

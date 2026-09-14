@@ -1,4 +1,4 @@
-import { getRuntimeStorefrontUrl } from "@/lib/api/runtime-env";
+import { getRuntimeStorefrontUrl } from "@/lib/api/runtime";
 import {
   normalizeResourceCanonicalPath,
   type CanonicalResourceKind,

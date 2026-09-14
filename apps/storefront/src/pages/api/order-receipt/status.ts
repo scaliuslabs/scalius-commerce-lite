@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import type { OrderReceipt } from "@/lib/api/types";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 import { getOrderSuccessStateKind } from "@/lib/order-success-state";
@@ -52,15 +52,13 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 
   try {
-    const response = await fetchWithRetry(
-      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}`),
+    const response = await apiFetch(
+      `/orders/receipt/${encodeURIComponent(orderId)}`,
       {
         headers: { "X-Receipt-Token": receiptToken },
         cache: "no-store",
       },
-      1,
-      RECEIPT_STATUS_TIMEOUT_MS,
-      false,
+      { retries: 1, timeout: RECEIPT_STATUS_TIMEOUT_MS, auth: false },
     );
 
     if (!response.ok) {

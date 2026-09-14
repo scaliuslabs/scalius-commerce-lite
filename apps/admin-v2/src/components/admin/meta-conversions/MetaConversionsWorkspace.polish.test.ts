@@ -63,12 +63,16 @@ describe("Meta CAPI workspace presentation", () => {
     expect(logs).toContain("min-h-11");
   });
 
-  it("uses compact route and phone-safe workspace tabs", () => {
+  it("uses the shared settings frame and phone-safe workspace tabs", () => {
     const route = readSource("../../../routes/admin/settings/meta-conversion.tsx");
     const container = readSource("./MetaConversionsContainer.tsx");
 
-    expect(route).toContain(">Meta conversions</h1>");
-    expect(route).toContain("text-xl font-semibold tracking-tight");
+    // The route now shares the settings frame, which names the page once
+    // through PageHeader instead of a bespoke heading block.
+    expect(route).toContain("<SettingsLayout");
+    expect(route).toContain('pathname="/admin/settings/meta-conversion"');
+    expect(route).toContain('title="Meta conversions"');
+    expect(route).not.toContain("<h1");
     expect(route).not.toContain("text-3xl");
     expect(container).toContain("min-h-11");
     expect(container).toContain("Setup");

@@ -145,8 +145,8 @@ describe("order payment recovery OTP service", () => {
       paymentRecovery: { state: "needs_attention" },
     });
     mocks.enforceCustomerAuthOtpIpRateLimit.mockResolvedValue(undefined);
-    mocks.getEmailProviderReadiness.mockResolvedValue({ configured: true });
-    mocks.getSmsProviderReadiness.mockResolvedValue({ configured: true });
+    mocks.getEmailProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
+    mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
     mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
       accessToken: "wa_token",
       phoneNumberId: "wa_phone",

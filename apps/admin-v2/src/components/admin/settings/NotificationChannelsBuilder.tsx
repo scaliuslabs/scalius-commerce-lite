@@ -4,15 +4,18 @@ import {
   Bell,
   ChevronDown,
   Loader2,
-  RotateCcw,
-  Save,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+import { isReady, type Readiness } from "@scalius/shared/readiness";
 
-import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import {
+  ContextualSaveBar,
+  SkeletonPage,
+  StatusBadge,
+} from "@/components/admin/shell";
 import {
   CUSTOMER_NOTIFICATION_CHANNELS,
   NOTIFICATION_EVENT_GROUPS,
@@ -36,7 +39,6 @@ import {
 } from "@/components/admin/settings/notification-channel-policy";
 import type { NotificationRulesPanel } from "@/components/admin/settings/notification-settings-sections";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -447,12 +449,9 @@ export function NotificationChannelsBuilder({
       const data = (await getNotificationChannels()) as {
         channels?: Record<string, string[]>;
         whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
-        emailConfigured?: boolean;
-        emailError?: string | null;
-        whatsappConfigured?: boolean;
-        whatsappError?: string | null;
-        smsProviderConfigured?: boolean;
-        smsProviderError?: string | null;
+        email?: Readiness;
+        whatsapp?: Readiness;
+        sms?: Readiness;
       };
       const nextChannels = buildCustomerNotificationConfig(data?.channels);
       const nextTemplate = {
@@ -463,12 +462,12 @@ export function NotificationChannelsBuilder({
           data?.whatsappTemplate?.languageCode ||
           DEFAULT_WHATSAPP_TEMPLATE.languageCode,
       };
-      setIsEmailConfigured(Boolean(data?.emailConfigured));
-      setEmailError(data?.emailError ?? null);
-      setIsWhatsAppConfigured(Boolean(data?.whatsappConfigured));
-      setWhatsAppError(data?.whatsappError ?? null);
-      setIsSmsConfigured(Boolean(data?.smsProviderConfigured));
-      setSmsProviderError(data?.smsProviderError ?? null);
+      setIsEmailConfigured(isReady(data?.email));
+      setEmailError(data?.email?.issues[0]?.message ?? null);
+      setIsWhatsAppConfigured(isReady(data?.whatsapp));
+      setWhatsAppError(data?.whatsapp?.issues[0]?.message ?? null);
+      setIsSmsConfigured(isReady(data?.sms));
+      setSmsProviderError(data?.sms?.issues[0]?.message ?? null);
       setChannels(nextChannels);
       setSavedChannels(nextChannels);
       setWhatsAppTemplate(nextTemplate);
@@ -491,12 +490,11 @@ export function NotificationChannelsBuilder({
     try {
       const data = (await getAdminNotificationChannels()) as {
         channels?: Record<string, string[]>;
-        pushConfigured?: boolean;
-        pushError?: string | null;
+        push?: Readiness;
       };
       const nextChannels = buildAdminNotificationConfig(data?.channels);
-      setIsPushConfigured(Boolean(data?.pushConfigured));
-      setPushError(data?.pushError ?? null);
+      setIsPushConfigured(isReady(data?.push));
+      setPushError(data?.push?.issues[0]?.message ?? null);
       setAdminChannels(nextChannels);
       setSavedAdminChannels(nextChannels);
     } catch (error) {
@@ -622,17 +620,54 @@ export function NotificationChannelsBuilder({
 
   if (isLoading && isAdminLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <SkeletonPage
+        showHeader={false}
+        sections={2}
+        rowsPerSection={4}
+        label="Loading notification rules"
+      />
     );
+  }
+
+  const audienceDirty = audience === "customers" ? customerDirty : adminDirty;
+  const audienceSaving = audience === "customers" ? isSaving : isAdminSaving;
+  const audienceBlocked = audience === "customers"
+    ? isLoading || Boolean(customerLoadError)
+    : isAdminLoading || Boolean(adminLoadError);
+  const audienceSaveLabel = audience === "customers"
+    ? "Save customer rules"
+    : "Save admin rules";
+  const audienceSaveDisabledReason = audienceBlocked
+    ? "Reload the rules before saving."
+    : !audienceDirty
+      ? "The unsaved changes are in the other audience."
+      : undefined;
+
+  function discardAudienceDraft() {
+    if (audience === "customers") {
+      setChannels(savedChannels);
+      setWhatsAppTemplate(savedWhatsAppTemplate);
+      return;
+    }
+    setAdminChannels(savedAdminChannels);
   }
 
   return (
     <div className="space-y-4">
-      <UnsavedChangesGuard
+      <ContextualSaveBar
+        // Both audiences share one page, so the guard has to stay armed for
+        // either draft while Save acts on the audience actually on screen.
         isDirty={customerDirty || adminDirty}
-        isSubmitting={isSaving || isAdminSaving}
+        saving={audienceSaving}
+        saveDisabled={!audienceDirty || audienceBlocked}
+        saveDisabledReason={audienceSaveDisabledReason}
+        canSave={canManage}
+        saveLabel={audienceSaveLabel}
+        allowSamePathNavigation
+        // The settings section picker is sticky on narrow widths.
+        stickyClassName="sticky top-15 z-30 lg:top-0"
+        onDiscard={discardAudienceDraft}
+        onSave={audience === "customers" ? handleSave : handleAdminSave}
       />
 
       {!canManage && (
@@ -686,36 +721,6 @@ export function NotificationChannelsBuilder({
               <div className="min-w-0">
                 <CardTitle className="text-base">Customer updates</CardTitle>
               </div>
-            </div>
-            <div className="grid w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 sm:flex sm:w-auto sm:flex-row">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setChannels(savedChannels);
-                  setWhatsAppTemplate(savedWhatsAppTemplate);
-                }}
-                disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
-                className="min-h-11 min-w-0 sm:min-h-9"
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleSave}
-                disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
-                className="min-h-11 min-w-0 sm:min-h-9"
-              >
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save customer rules
-              </Button>
             </div>
           </div>
 
@@ -864,50 +869,16 @@ export function NotificationChannelsBuilder({
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-base">Admin alerts</CardTitle>
                   {!isAdminLoading && !adminLoadError ? (
-                    <Badge
-                      variant={isPushConfigured ? "outline" : "secondary"}
-                      className={
-                        isPushConfigured
-                          ? "border-emerald-500/35 text-emerald-700 dark:text-emerald-400"
-                          : undefined
-                      }
-                    >
+                    <StatusBadge tone={isPushConfigured ? "success" : "attention"}>
                       {isPushConfigured
                         ? "Push ready"
                         : countAdminRules(adminChannels) > 0
                           ? `${countAdminRules(adminChannels)} paused`
                           : "Push needs setup"}
-                    </Badge>
+                    </StatusBadge>
                   ) : null}
                 </div>
               </div>
-            </div>
-            <div className="grid w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 sm:flex sm:w-auto sm:flex-row">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setAdminChannels(savedAdminChannels)}
-                disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
-                className="min-h-11 min-w-0 sm:min-h-9"
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleAdminSave}
-                disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
-                className="min-h-11 min-w-0 sm:min-h-9"
-              >
-                {isAdminSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save admin rules
-              </Button>
             </div>
           </div>
         </CardHeader>

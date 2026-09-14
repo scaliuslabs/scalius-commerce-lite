@@ -35,7 +35,6 @@ src/
     api/             # API client modules (per-domain fetch functions + typed unwrap)
     cart/            # Cart utility functions
     checkout/        # Checkout page logic + gateway handlers
-    edge-cache.ts    # Concurrent SSR read coalescing (no retained values)
     canonical-query.ts # Canonical public query-string handling
     public-worker-cache.ts # Native cache eligibility, tags, and route TTLs
     middleware-helper/ # CSP handler
@@ -70,7 +69,7 @@ Two middleware functions run in sequence via `sequence()`:
 
 ### 1. API Context Middleware (`apiContextMiddleware`)
 
-The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `createRequestApiContext()` (`src/lib/api/request-context.ts`) and seeded into the `apiContext` ALS store (`src/lib/api/context.ts`):
+The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `runWithRequestRuntime()` (`src/lib/api/runtime.ts`) and seeded into the request runtime store:
 
 - **Platform origins**: a `GET /api/v1/platform` read to the API -- through the `BACKEND_API` service binding (target `https://api.internal/api/v1/platform`) in production, or plain HTTP to `http://localhost:8787` during `astro dev`. The API KV-caches that response for 60 seconds, so this is one bounded sub-request, not a per-render config fetch. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead falls back to the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
 - **Derived secrets**: `API_TOKEN` and `PURGE_TOKEN` are derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical values, so nothing is installed or shared out of band.
@@ -224,7 +223,7 @@ Two helpers centralize the single `as` cast for the API's `{ success: true, data
 - `unwrapEnvelope<T>(response)` -- Returns `data` if `success === true`, else `null`
 - `unwrapData<T>(response)` -- Returns `data` without checking `success` (for cases where caller handles success separately)
 
-### Runtime Environment (`src/lib/api/runtime-env.ts`)
+### Request runtime (`src/lib/api/runtime.ts`)
 
 Consolidated accessors, all delegating to `apiContext.getStore()`. There is no module-level state and no Wrangler `vars` or `import.meta.env` fallback: when a value is absent from the store it is absent for the request, and callers fail closed:
 
@@ -344,7 +343,7 @@ The account delivery editor reads the current profile from `/me`, independently 
 
 The storefront imports ONLY:
 - `@scalius/shared` -- Pure utility functions (currency formatting, CORS, etc.)
-- `@scalius/api-client` -- Generated SDK types, generated endpoint helpers, and client factory/runtime used through the configured clients in `src/lib/api/client.ts`
+- `@scalius/api-client` -- Generated SDK types, generated endpoint helpers, and client factory/runtime used through the configured clients in `src/lib/api/transport.ts`
 
 It does NOT import:
 - `@scalius/core` -- Domain services
@@ -369,12 +368,10 @@ All data access goes through the API worker via the configured SDK clients, serv
 | `src/worker.ts` | Uncached gateway and native cached public entrypoint |
 | `src/middleware.ts` | Public/private response policy and API context |
 | `src/lib/public-worker-cache.ts` | Public eligibility, canonical keys, tags, and TTL |
-| `src/lib/edge-cache.ts` | Request-only duplicate-read coalescing |
 | `src/lib/canonical-query.ts` | Canonical API query strings |
-| `src/lib/api/context.ts` | AsyncLocalStorage for per-request Cloudflare bindings |
-| `src/lib/api/runtime-env.ts` | Per-request runtime env accessors (ALS-backed, no env/vars fallback) |
+| `src/lib/api/runtime.ts` | Per-request runtime: derived tokens, platform origins, ALS getters |
 | `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |
-| `src/lib/api/client.ts` | API URL builder and fetch client |
+| `src/lib/api/transport.ts` | `apiFetch`: service binding or local HTTP, fallback policy, system JWT, read coalescing, SDK clients |
 | `src/lib/checkout/index.ts` | Checkout page logic + gateway orchestration |
 | `src/store/cart.ts` | Nano Stores cart state (localStorage-persisted) |
 | `src/config/build-id.ts` | Build-scoped generated asset paths |

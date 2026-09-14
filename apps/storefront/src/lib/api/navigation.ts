@@ -1,8 +1,8 @@
 // src/lib/api/navigation.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { NavigationItem } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { getApiV1Navigation } from "@scalius/api-client/sdk";
 import type { GetApiV1NavigationData } from "@scalius/api-client/types";

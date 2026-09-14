@@ -60,7 +60,7 @@ function createTestApp(db = createDb()) {
 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.getCheckoutDeliveryReadiness.mockResolvedValue({
-    ready: true,
+    status: "ready",
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
     issues: [],
@@ -110,16 +110,19 @@ describe("shipping settings cache invalidation", () => {
   it("rejects deleting the last active shipping method from a ready checkout", async () => {
     mocks.getCheckoutDeliveryReadiness
       .mockResolvedValueOnce({
-        ready: true,
+        status: "ready",
         hasActiveShippingMethod: true,
         hasActiveDeliveryHierarchy: true,
         issues: [],
       })
       .mockResolvedValueOnce({
-        ready: false,
+        status: "incomplete",
         hasActiveShippingMethod: false,
         hasActiveDeliveryHierarchy: true,
-        issues: ["Add at least one active shipping method before checkout can accept orders."],
+        issues: [{
+          code: "missing_active_shipping_method",
+          message: "Add at least one active shipping method before checkout can accept orders.",
+        }],
       });
     const db = createDb({ id: "sm_1", isActive: true, deletedAt: null });
     const { app, env } = createTestApp(db);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { isReady } from "./readiness";
+
 import {
   EMPTY_PLATFORM_CONFIG,
   INTERNAL_SERVICE_ORIGIN,
@@ -9,6 +11,7 @@ import {
   PLATFORM_URL_KEYS,
   PLATFORM_URL_MAX_LENGTH,
   getPlatformConfigReadiness,
+  PLATFORM_READINESS_FIX,
   isInternalServiceUrl,
   isLoopbackUrl,
   mediaHostFromUrl,
@@ -334,20 +337,38 @@ describe("storefrontPurgeUrl", () => {
 });
 
 describe("getPlatformConfigReadiness", () => {
-  it("is complete when all four public URLs are set", () => {
-    expect(getPlatformConfigReadiness(PRODUCTION_CONFIG)).toEqual({ complete: true, missing: [] });
+  it("is ready when all four public URLs are set", () => {
+    expect(getPlatformConfigReadiness(PRODUCTION_CONFIG))
+      .toEqual({ status: "ready", issues: [], missing: [] });
     expect(getPlatformConfigReadiness({ ...PRODUCTION_CONFIG, customerAuthCookieDomain: "", corsAllowedOrigins: [] }))
-      .toEqual({ complete: true, missing: [] });
+      .toEqual({ status: "ready", issues: [], missing: [] });
+    expect(isReady(getPlatformConfigReadiness(PRODUCTION_CONFIG))).toBe(true);
   });
 
   it("lists every missing URL key in contract order", () => {
-    expect(getPlatformConfigReadiness({ ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] })).toEqual({
-      complete: false,
-      missing: ["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"],
+    const empty = getPlatformConfigReadiness({ ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] });
+    expect(empty.status).toBe("incomplete");
+    expect(empty.missing).toEqual(["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"]);
+    expect(empty.issues.map((issue) => issue.code)).toEqual([
+      "missing_storefront_url",
+      "missing_api_url",
+      "missing_dashboard_url",
+      "missing_media_url",
+    ]);
+
+    const partial = getPlatformConfigReadiness({ ...PRODUCTION_CONFIG, apiUrl: "", mediaUrl: "" });
+    expect(partial.status).toBe("incomplete");
+    expect(partial.missing).toEqual(["apiUrl", "mediaUrl"]);
+    expect(isReady(partial)).toBe(false);
+  });
+
+  it("gives every issue merchant-facing copy that names the dashboard page", () => {
+    const [issue] = getPlatformConfigReadiness({ ...PRODUCTION_CONFIG, apiUrl: "" }).issues;
+    expect(issue).toEqual({
+      code: "missing_api_url",
+      message: "API URL is not configured.",
+      fix: PLATFORM_READINESS_FIX,
     });
-    expect(getPlatformConfigReadiness({ ...PRODUCTION_CONFIG, apiUrl: "", mediaUrl: "" })).toEqual({
-      complete: false,
-      missing: ["apiUrl", "mediaUrl"],
-    });
+    expect(PLATFORM_READINESS_FIX).toContain("Settings -> System -> Platform");
   });
 });

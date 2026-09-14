@@ -48,12 +48,18 @@ import { encryptCredentials } from "../utils/credential-encryption";
 
 function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
   return {
+    // `.get()` is the email settings-document row (absent here, so the legacy
+    // per-key rows are assembled); `.all()` is the legacy category read.
     select: () => ({
       from: () => ({
         where: () => ({
           all: async () => rows,
+          get: async () => undefined,
         }),
       }),
+    }),
+    insert: () => ({
+      values: () => ({ onConflictDoUpdate: () => ({ statement: "upsert-email-config" }) }),
     }),
   };
 }
@@ -239,13 +245,15 @@ describe("createAuth", () => {
       expect(emailContext?.env?.JWT_SECRET).toBe(legacyJwtSecret);
       expect(emailContext?.encryptionKey).toBeUndefined();
       expect(readiness).toMatchObject({
-        configured: false,
+        status: "incomplete",
         provider: "resend",
         sender: "orders@example.com",
         senderConfigured: true,
         cloudflareBindingConfigured: false,
         resendConfigured: false,
-        error: "Resend API key is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
+        issues: [{
+          message: "Resend API key is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
+        }],
       });
     } finally {
       warnSpy.mockRestore();

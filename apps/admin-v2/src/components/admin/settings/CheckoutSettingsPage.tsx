@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, lazy, Suspense } from "react";
+import { Link } from "@tanstack/react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import {
     Select,
@@ -9,7 +10,7 @@ import {
 } from "../../ui/select";
 import type { CheckoutSettingsSection } from "./checkout-settings-sections";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
-import { PanelLoadingSkeleton } from "../shared/LoadingFallback";
+import { PageHeader, SkeletonPage, type PageHeaderLinkProps } from "../shell";
 
 const CheckoutFlowSettings = lazy(() =>
     import("./CheckoutFlowSettings")
@@ -36,8 +37,16 @@ const CustomerRequestSettings = lazy(() =>
     import("./CustomerRequestSettings")
 );
 
-function TabSpinner() {
-    return <PanelLoadingSkeleton />;
+function SectionSkeleton() {
+    return <SkeletonPage showHeader={false} sections={2} label="Loading checkout settings" />;
+}
+
+function BreadcrumbLink({ href, className, onClick, children }: PageHeaderLinkProps) {
+    return (
+        <Link to={href} className={className} onClick={onClick}>
+            {children}
+        </Link>
+    );
 }
 
 const tabs = [
@@ -137,11 +146,15 @@ export default function CheckoutSettingsPage({
             onPointerDownCapture={rememberWorkspaceScroll}
             onKeyDownCapture={rememberWorkspaceScroll}
         >
-            <div className="mb-4">
-                <h1 className="text-xl font-semibold tracking-tight">
-                    Checkout
-                </h1>
-            </div>
+            <PageHeader
+                title="Checkout"
+                subtitle="Controls how buyers pay, which gateways and languages they see, and how orders are shipped and delivered."
+                breadcrumbs={[
+                    { label: "Settings", href: "/admin/settings" },
+                    { label: "Checkout" },
+                ]}
+                linkComponent={BreadcrumbLink}
+            />
 
             <Tabs
                 value={section}
@@ -193,7 +206,7 @@ export default function CheckoutSettingsPage({
                 <div className="mt-6">
                     <TabsContent forceMount value="checkout-flow" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("checkout-flow") || section === "checkout-flow") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <CheckoutFlowSettings />
                             </Suspense>
                         )}
@@ -201,7 +214,7 @@ export default function CheckoutSettingsPage({
 
                     <TabsContent forceMount value="payment" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("payment") || section === "payment") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <PaymentGatewaysManager />
                             </Suspense>
                         )}
@@ -209,7 +222,7 @@ export default function CheckoutSettingsPage({
 
                     <TabsContent forceMount value="languages" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("languages") || section === "languages") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <CheckoutLanguagesManager />
                             </Suspense>
                         )}
@@ -217,7 +230,7 @@ export default function CheckoutSettingsPage({
 
                     <TabsContent forceMount value="shipping" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("shipping") || section === "shipping") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <ShippingMethodsManager />
                             </Suspense>
                         )}
@@ -225,7 +238,7 @@ export default function CheckoutSettingsPage({
 
                     <TabsContent forceMount value="delivery" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("delivery") || section === "delivery") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <DeliveryLocationsManager />
                             </Suspense>
                         )}
@@ -233,7 +246,7 @@ export default function CheckoutSettingsPage({
 
                     <TabsContent forceMount value="customer-requests" className="mt-0 data-[state=inactive]:hidden">
                         {(mountedTabs.has("customer-requests") || section === "customer-requests") && (
-                            <Suspense fallback={<TabSpinner />}>
+                            <Suspense fallback={<SectionSkeleton />}>
                                 <CustomerRequestSettings />
                             </Suspense>
                         )}

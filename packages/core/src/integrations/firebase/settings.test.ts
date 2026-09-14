@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  FIREBASE_READINESS_CODES,
   getFirebaseServiceAccountReadiness,
   normalizeFirebaseServiceAccountJson,
   readFirebaseServiceAccountJsonFromStoredValue,
+  readFirebaseSettings,
 } from "./settings";
 
 import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
@@ -16,16 +18,32 @@ const serviceAccountJson = JSON.stringify({
   project_id: "scalius-test",
 });
 
+/**
+ * Pre-document storage: the legacy `service_account` row exists and there is
+ * no settings-document row yet, so every read assembles from the legacy rows.
+ */
 function createReadinessDb(value: string | null) {
-  return {
+  const upserts: Array<Record<string, unknown>> = [];
+  const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          get: vi.fn(async () => value === null ? undefined : { value }),
+          get: vi.fn(async () => undefined),
+          all: vi.fn(async () =>
+            value === null ? [] : [{ key: "service_account", value }]),
         })),
       })),
     })),
+    insert: vi.fn(() => ({
+      values: vi.fn((values: Record<string, unknown>) => ({
+        onConflictDoUpdate: vi.fn(() => {
+          upserts.push(values);
+          return values;
+        }),
+      })),
+    })),
   };
+  return Object.assign(db, { upserts });
 }
 
 describe("Firebase credential settings", () => {
@@ -87,8 +105,8 @@ describe("Firebase credential settings", () => {
         credentialKey,
       ),
     ).resolves.toEqual({
-      configured: true,
-      error: null,
+      status: "ready",
+      issues: [],
       source: "settings",
     });
   });
@@ -101,11 +119,47 @@ describe("Firebase credential settings", () => {
         credentialKey,
       ),
     ).resolves.toEqual({
-      configured: false,
-      error:
-        "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+      status: "incomplete",
+      issues: [{
+        code: FIREBASE_READINESS_CODES.unusable,
+        message:
+          "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+      }],
       source: "settings",
     });
+  });
+
+  it("assembles the legacy rows into the settings document on first read", async () => {
+    const storedValue = encodeEncryptedCredential(
+      await encryptCredentials(serviceAccountJson, credentialKey),
+    );
+    const db = createReadinessDb(storedValue);
+
+    await expect(
+      readFirebaseSettings(db as never, credentialKey),
+    ).resolves.toMatchObject({
+      serviceAccountStored: true,
+      serviceAccountJson,
+    });
+
+    expect(db.upserts).toHaveLength(1);
+    const written = JSON.parse(String(db.upserts[0]?.value)) as Record<string, string>;
+    expect(db.upserts[0]).toMatchObject({ category: "firebase", key: "config" });
+    expect(written.serviceAccount).toMatch(/^enc:/);
+    expect(String(db.upserts[0]?.value)).not.toContain("scalius-test");
+  });
+
+  it("never replaces an undecryptable legacy credential with an empty document", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const db = createReadinessDb("enc:not-valid-aes-gcm");
+
+    await expect(
+      readFirebaseSettings(db as never, credentialKey),
+    ).resolves.toMatchObject({
+      serviceAccountStored: true,
+      serviceAccountJson: undefined,
+    });
+    expect(db.upserts).toHaveLength(0);
   });
 
   it("reports no source when nothing is stored, even if a legacy env value is present", async () => {
@@ -120,8 +174,11 @@ describe("Firebase credential settings", () => {
             credentialKey,
           ),
         ).resolves.toEqual({
-          configured: false,
-          error: "Configure Firebase service account credentials before enabling admin push notifications.",
+          status: "incomplete",
+          issues: [{
+            code: FIREBASE_READINESS_CODES.missing,
+            message: "Configure Firebase service account credentials before enabling admin push notifications.",
+          }],
           source: "none",
         });
       }

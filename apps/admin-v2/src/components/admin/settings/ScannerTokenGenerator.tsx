@@ -6,7 +6,6 @@ import {
   Check,
   Clock,
   Copy,
-  Loader2,
   Plus,
   ScanBarcode,
 } from "lucide-react";
@@ -16,16 +15,14 @@ import { toast } from "sonner";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { createScannerLink } from "@/lib/api-functions/auth-management";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  EmptyState,
+  SettingsSection,
+  StatusBadge,
+} from "@/components/admin/shell";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const TOKEN_LIFETIME_MS = SCANNER_TOKEN_TTL_SECONDS * 1000;
 const TOKEN_LIFETIME_MINUTES = SCANNER_TOKEN_TTL_SECONDS / 60;
@@ -140,7 +137,7 @@ export function ScannerTokenGenerator() {
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="max-w-5xl space-y-6">
       {!canGenerate && (
         <Alert>
           <AlertDescription>
@@ -149,105 +146,89 @@ export function ScannerTokenGenerator() {
         </Alert>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ScanBarcode className="h-5 w-5" />
-            Scanner access
-          </CardTitle>
-          <CardDescription>
-            Create a one-time device link. It expires in {TOKEN_LIFETIME_MINUTES} minutes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {token ? (
-            <div className="space-y-4">
-              <div className="flex min-h-64 items-center justify-center">
-                {qrDataUrl ? (
-                  <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5">
-                    <img
-                      src={qrDataUrl}
-                      alt="One-time warehouse scanner access QR code"
-                      className="h-56 w-56"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-56 w-56 items-center justify-center rounded-xl border bg-muted/20">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="sr-only">Creating QR code</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-center" aria-live="polite">
-                <Badge variant="secondary" className="min-h-7 gap-1.5 px-3">
-                  <Clock className="h-3.5 w-3.5" />
-                  {timeLeft || "Calculating expiry…"}
-                </Badge>
-              </div>
-
-              <Alert>
-                <AlertDescription className="text-xs leading-5">
-                  The first device to open this link claims it. Its scanner session stays active for up to {SESSION_IDLE_HOURS} hours after the latest check-in.
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 flex-1 sm:min-h-9"
-                  disabled={!scannerUrl}
-                  onClick={() => void handleCopy()}
-                >
-                  {copied ? (
-                    <Check className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Copy className="mr-2 h-4 w-4" />
-                  )}
-                  {copied ? "Copied" : "Copy link"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 flex-1 sm:min-h-9"
-                  disabled={isGenerating || !canGenerate}
-                  onClick={() => void handleGenerate()}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Create another link
-                </Button>
-              </div>
+      <SettingsSection
+        title="Scanner access"
+        description={`Creates a one-time device link that expires in ${TOKEN_LIFETIME_MINUTES} minutes.`}
+      >
+        {token ? (
+          <div className="space-y-4">
+            <div className="flex min-h-64 items-center justify-center">
+              {qrDataUrl ? (
+                <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+                  <img
+                    src={qrDataUrl}
+                    alt="One-time warehouse scanner access QR code"
+                    className="h-56 w-56"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-56 w-56 items-center justify-center rounded-xl border bg-muted/20">
+                  <Skeleton className="h-48 w-48 rounded-lg" />
+                  <span className="sr-only">Creating QR code</span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-4 py-6 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                <ScanBarcode className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <div className="max-w-sm space-y-1">
-                <p className="text-sm font-medium">No active scanner link</p>
-              </div>
+
+            <div className="flex justify-center" aria-live="polite">
+              <StatusBadge
+                tone={timeLeft === "Expired" ? "critical" : "info"}
+                dot={false}
+                srLabel="Link expiry:"
+                className="min-h-7 px-3"
+              >
+                <Clock className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
+                {timeLeft || "Calculating expiry…"}
+              </StatusBadge>
+            </div>
+
+            <Alert>
+              <AlertDescription className="text-xs leading-5">
+                The first device to open this link claims it. Its scanner session stays active for up to {SESSION_IDLE_HOURS} hours after the latest check-in.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
-                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                variant="outline"
+                className="min-h-11 flex-1 sm:min-h-9"
+                disabled={!scannerUrl}
+                onClick={() => void handleCopy()}
+              >
+                {copied ? (
+                  <Check className="mr-2 h-4 w-4" />
+                ) : (
+                  <Copy className="mr-2 h-4 w-4" />
+                )}
+                {copied ? "Copied" : "Copy link"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 flex-1 sm:min-h-9"
                 disabled={isGenerating || !canGenerate}
                 onClick={() => void handleGenerate()}
               >
-                {isGenerating ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <ScanBarcode className="mr-2 h-4 w-4" />
-                )}
-                Create link
+                <Plus className="mr-2 h-4 w-4" />
+                {isGenerating ? "Creating link" : "Create another link"}
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        ) : (
+          <EmptyState
+            bordered={false}
+            icon={ScanBarcode}
+            heading="No active scanner link"
+            body="Create a link, then scan it from the warehouse device that should claim it."
+            action={{
+              label: isGenerating ? "Creating link" : "Create link",
+              onClick: () => void handleGenerate(),
+              disabled: isGenerating || !canGenerate,
+              icon: ScanBarcode,
+            }}
+          />
+        )}
+      </SettingsSection>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
-import { CACHE_TTL } from "@/lib/edge-cache";
+import { CACHE_TTL } from "@/lib/api/transport";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;

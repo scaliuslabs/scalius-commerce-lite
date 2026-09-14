@@ -9,6 +9,7 @@ import {
   type NotificationRulesPanel,
   type NotificationSettingsSection,
 } from "~/components/admin/settings/notification-settings-sections";
+import { SettingsLayout } from "~/components/admin/settings/SettingsLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
@@ -62,14 +63,15 @@ function NotificationSettingsPage() {
 
   return (
     <div
-      className="mx-auto max-w-6xl space-y-4"
+      className="contents"
       onPointerDownCapture={rememberWorkspaceScroll}
       onKeyDownCapture={rememberWorkspaceScroll}
     >
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
-      </div>
-
+      <SettingsLayout
+        pathname="/admin/settings/notifications"
+        title="Notifications"
+        description="Which events notify staff and customers, and how push is delivered."
+      >
       <Tabs value={search.section} onValueChange={handleSectionChange}>
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-md border bg-card p-1 sm:w-fit">
           <TabsTrigger value="rules" className="min-h-11 gap-2 px-3 sm:min-h-9">
@@ -108,6 +110,7 @@ function NotificationSettingsPage() {
           ) : null}
         </TabsContent>
       </Tabs>
+      </SettingsLayout>
     </div>
   );
 }

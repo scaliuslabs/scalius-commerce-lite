@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
-import { getRuntimeApiBaseUrl, getRuntimeDashboardUrl } from "@/lib/api/runtime-env";
+import { apiFetch } from "@/lib/api/transport";
+import { getRuntimeApiBaseUrl, getRuntimeDashboardUrl } from "@/lib/api/runtime";
 import { createThemePreviewCookieHeader } from "@/lib/theme-preview-cookie";
 import {
   browserContinuationRelayResponse,
@@ -122,18 +122,15 @@ export const POST: APIRoute = async ({ request, url }) => {
       return textResponse("Invalid theme preview continuation.", 400);
     }
 
-    const upstream = await fetchWithRetry(
-      createApiUrl("/storefront/agent-continuations/theme-preview"),
+    const upstream = await apiFetch(
+      "/storefront/agent-continuations/theme-preview",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ continuationCode }),
         cache: "no-store",
       },
-      0,
-      4_000,
-      true,
-      false,
+      { retries: 0, timeout: 4_000, auth: true, logTerminalFailure: false },
     );
     if (!upstream.ok) {
       await upstream.body?.cancel();

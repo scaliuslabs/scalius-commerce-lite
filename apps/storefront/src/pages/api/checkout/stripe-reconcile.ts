@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 
 const STRIPE_RECONCILE_TIMEOUT_MS = 15_000;
@@ -36,17 +36,15 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const response = await fetchWithRetry(
-      createApiUrl("/payment/stripe/reconcile"),
+    const response = await apiFetch(
+      "/payment/stripe/reconcile",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, receiptToken }),
         cache: "no-store",
       },
-      0,
-      STRIPE_RECONCILE_TIMEOUT_MS,
-      false,
+      { retries: 0, timeout: STRIPE_RECONCILE_TIMEOUT_MS, auth: false },
     );
     const responseBody = await response.json().catch(() => ({
       error: "Stripe payment verification is temporarily unavailable.",

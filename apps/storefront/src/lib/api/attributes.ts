@@ -1,7 +1,7 @@
 // src/lib/api/attributes.ts
 
-import { getConfiguredSdkClient } from "./client";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getConfiguredSdkClient } from "./transport";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
   getApiV1AttributesFilterable,

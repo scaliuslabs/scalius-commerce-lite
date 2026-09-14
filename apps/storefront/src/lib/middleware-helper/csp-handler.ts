@@ -1,5 +1,5 @@
 // src/lib/middleware-helper/csp-handler.ts
-import { withEdgeCache, CACHE_TTL } from "../edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import {
   normalizePlatformOrigin,
   parseMerchantCspSources,

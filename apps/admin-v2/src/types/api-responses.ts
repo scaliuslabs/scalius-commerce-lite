@@ -10,6 +10,7 @@
 // Types that need stricter typing (timestamps, no index signatures) are defined
 // explicitly with matching shapes.
 
+import type { ReadinessStatus } from "@scalius/shared/readiness";
 import type {
   GetApiV1AdminDashboardResponse,
   GetApiV1AdminCollectionsFormOptionsResponse,
@@ -426,10 +427,15 @@ export interface AbandonedCheckout {
 // Delivery domain
 // ---------------------------------------------------------------------------
 
-export type DeliveryProviderReadinessStatus =
+/** Setup lifecycle position. The readiness verdict is the shared `status`. */
+export type DeliveryProviderLifecycle =
   "draft" | "configured" | "tested" | "active" | "blocked";
 
-export interface DeliveryProviderReadinessBlocker {
+/** The shared readiness verdict itself; never a lifecycle position. */
+export type DeliveryProviderReadinessStatus = ReadinessStatus;
+
+/** Mirrors `ReadinessIssue` in packages/shared/src/readiness.ts. */
+export interface DeliveryProviderReadinessIssue {
   code:
     | "inactive"
     | "unconfigured"
@@ -438,15 +444,17 @@ export interface DeliveryProviderReadinessBlocker {
     | "unreadable"
     | string;
   message: string;
+  fix?: string;
 }
 
 export interface DeliveryProviderReadiness {
   status: DeliveryProviderReadinessStatus;
+  lifecycle: DeliveryProviderLifecycle;
   configured?: boolean;
   tested?: boolean;
   active?: boolean;
   canCreateShipment: boolean;
-  blockers: DeliveryProviderReadinessBlocker[];
+  issues: DeliveryProviderReadinessIssue[];
   activationBlockers?: Array<{
     source: "credentials" | "config" | string;
     key: string;

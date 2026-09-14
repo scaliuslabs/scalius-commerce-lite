@@ -17,6 +17,10 @@ import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
+import {
+  isNavigationConfigUnreadable,
+  navigationConfigNeedsNormalizationSave,
+} from "~/components/admin/settings/navigation-readiness";
 import { Card } from "~/components/ui/card";
 
 import { BrandingSection } from "./BrandingSection";
@@ -88,9 +92,9 @@ export function FooterBuilder({
   const [internalActivePanel, setInternalActivePanel] =
     useState<FooterBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
-  const isEditingLocked = readiness?.state === "invalid";
+  const isEditingLocked = isNavigationConfigUnreadable(readiness);
   const requiresNormalizationSave =
-    readiness?.state === "legacy_normalized" && !normalizationSaved;
+    navigationConfigNeedsNormalizationSave(readiness) && !normalizationSaved;
   const hasPendingSave = isDirty || requiresNormalizationSave;
   useEffect(() => {
     if (!isDirty && !revisionConflict) setRevision(initialRevision);
@@ -198,7 +202,7 @@ export function FooterBuilder({
 
       <NavigationConfigReadinessNotice
         section="footer"
-        readiness={normalizationSaved ? { state: "ready" } : readiness}
+        readiness={normalizationSaved ? { status: "ready", issues: [] } : readiness}
       />
 
       {isEditingLocked ? null : (

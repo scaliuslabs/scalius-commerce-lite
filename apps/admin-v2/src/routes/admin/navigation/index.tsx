@@ -5,6 +5,12 @@ import {
   type NavigationWorkspacePanel,
 } from "~/components/admin/navigation-authority/NavigationWorkspace";
 
+/**
+ * Navigation keeps both views on one route: without `menu` it is the menus
+ * list, with `menu` it is that menu's editor. Existing deep links from the
+ * header and footer builders pass `panel`/`q`, so those stay part of the
+ * schema.
+ */
 interface NavigationSearch {
   menu?: string;
   panel: NavigationWorkspacePanel;

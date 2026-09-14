@@ -8210,8 +8210,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "ready": {
-              "type": "boolean"
+            "status": {
+              "type": "string",
+              "enum": [
+                "ready",
+                "incomplete",
+                "error"
+              ]
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              }
             },
             "hasActiveShippingMethod": {
               "type": "boolean"
@@ -8224,21 +8250,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "hasUsableCustomerSignIn": {
               "type": "boolean"
-            },
-            "issues": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
             }
           },
           "required": [
-            "ready",
+            "status",
+            "issues",
             "hasActiveShippingMethod",
             "hasActiveDeliveryHierarchy",
             "customerSignInRequired",
-            "hasUsableCustomerSignIn",
-            "issues"
+            "hasUsableCustomerSignIn"
           ]
         }
       },
@@ -14748,6 +14768,35 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status": {
                   "type": "string",
                   "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": [
                     "draft",
                     "configured",
                     "tested",
@@ -14766,24 +14815,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "canCreateShipment": {
                   "type": "boolean"
-                },
-                "blockers": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
                 },
                 "activationBlockers": {
                   "type": "array",
@@ -14847,11 +14878,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "status",
+                "issues",
+                "lifecycle",
                 "configured",
                 "tested",
                 "active",
                 "canCreateShipment",
-                "blockers",
                 "activationBlockers"
               ]
             },
@@ -15039,6 +15071,35 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status": {
                   "type": "string",
                   "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": [
                     "draft",
                     "configured",
                     "tested",
@@ -15057,24 +15118,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "canCreateShipment": {
                   "type": "boolean"
-                },
-                "blockers": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
                 },
                 "activationBlockers": {
                   "type": "array",
@@ -15138,11 +15181,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "status",
+                "issues",
+                "lifecycle",
                 "configured",
                 "tested",
                 "active",
                 "canCreateShipment",
-                "blockers",
                 "activationBlockers"
               ]
             },
@@ -15286,6 +15330,35 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "status": {
                         "type": "string",
                         "enum": [
+                          "ready",
+                          "incomplete",
+                          "error"
+                        ]
+                      },
+                      "issues": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "fix": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ]
+                        }
+                      },
+                      "lifecycle": {
+                        "type": "string",
+                        "enum": [
                           "draft",
                           "configured",
                           "tested",
@@ -15304,24 +15377,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       },
                       "canCreateShipment": {
                         "type": "boolean"
-                      },
-                      "blockers": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
                       },
                       "activationBlockers": {
                         "type": "array",
@@ -15385,11 +15440,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     "required": [
                       "status",
+                      "issues",
+                      "lifecycle",
                       "configured",
                       "tested",
                       "active",
                       "canCreateShipment",
-                      "blockers",
                       "activationBlockers"
                     ]
                   },
@@ -16115,6 +16171,35 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status": {
                   "type": "string",
                   "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": [
                     "draft",
                     "configured",
                     "tested",
@@ -16133,24 +16218,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "canCreateShipment": {
                   "type": "boolean"
-                },
-                "blockers": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
                 },
                 "activationBlockers": {
                   "type": "array",
@@ -16214,11 +16281,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "status",
+                "issues",
+                "lifecycle",
                 "configured",
                 "tested",
                 "active",
                 "canCreateShipment",
-                "blockers",
                 "activationBlockers"
               ]
             },
@@ -27938,18 +28006,48 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               }
             },
-            "pushConfigured": {
-              "type": "boolean"
-            },
-            "pushError": {
-              "type": "string",
-              "nullable": true
+            "push": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             }
           },
           "required": [
             "channels",
-            "pushConfigured",
-            "pushError"
+            "push"
           ]
         }
       },
@@ -28186,18 +28284,48 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               }
             },
-            "pushConfigured": {
-              "type": "boolean"
-            },
-            "pushError": {
-              "type": "string",
-              "nullable": true
+            "push": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             }
           },
           "required": [
             "channels",
-            "pushConfigured",
-            "pushError"
+            "push"
           ]
         }
       },
@@ -28280,37 +28408,127 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageCode"
               ]
             },
-            "whatsappConfigured": {
-              "type": "boolean"
+            "whatsapp": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             },
-            "whatsappError": {
-              "type": "string",
-              "nullable": true
+            "email": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             },
-            "emailConfigured": {
-              "type": "boolean"
-            },
-            "emailError": {
-              "type": "string",
-              "nullable": true
-            },
-            "smsProviderConfigured": {
-              "type": "boolean"
-            },
-            "smsProviderError": {
-              "type": "string",
-              "nullable": true
+            "sms": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             }
           },
           "required": [
             "channels",
             "whatsappTemplate",
-            "whatsappConfigured",
-            "whatsappError",
-            "emailConfigured",
-            "emailError",
-            "smsProviderConfigured",
-            "smsProviderError"
+            "whatsapp",
+            "email",
+            "sms"
           ]
         }
       },
@@ -28619,37 +28837,127 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageCode"
               ]
             },
-            "whatsappConfigured": {
-              "type": "boolean"
+            "whatsapp": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             },
-            "whatsappError": {
-              "type": "string",
-              "nullable": true
+            "email": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             },
-            "emailConfigured": {
-              "type": "boolean"
-            },
-            "emailError": {
-              "type": "string",
-              "nullable": true
-            },
-            "smsProviderConfigured": {
-              "type": "boolean"
-            },
-            "smsProviderError": {
-              "type": "string",
-              "nullable": true
+            "sms": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             }
           },
           "required": [
             "channels",
             "whatsappTemplate",
-            "whatsappConfigured",
-            "whatsappError",
-            "emailConfigured",
-            "emailError",
-            "smsProviderConfigured",
-            "smsProviderError"
+            "whatsapp",
+            "email",
+            "sms"
           ]
         }
       },
@@ -51847,13 +52155,43 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "resendConfigured": {
               "type": "boolean"
             },
-            "ready": {
-              "type": "boolean"
-            },
-            "readinessError": {
-              "type": "string",
-              "nullable": true,
-              "maxLength": 1000
+            "readiness": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
             }
           },
           "required": [
@@ -51863,8 +52201,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "senderConfigured",
             "cloudflareBindingConfigured",
             "resendConfigured",
-            "ready",
-            "readinessError"
+            "readiness"
           ]
         }
       },
@@ -52272,8 +52609,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "readiness": {
               "type": "object",
               "properties": {
-                "complete": {
-                  "type": "boolean"
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
                 },
                 "missing": {
                   "type": "array",
@@ -52289,7 +52652,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "complete",
+                "status",
+                "issues",
                 "missing"
               ]
             },
@@ -52450,8 +52814,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "readiness": {
               "type": "object",
               "properties": {
-                "complete": {
-                  "type": "boolean"
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
                 },
                 "missing": {
                   "type": "array",
@@ -52467,7 +52857,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "complete",
+                "status",
+                "issues",
                 "missing"
               ]
             },
@@ -64179,8 +64570,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "checkoutReadiness": {
               "type": "object",
               "properties": {
-                "ready": {
-                  "type": "boolean"
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
                 },
                 "hasActiveShippingMethod": {
                   "type": "boolean"
@@ -64193,22 +64610,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "hasUsableCustomerSignIn": {
                   "type": "boolean"
-                },
-                "issues": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 3
                 }
               },
               "required": [
-                "ready",
+                "status",
+                "issues",
                 "hasActiveShippingMethod",
                 "hasActiveDeliveryHierarchy",
                 "customerSignInRequired",
-                "hasUsableCustomerSignIn",
-                "issues"
+                "hasUsableCustomerSignIn"
               ]
             },
             "unavailable": {
@@ -78268,8 +78678,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               "output": {
                 "selectors": [
                   {
-                    "pointer": "/data/ready",
-                    "alias": "ready"
+                    "pointer": "/data/status",
+                    "alias": "status"
                   },
                   {
                     "pointer": "/data/hasActiveShippingMethod",
@@ -78290,7 +78700,17 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   {
                     "pointer": "/data/issues",
                     "alias": "issues",
-                    "maxItems": 20
+                    "maxItems": 20,
+                    "fields": [
+                      {
+                        "pointer": "/code",
+                        "alias": "code"
+                      },
+                      {
+                        "pointer": "/message",
+                        "alias": "message"
+                      }
+                    ]
                   }
                 ]
               },
@@ -80950,7 +81370,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require ready=true, an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
+        "Require checkout readiness status 'ready', an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
         "Make no setup write while any prerequisite is false, absent, contradictory, or unreadable."
       ]
     },

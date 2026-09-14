@@ -4,7 +4,7 @@
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import type { CreateOrderPayload } from "@/lib/api/types";
 import { createOrder } from "../../../lib/api/orders";
 import { getCheckoutErrorMessage } from "../../../lib/checkout/error-messages";
@@ -52,17 +52,15 @@ async function createInitialPaymentSession(
   receiptToken: string,
 ): Promise<InitialPaymentSessionResult> {
   try {
-    const res = await fetchWithRetry(
-      createApiUrl(PAYMENT_SESSION_ENDPOINTS[paymentMethod]),
+    const res = await apiFetch(
+      PAYMENT_SESSION_ENDPOINTS[paymentMethod],
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, receiptToken }),
         cache: "no-store",
       },
-      0,
-      PAYMENT_SESSION_PROXY_TIMEOUT_MS,
-      false,
+      { retries: 0, timeout: PAYMENT_SESSION_PROXY_TIMEOUT_MS, auth: false },
     );
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };
 

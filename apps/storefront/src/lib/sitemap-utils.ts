@@ -2,7 +2,7 @@
  * Sitemap generation utilities
  * Following XML sitemap protocol: https://www.sitemaps.org/protocol.html
  */
-import { getRuntimeStorefrontUrl } from "./api/runtime-env";
+import { getRuntimeStorefrontUrl } from "./api/runtime";
 import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
 
 export interface SitemapUrl {

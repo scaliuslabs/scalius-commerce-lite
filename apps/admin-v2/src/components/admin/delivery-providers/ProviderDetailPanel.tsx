@@ -318,10 +318,10 @@ export function ProviderDetailPanel({
                   <div className="space-y-1 text-sm">
                     <p className="font-medium">Shipment creation blocked</p>
                     <p className="text-xs">{readinessMessage}</p>
-                    {readiness.blockers.length > 1 && (
+                    {readiness.issues.length > 1 && (
                       <p className="text-xs">
-                        {readiness.blockers.length - 1} more setup item
-                        {readiness.blockers.length === 2 ? "" : "s"} need attention.
+                        {readiness.issues.length - 1} more setup item
+                        {readiness.issues.length === 2 ? "" : "s"} need attention.
                       </p>
                     )}
                   </div>

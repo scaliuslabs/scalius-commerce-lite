@@ -728,7 +728,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Require ready=true, an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
+      "Require checkout readiness status 'ready', an active shipping method, and active city/zone delivery hierarchy before guest enablement.",
       "Make no setup write while any prerequisite is false, absent, contradictory, or unreadable.",
     ],
   },

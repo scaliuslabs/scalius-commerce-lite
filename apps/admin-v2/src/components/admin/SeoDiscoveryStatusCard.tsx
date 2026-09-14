@@ -18,8 +18,12 @@ import type {
   ProductFeedDiagnosticsReport,
 } from "@scalius/core/modules/products";
 
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import {
+  EmptyState,
+  StatusBadge,
+  type StatusTone,
+} from "~/components/admin/shell";
 import { useStorefrontUrl } from "../../hooks/use-storefront-url";
 import { seoFeedDiagnosticsQueryOptions } from "../../lib/api-query-options/seo-feed-diagnostics";
 import { seoDiscoveryLiveProbeQueryOptions } from "../../lib/api-query-options/seo-discovery-live-probe";
@@ -48,11 +52,15 @@ const TONE_LABELS: Record<SeoDiscoveryTone, string> = {
   info: "Info",
 };
 
-const TONE_CLASSES: Record<SeoDiscoveryTone, string> = {
-  ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  warning: "border-amber-200 bg-amber-50 text-amber-700",
-  disabled: "border-border bg-muted text-muted-foreground",
-  info: "border-sky-200 bg-sky-50 text-sky-700",
+/**
+ * Discovery outcomes map onto the shared badge tones. The readable label always
+ * carries the meaning; the tone only reinforces it.
+ */
+const TONE_STATUS: Record<SeoDiscoveryTone, StatusTone> = {
+  ok: "success",
+  warning: "warning",
+  disabled: "neutral",
+  info: "info",
 };
 
 const TONE_ICONS: Record<SeoDiscoveryTone, LucideIcon> = {
@@ -83,10 +91,6 @@ const INFORMATIONAL_FEED_REASONS = new Set<ProductFeedDiagnosticReason>([
 function feedReasonTone(reason: ProductFeedDiagnosticReason): SeoDiscoveryTone {
   if (reason === "feed_disabled") return "disabled";
   return INFORMATIONAL_FEED_REASONS.has(reason) ? "info" : "warning";
-}
-
-function toneClassName(tone: SeoDiscoveryTone): string {
-  return TONE_CLASSES[tone];
 }
 
 function formatCount(value: number): string {
@@ -139,12 +143,13 @@ function StatusRow({
           <div className="flex items-start justify-between gap-2">
             <h4 className="text-sm font-medium">{title}</h4>
             <div className="flex shrink-0 items-center gap-2">
-              <Badge
-                variant="outline"
-                className={`w-fit shrink-0 ${toneClassName(tone)}`}
+              <StatusBadge
+                tone={TONE_STATUS[tone]}
+                srLabel={`${title} status:`}
+                className="w-fit shrink-0"
               >
                 {TONE_LABELS[tone]}
-              </Badge>
+              </StatusBadge>
               <ChevronDown className="mt-0.5 h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </div>
           </div>
@@ -166,17 +171,13 @@ function SectionChips({
   return (
     <div className="flex flex-wrap gap-2">
       {sections.map((section) => (
-        <Badge
+        <StatusBadge
           key={section.key}
-          variant="outline"
-          className={
-            section.enabled
-              ? "border-border bg-background text-foreground"
-              : "border-border bg-muted text-muted-foreground"
-          }
+          tone={section.enabled ? "success" : "neutral"}
+          srLabel="Sitemap section:"
         >
-          {section.label}
-        </Badge>
+          {section.label} {section.enabled ? "on" : "off"}
+        </StatusBadge>
       ))}
     </div>
   );
@@ -227,17 +228,13 @@ function UcpCatalogDetails({
     <div className="space-y-2 text-xs leading-5 text-muted-foreground">
       <div className="flex flex-wrap gap-2">
         {status.capabilities.map((capability) => (
-          <Badge
-            key={capability}
-            variant="outline"
-            className="border-border bg-background text-foreground"
-          >
+          <StatusBadge key={capability} tone="info" dot={false} srLabel="Advertised capability:">
             {capability}
-          </Badge>
+          </StatusBadge>
         ))}
-        <Badge variant="outline" className="border-border bg-muted">
+        <StatusBadge tone="neutral" dot={false}>
           No checkout/payment
-        </Badge>
+        </StatusBadge>
       </div>
       <p>{status.note}</p>
       {status.profileHref ? (
@@ -285,12 +282,13 @@ function StructuredDataPreviewRows({
                 {row.summary}
               </p>
             </div>
-            <Badge
-              variant="outline"
-              className={`w-fit shrink-0 self-start ${toneClassName(row.tone)}`}
+            <StatusBadge
+              tone={TONE_STATUS[row.tone]}
+              srLabel={`${row.title} status:`}
+              className="w-fit shrink-0 self-start"
             >
               {TONE_LABELS[row.tone]}
-            </Badge>
+            </StatusBadge>
           </div>
         );
       })}
@@ -442,7 +440,7 @@ function LiveProbeRows({
                   className={`text-[11px] leading-4 ${
                     resource.disabledReason
                       ? "text-muted-foreground"
-                      : "text-amber-700"
+                      : "text-amber-700 dark:text-amber-300"
                   }`}
                 >
                   {resource.disabledReason ??
@@ -452,12 +450,13 @@ function LiveProbeRows({
                 </p>
               ) : null}
             </div>
-            <Badge
-              variant="outline"
-              className={`w-fit shrink-0 self-start ${toneClassName(tone)}`}
+            <StatusBadge
+              tone={TONE_STATUS[tone]}
+              srLabel={`${resource.label} status:`}
+              className="w-fit shrink-0 self-start"
             >
               {TONE_LABELS[tone]}
-            </Badge>
+            </StatusBadge>
           </div>
         );
       })}
@@ -498,12 +497,9 @@ function LiveProbePanel({
             <h4 className="text-xs font-semibold uppercase text-muted-foreground">
               Live proof
             </h4>
-            <Badge
-              variant="outline"
-              className={`w-fit shrink-0 ${toneClassName(tone)}`}
-            >
+            <StatusBadge tone={TONE_STATUS[tone]} className="w-fit shrink-0">
               {TONE_LABELS[tone]}
-            </Badge>
+            </StatusBadge>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
             {enabled
@@ -525,9 +521,9 @@ function LiveProbePanel({
       </div>
 
       {errorMessage ? (
-        <p className="text-xs leading-5 text-amber-700">{errorMessage}</p>
+        <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{errorMessage}</p>
       ) : result?.error ? (
-        <p className="text-xs leading-5 text-amber-700">{result.error}</p>
+        <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{result.error}</p>
       ) : null}
 
       {result?.resources.length ? (
@@ -608,12 +604,9 @@ function FeedDiagnosticsPanel({
             <h4 className="text-xs font-semibold uppercase text-muted-foreground">
               Catalog diagnostics
             </h4>
-            <Badge
-              variant="outline"
-              className={`w-fit shrink-0 ${toneClassName(tone)}`}
-            >
+            <StatusBadge tone={TONE_STATUS[tone]} className="w-fit shrink-0">
               {TONE_LABELS[tone]}
-            </Badge>
+            </StatusBadge>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">{title}</p>
         </div>
@@ -631,21 +624,24 @@ function FeedDiagnosticsPanel({
       </div>
 
       {errorMessage ? (
-        <p className="text-xs leading-5 text-amber-700">{errorMessage}</p>
+        <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{errorMessage}</p>
       ) : null}
 
       {result ? (
         <div className="space-y-3 text-xs leading-5">
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="border-border bg-background">
+            <StatusBadge tone="neutral" dot={false}>
               Rows ready: {formatCount(result.totals.emittedRows)}
-            </Badge>
-            <Badge variant="outline" className="border-border bg-background">
+            </StatusBadge>
+            <StatusBadge tone="neutral" dot={false}>
               Skipped rows: {formatCount(result.totals.skippedRows)}
-            </Badge>
-            <Badge variant="outline" className="border-border bg-background">
+            </StatusBadge>
+            <StatusBadge
+              tone={result.totals.productsWithIssues === 0 ? "neutral" : TONE_STATUS[tone]}
+              dot={false}
+            >
               {tone === "info" ? "Products outside feed" : "Products to fix"}: {formatCount(result.totals.productsWithIssues)}
-            </Badge>
+            </StatusBadge>
           </div>
 
           <p className="text-muted-foreground">
@@ -697,19 +693,24 @@ function FeedDiagnosticsPanel({
                       </p>
                     ) : null}
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={`w-fit shrink-0 self-start ${toneClassName(feedReasonTone(reason.reason))}`}
+                  <StatusBadge
+                    tone={TONE_STATUS[feedReasonTone(reason.reason)]}
+                    dot={false}
+                    srLabel={`${FEED_REASON_LABELS[reason.reason]} products:`}
+                    className="w-fit shrink-0 self-start"
                   >
                     {formatCount(reason.products)}
-                  </Badge>
+                  </StatusBadge>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground">
-              No feed blockers found in this bounded scan.
-            </p>
+            <EmptyState
+              compact
+              icon={FileSearch}
+              heading="No feed blockers found"
+              body="Nothing in this bounded scan is kept out of the catalog feed."
+            />
           )}
         </div>
       ) : null}
@@ -828,7 +829,7 @@ export function SeoDiscoveryStatusCard({
         summary={status.robots.summary}
       >
         {status.robots.warning ? (
-          <p className="text-xs leading-5 text-amber-700">
+          <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
             {status.robots.warning}
           </p>
         ) : (
@@ -849,7 +850,7 @@ export function SeoDiscoveryStatusCard({
             rows={status.structuredData.schemaPreviewRows}
           />
           {status.structuredData.identityWarning ? (
-            <p className="text-amber-700">
+            <p className="text-amber-700 dark:text-amber-300">
               {status.structuredData.identityWarning}
             </p>
           ) : null}
@@ -860,7 +861,7 @@ export function SeoDiscoveryStatusCard({
             </span>
           </p>
           {status.structuredData.returnPolicyWarning ? (
-            <p className="text-amber-700">
+            <p className="text-amber-700 dark:text-amber-300">
               {status.structuredData.returnPolicyWarning}
             </p>
           ) : status.structuredData.returnPolicyNote ? (

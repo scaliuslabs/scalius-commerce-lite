@@ -6,3 +6,5 @@ export * from "./checkout-flow-admin.service";
 export * from "./checkout-readiness";
 export * from "./customer-request-policy";
 export * from "./platform-settings.service";
+export * from "./security-settings.service";
+export * from "./settings-store";

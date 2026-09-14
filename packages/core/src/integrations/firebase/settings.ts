@@ -1,12 +1,21 @@
+import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { settings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { ValidationError } from "@scalius/core/errors";
 import {
+  readiness,
+  readinessIssue,
+  type Readiness,
+  type ReadinessIssue,
+} from "@scalius/shared/readiness";
+import {
   decryptCredentials,
   decryptCredentialsGraceful,
+  readStoredCredentialStrict,
 } from "../../utils/credential-encryption";
+import { defineSettingsDocument } from "@scalius/core/modules/settings/settings-store";
 
 const FIREBASE_SETTINGS_CATEGORY = "firebase";
 const FIREBASE_SERVICE_ACCOUNT_KEY = "service_account";
@@ -18,11 +27,27 @@ interface FirebaseServiceAccount {
   project_id?: unknown;
 }
 
-export interface FirebaseServiceAccountReadiness {
-  configured: boolean;
-  error: string | null;
+/** Stable issue codes for the dashboard-managed Firebase service account. */
+export const FIREBASE_READINESS_CODES = {
+  unusable: "unusable_firebase_service_account",
+  missing: "missing_firebase_service_account",
+} as const;
+
+/**
+ * The shared readiness vocabulary plus the typed extra callers need: whether
+ * a service account row exists at all.
+ */
+export interface FirebaseServiceAccountReadiness extends Readiness {
   /** The service account is dashboard-managed only; there is no env source. */
   source: "settings" | "none";
+}
+
+function firebaseReadiness(
+  source: "settings" | "none",
+  issue: ReadinessIssue | null,
+): FirebaseServiceAccountReadiness {
+  const value = issue ? readiness.incomplete([issue]) : readiness.ready();
+  return { ...value, source };
 }
 
 function parseFirebaseServiceAccountJson(value: string): FirebaseServiceAccount {
@@ -101,58 +126,140 @@ export async function readFirebaseServiceAccountJsonFromStoredValue(
   }
 }
 
+const FIREBASE_PUBLIC_CONFIG_KEY = "public_config";
+
+export interface FirebaseSettingsDocument extends Record<string, unknown> {
+  /** Plaintext service account JSON. Encrypted at rest by the store. */
+  serviceAccount: string;
+  publicConfig: Record<string, unknown>;
+}
+
+/**
+ * Dashboard-managed Firebase credentials. The service account is the only
+ * secret, so the document is never cached and every read is strict.
+ */
+export const firebaseSettingsDocument = defineSettingsDocument<FirebaseSettingsDocument>({
+  category: FIREBASE_SETTINGS_CATEGORY,
+  key: "config",
+  label: "Firebase",
+  schema: z.object({
+    serviceAccount: z.string(),
+    publicConfig: z.record(z.string(), z.unknown()),
+  }),
+  defaults: { serviceAccount: "", publicConfig: {} },
+  secretFields: ["serviceAccount"],
+  legacy: {
+    async read(db, ctx) {
+      const rows = await db
+        .select({ key: settings.key, value: settings.value })
+        .from(settings)
+        .where(eq(settings.category, FIREBASE_SETTINGS_CATEGORY))
+        .all();
+      const values = new Map(rows.map((row) => [row.key, row.value]));
+      const storedServiceAccount = values.get(FIREBASE_SERVICE_ACCOUNT_KEY) || "";
+      const storedPublicConfig = values.get(FIREBASE_PUBLIC_CONFIG_KEY);
+      if (!values.has(FIREBASE_SERVICE_ACCOUNT_KEY) && storedPublicConfig === undefined) {
+        return null;
+      }
+
+      const resolved = await readStoredCredentialStrict(
+        storedServiceAccount,
+        ctx.encryptionKey,
+        "Firebase service account",
+      );
+
+      let publicConfig: Record<string, unknown> = {};
+      if (storedPublicConfig) {
+        try {
+          const parsed = JSON.parse(storedPublicConfig) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            publicConfig = parsed as Record<string, unknown>;
+          }
+        } catch {
+          publicConfig = {};
+        }
+      }
+
+      return {
+        document: {
+          serviceAccount: resolved.error ? "" : resolved.value,
+          publicConfig,
+        },
+        // Never replace a credential the reader could not decrypt.
+        migrate: !resolved.error,
+        secretErrors: resolved.error
+          ? { serviceAccount: resolved.error }
+          : {},
+        secretsConfigured: {
+          serviceAccount: !resolved.error && Boolean(resolved.value),
+        },
+      };
+    },
+  },
+});
+
+export interface StoredFirebaseSettings {
+  /** Whether a service account is stored at all, readable or not. */
+  serviceAccountStored: boolean;
+  /** The usable, normalized service account JSON, if there is one. */
+  serviceAccountJson: string | undefined;
+  publicConfig: Record<string, unknown>;
+}
+
+/** One read for every Firebase caller: delivery, readiness, and the dashboard. */
+export async function readFirebaseSettings(
+  db: Database,
+  encryptionKey?: string,
+): Promise<StoredFirebaseSettings> {
+  const stored = await firebaseSettingsDocument.readDetailed(db, { encryptionKey });
+  const serviceAccountStored = Boolean(stored.value.serviceAccount)
+    || Boolean(stored.secretErrors.serviceAccount);
+
+  let serviceAccountJson: string | undefined;
+  if (stored.value.serviceAccount) {
+    try {
+      serviceAccountJson =
+        normalizeFirebaseServiceAccountJson(stored.value.serviceAccount) || undefined;
+    } catch (error: unknown) {
+      console.warn(
+        "[Firebase] Stored service account is not usable:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  return {
+    serviceAccountStored,
+    serviceAccountJson,
+    publicConfig: stored.value.publicConfig,
+  };
+}
+
 export async function readFirebaseServiceAccountJson(
   db: Database,
   encryptionKey?: string,
 ): Promise<string | undefined> {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.key, FIREBASE_SERVICE_ACCOUNT_KEY),
-        eq(settings.category, FIREBASE_SETTINGS_CATEGORY),
-      ),
-    )
-    .get();
-
-  return readFirebaseServiceAccountJsonFromStoredValue(row?.value, encryptionKey);
+  return (await readFirebaseSettings(db, encryptionKey)).serviceAccountJson;
 }
 
 export async function getFirebaseServiceAccountReadiness(
   db: Database,
   encryptionKey?: string,
 ): Promise<FirebaseServiceAccountReadiness> {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.key, FIREBASE_SERVICE_ACCOUNT_KEY),
-        eq(settings.category, FIREBASE_SETTINGS_CATEGORY),
-      ),
-    )
-    .get();
-  const storedValue = row?.value?.trim();
+  const stored = await readFirebaseSettings(db, encryptionKey);
 
-  if (storedValue) {
-    const serviceAccountJson = await readFirebaseServiceAccountJsonFromStoredValue(
-      storedValue,
-      encryptionKey,
-    );
+  if (stored.serviceAccountStored) {
+    const serviceAccountJson = stored.serviceAccountJson;
     return serviceAccountJson
-      ? { configured: true, error: null, source: "settings" }
-      : {
-          configured: false,
-          error:
-            "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
-          source: "settings",
-        };
+      ? firebaseReadiness("settings", null)
+      : firebaseReadiness("settings", readinessIssue(
+          FIREBASE_READINESS_CODES.unusable,
+          "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+        ));
   }
 
-  return {
-    configured: false,
-    error: "Configure Firebase service account credentials before enabling admin push notifications.",
-    source: "none",
-  };
+  return firebaseReadiness("none", readinessIssue(
+    FIREBASE_READINESS_CODES.missing,
+    "Configure Firebase service account credentials before enabling admin push notifications.",
+  ));
 }

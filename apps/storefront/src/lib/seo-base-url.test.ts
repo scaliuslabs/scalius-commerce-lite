@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   getRuntimeStorefrontUrl: vi.fn(),
 }));
 
-vi.mock("@/lib/api/runtime-env", () => ({
+vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
 }));
 

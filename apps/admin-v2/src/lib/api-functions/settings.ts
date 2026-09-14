@@ -1,6 +1,7 @@
 import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
+import type { Readiness } from "@scalius/shared/readiness";
 import type {
   CustomerRequestPolicy,
   CustomerRequestPreviewState,
@@ -92,14 +93,11 @@ export interface GeneralSettingsPayload {
     footer: NavigationConfigSectionReadiness;
   };
 }
-export type NavigationConfigReadinessState =
-  | "ready"
-  | "legacy_normalized"
-  | "invalid";
-export interface NavigationConfigSectionReadiness {
-  state: NavigationConfigReadinessState;
-  message?: string;
-}
+/**
+ * One saved navigation section's readiness, in the shared platform vocabulary
+ * (`status` + `issues`). Match on `NAVIGATION_READINESS_CODES`, never on copy.
+ */
+export type NavigationConfigSectionReadiness = Readiness;
 export type SeoSettingsPayload = ApiEnvelopeData<
   GetApiV1AdminSettingsSeoResponses[200]
 >;
@@ -133,15 +131,14 @@ export interface CustomerRequestPolicyPayload {
   preview: CustomerRequestPreviewState[];
 }
 export type EmailProvider = "cloudflare" | "resend";
-export interface EmailSettingsPayload extends SettingsPayload {
+export interface EmailSettingsPayload {
   provider: EmailProvider;
   apiKey: string;
   sender: string;
   senderConfigured: boolean;
   cloudflareBindingConfigured: boolean;
   resendConfigured: boolean;
-  ready: boolean;
-  readinessError: string | null;
+  readiness: Readiness;
 }
 export type UpdateEmailSettingsInput = SettingsPayload;
 export interface FirebaseSettingsPayload extends SettingsPayload {
@@ -278,12 +275,9 @@ export interface NotificationChannelsPayload {
     templateName: string;
     languageCode: string;
   };
-  emailConfigured?: boolean;
-  emailError?: string | null;
-  whatsappConfigured?: boolean;
-  whatsappError?: string | null;
-  smsProviderConfigured?: boolean;
-  smsProviderError?: string | null;
+  email?: Readiness;
+  whatsapp?: Readiness;
+  sms?: Readiness;
 }
 export interface UpdateNotificationChannelsInput {
   channels: Record<string, string[]>;
@@ -294,8 +288,7 @@ export interface UpdateNotificationChannelsInput {
 }
 export interface AdminNotificationChannelsPayload {
   channels: Record<string, string[]>;
-  pushConfigured?: boolean;
-  pushError?: string | null;
+  push?: Readiness;
 }
 export interface UpdateAdminNotificationChannelsInput {
   channels: Record<string, string[]>;

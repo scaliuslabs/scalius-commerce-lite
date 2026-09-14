@@ -20,7 +20,7 @@ vi.mock("@/lib/api", () => ({
   getSeoSettings: mocks.getSeoSettings,
 }));
 
-vi.mock("@/lib/api/runtime-env", () => ({
+vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));

@@ -176,10 +176,11 @@ describe("delivery provider durable readiness summary", () => {
       lastTestSuccessAt: 100,
       lastTestSuccessFingerprint: legacyFingerprint,
     })).toMatchObject({
-      status: "blocked",
+      status: "incomplete",
+      lifecycle: "blocked",
       tested: false,
       active: false,
-      blockers: [{ code: "untested" }],
+      issues: [{ code: "untested" }],
     });
   });
 
@@ -191,11 +192,13 @@ describe("delivery provider durable readiness summary", () => {
       config: { storeId: "232926" },
       isActive: true,
     })).toMatchObject({
-      status: "blocked",
+      // Unreadable credentials are a platform error, not unfinished setup.
+      status: "error",
+      lifecycle: "blocked",
       configured: false,
       tested: false,
       active: false,
-      blockers: [{
+      issues: [{
         code: "unreadable",
         message: expect.stringContaining("cannot be decrypted"),
       }],
@@ -226,11 +229,12 @@ describe("delivery provider durable readiness summary", () => {
       lastTestSuccessAt: 100,
       lastTestSuccessFingerprint: fingerprint,
     })).toMatchObject({
-      status: "blocked",
+      status: "incomplete",
+      lifecycle: "blocked",
       configured: true,
       tested: false,
       active: false,
-      blockers: [{ code: "untested" }],
+      issues: [{ code: "untested" }],
     });
   });
 
@@ -250,11 +254,12 @@ describe("delivery provider durable readiness summary", () => {
       lastTestSuccessAt: 100,
       lastTestSuccessFingerprint: fingerprint,
     })).toMatchObject({
-      status: "active",
+      status: "ready",
+      lifecycle: "active",
       configured: true,
       tested: true,
       active: true,
-      blockers: [],
+      issues: [],
     });
   });
 
@@ -275,10 +280,11 @@ describe("delivery provider durable readiness summary", () => {
       lastTestFailureAt: 200,
       lastTestSuccessFingerprint: fingerprint,
     })).toMatchObject({
-      status: "blocked",
+      status: "incomplete",
+      lifecycle: "blocked",
       tested: false,
       active: false,
-      blockers: [{ code: "test_failed" }],
+      issues: [{ code: "test_failed" }],
     });
   });
 });

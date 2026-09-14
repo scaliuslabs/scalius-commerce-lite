@@ -38,6 +38,7 @@ import {
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
+import { isReady } from "@scalius/shared/readiness";
 import { getAllowedCountries } from "../settings/site-settings.service";
 
 // ─────────────────────────────────────────
@@ -785,8 +786,8 @@ export async function sendOtp(
             env: input.emailEnv,
             encryptionKey: input.credentialEncryptionKey,
         });
-        if (!emailReadiness.configured) {
-            console.error(`[CustomerAuth] Email transport unavailable: ${emailReadiness.error ?? "not configured"}`);
+        if (!isReady(emailReadiness)) {
+            console.error(`[CustomerAuth] Email transport unavailable: ${emailReadiness.issues[0]?.message ?? "not configured"}`);
             throw new ServiceUnavailableError("Email verification is currently unavailable. Contact store support.");
         }
     }
@@ -801,8 +802,8 @@ export async function sendOtp(
     }
     if (channel === "sms") {
         const smsReadiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
-        if (!smsReadiness.configured) {
-            console.error(`[CustomerAuth] SMS transport unavailable: ${smsReadiness.error ?? "not configured"}`);
+        if (!isReady(smsReadiness)) {
+            console.error(`[CustomerAuth] SMS transport unavailable: ${smsReadiness.issues[0]?.message ?? "not configured"}`);
             throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");
         }
     }

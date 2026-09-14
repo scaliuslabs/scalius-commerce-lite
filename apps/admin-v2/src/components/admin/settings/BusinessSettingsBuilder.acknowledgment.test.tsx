@@ -21,7 +21,9 @@ vi.mock("~/lib/api-functions/settings", () => ({
   updateBusinessSettings: api.update,
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
-vi.mock("../shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
+vi.mock("@tanstack/react-router", () => ({
+  useBlocker: () => ({ status: "idle", proceed: vi.fn(), reset: vi.fn() }),
+}));
 vi.mock("../media-manager", () => ({
   MediaManager: ({ trigger }: { trigger: ReactNode }) => trigger,
 }));
@@ -122,6 +124,35 @@ describe("BusinessSettingsBuilder save acknowledgment", () => {
     );
   }
 
+  it("saves from the page-level save bar and leaves no per-card button row", async () => {
+    api.get.mockResolvedValue(settings("before"));
+    api.update.mockResolvedValue({ message: "Saved" });
+    await render();
+
+    const bar = () => host.querySelector('[data-testid="contextual-save-bar"]');
+    expect(bar()).toBeNull();
+    // The old per-card Save/Reset row is gone; only the hidden native submit
+    // (no-JS fallback) still carries a save label while the page is clean.
+    const visibleLabels = [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .filter((node) => !node.classList.contains("hidden"))
+      .map((node) => node.textContent?.trim() ?? "");
+    expect(visibleLabels).not.toContain("Save changes");
+    expect(visibleLabels.some((label) => label.includes("Reset"))).toBe(false);
+
+    typeFooter("after");
+    expect(bar()).not.toBeNull();
+
+    act(() => button("Discard")?.click());
+    expect(footer().value).toBe("before");
+    expect(bar()).toBeNull();
+
+    typeFooter("after");
+    act(() => button("Save business")?.click());
+    await settle();
+    expect(api.update).toHaveBeenCalledTimes(1);
+    expect(api.success).toHaveBeenCalledWith("Business settings saved");
+  });
+
   it("preserves a post-submit revert through stale read, failed confirmation, and Retry", async () => {
     const background = deferred<Record<string, unknown>>();
     const write = deferred<{ message: string }>();
@@ -154,8 +185,10 @@ describe("BusinessSettingsBuilder save acknowledgment", () => {
     await settle();
 
     expect(footer().value).toBe("before");
+    // The retained draft is dirty again, so the page-level save bar is back.
+    expect(host.querySelector('[data-testid="contextual-save-bar"]')).toBeTruthy();
     expect(button("Save business")).toBeTruthy();
-    act(() => button("Reset")?.click());
+    act(() => button("Discard")?.click());
     expect(footer().value).toBe("after");
   });
 });

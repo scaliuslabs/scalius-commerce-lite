@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   getZones: vi.fn(),
 }));
 vi.mock("@/lib/api/customer-auth", () => mocks);
-vi.mock("@/lib/api/client", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
+vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
 vi.mock("@/lib/api", () => ({ getZones: mocks.getZones, getAreas: vi.fn() }));
 vi.mock("@/lib/checkout/session-state", () => ({ readCheckoutFormDraft: vi.fn() }));
 

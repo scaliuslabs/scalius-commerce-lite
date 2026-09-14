@@ -1,11 +1,11 @@
 import React from "react";
+import { isReady } from "@scalius/shared/readiness";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+    ContextualSaveBar,
+    SettingsSection,
+    SkeletonPage,
+    StatusBadge,
+} from "@/components/admin/shell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,6 @@ import {
     AlertTriangle,
     CheckCircle2,
     ExternalLink,
-    Loader2,
-    RotateCcw,
-    Save,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -59,7 +56,6 @@ import {
     OfficialProviderMark,
     type ProviderMarkId,
 } from "./provider-marks";
-import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 const MASKED_VALUE = "••••••••••••";
 type EmailCollectionMode = "none" | "optional" | "required";
@@ -166,8 +162,8 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
         result.emailSender = emailData.sender || "";
         result.emailCloudflareConfigured = emailData.cloudflareBindingConfigured === true;
         result.emailResendConfigured = emailData.resendConfigured === true;
-        result.emailReady = emailData.ready === true;
-        result.emailReadinessError = emailData.readinessError || "";
+        result.emailReady = isReady(emailData.readiness);
+        result.emailReadinessError = emailData.readiness?.issues[0]?.message || "";
     } catch {
         result.emailReadinessError = "Email readiness could not be checked. Retry or review the Email tab before enabling Email OTP.";
     }
@@ -449,9 +445,12 @@ export default function AuthSettingsBuilder() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <SkeletonPage
+                showHeader={false}
+                sections={2}
+                rowsPerSection={4}
+                label="Loading customer sign-in settings"
+            />
         );
     }
 
@@ -476,16 +475,29 @@ export default function AuthSettingsBuilder() {
     }
 
     return (
-        <div className="space-y-5 max-w-2xl">
-            <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} allowSamePathStateNavigation />
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Customer sign-in</CardTitle>
-                    <CardDescription>
-                        Choose sign-in channels and contact fields.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
+        <div className="max-w-5xl">
+            <ContextualSaveBar
+                isDirty={isDirty || isSaving}
+                saving={isSaving}
+                saveDisabled={!isLoaded || Boolean(providerReadinessIssue)}
+                saveDisabledReason={
+                    providerReadinessIssue
+                        ? "Resolve the provider issue above before saving."
+                        : "Reload the current settings before saving."
+                }
+                saveLabel="Save sign-in settings"
+                allowSamePathNavigation
+                // The settings section picker is sticky on narrow widths.
+                stickyClassName="sticky top-15 z-30 lg:top-0"
+                onDiscard={reset}
+                onSave={() => handleSubmit()}
+            />
+            <div className="space-y-6">
+            <SettingsSection
+                title="Customer sign-in"
+                description="Which channels a customer can sign in with, and which contact fields checkout collects."
+            >
+                <div className="space-y-5">
                     <div className="space-y-1.5">
                         <Label htmlFor="customer-auth-preset">Preset</Label>
                         <Select
@@ -600,24 +612,23 @@ export default function AuthSettingsBuilder() {
                             </Select>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </SettingsSection>
 
             {customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy) && (
-                <Card className="border-green-500/20 dark:bg-green-950/10">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-base flex items-center gap-2">
-                                <OfficialProviderMark provider="whatsapp" />
-                                Meta WhatsApp Cloud API
-                                {whatsAppConfigured && (
-                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                )}
-                            </CardTitle>
-                            <CardDescription>
-                                Configure WhatsApp Business API for OTP delivery.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                <SettingsSection
+                    title="Meta WhatsApp Cloud API"
+                    description="Credentials WhatsApp OTP messages are sent with."
+                    actions={
+                        <span className="flex items-center gap-2">
+                            <OfficialProviderMark provider="whatsapp" />
+                            {whatsAppConfigured ? (
+                                <StatusBadge tone="success">Configured</StatusBadge>
+                            ) : null}
+                        </span>
+                    }
+                >
+                        <div className="space-y-4">
                             {whatsAppProviderIssue && (
                                 <Alert variant="destructive">
                                     <AlertTriangle className="h-4 w-4" />
@@ -685,24 +696,19 @@ export default function AuthSettingsBuilder() {
                                     />
                                 </div>
                             </div>
-                        </CardContent>
-                </Card>
+                        </div>
+                </SettingsSection>
             )}
 
             {customerAuthPolicyUsesEmailProvider(customerAuthPolicy) && (
-                <Card className="border-emerald-500/20 dark:bg-emerald-950/10">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            Email OTP configuration
-                            {emailConfigured && (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            )}
-                        </CardTitle>
-                        <CardDescription>
-                            Use Cloudflare Email by default or Resend as the fallback provider.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                <SettingsSection
+                    title="Email OTP configuration"
+                    description="Email OTP sends through Cloudflare Email, falling back to Resend."
+                    actions={emailConfigured ? (
+                        <StatusBadge tone="success">Configured</StatusBadge>
+                    ) : undefined}
+                >
+                    <div className="space-y-4">
                         {emailProviderIssue && (
                             <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
@@ -713,41 +719,35 @@ export default function AuthSettingsBuilder() {
 
                         <div className="rounded-md border border-border px-3 py-2 text-sm">
                             <div className="flex items-center gap-2">
-                                {emailConfigured ? (
-                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                ) : (
-                                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                                )}
-                                <span>
+                                <StatusBadge tone={emailConfigured ? "success" : "critical"}>
                                     {emailConfigured
                                         ? "Email delivery ready"
                                         : "Review the Email tab before enabling Email OTP"}
-                                </span>
+                                </StatusBadge>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </SettingsSection>
             )}
 
             {customerAuthPolicyUsesSmsProvider(customerAuthPolicy) && (
-                <Card className="border-blue-500/20 dark:bg-blue-950/10">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
+                <SettingsSection
+                    title="SMS provider"
+                    description="The gateway SMS OTP messages are sent through. Credentials are encrypted."
+                    actions={
+                        <span className="flex items-center gap-2">
                             {values.smsProvider in SMS_PROVIDER_PRESENTATION ? (
                                 <OfficialProviderMark
                                     provider={SMS_PROVIDER_PRESENTATION[values.smsProvider as keyof typeof SMS_PROVIDER_PRESENTATION].mark}
                                 />
                             ) : null}
-                            SMS provider
-                            {smsConfigured && (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            )}
-                        </CardTitle>
-                        <CardDescription>
-                            Select a gateway. Credentials are encrypted.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                            {smsConfigured ? (
+                                <StatusBadge tone="success">Configured</StatusBadge>
+                            ) : null}
+                        </span>
+                    }
+                >
+                    <div className="space-y-4">
                         {(smsReadinessIssue || smsProviderIssue || smsProviderServerIssue) && (
                             <Alert variant="destructive">
                                 <AlertTriangle className="h-4 w-4" />
@@ -900,33 +900,10 @@ export default function AuthSettingsBuilder() {
                                 </div>
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </SettingsSection>
             )}
-
-            {isDirty ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={reset}
-                        disabled={isSaving}
-                        className="min-h-11 sm:min-h-9"
-                    >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Reset
-                    </Button>
-                    <Button
-                        onClick={() => handleSubmit()}
-                        disabled={isSaving || !isLoaded || Boolean(providerReadinessIssue)}
-                        className="min-h-11 min-w-[140px] sm:min-h-9"
-                    >
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <Save className="mr-2 h-4 w-4" />
-                        Save changes
-                    </Button>
-                </div>
-            ) : null}
+            </div>
         </div>
     );
 }

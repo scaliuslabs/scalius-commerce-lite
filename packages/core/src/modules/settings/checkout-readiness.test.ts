@@ -17,6 +17,7 @@ vi.mock("../../integrations/whatsapp", () => ({
 }));
 
 import {
+    CHECKOUT_READINESS_CODES,
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
     getCheckoutReadiness,
     getCustomerSignInReadiness,
@@ -66,8 +67,8 @@ function createAuthDb(options: {
 describe("customer checkout sign-in readiness", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.getEmailProviderReadiness.mockResolvedValue({ configured: false });
-        mocks.getSmsProviderReadiness.mockResolvedValue({ configured: false });
+        mocks.getEmailProviderReadiness.mockResolvedValue({ status: "incomplete", issues: [] });
+        mocks.getSmsProviderReadiness.mockResolvedValue({ status: "incomplete", issues: [] });
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({});
     });
 
@@ -106,13 +107,15 @@ describe("customer checkout sign-in readiness", () => {
         });
 
         await expect(resultPromise).resolves.toEqual({
-            ready: false,
+            status: "incomplete",
+            issues: [CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE],
             hasActiveShippingMethod: true,
             hasActiveDeliveryHierarchy: true,
             customerSignInRequired: true,
             hasUsableCustomerSignIn: false,
-            issues: [CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE],
         });
+        expect(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE.code)
+            .toBe(CHECKOUT_READINESS_CODES.customerSignIn);
         expect(mocks.getEmailProviderReadiness).not.toHaveBeenCalled();
         expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
         expect(mocks.getWhatsAppCloudApiSettings).not.toHaveBeenCalled();
@@ -125,6 +128,8 @@ describe("customer checkout sign-in readiness", () => {
         );
 
         expect(result).toEqual({
+            status: "incomplete",
+            issues: [CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE],
             customerSignInRequired: true,
             hasUsableCustomerSignIn: false,
         });
@@ -132,7 +137,7 @@ describe("customer checkout sign-in readiness", () => {
     });
 
     it("accepts a configured provider allowed by the saved customer auth policy", async () => {
-        mocks.getSmsProviderReadiness.mockResolvedValue({ configured: true, activeProvider: "mimsms" });
+        mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [], activeProvider: "mimsms" });
         const db = createAuthDb({
             guestCheckoutEnabled: false,
             policy: {
@@ -146,6 +151,8 @@ describe("customer checkout sign-in readiness", () => {
         await expect(getCustomerSignInReadiness(db as never, {
             encryptionKey: "credential-key",
         })).resolves.toEqual({
+            status: "ready",
+            issues: [],
             customerSignInRequired: true,
             hasUsableCustomerSignIn: true,
         });
@@ -159,6 +166,8 @@ describe("customer checkout sign-in readiness", () => {
         );
 
         expect(result).toEqual({
+            status: "ready",
+            issues: [],
             customerSignInRequired: false,
             hasUsableCustomerSignIn: true,
         });
@@ -171,7 +180,10 @@ describe("customer checkout sign-in readiness", () => {
             { inspectOptionalCustomerSignIn: true },
         );
 
+        // Optional sign-in is only a preview signal, never a checkout blocker.
         expect(result).toEqual({
+            status: "ready",
+            issues: [],
             customerSignInRequired: false,
             hasUsableCustomerSignIn: false,
         });

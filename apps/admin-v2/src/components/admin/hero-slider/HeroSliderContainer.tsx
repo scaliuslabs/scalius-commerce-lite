@@ -3,6 +3,7 @@ import { Image as ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { PageHeader } from "~/components/admin/shell";
 import type { HeroSlider } from "./helpers";
 import { getServerFnError } from "~/lib/api-helpers";
 import { readHeroSliderRevisionConflict } from "~/lib/admin-api-error";
@@ -176,7 +177,7 @@ export function HeroSliderContainer({
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-4 py-4" aria-busy="true">
-        <h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>
+        <PageHeader title="Homepage hero" subtitle="Manage separate desktop and mobile homepage banners." />
         <div className="flex h-40 items-center justify-center" role="status">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <span className="sr-only">Loading hero sliders</span>
@@ -191,12 +192,7 @@ export function HeroSliderContainer({
         isDirty={dirty.desktop || dirty.mobile}
         isSubmitting={saving.desktop || saving.mobile}
       />
-      <div className="border-b pb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage separate desktop and mobile homepage banners.
-        </p>
-      </div>
+      <PageHeader title="Homepage hero" subtitle="Manage separate desktop and mobile homepage banners." />
 
       <Tabs value={activeTab} onValueChange={(value) => onSectionChange(value as SliderType)}>
         <TabsList className="h-auto w-full justify-start gap-1 rounded-lg border bg-muted/20 p-1 sm:h-9 sm:w-auto">

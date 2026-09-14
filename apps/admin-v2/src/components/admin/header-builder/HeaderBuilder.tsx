@@ -24,6 +24,10 @@ import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseHeaderDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
+import {
+  isNavigationConfigUnreadable,
+  navigationConfigNeedsNormalizationSave,
+} from "~/components/admin/settings/navigation-readiness";
 import { Card } from "~/components/ui/card";
 import { normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 
@@ -101,9 +105,9 @@ export function HeaderBuilder({
   const [internalActivePanel, setInternalActivePanel] =
     useState<HeaderBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
-  const isEditingLocked = readiness?.state === "invalid";
+  const isEditingLocked = isNavigationConfigUnreadable(readiness);
   const requiresNormalizationSave =
-    readiness?.state === "legacy_normalized" && !normalizationSaved;
+    navigationConfigNeedsNormalizationSave(readiness) && !normalizationSaved;
   const hasPendingSave = isDirty || requiresNormalizationSave;
   useEffect(() => {
     if (!isDirty && !revisionConflict) setRevision(initialRevision);
@@ -217,7 +221,7 @@ export function HeaderBuilder({
 
       <NavigationConfigReadinessNotice
         section="header"
-        readiness={normalizationSaved ? { state: "ready" } : readiness}
+        readiness={normalizationSaved ? { status: "ready", issues: [] } : readiness}
       />
 
       {isEditingLocked ? null : (

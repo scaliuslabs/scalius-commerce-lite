@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 
 const RECEIPT_SUPPORT_TIMEOUT_MS = 8_000;
@@ -48,8 +48,8 @@ export const POST: APIRoute = async ({ request }) => {
       }, 400);
     }
 
-    const response = await fetchWithRetry(
-      createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}/support-requests`),
+    const response = await apiFetch(
+      `/orders/receipt/${encodeURIComponent(orderId)}/support-requests`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,9 +60,7 @@ export const POST: APIRoute = async ({ request }) => {
           message: message || null,
         }),
       },
-      0,
-      RECEIPT_SUPPORT_TIMEOUT_MS,
-      true,
+      { retries: 0, timeout: RECEIPT_SUPPORT_TIMEOUT_MS, auth: true },
     );
 
     const text = await response.text();

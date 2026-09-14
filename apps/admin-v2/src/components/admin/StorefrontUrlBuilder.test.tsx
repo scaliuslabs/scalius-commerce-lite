@@ -16,13 +16,18 @@ const storefrontUrlApi = vi.hoisted(() => ({
   updateStorefrontUrl: vi.fn(),
 }));
 const workspaceMocks = vi.hoisted(() => ({
-  guard: vi.fn(),
+  blocker: vi.fn(),
   homepage: vi.fn(),
 }));
 
 vi.mock("~/lib/api-functions/storefront-url", () => storefrontUrlApi);
-vi.mock("./shared/UnsavedChangesGuard", () => ({
-  UnsavedChangesGuard: (props: unknown) => { workspaceMocks.guard(props); return null; },
+// The page guard now lives inside ContextualSaveBar -> useUnsavedChanges, so
+// the router blocker options are the observable navigation-guard contract.
+vi.mock("@tanstack/react-router", () => ({
+  useBlocker: (options: unknown) => {
+    workspaceMocks.blocker(options);
+    return { status: "idle", proceed: vi.fn(), reset: vi.fn() };
+  },
 }));
 vi.mock("./settings/HomepagePresentationBuilder", () => ({
   HomepagePresentationBuilder: (props: unknown) => { workspaceMocks.homepage(props); return null; },
@@ -33,6 +38,42 @@ vi.mock("sonner", () => ({
     error: vi.fn(),
   },
 }));
+
+interface RouteLocation {
+  routeId: string;
+  fullPath: string;
+  pathname: string;
+}
+
+interface BlockerOptions {
+  disabled: boolean;
+  enableBeforeUnload: boolean;
+  shouldBlockFn: (args: { current: RouteLocation; next: RouteLocation }) => boolean;
+}
+
+const SAME_ROUTE: RouteLocation = {
+  routeId: "/admin/settings",
+  fullPath: "/admin/settings?section=storefront",
+  pathname: "/admin/settings",
+};
+const OTHER_ROUTE: RouteLocation = {
+  routeId: "/admin/orders",
+  fullPath: "/admin/orders",
+  pathname: "/admin/orders",
+};
+
+function lastBlockerOptions(): BlockerOptions {
+  const options = workspaceMocks.blocker.mock.calls.at(-1)?.[0] as
+    | BlockerOptions
+    | undefined;
+  if (!options) throw new Error("Expected a registered navigation guard");
+  return options;
+}
+
+/** The guard is armed exactly while the page has something to lose. */
+function isGuardingNavigation(): boolean {
+  return lastBlockerOptions().disabled === false;
+}
 
 async function flushAsyncWork() {
   await act(async () => {
@@ -139,8 +180,50 @@ describe("StorefrontUrlBuilder", () => {
     expect(host.textContent).toContain(
       "Used for links, previews, discovery, and cache refreshes.",
     );
-    expect(findButton(host, "Reset")).toBeUndefined();
+    expect(host.querySelector('[data-testid="contextual-save-bar"]')).toBeNull();
+    expect(findButton(host, "Discard")).toBeUndefined();
     expect(findButton(host, "Save URL")).toBeUndefined();
+    expect(isGuardingNavigation()).toBe(false);
+  });
+
+  it("saves the page draft through one contextual save bar", async () => {
+    await renderBuilder();
+
+    // No per-card Save/Reset row exists; the bar is the only save affordance.
+    expect(host.querySelectorAll('[data-testid="contextual-save-bar"]')).toHaveLength(0);
+
+    await setStoreUrl(host, "https://new-shop.example.com");
+
+    const bars = host.querySelectorAll('[data-testid="contextual-save-bar"]');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.getAttribute("role")).toBe("status");
+    expect(
+      Array.from(host.querySelectorAll("button")).filter((button) =>
+        /^(Save URL|Saving|Discard)$/.test(button.textContent?.trim() ?? ""),
+      ),
+    ).toHaveLength(2);
+
+    await act(async () => {
+      getButton(host, "Discard").dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    expect(host.querySelector<HTMLInputElement>("#storefront-url")?.value).toBe(
+      "https://shop.example.com",
+    );
+    expect(host.querySelector('[data-testid="contextual-save-bar"]')).toBeNull();
+
+    await setStoreUrl(host, "https://new-shop.example.com");
+    await act(async () => {
+      getButton(host, "Save URL").dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("rejects a relative draft without calling the API", async () => {
@@ -150,6 +233,9 @@ describe("StorefrontUrlBuilder", () => {
     expect(host.textContent).toContain(
       "Use an HTTPS origin without a path, query, credentials, or fragment.",
     );
+    expect(
+      host.querySelector<HTMLInputElement>("#storefront-url")?.getAttribute("aria-invalid"),
+    ).toBe("true");
     expect(
       host.querySelector<HTMLButtonElement>('[aria-label="Open storefront"]')
         ?.disabled,
@@ -162,7 +248,7 @@ describe("StorefrontUrlBuilder", () => {
     await renderBuilder();
     await setStoreUrl(host, "https://new-shop.example.com/");
 
-    expect(getButton(host, "Reset").disabled).toBe(false);
+    expect(getButton(host, "Discard").disabled).toBe(false);
     expect(getButton(host, "Save URL").disabled).toBe(false);
 
     await act(async () => {
@@ -185,6 +271,18 @@ describe("StorefrontUrlBuilder", () => {
     });
   });
 
+  it("keeps workspace-state navigation inside the same route unblocked", async () => {
+    await renderBuilder();
+    await setStoreUrl(host, "https://new-shop.example.com");
+
+    const options = lastBlockerOptions();
+    expect(options.disabled).toBe(false);
+    // `beforeunload` is owned by the hook's own effect, not the router blocker.
+    expect(options.enableBeforeUnload).toBe(false);
+    expect(options.shouldBlockFn({ current: SAME_ROUTE, next: SAME_ROUTE })).toBe(false);
+    expect(options.shouldBlockFn({ current: SAME_ROUTE, next: OTHER_ROUTE })).toBe(true);
+  });
+
   it("guards a pending URL save even if the merchant reverts to the previous URL", async () => {
     let resolveSave!: () => void;
     storefrontUrlApi.updateStorefrontUrl.mockImplementation(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
@@ -193,14 +291,14 @@ describe("StorefrontUrlBuilder", () => {
     await act(async () => { getButton(host, "Save URL").click(); });
     await waitFor(() => expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalled());
     await setStoreUrl(host, "https://shop.example.com");
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
+    expect(isGuardingNavigation()).toBe(true);
     storefrontUrlApi.getStorefrontUrl.mockResolvedValue({ storefrontUrl: "https://new-shop.example.com" });
     await act(async () => { resolveSave(); });
     await waitFor(() => expect(getButton(host, "Save URL").disabled).toBe(false));
     expect(host.querySelector<HTMLInputElement>("#storefront-url")?.value).toBe("https://shop.example.com");
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
-    await act(async () => { getButton(host, "Reset").click(); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false, allowSamePathStateNavigation: true });
+    expect(isGuardingNavigation()).toBe(true);
+    await act(async () => { getButton(host, "Discard").click(); });
+    expect(isGuardingNavigation()).toBe(false);
   });
 
   it.each([
@@ -211,8 +309,10 @@ describe("StorefrontUrlBuilder", () => {
     await renderBuilder();
     const onDraftStateChange = workspaceMocks.homepage.mock.calls.at(-1)?.[0].onDraftStateChange;
     await act(async () => { onDraftStateChange(homepageState); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: true, isSubmitting: false, allowSamePathStateNavigation: true });
+    expect(isGuardingNavigation()).toBe(true);
+    // The URL draft is clean, so the bar cannot pretend to save homepage work.
+    expect(getButton(host, "Save URL").disabled).toBe(true);
     await act(async () => { onDraftStateChange({ isDirty: false, isSubmitting: false }); });
-    expect(workspaceMocks.guard.mock.calls.at(-1)?.[0]).toEqual({ isDirty: false, isSubmitting: false, allowSamePathStateNavigation: true });
+    expect(isGuardingNavigation()).toBe(false);
   });
 });

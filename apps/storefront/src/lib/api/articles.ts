@@ -1,6 +1,6 @@
 import { BUILD_ID } from "@/config/build-id";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
-import { createApiUrl, fetchWithRetry } from "./client";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
+import { apiFetch } from "./transport";
 import { unwrapEnvelope } from "./unwrap";
 import type { Page, PaginatedResponse } from "./types";
 
@@ -28,12 +28,10 @@ export async function getArticles(
     `all_articles_${query || "default"}_${BUILD_ID}`,
     async () => {
       try {
-        const response = await fetchWithRetry(
-          createApiUrl(`/articles${query ? `?${query}` : ""}`),
+        const response = await apiFetch(
+          `/articles${query ? `?${query}` : ""}`,
           {},
-          2,
-          5_000,
-          false,
+          { retries: 2, timeout: 5_000, auth: false },
         );
         if (!response.ok) return null;
         const payload = unwrapEnvelope<ArticleListPayload>(
@@ -58,12 +56,10 @@ export async function getArticleBySlug(slug: string): Promise<Page | null> {
     `article_slug_${slug}_${BUILD_ID}`,
     async () => {
       try {
-        const response = await fetchWithRetry(
-          createApiUrl(`/articles/slug/${encodeURIComponent(slug)}`),
+        const response = await apiFetch(
+          `/articles/slug/${encodeURIComponent(slug)}`,
           {},
-          2,
-          5_000,
-          false,
+          { retries: 2, timeout: 5_000, auth: false },
         );
         if (!response.ok) return null;
         return (

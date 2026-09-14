@@ -4,7 +4,7 @@ import type {
   TaxConfigurationPayload,
   TaxJurisdictionType,
   TaxRateRecord,
-} from "@/lib/api-functions/taxes";
+} from "~/lib/api-functions/taxes";
 import { getTaxRateDiagnostics, getTaxRateDraftOverlap } from "./tax-rate-diagnostics";
 
 function rate(

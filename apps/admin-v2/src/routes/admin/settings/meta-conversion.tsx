@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { MetaConversionsManager } from "~/components/admin/meta-conversions";
+import { SettingsLayout } from "~/components/admin/settings/SettingsLayout";
 import {
   normalizeMetaConversionsWorkspaceSection,
   type MetaConversionsWorkspaceSection,
@@ -46,22 +47,22 @@ function MetaConversionPage() {
 
   return (
     <div
-      className="container max-w-6xl space-y-4 py-6"
+      className="contents"
       onPointerDownCapture={rememberWorkspaceScroll}
       onKeyDownCapture={rememberWorkspaceScroll}
     >
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Meta conversions</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Server events and delivery results.
-        </p>
-      </div>
+      <SettingsLayout
+        pathname="/admin/settings/meta-conversion"
+        title="Meta conversions"
+        description="Server-side events sent to Meta, and the delivery results returned."
+      >
       <MetaConversionsManager
         initialSettings={r.settings ?? undefined}
         initialPixelParity={r.pixelParity}
         section={search.section}
         onSectionChange={handleSectionChange}
       />
+      </SettingsLayout>
     </div>
   );
 }

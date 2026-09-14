@@ -72,7 +72,10 @@ describe("partytown proxy route", () => {
       TARGET,
       expect.objectContaining({ redirect: "follow" }),
     );
-    expect(kv.get).toHaveBeenCalledWith(CSP_ALLOWED_DOMAINS_CACHE_KEY);
+    expect(kv.get).toHaveBeenCalledWith(
+      CSP_ALLOWED_DOMAINS_CACHE_KEY,
+      expect.objectContaining({ cacheTtl: expect.any(Number) }),
+    );
     expect(mocks.getDb).not.toHaveBeenCalled();
     expect(dbGet).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();

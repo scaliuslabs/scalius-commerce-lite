@@ -4,6 +4,7 @@
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { isReady } from "@scalius/shared/readiness";
 import { eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
@@ -659,8 +660,8 @@ export async function sendOrderNotificationEmail(
                 const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
                 const readinessProviderName = smsReadiness.activeProvider ?? "sms";
 
-                if (!smsReadiness.configured) {
-                    const reason = smsReadiness.error ?? "SMS provider is not configured";
+                if (!isReady(smsReadiness)) {
+                    const reason = smsReadiness.issues[0]?.message ?? "SMS provider is not configured";
                     if (receiptDb && outboxId) {
                         const blocked = await recordProviderBlockedDeliveryIfNeeded({
                             db: receiptDb,

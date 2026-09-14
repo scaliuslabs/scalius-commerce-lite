@@ -106,28 +106,18 @@ function createPushDb(tokenRows: Array<{ token: string }>): {
     const updateWhere = vi.fn(async () => undefined);
     const updateSet = vi.fn(() => ({ where: updateWhere }));
     const update = vi.fn(() => ({ set: updateSet }));
-    let selectCount = 0;
-    const select = vi.fn(() => {
-        selectCount += 1;
-        if (selectCount === 1) {
-            return {
-                from: vi.fn(() => ({
-                    where: vi.fn(() => ({
-                        get: vi.fn(async () => null),
-                    })),
-                })),
-            };
-        }
-
-        return {
-            from: vi.fn(() => ({
-                where: vi.fn(() => ({
-                    then: (resolve: (value: typeof tokenRows) => void) =>
-                        Promise.resolve(tokenRows).then(resolve),
-                })),
+    // `.get()` is the Firebase settings-document row, `.all()` the legacy
+    // per-key rows, and awaiting the builder reads the push tokens.
+    const select = vi.fn(() => ({
+        from: vi.fn(() => ({
+            where: vi.fn(() => ({
+                get: vi.fn(async () => undefined),
+                all: vi.fn(async () => []),
+                then: (resolve: (value: typeof tokenRows) => void) =>
+                    Promise.resolve(tokenRows).then(resolve),
             })),
-        };
-    });
+        })),
+    }));
 
     return {
         db: { select, update } as unknown as Database,
@@ -197,9 +187,9 @@ describe("order notification dispatch", () => {
         mocks.markNotificationProviderBlocked.mockResolvedValue(undefined);
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(false);
         mocks.getSmsProviderReadiness.mockResolvedValue({
+            status: "ready",
+            issues: [],
             activeProvider: "smsnetbd",
-            configured: true,
-            error: null,
         });
     });
 
@@ -948,9 +938,12 @@ describe("order notification dispatch", () => {
             order_confirmed: ["sms"],
         });
         mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            status: "incomplete",
+            issues: [{
+                code: "missing_sms_provider_credentials",
+                message: "No active SMS provider selected",
+            }],
             activeProvider: null,
-            configured: false,
-            error: "No active SMS provider selected",
         });
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue(null);
@@ -993,9 +986,12 @@ describe("order notification dispatch", () => {
             order_confirmed: ["sms"],
         });
         mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            status: "incomplete",
+            issues: [{
+                code: "missing_sms_provider_credentials",
+                message: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+            }],
             activeProvider: "smsnetbd",
-            configured: false,
-            error: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
         });
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
 
@@ -1287,30 +1283,24 @@ describe("order notification dispatch", () => {
             project_id: "scalius-test",
         });
         const tokenRows = [{ token: "fcm_token_1" }];
-        let selectCount = 0;
+        const storedServiceAccount = `enc:${await encryptCredentials(serviceAccountJson, credentialKey)}`;
         const db = {
-            select: vi.fn(() => {
-                selectCount += 1;
-                if (selectCount === 1) {
-                    return {
-                        from: vi.fn(() => ({
-                            where: vi.fn(() => ({
-                                get: vi.fn(async () => ({
-                                    value: `enc:${await encryptCredentials(serviceAccountJson, credentialKey)}`,
-                                })),
-                            })),
-                        })),
-                    };
-                }
-
-                return {
-                    from: vi.fn(() => ({
-                        where: vi.fn(() => ({
-                            then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
-                        })),
+            select: vi.fn(() => ({
+                from: vi.fn(() => ({
+                    where: vi.fn(() => ({
+                        // No settings-document row yet; the legacy per-key row
+                        // is assembled and written back on this read.
+                        get: vi.fn(async () => undefined),
+                        all: vi.fn(async () => [
+                            { key: "service_account", value: storedServiceAccount },
+                        ]),
+                        then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
                     })),
-                };
-            }),
+                })),
+            })),
+            insert: vi.fn(() => ({
+                values: vi.fn(() => ({ onConflictDoUpdate: vi.fn(async () => undefined) })),
+            })),
         } as unknown as Database;
         const env = {
             PUBLIC_API_BASE_URL: "https://api.example.test",
@@ -1370,7 +1360,7 @@ describe("order notification dispatch", () => {
         const env = {
             PUBLIC_API_BASE_URL: "https://api.example.test",
             JWT_SECRET: legacyJwtKey,
-        } as Env;
+        } as unknown as Env;
 
         await sendOrderNotification(
             db,
@@ -1717,7 +1707,8 @@ describe("order notification dispatch", () => {
             provider: "fcm",
             reason: "Firebase service account JSON is missing required fields",
         });
-        expect(pushDb.db.select).toHaveBeenCalledTimes(1);
+        // The Firebase settings-document row plus the legacy rows; no token read.
+        expect(pushDb.db.select).toHaveBeenCalledTimes(2);
         expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);
     });

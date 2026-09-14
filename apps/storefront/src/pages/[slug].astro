@@ -6,7 +6,7 @@ import Layout from "../layouts/Layout.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";

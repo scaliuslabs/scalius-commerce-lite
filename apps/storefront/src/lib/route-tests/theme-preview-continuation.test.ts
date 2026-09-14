@@ -5,13 +5,12 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
 }));
 
-vi.mock("@/lib/api/client", () => mocks);
+vi.mock("@/lib/api/transport", () => mocks);
 
-import { apiContext } from "@/lib/api/context";
+import { requestRuntime } from "@/lib/api/runtime";
 import { ALL, GET, POST } from "../../pages/theme-preview/continue";
 
 const CONTINUATION_CODE = `tpc_${"a".repeat(48)}`;
@@ -53,25 +52,22 @@ describe("theme preview continuation route", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("exchanges a body-only code through service auth, sets HttpOnly state, and redirects cleanly", async () => {
-    mocks.fetchWithRetry.mockResolvedValue(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValue(new Response(JSON.stringify({
       success: true,
       data: { token: TOKEN, draftRevision: 3, basePublishedRevision: 2 },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     const response = await POST(context());
 
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/storefront/agent-continuations/theme-preview",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/storefront/agent-continuations/theme-preview",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ continuationCode: CONTINUATION_CODE }),
         cache: "no-store",
       },
-      0,
-      4_000,
-      true,
-      false,
+      { retries: 0, timeout: 4_000, auth: true, logTerminalFailure: false },
     );
     expect(response.status).toBe(303);
     expect(response.headers.get("Set-Cookie")).toContain(TOKEN);
@@ -119,13 +115,13 @@ describe("theme preview continuation route", () => {
     ))).resolves.toMatchObject({ status: 400 });
     await expect(POST(rawContext("continuationCode=value", "1")))
       .resolves.toMatchObject({ status: 400 });
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
   it("serves a private relay without continuation material", async () => {
     // Dashboard and API origins come from the request context seeded by the
     // middleware from /api/v1/platform, never from Worker vars.
-    const response = await apiContext.run({
+    const response = await requestRuntime.run({
       DASHBOARD_URL: "https://dashboard.example.test",
       PUBLIC_API_BASE_URL: "https://api.example.test",
     }, () => GET({} as never));
@@ -157,9 +153,9 @@ describe("theme preview continuation route", () => {
       path: "/",
       device: "full",
     }))).resolves.toMatchObject({ status: 400 });
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
 
-    mocks.fetchWithRetry.mockResolvedValue(new Response(null, { status: 409 }));
+    mocks.apiFetch.mockResolvedValue(new Response(null, { status: 409 }));
     const expired = await POST(context());
     expect(expired.status).toBe(410);
     expect(expired.headers.get("Set-Cookie")).toBeNull();
@@ -188,6 +184,7 @@ describe("theme preview continuation route", () => {
       "utf8",
     );
     expect(continuationSource).not.toMatch(/postMessage|request\.json|console\.|continue\/\$\{|continue\/\[continuationId\]/);
-    expect(continuationSource).toContain('createApiUrl("/storefront/agent-continuations/theme-preview")');
+    expect(continuationSource).toContain("apiFetch(");
+    expect(continuationSource).toContain('"/storefront/agent-continuations/theme-preview"');
   });
 });

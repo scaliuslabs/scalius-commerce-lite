@@ -50,7 +50,7 @@ const DAILY_RESPONSES: Record<string, unknown> = {
   "dashboard.inventory_alerts.list": { data: { alerts: [] } },
   "dashboard.checkout.readiness_get": {
     data: {
-      ready: true,
+      status: "ready",
       hasActiveShippingMethod: true,
       hasActiveDeliveryHierarchy: true,
       customerSignInRequired: false,

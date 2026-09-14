@@ -14,7 +14,7 @@ vi.mock("@/lib/api/storefront", () => ({
   getLayoutData: mocks.getLayoutData,
 }));
 
-vi.mock("@/lib/api/runtime-env", () => ({
+vi.mock("@/lib/api/runtime", () => ({
   setRuntimeImageCdnPolicy: vi.fn(),
 }));
 

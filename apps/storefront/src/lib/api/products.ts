@@ -1,6 +1,6 @@
 // src/lib/api/products.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type {
   Category,
   CategoryProductsResponse,
@@ -11,7 +11,7 @@ import type {
   BuyerPriceRange,
   ProductFacet,
 } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import {
   getApiV1ProductsBySlug,
@@ -146,10 +146,13 @@ export async function getProductVariants(
       try {
         // There is no dedicated SDK function for /products/{id}/variants,
         // so we use the product-by-slug endpoint data which includes variants.
-        // For a direct variant fetch, fall back to fetchWithRetry.
-        const { createApiUrl, fetchWithRetry } = await import("./client");
-        const url = createApiUrl(`/products/${productId}/variants`);
-        const response = await fetchWithRetry(url, {}, 3, 8000, false);
+        // For a direct variant fetch, call the transport directly.
+        const { apiFetch } = await import("./transport");
+        const response = await apiFetch(
+          `/products/${productId}/variants`,
+          {},
+          { retries: 3, timeout: 8000, auth: false },
+        );
 
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);

@@ -357,7 +357,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
-    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { status: string } }> } };
+    const json = await response.json() as { data: { providers: Array<{ credentials: string; readiness: { status: string; lifecycle: string } }> } };
     expect(JSON.parse(json.data.providers[0]?.credentials ?? "{}")).toEqual({
       clientSecret: "••••••••••••",
       clientId: "••••••••••••",
@@ -366,7 +366,8 @@ describe("delivery provider cache invalidation", () => {
       webhookSecret: "••••••••••••",
       baseUrl: "https://api-hermes.pathao.com",
     });
-    expect(json.data.providers[0]?.readiness.status).toBe("blocked");
+    expect(json.data.providers[0]?.readiness.status).toBe("incomplete");
+    expect(json.data.providers[0]?.readiness.lifecycle).toBe("blocked");
     expect(JSON.stringify(json)).not.toContain("must-not-leave-the-api");
   });
 
@@ -391,15 +392,17 @@ describe("delivery provider cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     const json = await response.json() as {
       data: { providers: Array<{ credentials: string; readiness: {
+        status: string;
         configured: boolean;
-        blockers: Array<{ code: string; message: string }>;
+        issues: Array<{ code: string; message: string }>;
       } }> };
     };
     expect(json.data.providers[0]).toMatchObject({
       credentials: "{}",
       readiness: {
+        status: "error",
         configured: false,
-        blockers: [{
+        issues: [{
           code: "unreadable",
           message: expect.stringContaining("cannot be decrypted"),
         }],

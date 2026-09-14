@@ -3,7 +3,7 @@
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { fetchWithRetry, createApiUrl } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import {
   getPaymentSessionApiErrorMessage,
   PAYMENT_SESSION_PROXY_TIMEOUT_MS,
@@ -56,8 +56,8 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonError("Private receipt proof is missing for this order. Please reopen the receipt from this browser and try again.", 400);
     }
 
-    const res = await fetchWithRetry(
-      createApiUrl("/payment/sslcommerz/session"),
+    const res = await apiFetch(
+      "/payment/sslcommerz/session",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,9 +68,8 @@ export const POST: APIRoute = async ({ request }) => {
         }),
         cache: "no-store",
       },
-      0,     // retries; hosted session creation is explicit-user-action only
-      PAYMENT_SESSION_PROXY_TIMEOUT_MS,
-      false,
+      // retries: 0; hosted session creation is explicit-user-action only
+      { retries: 0, timeout: PAYMENT_SESSION_PROXY_TIMEOUT_MS, auth: false },
     );
 
     const json = await res.json() as { success?: boolean; data?: Record<string, unknown>; error?: unknown };

@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
+import { PLATFORM_READINESS_FIX } from "@scalius/shared/platform-config";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -17,6 +18,9 @@ vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
   getPlatformSettings: mocks.getPlatformSettings,
   savePlatformSettings: mocks.savePlatformSettings,
   invalidatePlatformConfigCache: mocks.invalidatePlatformConfigCache,
+  platformSettingsDocument: {
+    invalidationGroups: ["layout", "homepage", "discovery", "checkout"],
+  },
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -106,7 +110,14 @@ describe("admin platform settings", () => {
         success: true,
         data: {
           ...STORED,
-          readiness: { complete: false, missing: ["apiUrl", "mediaUrl"] },
+          readiness: {
+            status: "incomplete",
+            issues: [
+              { code: "missing_api_url", message: "API URL is not configured.", fix: PLATFORM_READINESS_FIX },
+              { code: "missing_media_url", message: "Media URL is not configured.", fix: PLATFORM_READINESS_FIX },
+            ],
+            missing: ["apiUrl", "mediaUrl"],
+          },
           effective: {
             storefrontUrl: "https://shop.example.com",
             apiUrl: "https://api.example.com",
@@ -143,7 +154,7 @@ describe("admin platform settings", () => {
       const response = await app.request("/api/v1/admin/settings/platform", { method: "GET" }, env);
       const body = await response.json() as { data: { readiness: unknown } };
 
-      expect(body.data.readiness).toEqual({ complete: true, missing: [] });
+      expect(body.data.readiness).toEqual({ status: "ready", issues: [], missing: [] });
     });
   });
 
@@ -180,7 +191,7 @@ describe("admin platform settings", () => {
         success: true,
         data: {
           ...saved,
-          readiness: { complete: true, missing: [] },
+          readiness: { status: "ready", issues: [], missing: [] },
           effective: {
             storefrontUrl: "https://shop.example.com",
             apiUrl: "https://api.example.com",
