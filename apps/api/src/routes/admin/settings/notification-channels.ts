@@ -185,11 +185,7 @@ app.openapi(getAdminChannelsRoute, async (c) => {
     const db = c.get("db");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const channels = await getAdminNotificationChannels(db);
-    const pushReadiness = await getFirebaseServiceAccountReadiness(
-        db,
-        encryptionKey,
-        c.env as Record<string, unknown>,
-    );
+    const pushReadiness = await getFirebaseServiceAccountReadiness(db, encryptionKey);
     const pushNotificationReadiness = await getPushNotificationReadiness(db, pushReadiness);
     return ok(c, {
         channels,
@@ -221,11 +217,7 @@ app.openapi(updateAdminChannelsRoute, async (c) => {
     const db = c.get("db");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const { channels } = c.req.valid("json");
-    const pushReadiness = await getFirebaseServiceAccountReadiness(
-        db,
-        encryptionKey,
-        c.env as Record<string, unknown>,
-    );
+    const pushReadiness = await getFirebaseServiceAccountReadiness(db, encryptionKey);
     const pushNotificationReadiness = await getPushNotificationReadiness(db, pushReadiness);
     if (adminChannelsRequirePush(channels) && !pushNotificationReadiness.configured) {
         throw new ValidationError(

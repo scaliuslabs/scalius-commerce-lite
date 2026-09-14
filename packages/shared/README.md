@@ -46,7 +46,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `price-utils.ts` | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
 | `image-optimizer.ts` | Cloudflare Image Resizing URL generation | `getOptimizedImageUrl()`, `getOriginalImageUrl()`, `isR2Image()`, `getOptimizedImageProps()`, `getResponsiveSrcSet()`, `ImagePresets` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
-| `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus optional explicit credentialed-CORS env origins; merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
+| `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
 | `request-origin-guard.ts` | Same-origin guard for unsafe cookie-bearing browser requests used by admin/storefront proxy routes before forwarding or mutating session state | `shouldRejectCrossOriginCookieRequest()` |
 | `rate-limit.ts` | KV-based IP rate limiter with automatic TTL expiry | `rateLimit()`, `getClientIp()` |
 | `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |

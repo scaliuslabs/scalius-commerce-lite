@@ -22,8 +22,8 @@ Browser (Customer/Admin)
 │  ├─ Routes (thin HTTP layer)                         │
 │  ├─ Checkout DOs (sharded ingress + bounded commit)  │
 │  ├─ Middleware (auth, RBAC, cache, CSP)              │
-│  ├─ Queue Consumer (payment, notification, OTP/cache)│
-│  └─ Cron (reservation expiry)                        │
+│  ├─ Queue Consumer (payment, notification, OTP+DLQs) │
+│  └─ Cron every 15 min (scheduled maintenance)        │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
@@ -65,6 +65,23 @@ concurrent merchant requests to remain isolated without threading presentation
 configuration through every domain-service signature. The API production build
 runs `scripts/check-worker-request-isolation.mjs`, which rejects mutable server
 module variables and the known historical client/cache globals.
+
+## Runtime Configuration Boundary
+
+Wrangler configs declare resource bindings only; they carry no `vars`. Each
+Worker installs exactly one master secret, `SCALIUS_SECRET` (plus
+`CREDENTIAL_ENCRYPTION_KEY` on API and admin). Every per-purpose secret is
+HKDF-derived from the master at Worker entry in
+`packages/shared/src/runtime-secrets.ts`.
+
+Public origins are merchant settings, not deployment configuration. The API
+resolves them per invocation in `apps/api/src/runtime/runtime-env.ts`, which
+returns a request-scoped env carrying the derived secrets and the resolved
+`PLATFORM_CONFIG`; consumers keep reading fields such as `env.STOREFRONT_URL`
+without knowing where the value came from. The storefront and admin Workers hold
+no origins of their own: they read `GET /api/v1/platform` through their service
+binding and fall back to their own request origin for their own URL. Local
+development substitutes fixed localhost ports in code.
 
 ## Database Provider Boundary
 
@@ -169,13 +186,13 @@ Admin/Webhook triggers status change
 5. Queue consumer dispatches to channels (independently):
     ├─ EMAIL: sendEmail() via Cloudflare Email Service by default, Resend fallback
     ├─ SMS: getActiveSmsProvider(db) → provider.sendSms() (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
-    ├─ WHATSAPP: (placeholder — logged only)
+    ├─ WHATSAPP: Meta Cloud API template send
     └─ PUSH: sendOrderNotification() (FCM to admin devices when enabled)
 ```
 
-### Notification Coverage (9 types)
+### Notification Coverage
 
-All 9 order statuses that trigger notifications: `order_created`, `order_confirmed`, `order_processing`, `order_shipped`, `order_delivered`, `order_completed`, `order_cancelled`, `order_returned`, `order_refunded`. Each channel (email, SMS, WhatsApp, push) is dispatched independently -- failure in one does not affect others.
+`ORDER_NOTIFICATION_TYPES` (`packages/core/src/modules/notifications/notification-types.ts`) is the source of truth: order created/confirmed/processing/shipped/delivered/completed/cancelled/returned, refund processing/failed/refunded/partially refunded, balance paid, and support request submitted/updated. Each channel (email, SMS, WhatsApp, push) is dispatched independently -- failure in one does not affect others.
 
 ---
 
@@ -378,6 +395,7 @@ If status changed:
 | `sslcommerz` | SSLCommerz credentials | Yes |
 | `polar` | Polar credentials | Yes |
 | `firebase` | Firebase service account and public browser config | Service account only (AES-GCM `enc:`) |
+| `platform` | Public API/dashboard/media origins, customer cookie domain, extra CORS origins (the storefront origin stays in `siteSettings.storefrontUrl`) | No |
 | `business_info` | Company name, TIN, logo, address | No |
 | `invoice_counter` | Next invoice number | No |
 | `notifications` | Per-status channel preferences | No |
@@ -386,14 +404,12 @@ If status changed:
 
 ## Release posture
 
-Numeric architecture scores and blanket “production-ready” claims are not used.
-They hide the difference between a sensible module boundary and a verified
-commerce lifecycle. Stable-release confidence comes from focused invariant
-tests, sequential package gates, deployed Cloudflare
-smokes, and current operational evidence. The
-orders/payments/inventory triangle remains intentionally coupled at its atomic
-database commit boundary; every other dependency should be justified by current code
-and boundary tests.
+Numeric architecture scores and blanket "production-ready" claims are not used.
+Release confidence comes from invariant tests, sequential package gates,
+deployed Cloudflare smokes, and current operational evidence. The
+orders/payments/inventory triangle stays intentionally coupled at its atomic
+commit boundary; every other dependency should be justified by current code and
+boundary tests.
 
 ---
 

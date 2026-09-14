@@ -326,7 +326,16 @@ describe("agent operation contract", () => {
         "/api/v1/admin/agent-access/browser-handoffs/",
       ),
     );
-    expect(managementOperations).toHaveLength(14);
+    expect(managementOperations).toHaveLength(15);
+    expect(byId(manifest, "dashboard.agent_access.connections.purge_revoked")).toMatchObject({
+      method: "DELETE",
+      pathTemplate: "/api/v1/admin/agent-access/connections/revoked",
+      exposure: "excluded",
+      risk: "security",
+      batch: "forbidden",
+      sensitiveOutput: false,
+      rbac: { type: "permission", permission: "agent_access.manage" },
+    });
     const executableIds = managementOperations
       .filter((operation) => operation.exposure === "execute")
       .map((operation) => operation.operationId)

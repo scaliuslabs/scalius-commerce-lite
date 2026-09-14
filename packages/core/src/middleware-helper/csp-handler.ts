@@ -48,21 +48,27 @@ function getEssentialDomains(): string[] {
   ]);
 }
 
-async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<string[]> {
-  let cspAllowed = String(env?.CSP_ALLOWED || "");
-  try {
-    if (env?.CACHE) {
-      const cache = env.CACHE as { get(key: string): Promise<string | null> };
-      const cached = await cache.get("security:csp_allowed_domains");
-      if (cached !== null) {
-        cspAllowed = cached;
-      }
-    }
-  } catch (e: unknown) {
-    console.error("Failed to read CSP_ALLOWED from KV Cache", e);
-  }
+/** KV key holding the merchant-managed CSP sources saved from the dashboard. */
+export const CSP_ALLOWED_DOMAINS_CACHE_KEY = "security:csp_allowed_domains";
 
-  return parseMerchantCspSources(cspAllowed);
+/**
+ * Merchant CSP sources come only from the dashboard security settings, which
+ * the API mirrors into KV. There is no environment fallback.
+ */
+async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<string[]> {
+  const cache = env?.CACHE as { get(key: string): Promise<string | null> } | undefined;
+  if (!cache) return [];
+
+  try {
+    const cached = await cache.get(CSP_ALLOWED_DOMAINS_CACHE_KEY);
+    return parseMerchantCspSources(cached ?? "");
+  } catch (error: unknown) {
+    console.error(
+      "[CSP] Failed to read merchant CSP sources from KV:",
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
 }
 
 /**

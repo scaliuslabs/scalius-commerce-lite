@@ -5,3 +5,4 @@ export * from "./checkout-config.service";
 export * from "./checkout-flow-admin.service";
 export * from "./checkout-readiness";
 export * from "./customer-request-policy";
+export * from "./platform-settings.service";

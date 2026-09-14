@@ -92,7 +92,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `src/lib/checkout/handlers/polar.ts` | Polar handler: creates order, fetches session, redirects to `gatewayUrl` |
 | `src/lib/account-payment-recovery.ts` | Pure account-order payment recovery copy/action helpers plus hosted URL normalization |
 | `src/pages/account/orders/[id].astro` | Private customer order detail page; renders retry/pay-balance UI, Stripe card form, and hosted-gateway redirects without receipt tokens |
-| `src/pages/api/checkout/create-order.ts` | SSR proxy: calls API to create order (API_TOKEN server-side only) |
+| `src/pages/api/checkout/create-order.ts` | SSR proxy: calls API to create order (derived `API_TOKEN`, server-side only) |
 | `src/pages/api/checkout/stripe-intent.ts` | SSR proxy: calls `POST /payment/stripe/intent`, unwraps `{success, data}` envelope |
 | `src/pages/api/checkout/sslcommerz-session.ts` | SSR proxy: calls `POST /payment/sslcommerz/session`, unwraps envelope, 15s timeout |
 | `src/pages/api/checkout/polar-session.ts` | SSR proxy: calls `POST /payment/polar/session`, unwraps envelope, 15s timeout |
@@ -330,11 +330,11 @@ The `GET /checkout/config` endpoint returns:
 Storefront SSR pages at `apps/storefront/src/pages/api/checkout/` act as proxies:
 
 1. Browser calls storefront proxy (e.g., `POST /api/checkout/stripe-intent`) after order creation returns a committed `orderId` and receipt proof
-2. Proxy calls API worker via service binding (e.g., `POST /payment/stripe/intent`) using the server-side `API_TOKEN`
+2. Proxy calls API worker via service binding (e.g., `POST /payment/stripe/intent`) using the server-side `API_TOKEN` (derived from `SCALIUS_SECRET` per request, never installed)
 3. Proxy unwraps the `{success, data}` envelope before returning to browser
 4. Browser receives flat response (e.g., `{clientSecret, paymentIntentId, ...}`)
 
-This keeps the API_TOKEN server-side and handles the envelope unwrapping for checkout page consumers.
+This keeps the derived `API_TOKEN` server-side and handles the envelope unwrapping for checkout page consumers.
 
 ### Storefront Client-Side Gateway Handler Registry
 

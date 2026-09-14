@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { getRuntimeApiBaseUrl } from "@/lib/api/runtime-env";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
 import {
   browserContinuationRelayResponse,
@@ -35,7 +35,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export const GET: APIRoute = async () => {
   const apiOrigin = (() => {
     try {
-      return new URL((cfEnv as Env).PUBLIC_API_BASE_URL ?? "").origin;
+      return new URL(getRuntimeApiBaseUrl() ?? "").origin;
     } catch {
       return "";
     }

@@ -13,38 +13,38 @@ import {
 } from "./credential-account";
 import { retryTransientD1 } from "../utils/transient-d1";
 
-function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
-  const source = (env ?? process.env) as Record<string, unknown>;
+function getEmailRuntimeContext(env: Env) {
+  const source = env as Record<string, unknown>;
   return {
     env: source,
     encryptionKey: source.CREDENTIAL_ENCRYPTION_KEY as string | undefined,
   };
 }
 
+function readString(env: Env, key: string): string | undefined {
+  const value = (env as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
 /**
- * Create Better Auth instance with the given environment.
- * This factory pattern is necessary for Cloudflare Workers where
- * env bindings are only available within the request context.
+ * Create Better Auth instance with the request's composed environment.
+ *
+ * `BETTER_AUTH_SECRET` is derived from `SCALIUS_SECRET` at Worker entry and
+ * `BETTER_AUTH_URL` is the dashboard origin resolved from Platform settings.
+ * Nothing is read from `process.env`; the request `Env` is the only source.
  */
-export function createAuth(env?: Env | NodeJS.ProcessEnv) {
+export function createAuth(env: Env) {
   const db = getDb(env);
 
-  // Get environment variables
-  const getEnvVar = (key: string): string | undefined => {
-    if (env && key in env) {
-      return (env as Record<string, string>)[key];
-    }
-    return process.env[key];
-  };
-
-  const secret = getEnvVar("BETTER_AUTH_SECRET");
-  const baseURL = getEnvVar("BETTER_AUTH_URL") || getEnvVar("PUBLIC_API_BASE_URL");
-  const storefrontURL = getEnvVar("STOREFRONT_URL");
+  const secret = readString(env, "BETTER_AUTH_SECRET");
+  // The dashboard origin. Never the API origin: reset links open dashboard routes.
+  const baseURL = readString(env, "BETTER_AUTH_URL");
+  const storefrontURL = readString(env, "STOREFRONT_URL");
   const appName = "Scalius Commerce";
   const emailRuntimeContext = getEmailRuntimeContext(env);
 
   if (!secret) {
-    throw new Error("BETTER_AUTH_SECRET is not set. Generate one with: openssl rand -base64 32");
+    throw new Error("BETTER_AUTH_SECRET is not set. It is derived from SCALIUS_SECRET at Worker entry.");
   }
 
   return betterAuth({
@@ -102,6 +102,9 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         user: { id: string; email: string; name: string };
         token: string;
       }) => {
+        if (!baseURL) {
+          throw new Error("BETTER_AUTH_URL is required for password reset links");
+        }
         const { sendEmail } = await import("../integrations/email");
         const inviteState = await db
           .select({
@@ -129,9 +132,6 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
           : "We received a request to reset your password. Click the button below to create a new password.";
         const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
-        if (!baseURL) {
-          throw new Error("BETTER_AUTH_URL is required for password reset links");
-        }
         const resetLink = new URL("/auth/reset-password", baseURL);
         // Fragments are not sent to Cloudflare or included in Referer. The
         // dashboard exchanges and removes this one-time value immediately.
@@ -329,6 +329,6 @@ export type Auth = ReturnType<typeof createAuth>;
  * context into a later request. Keep this alias request-scoped like
  * `createAuth()`.
  */
-export function getAuth(env?: Env | NodeJS.ProcessEnv): Auth {
+export function getAuth(env: Env): Auth {
   return createAuth(env);
 }

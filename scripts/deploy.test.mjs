@@ -1,20 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   cacheStatusBuildId,
+  collectStorefrontWarmPaths,
+  fetchPlatformConfig,
   getExternalSchemaPreflightCommand,
   getBuildCommandForTarget,
   getDeployCommandForTarget,
   getSequentialWorkspaceCommand,
+  getStorefrontCustomDomainUrl,
   getTypecheckCommandForTarget,
+  normalizeDeploymentOrigin,
   parseJsoncText,
   parseOnlyTarget,
   parseStorefrontBuildId,
+  resolveDeploymentUrls,
+  resolveStorefrontVerificationUrl,
   sampleApiReadiness,
   resolveDeploymentDatabaseProvider,
   storefrontStaticPostDeployWarmPaths,
   verifyPostDeployTarget,
   warmStorefrontPath,
 } from "./deploy.mjs";
+
+function platformResponse(data, status = 200) {
+  return new Response(JSON.stringify({ success: true, data }), { status });
+}
 
 function readyResponse() {
   return new Response(JSON.stringify({
@@ -83,6 +94,56 @@ describe("deploy API readiness sampling", () => {
       delayMs: 0,
       fetchImpl,
       sleepImpl: async () => undefined,
+    })).rejects.toThrow("API /readyz did not recover during deploy verification");
+  });
+
+  it("accepts pending merchant setup (platform_config missing) as ready infrastructure", async () => {
+    const setupPending = () => new Response(JSON.stringify({
+      success: false,
+      status: "degraded",
+      checks: {
+        d1: { status: "ok", latencyMs: 20 },
+        runtime_config: { status: "ok" },
+        platform_config: { status: "missing", detail: "missing dashboardUrl, mediaUrl" },
+      },
+    }), { status: 503 });
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(setupPending())
+      .mockResolvedValueOnce(setupPending())
+      .mockResolvedValueOnce(setupPending())
+      .mockResolvedValueOnce(setupPending());
+
+    const result = await sampleApiReadiness("https://api.example.test", {
+      sampleCount: 4,
+      delayMs: 0,
+      fetchImpl,
+      sleepImpl: async () => {},
+    });
+
+    expect(result.readyCount).toBe(4);
+    expect(result.setupPending).toEqual(["platform_config"]);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Settings -> System -> Platform"),
+    );
+  });
+
+  it("still fails when an infrastructure check is degraded alongside pending setup", async () => {
+    const mixed = () => new Response(JSON.stringify({
+      success: false,
+      status: "degraded",
+      checks: {
+        d1: { status: "ok", latencyMs: 20 },
+        r2: { status: "error", latencyMs: 1_500 },
+        platform_config: { status: "missing" },
+      },
+    }), { status: 503 });
+    const fetchImpl = vi.fn().mockResolvedValue(mixed());
+
+    await expect(sampleApiReadiness("https://api.example.test", {
+      sampleCount: 2,
+      delayMs: 0,
+      fetchImpl,
+      sleepImpl: async () => {},
     })).rejects.toThrow("API /readyz did not recover during deploy verification");
   });
 
@@ -168,6 +229,18 @@ describe("deploy target wiring", () => {
     expect(() => getTypecheckCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
     );
+  });
+
+  it("selects D1 from the binding when the committed config carries no vars", () => {
+    expect(resolveDeploymentDatabaseProvider({
+      d1_databases: [{ database_name: "scalius-commerce" }],
+    })).toBe("d1");
+    expect(resolveDeploymentDatabaseProvider(parseJsoncText(
+      readFileSync(new URL("../apps/api/wrangler.jsonc", import.meta.url), "utf8"),
+    ))).toBe("d1");
+    expect(() => resolveDeploymentDatabaseProvider({})).toThrow(/DATABASE_PROVIDER or contain a D1 binding/);
+    expect(() => resolveDeploymentDatabaseProvider({ vars: { DATABASE_PROVIDER: "mysql" } }))
+      .toThrow(/Unsupported DATABASE_PROVIDER/);
   });
 
   it("keeps external schema changes out of ordinary deploys", () => {
@@ -297,5 +370,203 @@ describe("storefront post-deploy warming", () => {
     )).rejects.toThrow(
       "Verify the custom-domain target and Worker propagation, then rerun deployment verification",
     );
+  });
+});
+
+describe("post-deploy verification URLs", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("normalizes origins and rejects paths, credentials, and wildcards", () => {
+    expect(normalizeDeploymentOrigin(" https://shop.example.test/ ", "x")).toBe("https://shop.example.test");
+    expect(normalizeDeploymentOrigin("http://localhost:4322", "x")).toBe("http://localhost:4322");
+    expect(normalizeDeploymentOrigin(undefined, "x")).toBeNull();
+    expect(normalizeDeploymentOrigin("", "x")).toBeNull();
+    expect(() => normalizeDeploymentOrigin("https://api.example.test/api/v1", "--api-url"))
+      .toThrow("--api-url must be an origin without a path");
+    expect(() => normalizeDeploymentOrigin("https://user:pw@example.test", "x")).toThrow("credentials");
+    expect(() => normalizeDeploymentOrigin("https://*.example.test", "x")).toThrow("wildcard");
+    expect(() => normalizeDeploymentOrigin("ftp://example.test", "x")).toThrow("http or https");
+    expect(() => normalizeDeploymentOrigin("not a url", "x")).toThrow("absolute http(s) origin");
+  });
+
+  it("derives the storefront origin from the Wrangler custom-domain route", () => {
+    expect(getStorefrontCustomDomainUrl({
+      routes: [
+        { pattern: "*.example.test/*", zone_name: "example.test" },
+        { pattern: "shop.example.test", custom_domain: true },
+      ],
+    })).toBe("https://shop.example.test");
+    expect(getStorefrontCustomDomainUrl({
+      routes: [{ pattern: "shop.example.test/*", custom_domain: true }],
+    })).toBe("https://shop.example.test");
+    expect(getStorefrontCustomDomainUrl({ routes: [{ pattern: "shop.example.test" }] })).toBeNull();
+    expect(getStorefrontCustomDomainUrl({ routes: [{ pattern: "*.example.test", custom_domain: true }] })).toBeNull();
+    expect(getStorefrontCustomDomainUrl({})).toBeNull();
+    expect(getStorefrontCustomDomainUrl(null)).toBeNull();
+  });
+
+  it("reads the repository storefront custom domain", () => {
+    const config = parseJsoncText(
+      readFileSync(new URL("../apps/storefront/wrangler.jsonc", import.meta.url), "utf8"),
+    );
+    expect(config.vars).toBeUndefined();
+    expect(getStorefrontCustomDomainUrl(config)).toBe("https://storefront.scalius.com");
+  });
+
+  it("prefers CLI flags, then environment, then the custom domain; the API has no config fallback", () => {
+    const storefrontConfig = { routes: [{ pattern: "shop.example.test", custom_domain: true }] };
+
+    expect(resolveDeploymentUrls({ args: [], env: {}, storefrontConfig })).toEqual({
+      storefrontUrl: "https://shop.example.test",
+      apiUrl: null,
+    });
+    expect(resolveDeploymentUrls({
+      args: [],
+      env: { SCALIUS_STOREFRONT_URL: "https://env.example.test/", SCALIUS_API_URL: "https://api-env.example.test" },
+      storefrontConfig,
+    })).toEqual({
+      storefrontUrl: "https://env.example.test",
+      apiUrl: "https://api-env.example.test",
+    });
+    expect(resolveDeploymentUrls({
+      args: ["--only", "storefront", "--storefront-url", "https://flag.example.test", "--api-url=https://api-flag.example.test"],
+      env: { SCALIUS_STOREFRONT_URL: "https://env.example.test", SCALIUS_API_URL: "https://api-env.example.test" },
+      storefrontConfig,
+    })).toEqual({
+      storefrontUrl: "https://flag.example.test",
+      apiUrl: "https://api-flag.example.test",
+    });
+    expect(resolveDeploymentUrls({ args: [], env: {}, storefrontConfig: null })).toEqual({
+      storefrontUrl: null,
+      apiUrl: null,
+    });
+    expect(() => resolveDeploymentUrls({ args: ["--api-url"], env: {} })).toThrow(/requires a value/);
+    expect(() => resolveDeploymentUrls({ args: [], env: { SCALIUS_API_URL: "https://api.example.test/api/v1" } }))
+      .toThrow("--api-url / SCALIUS_API_URL must be an origin without a path");
+  });
+
+  it("reads the public platform envelope and rejects failures", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(platformResponse({
+      storefrontUrl: "https://shop.example.test",
+      apiUrl: "https://api.example.test",
+      dashboardUrl: "https://dashboard.example.test",
+      mediaUrl: "https://cdn.example.test",
+    }));
+
+    await expect(fetchPlatformConfig("https://api.example.test", { fetchImpl })).resolves.toEqual({
+      storefrontUrl: "https://shop.example.test",
+      apiUrl: "https://api.example.test",
+      dashboardUrl: "https://dashboard.example.test",
+      mediaUrl: "https://cdn.example.test",
+    });
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://api.example.test/api/v1/platform");
+
+    await expect(fetchPlatformConfig("https://api.example.test", {
+      fetchImpl: vi.fn().mockResolvedValue(new Response("nope", { status: 503 })),
+    })).rejects.toThrow("returned 503");
+    await expect(fetchPlatformConfig("https://api.example.test", {
+      fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 200 })),
+    })).rejects.toThrow("successful platform envelope");
+    await expect(fetchPlatformConfig("https://api.example.test", {
+      fetchImpl: vi.fn().mockResolvedValue(new Response("<html>", { status: 200 })),
+    })).rejects.toThrow("did not return JSON");
+  });
+
+  it("uses the known storefront origin without the API and fails clearly when nothing is known", async () => {
+    const fetchPlatformConfigImpl = vi.fn();
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: "https://shop.example.test", apiUrl: null },
+      { fetchPlatformConfigImpl },
+    )).resolves.toBe("https://shop.example.test");
+    expect(fetchPlatformConfigImpl).not.toHaveBeenCalled();
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: null, apiUrl: null },
+      { fetchPlatformConfigImpl },
+    )).rejects.toThrow(/custom_domain route .* --storefront-url .* --api-url/);
+  });
+
+  it("falls back to the dashboard Platform storefrontUrl when only the API origin is known", async () => {
+    const fetchPlatformConfigImpl = vi.fn().mockResolvedValue({
+      storefrontUrl: "https://shop.example.test",
+      apiUrl: "https://api.example.test",
+      dashboardUrl: null,
+      mediaUrl: null,
+    });
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: null, apiUrl: "https://api.example.test" },
+      { fetchPlatformConfigImpl },
+    )).resolves.toBe("https://shop.example.test");
+    expect(fetchPlatformConfigImpl).toHaveBeenCalledWith("https://api.example.test");
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: null, apiUrl: "https://api.example.test" },
+      { fetchPlatformConfigImpl: vi.fn().mockResolvedValue({ storefrontUrl: null }) },
+    )).rejects.toThrow("storefrontUrl is empty");
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: null, apiUrl: "https://api.example.test" },
+      { fetchPlatformConfigImpl: vi.fn().mockRejectedValue(new Error("HTTP 503")) },
+    )).rejects.toThrow(/reading https:\/\/api\.example\.test\/api\/v1\/platform failed \(HTTP 503\)/);
+  });
+
+  it("warns, but keeps the deploy target, when the Platform setting disagrees", async () => {
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: "https://shop.example.test", apiUrl: "https://api.example.test" },
+      {
+        fetchPlatformConfigImpl: vi.fn().mockResolvedValue({ storefrontUrl: "https://old.example.test" }),
+      },
+    )).resolves.toBe("https://shop.example.test");
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("differs from the deploy target"));
+
+    await expect(resolveStorefrontVerificationUrl(
+      { storefrontUrl: "https://shop.example.test", apiUrl: "https://api.example.test" },
+      { fetchPlatformConfigImpl: vi.fn().mockRejectedValue(new Error("timeout")) },
+    )).resolves.toBe("https://shop.example.test");
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Could not read dashboard Platform settings"));
+  });
+
+  it("skips API-driven warm paths with a notice when the API origin is unknown", async () => {
+    const collectDynamicWarmPathsImpl = vi.fn().mockResolvedValue(new Set(["/products/a"]));
+
+    await expect(collectStorefrontWarmPaths(null, { collectDynamicWarmPathsImpl }))
+      .resolves.toEqual([...storefrontStaticPostDeployWarmPaths]);
+    expect(collectDynamicWarmPathsImpl).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("--api-url"));
+
+    await expect(collectStorefrontWarmPaths("https://api.example.test", { collectDynamicWarmPathsImpl }))
+      .resolves.toEqual([...storefrontStaticPostDeployWarmPaths, "/products/a"]);
+    expect(collectDynamicWarmPathsImpl).toHaveBeenCalledWith("https://api.example.test");
+  });
+
+  it("threads deployment URLs into the target verifiers", async () => {
+    const deploymentUrls = { storefrontUrl: "https://shop.example.test", apiUrl: "https://api.example.test" };
+    const verifyApiDeployImpl = vi.fn();
+    const verifyStorefrontDeployImpl = vi.fn();
+    const verifyLatestWorkerDeploymentImpl = vi.fn();
+    const options = {
+      deploymentUrls,
+      verifyApiDeployImpl,
+      verifyStorefrontDeployImpl,
+      verifyLatestWorkerDeploymentImpl,
+    };
+
+    await verifyPostDeployTarget("api", { name: "scalius-api" }, null, options);
+    expect(verifyApiDeployImpl).toHaveBeenCalledWith({ name: "scalius-api" }, null, options);
+
+    await verifyPostDeployTarget("storefront", { name: "scalius-api" }, null, options);
+    expect(verifyStorefrontDeployImpl).toHaveBeenCalledWith(options);
+
+    await verifyPostDeployTarget("admin", { name: "scalius-api" }, null, options);
+    expect(verifyLatestWorkerDeploymentImpl).toHaveBeenCalledWith(expect.stringMatching(/apps\/admin-v2$/), "Admin V2 Worker");
   });
 });

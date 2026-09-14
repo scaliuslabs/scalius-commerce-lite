@@ -56,11 +56,12 @@ const getTokenRoute = createRoute({
 });
 
 app.openapi(getTokenRoute, async (c) => {
+  // API_TOKEN is derived from SCALIUS_SECRET at Worker entry; it is never a
+  // placeholder. Fail closed when the composed env does not carry it.
   const API_TOKEN = c.env.API_TOKEN;
 
-  if (!API_TOKEN || API_TOKEN === "default-api-token-change-in-production") {
-    // In production, refuse to issue system tokens with a missing or default secret
-    console.error("API_TOKEN is not set or is using the insecure default value. Set it via `wrangler secret put API_TOKEN`.");
+  if (typeof API_TOKEN !== "string" || API_TOKEN.length === 0) {
+    console.error("API_TOKEN is not available in the runtime env; SCALIUS_SECRET derivation did not run.");
     throw new UnauthorizedError("Service token endpoint is not configured");
   }
 

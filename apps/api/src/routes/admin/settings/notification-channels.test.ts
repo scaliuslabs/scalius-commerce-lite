@@ -396,7 +396,6 @@ describe("notification channel settings routes", () => {
         expect(mocks.getFirebaseServiceAccountReadiness).toHaveBeenCalledWith(
             { id: "db" },
             "credential-key",
-            env,
         );
     });
 

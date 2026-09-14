@@ -6,7 +6,11 @@ import Footer from "../components/Footer.astro";
 import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import {
+  getRuntimeApiUrl,
+  getRuntimeMediaUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime-env";
 import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
@@ -224,25 +228,14 @@ const bodyEndScripts = analyticsScripts.filter(
   (script) => script.location === "body_end",
 );
 
-// Derive preconnect origins from Cloudflare Worker env (wrangler.jsonc vars).
-// All values come from runtime bindings — no build-time fallbacks.
-import { env as cfEnv } from "cloudflare:workers";
-const workerEnv = (() => {
-  try {
-    const e = cfEnv as unknown as Env;
-    return e?.CDN_DOMAIN_URL || e?.PUBLIC_API_URL ? e : null;
-  } catch {
-    return null;
-  }
-})();
-const publicApiUrl =
-  (workerEnv?.PUBLIC_API_URL as string) ||
-  (import.meta.env.PUBLIC_API_URL as string) ||
-  "";
-const envCdnDomainUrl = (workerEnv?.CDN_DOMAIN_URL as string) || "";
+// Public API and media origins come from the per-request context seeded by
+// the middleware from /api/v1/platform. No Worker vars, no build-time values.
+const publicApiUrl = getRuntimeApiUrl() ?? "";
 const mediaSettings = layoutData?.media;
+// Dashboard media settings own the canonical CDN; the platform media URL is
+// the fallback when the merchant has not configured one.
 const configuredCdnBase =
-  mediaSettings?.canonicalCdnUrl?.trim() || envCdnDomainUrl;
+  mediaSettings?.canonicalCdnUrl?.trim() || getRuntimeMediaUrl() || "";
 const cdnDomainUrl = configuredCdnBase
   .replace(/^https?:\/\//, "")
   .replace(/\/$/, "");
@@ -328,7 +321,7 @@ if (!window.$RefreshReg$) {
       )
     }
 
-    <!-- Runtime API URL, CDN domain, and currency for client-side JS (Cloudflare Worker env vars aren't available to Vite client bundles) -->
+    <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
 
     <!-- Prevent browser from caching this HTML -->

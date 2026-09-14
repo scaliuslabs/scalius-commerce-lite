@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 
 import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { getRuntimeApiBaseUrl, getRuntimeDashboardUrl } from "@/lib/api/runtime-env";
 import { createThemePreviewCookieHeader } from "@/lib/theme-preview-cookie";
 import {
   browserContinuationRelayResponse,
@@ -71,21 +71,17 @@ function hasBoundedFormBody(request: Request, body: string): boolean {
   return true;
 }
 
+function originOf(value: string | undefined): string {
+  try {
+    return new URL(value ?? "").origin;
+  } catch {
+    return "";
+  }
+}
+
 export const GET: APIRoute = async () => {
-  const dashboardOrigin = (() => {
-    try {
-      return new URL((cfEnv as Env).DASHBOARD_URL ?? "").origin;
-    } catch {
-      return "";
-    }
-  })();
-  const apiOrigin = (() => {
-    try {
-      return new URL((cfEnv as Env).PUBLIC_API_BASE_URL ?? "").origin;
-    } catch {
-      return "";
-    }
-  })();
+  const dashboardOrigin = originOf(getRuntimeDashboardUrl());
+  const apiOrigin = originOf(getRuntimeApiBaseUrl());
   return browserContinuationRelayResponse([
     { name: "continuationCode", pattern: CONTINUATION_CODE.source, maxBytes: 52 },
     { name: "path", pattern: "^/[^\\r\\n]{0,511}$", maxBytes: 512 },

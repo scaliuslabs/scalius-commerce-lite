@@ -3,7 +3,7 @@
  *
  * Calls the API worker directly:
  * - Production: via Cloudflare Service Binding (env.API) -- zero latency
- * - Local dev: via HTTP to localhost:8787
+ * - `vite dev`: via HTTP to the fixed local API port (see runtime-env.server)
  *
  * Handles the standard API envelope { success: true, data: T },
  * unwrapping to return T directly.
@@ -17,7 +17,6 @@
  */
 
 import { getRequestHeader, getResponseHeaders } from "@tanstack/react-start/server";
-import { env as cfEnv } from "cloudflare:workers";
 import { splitSetCookieHeader } from "better-auth/cookies";
 import {
   type AdminApiReadTimeoutHandle,
@@ -26,19 +25,13 @@ import {
   wrapResponseWithAdminApiReadTimeout,
 } from "./admin-api-timeout";
 import { AdminApiResponseError } from "./admin-api-error";
+import { fetchApi, getRuntimeEnv } from "./runtime-env.server";
 
 // Admin API prefix -- all admin endpoints live under this path
 const API_PATH_PREFIX = "/api/v1/admin";
 
 // Non-admin prefix for auth/setup/cache endpoints
 const API_BASE_PREFIX = "/api/v1";
-
-/**
- * Access Cloudflare bindings.
- */
-function getCfEnv(): Env {
-  return cfEnv;
-}
 
 interface ApiEnvelope {
   success: boolean;
@@ -48,16 +41,6 @@ interface ApiEnvelope {
 }
 
 type HeadersWithGetSetCookie = Headers & { getSetCookie?: () => string[] };
-
-function isLocalApiBase(apiBase?: string): boolean {
-  if (!apiBase) return false;
-  try {
-    const { hostname } = new URL(apiBase);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Extract cookie and authorization headers for forwarding to the API worker.
@@ -171,14 +154,14 @@ function buildPath(
 
 /**
  * Execute a fetch against the API worker.
- * Uses service binding in production, HTTP in dev.
+ * Uses the service binding in production, HTTP to the local port in `vite dev`.
  */
 async function apiFetchRaw(
   method: string,
   fullPath: string,
   options?: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal },
 ): Promise<{ response: Response; timeout: AdminApiReadTimeoutHandle }> {
-  const cfEnv = getCfEnv();
+  const env = getRuntimeEnv();
   const forwardHeaders = getForwardHeaders();
   const timeout = createAdminApiReadTimeout(method, options?.signal);
 
@@ -198,20 +181,8 @@ async function apiFetchRaw(
   }
 
   try {
-    // Production: service binding. In local dev the binding may still be present
-    // from wrangler.jsonc, but the API runs in a separate Miniflare process.
-    const configuredApiBase = cfEnv.PUBLIC_API_BASE_URL as string | undefined;
-    if (cfEnv.API && !isLocalApiBase(configuredApiBase)) {
-      const target = `https://api.internal${fullPath}`;
-      const resp = await cfEnv.API.fetch(target, fetchOptions);
-      return { response: resp, timeout };
-    }
-
-    // Local dev: HTTP to API worker
-    const apiBase = configuredApiBase ?? "http://localhost:8787";
-    const target = `${apiBase}${fullPath}`;
-    const resp = await fetch(target, fetchOptions);
-    return { response: resp, timeout };
+    const response = await fetchApi(env, fullPath, fetchOptions);
+    return { response, timeout };
   } catch (error) {
     timeout.cleanup();
     if (timeout.didTimeout()) {

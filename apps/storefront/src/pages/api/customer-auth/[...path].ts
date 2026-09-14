@@ -9,11 +9,11 @@
 // sent correctly.
 //
 // Production: routes through BACKEND_API service binding (zero latency).
-// Local dev: forwards via HTTP to the API worker.
+// Local dev: forwards via HTTP to the local API worker.
 
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { resolveBackendTarget } from "@/lib/api/backend-target";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 
 export const prerender = false;
@@ -41,28 +41,14 @@ export const ALL: APIRoute = async ({ request, params }) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Resolve Cloudflare env (probe properties, not Object.keys)
-  const env = (() => {
-    try {
-      const e = cfEnv as unknown as Env;
-      return (e?.BACKEND_API || e?.PUBLIC_API_BASE_URL || e?.ASSETS) ? e : undefined;
-    } catch { return undefined; }
-  })();
-
-  // Build the target URL
-  let targetUrl: string;
-  let fetcher: typeof fetch = fetch;
-  const canUseServiceBinding = Boolean(env?.BACKEND_API && !import.meta.env.DEV);
-
-  if (canUseServiceBinding) {
-    // Production: service binding (zero-latency internal routing)
-    targetUrl = `https://api.internal${apiPath}`;
-    fetcher = env!.BACKEND_API.fetch.bind(env!.BACKEND_API);
-  } else {
-    // Local dev: HTTP to API worker
-    const apiBase = env?.PUBLIC_API_BASE_URL as string;
-    if (!apiBase) throw new Error("PUBLIC_API_BASE_URL not configured");
-    targetUrl = `${apiBase}${apiPath}`;
+  // Production: service binding; local dev: HTTP to the local API worker.
+  // A production Worker without the binding fails closed.
+  const target = resolveBackendTarget(apiPath);
+  if (!target) {
+    return new Response(JSON.stringify({ success: false, error: "Account service is temporarily unavailable." }), {
+      status: 503,
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+    });
   }
 
   // Forward the request, preserving method, headers, and body
@@ -71,12 +57,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
   headers.delete("host");
 
   try {
-    const apiResponse = await fetcher(targetUrl, {
+    const apiResponse = await target.fetch(target.url, {
       method: request.method,
       headers,
       body: request.body,
       // @ts-ignore — needed for streaming request bodies in non-service-binding path
-      ...(canUseServiceBinding ? {} : { duplex: "half" }),
+      ...(target.viaServiceBinding ? {} : { duplex: "half" }),
     });
 
     // Build the response, passing through status, body, and headers

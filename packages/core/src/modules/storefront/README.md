@@ -112,7 +112,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 | GET | `/stats` | Get KV cache statistics |
 | GET | `/groups` | Get invalidation group definitions and admin path-to-group mapping |
 | GET | `/last-cleared` | Get last-cleared timestamps per group |
-| POST | `/clear` | Clear ALL cache. Also triggers storefront purge via PURGE_URL |
+| POST | `/clear` | Clear ALL cache. Also triggers storefront purge via `PURGE_URL` (resolved at Worker entry from the Platform storefront URL setting, not configured) |
 | POST | `/clear-group` | Clear specific groups. Records timestamps, triggers storefront purge if groups bump HTML |
 
 ## Storefront Consumers

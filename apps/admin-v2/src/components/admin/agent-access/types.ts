@@ -1,7 +1,29 @@
+import type {
+  DeleteApiV1AdminAgentAccessConnectionsRevokedResponses,
+  GetApiV1AdminAgentAccessConnectionsData,
+} from "@scalius/api-client/types";
+
 export type AgentResource = "dashboard" | "storefront";
 export type AgentGrantKind = "oauth" | "pat" | "cli";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
 export type AgentGrantStatus = "pending" | "active" | "revoked" | "expired";
+/**
+ * Connection list filter. `current` is the dashboard default and lists every
+ * pending or active connection that has not expired; `revoked` and `expired`
+ * together are exactly what "Clear revoked" permanently deletes.
+ */
+export type AgentConnectionStatusFilter = NonNullable<
+  NonNullable<GetApiV1AdminAgentAccessConnectionsData["query"]>["status"]
+>;
+
+export interface AgentClearableConnections {
+  revoked: number;
+  expired: number;
+  total: number;
+}
+
+export type AgentPurgeRevokedResult =
+  DeleteApiV1AdminAgentAccessConnectionsRevokedResponses[200]["data"];
 
 export interface AgentCredentialSummary {
   id: string;

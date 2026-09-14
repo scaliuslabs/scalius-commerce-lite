@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -87,6 +88,18 @@ describe("release check arguments", () => {
       skipLive: true,
       skipWrangler: true,
     });
+  });
+
+  it("defaults every origin to the repository demo without reading Wrangler vars", () => {
+    expect(parseReleaseCheckArgs([])).toMatchObject({
+      apiBaseUrl: "https://api.scalius.com",
+      storefrontUrl: "https://storefront.scalius.com",
+      dashboardUrl: "https://dashboard.scalius.com",
+    });
+
+    const source = readFileSync(new URL("./release-check.mjs", import.meta.url), "utf8");
+    expect(source).not.toContain("vars?.PUBLIC_API_BASE_URL");
+    expect(source).not.toContain("vars?.STOREFRONT_URL");
   });
 
   it("rejects credentialed and non-http URLs", () => {

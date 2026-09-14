@@ -12,6 +12,15 @@
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
  *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations
  *   node scripts/deploy.mjs --migrate-only --local  # apply local D1 migrations only
+ *
+ * Post-deploy verification URLs (Wrangler configs carry no vars):
+ *   --storefront-url <origin> / SCALIUS_STOREFRONT_URL
+ *       Public storefront origin. Defaults to https://<pattern> of the
+ *       custom_domain route in apps/storefront/wrangler.jsonc, then to the
+ *       dashboard Platform setting read from ${apiUrl}/api/v1/platform.
+ *   --api-url <origin> / SCALIUS_API_URL
+ *       Public API origin. Without it, live API verification and the
+ *       API-driven storefront warm paths are skipped with a notice.
  *   # External provider upgrades are an explicit frozen control-plane step:
  *   pnpm --filter @scalius/database upgrade:schema --provider <provider> ...
  *
@@ -27,7 +36,7 @@ import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { delimiter, resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import { resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
+import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -47,6 +56,11 @@ const databaseTargetHost = databaseTargetHostArgIndex === -1
   ? null
   : args[databaseTargetHostArgIndex + 1] || null;
 const localPersistPath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const storefrontWranglerConfigPath = resolve(root, "apps", "storefront", "wrangler.jsonc");
+const PLATFORM_CONFIG_PATH = "/api/v1/platform";
+const PLATFORM_CONFIG_TIMEOUT_MS = 10_000;
+const API_URL_HINT = "pass --api-url https://api.example.com (or set SCALIUS_API_URL)";
+const STOREFRONT_URL_HINT = "pass --storefront-url https://shop.example.com (or set SCALIUS_STOREFRONT_URL)";
 const deployTargets = ["api", "admin", "storefront"];
 const selectableDeployTargets = deployTargets;
 const appDirsByTarget = {
@@ -151,10 +165,6 @@ function run(cmd, label, cwd = root) {
   execSync(cmd, { cwd, stdio: "inherit" });
 }
 
-function readJsonFile(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
-
 function runJson(cmd, label, cwd = root) {
   console.log(`\n▶ ${label}`);
   console.log(`  $ ${cmd}\n`);
@@ -233,6 +243,9 @@ export function getSequentialWorkspaceCommand(task) {
   return `${pnpm} exec turbo run ${task} --concurrency=1`;
 }
 
+// Committed Wrangler configs carry no vars (pnpm check:env enforces it), so a
+// D1 binding selects D1. A custom --wrangler-config used for turso/postgres
+// rehearsals may still set DATABASE_PROVIDER in its own vars.
 export function resolveDeploymentDatabaseProvider(config) {
   const explicit = typeof config?.vars?.DATABASE_PROVIDER === "string"
     ? config.vars.DATABASE_PROVIDER.trim().toLowerCase()
@@ -319,6 +332,118 @@ function buildApiV1Url(apiBaseUrl, path) {
   return new URL(`/api/v1${normalizedPath}`, apiBaseUrl).toString();
 }
 
+/** Public origin (scheme + host[:port]) or null. Rejects paths, credentials, wildcards. */
+export function normalizeDeploymentOrigin(value, label) {
+  if (value === undefined || value === null) return null;
+  const candidate = String(value).trim();
+  if (!candidate) return null;
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error(`${label} must be an absolute http(s) origin, got ${JSON.stringify(candidate)}.`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`${label} must use http or https.`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error(`${label} must not include credentials.`);
+  }
+  if (parsed.hostname.includes("*")) {
+    throw new Error(`${label} must not be a wildcard host.`);
+  }
+  if ((parsed.pathname !== "/" && parsed.pathname !== "") || parsed.search || parsed.hash) {
+    throw new Error(`${label} must be an origin without a path, query, or fragment.`);
+  }
+  return parsed.origin;
+}
+
+/**
+ * The storefront's public origin as declared by its Wrangler custom-domain
+ * route (`routes[].pattern` with `custom_domain: true`). Custom domains are
+ * bare hosts, so the origin is always https://<pattern>. Returns null when no
+ * concrete custom domain is declared.
+ */
+export function getStorefrontCustomDomainUrl(config) {
+  for (const route of Array.isArray(config?.routes) ? config.routes : []) {
+    if (route?.custom_domain !== true || typeof route.pattern !== "string") continue;
+    const host = route.pattern.trim().replace(/^https?:\/\//i, "").split("/")[0];
+    if (!host || host.includes("*")) continue;
+    try {
+      return normalizeDeploymentOrigin(`https://${host}`, "Storefront custom domain");
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves the public origins used only for post-deploy verification.
+ * Precedence: CLI flag, environment override, then (storefront only) the
+ * Wrangler custom-domain route. The API origin has no config fallback; a
+ * missing value skips API-dependent verification with a notice.
+ */
+export function resolveDeploymentUrls({
+  args: inputArgs = [],
+  env = process.env,
+  storefrontConfig = null,
+} = {}) {
+  const storefrontUrl = normalizeDeploymentOrigin(
+    getArgValue(inputArgs, "--storefront-url") ?? env.SCALIUS_STOREFRONT_URL,
+    "--storefront-url / SCALIUS_STOREFRONT_URL",
+  ) ?? getStorefrontCustomDomainUrl(storefrontConfig);
+  const apiUrl = normalizeDeploymentOrigin(
+    getArgValue(inputArgs, "--api-url") ?? env.SCALIUS_API_URL,
+    "--api-url / SCALIUS_API_URL",
+  );
+  return { storefrontUrl, apiUrl };
+}
+
+/**
+ * Reads the dashboard Platform settings the API serves publicly. The response
+ * envelope is { success, data: { storefrontUrl, apiUrl, dashboardUrl, mediaUrl } }.
+ */
+export async function fetchPlatformConfig(apiUrl, {
+  fetchImpl = fetch,
+  timeoutMs = PLATFORM_CONFIG_TIMEOUT_MS,
+} = {}) {
+  const url = new URL(PLATFORM_CONFIG_PATH, apiUrl).toString();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`GET ${url} returned ${response.status}: ${text.slice(0, 200)}`);
+    }
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new Error(`GET ${url} did not return JSON.`);
+    }
+    const data = payload?.success === true && payload.data && typeof payload.data === "object"
+      ? payload.data
+      : null;
+    if (!data) {
+      throw new Error(`GET ${url} did not return a successful platform envelope.`);
+    }
+    return {
+      storefrontUrl: normalizeDeploymentOrigin(data.storefrontUrl, "platform.storefrontUrl"),
+      apiUrl: normalizeDeploymentOrigin(data.apiUrl, "platform.apiUrl"),
+      dashboardUrl: normalizeDeploymentOrigin(data.dashboardUrl, "platform.dashboardUrl"),
+      mediaUrl: typeof data.mediaUrl === "string" ? data.mediaUrl.trim() : null,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function verifyHttpOk(url, label) {
   console.log(`\n▶ ${label}`);
   console.log(`  GET ${url}\n`);
@@ -358,13 +483,41 @@ function getReadinessCheckSummary(payload) {
     .join(", ");
 }
 
+/**
+ * Readiness checks that describe merchant setup state rather than
+ * infrastructure. Platform origins are saved in the dashboard after the
+ * dashboard Worker is deployed, so a fresh deployment legitimately reports
+ * them as missing while every binding and secret is healthy.
+ */
+const SETUP_PENDING_READINESS_CHECKS = new Set(["platform_config"]);
+
+export function getSetupPendingReadinessChecks(payload) {
+  const checks = payload?.checks;
+  if (!checks || typeof checks !== "object") return [];
+  return Object.entries(checks)
+    .filter(([name, check]) =>
+      SETUP_PENDING_READINESS_CHECKS.has(name) && check?.status === "missing")
+    .map(([name]) => name);
+}
+
 function isReadyzPayloadReady(status, payload) {
-  if (status !== 200 || payload?.success !== true || payload?.status !== "ready") {
+  const checks = payload?.checks;
+  if (!checks || typeof checks !== "object" || Object.keys(checks).length === 0) {
     return false;
   }
 
-  const checks = payload?.checks;
-  if (!checks || typeof checks !== "object" || Object.keys(checks).length === 0) {
+  // /readyz answers 503 with success=false while Platform origins are unsaved.
+  // That is merchant setup state, not a deployment failure, provided every
+  // infrastructure check is ok.
+  const setupPending = new Set(getSetupPendingReadinessChecks(payload));
+  if (setupPending.size > 0) {
+    if (status !== 200 && status !== 503) return false;
+    return Object.entries(checks).every(
+      ([name, check]) => check?.status === "ok" || setupPending.has(name),
+    );
+  }
+
+  if (status !== 200 || payload?.success !== true || payload?.status !== "ready") {
     return false;
   }
   return Object.values(checks).every((check) => check?.status === "ok");
@@ -401,6 +554,7 @@ async function fetchReadinessSample(url, {
       payload,
       durationMs: Date.now() - startedAt,
       summary: getReadinessCheckSummary(payload),
+      setupPending: getSetupPendingReadinessChecks(payload),
     };
   } catch (error) {
     return {
@@ -460,7 +614,16 @@ export async function sampleApiReadiness(apiBaseUrl, {
     console.log(`✓ API /readyz returned ready for all ${sampleCount} samples.`);
   }
 
-  return { readyCount, samples };
+  const setupPending = [...new Set(samples.flatMap((sample) => sample.setupPending ?? []))];
+  if (setupPending.length > 0) {
+    console.warn(
+      `⚠ API infrastructure is healthy but merchant setup is incomplete (${setupPending.join(", ")}). ` +
+      "Sign in to the dashboard and complete Settings -> System -> Platform; " +
+      "storefront browser features stay disabled until then.",
+    );
+  }
+
+  return { readyCount, samples, setupPending };
 }
 
 export function parseStorefrontBuildId(source) {
@@ -541,11 +704,6 @@ export async function warmStorefrontPath(url, path, {
   );
 }
 
-function buildApiUrl(apiBaseUrl, path) {
-  const baseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
-  return new URL(path.replace(/^\//, ""), baseUrl).toString();
-}
-
 function getPayloadCollection(payload, keys) {
   const unwrapped = payload?.data ?? payload;
   if (Array.isArray(unwrapped)) {
@@ -614,11 +772,11 @@ async function collectDynamicWarmPaths(apiBaseUrl) {
 
   const [productsResult, categoriesResult] = await Promise.allSettled([
     fetchJsonWithTimeout(
-      buildApiUrl(apiBaseUrl, `/products?limit=${STOREFRONT_DYNAMIC_WARM_LIMIT}`),
+      buildApiV1Url(apiBaseUrl, `/products?limit=${STOREFRONT_DYNAMIC_WARM_LIMIT}`),
       STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS,
     ),
     fetchJsonWithTimeout(
-      buildApiUrl(apiBaseUrl, "/categories"),
+      buildApiV1Url(apiBaseUrl, "/categories"),
       STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS,
     ),
   ]);
@@ -649,18 +807,26 @@ async function collectDynamicWarmPaths(apiBaseUrl) {
   return paths;
 }
 
-async function collectStorefrontWarmPaths(generatedConfig) {
+export async function collectStorefrontWarmPaths(apiUrl, {
+  collectDynamicWarmPathsImpl = collectDynamicWarmPaths,
+} = {}) {
   const paths = new Set(storefrontStaticPostDeployWarmPaths);
-  const apiBaseUrl = generatedConfig.vars?.PUBLIC_API_URL;
-  const dynamicPaths = await collectDynamicWarmPaths(apiBaseUrl);
+  if (!apiUrl) {
+    console.warn(
+      "⚠ Skipped API-driven storefront warm paths (products, categories): the public API origin is unknown. "
+      + `To warm them, ${API_URL_HINT}.`,
+    );
+    return [...paths];
+  }
+  const dynamicPaths = await collectDynamicWarmPathsImpl(apiUrl);
   for (const path of dynamicPaths) {
     paths.add(path);
   }
   return [...paths];
 }
 
-async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId) {
-  const warmPaths = await collectStorefrontWarmPaths(generatedConfig);
+async function warmStorefrontAfterDeploy(storefrontUrl, apiUrl, expectedBuildId) {
+  const warmPaths = await collectStorefrontWarmPaths(apiUrl);
 
   console.log("\n▶ Warm Storefront critical public caches");
   console.log(`  ${warmPaths.join(", ")}\n`);
@@ -675,10 +841,66 @@ async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expecte
   }
 }
 
-async function verifyStorefrontDeploy() {
+/**
+ * Storefront origin for live verification: explicit flag/env or the Wrangler
+ * custom domain, otherwise the dashboard Platform setting when the API origin
+ * is known. When both are available they must agree, because a storefront
+ * whose Platform setting points elsewhere emits wrong canonical/sitemap URLs.
+ */
+export async function resolveStorefrontVerificationUrl(deploymentUrls, {
+  fetchPlatformConfigImpl = fetchPlatformConfig,
+} = {}) {
+  const { storefrontUrl = null, apiUrl = null } = deploymentUrls ?? {};
+  if (!apiUrl) {
+    if (storefrontUrl) return storefrontUrl;
+    throw new Error(
+      "Could not verify live storefront: no public storefront origin is known. "
+      + `Declare a custom_domain route in apps/storefront/wrangler.jsonc, ${STOREFRONT_URL_HINT}, `
+      + `or ${API_URL_HINT} so the dashboard Platform setting can be read.`,
+    );
+  }
+
+  let platform;
+  try {
+    platform = await fetchPlatformConfigImpl(apiUrl);
+  } catch (error) {
+    if (storefrontUrl) {
+      console.warn(`⚠ Could not read dashboard Platform settings from ${apiUrl}: ${errorMessage(error)}`);
+      return storefrontUrl;
+    }
+    throw new Error(
+      `Could not verify live storefront: no public storefront origin is known and reading `
+      + `${apiUrl}${PLATFORM_CONFIG_PATH} failed (${errorMessage(error)}). ${STOREFRONT_URL_HINT}.`,
+    );
+  }
+
+  if (!storefrontUrl) {
+    if (!platform.storefrontUrl) {
+      throw new Error(
+        "Could not verify live storefront: the dashboard Platform setting storefrontUrl is empty. "
+        + `Set it in Settings -> System -> Platform or ${STOREFRONT_URL_HINT}.`,
+      );
+    }
+    console.log(`✓ Using storefront origin ${platform.storefrontUrl} from dashboard Platform settings.`);
+    return platform.storefrontUrl;
+  }
+
+  if (platform.storefrontUrl && platform.storefrontUrl !== storefrontUrl) {
+    console.warn(
+      `⚠ Dashboard Platform storefrontUrl (${platform.storefrontUrl}) differs from the deploy target `
+      + `(${storefrontUrl}). Update Settings -> System -> Platform so canonical and sitemap URLs match.`,
+    );
+  } else if (!platform.storefrontUrl) {
+    console.warn(
+      "⚠ Dashboard Platform storefrontUrl is empty; set it in Settings -> System -> Platform "
+      + "so discovery XML and canonical links resolve.",
+    );
+  }
+  return storefrontUrl;
+}
+
+async function verifyStorefrontDeploy(options = {}) {
   const storefrontDir = resolve(root, "apps", "storefront");
-  const generatedConfigPath = resolve(storefrontDir, "dist", "server", "wrangler.json");
-  const generatedConfig = readJsonFile(generatedConfigPath);
   const expectedBuildId = parseStorefrontBuildId(
     readFileSync(resolve(storefrontDir, "src", "config", "build-id.ts"), "utf8"),
   );
@@ -695,13 +917,10 @@ async function verifyStorefrontDeploy() {
   }
   console.log(`✓ Latest Storefront deployment serves ${deployedVersion.version_id} at 100%.`);
 
-  const storefrontUrl = generatedConfig.vars?.STOREFRONT_URL;
-  if (!storefrontUrl) {
-    throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
-  }
+  const storefrontUrl = await resolveStorefrontVerificationUrl(options.deploymentUrls);
   console.log("\n▶ Verify live Storefront build propagation");
   await warmStorefrontPath(storefrontUrl, "/health", { expectedBuildId });
-  await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId);
+  await warmStorefrontAfterDeploy(storefrontUrl, options.deploymentUrls?.apiUrl ?? null, expectedBuildId);
 }
 
 async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {}) {
@@ -720,9 +939,13 @@ async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {
   }
   console.log(`✓ Latest API deployment serves ${deployedVersion.version_id} at 100%.`);
 
-  const apiBaseUrl = config.vars?.PUBLIC_API_BASE_URL;
+  const apiBaseUrl = options.deploymentUrls?.apiUrl ?? null;
   if (!apiBaseUrl) {
-    throw new Error("Could not verify live API: PUBLIC_API_BASE_URL is missing from API Wrangler config.");
+    console.warn(
+      "⚠ Skipped live API /health and /readyz verification: the public API origin is unknown "
+      + `(Wrangler config carries no vars). To verify the live API, ${API_URL_HINT}.`,
+    );
+    return;
   }
 
   await verifyHttpOk(buildApiV1Url(apiBaseUrl, "/health"), "Verify live API /health");
@@ -772,7 +995,7 @@ export async function verifyPostDeployTarget(
     verifyLatestWorkerDeploymentImpl(adminV2Dir, "Admin V2 Worker");
   }
   if (target === "storefront") {
-    await verifyStorefrontDeployImpl();
+    await verifyStorefrontDeployImpl(options);
   }
 }
 
@@ -808,6 +1031,17 @@ export async function main() {
   let databaseProvider;
   try {
     databaseProvider = resolveDeploymentDatabaseProvider(config);
+  } catch (error) {
+    console.error(`✗ ${error.message}`);
+    process.exit(1);
+  }
+  let deploymentUrls;
+  try {
+    deploymentUrls = resolveDeploymentUrls({
+      args,
+      env: process.env,
+      storefrontConfig: readJsoncFile(storefrontWranglerConfigPath),
+    });
   } catch (error) {
     console.error(`✗ ${error.message}`);
     process.exit(1);
@@ -923,7 +1157,10 @@ export async function main() {
       if (requestedTarget === "api") prepareSelectedProviderSchema();
 
       deployTarget(requestedTarget, customWranglerConfigPath);
-      await verifyPostDeployTarget(requestedTarget, config, customWranglerConfigPath, { healthOnly });
+      await verifyPostDeployTarget(requestedTarget, config, customWranglerConfigPath, {
+        healthOnly,
+        deploymentUrls,
+      });
       console.log(`\n✓ Deploy complete (${requestedTarget}).`);
       return;
     }
@@ -946,7 +1183,7 @@ export async function main() {
     // 4. Deploy all workers (admin-v2 replaces the old Astro admin)
     for (const targetName of deployTargets) {
       deployTarget(targetName);
-      await verifyPostDeployTarget(targetName, config);
+      await verifyPostDeployTarget(targetName, config, null, { deploymentUrls });
     }
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);

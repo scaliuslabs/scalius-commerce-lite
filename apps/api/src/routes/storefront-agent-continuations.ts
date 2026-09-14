@@ -41,7 +41,6 @@ import { getTrustedClientIp } from "../utils/client-ip";
 import {
   getCredentialEncryptionKey,
   getCustomerSessionHashKey,
-  getEncryptionKey,
 } from "../utils/encryption-key";
 import {
   conflictResponse,
@@ -257,7 +256,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     email: body.email?.trim().toLowerCase(),
     ip: getTrustedClientIp(c),
     emailEnv: c.env as unknown as Record<string, unknown>,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -319,7 +318,7 @@ app.openapi(verifyCustomerOtpRoute, async (c) => {
     name: body.name?.trim() || "Customer",
     phone: body.phone?.trim(),
     email: body.email?.trim().toLowerCase(),
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     sessionHashKey,
   });
@@ -450,7 +449,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
     channel: c.req.valid("json").channel,
     ip: getTrustedClientIp(c),
     emailEnv: c.env as unknown as Record<string, unknown>,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -505,7 +504,7 @@ app.openapi(verifyRecoveryOtpRoute, async (c) => {
     orderId: continuation.orderId,
     channel: body.channel,
     code: body.code,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   await bindAgentStorefrontRecoveredOrder(c.get("db"), continuationId, {
     orderId: result.orderId,

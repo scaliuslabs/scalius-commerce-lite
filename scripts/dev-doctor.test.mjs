@@ -112,15 +112,34 @@ describe("dev doctor helpers", () => {
       checks: [
         {
           status: "fail",
-          title: "Shared local secrets",
-          detail: "JWT_SECRET differs between local .dev.vars files",
+          title: "Installed local secrets",
+          detail: "SCALIUS_SECRET differs between local .dev.vars files",
           action: "Run pnpm dev:setup --force",
         },
       ],
     });
 
-    expect(report).toContain("[fail] Shared local secrets");
-    expect(report).toContain("JWT_SECRET differs");
+    expect(report).toContain("[fail] Installed local secrets");
+    expect(report).toContain("SCALIUS_SECRET differs");
     expect(report).not.toContain("super-secret-value");
+  });
+
+  it("checks only the two installed secrets and never local URL vars", () => {
+    const source = readFileSync(new URL("./dev-doctor.mjs", import.meta.url), "utf8");
+
+    expect(source).toContain("collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars })");
+    expect(source).toContain("collectStaleLocalEnvIssues({ apiVars, adminVars, storefrontVars })");
+    expect(source).not.toContain("collectLocalUrlConfigIssues");
+    expect(source).not.toContain("Build-time env files");
+    for (const retired of ["PURGE_TOKEN", "PURGE_URL", "PUBLIC_API_BASE_URL", "BETTER_AUTH_URL"]) {
+      expect(source).not.toMatch(new RegExp(`apiRequired.*${retired}`));
+      expect(source).not.toMatch(new RegExp(`key: "${retired}"`));
+    }
+  });
+
+  it("keeps the LOCAL_API_BASE_URL override for the running-API probe", () => {
+    expect(getDoctorConfig([], { LOCAL_API_BASE_URL: "http://127.0.0.1:9999/" }).apiBaseUrl)
+      .toBe("http://127.0.0.1:9999");
+    expect(getDoctorConfig([], {}).apiBaseUrl).toBe("http://localhost:8787");
   });
 });

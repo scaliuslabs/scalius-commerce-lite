@@ -14,6 +14,9 @@ const source = readFileSync(
 describe("SecuritySettingsBuilder contract", () => {
   it("separates inherited platform trust from merchant additions", () => {
     expect(source).toContain("Inherited platform trust");
+    expect(source).toContain("Read-only origins configured in Settings → System → Platform.");
+    expect(source).toContain("Set it in the Platform section.");
+    expect(source).not.toContain("Read-only origins from the deployed platform.");
     expect(source).toContain("Additional storefront services");
     expect(source).toContain("getInheritedSecuritySources");
     expect(source).toContain("merchantSources.map");

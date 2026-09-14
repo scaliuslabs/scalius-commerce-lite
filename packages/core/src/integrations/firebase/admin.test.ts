@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FCMMessagingService,
+  FCM_SEND_CONCURRENCY,
   getFirebaseAccessTokenCacheKey,
   getFirebaseAdminMessaging,
 } from "./admin";
@@ -49,8 +50,8 @@ describe("FCMMessagingService", () => {
   });
 
   it("creates request-scoped messaging services instead of retaining Worker bindings", () => {
-    const firstEnvironment = { PROJECT_CACHE_PREFIX: "first" };
-    const secondEnvironment = { PROJECT_CACHE_PREFIX: "second" };
+    const firstEnvironment = { SHARED_AUTH_CACHE: { get: vi.fn(), put: vi.fn() } };
+    const secondEnvironment = { SHARED_AUTH_CACHE: { get: vi.fn(), put: vi.fn() } };
 
     const first = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
     const sameEnvironment = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
@@ -60,7 +61,43 @@ describe("FCMMessagingService", () => {
     expect(second).not.toBe(first);
   });
 
-  it("sends multicast messages with bounded concurrency while preserving token response order", async () => {
+  it("requires the dashboard-managed service account and never reads it from env", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const previous = process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
+    process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON = serviceAccountJson;
+
+    try {
+      expect(() => new FCMMessagingService({
+        FIREBASE_SERVICE_ACCOUNT_CRED_JSON: serviceAccountJson,
+      })).toThrow("Firebase service account is not configured");
+      expect(() => new FCMMessagingService({}, "   ")).toThrow(
+        "Firebase service account is not configured",
+      );
+      expect(() => getFirebaseAdminMessaging({}, undefined)).toThrow(
+        "Firebase service account is not configured",
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
+      } else {
+        process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON = previous;
+      }
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("rejects a service account that is missing required fields", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(() => new FCMMessagingService({}, JSON.stringify({ project_id: "only" }))).toThrow(
+        "Firebase service account JSON is missing required fields",
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("sends multicast messages with the fixed concurrency while preserving token response order", async () => {
     let activeRequests = 0;
     let maxActiveRequests = 0;
     const sentTokens: string[] = [];
@@ -110,16 +147,23 @@ describe("FCMMessagingService", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const messaging = new FCMMessagingService({
-      FIREBASE_SERVICE_ACCOUNT_CRED_JSON: serviceAccountJson,
-      FCM_SEND_CONCURRENCY: "2",
-      PROJECT_CACHE_PREFIX: "test",
-      SHARED_AUTH_CACHE: cache,
-      CREDENTIAL_ENCRYPTION_KEY: credentialKey,
-    });
+    const messaging = new FCMMessagingService(
+      {
+        // Removed tunable: must be ignored.
+        FCM_SEND_CONCURRENCY: "2",
+        SHARED_AUTH_CACHE: cache,
+        CREDENTIAL_ENCRYPTION_KEY: credentialKey,
+      },
+      serviceAccountJson,
+    );
 
+    const tokens = [
+      "token-1",
+      "bad-token",
+      ...Array.from({ length: FCM_SEND_CONCURRENCY + 2 }, (_, index) => `token-${index + 3}`),
+    ];
     const result = await messaging.sendEachForMulticast({
-      tokens: ["token-1", "bad-token", "token-3", "token-4"],
+      tokens,
       notification: {
         title: "New order",
         body: "Order #1001",
@@ -135,13 +179,13 @@ describe("FCMMessagingService", () => {
     });
 
     const expectedCacheKey = await getFirebaseAccessTokenCacheKey(
-      { PROJECT_CACHE_PREFIX: "test" },
       JSON.parse(serviceAccountJson),
     );
+    expect(FCM_SEND_CONCURRENCY).toBe(8);
     expect(cache.get).toHaveBeenCalledWith(expectedCacheKey);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(maxActiveRequests).toBe(2);
-    expect(sentTokens).toEqual(["token-1", "bad-token", "token-3", "token-4"]);
+    expect(fetchMock).toHaveBeenCalledTimes(tokens.length);
+    expect(maxActiveRequests).toBe(FCM_SEND_CONCURRENCY);
+    expect(sentTokens).toEqual(tokens);
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: {
         Authorization: "Bearer cached-token",
@@ -149,14 +193,11 @@ describe("FCMMessagingService", () => {
       },
     });
 
-    expect(result.successCount).toBe(3);
+    expect(result.successCount).toBe(tokens.length - 1);
     expect(result.failureCount).toBe(1);
-    expect(result.responses.map((response) => response.success)).toEqual([
-      true,
-      false,
-      true,
-      true,
-    ]);
+    expect(result.responses.map((response) => response.success)).toEqual(
+      tokens.map((token) => token !== "bad-token"),
+    );
     expect(result.responses[0]?.messageId).toBe("projects/scalius-test/messages/token-1");
     expect(result.responses[1]?.error?.code).toBe(
       "messaging/registration-token-not-registered",
@@ -188,12 +229,13 @@ describe("FCMMessagingService", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const messaging = new FCMMessagingService({
-      FIREBASE_SERVICE_ACCOUNT_CRED_JSON: signableServiceAccountJson,
-      PROJECT_CACHE_PREFIX: "test",
-      SHARED_AUTH_CACHE: cache,
-      CREDENTIAL_ENCRYPTION_KEY: credentialKey,
-    });
+    const messaging = new FCMMessagingService(
+      {
+        SHARED_AUTH_CACHE: cache,
+        CREDENTIAL_ENCRYPTION_KEY: credentialKey,
+      },
+      signableServiceAccountJson,
+    );
 
     await messaging.sendEachForMulticast({ tokens: ["token-1"] });
 
@@ -205,7 +247,6 @@ describe("FCMMessagingService", () => {
     ]>;
     const [cacheKey, storedValue, options] = putCalls[0] ?? [];
     expect(cacheKey).toBe(await getFirebaseAccessTokenCacheKey(
-      { PROJECT_CACHE_PREFIX: "test" },
       JSON.parse(signableServiceAccountJson),
     ));
     expect(storedValue).toMatch(/^enc:/);
@@ -224,19 +265,17 @@ describe("FCMMessagingService", () => {
     );
   });
 
-  it("rotates the shared token cache key with service-account credentials", async () => {
+  it("uses a fixed deployment prefix and rotates the token cache key with service-account credentials", async () => {
     const base = JSON.parse(serviceAccountJson);
-    const first = await getFirebaseAccessTokenCacheKey(
-      { PROJECT_CACHE_PREFIX: "test" },
-      base,
-    );
-    const rotated = await getFirebaseAccessTokenCacheKey(
-      { PROJECT_CACHE_PREFIX: "test" },
-      { ...base, private_key: "rotated-private-key" },
-    );
+    const first = await getFirebaseAccessTokenCacheKey(base);
+    const rotated = await getFirebaseAccessTokenCacheKey({
+      ...base,
+      private_key: "rotated-private-key",
+    });
 
-    expect(first).toMatch(/^test:fcm_access_token:scalius-test:[0-9a-f]{24}$/);
+    expect(first).toMatch(/^scalius:fcm_access_token:scalius-test:[0-9a-f]{24}$/);
     expect(rotated).not.toBe(first);
+    await expect(getFirebaseAccessTokenCacheKey(base)).resolves.toBe(first);
   });
 
   it("does not persist OAuth access tokens to KV when credential encryption is unavailable", async () => {
@@ -263,11 +302,12 @@ describe("FCMMessagingService", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const messaging = new FCMMessagingService({
-      FIREBASE_SERVICE_ACCOUNT_CRED_JSON: signableServiceAccountJson,
-      PROJECT_CACHE_PREFIX: "test",
-      SHARED_AUTH_CACHE: cache,
-    });
+    const messaging = new FCMMessagingService(
+      {
+        SHARED_AUTH_CACHE: cache,
+      },
+      signableServiceAccountJson,
+    );
 
     await messaging.sendEachForMulticast({ tokens: ["token-1"] });
     await messaging.sendEachForMulticast({ tokens: ["token-2"] });

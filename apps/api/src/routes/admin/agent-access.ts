@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
+import { deleteAgentArtifactObjects } from "../../agent-access/artifact-delivery";
 import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
 import { loadAgentAccessBackend } from "../../agent-access/backend";
 import { resolveAgentPrincipalFromGrant } from "../../agent-access/principal";
@@ -15,6 +16,7 @@ import {
   getDeviceAuthorizationByUserCodeHmac,
   listAgentAuditEvents,
   listAgentConnections,
+  purgeRevokedAgentGrants,
   resolveGrantSelection,
   revokeAgentGrant,
   revokeAllAgentGrants,
@@ -24,6 +26,7 @@ import {
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";
+import { logOpsEvent } from "../../utils/ops-log";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { hmacAgentOpaqueValue, issueAgentCredential } from "../../agent-access/pat";
 import type { AgentPrincipal } from "../../agent-access/types";
@@ -188,9 +191,9 @@ const listConnectionsRoute = createRoute({
   method: "get", path: "/connections", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.list",
   summary: "List agent connections",
-  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal.",
+  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes.",
   request: { query: pageQuerySchema.extend({
-    status: z.enum(["pending", "active", "revoked", "expired"]).optional(),
+    status: z.enum(["current", "pending", "active", "revoked", "expired"]).optional(),
     resource: resourceSchema.optional(),
     kind: z.enum(["oauth", "pat", "cli"]).optional(),
   }) },
@@ -394,6 +397,50 @@ app.openapi(revokeAllRoute, async (c) => {
   const user = assertSuperAdmin(c);
   const body = c.req.valid("json");
   return ok(c, await revokeAllAgentGrants(c.get("db"), user.id, body.resource, body.reason));
+});
+
+const purgeRevokedRoute = createRoute({
+  method: "delete", path: "/connections/revoked", tags: ["Admin - Agent Access"],
+  operationId: "dashboard.agent_access.connections.purge_revoked",
+  summary: "Permanently delete revoked and expired agent connections",
+  description: "Browser-only ceremony that permanently deletes every revoked grant and every grant whose expiry has passed, together with their credentials, artifact handles, browser handoffs, pairing records, storefront contexts, and audit history. Active and pending connections are never touched.",
+  request: { query: z.object({ resource: resourceSchema.optional() }) },
+  responses: {
+    200: {
+      description: "Revoked and expired connections purged",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        status: z.literal("purged"),
+        count: z.number().int().nonnegative(),
+        credentials: z.number().int().nonnegative(),
+        artifacts: z.number().int().nonnegative(),
+      })) } },
+    },
+    ...errorResponses,
+  },
+});
+app.openapi(purgeRevokedRoute, async (c) => {
+  const user = assertSuperAdmin(c);
+  const { resource } = c.req.valid("query");
+  let artifactObjectFailures = 0;
+  const result = await purgeRevokedAgentGrants(c.get("db"), {
+    resource,
+    onArtifactsPurging: async (artifacts) => {
+      // Objects go first so relational authority never outlives them; a
+      // failed object delete is counted and left to the bucket lifecycle rule.
+      const outcome = await deleteAgentArtifactObjects(c.env, artifacts);
+      artifactObjectFailures += outcome.failed;
+    },
+  });
+  logOpsEvent("info", "agent_access.connections.purged", {
+    actorUserId: user.id,
+    resource: resource ?? "all",
+    count: result.count,
+    credentials: result.credentials,
+    artifacts: result.artifacts,
+    artifactObjectFailures,
+  });
+  noStore(c);
+  return ok(c, result);
 });
 
 const getAuthorizationRoute = createRoute({

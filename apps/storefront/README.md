@@ -2,9 +2,11 @@
 
 Astro 7 SSR customer-facing storefront deployed as a Cloudflare Worker. Communicates with the API worker via Cloudflare Service Binding (`env.BACKEND_API`). Imports `@scalius/shared` and `@scalius/api-client` -- does NOT import `@scalius/core` or `@scalius/database` directly.
 
+Install, configure, and deploy from the repository root; see the [root README](../../README.md). `pnpm dev:storefront` starts the API and this app together.
+
 ## Entry Point
 
-Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, vars, and compatibility settings; production deploys must run after `astro build` and use the generated config. The production custom domain is currently managed in Cloudflare outside this source config, so do not add `route`/`routes` unless route ownership moves into IaC.
+Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, routes, and compatibility settings; production deploys must run after `astro build` and use the generated config. The public custom domain is declared as a `custom_domain` route in the source config, and `scripts/deploy.mjs` reads that pattern for post-deploy verification.
 
 ## Tech Stack
 
@@ -46,11 +48,16 @@ src/
       products/      # Product data proxy
     products/        # Product detail pages
     categories/      # Category listing pages
+    collections/     # Collection listing pages
+    blog/            # Articles index, detail, RSS feed
     buy/             # Buy/redirect pages
     search/          # Search with filters
+    ucp/, .well-known/ucp.ts  # Read-only UCP catalog discovery
+    robots.txt.ts, sitemap*.xml.ts, llms.txt.ts  # Discovery assets
     cart.astro       # Cart page
     checkout.astro   # Checkout page
     order-success.astro
+    payment-recovery.astro    # Receipt-token payment recovery
     account.astro    # Customer account page
     account/orders/[id].astro # Private order detail, timeline, shipment/payment history, and owned payment recovery
   store/             # Global state (cart.ts, toast)
@@ -63,14 +70,20 @@ Two middleware functions run in sequence via `sequence()`:
 
 ### 1. API Context Middleware (`apiContextMiddleware`)
 
-Injects Cloudflare Worker runtime bindings into AsyncLocalStorage for the request lifecycle. The `apiContext` ALS store (`src/lib/api/context.ts`) carries:
+The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `createRequestApiContext()` (`src/lib/api/request-context.ts`) and seeded into the `apiContext` ALS store (`src/lib/api/context.ts`):
+
+- **Platform origins**: a `GET /api/v1/platform` read to the API -- through the `BACKEND_API` service binding (target `https://api.internal/api/v1/platform`) in production, or plain HTTP to `http://localhost:8787` during `astro dev`. The API KV-caches that response for 60 seconds, so this is one bounded sub-request, not a per-render config fetch. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead falls back to the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
+- **Derived secrets**: `API_TOKEN` and `PURGE_TOKEN` are derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical values, so nothing is installed or shared out of band.
+
+The resulting store carries:
 
 - `BACKEND_API` -- Service binding Fetcher for 0ms-latency internal API calls
-- `PUBLIC_API_URL` -- Full API URL for client-side use
-- `PUBLIC_API_BASE_URL` -- Base URL for image optimization and auth redirects
-- `CDN_DOMAIN_URL` -- CDN domain for image URLs (also set on `globalThis.__SCALIUS_CDN_DOMAIN__` as fallback)
-- `STOREFRONT_URL` -- This storefront's URL (sitemaps and catalog feeds)
-- `API_TOKEN` -- Token for protected API operations
+- `PUBLIC_API_URL` -- Full API URL (`${apiUrl}/api/v1`) for client-side use
+- `PUBLIC_API_BASE_URL` -- Bare API origin, for image optimization and auth redirects
+- `MEDIA_URL` / `CDN_DOMAIN_URL` -- Platform media base URL and its host[:port] (also set on `window.__CDN_DOMAIN__` for client code)
+- `STOREFRONT_URL` -- This storefront's own origin (Platform setting, or the request-origin fallback above)
+- `DASHBOARD_URL` -- Admin dashboard origin
+- `API_TOKEN` / `PURGE_TOKEN` -- Derived per-request secrets (see above)
 
 ### 2. Response Policy Middleware (`responsePolicyMiddleware`)
 
@@ -165,10 +178,11 @@ preconnect transfers no asset bytes and does not alter commerce freshness.
 
 ### Cache Invalidation
 
-When the API triggers `/api/purge-cache` with `Authorization: Bearer
-PURGE_TOKEN`, the storefront validates and deduplicates at most 30 known domain
-groups, then awaits `CachedPublicStorefront.purgeGroups()`. Unknown groups are ignored
-by the cache owner. `GET` and query-string tokens are rejected. A failed purge
+When the API triggers `/api/purge-cache` with `Authorization: Bearer <purge
+token>` (the same value both sides derive from `SCALIUS_SECRET`), the storefront
+validates and deduplicates at most 30 known domain groups, then awaits
+`CachedPublicStorefront.purgeGroups()`. Unknown groups are ignored by the cache
+owner. `GET` and query-string tokens are rejected. A failed purge
 is observable but never rolls back an already committed database mutation; the
 one-hour availability TTL is the failure-only correctness backstop, while the
 one-day content TTL is the final backstop for low-frequency mutation-purged routes.
@@ -212,13 +226,15 @@ Two helpers centralize the single `as` cast for the API's `{ success: true, data
 
 ### Runtime Environment (`src/lib/api/runtime-env.ts`)
 
-Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiContext.getStore()` (AsyncLocalStorage set per-request by middleware):
+Consolidated accessors, all delegating to `apiContext.getStore()`. There is no module-level state and no Wrangler `vars` or `import.meta.env` fallback: when a value is absent from the store it is absent for the request, and callers fail closed:
 
-- `getRuntimeApiUrl()` -- PUBLIC_API_URL
-- `getRuntimeApiBaseUrl()` -- PUBLIC_API_BASE_URL
-- `getRuntimeCdnDomain()` -- CDN_DOMAIN_URL
-- `getRuntimeApiToken()` -- API_TOKEN
-- `getRuntimeStorefrontUrl()` -- STOREFRONT_URL with fallback chain: ALS -> cloudflare:workers env -> import.meta.env -> empty string
+- `getRuntimeApiUrl()` -- `PUBLIC_API_URL`
+- `getRuntimeApiBaseUrl()` -- `PUBLIC_API_BASE_URL`
+- `getRuntimeCdnDomain()` -- `CDN_DOMAIN_URL`
+- `getRuntimeMediaUrl()` -- `MEDIA_URL`
+- `getRuntimeDashboardUrl()` -- `DASHBOARD_URL`
+- `getRuntimeApiToken()` -- `API_TOKEN`, derived from `SCALIUS_SECRET` per request
+- `getRuntimeStorefrontUrl()` -- `STOREFRONT_URL` (Platform setting, or the request-origin fallback seeded by the middleware), trailing slash stripped
 
 ### API Module Files
 
@@ -251,7 +267,7 @@ Consolidated accessors for Cloudflare Worker bindings. All delegate to `apiConte
 
 ## Server-Side Proxy Routes (`src/pages/api/`)
 
-Proxy routes handle operations that require the `API_TOKEN` secret or need to unwrap the API envelope before returning to browser JavaScript.
+Proxy routes handle operations that require the derived `API_TOKEN` (from `SCALIUS_SECRET`) or need to unwrap the API envelope before returning to browser JavaScript.
 
 | Route | Purpose |
 |-------|---------|
@@ -322,7 +338,7 @@ The account delivery editor reads the current profile from `/me`, independently 
 ## Search
 
 - **FTS5 full-text search**: Product search uses SQLite FTS5 via the API worker
-- **Bengali support**: FTS5 tables use `unicode61` tokenizer with `categories 'L* N* Co Mc Mn'` for proper Bengali script tokenization (migration 0031)
+- **Bengali support**: FTS5 tables use the `unicode61` tokenizer with `categories 'L* N* Co Mc Mn'` for Bengali script tokenization
 
 ## Import Boundaries
 
@@ -340,14 +356,15 @@ All data access goes through the API worker via the configured SDK clients, serv
 
 | Binding | Type | Purpose |
 |---------|------|---------|
-| `BACKEND_API` | Service | Service binding to API worker (0ms latency) |
-| `ASSETS` | Fetcher | Static asset serving |
+| `BACKEND_API` | Service | Service binding to the API worker |
+| `ASSETS` | Fetcher | Static asset serving (required by `@astrojs/cloudflare`) |
+| `SESSION` | KV | Session storage (separate from the dashboard's `SESSION` namespace) |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `wrangler.jsonc` | Source Cloudflare binding/vars/routes config consumed by the Astro adapter |
+| `wrangler.jsonc` | Source Cloudflare binding/route config consumed by the Astro adapter (no `vars`) |
 | `dist/server/wrangler.json` | Generated deploy config produced by `astro build`; deploy this file, not the source config |
 | `src/worker.ts` | Uncached gateway and native cached public entrypoint |
 | `src/middleware.ts` | Public/private response policy and API context |
@@ -355,7 +372,7 @@ All data access goes through the API worker via the configured SDK clients, serv
 | `src/lib/edge-cache.ts` | Request-only duplicate-read coalescing |
 | `src/lib/canonical-query.ts` | Canonical API query strings |
 | `src/lib/api/context.ts` | AsyncLocalStorage for per-request Cloudflare bindings |
-| `src/lib/api/runtime-env.ts` | Runtime env accessors with fallback chains |
+| `src/lib/api/runtime-env.ts` | Per-request runtime env accessors (ALS-backed, no env/vars fallback) |
 | `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |
 | `src/lib/api/client.ts` | API URL builder and fetch client |
 | `src/lib/checkout/index.ts` | Checkout page logic + gateway orchestration |

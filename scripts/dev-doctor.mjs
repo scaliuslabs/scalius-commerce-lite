@@ -17,8 +17,8 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "url";
 import {
   assertStringOptions,
-  collectLocalUrlConfigIssues,
   collectLocalSecretSyncIssues,
+  collectStaleLocalEnvIssues,
   parseOptions,
   readEnvVarsIfExists,
   resolvePnpmExecutable,
@@ -227,8 +227,6 @@ function checkLocalEnvFiles(checks) {
     api: resolve(root, "apps", "api", ".dev.vars"),
     admin: resolve(root, "apps", "admin-v2", ".dev.vars"),
     storefront: resolve(root, "apps", "storefront", ".dev.vars"),
-    adminBuild: resolve(root, "apps", "admin-v2", ".env.development"),
-    storefrontBuild: resolve(root, "apps", "storefront", ".env.development"),
   };
   const missingRuntime = [
     ["apps/api/.dev.vars", paths.api],
@@ -246,94 +244,52 @@ function checkLocalEnvFiles(checks) {
     );
   }
 
-  const buildRequirements = [
-    {
-      label: "apps/admin-v2/.env.development",
-      path: paths.adminBuild,
-      keys: ["PUBLIC_API_BASE_URL"],
-    },
-    {
-      label: "apps/storefront/.env.development",
-      path: paths.storefrontBuild,
-      keys: ["PUBLIC_API_URL", "PUBLIC_API_BASE_URL", "STOREFRONT_URL"],
-    },
-  ];
-  const missingBuild = buildRequirements.filter(({ path }) => !existsSync(path));
-  const incompleteBuild = buildRequirements.flatMap(({ label, path, keys }) => {
-    const vars = readEnvVarsIfExists(path);
-    if (!vars) return [];
-    return keys
-      .filter((key) => isMissingEnvValue(vars[key]))
-      .map((key) => `${label}:${key}`);
-  });
-  if (missingBuild.length === 0 && incompleteBuild.length === 0) {
-    pass(checks, "Build-time env files", "Admin and storefront .env.development files contain required keys.");
-  } else {
-    fail(
-      checks,
-      "Build-time env files",
-      [
-        missingBuild.length ? `Missing ${missingBuild.map(({ label }) => label).join(", ")}` : null,
-        incompleteBuild.length ? `Missing/blank ${incompleteBuild.join(", ")}` : null,
-      ].filter(Boolean).join("; ") + ".",
-      "Run pnpm dev:setup --env-only.",
-    );
-  }
-
   const apiVars = readEnvVarsIfExists(paths.api);
   const adminVars = readEnvVarsIfExists(paths.admin);
   const storefrontVars = readEnvVarsIfExists(paths.storefront);
-  const adminBuildVars = readEnvVarsIfExists(paths.adminBuild);
-  const storefrontBuildVars = readEnvVarsIfExists(paths.storefrontBuild);
+
+  // The only installed secrets: SCALIUS_SECRET (>= 32 chars, identical across
+  // API/admin/storefront) and CREDENTIAL_ENCRYPTION_KEY (base64 32 bytes,
+  // identical across API/admin). Values are never included in the report.
   const drift = collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars });
   if (drift.length === 0 && missingRuntime.length === 0) {
-    pass(checks, "Shared local secrets", "API/admin/storefront shared secrets are present and aligned.");
+    pass(
+      checks,
+      "Installed local secrets",
+      "SCALIUS_SECRET is present and identical across API/admin/storefront; CREDENTIAL_ENCRYPTION_KEY is present and identical across API/admin.",
+    );
   } else if (drift.length > 0) {
-    fail(checks, "Shared local secrets", drift.join("; "), "Run pnpm dev:setup --env-only to repair missing keys, or pnpm dev:setup --force --env-only to regenerate all local env files.");
+    fail(
+      checks,
+      "Installed local secrets",
+      drift.join("; "),
+      "Run pnpm dev:setup --env-only to append missing keys, or pnpm dev:setup --force --env-only to regenerate all local .dev.vars files.",
+    );
   } else {
-    skip(checks, "Shared local secrets", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");
+    skip(checks, "Installed local secrets", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");
   }
 
-  const apiRequired = ["CREDENTIAL_ENCRYPTION_KEY", "PURGE_TOKEN", "PURGE_URL"];
-  const missingApi = apiRequired.filter((key) => !apiVars?.[key]);
-  if (!apiVars) {
-    skip(checks, "API local env completeness", "Skipped because apps/api/.dev.vars is missing.", "Run pnpm dev:setup --env-only.");
-  } else if (missingApi.length === 0) {
-    pass(checks, "API local env completeness", "API has credential encryption and purge config.");
+  // URLs are dashboard Platform settings (local dev falls back to fixed ports
+  // in code) and per-purpose secrets are derived from SCALIUS_SECRET, so any
+  // leftover entries are ignored by every Worker. Warn so they get cleaned up.
+  const staleIssues = collectStaleLocalEnvIssues({ apiVars, adminVars, storefrontVars });
+  const staleBuildEnvFiles = [
+    ["apps/admin-v2/.env.development", resolve(root, "apps", "admin-v2", ".env.development")],
+    ["apps/storefront/.env.development", resolve(root, "apps", "storefront", ".env.development")],
+  ].filter(([, path]) => existsSync(path)).map(([label]) => `${label} is no longer generated or read`);
+  const stale = [...staleIssues, ...staleBuildEnvFiles];
+  if (stale.length > 0) {
+    warn(
+      checks,
+      "Retired local env entries",
+      `${stale.join("; ")}.`,
+      "Run pnpm dev:setup --force --env-only to rewrite .dev.vars with only the installed secrets, and delete stale .env.development files.",
+    );
+  } else if (missingRuntime.length > 0) {
+    skip(checks, "Retired local env entries", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");
   } else {
-    fail(checks, "API local env completeness", `Missing ${missingApi.join(", ")}.`, "Run pnpm dev:setup --env-only to append missing local keys.");
+    pass(checks, "Retired local env entries", "No retired secret or URL keys remain in local env files.");
   }
-
-  const localUrlIssues = collectLocalUrlConfigIssues([
-    { label: "apps/api/.dev.vars", key: "BETTER_AUTH_URL", value: apiVars?.BETTER_AUTH_URL, port: 4323, pathname: "" },
-    { label: "apps/api/.dev.vars", key: "PUBLIC_API_BASE_URL", value: apiVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
-    { label: "apps/api/.dev.vars", key: "STOREFRONT_URL", value: apiVars?.STOREFRONT_URL, port: 4322, pathname: "" },
-    { label: "apps/api/.dev.vars", key: "PURGE_URL", value: apiVars?.PURGE_URL, port: 4322, pathname: "/api/purge-cache" },
-    { label: "apps/admin-v2/.dev.vars", key: "BETTER_AUTH_URL", value: adminVars?.BETTER_AUTH_URL, port: 4323, pathname: "" },
-    { label: "apps/admin-v2/.dev.vars", key: "PUBLIC_API_BASE_URL", value: adminVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
-    { label: "apps/admin-v2/.dev.vars", key: "STOREFRONT_URL", value: adminVars?.STOREFRONT_URL, port: 4322, pathname: "" },
-    { label: "apps/storefront/.dev.vars", key: "PUBLIC_API_URL", value: storefrontVars?.PUBLIC_API_URL, port: 8787, pathname: "/api/v1" },
-    { label: "apps/storefront/.dev.vars", key: "PUBLIC_API_BASE_URL", value: storefrontVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
-    { label: "apps/storefront/.dev.vars", key: "STOREFRONT_URL", value: storefrontVars?.STOREFRONT_URL, port: 4322, pathname: "" },
-    { label: "apps/admin-v2/.env.development", key: "PUBLIC_API_BASE_URL", value: adminBuildVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
-    { label: "apps/storefront/.env.development", key: "PUBLIC_API_URL", value: storefrontBuildVars?.PUBLIC_API_URL, port: 8787, pathname: "/api/v1" },
-    { label: "apps/storefront/.env.development", key: "PUBLIC_API_BASE_URL", value: storefrontBuildVars?.PUBLIC_API_BASE_URL, port: 8787, pathname: "" },
-    { label: "apps/storefront/.env.development", key: "STOREFRONT_URL", value: storefrontBuildVars?.STOREFRONT_URL, port: 4322, pathname: "" },
-  ]);
-
-  if (localUrlIssues.length > 0) {
-    fail(checks, "Local URL config", localUrlIssues.join("; "), "Run pnpm dev:setup --env-only to restore localhost URL defaults.");
-  } else if (missingRuntime.length > 0 || missingBuild.length > 0) {
-    skip(checks, "Local URL config", "Skipped because one or more local env files are missing.", "Run pnpm dev:setup --env-only.");
-  } else {
-    pass(checks, "Local URL config", "Runtime and build-time URLs point at local API/admin/storefront ports.");
-  }
-}
-
-function isMissingEnvValue(value) {
-  if (typeof value !== "string") return true;
-  const trimmed = value.trim();
-  return trimmed === "" || trimmed === "<auto-generated>";
 }
 
 function checkWranglerState(checks, wranglerState) {

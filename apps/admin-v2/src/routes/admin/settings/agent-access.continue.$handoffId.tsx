@@ -19,8 +19,9 @@ interface BrowserAction {
 
 const getTrustedStorefrontOrigin = createServerFn({ method: "GET" }).handler(
   async () => {
-    const { env } = await import("cloudflare:workers");
-    const configured = (env as Env).STOREFRONT_URL;
+    // Platform storefrontUrl resolved per request in src/server.ts.
+    const { getRuntimeEnv } = await import("~/lib/runtime-env.server");
+    const configured = getRuntimeEnv().STOREFRONT_URL;
     if (!configured) throw new Error("Storefront continuation is not configured");
     const url = new URL(configured);
     if (

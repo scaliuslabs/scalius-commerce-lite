@@ -52,7 +52,7 @@ import {
 } from "../schemas/responses";
 import { nullableTimestampSchema } from "../schemas/timestamps";
 import { created, ok } from "../utils/api-response";
-import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../utils/encryption-key";
 import { getTrustedClientIp } from "../utils/client-ip";
 import {
   createCustomerAccountPaymentSession,
@@ -197,7 +197,7 @@ app.openapi(sendOtpRoute, async (c) => {
     phone,
     email,
     emailEnv: c.env as unknown as Record<string, unknown>,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -327,7 +327,7 @@ app.openapi(verifyOtpRoute, async (c) => {
     name,
     phone,
     email,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     sessionHashKey: getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
   });

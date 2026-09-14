@@ -9,6 +9,44 @@ Central store configuration: site settings (singleton row), key-value settings, 
 - `site-settings.service.ts` -- admin site settings operations (currency, header/footer, theme, SEO, storefront URL, allowed countries)
 - `checkout-config.service.ts` -- public checkout configuration assembly
 - `business-settings.service.ts` -- business info settings (company name, TIN, logo, address, invoice prefix/number)
+- `platform-settings.service.ts` -- storage and KV-cached resolution of the deployment's public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins)
+
+## platform-settings.service.ts
+
+Storage and resolution for the deployment's public origins -- the values every
+Worker resolves at request time instead of reading Wrangler `vars` (see
+`@scalius/shared/platform-config` for the `PlatformConfig` shape and
+normalization rules). `storefrontUrl` reuses the existing, already
+merchant-editable `siteSettings.storefrontUrl` column; `apiUrl`, `dashboardUrl`,
+`mediaUrl`, `customerAuthCookieDomain`, and `corsAllowedOrigins` live in the
+`settings` table under `category = "platform"`.
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `getPlatformSettings` | `(db) => Promise<PlatformConfig>` | Reads the stored configuration with no cache: the `storefrontUrl` column plus every `platform`-category `settings` row, normalized through `normalizePlatformConfig()` |
+| `savePlatformSettings` | `(db, patch) => Promise<PlatformConfig>` | Validates and stores a partial update; every field in the patch is validated before the first write. Empty strings clear a value, except `storefrontUrl`, which is required and reuses `saveStorefrontUrl()`'s existing validation. Returns the full stored configuration after the write |
+| `resolvePlatformConfig` | `({ getDb, kv? }) => Promise<PlatformConfig>` | KV-first resolution used at Worker entry: reads `platform:config:v1` from KV, falling back to `getPlatformSettings()` (and repopulating KV) on a miss. A DB failure returns the empty configuration so callers fail closed instead of crashing every request |
+| `cachePlatformConfig` / `invalidatePlatformConfigCache` | `(kv, config)` / `(kv)` | Write/clear the `platform:config:v1` KV entry (300s TTL on write; the API additionally serves `GET /api/v1/platform` with a 60s `Cache-Control`, so a save is visible to other Workers within roughly a minute even without the explicit invalidation) |
+| `getConfiguredStorefrontUrl` | `(db) => Promise<string>` | Storefront URL alone, normalized, for callers that only need the store origin |
+
+Admin API: `GET`/`PUT /api/v1/admin/settings/platform`
+(`apps/api/src/routes/admin/settings/platform.ts`, operation IDs
+`dashboard.settings.platform_get` / `platform_update`). The response adds
+`readiness: { complete, missing[] }` (which of the four URL fields are still
+unset) and `effective: {...}` (what the current request actually resolved,
+including local-development loopback defaults, which can differ from the
+stored value while a field is empty). `PUT` accepts a partial patch of
+`{ storefrontUrl, apiUrl, dashboardUrl, mediaUrl, customerAuthCookieDomain,
+corsAllowedOrigins[] }` and invalidates the platform KV cache plus the
+`layout`/`homepage`/`discovery`/`checkout` cache groups on every save, since
+these origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
+
+Public API: `GET /api/v1/platform` (`apps/api/src/routes/platform.ts`,
+operation ID `storefront.platform.get`) returns only
+`{ storefrontUrl, apiUrl, dashboardUrl, mediaUrl }` with a 60s public
+`Cache-Control`. The storefront and dashboard Workers read this once per
+request (through their service binding in production, or plain HTTP in local
+dev) instead of carrying their own URL configuration.
 
 ## settings.service.ts
 
@@ -147,7 +185,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, the legacy customer-auth summary `authVerificationMethod`, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. The advanced customer auth policy lives in `settings.customer_auth/policy`; phone collection is always required, while OTP channels and email collection are configurable. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`, and legacy migration/cleanup requires a dedicated `migrationEncryptionKey` rather than the JWT-tolerant read key. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `platform` (api_url, dashboard_url, media_url, customer_auth_cookie_domain, cors_allowed_origins -- see `platform-settings.service.ts` above), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
 
 SMS provider readiness is structural and local: it requires an active supported provider, decryptable required credentials, provider-required non-secret fields, and no obvious placeholder values such as `dummy`, `example`, `changeme`, `your-token-here`, or all-zero/simple numeric junk. This keeps notification and OTP settings fail-closed without issuing paid SMS test sends.
 
@@ -200,6 +238,12 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/email` | Atomically save the selected email provider + sender. Skips masked Resend key values, encrypts new Resend keys, and requires the selected provider itself—not an unrelated configured provider—to be ready when email OTP is active |
 | GET | `/firebase` | Get Firebase settings (masks service account) |
 | POST | `/firebase` | Save Firebase service account + public config. Service-account saves validate required fields, require `CREDENTIAL_ENCRYPTION_KEY`, and store encrypted `enc:` values |
+
+### `platform.ts` -- Platform origins (see `platform-settings.service.ts` above)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/platform` | Get stored platform origins plus `readiness` and `effective` (see above) |
+| PUT | `/platform` | Save a partial patch of platform origins; invalidates the platform KV cache and layout/homepage/discovery/checkout cache groups |
 
 ### `payments.ts` -- Payment gateway settings
 | Method | Path | Description |

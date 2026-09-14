@@ -42,21 +42,26 @@ interface Env {
   // R2 storage bucket
   BUCKET: R2Bucket;
 
-  // Secrets
-  BETTER_AUTH_SECRET: string;
-  FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+  // Installed secrets. Exactly two per deployment.
+  SCALIUS_SECRET?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
-  JWT_SECRET?: string;
 
-  // Variables
+  // Derived at Worker entry from SCALIUS_SECRET. Never installed.
+  BETTER_AUTH_SECRET: string;
+  JWT_SECRET?: string;
+  CUSTOMER_SESSION_HASH_KEY?: string;
+
+  // Resolved at Worker entry from Platform settings. Never Wrangler vars.
+  PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
   BETTER_AUTH_URL?: string;
   PUBLIC_API_BASE_URL?: string;
-  LOCAL_MAILPIT_URL?: string;
-  PROJECT_CACHE_PREFIX?: string;
   STOREFRONT_URL?: string;
   CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
   R2_PUBLIC_URL?: string;
   CDN_DOMAIN_URL?: string;
+
+  // Local development only.
+  LOCAL_MAILPIT_URL?: string;
 
   // Allow additional bindings from apps
   [key: string]: unknown;

@@ -76,7 +76,7 @@ import {
   type WaitUntilExecutionContext,
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
-import { getCredentialEncryptionKey, getCustomerSessionHashKey, getEncryptionKey } from "../utils/encryption-key";
+import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../utils/encryption-key";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
@@ -797,7 +797,7 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
       channel: body.channel,
       ip: getTrustedClientIp(c),
       emailEnv: c.env as unknown as Record<string, unknown>,
-      encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+      encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     });
@@ -886,7 +886,7 @@ app.openapi(verifyOrderPaymentRecoveryOtpRoute, async (c) => {
     orderId: body.orderId,
     channel: body.channel,
     code: body.code,
-    encryptionKey: getEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
 
   return ok(c, result);

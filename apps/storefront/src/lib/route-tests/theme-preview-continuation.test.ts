@@ -10,10 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/client", () => mocks);
-vi.mock("cloudflare:workers", () => ({
-  env: { DASHBOARD_URL: "https://dashboard.example.test" },
-}));
 
+import { apiContext } from "@/lib/api/context";
 import { ALL, GET, POST } from "../../pages/theme-preview/continue";
 
 const CONTINUATION_CODE = `tpc_${"a".repeat(48)}`;
@@ -125,7 +123,12 @@ describe("theme preview continuation route", () => {
   });
 
   it("serves a private relay without continuation material", async () => {
-    const response = await GET({} as never);
+    // Dashboard and API origins come from the request context seeded by the
+    // middleware from /api/v1/platform, never from Worker vars.
+    const response = await apiContext.run({
+      DASHBOARD_URL: "https://dashboard.example.test",
+      PUBLIC_API_BASE_URL: "https://api.example.test",
+    }, () => GET({} as never));
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
@@ -135,8 +138,17 @@ describe("theme preview continuation route", () => {
     expect(html).toContain("window.opener");
     expect(html).toContain("scalius-continuation-ready-v1");
     expect(html).toContain("https://dashboard.example.test");
+    expect(html).toContain("https://api.example.test");
     expect(html).toContain("continuationCode");
     expect(html).not.toContain(CONTINUATION_CODE);
+  });
+
+  it("advertises no opener origins when the platform origins are unavailable", async () => {
+    const response = await GET({} as never);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).not.toContain("dashboard.example.test");
+    expect(html).not.toContain("api.example.test");
   });
 
   it("fails malformed, expired, and replayed continuations closed", async () => {

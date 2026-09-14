@@ -3014,6 +3014,46 @@ export type GetApiV1StorefrontCspResponses = {
 
 export type GetApiV1StorefrontCspResponse = GetApiV1StorefrontCspResponses[keyof GetApiV1StorefrontCspResponses];
 
+export type GetApiV1PlatformData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/platform';
+};
+
+export type GetApiV1PlatformErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1PlatformError = GetApiV1PlatformErrors[keyof GetApiV1PlatformErrors];
+
+export type GetApiV1PlatformResponses = {
+    /**
+     * Public platform origins
+     */
+    200: {
+        success: true;
+        data: {
+            storefrontUrl: string;
+            apiUrl: string;
+            dashboardUrl: string;
+            mediaUrl: string;
+        };
+    };
+};
+
+export type GetApiV1PlatformResponse = GetApiV1PlatformResponses[keyof GetApiV1PlatformResponses];
+
 export type PostApiV1StorefrontAgentContextsData = {
     body?: never;
     path?: never;
@@ -34124,6 +34164,227 @@ export type PostApiV1AdminSettingsFirebaseResponses = {
 
 export type PostApiV1AdminSettingsFirebaseResponse = PostApiV1AdminSettingsFirebaseResponses[keyof PostApiV1AdminSettingsFirebaseResponses];
 
+export type GetApiV1AdminSettingsPlatformData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/platform';
+};
+
+export type GetApiV1AdminSettingsPlatformErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsPlatformError = GetApiV1AdminSettingsPlatformErrors[keyof GetApiV1AdminSettingsPlatformErrors];
+
+export type GetApiV1AdminSettingsPlatformResponses = {
+    /**
+     * Platform origins
+     */
+    200: {
+        success: true;
+        data: {
+            storefrontUrl: string;
+            apiUrl: string;
+            dashboardUrl: string;
+            mediaUrl: string;
+            customerAuthCookieDomain: string;
+            corsAllowedOrigins: Array<string>;
+            readiness: {
+                complete: boolean;
+                missing: Array<'storefrontUrl' | 'apiUrl' | 'dashboardUrl' | 'mediaUrl'>;
+            };
+            effective: {
+                storefrontUrl: string;
+                apiUrl: string;
+                dashboardUrl: string;
+                mediaUrl: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsPlatformResponse = GetApiV1AdminSettingsPlatformResponses[keyof GetApiV1AdminSettingsPlatformResponses];
+
+export type PutApiV1AdminSettingsPlatformData = {
+    body: {
+        storefrontUrl?: string;
+        apiUrl?: string;
+        dashboardUrl?: string;
+        mediaUrl?: string;
+        customerAuthCookieDomain?: string;
+        corsAllowedOrigins?: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/platform';
+};
+
+export type PutApiV1AdminSettingsPlatformErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsPlatformError = PutApiV1AdminSettingsPlatformErrors[keyof PutApiV1AdminSettingsPlatformErrors];
+
+export type PutApiV1AdminSettingsPlatformResponses = {
+    /**
+     * Platform origins saved
+     */
+    200: {
+        success: true;
+        data: {
+            storefrontUrl: string;
+            apiUrl: string;
+            dashboardUrl: string;
+            mediaUrl: string;
+            customerAuthCookieDomain: string;
+            corsAllowedOrigins: Array<string>;
+            readiness: {
+                complete: boolean;
+                missing: Array<'storefrontUrl' | 'apiUrl' | 'dashboardUrl' | 'mediaUrl'>;
+            };
+            effective: {
+                storefrontUrl: string;
+                apiUrl: string;
+                dashboardUrl: string;
+                mediaUrl: string;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsPlatformResponse = PutApiV1AdminSettingsPlatformResponses[keyof PutApiV1AdminSettingsPlatformResponses];
+
 export type GetApiV1AdminSettingsShippingMethodsData = {
     body?: never;
     path?: never;
@@ -50556,7 +50817,7 @@ export type GetApiV1AdminAgentAccessConnectionsData = {
     query?: {
         page?: number;
         limit?: number;
-        status?: 'pending' | 'active' | 'revoked' | 'expired';
+        status?: 'current' | 'pending' | 'active' | 'revoked' | 'expired';
         resource?: 'dashboard' | 'storefront';
         kind?: 'oauth' | 'pat' | 'cli';
     };
@@ -51327,6 +51588,103 @@ export type PostApiV1AdminAgentAccessRevokeAllResponses = {
 };
 
 export type PostApiV1AdminAgentAccessRevokeAllResponse = PostApiV1AdminAgentAccessRevokeAllResponses[keyof PostApiV1AdminAgentAccessRevokeAllResponses];
+
+export type DeleteApiV1AdminAgentAccessConnectionsRevokedData = {
+    body?: never;
+    path?: never;
+    query?: {
+        resource?: 'dashboard' | 'storefront';
+    };
+    url: '/api/v1/admin/agent-access/connections/revoked';
+};
+
+export type DeleteApiV1AdminAgentAccessConnectionsRevokedErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAgentAccessConnectionsRevokedError = DeleteApiV1AdminAgentAccessConnectionsRevokedErrors[keyof DeleteApiV1AdminAgentAccessConnectionsRevokedErrors];
+
+export type DeleteApiV1AdminAgentAccessConnectionsRevokedResponses = {
+    /**
+     * Revoked and expired connections purged
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'purged';
+            count: number;
+            credentials: number;
+            artifacts: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAgentAccessConnectionsRevokedResponse = DeleteApiV1AdminAgentAccessConnectionsRevokedResponses[keyof DeleteApiV1AdminAgentAccessConnectionsRevokedResponses];
 
 export type GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdData = {
     body?: never;

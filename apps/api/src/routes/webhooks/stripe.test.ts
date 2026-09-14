@@ -32,7 +32,6 @@ vi.mock("@scalius/core/modules/payments/stripe", () => ({
 }));
 
 vi.mock("../../utils/encryption-key", () => ({
-  getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "test-key"),
 }));
 

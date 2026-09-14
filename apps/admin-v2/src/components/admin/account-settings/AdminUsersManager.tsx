@@ -39,6 +39,7 @@ import {
   Search,
   UserCheck,
   UserX,
+  ChevronDown,
 } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -68,6 +69,36 @@ function getInvitationActionLabel(status: AdminUserStatus): string {
   if (status === "invite_expired") return "Send new link";
   if (status === "invite_delivery_failed") return "Retry delivery";
   return "Resend setup";
+}
+
+function splitAdminUsersBySuspension(adminUsers: AdminUser[]): {
+  activeUsers: AdminUser[];
+  suspendedUsers: AdminUser[];
+} {
+  const activeUsers: AdminUser[] = [];
+  const suspendedUsers: AdminUser[] = [];
+  for (const adminUser of adminUsers) {
+    if (getAdminUserStatus(adminUser) === "suspended") {
+      suspendedUsers.push(adminUser);
+    } else {
+      activeUsers.push(adminUser);
+    }
+  }
+  return { activeUsers, suspendedUsers };
+}
+
+function filterAdminUsers(adminUsers: AdminUser[], normalizedQuery: string): AdminUser[] {
+  if (!normalizedQuery) return adminUsers;
+
+  return adminUsers.filter((adminUser) => {
+    const status = getAdminUserStatus(adminUser);
+    return [
+      adminUser.name,
+      adminUser.email,
+      ADMIN_USER_STATUS_COPY[status].label,
+      ...adminUser.roles.map((role) => role.displayName),
+    ].some((value) => value.toLowerCase().includes(normalizedQuery));
+  });
 }
 
 function getInvitationTiming(expiresAt: string | null | undefined): string | null {
@@ -108,6 +139,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [suspendedOpen, setSuspendedOpen] = useState(false);
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
@@ -116,20 +148,23 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     isLoading,
     error: usersError,
   });
-  const filteredUsers = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return adminUsers;
-
-    return adminUsers.filter((adminUser) => {
-      const status = getAdminUserStatus(adminUser);
-      return [
-        adminUser.name,
-        adminUser.email,
-        ADMIN_USER_STATUS_COPY[status].label,
-        ...adminUser.roles.map((role) => role.displayName),
-      ].some((value) => value.toLowerCase().includes(normalizedQuery));
-    });
-  }, [adminUsers, query]);
+  const normalizedQuery = query.trim().toLowerCase();
+  const { activeUsers, suspendedUsers } = useMemo(
+    () => splitAdminUsersBySuspension(adminUsers),
+    [adminUsers],
+  );
+  const filteredActiveUsers = useMemo(
+    () => filterAdminUsers(activeUsers, normalizedQuery),
+    [activeUsers, normalizedQuery],
+  );
+  const filteredSuspendedUsers = useMemo(
+    () => filterAdminUsers(suspendedUsers, normalizedQuery),
+    [suspendedUsers, normalizedQuery],
+  );
+  const hasQuery = normalizedQuery.length > 0;
+  // A search that matches a suspended administrator opens the section so the
+  // match is visible without an extra click.
+  const showSuspendedOpen = suspendedOpen || (hasQuery && filteredSuspendedUsers.length > 0);
 
   const resetInviteForm = () => {
     setShowAddForm(false);
@@ -195,7 +230,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <Users className="h-4 w-4" />
               Administrators
               <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
-                {adminUsers.length}
+                {activeUsers.length}
               </span>
             </CardTitle>
             <CardDescription>
@@ -378,191 +413,100 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
             <p className="text-sm font-medium text-foreground">No administrators found</p>
             <p className="mt-1 text-xs">Invite someone when this store needs shared access.</p>
           </div>
-        ) : filteredUsers.length === 0 ? (
+        ) : filteredActiveUsers.length === 0 && filteredSuspendedUsers.length === 0 ? (
           <div className="rounded-lg border border-dashed py-8 text-center">
             <p className="text-sm font-medium">No matching administrators</p>
             <button type="button" onClick={() => setQuery("")} className="mt-1 min-h-9 px-3 text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               Clear search
             </button>
           </div>
+        ) : filteredActiveUsers.length === 0 ? (
+          <div
+            data-admin-list="active"
+            className="rounded-lg border border-dashed py-8 text-center"
+          >
+            <p className="text-sm font-medium">
+              {hasQuery ? "No active administrators match" : "No active administrators"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {hasQuery ? "Matches are in the Suspended section below." : "Everyone here is suspended."}
+            </p>
+          </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border">
+          <div data-admin-list="active" className="overflow-hidden rounded-lg border">
             <div className="hidden grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] gap-3 border-b bg-muted/30 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
               <span>Administrator</span>
               <span>Access</span>
               <span className="pr-1 text-right">Status and actions</span>
             </div>
             <div className="divide-y">
-            {filteredUsers.map((adminUser) => {
-              const status = getAdminUserStatus(adminUser);
-              return (
-              <div
-                key={adminUser.id}
-                className="grid gap-3 p-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] sm:items-center"
-              >
-                <div className="flex min-w-0 items-start gap-3 sm:items-center">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
-                    {adminUser.image ? (
-                      <img
-                        src={getOptimizedImageUrl(
-                          adminUser.image,
-                          ADMIN_IMAGE_PRESETS.avatar,
-                        )}
-                        alt={adminUser.name}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-1.5 font-medium">
-                      <span className="truncate">{adminUser.name}</span>
-                      {adminUser.id === currentUserId && (
-                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          You
-                        </span>
-                      )}
-                      {adminUser.isSuperAdmin && (
-                        <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                          Super Admin
-                        </span>
-                      )}
-                    </p>
-                    <p className="break-words text-sm text-muted-foreground">{adminUser.email}</p>
-                  </div>
-                </div>
-                <div className="flex min-w-0 flex-wrap gap-1.5">
-                  {adminUser.roles.length > 0 ? adminUser.roles.map((role) => (
-                    <span key={role.id} className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-                      {role.displayName}
-                    </span>
-                  )) : (
-                    <span className="text-xs text-muted-foreground">No assigned role</span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <AdminStatusBadge
-                    status={status}
-                    invitation={adminUser.invitation}
-                  />
-                  {canManageTeam && isInvitationStatus(status) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 text-xs sm:min-h-9"
-                      onClick={() => void handleResendSetup(adminUser.id)}
-                      disabled={!userAuthorityReady || resendingUserId !== null}
-                    >
-                      {resendingUserId === adminUser.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      )}
-                      {getInvitationActionLabel(status)}
-                    </Button>
-                  )}
-                  {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 text-xs sm:min-h-9"
-                      onClick={() => setEditingUser(adminUser)}
-                      disabled={!userAuthorityReady}
-                    >
-                      <Shield className="h-3 w-3 mr-1" />
-                      Permissions
-                    </Button>
-                  )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && isInvitationStatus(status) && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Revoke invitation for ${adminUser.name}`} disabled={!userAuthorityReady}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            <strong>{adminUser.name}</strong> will no longer be able to use the setup link. You can invite them again later.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteUser(adminUser.id)}
-                            variant="destructive"
-                          >
-                            Revoke invitation
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "suspended" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 text-xs sm:min-h-9"
-                      onClick={() => void handleSuspension(adminUser, false)}
-                      disabled={!userAuthorityReady || updatingUserId !== null}
-                    >
-                      {updatingUserId === adminUser.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <UserCheck className="h-3.5 w-3.5" />
-                      )}
-                      Restore access
-                    </Button>
-                  )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && !isInvitationStatus(status) && status !== "password_setup" && status !== "suspended" && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
-                          aria-label={`Suspend ${adminUser.name}`}
-                          disabled={!userAuthorityReady || updatingUserId !== null}
-                        >
-                          {updatingUserId === adminUser.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <UserX className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Suspend administrator?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            <strong>{adminUser.name}</strong> will be signed out on every device and cannot sign in until access is restored. Their role and activity history stay intact.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => void handleSuspension(adminUser, true)}
-                            variant="destructive"
-                          >
-                            Suspend access
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              </div>
-              );
-            })}
+              {filteredActiveUsers.map((adminUser) => (
+                <AdminUserRow
+                  key={adminUser.id}
+                  adminUser={adminUser}
+                  currentUserId={currentUserId}
+                  canManageTeam={canManageTeam}
+                  canManageRoles={canManageRoles}
+                  userAuthorityReady={userAuthorityReady}
+                  resendingUserId={resendingUserId}
+                  updatingUserId={updatingUserId}
+                  handleResendSetup={handleResendSetup}
+                  setEditingUser={setEditingUser}
+                  deleteUser={deleteUser}
+                  handleSuspension={handleSuspension}
+                />
+              ))}
             </div>
           </div>
+        )}
+
+        {suspendedUsers.length > 0 && !(isLoading && adminUsers.length === 0) && (
+          <details
+            data-admin-list="suspended"
+            className="group mt-4 rounded-lg border"
+            open={showSuspendedOpen}
+            onToggle={(event) => setSuspendedOpen(event.currentTarget.open)}
+          >
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2">
+                <UserX className="h-4 w-4 text-muted-foreground" />
+                Suspended
+                <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                  {hasQuery ? `${filteredSuspendedUsers.length} of ${suspendedUsers.length}` : suspendedUsers.length}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="border-t">
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Suspended administrators cannot sign in. Restore access to move them back to the list above.
+              </p>
+              {filteredSuspendedUsers.length === 0 ? (
+                <p className="border-t px-3 py-3 text-sm text-muted-foreground">
+                  No suspended administrators match this search.
+                </p>
+              ) : (
+                <div className="divide-y border-t">
+                  {filteredSuspendedUsers.map((adminUser) => (
+                    <AdminUserRow
+                      key={adminUser.id}
+                      adminUser={adminUser}
+                      currentUserId={currentUserId}
+                      canManageTeam={canManageTeam}
+                      canManageRoles={canManageRoles}
+                      userAuthorityReady={userAuthorityReady}
+                      resendingUserId={resendingUserId}
+                      updatingUserId={updatingUserId}
+                      handleResendSetup={handleResendSetup}
+                      setEditingUser={setEditingUser}
+                      deleteUser={deleteUser}
+                      handleSuspension={handleSuspension}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
         )}
 
         {editingUser && userAuthorityReady && (
@@ -575,6 +519,200 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+interface AdminUserRowProps {
+  adminUser: AdminUser;
+  currentUserId: string;
+  canManageTeam: boolean;
+  canManageRoles: boolean;
+  userAuthorityReady: boolean;
+  resendingUserId: string | null;
+  updatingUserId: string | null;
+  handleResendSetup: (userId: string) => Promise<void>;
+  setEditingUser: (adminUser: AdminUser) => void;
+  deleteUser: (userId: string) => Promise<void>;
+  handleSuspension: (adminUser: AdminUser, suspended: boolean) => Promise<void>;
+}
+
+function AdminUserRow({
+  adminUser,
+  currentUserId,
+  canManageTeam,
+  canManageRoles,
+  userAuthorityReady,
+  resendingUserId,
+  updatingUserId,
+  handleResendSetup,
+  setEditingUser,
+  deleteUser,
+  handleSuspension,
+}: AdminUserRowProps) {
+  const status = getAdminUserStatus(adminUser);
+  return (
+      <div
+        className="grid gap-3 p-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] sm:items-center"
+      >
+        <div className="flex min-w-0 items-start gap-3 sm:items-center">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
+            {adminUser.image ? (
+              <img
+                src={getOptimizedImageUrl(
+                  adminUser.image,
+                  ADMIN_IMAGE_PRESETS.avatar,
+                )}
+                alt={adminUser.name}
+                className="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-1.5 font-medium">
+              <span className="truncate">{adminUser.name}</span>
+              {adminUser.id === currentUserId && (
+                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  You
+                </span>
+              )}
+              {adminUser.isSuperAdmin && (
+                <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                  Super Admin
+                </span>
+              )}
+            </p>
+            <p className="break-words text-sm text-muted-foreground">{adminUser.email}</p>
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          {adminUser.roles.length > 0 ? adminUser.roles.map((role) => (
+            <span key={role.id} className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+              {role.displayName}
+            </span>
+          )) : (
+            <span className="text-xs text-muted-foreground">No assigned role</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <AdminStatusBadge
+            status={status}
+            invitation={adminUser.invitation}
+          />
+          {canManageTeam && isInvitationStatus(status) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-h-11 text-xs sm:min-h-9"
+              onClick={() => void handleResendSetup(adminUser.id)}
+              disabled={!userAuthorityReady || resendingUserId !== null}
+            >
+              {resendingUserId === adminUser.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {getInvitationActionLabel(status)}
+            </Button>
+          )}
+          {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 text-xs sm:min-h-9"
+              onClick={() => setEditingUser(adminUser)}
+              disabled={!userAuthorityReady}
+            >
+              <Shield className="h-3 w-3 mr-1" />
+              Permissions
+            </Button>
+          )}
+          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && isInvitationStatus(status) && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Revoke invitation for ${adminUser.name}`} disabled={!userAuthorityReady}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>{adminUser.name}</strong> will no longer be able to use the setup link. You can invite them again later.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteUser(adminUser.id)}
+                    variant="destructive"
+                  >
+                    Revoke invitation
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "suspended" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 text-xs sm:min-h-9"
+              onClick={() => void handleSuspension(adminUser, false)}
+              disabled={!userAuthorityReady || updatingUserId !== null}
+            >
+              {updatingUserId === adminUser.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <UserCheck className="h-3.5 w-3.5" />
+              )}
+              Restore access
+            </Button>
+          )}
+          {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && !isInvitationStatus(status) && status !== "password_setup" && status !== "suspended" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
+                  aria-label={`Suspend ${adminUser.name}`}
+                  disabled={!userAuthorityReady || updatingUserId !== null}
+                >
+                  {updatingUserId === adminUser.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserX className="h-4 w-4" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Suspend administrator?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>{adminUser.name}</strong> will be signed out on every device and cannot sign in until access is restored. Their role and activity history stay intact.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => void handleSuspension(adminUser, true)}
+                    variant="destructive"
+                  >
+                    Suspend access
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+      </div>
   );
 }
 

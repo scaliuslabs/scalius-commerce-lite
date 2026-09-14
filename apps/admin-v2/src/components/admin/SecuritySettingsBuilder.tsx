@@ -175,7 +175,7 @@ export function SecuritySettingsBuilder() {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Inherited platform trust</h3>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Read-only origins from the deployed platform.
+                Read-only origins configured in Settings → System → Platform.
               </p>
             </div>
           </div>
@@ -222,7 +222,7 @@ export function SecuritySettingsBuilder() {
                     )}
                     {!source.source ? (
                       <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                        {source.consequence}
+                        {source.consequence} Set it in the Platform section.
                       </p>
                     ) : null}
                   </div>

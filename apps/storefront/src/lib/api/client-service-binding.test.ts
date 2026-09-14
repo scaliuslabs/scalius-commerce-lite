@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiContext, type ApiContext } from "./context";
-import { fetchWithRetry } from "./client";
+import { createApiUrl, fetchWithRetry } from "./client";
 
 const contextMock = vi.hoisted(() => {
   let current: ApiContext | undefined;
@@ -149,6 +149,28 @@ describe("storefront API service-binding boundary", () => {
 
     expect(bindingFetch).toHaveBeenCalledTimes(1);
     expect(httpFetch).not.toHaveBeenCalled();
+  });
+
+  it("renders through the service binding when the public API URL is not saved yet", async () => {
+    const bindingFetch = vi.fn(async (request: Request) => new Response(request.url));
+    const httpFetch = vi.fn(async () => new Response("unexpected"));
+    vi.stubGlobal("fetch", httpFetch);
+
+    const context: ApiContext = { BACKEND_API: fetcher(bindingFetch) };
+    const response = await apiContext.run(context, () =>
+      fetchWithRetry(createApiUrl("/products"), {}, 0, 5, false, false),
+    );
+
+    expect(await response.text()).toBe("https://api.internal/api/v1/products");
+    expect(bindingFetch).toHaveBeenCalledTimes(1);
+    expect(httpFetch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without a binding when the public API URL is not saved yet", () => {
+    const context: ApiContext = {};
+    expect(() => apiContext.run(context, () => createApiUrl("/products"))).toThrow(
+      "Settings -> System -> Platform",
+    );
   });
 
   it("forwards an abort signal to the binding request", async () => {

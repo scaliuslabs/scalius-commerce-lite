@@ -59,12 +59,14 @@ Customer Auth Flow (storefront):
 ## Better Auth Configuration
 
 - **Provider**: Email/password only (no OAuth)
+- **Secret**: `BETTER_AUTH_SECRET`, derived from the single installed `SCALIUS_SECRET` with HKDF at Worker entry (`@scalius/shared/runtime-secrets`). It is never installed or read from `process.env`; `createAuth()` throws if it is absent from the request `Env`.
+- **Base URL**: `BETTER_AUTH_URL`, resolved per request to the Platform dashboard URL (Settings -> System -> Platform, falling back to the request's own origin before that setting is filled in) -- never the API origin, since reset links open dashboard routes.
 - **Min password length**: 12 characters (enforced consistently: Better Auth config, API `changePasswordSchema`, admin frontend `ChangePasswordForm`, and `SetupForm`)
 - **Email verification**: Disabled (`requireEmailVerification: false`)
 - **Session TTL**: 7 days, updated daily, cookie cache 5 minutes
 - **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
 - **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
-- **Trusted origins**: `BETTER_AUTH_URL` + `STOREFRONT_URL`
+- **Trusted origins**: the resolved dashboard URL (`BETTER_AUTH_URL`) and storefront URL (`STOREFRONT_URL`), both from Platform settings
 - **Password resets**: Better Auth revokes existing sessions after password reset and clears `user.mustChangePassword` only after the reset token is consumed.
 - **Email callbacks**: `sendVerificationEmail`, `sendResetPassword`, and 2FA `sendOTP` all dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies. All templates use `escapeHtml()` from `@scalius/shared/html-escape`.
 
@@ -127,7 +129,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 
 ### 1. Auth Helpers
 
-- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It verifies the Better Auth session cookie HMAC with `BETTER_AUTH_SECRET`, then verifies the active session/user directly through D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach the D1 lookup.
+- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It verifies the Better Auth session cookie HMAC with the derived `BETTER_AUTH_SECRET`, then verifies the active session/user directly through D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach the D1 lookup.
 - `apps/admin-v2/src/lib/auth.server.ts` remains the Better Auth integration boundary for `/api/auth/*`, 2FA verification paths, and auth operations that need Better Auth itself. Do not pull it back into normal `/admin` guard reads.
 
 ### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
@@ -148,7 +150,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 ### Admin Auth Middleware (`apps/api/src/middleware/admin-auth.ts`)
 
 Authentication strategy:
-1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding). The API middleware uses the same direct signed-cookie model as the admin route guard: verify `token.signature` with `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
+1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding). The API middleware uses the same direct signed-cookie model as the admin route guard: verify `token.signature` with the derived `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
 2. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:

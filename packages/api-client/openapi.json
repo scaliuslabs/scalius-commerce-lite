@@ -10682,6 +10682,122 @@
         "security": []
       }
     },
+    "/api/v1/platform": {
+      "get": {
+        "operationId": "storefront.platform.get",
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Get the public origins of this deployment",
+        "responses": {
+          "200": {
+            "description": "Public platform origins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "storefrontUrl": {
+                          "type": "string"
+                        },
+                        "apiUrl": {
+                          "type": "string"
+                        },
+                        "dashboardUrl": {
+                          "type": "string"
+                        },
+                        "mediaUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "storefrontUrl",
+                        "apiUrl",
+                        "dashboardUrl",
+                        "mediaUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/storefront/agent-contexts": {
       "post": {
         "operationId": "storefront.context.create",
@@ -123729,6 +123845,804 @@
         }
       }
     },
+    "/api/v1/admin/settings/platform": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get platform origins",
+        "operationId": "dashboard.settings.platform_get",
+        "responses": {
+          "200": {
+            "description": "Platform origins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "storefrontUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "apiUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "dashboardUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "mediaUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "customerAuthCookieDomain": {
+                          "type": "string",
+                          "maxLength": 253
+                        },
+                        "corsAllowedOrigins": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "maxItems": 20
+                        },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "complete": {
+                              "type": "boolean"
+                            },
+                            "missing": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "storefrontUrl",
+                                  "apiUrl",
+                                  "dashboardUrl",
+                                  "mediaUrl"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "complete",
+                            "missing"
+                          ]
+                        },
+                        "effective": {
+                          "type": "object",
+                          "properties": {
+                            "storefrontUrl": {
+                              "type": "string"
+                            },
+                            "apiUrl": {
+                              "type": "string"
+                            },
+                            "dashboardUrl": {
+                              "type": "string"
+                            },
+                            "mediaUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "storefrontUrl",
+                            "apiUrl",
+                            "dashboardUrl",
+                            "mediaUrl"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "storefrontUrl",
+                        "apiUrl",
+                        "dashboardUrl",
+                        "mediaUrl",
+                        "customerAuthCookieDomain",
+                        "corsAllowedOrigins",
+                        "readiness",
+                        "effective"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save platform origins",
+        "operationId": "dashboard.settings.platform_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storefrontUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "apiUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "dashboardUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "mediaUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "customerAuthCookieDomain": {
+                    "type": "string",
+                    "maxLength": 253
+                  },
+                  "corsAllowedOrigins": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    "maxItems": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Platform origins saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "storefrontUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "apiUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "dashboardUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "mediaUrl": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
+                        "customerAuthCookieDomain": {
+                          "type": "string",
+                          "maxLength": 253
+                        },
+                        "corsAllowedOrigins": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "maxItems": 20
+                        },
+                        "readiness": {
+                          "type": "object",
+                          "properties": {
+                            "complete": {
+                              "type": "boolean"
+                            },
+                            "missing": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "storefrontUrl",
+                                  "apiUrl",
+                                  "dashboardUrl",
+                                  "mediaUrl"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "complete",
+                            "missing"
+                          ]
+                        },
+                        "effective": {
+                          "type": "object",
+                          "properties": {
+                            "storefrontUrl": {
+                              "type": "string"
+                            },
+                            "apiUrl": {
+                              "type": "string"
+                            },
+                            "dashboardUrl": {
+                              "type": "string"
+                            },
+                            "mediaUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "storefrontUrl",
+                            "apiUrl",
+                            "dashboardUrl",
+                            "mediaUrl"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "storefrontUrl",
+                        "apiUrl",
+                        "dashboardUrl",
+                        "mediaUrl",
+                        "customerAuthCookieDomain",
+                        "corsAllowedOrigins",
+                        "readiness",
+                        "effective"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
     "/api/v1/admin/settings/shipping-methods": {
       "get": {
         "operationId": "dashboard.shipping_methods.list",
@@ -185325,7 +186239,7 @@
         ],
         "operationId": "dashboard.agent_access.connections.list",
         "summary": "List agent connections",
-        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal.",
+        "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes.",
         "parameters": [
           {
             "schema": {
@@ -185352,6 +186266,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "current",
                 "pending",
                 "active",
                 "revoked",
@@ -187965,6 +188880,338 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Emergency tenant-wide credential kill switch; only a live 2FA-verified Super Admin browser session may invoke it."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "agent_access.manage"
+        }
+      }
+    },
+    "/api/v1/admin/agent-access/connections/revoked": {
+      "delete": {
+        "tags": [
+          "Admin - Agent Access"
+        ],
+        "operationId": "dashboard.agent_access.connections.purge_revoked",
+        "summary": "Permanently delete revoked and expired agent connections",
+        "description": "Browser-only ceremony that permanently deletes every revoked grant and every grant whose expiry has passed, together with their credentials, artifact handles, browser handoffs, pairing records, storefront contexts, and audit history. Active and pending connections are never touched.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dashboard",
+                "storefront"
+              ]
+            },
+            "required": false,
+            "name": "resource",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revoked and expired connections purged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "purged"
+                          ]
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "credentials": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "artifacts": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "count",
+                        "credentials",
+                        "artifacts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Irreversible purge of revoked and expired grants plus their audit history; only a live 2FA-verified Super Admin browser session may invoke it."
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -204982,6 +206229,8 @@
         "operationIds": [
           "dashboard.settings.storefront_url_get",
           "dashboard.settings.storefront_url_update",
+          "dashboard.settings.platform_get",
+          "dashboard.settings.platform_update",
           "dashboard.seo.live_probe"
         ],
         "requiresFacts": true,
@@ -210277,6 +211526,22 @@
           ]
         },
         {
+          "operationId": "dashboard.settings.platform_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.storefront-origin"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.platform_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.storefront-origin"
+          ]
+        },
+        {
           "operationId": "dashboard.settings.storefront_url_get",
           "surface": "dashboard",
           "mode": "curated",
@@ -211093,6 +212358,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.hosted-payment"
+          ]
+        },
+        {
+          "operationId": "storefront.platform.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.platform.get"
           ]
         },
         {

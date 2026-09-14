@@ -1133,6 +1133,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     operationIds: [
       "dashboard.settings.storefront_url_get",
       "dashboard.settings.storefront_url_update",
+      "dashboard.settings.platform_get",
+      "dashboard.settings.platform_update",
       "dashboard.seo.live_probe",
     ],
     requiresFacts: true,

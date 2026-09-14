@@ -8,6 +8,7 @@ import { navigationRoutes } from "../routes/navigation";
 import { seoRoutes } from "../routes/seo";
 import { shippingMethodRoutes } from "../routes/shipping-methods";
 import { storefrontRoutes } from "../routes/storefront";
+import { platformRoutes } from "../routes/platform";
 
 const app = createRuntimeApiApp();
 app.get("/", (c) => c.json({
@@ -21,6 +22,7 @@ app.route("/header", headerRoutes);
 app.route("/navigation", navigationRoutes);
 app.route("/footer", footerRoutes);
 app.route("/storefront", storefrontRoutes);
+app.route("/platform", platformRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);

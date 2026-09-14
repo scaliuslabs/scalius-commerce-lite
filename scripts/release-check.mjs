@@ -2616,12 +2616,12 @@ export async function main(rawArgs = process.argv.slice(2), {
       return 0;
     }
 
+    // apps/api/wrangler.jsonc carries no vars: it is read only for Worker
+    // monitoring expectations. Public origins come from the --*-url flags or
+    // this repository's demo defaults; production values live in the
+    // dashboard Platform settings, not in Wrangler config.
     const apiConfig = readApiWranglerConfig(configPath);
-    options = parseReleaseCheckArgs(rawArgs, {
-      defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
-      defaultStorefrontUrl: apiConfig.vars?.STOREFRONT_URL ?? DEFAULT_STOREFRONT_URL,
-      defaultDashboardUrl: DEFAULT_DASHBOARD_URL,
-    });
+    options = parseReleaseCheckArgs(rawArgs);
 
     const result = await runReleaseCheck(options, {
       apiConfig,

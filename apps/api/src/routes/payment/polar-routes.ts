@@ -106,8 +106,8 @@ polarPaymentRoutes.openapi(createPolarSessionRoute, async (c) => {
 // ─── GET /success ────────────────────────────────────────────────────────────
 // Redirect handlers — not OpenAPI routes (external callbacks)
 
-function getConfiguredStorefrontUrl(env: { STOREFRONT_URL?: string; PUBLIC_STOREFRONT_URL?: string }): string {
-    return String(env.STOREFRONT_URL || env.PUBLIC_STOREFRONT_URL || "").replace(/\/+$/, "");
+function getConfiguredStorefrontUrl(env: { STOREFRONT_URL?: string }): string {
+    return String(env.STOREFRONT_URL || "").replace(/\/+$/, "");
 }
 
 function normalizeCallbackPaymentType(value: string | undefined): "full" | "deposit" | "balance" | "" {

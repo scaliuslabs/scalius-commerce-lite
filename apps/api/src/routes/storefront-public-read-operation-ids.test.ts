@@ -7,6 +7,7 @@ import { publicCheckoutLanguageRoutes } from "./checkout-languages";
 import { checkoutRoutes } from "./checkout";
 import { collectionRoutes } from "./collections";
 import { footerRoutes } from "./footer";
+import { platformRoutes } from "./platform";
 import { headerRoutes } from "./header";
 import { locationRoutes } from "./locations";
 import { productRoutes } from "./products";
@@ -34,6 +35,7 @@ function buildSpec(): Spec {
   app.route("/footer", footerRoutes);
   app.route("/header", headerRoutes);
   app.route("/locations", locationRoutes);
+  app.route("/platform", platformRoutes);
   app.route("/products", productRoutes);
   app.route("/search", searchRoutes);
   app.route("/seo", seoRoutes);
@@ -78,6 +80,7 @@ const expectedOperations: Expected[] = [
   ["get", "/api/v1/checkout/config", "storefront.checkout.get_config"],
   ["get", "/api/v1/checkout-languages/active", "storefront.checkout_language.get_active"],
   ["get", "/api/v1/seo", "storefront.seo.get"],
+  ["get", "/api/v1/platform", "storefront.platform.get"],
 ];
 
 describe("storefront public read operation identity", () => {

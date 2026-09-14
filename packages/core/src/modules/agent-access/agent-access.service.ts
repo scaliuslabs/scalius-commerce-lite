@@ -1,13 +1,18 @@
-import { and, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, safeBatch } from "@scalius/database/client";
 import {
+  agentArtifactHandles,
   agentAuditEvents,
   agentAuthorizationRequests,
+  agentBrowserHandoffs,
   agentCredentials,
   agentDeviceAuthorizations,
   agentGrants,
+  agentStorefrontContexts,
+  agentStorefrontContinuations,
+  agentStorefrontOrderGrants,
   user,
 } from "@scalius/database/schema";
 import { getAllPermissionNames, isSensitivePermission } from "../../auth/rbac/permissions";
@@ -231,12 +236,43 @@ function safeJsonArray(value: string): string[] {
   }
 }
 
+/**
+ * Connection list status filters. `current` is the dashboard default: every
+ * pending or active grant that has not expired yet. `expired` and `revoked`
+ * together are exactly the set `purgeRevokedAgentGrants()` deletes.
+ */
+export type AgentConnectionStatusFilter =
+  | "current"
+  | "pending"
+  | "active"
+  | "revoked"
+  | "expired";
+
+function connectionStatusFilter(status: string | undefined, now: Date) {
+  switch (status) {
+    case undefined:
+    case "":
+      return undefined;
+    case "current":
+      return and(inArray(agentGrants.status, ["pending", "active"]), gt(agentGrants.expiresAt, now));
+    case "expired":
+      return and(inArray(agentGrants.status, ["pending", "active"]), lte(agentGrants.expiresAt, now));
+    case "revoked":
+      return eq(agentGrants.status, "revoked");
+    default:
+      return and(
+        eq(agentGrants.status, status as "pending" | "active"),
+        gt(agentGrants.expiresAt, now),
+      );
+  }
+}
+
 export async function listAgentConnections(
   db: Database,
   input: {
     page: number;
     limit: number;
-    status?: string;
+    status?: AgentConnectionStatusFilter | string;
     resource?: AgentResource;
     kind?: string;
     ownerUserId?: string;
@@ -244,15 +280,9 @@ export async function listAgentConnections(
 ) {
   const now = new Date();
   const filters = [
-    input.status && input.status !== "expired" ? eq(agentGrants.status, input.status as "pending" | "active" | "revoked") : undefined,
-    input.status && input.status !== "expired" && input.status !== "revoked"
-      ? gt(agentGrants.expiresAt, now)
-      : undefined,
+    connectionStatusFilter(input.status, now),
     input.resource ? eq(agentGrants.resource, input.resource) : undefined,
     input.kind ? eq(agentGrants.kind, input.kind as "oauth" | "pat" | "cli") : undefined,
-    input.status === "expired"
-      ? and(inArray(agentGrants.status, ["pending", "active"]), sql`${agentGrants.expiresAt} <= unixepoch()`)
-      : undefined,
     input.ownerUserId ? eq(agentGrants.ownerUserId, input.ownerUserId) : undefined,
   ].filter(Boolean);
   const where = filters.length ? and(...filters) : undefined;
@@ -418,6 +448,107 @@ export async function revokeAllAgentGrants(
   ]);
   const grantRows = results[1] as { id: string }[] | undefined;
   return { status: "revoked" as const, count: grantRows?.length ?? 0 };
+}
+
+/** D1 allows at most 100 bound parameters per statement; keep ID chunks below that. */
+export const AGENT_GRANT_PURGE_CHUNK_SIZE = 90;
+
+export interface PurgeRevokedAgentGrantsOptions {
+  resource?: AgentResource;
+  now?: Date;
+  /**
+   * Receives every artifact handle in a chunk before its rows are deleted so
+   * the caller can remove the private R2 objects while the relational
+   * authority still exists. Object failures must be absorbed by the caller;
+   * the purge continues because the grant is already dead and the bucket
+   * lifecycle rule remains the secondary safety net.
+   */
+  onArtifactsPurging?: (
+    artifacts: ReadonlyArray<{ id: string; r2Key: string }>,
+  ) => Promise<void>;
+}
+
+export interface PurgeRevokedAgentGrantsResult {
+  status: "purged";
+  /** Grants permanently deleted. */
+  count: number;
+  /** Credentials deleted with those grants. */
+  credentials: number;
+  /** Artifact handles deleted with those grants. */
+  artifacts: number;
+}
+
+function purgeableGrantPredicate(now: Date, resource?: AgentResource) {
+  return and(
+    or(eq(agentGrants.status, "revoked"), lte(agentGrants.expiresAt, now)),
+    resource ? eq(agentGrants.resource, resource) : undefined,
+  );
+}
+
+/**
+ * Permanently deletes revoked grants plus every grant whose expiry has passed
+ * (regardless of status), together with all dependent rows. Tables whose
+ * grant reference is `no action` (artifact handles, browser handoffs) or whose
+ * `set null` action would violate a status CHECK (authorization requests,
+ * device authorizations) are deleted explicitly, in dependency order, inside
+ * the same atomic batch as the grant so no provider relies on FK actions.
+ * Audit history for the purged grants is deleted as well; this is the
+ * merchant-facing "clear revoked connections" ceremony, not a retention job.
+ */
+export async function purgeRevokedAgentGrants(
+  db: Database,
+  options: PurgeRevokedAgentGrantsOptions = {},
+): Promise<PurgeRevokedAgentGrantsResult> {
+  const now = options.now ?? new Date();
+  const candidates = await db.select({ id: agentGrants.id }).from(agentGrants)
+    .where(purgeableGrantPredicate(now, options.resource))
+    .orderBy(asc(agentGrants.createdAt), asc(agentGrants.id));
+  const result: PurgeRevokedAgentGrantsResult = {
+    status: "purged",
+    count: 0,
+    credentials: 0,
+    artifacts: 0,
+  };
+  for (let offset = 0; offset < candidates.length; offset += AGENT_GRANT_PURGE_CHUNK_SIZE) {
+    const ids = candidates
+      .slice(offset, offset + AGENT_GRANT_PURGE_CHUNK_SIZE)
+      .map((row) => row.id);
+    if (options.onArtifactsPurging) {
+      const artifacts = await db.select({
+        id: agentArtifactHandles.id,
+        r2Key: agentArtifactHandles.r2Key,
+      }).from(agentArtifactHandles).where(inArray(agentArtifactHandles.grantId, ids));
+      if (artifacts.length > 0) await options.onArtifactsPurging(artifacts);
+    }
+    const credentialIds = db.select({ id: agentCredentials.id }).from(agentCredentials)
+      .where(inArray(agentCredentials.grantId, ids));
+    const contextIds = db.select({ id: agentStorefrontContexts.id }).from(agentStorefrontContexts)
+      .where(inArray(agentStorefrontContexts.grantId, ids));
+    const results = await safeBatch(db, [
+      db.delete(agentAuditEvents).where(inArray(agentAuditEvents.grantId, ids)),
+      db.delete(agentAuditEvents).where(inArray(agentAuditEvents.credentialId, credentialIds)),
+      db.delete(agentArtifactHandles).where(inArray(agentArtifactHandles.grantId, ids))
+        .returning({ id: agentArtifactHandles.id }),
+      db.delete(agentBrowserHandoffs).where(inArray(agentBrowserHandoffs.grantId, ids)),
+      db.delete(agentAuthorizationRequests).where(inArray(agentAuthorizationRequests.grantId, ids)),
+      db.delete(agentDeviceAuthorizations).where(inArray(agentDeviceAuthorizations.grantId, ids)),
+      db.delete(agentStorefrontContinuations)
+        .where(inArray(agentStorefrontContinuations.contextId, contextIds)),
+      db.delete(agentStorefrontOrderGrants)
+        .where(inArray(agentStorefrontOrderGrants.contextId, contextIds)),
+      db.delete(agentStorefrontContexts).where(inArray(agentStorefrontContexts.grantId, ids)),
+      db.delete(agentCredentials).where(inArray(agentCredentials.grantId, ids))
+        .returning({ id: agentCredentials.id }),
+      db.delete(agentGrants).where(and(
+        inArray(agentGrants.id, ids),
+        purgeableGrantPredicate(now, options.resource),
+      )).returning({ id: agentGrants.id }),
+    ]);
+    result.artifacts += (results[2] as { id: string }[] | undefined)?.length ?? 0;
+    result.credentials += (results[9] as { id: string }[] | undefined)?.length ?? 0;
+    result.count += (results[10] as { id: string }[] | undefined)?.length ?? 0;
+  }
+  return result;
 }
 
 export async function getAuthorizationRequest(db: Database, requestId: string) {

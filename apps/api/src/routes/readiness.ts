@@ -10,6 +10,8 @@ import {
 } from "@scalius/database/schema-contract";
 import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
+import { MASTER_SECRET_NAME, readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { EMPTY_PLATFORM_CONFIG, getPlatformConfigReadiness } from "@scalius/shared/platform-config";
 
 const READINESS_REMOTE_PROBE_TIMEOUT_MS = 5000;
 const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
@@ -187,29 +189,35 @@ async function r2Check(
 }
 
 function configCheck(env: Env): CheckResult {
-  const requiredVars = [
-    "BETTER_AUTH_SECRET",
-    "API_TOKEN",
-    "JWT_SECRET",
-    "CREDENTIAL_ENCRYPTION_KEY",
-    "AGENT_TOKEN_PEPPER",
-    "PUBLIC_API_BASE_URL",
-    "STOREFRONT_URL",
-    "BETTER_AUTH_URL",
-    "R2_PUBLIC_URL",
-    "PURGE_URL",
-    "PURGE_TOKEN",
-  ] as const;
-  const missingVars = requiredVars.filter((key) => !String(env[key] ?? "").trim());
+  const missing: string[] = [];
+  if (!readMasterSecret(env)) missing.push(MASTER_SECRET_NAME);
+  if (!String(env.CREDENTIAL_ENCRYPTION_KEY ?? "").trim()) {
+    missing.push("CREDENTIAL_ENCRYPTION_KEY");
+  }
 
   return {
     name: "runtime_config",
     required: true,
     check: {
-      status: missingVars.length === 0 ? "ok" : "missing",
-      detail: missingVars.length > 0
-        ? `missing ${missingVars.join(", ")}`
-        : "required runtime vars present",
+      status: missing.length === 0 ? "ok" : "missing",
+      detail: missing.length > 0
+        ? `missing ${missing.join(", ")}`
+        : "required secrets installed",
+    },
+  };
+}
+
+/** Platform origins are merchant-configured; they gate CORS, cookies, links, and discovery. */
+function platformCheck(env: Env): CheckResult {
+  const readiness = getPlatformConfigReadiness(env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG);
+  return {
+    name: "platform_config",
+    required: true,
+    check: {
+      status: readiness.complete ? "ok" : "missing",
+      detail: readiness.complete
+        ? "platform origins configured"
+        : `missing ${readiness.missing.join(", ")}; set them in Settings -> System -> Platform`,
     },
   };
 }
@@ -277,6 +285,7 @@ app.get("/readyz", async (c) => {
       "rate limit",
     ),
     configCheck(env),
+    platformCheck(env),
   ];
   const ready = isReady(checks);
   const durationMs = nowMs() - started;

@@ -1389,6 +1389,65 @@ describe("order notification dispatch", () => {
         );
     });
 
+    it("links admin push notifications to the dashboard origin, never the API or request origin", async () => {
+        const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 1,
+            failureCount: 0,
+            responses: [{ success: true, messageId: "projects/scalius-test/messages/1" }],
+        });
+
+        await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order 42",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            {
+                BETTER_AUTH_URL: "https://dashboard.example.test/",
+                PUBLIC_API_BASE_URL: "https://api.example.test",
+            } as Env,
+            "https://api.example.test/api/v1/orders",
+        );
+
+        expect(mocks.sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({
+            webpush: { fcmOptions: { link: "https://dashboard.example.test/admin/orders/order%2042" } },
+            data: expect.objectContaining({
+                link: "https://dashboard.example.test/admin/orders/order%2042",
+            }),
+        }));
+    });
+
+    it("omits the push link instead of guessing when the dashboard origin is not configured", async () => {
+        const pushDb = createPushDb([{ token: "fcm_token_1" }]);
+        mocks.sendEachForMulticast.mockResolvedValueOnce({
+            successCount: 1,
+            failureCount: 0,
+            responses: [{ success: true, messageId: "projects/scalius-test/messages/1" }],
+        });
+
+        await sendOrderNotification(
+            pushDb.db,
+            {
+                id: "order_43",
+                customerName: "Push Customer",
+                notificationType: "order_created",
+            },
+            { PUBLIC_API_BASE_URL: "https://api.example.test" } as Env,
+            "https://api.example.test",
+        );
+
+        const payload = mocks.sendEachForMulticast.mock.calls.at(-1)?.[0] as {
+            webpush?: unknown;
+            data: Record<string, unknown>;
+        };
+        expect(payload.webpush).toBeUndefined();
+        expect(payload.data).not.toHaveProperty("link");
+        expect(payload.data).toMatchObject({ orderId: "order_43", notificationType: "order_created" });
+        expect(JSON.stringify(payload)).not.toContain("api.example.test");
+    });
+
     it("treats provider stale-device FCM errors as skipped receipts and deactivates tokens", async () => {
         const pushDb = createPushDb([
             { token: "dead_fcm_token" },

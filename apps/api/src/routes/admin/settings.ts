@@ -10,6 +10,7 @@ import { notificationChannelsRoutes } from "./settings/notification-channels";
 import { smsSettingsRoutes } from "./settings/sms";
 import { businessSettingsRoutes } from "./settings/business";
 import { customerRequestPolicyRoutes } from "./settings/customer-requests";
+import { platformSettingsRoutes } from "./settings/platform";
 import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -21,6 +22,7 @@ app.route("/", feedRowPreviewRoutes);
 app.route("/", businessSettingsRoutes);
 app.route("/", paymentSettingsRoutes);
 app.route("/", systemSettingsRoutes);
+app.route("/", platformSettingsRoutes);
 app.route("/shipping-methods", shippingMethodsSettingsRoutes);
 app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/hero-sliders", heroSlidersRoutes);

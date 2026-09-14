@@ -21,7 +21,8 @@ interface FirebaseServiceAccount {
 export interface FirebaseServiceAccountReadiness {
   configured: boolean;
   error: string | null;
-  source: "settings" | "env" | "none";
+  /** The service account is dashboard-managed only; there is no env source. */
+  source: "settings" | "none";
 }
 
 function parseFirebaseServiceAccountJson(value: string): FirebaseServiceAccount {
@@ -121,7 +122,6 @@ export async function readFirebaseServiceAccountJson(
 export async function getFirebaseServiceAccountReadiness(
   db: Database,
   encryptionKey?: string,
-  env?: Record<string, unknown>,
 ): Promise<FirebaseServiceAccountReadiness> {
   const row = await db
     .select({ value: settings.value })
@@ -148,23 +148,6 @@ export async function getFirebaseServiceAccountReadiness(
             "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
           source: "settings",
         };
-  }
-
-  const envValue = typeof env?.FIREBASE_SERVICE_ACCOUNT_CRED_JSON === "string"
-    ? env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON.trim()
-    : "";
-  if (envValue) {
-    try {
-      normalizeFirebaseServiceAccountJson(envValue);
-      return { configured: true, error: null, source: "env" };
-    } catch {
-      return {
-        configured: false,
-        error:
-          "Firebase service account environment variable is not valid. Fix it or disable admin push notifications.",
-        source: "env",
-      };
-    }
   }
 
   return {

@@ -29,25 +29,30 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { getServerFnError } from "~/lib/api-helpers";
 
 import {
+  agentClearableConnectionsQueryOptions,
   agentConnectionsQueryOptions,
+  purgeRevokedAgentConnections,
   revokeAllAgentGrants,
 } from "./api";
 import { ConnectionDetails } from "./ConnectionDetails";
 import { ConnectionTable } from "./ConnectionTable";
 import { CreateTokenDialog } from "./CreateTokenDialog";
+import { PurgeRevokedDialog } from "./PurgeRevokedDialog";
 import { RevokeDialog } from "./RevokeDialog";
 import type {
   AgentConnection,
+  AgentConnectionStatusFilter,
   AgentGrantKind,
-  AgentGrantStatus,
   AgentResource,
 } from "./types";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
+/** Default list: pending + active, so revoked and expired history stays out of the way. */
+const DEFAULT_STATUS: StatusFilter = "current";
 const EMPTY_CONNECTIONS: AgentConnection[] = [];
 
-type StatusFilter = AgentGrantStatus | typeof ALL;
+type StatusFilter = AgentConnectionStatusFilter | typeof ALL;
 type KindFilter = AgentGrantKind | typeof ALL;
 type ResourceFilter = AgentResource | typeof ALL;
 
@@ -63,7 +68,7 @@ export function AgentAccessSettingsPage({
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<StatusFilter>(ALL);
+  const [status, setStatus] = useState<StatusFilter>(DEFAULT_STATUS);
   const [kind, setKind] = useState<KindFilter>(ALL);
   const [resource, setResource] = useState<ResourceFilter>(ALL);
   const [selectedConnection, setSelectedConnection] =
@@ -77,6 +82,7 @@ export function AgentAccessSettingsPage({
     }),
   );
   const connections = connectionsQuery.data?.connections ?? EMPTY_CONNECTIONS;
+  const clearableQuery = useQuery(agentClearableConnectionsQueryOptions());
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -108,6 +114,21 @@ export function AgentAccessSettingsPage({
     },
   });
 
+  const purgeRevokedMutation = useMutation({
+    mutationFn: () => purgeRevokedAgentConnections(),
+    onSuccess: async (result) => {
+      toast.success(
+        result.count === 0
+          ? "No revoked or expired connections were found"
+          : `${result.count} ${result.count === 1 ? "connection" : "connections"} permanently deleted`,
+      );
+      await invalidateConnections(queryClient);
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Connections could not be cleared"));
+    },
+  });
+
   const activeCount = connections.filter((item) => item.status === "active").length;
   const dashboardCount = connections.filter(
     (item) => item.status === "active" && item.resource === "dashboard",
@@ -128,8 +149,9 @@ export function AgentAccessSettingsPage({
             <h1 className="text-xl font-semibold tracking-tight">Agent Access</h1>
           </div>
           <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-            Approve, scope, inspect, and revoke every MCP, CLI, and personal-token
-            connection to this store.
+            Approve, scope, inspect, revoke, and clear every MCP, CLI, and
+            personal-token connection to this store. Revoked and expired
+            connections stay out of the default view until you clear them.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -137,6 +159,12 @@ export function AgentAccessSettingsPage({
             availablePermissions={availablePermissions}
             canManage={canManage}
             onCreated={() => invalidateConnections(queryClient)}
+          />
+          <PurgeRevokedDialog
+            clearable={clearableQuery.data}
+            disabled={!canManage}
+            pending={purgeRevokedMutation.isPending}
+            onConfirm={() => purgeRevokedMutation.mutateAsync()}
           />
           <RevokeDialog
             title="Revoke every agent connection?"
@@ -193,7 +221,8 @@ export function AgentAccessSettingsPage({
           <AlertTitle>View-only access</AlertTitle>
           <AlertDescription>
             You can inspect connections and activity. A Super Admin with Agent
-            Access management permission must create, rotate, narrow, or revoke them.
+            Access management permission must create, rotate, narrow, revoke, or
+            clear them.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -255,11 +284,12 @@ export function AgentAccessSettingsPage({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All statuses</SelectItem>
+                <SelectItem value="current">Current</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="revoked">Revoked</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value={ALL}>All statuses</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -307,11 +337,26 @@ export function AgentAccessSettingsPage({
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border bg-muted/30 text-muted-foreground">
                 <TerminalSquare className="h-5 w-5" aria-hidden="true" />
               </div>
-              <h2 className="mt-3 text-sm font-semibold">No agent connections</h2>
+              <h2 className="mt-3 text-sm font-semibold">
+                {status === "current" ? "No current agent connections" : "No agent connections"}
+              </h2>
               <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
                 Create a personal token here, connect an MCP client through OAuth,
                 or run <code className="rounded bg-muted px-1 py-0.5">scalius auth login</code> for CLI pairing.
               </p>
+              {status === "current" && (clearableQuery.data?.total ?? 0) > 0 ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="mt-1"
+                  onClick={() => {
+                    setStatus(ALL);
+                    setPage(1);
+                  }}
+                >
+                  Show revoked and expired connections
+                </Button>
+              ) : null}
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-lg border border-dashed px-4 py-8 text-center">
@@ -322,7 +367,7 @@ export function AgentAccessSettingsPage({
                 className="mt-1"
                 onClick={() => {
                   setQuery("");
-                  setStatus(ALL);
+                  setStatus(DEFAULT_STATUS);
                   setKind(ALL);
                   setResource(ALL);
                   setPage(1);
@@ -341,7 +386,7 @@ export function AgentAccessSettingsPage({
           {pagination && pagination.totalPages > 1 ? (
             <div className="flex items-center justify-between border-t pt-3">
               <p className="text-xs text-muted-foreground">
-                {pagination.total} total connections
+                {pagination.total} {status === "current" ? "current" : "matching"} connections
               </p>
               <div className="flex items-center gap-2">
                 <Button

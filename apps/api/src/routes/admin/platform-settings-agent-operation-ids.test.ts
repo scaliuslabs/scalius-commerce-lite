@@ -10,6 +10,7 @@ import { adminDashboardRoutes } from "./dashboard";
 import { businessSettingsRoutes } from "./settings/business";
 import { siteSettingsRoutes } from "./settings/site";
 import { systemSettingsRoutes } from "./settings/system";
+import { platformSettingsRoutes } from "./settings/platform";
 import { smsSettingsRoutes } from "./settings/sms";
 import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
 
@@ -76,9 +77,12 @@ const EXPECTED_OPERATIONS: readonly ExpectedOperation[] = [
   ["get", "/api/v1/admin/settings/security", "dashboard.security.policy_get"],
   ["post", "/api/v1/admin/settings/security", "dashboard.security.policy_update"],
   ["get", "/api/v1/admin/settings/security/runtime-sources", "dashboard.security.runtime_sources"],
+  ["get", "/api/v1/admin/settings/platform", "dashboard.settings.platform_get"],
+  ["put", "/api/v1/admin/settings/platform", "dashboard.settings.platform_update"],
 ] as const;
 
 const BODY_MUTATIONS = [
+  ["put", "/api/v1/admin/settings/platform"],
   ["post", "/api/v1/cache/clear-group"],
   ["post", "/api/v1/admin/settings/business"],
   ["post", "/api/v1/admin/settings/currency"],
@@ -134,6 +138,8 @@ const EXPECTED_PERMISSIONS = [
   ["GET", "/api/v1/admin/settings/security", PERMISSIONS.SETTINGS_GENERAL_VIEW],
   ["POST", "/api/v1/admin/settings/security", PERMISSIONS.SETTINGS_GENERAL_EDIT],
   ["GET", "/api/v1/admin/settings/security/runtime-sources", PERMISSIONS.SETTINGS_GENERAL_VIEW],
+  ["GET", "/api/v1/admin/settings/platform", PERMISSIONS.SETTINGS_GENERAL_VIEW],
+  ["PUT", "/api/v1/admin/settings/platform", PERMISSIONS.SETTINGS_GENERAL_EDIT],
 ] as const;
 
 function buildSpec() {
@@ -143,6 +149,7 @@ function buildSpec() {
   app.route("/admin/settings", siteSettingsRoutes);
   app.route("/admin/settings", businessSettingsRoutes);
   app.route("/admin/settings", systemSettingsRoutes);
+  app.route("/admin/settings", platformSettingsRoutes);
   app.route("/admin/settings", smsSettingsRoutes);
   app.route("/admin/settings", feedRowPreviewRoutes);
   return app.getOpenAPIDocument({

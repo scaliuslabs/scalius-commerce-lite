@@ -35,18 +35,15 @@ interface JwtVerificationEnv extends JwtSigningEnv {
 }
 
 /**
- * Retrieve the JWT secret from the Workers env or process.env.
- * Called at request time (not module load) to avoid the missing-env issue.
+ * Read the JWT signing secret from the request-scoped env. The value is
+ * derived from `SCALIUS_SECRET` at Worker entry (src/runtime/runtime-env.ts);
+ * there is no process.env or default-secret fallback.
  */
 function getJwtSecret(env?: JwtSigningEnv): string {
-  const secret =
-    env?.JWT_SECRET ||
-    (typeof process !== "undefined" ? process.env.JWT_SECRET : undefined);
-
-  if (!secret) {
-    throw new Error("JWT_SECRET environment variable is required");
+  const secret = env?.JWT_SECRET;
+  if (typeof secret !== "string" || secret.length === 0) {
+    throw new Error("JWT_SECRET is not available in the runtime env");
   }
-
   return secret;
 }
 
@@ -219,7 +216,7 @@ export function getTokenStats(
   isConfigured: boolean;
   secretLengthSufficient: boolean;
 } {
-  const secret = env?.JWT_SECRET || process.env?.JWT_SECRET || "";
+  const secret = env?.JWT_SECRET ?? "";
   return {
     blacklistStorage: "cloudflare-kv",
     isConfigured: typeof secret === "string" && secret.length > 0,

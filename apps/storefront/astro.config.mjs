@@ -6,7 +6,6 @@ import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 import deferredPartytown from "./integrations/deferred-partytown.mjs";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
-import { CDN_DOMAINS } from "./src/lib/image-config.ts";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
 
@@ -28,9 +27,10 @@ const reactSingletonDeps = [
 export default defineConfig({
   devToolbar: { enabled: false },
 
-  image: {
-    domains: CDN_DOMAINS,
-  },
+  // No `image.domains`: the Cloudflare adapter runs the passthrough image
+  // service and nothing renders astro:assets <Image>/<Picture> or getImage(),
+  // so the remote-image allowlist has no effect. Media hosts are resolved per
+  // request from dashboard media settings and the platform media URL.
 
   prefetch: {
     prefetchAll: true,

@@ -1,5 +1,6 @@
 export const storefrontPublicReadScenarios = {
   loadBuyerShell: [
+    "storefront.platform.get",
     "storefront.layout.get",
     "storefront.homepage.get",
     "storefront.seo.get",

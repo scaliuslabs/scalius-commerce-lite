@@ -41,6 +41,35 @@ vi.mock("cloudflare:workers", () => ({
   },
 }));
 
+// Platform origins normally come from KV/D1; keep the boundary tests hermetic.
+vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
+  resolvePlatformConfig: vi.fn(async () => ({
+    storefrontUrl: "https://storefront.example.test",
+    apiUrl: "https://api.example.test",
+    dashboardUrl: "https://dashboard.example.test",
+    mediaUrl: "https://cdn.example.test",
+    customerAuthCookieDomain: "",
+    corsAllowedOrigins: [],
+  })),
+}));
+
+const MASTER_SECRET = "worker-boundary-master-secret-with-more-than-32-chars";
+
+/** The only secret Wrangler installs; everything else is derived per invocation. */
+function runtimeEnv(overrides: Partial<Env> = {}): Env {
+  return { SCALIUS_SECRET: MASTER_SECRET, ...overrides } as Env;
+}
+
+/** The env every downstream graph receives: bindings plus derived secrets and origins. */
+const composedEnv = expect.objectContaining({
+  SCALIUS_SECRET: MASTER_SECRET,
+  JWT_SECRET: expect.any(String),
+  API_TOKEN: expect.any(String),
+  PURGE_TOKEN: expect.any(String),
+  STOREFRONT_URL: "https://storefront.example.test",
+  PURGE_URL: "https://storefront.example.test/api/purge-cache",
+});
+
 describe("API Worker startup boundaries", () => {
   afterEach(() => {
     vi.doUnmock("./app");
@@ -98,7 +127,7 @@ describe("API Worker startup boundaries", () => {
     const { PublicApi } = await import("./worker");
     const withoutCache = new PublicApi(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     );
 
     await expect(withoutCache.purgeGroups(["products"])).resolves.toBeUndefined();
@@ -150,7 +179,7 @@ describe("API Worker startup boundaries", () => {
         : workerModule.default;
       const worker = new WorkerClass(
         undefined as never,
-        undefined as never,
+        runtimeEnv(),
       ) as unknown as TestApiWorker;
       const response = await worker.fetch(
         new Request(`https://api.example.test${path}`),
@@ -195,7 +224,7 @@ describe("API Worker startup boundaries", () => {
     expect(agentLoaded).toBe(false);
     const worker = new ApiWorker(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     ) as unknown as TestApiWorker;
     const response = await worker.fetch(
       new Request("https://api.example.test/api/v1/mcp/dashboard"),
@@ -225,7 +254,7 @@ describe("API Worker startup boundaries", () => {
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     ) as unknown as TestApiWorker;
     const response = await worker.fetch(
       new Request("https://api.example.test/api/v1/unknown"),
@@ -251,7 +280,7 @@ describe("API Worker startup boundaries", () => {
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     ) as unknown as TestApiWorker;
     await worker.fetch(new Request("https://api.example.test/api/v1/admin/dashboard/activity"));
     await worker.fetch(new Request("https://api.example.test/api/v1/admin/orders"));
@@ -312,7 +341,7 @@ describe("API Worker startup boundaries", () => {
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     ) as unknown as TestApiWorker;
     const batch = { messages: [] } as unknown as MessageBatch<
       Record<string, unknown>
@@ -322,7 +351,7 @@ describe("API Worker startup boundaries", () => {
 
     expect(handleQueueBatch).toHaveBeenCalledWith(
       batch,
-      worker.env,
+      composedEnv,
       worker.ctx,
     );
     expect(loaded).toEqual({
@@ -360,7 +389,7 @@ describe("API Worker startup boundaries", () => {
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       undefined as never,
-      undefined as never,
+      runtimeEnv(),
     ) as unknown as TestApiWorker;
     const controller = {
       cron: "*/15 * * * *",
@@ -371,15 +400,15 @@ describe("API Worker startup boundaries", () => {
     await worker.scheduled(controller);
 
     expect(runScheduledMaintenance).toHaveBeenCalledWith(
-      worker.env,
+      composedEnv,
       worker.ctx,
       {
         cron: "*/15 * * * *",
         scheduledTime: 1783166400000,
       },
     );
-    expect(purgeExpiredOAuthData).toHaveBeenCalledWith(worker.env);
-    expect(purgeExpiredAgentArtifacts).toHaveBeenCalledWith(worker.env);
+    expect(purgeExpiredOAuthData).toHaveBeenCalledWith(composedEnv);
+    expect(purgeExpiredAgentArtifacts).toHaveBeenCalledWith(composedEnv);
     expect(loaded).toEqual({
       app: false,
       queue: false,
@@ -419,5 +448,128 @@ describe("API Worker startup boundaries", () => {
     expect(retryAll).toHaveBeenCalledWith({ delaySeconds: 60 });
     expect(handleQueueBatch).not.toHaveBeenCalled();
     expect(runScheduledMaintenance).not.toHaveBeenCalled();
+  });
+
+  describe("missing SCALIUS_SECRET", () => {
+    it.each([
+      ["/api/v1/admin/dashboard/activity"],
+      ["/api/v1/auth/me"],
+      ["/api/v1/products"],
+      ["/api/v1/mcp/dashboard"],
+      ["/api/v1/unknown"],
+    ])("fails closed with 503 RUNTIME_SECRET_MISSING for %s without loading a route family", async (path) => {
+      const loaded: Record<RuntimeAppName, boolean> = {
+        probe: false,
+        public: false,
+        admin: false,
+        system: false,
+        docs: false,
+      };
+      mockRuntimeApps(loaded);
+      const agentFetch = vi.fn(() => new Response("agent"));
+      vi.doMock("./agent-access/runtime", () => ({
+        handleAgentAccessRequest: agentFetch,
+      }));
+
+      const { default: ApiWorker } = await import("./worker");
+      const worker = new ApiWorker(
+        undefined as never,
+        { CACHE: { get: vi.fn() } } as unknown as Env,
+      ) as unknown as TestApiWorker;
+      const response = await worker.fetch(new Request(`https://api.example.test${path}`));
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      await expect(response.json()).resolves.toMatchObject({
+        success: false,
+        code: "RUNTIME_SECRET_MISSING",
+        error: expect.stringContaining("SCALIUS_SECRET"),
+      });
+      expect(agentFetch).not.toHaveBeenCalled();
+      expect(loaded).toEqual({
+        probe: false,
+        public: false,
+        admin: false,
+        system: false,
+        docs: false,
+      });
+    });
+
+    it("rejects the public cache entrypoint too", async () => {
+      const loaded: Record<RuntimeAppName, boolean> = {
+        probe: false,
+        public: false,
+        admin: false,
+        system: false,
+        docs: false,
+      };
+      mockRuntimeApps(loaded);
+
+      const { PublicApi } = await import("./worker");
+      const worker = new PublicApi(undefined as never, {} as Env) as unknown as TestApiWorker;
+      const response = await worker.fetch(new Request("https://api.example.test/api/v1/products"));
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ code: "RUNTIME_SECRET_MISSING" });
+      expect(loaded.public).toBe(false);
+    });
+
+    it("still answers /api/v1/health and /api/v1/readyz so operators can see the missing secret", async () => {
+      const probeFetch = vi.fn((_request: Request, _env: Env, _ctx: unknown) => new Response("probe"));
+      vi.doMock("./runtime/probe-app", () => ({ default: { fetch: probeFetch } }));
+
+      const { default: ApiWorker } = await import("./worker");
+      const worker = new ApiWorker(
+        undefined as never,
+        { SCALIUS_SECRET: "too-short" } as Env,
+      ) as unknown as TestApiWorker;
+
+      const health = await worker.fetch(new Request("https://api.example.test/api/v1/health"));
+      expect(health.status).toBe(200);
+      await expect(health.json()).resolves.toMatchObject({ status: "ok" });
+
+      const readyz = await worker.fetch(new Request("https://api.example.test/api/v1/readyz"));
+      expect(readyz.status).toBe(200);
+      expect(await readyz.text()).toBe("probe");
+      // The probe receives the composed env (platform origins, no derived secrets)
+      // so its runtime_config check can report exactly what is missing.
+      expect(probeFetch).toHaveBeenCalledWith(
+        expect.any(Request),
+        expect.objectContaining({
+          SCALIUS_SECRET: "too-short",
+          STOREFRONT_URL: "https://storefront.example.test",
+        }),
+        expect.anything(),
+      );
+      const probeEnv = probeFetch.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+      expect(probeEnv.JWT_SECRET).toBeUndefined();
+      expect(probeEnv.API_TOKEN).toBeUndefined();
+    });
+
+    it("retries queue batches and skips cron work instead of running without derived secrets", async () => {
+      const handleQueueBatch = vi.fn();
+      const runScheduledMaintenance = vi.fn();
+      vi.doMock("./queue-consumer", () => ({ handleQueueBatch }));
+      vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
+      vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData: vi.fn() }));
+      vi.doMock("./agent-access/artifact-delivery", () => ({
+        purgeExpiredAgentArtifacts: vi.fn(),
+      }));
+
+      const { default: ApiWorker } = await import("./worker");
+      const worker = new ApiWorker(undefined as never, {} as Env) as unknown as TestApiWorker;
+      const retryAll = vi.fn();
+      const batch = { messages: [], retryAll } as unknown as MessageBatch<Record<string, unknown>>;
+
+      await worker.queue(batch);
+      await worker.scheduled({
+        cron: "*/15 * * * *",
+        scheduledTime: 1783166400000,
+      } as unknown as ScheduledController);
+
+      expect(retryAll).toHaveBeenCalledWith({ delaySeconds: 60 });
+      expect(handleQueueBatch).not.toHaveBeenCalled();
+      expect(runScheduledMaintenance).not.toHaveBeenCalled();
+    });
   });
 });

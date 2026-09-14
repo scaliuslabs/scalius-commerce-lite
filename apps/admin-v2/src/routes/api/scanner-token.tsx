@@ -168,8 +168,8 @@ async function defaultLoadUserPermissions(
 }
 
 async function defaultGetEnv(): Promise<CloudflareEnv> {
-  const { env } = await import("cloudflare:workers");
-  return env as CloudflareEnv;
+  const { getRuntimeEnv } = await import("~/lib/runtime-env.server");
+  return getRuntimeEnv() as CloudflareEnv;
 }
 
 async function defaultCreateToken(): Promise<string> {

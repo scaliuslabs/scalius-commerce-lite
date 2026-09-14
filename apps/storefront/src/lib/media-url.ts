@@ -20,6 +20,17 @@ function normalizeCdnDomain(value: string | null | undefined): string {
   return raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
+const LOOPBACK_CDN_HOST = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i;
+
+/**
+ * CDN bases are configured as hosts. Production media is always HTTPS; only a
+ * loopback host (local `pnpm dev` serving media from the API) keeps plain HTTP.
+ */
+function toCdnBaseUrl(domain: string): string {
+  if (!domain) return "";
+  return `${LOOPBACK_CDN_HOST.test(domain) ? "http" : "https"}://${domain}`;
+}
+
 function readWindowCdnDomain(): string {
   if (typeof window === "undefined") return "";
   return (
@@ -56,34 +67,31 @@ function readWindowBoolean(
 /**
  * Lazily resolve the CDN base URL (called per-use, not at module init).
  * Resolution order (SSR):
- * 1. getRuntimeCdnDomain() — request-local context set by middleware
+ * 1. dashboard media setting (canonical CDN) applied to the request context
+ * 2. getRuntimeCdnDomain() — platform media host seeded by the middleware
  * Resolution order (Client):
- * 2. window.__CDN_DOMAIN__ — injected by Layout.astro
+ * 1. window.__IMAGE_CDN_BASE_URL__, 2. window.__CDN_DOMAIN__ — both injected
+ *    by Layout.astro from the same request context.
  *
- * All values come from Cloudflare Worker runtime env (wrangler.jsonc vars).
  * No build-time baking — .dev.vars and .env files do NOT affect this.
  */
 export function getCdnBase(): string {
   const policyBase = normalizeCdnDomain(getRuntimeImageCdnBaseUrl());
-  if (policyBase) return `https://${policyBase}`;
+  if (policyBase) return toCdnBaseUrl(policyBase);
 
-  // SSR: runtime env from middleware
+  // SSR: platform media host from the request context
   if (import.meta.env.SSR) {
     const domain = normalizeCdnDomain(getRuntimeCdnDomain());
-    if (domain) return `https://${domain.replace(/^https?:\/\//, "")}`;
-
+    if (domain) return toCdnBaseUrl(domain);
   }
 
   // Client-side: injected by Layout.astro into window
   const windowPolicyBase = normalizeCdnDomain(
     readWindowString("__IMAGE_CDN_BASE_URL__"),
   );
-  if (windowPolicyBase) return `https://${windowPolicyBase}`;
+  if (windowPolicyBase) return toCdnBaseUrl(windowPolicyBase);
 
-  const windowDomain = normalizeCdnDomain(readWindowCdnDomain());
-  if (windowDomain) return `https://${windowDomain}`;
-
-  return "";
+  return toCdnBaseUrl(normalizeCdnDomain(readWindowCdnDomain()));
 }
 
 /**

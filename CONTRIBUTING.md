@@ -19,6 +19,26 @@ Maintainers classify work with a native GitHub issue type plus status, priority,
 
 If a maintainer invites a contribution, work from the repository default branch, link the accepted issue, follow the pull request template, and keep the change scoped to the agreed outcome.
 
+## Working on the code
+
+Set up a local environment with the [root README](./README.md): `pnpm install`, `pnpm dev:setup`, `pnpm dev`.
+
+Run the same gates CI runs before pushing:
+
+```bash
+pnpm lint
+pnpm typecheck        # tsc, not esbuild
+pnpm test
+pnpm check:env        # no Wrangler `vars` entries
+pnpm generate:sdk     # then commit any regenerated @scalius/api-client output
+```
+
+CI additionally runs repository hygiene, a dependency audit, migration metadata
+checks, `pnpm build`, an API deploy dry run, and a dist secret guard, and fails
+if the working tree is dirty afterwards.
+
+Never commit secrets, `.dev.vars`, or real buyer data.
+
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**. See [LICENSE](./LICENSE) for details.
