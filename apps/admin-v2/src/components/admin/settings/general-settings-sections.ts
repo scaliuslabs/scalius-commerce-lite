@@ -20,6 +20,7 @@ export const GENERAL_SETTINGS_SECTIONS = [
   "auth",
   "security",
   "scanner",
+  "platform",
 ] as const;
 
 export type GeneralSettingsSection =

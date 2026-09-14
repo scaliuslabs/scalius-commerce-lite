@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   getNotificationProviderBlock: vi.fn(),
   isNotificationProviderBreakerFailure: vi.fn(),
   markNotificationProviderBlocked: vi.fn(),
-  getEncryptionKey: vi.fn(() => "test-key"),
   getCredentialEncryptionKey: vi.fn(() => "credential-key"),
   enqueueOrderBalancePaidNotificationForOrder: vi.fn(),
   enqueueOrderCreatedNotificationForOrder: vi.fn(),
@@ -108,7 +107,6 @@ vi.mock("@scalius/core/modules/notifications/notification-provider-health", () =
 }));
 
 vi.mock("./utils/encryption-key", () => ({
-  getEncryptionKey: mocks.getEncryptionKey,
   getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
 
@@ -212,6 +210,7 @@ function createOtpChallengeDb(row: {
 describe("handleQueueBatch payment confirmation retries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -1141,7 +1140,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as Env);
 
-    expect(mocks.getEncryptionKey).not.toHaveBeenCalled();
     expect(mocks.getCredentialEncryptionKey).toHaveBeenCalledTimes(2);
     expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledWith(
       undefined,
@@ -1347,6 +1345,48 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
+  it("skips admin push with an ops log instead of inventing an API origin when the platform apiUrl is not configured", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.getAdminNotificationChannels.mockResolvedValue({
+      order_shipped: ["push"],
+    });
+    const message = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_push_unconfigured",
+      orderId: "order-shipped-unconfigured",
+      customerName: "Push Customer",
+      notificationType: "order_shipped",
+      data: { trackingId: "TRK-2" },
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(mocks.sendOrderNotification).not.toHaveBeenCalled();
+    const skipLog = warn.mock.calls.find((call) => {
+      if (call[0] !== "[api-ops]" || typeof call[1] !== "string") return false;
+      return (JSON.parse(call[1]) as { event?: string }).event
+        === "queue.order_notification.admin_push_skipped";
+    });
+    expect(skipLog).toBeTruthy();
+    expect(JSON.parse(skipLog?.[1] as string)).toMatchObject({
+      event: "queue.order_notification.admin_push_skipped",
+      orderId: "order-shipped-unconfigured",
+      notificationType: "order_shipped",
+      outboxId: "outbox_push_unconfigured",
+      reason: expect.stringContaining("Settings -> System -> Platform"),
+    });
+    expect(warn.mock.calls.map((call) => String(call[1] ?? ""))).not.toContainEqual(
+      expect.stringContaining("scalius.com"),
+    );
+    expect(mocks.markOrderNotificationOutboxSent).toHaveBeenCalledWith(
+      { id: "db" },
+      "outbox_1",
+      "claim_1",
+    );
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
   it("marks durable order notifications sent when admin push only has skipped receipts", async () => {
     mocks.getAdminNotificationChannels.mockResolvedValue({
       order_created: ["push"],
@@ -1406,13 +1446,13 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expiresAt: 4_102_444_800,
     });
     mocks.getDb.mockReturnValueOnce(db);
-    mocks.getCredentialEncryptionKey
-      .mockReturnValueOnce(otpDeliveryCredentialKey)
-      .mockReturnValueOnce(otpDeliveryCredentialKey);
+    // One key: CREDENTIAL_ENCRYPTION_KEY decrypts the D1 delivery target,
+    // derives the OTP code, and is handed to the provider dispatch context.
+    mocks.getCredentialEncryptionKey.mockReturnValue(otpDeliveryCredentialKey);
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
-      encryptionKey: "test-key",
+      encryptionKey: otpDeliveryCredentialKey,
     });
     const message = createMessage({
       type: "auth.send_otp",
@@ -1479,13 +1519,13 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expiresAt: 4_102_444_800,
     });
     mocks.getDb.mockReturnValueOnce(db);
-    mocks.getCredentialEncryptionKey
-      .mockReturnValueOnce(otpDeliveryCredentialKey)
-      .mockReturnValueOnce(otpDeliveryCredentialKey);
+    // One key: CREDENTIAL_ENCRYPTION_KEY decrypts the D1 delivery target,
+    // derives the OTP code, and is handed to the provider dispatch context.
+    mocks.getCredentialEncryptionKey.mockReturnValue(otpDeliveryCredentialKey);
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
-      encryptionKey: "test-key",
+      encryptionKey: otpDeliveryCredentialKey,
     });
     const message = createMessage({
       type: "auth.send_otp",
@@ -1546,7 +1586,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
-      encryptionKey: "test-key",
+      encryptionKey: "credential-key",
     });
     const message = createMessage({
       type: "auth.send_otp",
@@ -1609,7 +1649,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
-      encryptionKey: "test-key",
+      encryptionKey: "credential-key",
     });
     const message = createMessage({
       type: "auth.send_otp",
@@ -2080,7 +2120,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey,
-      encryptionKey: "test-key",
+      encryptionKey: "credential-key",
     });
     const message = createMessage({
       type: "auth.send_otp",

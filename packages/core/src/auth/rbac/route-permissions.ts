@@ -33,6 +33,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/agent-access/connections": {
     GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
   },
+  "/api/v1/admin/agent-access/connections/revoked": {
+    DELETE: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
   "/api/v1/admin/agent-access/connections/*": {
     GET: { permission: PERMISSIONS.AGENT_ACCESS_VIEW },
   },
@@ -730,6 +733,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/settings/security/runtime-sources": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/platform": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/email": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

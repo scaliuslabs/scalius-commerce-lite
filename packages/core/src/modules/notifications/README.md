@@ -18,9 +18,9 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 
 `sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `order_notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` instead of being passed to FCM.
-- Admin channel settings use `getFirebaseServiceAccountReadiness()` and reject enabling Push unless encrypted settings or `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` contain a usable service account.
-- `getFirebaseAdminMessaging(env, serviceAccountJson?)` creates a new `FCMMessagingService` instance when DB credentials are provided, or returns a singleton for env-var credentials
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext resolves to `undefined` rather than being passed to FCM -- there is no environment-variable fallback.
+- Admin channel settings use `getFirebaseServiceAccountReadiness()` and reject enabling Push unless the encrypted settings row contains a usable service account.
+- `getFirebaseAdminMessaging(env, serviceAccountJson?)` always creates a fresh `FCMMessagingService` instance and throws if `serviceAccountJson` is missing; there is no env-var credential source or singleton.
 - Uses `escapeHtml()` from `@scalius/shared/html-escape` to sanitize customer names in notification payloads
 - Stores FCM REST message `name` values on accepted delivery receipts; invalid/stale tokens become skipped receipts before deactivation, including Firebase variants surfaced as `Device unregistered` or `NotRegistered`
 
@@ -49,7 +49,7 @@ Obvious placeholder SMS settings are also readiness blockers. Values such as `du
 
 Sends FCM push notifications to all active admin devices about a new order.
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with strict `CREDENTIAL_ENCRYPTION_KEY` reads for encrypted rows, then falls back to `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` env var. Legacy plaintext rows remain readable; `JWT_SECRET` is not used for provider credentials.
+- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with strict `CREDENTIAL_ENCRYPTION_KEY` reads for encrypted rows; legacy plaintext rows remain readable. There is no environment-variable fallback -- the dashboard-saved row is the only source -- and `JWT_SECRET` is not used for provider credentials.
 - Queries all active tokens from `adminFcmTokens` table
 - Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
 - Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.

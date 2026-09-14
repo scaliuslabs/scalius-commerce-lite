@@ -5,13 +5,15 @@ import type {
   AgentAuditPage,
   AgentAuthorizationDecisionResult,
   AgentAuthorizationRequest,
+  AgentClearableConnections,
   AgentConnection,
+  AgentConnectionStatusFilter,
   AgentConnectionsPage,
   AgentDeviceDecisionResult,
   AgentDeviceAuthorization,
   AgentGrantKind,
-  AgentGrantStatus,
   AgentGrantSelection,
+  AgentPurgeRevokedResult,
   AgentResource,
   AgentSecretResult,
   AgentRotationResult,
@@ -22,7 +24,7 @@ import type {
 const BASE = "/agent-access";
 
 export interface AgentConnectionFilters {
-  status?: AgentGrantStatus;
+  status?: AgentConnectionStatusFilter;
   resource?: AgentResource;
   kind?: AgentGrantKind;
 }
@@ -43,7 +45,7 @@ export const agentConnectionsQueryOptions = (
 export function listAgentConnections(params?: {
   page?: number;
   limit?: number;
-  status?: AgentGrantStatus;
+  status?: AgentConnectionStatusFilter;
   resource?: AgentResource;
   kind?: AgentGrantKind;
 }): Promise<AgentConnectionsPage> {
@@ -54,6 +56,42 @@ export function listAgentConnections(params?: {
     ...(params?.resource ? { resource: params.resource } : {}),
     ...(params?.kind ? { kind: params.kind } : {}),
   });
+}
+
+/**
+ * Counts the revoked and expired connections that "Clear revoked" would
+ * permanently delete. Two `limit=1` reads keep this cheap; the API totals
+ * come from the same status filters the purge route deletes.
+ */
+export const agentClearableConnectionsQueryOptions = () =>
+  queryOptions({
+    queryKey: ["agent-access", "clearable"] as const,
+    queryFn: countClearableAgentConnections,
+    staleTime: 15_000,
+    refetchOnMount: "always" as const,
+    refetchOnWindowFocus: "always" as const,
+  });
+
+export async function countClearableAgentConnections(): Promise<AgentClearableConnections> {
+  const [revokedPage, expiredPage] = await Promise.all([
+    listAgentConnections({ page: 1, limit: 1, status: "revoked" }),
+    listAgentConnections({ page: 1, limit: 1, status: "expired" }),
+  ]);
+  const revoked = revokedPage.pagination.total;
+  const expired = expiredPage.pagination.total;
+  return { revoked, expired, total: revoked + expired };
+}
+
+/**
+ * Permanently deletes every revoked and expired connection (optionally for one
+ * resource) together with its credentials, artifacts, and audit history.
+ */
+export function purgeRevokedAgentConnections(
+  resource?: AgentResource,
+): Promise<AgentPurgeRevokedResult> {
+  return apiDelete<AgentPurgeRevokedResult>(
+    `${BASE}/connections/revoked${resource ? `?resource=${resource}` : ""}`,
+  );
 }
 
 export function getAgentConnection(grantId: string): Promise<AgentConnection> {

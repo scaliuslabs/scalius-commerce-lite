@@ -171,14 +171,11 @@
   },
   "triggers": {
     "crons": ["*/15 * * * *"]
-  },
-  "vars": {
-    "DATABASE_PROVIDER": "d1",
-    "PUBLIC_API_BASE_URL": "https://api.scalius.com",
-    "BETTER_AUTH_URL": "https://dashboard.scalius.com",
-    "STOREFRONT_URL": "https://storefront.scalius.com",
-    "CDN_DOMAIN_URL": "cloud.scalius.com",
-    "R2_PUBLIC_URL": "https://cloud.scalius.com",
-    "PURGE_URL": "https://storefront.scalius.com/api/purge-cache"
   }
+  // No `vars`. Runtime configuration (storefront/API/dashboard/media URLs,
+  // cookie domain, CORS origins) lives in the dashboard: Settings -> System ->
+  // Platform, served by GET /api/v1/platform. The only installed secrets are
+  // SCALIUS_SECRET and CREDENTIAL_ENCRYPTION_KEY (`wrangler secret put`).
+  // Non-D1 deployments may additionally install DATABASE_PROVIDER plus the
+  // matching TURSO_*/POSTGRES_* values; `pnpm check:env` fails on any `vars`.
 }

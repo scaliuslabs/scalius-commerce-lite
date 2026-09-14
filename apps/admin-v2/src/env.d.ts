@@ -1,21 +1,8 @@
 /// <reference types="vite/client" />
 
-// Vite build-time environment variables (import.meta.env).
-// Runtime secrets come through Cloudflare Workers bindings via `import { env } from 'cloudflare:workers'`.
-interface ImportMetaEnv {
-  readonly VITE_FIREBASE_API_KEY?: string;
-  readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
-  readonly VITE_FIREBASE_PROJECT_ID?: string;
-  readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
-  readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
-  readonly VITE_FIREBASE_APP_ID?: string;
-  readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
-  readonly VITE_VAPID_FIREBASE?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
+// Vite build-time environment (import.meta.env) comes from vite/client only.
+// The dashboard reads no VITE_* variables: runtime configuration is composed
+// per request in src/server.ts (see src/lib/runtime-env.server.ts).
 
 // Better Auth user type
 interface BetterAuthUser {
@@ -220,7 +207,8 @@ interface Queue<T = unknown> {
 }
 
 // Cloudflare Workers environment bindings (global Env interface).
-// Must stay in sync with apps/admin-v2/wrangler.jsonc.
+// Must stay in sync with apps/admin-v2/wrangler.jsonc. The `vars` block is
+// empty: every URL is resolved from Platform settings at request time.
 interface Env {
   // Resource bindings
   DB?: D1Database;
@@ -233,32 +221,37 @@ interface Env {
   // Service bindings
   API: Fetcher;
 
-  // Secrets (set via `wrangler secret put`)
-  BETTER_AUTH_SECRET: string;
-  API_TOKEN?: string;
-  JWT_SECRET?: string;
-  FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+  // Installed secrets (`wrangler secret put`). Exactly two per deployment.
+  SCALIUS_SECRET?: string;
   CREDENTIAL_ENCRYPTION_KEY?: string;
+
+  // Optional relational provider selection (only for non-D1 deployments).
   DATABASE_PROVIDER?: "d1" | "turso" | "postgres";
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
   POSTGRES_DATABASE_URL?: string;
+  HYPERDRIVE?: { connectionString: string };
+  // Operations-only cutover switch.
   DATABASE_MIGRATION_FREEZE?: string;
 
-  // Variables
+  // Derived per request from SCALIUS_SECRET (src/server.ts). Never installed.
+  BETTER_AUTH_SECRET: string;
+
+  // Resolved per request from Platform settings (dashboard -> Settings ->
+  // System -> Platform) through GET /api/v1/platform. Never Wrangler vars.
+  PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
   BETTER_AUTH_URL?: string;
   PUBLIC_API_BASE_URL?: string;
   STOREFRONT_URL?: string;
   R2_PUBLIC_URL?: string;
-  CDN_DOMAIN_URL?: string;
-  PURGE_URL?: string;
-  PURGE_TOKEN?: string;
-  PROJECT_CACHE_PREFIX?: string;
+
+  // Local development only (vite.config.ts dev vars).
   LOCAL_MAILPIT_URL?: string;
   [key: string]: unknown;
 }
 
-// Provides the Worker `env` object at module level.
+// Provides the raw Worker `env` object at module level. Server code reads the
+// request-scoped composed env through `getRuntimeEnv()` instead.
 declare module "cloudflare:workers" {
   export const env: Env;
 }

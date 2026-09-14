@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
+import { resolveBackendTarget } from "@/lib/api/backend-target";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
 
 export const prerender = false;
@@ -41,28 +41,15 @@ export const POST: APIRoute = async ({ request }) => {
     }, 404);
   }
 
-  const env = (() => {
-    try {
-      const value = cfEnv as unknown as Env;
-      return value?.BACKEND_API || value?.PUBLIC_API_BASE_URL ? value : undefined;
-    } catch {
-      return undefined;
-    }
-  })();
-  const apiPath = `/api/v1/customer-auth/orders/${encodeURIComponent(orderId)}/claim-receipt`;
-  const canUseServiceBinding = Boolean(env?.BACKEND_API && !import.meta.env.DEV);
-  const targetUrl = canUseServiceBinding
-    ? `https://api.internal${apiPath}`
-    : `${String(env?.PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "")}${apiPath}`;
-  if (!canUseServiceBinding && !env?.PUBLIC_API_BASE_URL) {
+  const target = resolveBackendTarget(
+    `/api/v1/customer-auth/orders/${encodeURIComponent(orderId)}/claim-receipt`,
+  );
+  if (!target) {
     return jsonResponse({ success: false, error: "Account service is temporarily unavailable." }, 503);
   }
 
   try {
-    const fetcher = canUseServiceBinding
-      ? env!.BACKEND_API.fetch.bind(env!.BACKEND_API)
-      : fetch;
-    const response = await fetcher(targetUrl, {
+    const response = await target.fetch(target.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

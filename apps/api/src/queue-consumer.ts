@@ -67,7 +67,8 @@ import {
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
-import { getCredentialEncryptionKey, getEncryptionKey } from "./utils/encryption-key";
+import { getCredentialEncryptionKey } from "./utils/encryption-key";
+import { logOpsEvent } from "./utils/ops-log";
 import {
   markWebhookEventFailed,
   markWebhookEventManualReconciliation,
@@ -1196,16 +1197,28 @@ async function processQueueMessage(
           const enabledAdminChannels = adminChannels[payload.notificationType] || [];
 
           if (enabledAdminChannels.includes("push")) {
-            const requestUrl = env.PUBLIC_API_BASE_URL || "https://api.scalius.com";
-            const adminPushResult = await sendOrderNotification(db, {
-              id: payload.orderId,
-              customerName: payload.customerName,
-              notificationType: payload.notificationType,
-            }, env, requestUrl, {
-              outboxId: payload.outboxId,
-            });
-            if (adminPushResult?.hasRetryableFailure) {
-              retryableFailures.push(`admin push: ${summarizeNotificationFailures(adminPushResult.outcomes)}`);
+            // Push payloads deep-link into the dashboard through the public
+            // API origin. Queue invocations have no request URL, so the origin
+            // must come from Platform settings; never invent a domain.
+            const requestUrl = env.PUBLIC_API_BASE_URL;
+            if (!requestUrl) {
+              logOpsEvent("warn", "queue.order_notification.admin_push_skipped", {
+                orderId: payload.orderId,
+                notificationType: payload.notificationType,
+                outboxId: payload.outboxId,
+                reason: "platform apiUrl is not configured (Settings -> System -> Platform)",
+              });
+            } else {
+              const adminPushResult = await sendOrderNotification(db, {
+                id: payload.orderId,
+                customerName: payload.customerName,
+                notificationType: payload.notificationType,
+              }, env, requestUrl, {
+                outboxId: payload.outboxId,
+              });
+              if (adminPushResult?.hasRetryableFailure) {
+                retryableFailures.push(`admin push: ${summarizeNotificationFailures(adminPushResult.outcomes)}`);
+              }
             }
           }
         } catch (fcmError) {
@@ -1716,7 +1729,7 @@ async function resolveAuthOtpDeliveryCode(
     return deriveCustomerAuthOtpDeliveryCode({
       otpKey: challengeKey,
       deliveryKey: payload.deliveryKey,
-      encryptionKey: getEncryptionKey(env as unknown as Record<string, unknown>),
+      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
     });
   }
 

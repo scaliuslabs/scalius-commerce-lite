@@ -931,7 +931,7 @@ function printUsage() {
 Read-only production ops smoke checks.
 
 Options:
-  --api-base-url <url>  API base URL (default from apps/api/wrangler.jsonc)
+  --api-base-url <url>  API base URL (default ${DEFAULT_API_BASE_URL})
   --samples <count>     /readyz sample count (default ${DEFAULT_READYZ_SAMPLES})
   --timeout-ms <ms>     Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
   --skip-wrangler       Skip Cloudflare Wrangler deployment proof
@@ -961,10 +961,11 @@ export async function main(rawArgs = process.argv.slice(2), {
       return 0;
     }
 
+    // apps/api/wrangler.jsonc carries no vars: it is read only for the Worker
+    // name, cron, observability, and queue monitoring expectations. The API
+    // origin comes from --api-base-url or this repository's demo default.
     const apiConfig = readApiWranglerConfig(configPath);
-    options = parseOpsCheckArgs(rawArgs, {
-      defaultApiBaseUrl: apiConfig.vars?.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL,
-    });
+    options = parseOpsCheckArgs(rawArgs);
 
     const result = await runOpsCheck(options, {
       apiConfig,

@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { splitSetCookieHeader } from "better-auth/cookies";
 import { ADMIN_API_READ_TIMEOUT_MS } from "./admin-api-timeout";
 
+// The raw module env carries only bindings. `vite dev` (import.meta.env.DEV,
+// vitest's default) talks to the fixed local API port; production always uses
+// the API service binding.
 const mocks = vi.hoisted(() => ({
-  cfEnv: {
-    PUBLIC_API_BASE_URL: "https://api.test",
-  },
+  cfEnv: {} as { API?: Fetcher },
   getRequestHeader: vi.fn(),
   getResponseHeaders: vi.fn(),
   responseHeaders: new Headers(),
@@ -23,8 +24,8 @@ describe("api.server cookie forwarding", () => {
     vi.useRealTimers();
     vi.resetModules();
     vi.unstubAllGlobals();
-    delete (mocks.cfEnv as { API?: Fetcher }).API;
-    mocks.cfEnv.PUBLIC_API_BASE_URL = "https://api.test";
+    vi.unstubAllEnvs();
+    delete mocks.cfEnv.API;
     mocks.getRequestHeader.mockReset();
     mocks.getResponseHeaders.mockReset();
     mocks.responseHeaders = new Headers();
@@ -61,7 +62,7 @@ describe("api.server cookie forwarding", () => {
 
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/api/v1/admin/auth/change-password",
+      "http://localhost:8787/api/v1/admin/auth/change-password",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -123,7 +124,7 @@ describe("api.server cookie forwarding", () => {
 
     await expectation;
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/api/v1/admin/dashboard/summary",
+      "http://localhost:8787/api/v1/admin/dashboard/summary",
       expect.objectContaining({
         method: "GET",
         signal: expect.any(AbortSignal),
@@ -158,7 +159,7 @@ describe("api.server cookie forwarding", () => {
 
     await expectation;
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/api/v1/admin/dashboard/summary",
+      "http://localhost:8787/api/v1/admin/dashboard/summary",
       expect.objectContaining({
         method: "GET",
         signal: expect.any(AbortSignal),
@@ -166,15 +167,16 @@ describe("api.server cookie forwarding", () => {
     );
   });
 
-  it("passes read timeout signals through service bindings", async () => {
+  it("passes read timeout signals through the production service binding", async () => {
+    vi.stubEnv("DEV", false);
     const apiFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { ok: true } }), {
         status: 200,
       }),
     );
-    (mocks.cfEnv as { API?: { fetch: typeof apiFetch } }).API = {
-      fetch: apiFetch,
-    };
+    mocks.cfEnv.API = { fetch: apiFetch };
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
     const { apiBaseGet } = await import("./api.server");
     await expect(apiBaseGet("/cache/stats")).resolves.toEqual({ ok: true });
@@ -185,6 +187,62 @@ describe("api.server cookie forwarding", () => {
         method: "GET",
         signal: expect.any(AbortSignal),
       }),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the API binding from the request-scoped composed env", async () => {
+    vi.stubEnv("DEV", false);
+    const apiFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", vi.fn());
+
+    const { runWithRuntimeEnv } = await import("./runtime-env.server");
+    const { apiGet } = await import("./api.server");
+    await expect(
+      runWithRuntimeEnv({ API: { fetch: apiFetch } } as unknown as Env, () =>
+        apiGet("/dashboard/summary"),
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "https://api.internal/api/v1/admin/dashboard/summary",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fails closed in production when the API service binding is missing", async () => {
+    vi.stubEnv("DEV", false);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { apiGet } = await import("./api.server");
+    await expect(apiGet("/dashboard/summary")).rejects.toThrow(
+      "API service binding is not configured",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stray API binding during vite dev and uses the local API port", async () => {
+    const apiFetch = vi.fn();
+    mocks.cfEnv.API = { fetch: apiFetch };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { apiGet } = await import("./api.server");
+    await expect(apiGet("/dashboard/summary")).resolves.toEqual({ ok: true });
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8787/api/v1/admin/dashboard/summary",
+      expect.objectContaining({ method: "GET" }),
     );
   });
 

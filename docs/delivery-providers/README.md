@@ -11,6 +11,7 @@ This folder records courier contracts and dated live observations that are usefu
 
 - A provider is usable only when its saved credentials/config match a successful live test and the row is active. A friendly name such as “Demo” does not change the endpoint or make a production API a sandbox.
 - API credentials and webhook authentication secrets are different authorities. Save and rotate each in its provider field; never substitute one for the other.
+- Provider credentials are merchant settings, never environment variables. They are stored encrypted with the installed `CREDENTIAL_ENCRYPTION_KEY`, so rotating that key makes every saved provider credential unreadable and each one must be re-entered in the dashboard.
 - Shipment creation is insert-first and order-claim guarded. Retry only after an explicit rejection. A timeout, malformed response, server error, or incomplete success identity is an unknown outcome and keeps the order locked until positive provider evidence or accountable merchant confirmation resolves it.
 - Never infer absence from a 404, failed lookup, unknown status, or arbitrary consignment ID. Never attach an ID unless evidence binds it to the original provider and order.
 - Provider failures must expose bounded status/field information only. Do not log credentials, raw provider responses, buyer contact data, addresses, or webhook bodies.

@@ -42,10 +42,12 @@ export interface EmailRuntimeContext {
   db?: unknown;
   env?: Record<string, unknown> & {
     EMAIL?: CloudflareEmailBinding;
+    /** The only key that decrypts stored provider credentials. */
     CREDENTIAL_ENCRYPTION_KEY?: string;
-    JWT_SECRET?: string;
+    /** Local development only: route mail to a loopback Mailpit. */
     LOCAL_MAILPIT_URL?: string;
   };
+  /** Explicit override of `env.CREDENTIAL_ENCRYPTION_KEY`. */
   encryptionKey?: string;
   settings?: EmailRuntimeSettings;
 }

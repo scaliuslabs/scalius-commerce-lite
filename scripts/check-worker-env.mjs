@@ -2,32 +2,56 @@
 
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "..");
 
-const apps = [
+// The only Wrangler `vars` entry any config may declare: the dev-only mailbox
+// sink in apps/api/wrangler.local.jsonc. Every other runtime value is either an
+// installed secret or a dashboard Platform setting (GET /api/v1/platform).
+export const ALLOWED_WRANGLER_VARS = Object.freeze({
+  "apps/api/wrangler.local.jsonc": Object.freeze(["LOCAL_MAILPIT_URL"]),
+});
+
+// Installed secrets and optional provider selection shared by API + admin.
+const INSTALLED_SECRETS = ["SCALIUS_SECRET", "CREDENTIAL_ENCRYPTION_KEY"];
+const OPTIONAL_DATABASE_PROVIDER_ENV = [
+  "DATABASE_PROVIDER",
+  "TURSO_DATABASE_URL",
+  "TURSO_AUTH_TOKEN",
+  "POSTGRES_DATABASE_URL",
+  "HYPERDRIVE",
+  "DATABASE_MIGRATION_FREEZE",
+];
+
+export const apps = [
   {
     name: "api",
     configs: ["apps/api/wrangler.jsonc", "apps/api/wrangler.local.jsonc"],
     envFiles: ["apps/api/src/env.d.ts", "apps/api/src/hono-env.d.ts"],
     extraEnv: [
-      "BETTER_AUTH_SECRET",
-      "API_TOKEN",
-      "JWT_SECRET",
-      "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
-      "CREDENTIAL_ENCRYPTION_KEY",
-      "AGENT_TOKEN_PEPPER",
+      ...INSTALLED_SECRETS,
+      ...OPTIONAL_DATABASE_PROVIDER_ENV,
       "OAUTH_PROVIDER",
-      "DATABASE_PROVIDER",
-      "TURSO_DATABASE_URL",
-      "TURSO_AUTH_TOKEN",
-      "POSTGRES_DATABASE_URL",
-      "HYPERDRIVE",
-      "DATABASE_MIGRATION_FREEZE",
-      "CUSTOMER_AUTH_COOKIE_DOMAIN",
+      // Derived at Worker entry from SCALIUS_SECRET (apps/api/src/runtime/runtime-env.ts).
+      "BETTER_AUTH_SECRET",
+      "JWT_SECRET",
+      "API_TOKEN",
       "PURGE_TOKEN",
-      "PROJECT_CACHE_PREFIX",
-      "FCM_SEND_CONCURRENCY",
+      "AGENT_TOKEN_PEPPER",
+      "CUSTOMER_SESSION_HASH_KEY",
+      // Resolved at Worker entry from dashboard Platform settings.
+      "PLATFORM_CONFIG",
+      "STOREFRONT_URL",
+      "PUBLIC_API_BASE_URL",
+      "BETTER_AUTH_URL",
+      "R2_PUBLIC_URL",
+      "CDN_DOMAIN_URL",
+      "PURGE_URL",
+      "CUSTOMER_AUTH_COOKIE_DOMAIN",
+      "CORS_ALLOWED_ORIGINS",
+      // Local development only (apps/api/wrangler.local.jsonc vars).
+      "LOCAL_MAILPIT_URL",
     ],
   },
   {
@@ -35,19 +59,17 @@ const apps = [
     configs: ["apps/admin-v2/wrangler.jsonc"],
     envFiles: ["apps/admin-v2/src/env.d.ts"],
     extraEnv: [
+      ...INSTALLED_SECRETS,
+      ...OPTIONAL_DATABASE_PROVIDER_ENV,
+      // Derived per request from SCALIUS_SECRET.
       "BETTER_AUTH_SECRET",
-      "API_TOKEN",
-      "JWT_SECRET",
-      "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
-      "CREDENTIAL_ENCRYPTION_KEY",
-      "DATABASE_PROVIDER",
-      "TURSO_DATABASE_URL",
-      "TURSO_AUTH_TOKEN",
-      "POSTGRES_DATABASE_URL",
-      "HYPERDRIVE",
-      "DATABASE_MIGRATION_FREEZE",
-      "PURGE_TOKEN",
-      "PROJECT_CACHE_PREFIX",
+      // Resolved per request from GET /api/v1/platform.
+      "BETTER_AUTH_URL",
+      "PUBLIC_API_BASE_URL",
+      "STOREFRONT_URL",
+      "R2_PUBLIC_URL",
+      "PLATFORM_CONFIG",
+      // Local development only (admin vite dev config).
       "LOCAL_MAILPIT_URL",
     ],
   },
@@ -55,11 +77,7 @@ const apps = [
     name: "storefront",
     configs: ["apps/storefront/wrangler.jsonc"],
     envFiles: ["apps/storefront/src/env.d.ts"],
-    extraEnv: [
-      "API_TOKEN",
-      "JWT_SECRET",
-      "PURGE_TOKEN",
-    ],
+    extraEnv: ["SCALIUS_SECRET"],
   },
 ];
 
@@ -122,10 +140,6 @@ function stripJsonc(input) {
   return output.replace(/,\s*([}\]])/g, "$1");
 }
 
-function readJsonc(path) {
-  return JSON.parse(stripJsonc(readText(path)));
-}
-
 function collectConfigNames(config) {
   const names = new Set(Object.keys(config.vars ?? {}));
 
@@ -167,6 +181,29 @@ function collectConfigNames(config) {
   }
 
   return names;
+}
+
+/**
+ * Wrangler `vars` are forbidden: URLs and other runtime configuration are
+ * dashboard Platform settings, and secrets are installed with
+ * `wrangler secret put`. Returns one message per offending config.
+ */
+export function collectWranglerVarsViolations(configPath, config) {
+  const allowed = new Set(ALLOWED_WRANGLER_VARS[configPath] ?? []);
+  const declared = Object.keys(config?.vars ?? {});
+  const forbidden = sorted(declared.filter((name) => !allowed.has(name)));
+  if (forbidden.length === 0) return [];
+
+  const allowedNote = allowed.size > 0
+    ? ` Only ${sorted(allowed).join(", ")} may stay in this file.`
+    : "";
+  return [
+    `${configPath} declares Wrangler vars ${forbidden.join(", ")}. `
+    + "Wrangler vars are not read: configure URLs, cookie domain, and CORS origins "
+    + "in the dashboard (Settings -> System -> Platform, served by GET /api/v1/platform) "
+    + "and install secrets with `wrangler secret put`."
+    + allowedNote,
+  ];
 }
 
 function extractBalancedBlock(source, startIndex) {
@@ -254,54 +291,67 @@ function sorted(values) {
   return [...values].sort((a, b) => a.localeCompare(b));
 }
 
-const errors = [];
-let checkedEnvFileCount = 0;
+export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
+  const errors = [];
+  let checkedEnvFileCount = 0;
+  const readJsoncWith = (path) => JSON.parse(stripJsonc(readTextImpl(path)));
 
-for (const configPath of apps[0].configs) {
-  const config = readJsonc(configPath);
-  if (config.cache?.enabled !== true ||
-    config.exports?.default?.cache?.enabled !== false ||
-    config.exports?.PublicApi?.cache?.enabled !== true) {
-    errors.push(`${configPath} must keep the default API entrypoint uncached and PublicApi Workers Caching enabled`);
-  }
-}
-
-for (const app of apps) {
-  const expected = new Set();
-
-  for (const configPath of app.configs) {
-    for (const name of collectConfigNames(readJsonc(configPath))) {
-      expected.add(name);
+  for (const configPath of apps[0].configs) {
+    const config = readJsoncWith(configPath);
+    if (config.cache?.enabled !== true ||
+      config.exports?.default?.cache?.enabled !== false ||
+      config.exports?.PublicApi?.cache?.enabled !== true) {
+      errors.push(`${configPath} must keep the default API entrypoint uncached and PublicApi Workers Caching enabled`);
     }
   }
 
-  const allowed = new Set([...expected, ...app.extraEnv]);
+  for (const app of apps) {
+    const expected = new Set();
 
-  for (const envPath of app.envFiles) {
-    checkedEnvFileCount += 1;
-    const actual = extractEnvNames(readText(envPath));
-    const missing = sorted([...expected].filter((name) => !actual.has(name)));
-    const extra = sorted([...actual].filter((name) => !allowed.has(name)));
-    const label = `${app.name}:${relative(root, resolve(root, envPath))}`;
-
-    if (missing.length > 0) {
-      errors.push(`${label} is missing Wrangler names: ${missing.join(", ")}`);
+    for (const configPath of app.configs) {
+      const config = readJsoncWith(configPath);
+      errors.push(...collectWranglerVarsViolations(configPath, config));
+      for (const name of collectConfigNames(config)) {
+        expected.add(name);
+      }
     }
 
-    if (extra.length > 0) {
-      errors.push(`${label} declares names not present in Wrangler configs or the explicit secret/override allowlist: ${extra.join(", ")}`);
+    const allowed = new Set([...expected, ...app.extraEnv]);
+
+    for (const envPath of app.envFiles) {
+      checkedEnvFileCount += 1;
+      const actual = extractEnvNames(readTextImpl(envPath));
+      const missing = sorted([...expected].filter((name) => !actual.has(name)));
+      const extra = sorted([...actual].filter((name) => !allowed.has(name)));
+      const label = `${app.name}:${relative(root, resolve(root, envPath))}`;
+
+      if (missing.length > 0) {
+        errors.push(`${label} is missing Wrangler names: ${missing.join(", ")}`);
+      }
+
+      if (extra.length > 0) {
+        errors.push(`${label} declares names not present in Wrangler configs or the explicit secret/override allowlist: ${extra.join(", ")}`);
+      }
     }
   }
+
+  return { errors, checkedEnvFileCount };
 }
 
-if (errors.length > 0) {
-  console.error("Worker Env check failed:");
-  for (const error of errors) {
-    console.error(`- ${error}`);
+export { collectConfigNames, extractEnvNames, stripJsonc };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { errors, checkedEnvFileCount } = runWorkerEnvCheck();
+
+  if (errors.length > 0) {
+    console.error("Worker Env check failed:");
+    for (const error of errors) {
+      console.error(`- ${error}`);
+    }
+    process.exit(1);
   }
-  process.exit(1);
-}
 
-console.log(
-  `Worker Env OK: checked ${apps.length} apps, ${checkedEnvFileCount} Env declaration files.`,
-);
+  console.log(
+    `Worker Env OK: checked ${apps.length} apps, ${checkedEnvFileCount} Env declaration files.`,
+  );
+}

@@ -15,6 +15,7 @@ describe("Agent Access UI security boundaries", () => {
       "AgentAccessSettingsPage.tsx",
       "ConnectionDetails.tsx",
       "CreateTokenDialog.tsx",
+      "PurgeRevokedDialog.tsx",
       "OneTimeSecretDialog.tsx",
       "AuthorizationApprovalPage.tsx",
       "DevicePairingPage.tsx",
@@ -46,6 +47,40 @@ describe("Agent Access UI security boundaries", () => {
     expect(source("types.ts")).toContain('label: "Full automation"');
     expect(source("ConnectionDetails.tsx")).toContain("Narrow connection access");
     expect(source("RevokeDialog.tsx")).toContain("Reason (optional)");
+  });
+
+  it("hides revoked and expired connections by default while keeping explicit filters", () => {
+    const settings = source("AgentAccessSettingsPage.tsx");
+
+    expect(settings).toContain('const DEFAULT_STATUS: StatusFilter = "current"');
+    expect(settings).toContain("useState<StatusFilter>(DEFAULT_STATUS)");
+    expect(settings).toContain('<SelectItem value="current">Current</SelectItem>');
+    expect(settings).toContain('<SelectItem value="revoked">Revoked</SelectItem>');
+    expect(settings).toContain('<SelectItem value="expired">Expired</SelectItem>');
+    expect(settings).toContain("<SelectItem value={ALL}>All statuses</SelectItem>");
+    // Clearing filters returns to the clean default, not to "all".
+    expect(settings).not.toContain("setStatus(ALL);\n                  setKind(ALL);");
+    expect(settings).toContain("setStatus(DEFAULT_STATUS);");
+  });
+
+  it("offers a confirmed, permission-gated purge that is disabled when nothing is clearable", () => {
+    const settings = source("AgentAccessSettingsPage.tsx");
+    const dialog = source("PurgeRevokedDialog.tsx");
+    const api = source("api.ts");
+
+    expect(settings).toContain("<PurgeRevokedDialog");
+    expect(settings).toContain("disabled={!canManage}");
+    expect(settings).toContain("agentClearableConnectionsQueryOptions()");
+    expect(settings).toContain("await invalidateConnections(queryClient);");
+    expect(dialog).toContain("disabled={disabled || pending || nothingToClear}");
+    expect(dialog).toContain("const nothingToClear = clearable === undefined || total === 0;");
+    expect(dialog).toContain("Permanently delete revoked and expired connections?");
+    expect(dialog).toContain("audit history");
+    expect(dialog).toContain("cannot be undone");
+    expect(dialog).toContain("Active and pending connections are not affected.");
+    expect(api).toContain("`${BASE}/connections/revoked");
+    expect(api).toContain('status: "revoked"');
+    expect(api).toContain('status: "expired"');
   });
 
   it("uses the dashboard permission registry for view and management gates", () => {

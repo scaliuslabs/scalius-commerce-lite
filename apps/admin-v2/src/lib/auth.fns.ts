@@ -17,20 +17,14 @@ const ADMIN_EXISTS_READ_TIMEOUT_MS = 3_000;
 let adminExistsCache: { value: true; expiresAt: number } | null = null;
 let adminExistsInFlight: Promise<boolean> | null = null;
 let adminExistsCacheEpoch = 0;
-let workerEnvInFlight: Promise<Env> | null = null;
 
+/**
+ * The request-scoped env composed in `src/server.ts`. Loaded lazily so the
+ * Worker runtime module stays out of the client bundle.
+ */
 async function getWorkerEnv(): Promise<Env> {
-  const inFlight =
-    workerEnvInFlight ??
-    import("cloudflare:workers").then(({ env }) => env as Env);
-  workerEnvInFlight = inFlight;
-
-  try {
-    return await inFlight;
-  } catch (error) {
-    if (workerEnvInFlight === inFlight) workerEnvInFlight = null;
-    throw error;
-  }
+  const { getRuntimeEnv } = await import("./runtime-env.server");
+  return getRuntimeEnv();
 }
 
 async function queryAdminExists(db: AdminDb): Promise<boolean> {

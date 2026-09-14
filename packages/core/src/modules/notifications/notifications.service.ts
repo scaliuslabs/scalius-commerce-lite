@@ -119,6 +119,16 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
     /account\s+(?:expired|suspended|inactive|disabled)/i,
 ];
 
+function resolveDashboardOrderLink(env: Env, orderId: string): string | null {
+    const dashboardUrl = typeof env.BETTER_AUTH_URL === "string" ? env.BETTER_AUTH_URL.trim() : "";
+    if (!dashboardUrl) return null;
+    try {
+        return new URL(`/admin/orders/${encodeURIComponent(orderId)}`, dashboardUrl).href;
+    } catch {
+        return null;
+    }
+}
+
 function credentialEncryptionKeyFromEnv(env: Env): string | undefined {
     const source = env as unknown as Record<string, unknown>;
     return source.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
@@ -197,7 +207,9 @@ export async function sendOrderNotification(
     db: Database,
     order: OrderNotificationData,
     env: Env,
-    requestUrl: string,
+    // Retained for the queue-consumer call site; the push link is resolved
+    // from the composed dashboard origin, not from the request.
+    _requestUrl: string,
     options: AdminPushOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
@@ -229,7 +241,7 @@ export async function sendOrderNotification(
             );
         } catch (e: unknown) {
             console.warn(
-                "Failed to fetch custom Firebase credentials from DB, falling back to env:",
+                "Failed to read the Firebase service account from settings; admin push is unavailable:",
                 e,
             );
         }
@@ -245,8 +257,12 @@ export async function sendOrderNotification(
         }
 
         const tokens = tokensSnapshot.map((t) => t.token);
-        const baseUrl = env.PUBLIC_API_BASE_URL || new URL(requestUrl).origin;
-        const orderViewLink = `${baseUrl}/admin/orders/${order.id}`;
+        // The notification opens the dashboard order page, so the link must be
+        // the dashboard origin (BETTER_AUTH_URL from Platform settings), never
+        // the API origin or the current request origin. FCM requires an
+        // absolute HTTPS link; when the dashboard origin is not configured the
+        // link is omitted and the service worker falls back to the order list.
+        const orderViewLink = resolveDashboardOrderLink(env, order.id);
 
         const safeName = escapeHtml(order.customerName || "Unknown Customer");
         const label = ORDER_NOTIFICATION_LABELS[notificationType] ?? "Order Update";
@@ -258,16 +274,12 @@ export async function sendOrderNotification(
                 title,
                 body: `${label}: Order ${order.id} from ${safeName}. Click to view.`,
             },
-            webpush: {
-                fcmOptions: {
-                    link: orderViewLink,
-                },
-            },
+            ...(orderViewLink ? { webpush: { fcmOptions: { link: orderViewLink } } } : {}),
             data: {
                 orderId: order.id,
                 customerName: safeName,
                 notificationType,
-                link: orderViewLink,
+                ...(orderViewLink ? { link: orderViewLink } : {}),
                 ...(options.outboxId ? { deliveryKey: `${options.outboxId}:push` } : {}),
             },
             tokens,

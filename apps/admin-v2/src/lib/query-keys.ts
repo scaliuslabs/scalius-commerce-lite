@@ -212,6 +212,7 @@ export const queryKeys = {
     byCategory: (category: string) => ["settings", category] as const,
     general: () => ["settings", "general"] as const,
     storefrontUrl: () => ["settings", "storefront-url"] as const,
+    platform: () => ["settings", "platform"] as const,
     homepagePresentation: () =>
       ["settings", "homepage-presentation"] as const,
     seoDiscoveryLiveProbe: () =>

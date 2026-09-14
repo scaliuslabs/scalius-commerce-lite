@@ -4,10 +4,11 @@ import {
   ADMIN_API_READ_TIMEOUT_MS,
 } from "../../../../lib/admin-api-timeout";
 
+// The raw module env carries only bindings. `vite dev` (import.meta.env.DEV,
+// vitest's default) talks to the fixed local API port; production always uses
+// the API service binding.
 const mocks = vi.hoisted(() => ({
-  cfEnv: {
-    PUBLIC_API_BASE_URL: "https://api.test",
-  },
+  cfEnv: {} as { API?: Fetcher },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -21,12 +22,11 @@ describe("admin API proxy", () => {
     vi.useRealTimers();
     vi.resetModules();
     vi.unstubAllGlobals();
-    delete (mocks.cfEnv as { API?: Fetcher }).API;
+    vi.unstubAllEnvs();
+    delete mocks.cfEnv.API;
   });
 
   it("returns a 504 envelope when a read-only proxy request times out", async () => {
-    vi.useFakeTimers();
-
     const fetchMock = vi.fn((_target: string, init?: RequestInit) => {
       return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener(
@@ -39,6 +39,11 @@ describe("admin API proxy", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { proxyToApi } = await import("./$");
+    // The route loads the runtime env module lazily; warm it before faking
+    // timers so the module load does not race the timer advance.
+    await import("../../../../lib/runtime-env.server");
+    vi.useFakeTimers();
+
     const responsePromise = proxyToApi(
       new Request("https://dashboard.test/api/v1/admin/products?page=1"),
     );
@@ -55,7 +60,7 @@ describe("admin API proxy", () => {
       },
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/api/v1/admin/products?page=1",
+      "http://localhost:8787/api/v1/admin/products?page=1",
       expect.objectContaining({
         method: "GET",
         signal: expect.any(AbortSignal),
@@ -84,19 +89,20 @@ describe("admin API proxy", () => {
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
   });
 
-  it("uses HTTPS for production service-binding requests", async () => {
+  it("uses the internal service origin for production service-binding requests", async () => {
+    vi.stubEnv("DEV", false);
     const apiFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { ok: true } }), {
         status: 200,
       }),
     );
-    (mocks.cfEnv as { API?: { fetch: typeof apiFetch } }).API = {
-      fetch: apiFetch,
-    };
+    mocks.cfEnv.API = { fetch: apiFetch };
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
     const { proxyToApi } = await import("./$");
     const response = await proxyToApi(
-      new Request("https://dashboard.test/api/v1/admin/media/uploads", {
+      new Request("https://dashboard.test/api/v1/admin/media/uploads?kind=image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: "test.png" }),
@@ -105,8 +111,55 @@ describe("admin API proxy", () => {
 
     expect(response.status).toBe(200);
     expect(apiFetch).toHaveBeenCalledWith(
-      "https://api.internal/api/v1/admin/media/uploads",
+      "https://api.internal/api/v1/admin/media/uploads?kind=image",
       expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the API binding from the request-scoped composed env in production", async () => {
+    vi.stubEnv("DEV", false);
+    const apiFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", vi.fn());
+
+    const { runWithRuntimeEnv } = await import("../../../../lib/runtime-env.server");
+    const { proxyToApi } = await import("./$");
+    const response = await runWithRuntimeEnv(
+      { API: { fetch: apiFetch } } as unknown as Env,
+      () => proxyToApi(new Request("https://dashboard.test/api/v1/admin/products")),
+    );
+
+    expect(response.status).toBe(200);
+    expect(apiFetch).toHaveBeenCalledWith(
+      "https://api.internal/api/v1/admin/products",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("ignores a stray API binding during vite dev and uses the local API port", async () => {
+    const apiFetch = vi.fn();
+    mocks.cfEnv.API = { fetch: apiFetch };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { ok: true } }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { proxyToApi } = await import("./$");
+    const response = await proxyToApi(
+      new Request("https://dashboard.test/api/v1/admin/products"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8787/api/v1/admin/products",
+      expect.objectContaining({ method: "GET" }),
     );
   });
 

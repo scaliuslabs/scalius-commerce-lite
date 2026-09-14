@@ -378,9 +378,37 @@ describe("admin route graph boundaries", () => {
     expect(rbacServerSource).not.toMatch(
       /import\s+[^;]*from\s+["']@scalius\/core\/auth\/rbac/,
     );
+    expect(rbacServerSource).not.toContain("cloudflare:workers");
     expect(rbacServerSource.indexOf("knownIsSuperAdmin === true")).toBeLessThan(
-      rbacServerSource.indexOf('import("cloudflare:workers")'),
+      rbacServerSource.indexOf('import("~/lib/runtime-env.server")'),
     );
+  });
+
+  it("reads the Worker env only through the request-scoped runtime env module", () => {
+    const runtimeEnvSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "runtime-env.server.ts"),
+      "utf8",
+    );
+    expect(runtimeEnvSource).toContain('from "cloudflare:workers"');
+    expect(runtimeEnvSource).toContain("new AsyncLocalStorage<Env>()");
+
+    const consumers = [
+      ["lib", "auth.server.ts"],
+      ["lib", "auth.fns.ts"],
+      ["lib", "api.server.ts"],
+      ["middleware", "rbac.server.ts"],
+      ["routes", "api", "scanner-token.tsx"],
+      ["routes", "api", "v1", "admin", "$.ts"],
+      ["routes", "firebase-messaging-sw[.]js.tsx"],
+      ["routes", "admin", "settings", "agent-access.authorize.$requestId.tsx"],
+      ["routes", "admin", "settings", "agent-access.continue.$handoffId.tsx"],
+    ] as const;
+    for (const segments of consumers) {
+      const source = readFileSync(join(ADMIN_SRC_ROOT, ...segments), "utf8");
+      expect(source, segments.join("/")).not.toContain("cloudflare:workers");
+      expect(source, segments.join("/")).toContain("runtime-env.server");
+      expect(source, segments.join("/")).not.toContain("isLocalApiBase");
+    }
   });
 
   it("keeps scanner-token routing off the broad core auth barrel", () => {

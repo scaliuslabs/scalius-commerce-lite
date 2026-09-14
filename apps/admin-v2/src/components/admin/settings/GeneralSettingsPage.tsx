@@ -63,6 +63,11 @@ const ScannerTokenGenerator = lazy(() =>
   })),
 );
 const BusinessSettingsBuilder = lazy(() => import("./BusinessSettingsBuilder"));
+const PlatformSettingsBuilder = lazy(() =>
+  import("./PlatformSettingsBuilder").then((m) => ({
+    default: m.PlatformSettingsBuilder,
+  })),
+);
 function TabSpinner() {
   return <PanelLoadingSkeleton />;
 }
@@ -127,9 +132,10 @@ const tabs = [
   { value: "auth", label: "Customer sign-in", group: "Access & security" },
   { value: "security", label: "Security", group: "Access & security" },
   { value: "scanner", label: "Warehouse scanner", group: "Access & security" },
+  { value: "platform", label: "Platform", group: "System" },
 ] as const;
 
-const tabGroups = ["Storefront", "Operations", "Access & security"] as const;
+const tabGroups = ["Storefront", "Operations", "Access & security", "System"] as const;
 
 export default function GeneralSettingsPage({
   headerConfig,
@@ -369,6 +375,16 @@ export default function GeneralSettingsPage({
                 {(mountedTabs.has("scanner") || section === "scanner") && (
                   <Suspense fallback={<TabSpinner />}>
                     <ScannerTokenGenerator />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
+            </TabsContent>
+
+            <TabsContent forceMount value="platform" className="mt-0 data-[state=inactive]:hidden">
+              <SettingsEditorBoundary label="Platform">
+                {(mountedTabs.has("platform") || section === "platform") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <PlatformSettingsBuilder />
                   </Suspense>
                 )}
               </SettingsEditorBoundary>

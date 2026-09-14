@@ -34,7 +34,7 @@ A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` 
 - **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
 - **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Uses per-instance memory for the current token and writes to `SHARED_AUTH_CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present; persisted values are `enc:` AES-GCM strings with a 3300s TTL. Legacy plaintext KV reads remain tolerated when the dedicated key is available, but new writes never persist raw bearer tokens.
 - **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
-- **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. Default concurrency is 8; optional runtime var `FCM_SEND_CONCURRENCY` is clamped to 1-20. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
+- **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. `FCM_SEND_CONCURRENCY` is a fixed constant (8) exported from `admin.ts` -- not a merchant setting or environment variable. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
 - **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + Web Crypto jitter. Respects `Retry-After` header.
 - **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars (leading/trailing quotes, literal newlines)
 
@@ -59,12 +59,10 @@ interface FCMMessage {
 
 Key exports:
 - `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Sends with bounded concurrency and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
-- `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function. When `serviceAccountJson` is provided (e.g., from DB settings), creates a new instance. Otherwise returns a singleton for env-var credentials.
-- `settings.ts` -- `saveFirebaseServiceAccountJson()` validates required service-account fields and writes encrypted `enc:` settings; `readFirebaseServiceAccountJson()` decrypts `enc:` rows, tolerates legacy plaintext/bare AES-GCM rows on read, and returns `undefined` for unreadable ciphertext so runtime falls back to env credentials.
+- `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function; always constructs a fresh `FCMMessagingService` for the call (cheap; the encrypted OAuth access token is shared safely through the request's KV binding instead). Throws `ServiceUnavailableError` if `serviceAccountJson` is missing or empty -- there is no other credential source.
+- `settings.ts` -- `readFirebaseServiceAccountJson(db, encryptionKey?)` reads the encrypted `firebase`/`service_account` row, decrypts `enc:` values, tolerates legacy plaintext rows on read, and returns `undefined` (never throws) when the row is missing or unusable so callers can report readiness instead of crashing. `getFirebaseServiceAccountReadiness(db, encryptionKey?)` is the merchant-facing check used before enabling admin push.
 
-Credential resolution order:
-1. `serviceAccountJson` parameter (decrypted from DB `settings` table, category `firebase`, key `service_account`)
-2. `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` environment variable
+The service account has exactly one source: the encrypted `firebase`/`service_account` row saved from the dashboard (Settings -> Notifications -> Push setup, `FirebaseSettingsForm.tsx`). There is no environment-variable fallback; `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` does not exist in code.
 
 Required fields in service account JSON: `client_email`, `private_key`, `project_id`.
 
@@ -89,28 +87,24 @@ Runs in the admin dashboard browser. Uses the Firebase app and messaging package
 
 ## Admin Dashboard Integration
 
-### `FirebaseInit.astro` (layout component)
+### `getFirebaseConfig()` (`apps/admin-v2/src/lib/api-functions/firebase.ts`)
 
-Lazy-loads Firebase initialization:
-1. Reads `window.__USER_ID__` (set by the admin layout)
-2. Fetches Firebase public config from `GET /api/v1/auth/firebase-config`
-3. Dynamically imports `initFirebaseClientNotifications` from `@scalius/core/integrations/firebase/client`
-4. Deferred via `requestIdleCallback` with 3s timeout fallback
+A TanStack server function that fetches the public Firebase config from
+`GET /api/v1/auth/firebase-config` and normalizes it to `Record<string, string>`.
+No env-var default or merge: an unset field is simply absent from the result.
+`initFirebaseClientNotifications()` (`@scalius/core/integrations/firebase/client`)
+is the browser-side entry point this config is meant for, but no current
+admin-v2 route wires it up -- confirm before documenting admin push as active
+end to end.
 
-### `firebase-messaging-sw.js.ts` (Astro page -> service worker)
+### `/firebase-messaging-sw.js` (`apps/admin-v2/src/routes/firebase-messaging-sw[.]js.tsx`)
 
 Generates a dynamic service worker at `/firebase-messaging-sw.js`:
-1. Fetches Firebase public config from API (with env var fallback)
-2. Outputs a script that imports Firebase compat SDK (v9.15.0) and initializes messaging
-3. Handles `onBackgroundMessage`: Shows browser notification with order details, "View Order" link, and custom icon
-4. Handles `notificationclick`: Focuses existing admin tab or opens new window to order URL
-
-### Layout Loader (`loaders/admin/layout.ts`)
-
-`getAdminLayoutFirebaseConfig()`:
-- Fetches public config from `GET /api/v1/auth/firebase-config`
-- Merges with default config from env vars
-- Caches in in-memory `layoutCache` (invalidated when Firebase settings are saved)
+1. Reads the public Firebase config through `fetchApi()` (the `API` service binding in production, local HTTP in `vite dev`) from `GET /api/v1/auth/firebase-config`. There is no environment-variable fallback or default config.
+2. If `apiKey` is missing (unconfigured or the read failed), returns a no-op service worker that logs a warning instead of a broken one.
+3. Otherwise outputs a script that imports the Firebase compat SDK (v9.15.0) and initializes messaging.
+4. Handles `onBackgroundMessage`: Shows browser notification with order details, "View Order" link, and custom icon.
+5. Handles `notificationclick`: Focuses existing admin tab or opens new window to the order URL.
 
 ## API Endpoints
 
@@ -152,5 +146,6 @@ Firebase settings in `settings` table:
 
 ## Operations
 
-- `FCM_SEND_CONCURRENCY` is optional and only affects server fanout. Leave it unset for the default of 8. Lower it if Firebase starts returning 429s for a merchant; raise carefully only for high-admin-device installs.
+- `FCM_SEND_CONCURRENCY` (fanout of 8) is a fixed constant in `admin.ts`, not a merchant setting or environment variable. Changing it requires a code change and redeploy.
+- The FCM OAuth access-token KV cache key is prefixed with the fixed literal `scalius:` (`FCM_TOKEN_CACHE_PREFIX` in `admin.ts`) rather than a configurable/environment prefix -- this deployment owns exactly one KV namespace per environment, so there is nothing to disambiguate.
 - Current admin browser push is Firebase FCM only. A first-party Web Push provider remains the Cloudflare-native fallback target; do not describe admin push as Cloudflare-native until that exists.

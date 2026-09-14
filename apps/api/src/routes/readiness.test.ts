@@ -131,17 +131,18 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     ORDER_IP_RATE_LIMITER: createRateLimiter(),
     ORDER_PHONE_RATE_LIMITER: createRateLimiter(),
     CHECKOUT_COORDINATOR: createCheckoutCoordinator(),
-    BETTER_AUTH_SECRET: "test-secret",
-    API_TOKEN: "test-api-token",
-    JWT_SECRET: "test-jwt-secret",
+    // Installed secrets: the master secret plus the credential key.
+    SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
-    AGENT_TOKEN_PEPPER: "test-agent-token-pepper",
-    PUBLIC_API_BASE_URL: "https://api.example.test",
-    STOREFRONT_URL: "https://storefront.example.test",
-    BETTER_AUTH_URL: "https://dashboard.example.test",
-    R2_PUBLIC_URL: "https://cloud.example.test",
-    PURGE_URL: "https://storefront.example.test/api/purge-cache",
-    PURGE_TOKEN: "purge-secret",
+    // Resolved at Worker entry from Settings -> System -> Platform.
+    PLATFORM_CONFIG: {
+      storefrontUrl: "https://storefront.example.test",
+      apiUrl: "https://api.example.test",
+      dashboardUrl: "https://dashboard.example.test",
+      mediaUrl: "https://cloud.example.test",
+      customerAuthCookieDomain: "",
+      corsAllowedOrigins: [],
+    },
     ...overrides,
   } as Env;
 }
@@ -181,7 +182,8 @@ describe("API readiness route", () => {
       search_rate_limiter: { status: "ok" },
       order_ip_rate_limiter: { status: "ok" },
       order_phone_rate_limiter: { status: "ok" },
-      runtime_config: { status: "ok" },
+      runtime_config: { status: "ok", detail: "required secrets installed" },
+      platform_config: { status: "ok", detail: "platform origins configured" },
     });
     expect(env.OAUTH_KV.get).toHaveBeenCalledWith(
       "__scalius:readyz:probe",
@@ -191,14 +193,14 @@ describe("API readiness route", () => {
     expect(env.AGENT_RATE_LIMITER.limit).not.toHaveBeenCalled();
   });
 
-  it("fails closed when agent access bindings or token pepper are missing", async () => {
+  it("fails closed when agent access bindings or the credential encryption key are missing", async () => {
     const app = createApp();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
       OAUTH_KV: undefined as unknown as KVNamespace,
       AGENT_ARTIFACTS: undefined as unknown as R2Bucket,
       AGENT_RATE_LIMITER: undefined as unknown as RateLimit,
-      AGENT_TOKEN_PEPPER: "",
+      CREDENTIAL_ENCRYPTION_KEY: "   ",
     });
 
     const response = await app.request("/api/v1/readyz", {}, env);
@@ -225,7 +227,73 @@ describe("API readiness route", () => {
     });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing AGENT_TOKEN_PEPPER",
+      detail: "missing CREDENTIAL_ENCRYPTION_KEY",
+    });
+    expect(json.checks?.platform_config).toMatchObject({ status: "ok" });
+  });
+
+  it("reports the master secret as missing when it is absent or too short", async () => {
+    const app = createApp();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    for (const SCALIUS_SECRET of [undefined, "", "too-short"]) {
+      const response = await app.request("/api/v1/readyz", {}, createEnv({ SCALIUS_SECRET }));
+      const json = await response.json() as {
+        success?: boolean;
+        checks?: Record<string, { status?: string; detail?: string }>;
+      };
+
+      expect(response.status).toBe(503);
+      expect(json.success).toBe(false);
+      expect(json.checks?.runtime_config).toMatchObject({
+        status: "missing",
+        detail: "missing SCALIUS_SECRET",
+      });
+    }
+  });
+
+  it("reports unset platform origins and points operators at the Platform settings page", async () => {
+    const app = createApp();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const withoutConfig = await app.request(
+      "/api/v1/readyz",
+      {},
+      createEnv({ PLATFORM_CONFIG: undefined }),
+    );
+    const withoutConfigJson = await withoutConfig.json() as {
+      success?: boolean;
+      checks?: Record<string, { status?: string; detail?: string }>;
+    };
+    expect(withoutConfig.status).toBe(503);
+    expect(withoutConfigJson.success).toBe(false);
+    expect(withoutConfigJson.checks?.runtime_config).toMatchObject({ status: "ok" });
+    expect(withoutConfigJson.checks?.platform_config).toMatchObject({
+      status: "missing",
+      detail: "missing storefrontUrl, apiUrl, dashboardUrl, mediaUrl; set them in Settings -> System -> Platform",
+    });
+
+    const partial = await app.request(
+      "/api/v1/readyz",
+      {},
+      createEnv({
+        PLATFORM_CONFIG: {
+          storefrontUrl: "https://storefront.example.test",
+          apiUrl: "",
+          dashboardUrl: "https://dashboard.example.test",
+          mediaUrl: "",
+          customerAuthCookieDomain: "",
+          corsAllowedOrigins: [],
+        },
+      }),
+    );
+    const partialJson = await partial.json() as {
+      checks?: Record<string, { status?: string; detail?: string }>;
+    };
+    expect(partial.status).toBe(503);
+    expect(partialJson.checks?.platform_config).toMatchObject({
+      status: "missing",
+      detail: "missing apiUrl, mediaUrl; set them in Settings -> System -> Platform",
     });
   });
 
@@ -236,9 +304,16 @@ describe("API readiness route", () => {
       DB: createDb({ fail: true }),
       PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
       SEARCH_RATE_LIMITER: undefined as unknown as RateLimit,
-      STOREFRONT_URL: "",
-      PURGE_TOKEN: "",
-      JWT_SECRET: "",
+      SCALIUS_SECRET: "",
+      CREDENTIAL_ENCRYPTION_KEY: "",
+      PLATFORM_CONFIG: {
+        storefrontUrl: "",
+        apiUrl: "https://api.example.test",
+        dashboardUrl: "https://dashboard.example.test",
+        mediaUrl: "https://cloud.example.test",
+        customerAuthCookieDomain: "",
+        corsAllowedOrigins: [],
+      },
     });
 
     const response = await app.request("/api/v1/readyz", {
@@ -271,7 +346,11 @@ describe("API readiness route", () => {
     });
     expect(json.checks?.runtime_config).toMatchObject({
       status: "missing",
-      detail: "missing JWT_SECRET, STOREFRONT_URL, PURGE_TOKEN",
+      detail: "missing SCALIUS_SECRET, CREDENTIAL_ENCRYPTION_KEY",
+    });
+    expect(json.checks?.platform_config).toMatchObject({
+      status: "missing",
+      detail: "missing storefrontUrl; set them in Settings -> System -> Platform",
     });
     expect(response.headers.get("X-Request-Id")).toBe("req_readyz_1234");
 
@@ -289,6 +368,7 @@ describe("API readiness route", () => {
         "payment_events_queue:missing",
         "search_rate_limiter:missing",
         "runtime_config:missing",
+        "platform_config:missing",
       ],
     });
   });

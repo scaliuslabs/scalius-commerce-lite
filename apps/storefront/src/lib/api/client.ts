@@ -12,40 +12,47 @@
  * custom retry/timeout parameters (orders polling, fire-and-forget tracking).
  */
 
-import { getRuntimeApiUrl, getRuntimeApiToken } from "./runtime-env";
+import { getRuntimeApiUrl, getRuntimeApiToken, getRuntimeBackendApi } from "./runtime-env";
 import { apiContext } from "./context";
 import { createClient, createConfig } from "@scalius/api-client/factory";
 import type { Client } from "@scalius/api-client/factory";
+import {
+  INTERNAL_SERVICE_ORIGIN,
+  LOCAL_DEVELOPMENT_PLATFORM_CONFIG,
+} from "@scalius/shared/platform-config";
 
 // Resolve the API base URL lazily (called per-request, not at module init).
 //
-// In SSR, this module loads once per Worker isolate BEFORE any request's context is set.
-// A module-level constant would always resolve to the build-time fallback (empty without .env).
+// In SSR, this module loads once per Worker isolate BEFORE any request's context is set,
+// so a module-level constant could never hold the request's platform configuration.
 //
 // Resolution order:
-// 1. SSR runtime: Cloudflare Worker env from runtime-env.ts (wrangler.jsonc vars)
-// 2. Client-side: window.__API_BASE_URL__ injected by Layout.astro
-// 3. Build-time: import.meta.env.PUBLIC_API_URL (from .env if present)
+// 1. SSR: per-request context seeded by the middleware from /api/v1/platform
+// 2. Browser: window.__API_BASE_URL__ injected by Layout.astro from that context
+// 3. Local `astro dev` only: the fixed local API port
 // Missing configuration fails loudly because storefront does not expose a
 // catch-all same-origin /api/v1 proxy.
 
+const LOCAL_DEVELOPMENT_API_URL = `${LOCAL_DEVELOPMENT_PLATFORM_CONFIG.apiUrl}/api/v1`;
+
 function getApiBaseUrl(): string {
-  // SSR: try runtime env (set per-request by middleware from locals.runtime.env)
   if (import.meta.env.SSR) {
     const runtimeUrl = getRuntimeApiUrl();
     if (runtimeUrl) return runtimeUrl;
-  }
-
-  // Client-side: read from injected window var (set by Layout.astro from runtime env)
-  if (typeof window !== "undefined" && window.__API_BASE_URL__) {
+    // The public API origin is a Platform setting saved in the dashboard.
+    // Until it exists, server rendering still works through the service
+    // binding; only browser-side calls (which need the public origin) wait.
+    if (!import.meta.env.DEV && getRuntimeBackendApi()) {
+      return `${INTERNAL_SERVICE_ORIGIN}/api/v1`;
+    }
+  } else if (typeof window !== "undefined" && window.__API_BASE_URL__) {
     return window.__API_BASE_URL__;
   }
 
-  const buildTimeUrl = import.meta.env.PUBLIC_API_URL;
-  if (buildTimeUrl) return String(buildTimeUrl);
+  if (import.meta.env.DEV) return LOCAL_DEVELOPMENT_API_URL;
 
   throw new Error(
-    "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set PUBLIC_API_URL to the API worker URL.",
+    "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set the API URL in the dashboard under Settings -> System -> Platform.",
   );
 }
 

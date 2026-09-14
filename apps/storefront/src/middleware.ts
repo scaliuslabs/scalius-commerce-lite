@@ -7,6 +7,13 @@ import {
 } from "@scalius/shared/http-security";
 
 import { apiContext } from "@/lib/api/context";
+import { createRequestApiContext } from "@/lib/api/request-context";
+import {
+  getRuntimeApiBaseUrl,
+  getRuntimeMediaUrl,
+  getRuntimeStorefrontUrl,
+} from "@/lib/api/runtime-env";
+import { getCdnBase } from "@/lib/media-url";
 import {
   isPrivateStorefrontPathname,
   requestBypassesPublicStorefrontCache,
@@ -30,7 +37,7 @@ import {
 function getEnv(): Env | null {
   try {
     const env = cfEnv as Partial<Env> | null | undefined;
-    if (env && (env.ASSETS || env.CDN_DOMAIN_URL || env.PUBLIC_API_URL)) {
+    if (env && (env.ASSETS || env.BACKEND_API || env.SCALIUS_SECRET)) {
       return cfEnv as unknown as Env;
     }
   } catch {
@@ -52,7 +59,6 @@ function setPrivateResponse(response: Response, status: string): void {
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const response = await next();
-  const env = getEnv();
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
@@ -89,7 +95,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       if (
         response.headers.get("Content-Type")?.toLowerCase().includes("text/html")
       ) {
-        applyPublicStorefrontPreconnectHint(response, env?.CDN_DOMAIN_URL);
+        applyPublicStorefrontPreconnectHint(response, getCdnBase());
       }
       response.headers.set("X-Cache-Status", "NATIVE");
     } else if (!response.headers.has("Cache-Control")) {
@@ -99,34 +105,21 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 
   const securedResponse = isBrowserContinuationRelayPathname(url.pathname)
     ? response
-    : await setPageCspHeader(response, env ?? undefined);
+    : await setPageCspHeader(response, {
+        apiBaseUrl: getRuntimeApiBaseUrl(),
+        storefrontUrl: getRuntimeStorefrontUrl(),
+        mediaUrl: getRuntimeMediaUrl(),
+        cdnBaseUrl: getCdnBase(),
+      });
   return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
-const apiContextMiddleware = defineMiddleware((_context, next) => {
-  const env = getEnv();
-  let cdnDomain = env?.CDN_DOMAIN_URL as string | undefined;
-  if (!cdnDomain) {
-    try {
-      cdnDomain = (cfEnv as Partial<Env> | null | undefined)?.CDN_DOMAIN_URL;
-    } catch {
-      // Wrangler bindings are unavailable in local Astro development.
-    }
-  }
-
-  return apiContext.run(
-    {
-      BACKEND_API: env?.BACKEND_API as Fetcher | undefined,
-      PUBLIC_API_URL: env?.PUBLIC_API_URL as string | undefined,
-      PUBLIC_API_BASE_URL: env?.PUBLIC_API_BASE_URL as string | undefined,
-      CDN_DOMAIN_URL: cdnDomain,
-      STOREFRONT_URL: env?.STOREFRONT_URL as string | undefined,
-      API_TOKEN: env?.API_TOKEN as string | undefined,
-      inflightReads: new Map<string, Promise<unknown>>(),
-      apiJwt: { token: null, expiresAt: null, refresh: null },
-    },
-    next,
-  );
+// Seeds the request-scoped context: derived secrets from SCALIUS_SECRET and
+// public origins from the API's /api/v1/platform response. Nothing is read
+// from Wrangler vars or import.meta.env, and nothing is retained across requests.
+const apiContextMiddleware = defineMiddleware(async ({ request }, next) => {
+  const store = await createRequestApiContext(request, getEnv());
+  return apiContext.run(store, next);
 });
 
 const transportSecurityMiddleware = defineMiddleware(

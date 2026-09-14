@@ -35,18 +35,19 @@ export async function loadUserPermissions(
   }
 
   const [
-    { env },
+    { getRuntimeEnv },
     { getDb },
     { getUserPermissions, isSuperAdmin },
     { retryTransientD1 },
   ] = await Promise.all([
-    import("cloudflare:workers"),
+    import("~/lib/runtime-env.server"),
     import("@scalius/database/client"),
     import("@scalius/core/auth/rbac/helpers"),
     import("@scalius/core/utils/transient-d1"),
   ]);
-  const db = getDb(env as Env);
-  const kv = (env as Env).CACHE as KVNamespace | undefined;
+  const env = getRuntimeEnv();
+  const db = getDb(env);
+  const kv = env.CACHE as KVNamespace | undefined;
 
   const permissions = await retryTransientD1(() => getUserPermissions(db, userId, kv));
   const superAdmin =

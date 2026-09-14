@@ -36,6 +36,7 @@ import { shippingMethodRoutes } from "./routes/shipping-methods";
 import { seoRoutes } from "./routes/seo";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
 import { storefrontRoutes } from "./routes/storefront";
+import { platformRoutes } from "./routes/platform";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerAuthRoutes } from "./routes/customer-auth";
 import { readinessRoutes } from "./routes/readiness";
@@ -123,6 +124,8 @@ app.route("/discounts", discountRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
+// Public platform origins consumed by the storefront and dashboard Workers
+app.route("/platform", platformRoutes);
 app.use("/storefront/agent-contexts/*", agentPrincipalMiddleware);
 app.route("/storefront/agent-contexts", storefrontAgentContextRoutes);
 app.route("/storefront/agent-continuations", storefrontAgentContinuationRoutes);

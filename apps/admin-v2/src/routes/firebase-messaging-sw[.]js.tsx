@@ -1,30 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-interface CloudflareWorkerEnv {
-  API?: { fetch: (url: string) => Promise<Response> };
-  PUBLIC_API_BASE_URL?: string;
-}
+const FIREBASE_CONFIG_PATH = "/api/v1/auth/firebase-config";
 
 export const Route = createFileRoute("/firebase-messaging-sw.js")({
   server: {
     handlers: {
       GET: async () => {
-        // 1. Fetch Firebase config from API using service binding or HTTP
+        // 1. Fetch Firebase config from the API (service binding in
+        //    production, local HTTP port in `vite dev`).
         let publicConfig: Record<string, string> = {};
         try {
-          const { env } = await import("cloudflare:workers");
-          const cfEnv = env as CloudflareWorkerEnv;
-          let response: Response;
-          if (cfEnv?.API) {
-            response = await cfEnv.API.fetch(
-              new URL("/api/v1/auth/firebase-config", "https://api.internal").toString(),
-            );
-          } else {
-            const apiBase = cfEnv?.PUBLIC_API_BASE_URL || "http://localhost:8787";
-            response = await fetch(
-              new URL("/api/v1/auth/firebase-config", apiBase).toString(),
-            );
-          }
+          const { fetchApi, getRuntimeEnv } = await import("~/lib/runtime-env.server");
+          const response = await fetchApi(getRuntimeEnv(), FIREBASE_CONFIG_PATH);
           if (response.ok) {
             const body = (await response.json()) as { data?: Record<string, string> };
             publicConfig = body?.data || {};

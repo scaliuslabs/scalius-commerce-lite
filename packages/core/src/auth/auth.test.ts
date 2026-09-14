@@ -67,7 +67,7 @@ describe("createAuth", () => {
   it("maps the two-factor session flag to the Drizzle schema field", () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const options = mocks.betterAuth.mock.calls[0]?.[0] as {
@@ -88,7 +88,7 @@ describe("createAuth", () => {
   it("passes the Better Auth 1.6 two-factor verified column to the Drizzle adapter", () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const adapterCalls = mocks.drizzleAdapter.mock.calls as unknown as Array<
@@ -116,7 +116,7 @@ describe("createAuth", () => {
   it("encrypts new recovery-code rows while retaining legacy plaintext reads", async () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const twoFactorOptions = mocks.twoFactor.mock.calls[0]?.[0] as {
@@ -147,7 +147,7 @@ describe("createAuth", () => {
   it("revokes existing sessions after password reset", () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const options = mocks.betterAuth.mock.calls[0]?.[0] as {
@@ -162,7 +162,7 @@ describe("createAuth", () => {
   it("keeps auth abuse limits in the database and targets the current reset route", () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const options = mocks.betterAuth.mock.calls[0]?.[0] as {
@@ -211,7 +211,7 @@ describe("createAuth", () => {
     try {
       createAuth({
         BETTER_AUTH_SECRET: "test-secret",
-        PUBLIC_API_BASE_URL: "http://localhost:8787",
+        BETTER_AUTH_URL: "http://localhost:4323",
         JWT_SECRET: legacyJwtSecret,
       } as never);
 
@@ -263,7 +263,7 @@ describe("createAuth", () => {
 
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
 
     const options = mocks.betterAuth.mock.calls[0]?.[0] as {
@@ -304,7 +304,7 @@ describe("createAuth", () => {
     try {
       createAuth({
         BETTER_AUTH_SECRET: "test-secret",
-        PUBLIC_API_BASE_URL: "http://localhost:8787",
+        BETTER_AUTH_URL: "http://localhost:4323",
       } as never);
       const options = mocks.betterAuth.mock.calls[0]?.[0] as {
         emailAndPassword?: {
@@ -346,7 +346,7 @@ describe("createAuth", () => {
 
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
     const options = mocks.betterAuth.mock.calls.at(-1)?.[0] as {
       emailAndPassword?: {
@@ -379,7 +379,7 @@ describe("createAuth", () => {
       expect.objectContaining({
         subject: "Set up your Scalius Commerce admin account",
         html: expect.stringContaining(
-          "http://localhost:8787/auth/reset-password#token=one_time_reset_secret",
+          "http://localhost:4323/auth/reset-password#token=one_time_reset_secret",
         ),
       }),
       expect.anything(),
@@ -410,7 +410,7 @@ describe("createAuth", () => {
 
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
-      PUBLIC_API_BASE_URL: "http://localhost:8787",
+      BETTER_AUTH_URL: "http://localhost:4323",
     } as never);
     const options = mocks.betterAuth.mock.calls.at(-1)?.[0] as {
       emailAndPassword?: {
@@ -435,21 +435,18 @@ describe("createAuth", () => {
     const first = getAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "https://api-one.example.com",
-      PUBLIC_API_BASE_URL: "https://api-one.example.com",
       STOREFRONT_URL: "https://store-one.example.com",
     } as never);
 
     const sameEnvironment = getAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "https://api-one.example.com",
-      PUBLIC_API_BASE_URL: "https://api-one.example.com",
       STOREFRONT_URL: "https://store-one.example.com",
     } as never);
 
     const nextOrigin = getAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "https://api-two.example.com",
-      PUBLIC_API_BASE_URL: "https://api-two.example.com",
       STOREFRONT_URL: "https://store-two.example.com",
     } as never);
 
@@ -459,5 +456,80 @@ describe("createAuth", () => {
     expect((nextOrigin as { options: { baseURL?: string } }).options.baseURL).toBe(
       "https://api-two.example.com",
     );
+  });
+
+  it("reads the secret from the composed request env only, never from process.env", () => {
+    const previousSecret = process.env.BETTER_AUTH_SECRET;
+    const previousUrl = process.env.BETTER_AUTH_URL;
+    process.env.BETTER_AUTH_SECRET = "process-env-secret";
+    process.env.BETTER_AUTH_URL = "https://process-env.example.com";
+
+    try {
+      expect(() => createAuth({} as never)).toThrow("BETTER_AUTH_SECRET is not set");
+      expect(() => createAuth({ BETTER_AUTH_SECRET: "   " } as never)).toThrow(
+        "BETTER_AUTH_SECRET is not set",
+      );
+      expect(mocks.betterAuth).not.toHaveBeenCalled();
+
+      createAuth({ BETTER_AUTH_SECRET: "test-secret" } as never);
+      const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+        secret?: string;
+        baseURL?: string;
+      };
+      expect(options.secret).toBe("test-secret");
+      expect(options.baseURL).toBeUndefined();
+    } finally {
+      if (previousSecret === undefined) delete process.env.BETTER_AUTH_SECRET;
+      else process.env.BETTER_AUTH_SECRET = previousSecret;
+      if (previousUrl === undefined) delete process.env.BETTER_AUTH_URL;
+      else process.env.BETTER_AUTH_URL = previousUrl;
+    }
+  });
+
+  it("never derives the dashboard base URL from the API origin", async () => {
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "https://api.example.com",
+      STOREFRONT_URL: "https://shop.example.com",
+    } as never);
+
+    const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+      baseURL?: string;
+      trustedOrigins?: string[];
+      emailAndPassword?: {
+        sendResetPassword?: (input: {
+          user: { id: string; email: string; name: string };
+          token: string;
+        }) => Promise<void>;
+      };
+    };
+
+    expect(options.baseURL).toBeUndefined();
+    expect(options.trustedOrigins).toEqual(["https://shop.example.com"]);
+    await expect(options.emailAndPassword?.sendResetPassword?.({
+      user: { id: "user_1", email: "admin@example.com", name: "Admin" },
+      token: "one_time_reset_secret",
+    })).rejects.toThrow("BETTER_AUTH_URL is required for password reset links");
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("trusts the dashboard and storefront origins from the composed env", () => {
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      BETTER_AUTH_URL: "https://dashboard.example.com",
+      PUBLIC_API_BASE_URL: "https://api.example.com",
+      STOREFRONT_URL: "https://shop.example.com",
+    } as never);
+
+    const options = mocks.betterAuth.mock.calls[0]?.[0] as {
+      baseURL?: string;
+      trustedOrigins?: string[];
+    };
+
+    expect(options.baseURL).toBe("https://dashboard.example.com");
+    expect(options.trustedOrigins).toEqual([
+      "https://dashboard.example.com",
+      "https://shop.example.com",
+    ]);
   });
 });

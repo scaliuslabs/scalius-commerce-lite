@@ -20,26 +20,34 @@ describe("turbo cache inputs", () => {
     );
   });
 
-  it("hashes build-time environment variables", () => {
-    expect(turboConfig.globalEnv).toEqual(
-      expect.arrayContaining([
-        "PUBLIC_API_URL",
-        "PUBLIC_API_BASE_URL",
-        "PUBLIC_STOREFRONT_URL",
-        "STOREFRONT_URL",
-        "CDN_DOMAIN_URL",
-        "R2_PUBLIC_URL",
-        "BETTER_AUTH_URL",
-        "VITE_FIREBASE_API_KEY",
-        "VITE_FIREBASE_AUTH_DOMAIN",
-        "VITE_FIREBASE_PROJECT_ID",
-        "VITE_FIREBASE_STORAGE_BUCKET",
-        "VITE_FIREBASE_MESSAGING_SENDER_ID",
-        "VITE_FIREBASE_APP_ID",
-        "VITE_FIREBASE_MEASUREMENT_ID",
-        "VITE_VAPID_FIREBASE",
-      ]),
-    );
+  it("declares no build-time environment variables", () => {
+    // Runtime configuration is a dashboard Platform setting served by
+    // GET /api/v1/platform, and secrets are derived from SCALIUS_SECRET at
+    // Worker entry. Nothing is baked into builds, so nothing hashes here.
+    expect(turboConfig.globalEnv).toBeUndefined();
+    const source = JSON.stringify(turboConfig);
+    for (const retired of [
+      "PUBLIC_API_URL",
+      "PUBLIC_API_BASE_URL",
+      "PUBLIC_STOREFRONT_URL",
+      "STOREFRONT_URL",
+      "CDN_DOMAIN_URL",
+      "R2_PUBLIC_URL",
+      "BETTER_AUTH_URL",
+      "VITE_FIREBASE_",
+      "VITE_VAPID_FIREBASE",
+    ]) {
+      expect(source).not.toContain(retired);
+    }
+  });
+
+  it("keeps build outputs free of local env files", () => {
+    expect(turboConfig.tasks.build.outputs).toEqual(expect.arrayContaining([
+      "!dist/**/.dev.vars",
+      "!dist/**/.env",
+      "!dist/**/.env.*",
+      "!dist/**/*.vars",
+    ]));
   });
 
   it("runs workspace typechecks sequentially on constrained release hosts", () => {

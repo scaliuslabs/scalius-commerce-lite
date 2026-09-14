@@ -8,10 +8,11 @@ const FIRST_PARTY_ORIGIN_ENV_KEYS = [
   "STOREFRONT_URL",
 ] as const;
 
-const EXTRA_CREDENTIAL_ORIGIN_ENV_KEYS = [
-  "CREDENTIAL_CORS_ALLOWED_ORIGINS",
-  "CORS_ALLOWED_ORIGINS",
-] as const;
+/**
+ * Extra credentialed origins. The Worker entry composes this comma-separated
+ * list from the merchant-editable Platform settings; it is never a Wrangler var.
+ */
+const EXTRA_CREDENTIAL_ORIGIN_ENV_KEY = "CORS_ALLOWED_ORIGINS";
 
 const LOOPBACK_DEVELOPMENT_ORIGINS = [
   "http://localhost:*",
@@ -117,11 +118,10 @@ function getAllowedCorsOrigins(c: CorsContext): string[] {
     origins.push(...LOOPBACK_DEVELOPMENT_ORIGINS);
   }
 
-  // Separate explicit credentialed-CORS origins from merchant CSP domains.
-  // Values must be URL origins; CSP hostnames/wildcards are intentionally ignored.
-  for (const key of EXTRA_CREDENTIAL_ORIGIN_ENV_KEYS) {
-    const raw = ((c.env?.[key] as string) || "").trim();
-    if (!raw) continue;
+  // Extra credentialed-CORS origins composed from Platform settings. Values
+  // must be exact URL origins; wildcards and CSP hostnames are ignored.
+  const raw = c.env?.[EXTRA_CREDENTIAL_ORIGIN_ENV_KEY];
+  if (typeof raw === "string" && raw.trim()) {
     const extraOrigins = raw
       .split(",")
       .filter((value: string) => !value.includes("*"))

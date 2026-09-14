@@ -4,11 +4,11 @@
 // Clears cs_tok/cs_auth cookies from the browser (same-origin Set-Cookie)
 // and forwards the logout to the API worker to revoke the D1 session.
 //
-// Uses BACKEND_API service binding in production, HTTP in dev.
+// Uses BACKEND_API service binding in production, HTTP to the local API in dev.
 
 import type { APIRoute } from "astro";
-import { env as cfEnv } from "cloudflare:workers";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { resolveBackendTarget } from "@/lib/api/backend-target";
 
 export const prerender = false;
 
@@ -30,34 +30,16 @@ export const POST: APIRoute = async ({ request }) => {
 
   // Forward the logout to the backend so the D1 session is revoked.
   // Best-effort: even if this fails, the cookies are cleared above.
-  const env = (() => {
+  const target = resolveBackendTarget(BACKEND_LOGOUT_PATH);
+  if (target) {
     try {
-      const e = cfEnv as unknown as Env;
-      return (e?.BACKEND_API || e?.PUBLIC_API_BASE_URL || e?.ASSETS) ? e : undefined;
-    } catch { return undefined; }
-  })();
-
-  try {
-    let fetcher: typeof fetch = fetch;
-    let targetUrl: string;
-    const canUseServiceBinding = Boolean(env?.BACKEND_API && !import.meta.env.DEV);
-
-    if (canUseServiceBinding) {
-      // Production: service binding (zero-latency)
-      targetUrl = `https://api.internal${BACKEND_LOGOUT_PATH}`;
-      fetcher = env!.BACKEND_API.fetch.bind(env!.BACKEND_API);
-    } else {
-      const apiBase = env?.PUBLIC_API_BASE_URL as string;
-      if (!apiBase) throw new Error("PUBLIC_API_BASE_URL not configured");
-      targetUrl = `${apiBase}${BACKEND_LOGOUT_PATH}`;
+      await target.fetch(target.url, {
+        method: "POST",
+        headers: { Cookie: request.headers.get("Cookie") || "" },
+      });
+    } catch {
+      // Non-critical: cookie clearing is the primary logout mechanism
     }
-
-    await fetcher(targetUrl, {
-      method: "POST",
-      headers: { Cookie: request.headers.get("Cookie") || "" },
-    });
-  } catch {
-    // Non-critical: cookie clearing is the primary logout mechanism
   }
 
   const headers = new Headers();

@@ -1848,7 +1848,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections",
     "summary": "List agent connections",
-    "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal.",
+    "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -1901,6 +1901,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
+              "current",
               "pending",
               "active",
               "revoked",
@@ -1957,6 +1958,41 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data"
       ]
     }
+  },
+  {
+    "operationId": "dashboard.agent_access.connections.purge_revoked",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/agent-access/connections/revoked",
+    "summary": "Permanently delete revoked and expired agent connections",
+    "description": "Browser-only ceremony that permanently deletes every revoked grant and every grant whose expiry has passed, together with their credentials, artifact handles, browser handoffs, pairing records, storefront contexts, and audit history. Active and pending connections are never touched.",
+    "tags": [
+      "Admin - Agent Access"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Irreversible purge of revoked and expired grants plus their audit history; only a live 2FA-verified Super Admin browser session may invoke it.",
+    "rbac": {
+      "type": "permission",
+      "permission": "agent_access.manage"
+    },
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "dashboard.agent_access.grants.revoke",
@@ -52163,6 +52199,321 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.settings.platform_get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/platform",
+    "summary": "Get platform origins",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.view"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "storefrontUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "apiUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "dashboardUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "mediaUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "customerAuthCookieDomain": {
+              "type": "string",
+              "maxLength": 253
+            },
+            "corsAllowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "maxItems": 20
+            },
+            "readiness": {
+              "type": "object",
+              "properties": {
+                "complete": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "storefrontUrl",
+                      "apiUrl",
+                      "dashboardUrl",
+                      "mediaUrl"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "complete",
+                "missing"
+              ]
+            },
+            "effective": {
+              "type": "object",
+              "properties": {
+                "storefrontUrl": {
+                  "type": "string"
+                },
+                "apiUrl": {
+                  "type": "string"
+                },
+                "dashboardUrl": {
+                  "type": "string"
+                },
+                "mediaUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "storefrontUrl",
+                "apiUrl",
+                "dashboardUrl",
+                "mediaUrl"
+              ]
+            }
+          },
+          "required": [
+            "storefrontUrl",
+            "apiUrl",
+            "dashboardUrl",
+            "mediaUrl",
+            "customerAuthCookieDomain",
+            "corsAllowedOrigins",
+            "readiness",
+            "effective"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.settings.platform_update",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/settings/platform",
+    "summary": "Save platform origins",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "storefrontUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "apiUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "dashboardUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "mediaUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "customerAuthCookieDomain": {
+                  "type": "string",
+                  "maxLength": 253
+                },
+                "corsAllowedOrigins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "maxItems": 20
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "storefrontUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "apiUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "dashboardUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "mediaUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "customerAuthCookieDomain": {
+              "type": "string",
+              "maxLength": 253
+            },
+            "corsAllowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "maxItems": 20
+            },
+            "readiness": {
+              "type": "object",
+              "properties": {
+                "complete": {
+                  "type": "boolean"
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "storefrontUrl",
+                      "apiUrl",
+                      "dashboardUrl",
+                      "mediaUrl"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "complete",
+                "missing"
+              ]
+            },
+            "effective": {
+              "type": "object",
+              "properties": {
+                "storefrontUrl": {
+                  "type": "string"
+                },
+                "apiUrl": {
+                  "type": "string"
+                },
+                "dashboardUrl": {
+                  "type": "string"
+                },
+                "mediaUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "storefrontUrl",
+                "apiUrl",
+                "dashboardUrl",
+                "mediaUrl"
+              ]
+            }
+          },
+          "required": [
+            "storefrontUrl",
+            "apiUrl",
+            "dashboardUrl",
+            "mediaUrl",
+            "customerAuthCookieDomain",
+            "corsAllowedOrigins",
+            "readiness",
+            "effective"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.settings.storefront_url_get",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/settings/storefront-url",
@@ -73175,6 +73526,76 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "storefront.platform.get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/platform",
+    "summary": "Get the public origins of this deployment",
+    "tags": [
+      "Platform"
+    ],
+    "surface": "storefront",
+    "exposure": "execute",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 8192,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "storefrontUrl": {
+              "type": "string"
+            },
+            "apiUrl": {
+              "type": "string"
+            },
+            "dashboardUrl": {
+              "type": "string"
+            },
+            "mediaUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "storefrontUrl",
+            "apiUrl",
+            "dashboardUrl",
+            "mediaUrl"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "storefront.products_feed.get_feed",
     "method": "GET",
     "pathTemplate": "/api/v1/products/feed",
@@ -79760,6 +80181,8 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "operationIds": [
         "dashboard.settings.storefront_url_get",
         "dashboard.settings.storefront_url_update",
+        "dashboard.settings.platform_get",
+        "dashboard.settings.platform_update",
         "dashboard.seo.live_probe"
       ],
       "requiresFacts": true,
@@ -85055,6 +85478,22 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.settings.platform_get",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.storefront-origin"
+        ]
+      },
+      {
+        "operationId": "dashboard.settings.platform_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.storefront-origin"
+        ]
+      },
+      {
         "operationId": "dashboard.settings.storefront_url_get",
         "surface": "dashboard",
         "mode": "curated",
@@ -85871,6 +86310,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "storefront.hosted-payment"
+        ]
+      },
+      {
+        "operationId": "storefront.platform.get",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.platform.get"
         ]
       },
       {

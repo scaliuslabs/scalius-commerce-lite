@@ -16,34 +16,17 @@ export interface ServiceAccount {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const DEFAULT_FCM_SEND_CONCURRENCY = 8;
-const MAX_FCM_SEND_CONCURRENCY = 20;
+/** Parallel FCM sends per multicast. Fixed; not merchant- or env-tunable. */
+export const FCM_SEND_CONCURRENCY = 8;
 const FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS = 3300;
 const ENCRYPTED_VALUE_PREFIX = "enc:";
-
-function getEnv(contextEnv?: Record<string, unknown>) {
-  if (contextEnv) {
-    return contextEnv;
-  }
-  if (typeof process !== "undefined" && process.env) {
-    return process.env;
-  }
-  throw new ServiceUnavailableError(
-    "Environment variables not available - should be provided by runtime context",
-  );
-}
+/** One deployment per KV namespace, so the cache prefix is fixed. */
+const FCM_TOKEN_CACHE_PREFIX = "scalius";
 
 function getCredentialEncryptionKey(
   env: Record<string, unknown>,
 ): string | undefined {
   return env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
-}
-
-function getProjectCachePrefix(env: Record<string, unknown>): string {
-  const prefix = env.PROJECT_CACHE_PREFIX;
-  return typeof prefix === "string" && prefix.trim()
-    ? prefix.trim()
-    : "scalius";
 }
 
 async function serviceAccountCacheFingerprint(
@@ -61,11 +44,10 @@ async function serviceAccountCacheFingerprint(
 }
 
 export async function getFirebaseAccessTokenCacheKey(
-  env: Record<string, unknown>,
   serviceAccount: ServiceAccount,
 ): Promise<string> {
   const fingerprint = await serviceAccountCacheFingerprint(serviceAccount);
-  return `${getProjectCachePrefix(env)}:fcm_access_token:${serviceAccount.project_id}:${fingerprint}`;
+  return `${FCM_TOKEN_CACHE_PREFIX}:fcm_access_token:${serviceAccount.project_id}:${fingerprint}`;
 }
 
 async function readCachedAccessToken(
@@ -320,18 +302,6 @@ function randomJitterMs(maxMs: number): number {
   return value - Math.floor(value / maxMs) * maxMs;
 }
 
-function resolveSendConcurrency(env: Record<string, unknown>): number {
-  const raw = Number(env.FCM_SEND_CONCURRENCY);
-  if (!Number.isFinite(raw)) {
-    return DEFAULT_FCM_SEND_CONCURRENCY;
-  }
-
-  return Math.max(
-    1,
-    Math.min(MAX_FCM_SEND_CONCURRENCY, Math.floor(raw)),
-  );
-}
-
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -358,20 +328,19 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function initializeFCMService(environment?: Record<string, unknown>, serviceAccountJson?: string) {
-  const env = getEnv(environment);
-  const firebaseServiceAccountJson =
-    serviceAccountJson || env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
-
-  if (!firebaseServiceAccountJson) {
+/**
+ * Parses the service account JSON read from the encrypted `firebase` settings
+ * row. The dashboard is the only source; there is no environment fallback.
+ */
+function initializeFCMService(serviceAccountJson?: string) {
+  if (!serviceAccountJson || !serviceAccountJson.trim()) {
     throw new ServiceUnavailableError(
-      "FIREBASE_SERVICE_ACCOUNT_CRED_JSON is not set and no service account provided",
+      "Firebase service account is not configured. Save it in the dashboard notification settings.",
     );
   }
 
-  // Sanitize the JSON string to handle common env var formatting issues
-  // 1. Remove leading/trailing quotes if they exist (sometimes added by shell/env tools)
-  let jsonStr = (firebaseServiceAccountJson as string).trim();
+  // Tolerate a pasted value wrapped in quotes.
+  let jsonStr = serviceAccountJson.trim();
   if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
     jsonStr = jsonStr.slice(1, -1);
   }
@@ -419,18 +388,13 @@ export class FCMMessagingService {
   private serviceAccount: ServiceAccount;
   private projectId: string;
   private env: Record<string, unknown>;
-  private sendConcurrency: number;
   private accessTokenCache: { token: string; expiresAt: number } | null = null;
 
   constructor(environment: Record<string, unknown>, serviceAccountJson?: string) {
-    const { serviceAccount, projectId } = initializeFCMService(
-      environment,
-      serviceAccountJson,
-    );
+    const { serviceAccount, projectId } = initializeFCMService(serviceAccountJson);
     this.serviceAccount = serviceAccount;
     this.projectId = projectId;
     this.env = environment;
-    this.sendConcurrency = resolveSendConcurrency(environment);
   }
 
   private async ensureValidAccessToken(): Promise<string> {
@@ -442,10 +406,7 @@ export class FCMMessagingService {
     // Scope the reusable OAuth token to the exact service-account credential.
     // Project-only keys can reuse an old token after private-key rotation in a
     // warm Worker/colo for the full token TTL.
-    const cacheKey = await getFirebaseAccessTokenCacheKey(
-      this.env,
-      this.serviceAccount,
-    );
+    const cacheKey = await getFirebaseAccessTokenCacheKey(this.serviceAccount);
     const cache = this.env.SHARED_AUTH_CACHE as KVNamespace | undefined;
     const encryptionKey = getCredentialEncryptionKey(this.env);
 
@@ -514,7 +475,7 @@ export class FCMMessagingService {
     const accessToken = await this.ensureValidAccessToken();
     const responses = await mapWithConcurrency(
       payload.tokens,
-      this.sendConcurrency,
+      FCM_SEND_CONCURRENCY,
       async (token) => {
         try {
           const message: FCMMessage = {

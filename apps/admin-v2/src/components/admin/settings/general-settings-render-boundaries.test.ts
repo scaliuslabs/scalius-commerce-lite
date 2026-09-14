@@ -27,7 +27,8 @@ describe("General settings render boundaries", () => {
   });
 
   it("uses grouped desktop navigation and a single mobile section picker", () => {
-    expect(source).toContain('const tabGroups = ["Storefront", "Operations", "Access & security"]');
+    expect(source).toContain('const tabGroups = ["Storefront", "Operations", "Access & security", "System"]');
+    expect(source).toContain('{ value: "platform", label: "Platform", group: "System" }');
     expect(source).toContain('aria-label="Settings section"');
     expect(source).toContain("<SelectGroup");
     expect(source).toContain('className="min-h-11"');
@@ -38,10 +39,14 @@ describe("General settings render boundaries", () => {
   });
 
   it("keeps visited editors mounted without displaying inactive panels", () => {
-    expect(source.match(/<TabsContent forceMount/g)).toHaveLength(12);
-    expect(source.match(/data-\[state=inactive\]:hidden/g)).toHaveLength(12);
+    expect(source.match(/<TabsContent forceMount/g)).toHaveLength(13);
+    expect(source.match(/data-\[state=inactive\]:hidden/g)).toHaveLength(13);
     expect(source).toContain(
       '(mountedTabs.has("business") || section === "business")',
     );
+    expect(source).toContain(
+      '(mountedTabs.has("platform") || section === "platform")',
+    );
+    expect(source.match(/<PlatformSettingsBuilder\s*\/>/g)).toHaveLength(1);
   });
 });

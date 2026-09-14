@@ -42,7 +42,8 @@ declare global {
 
   // Cloudflare Workers environment bindings.
   // DB, CACHE, BUCKET come from wrangler.jsonc bindings.
-  // Secrets are set in the Cloudflare dashboard (or via wrangler secret put).
+  // Secrets are installed with `wrangler secret put`; runtime origins come from
+  // the dashboard Platform settings and are composed at Worker entry.
   type Env = {
     // Service / resource bindings
     DB?: D1Database;
@@ -64,32 +65,42 @@ declare global {
     ORDER_NOTIFICATIONS_QUEUE: Queue;
     AUTH_OTP_QUEUE: Queue;
 
-    // Secrets
-    BETTER_AUTH_SECRET: string;
-    API_TOKEN?: string;
-    JWT_SECRET?: string;
-    FIREBASE_SERVICE_ACCOUNT_CRED_JSON?: string;
+    // Installed secrets (`wrangler secret put`). Exactly two per deployment.
+    SCALIUS_SECRET?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
-    AGENT_TOKEN_PEPPER?: string;
+
+    // Optional relational provider selection (only for non-D1 deployments).
     DATABASE_PROVIDER?: "d1" | "turso" | "postgres";
     TURSO_DATABASE_URL?: string;
     TURSO_AUTH_TOKEN?: string;
     POSTGRES_DATABASE_URL?: string;
     HYPERDRIVE?: Hyperdrive;
+    // Operations-only cutover switch.
     DATABASE_MIGRATION_FREEZE?: string;
 
-    // Variables (set in wrangler.jsonc [vars] or dashboard)
-    BETTER_AUTH_URL?: string;
-    PUBLIC_API_BASE_URL?: string;
+    // Derived at Worker entry from SCALIUS_SECRET (src/runtime/runtime-env.ts).
+    // Never installed as secrets.
+    BETTER_AUTH_SECRET: string;
+    JWT_SECRET?: string;
+    API_TOKEN?: string;
+    PURGE_TOKEN?: string;
+    AGENT_TOKEN_PEPPER?: string;
+    CUSTOMER_SESSION_HASH_KEY?: string;
+
+    // Resolved at Worker entry from Platform settings (dashboard -> Settings ->
+    // System -> Platform). Never Wrangler vars.
+    PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
     STOREFRONT_URL?: string;
-    CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
+    PUBLIC_API_BASE_URL?: string;
+    BETTER_AUTH_URL?: string;
     R2_PUBLIC_URL?: string;
     CDN_DOMAIN_URL?: string;
     PURGE_URL?: string;
-    PURGE_TOKEN?: string;
-    PROJECT_CACHE_PREFIX?: string;
+    CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
+    CORS_ALLOWED_ORIGINS?: string;
+
+    // Local development only (apps/api/wrangler.local.jsonc).
     LOCAL_MAILPIT_URL?: string;
-    FCM_SEND_CONCURRENCY?: string | number;
     [key: string]: unknown;
   };
 }

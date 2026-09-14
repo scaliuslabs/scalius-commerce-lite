@@ -267,6 +267,29 @@ export async function stageAgentArtifact(
   }
 }
 
+/**
+ * Best-effort sequential deletion of private artifact objects. Returns the
+ * handle IDs whose objects are gone so callers can remove relational rows
+ * only for those, and the number of objects that could not be deleted. One
+ * unavailable object never stops later deletions.
+ */
+export async function deleteAgentArtifactObjects(
+  env: Pick<Env, "AGENT_ARTIFACTS">,
+  candidates: ReadonlyArray<{ id: string; r2Key: string }>,
+): Promise<{ deletedIds: string[]; failed: number }> {
+  const deletedIds: string[] = [];
+  let failed = 0;
+  for (const candidate of candidates) {
+    try {
+      await env.AGENT_ARTIFACTS.delete(candidate.r2Key);
+      deletedIds.push(candidate.id);
+    } catch {
+      failed += 1;
+    }
+  }
+  return { deletedIds, failed };
+}
+
 export async function purgeExpiredAgentArtifacts(env: Env): Promise<void> {
   const db = getDb(env);
   await expireAgentArtifactHandles(db);
@@ -284,20 +307,12 @@ export async function purgeExpiredAgentArtifacts(env: Env): Promise<void> {
       },
     );
     if (page.length === 0) break;
-    const objectDeletedIds: string[] = [];
-    for (const candidate of page) {
-      attempted += 1;
-      cursor = { expiresAt: candidate.expiresAt, id: candidate.id };
-      // Relational authority is removed only after the object is gone. A
-      // failed R2 delete leaves the row for the next scheduled retry.
-      try {
-        await env.AGENT_ARTIFACTS.delete(candidate.r2Key);
-        objectDeletedIds.push(candidate.id);
-      } catch {
-        // Retain this authoritative row for the next bounded cleanup pass
-        // while continuing so one unavailable object cannot starve later rows.
-      }
-    }
+    attempted += page.length;
+    const last = page[page.length - 1];
+    if (last) cursor = { expiresAt: last.expiresAt, id: last.id };
+    // Relational authority is removed only after the object is gone. A
+    // failed R2 delete leaves the row for the next scheduled retry.
+    const { deletedIds: objectDeletedIds } = await deleteAgentArtifactObjects(env, page);
     for (let offset = 0; offset < objectDeletedIds.length; offset += 90) {
       await deleteAgentArtifactRecords(db, objectDeletedIds.slice(offset, offset + 90));
     }

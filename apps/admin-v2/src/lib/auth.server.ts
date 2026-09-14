@@ -1,7 +1,7 @@
 /**
  * Server-only auth helpers for TanStack Start.
  *
- * Isolates cloudflare:workers import so it cannot leak into client bundles.
+ * Isolates the Worker runtime env so it cannot leak into client bundles.
  * Only import this file inside .server() callbacks or other .server.ts files.
  */
 
@@ -9,16 +9,17 @@ import { createAuth } from "@scalius/core/auth";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
-import { env as cfEnv } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
+import { getRuntimeEnv } from "./runtime-env.server";
 
 const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
 
 /**
- * Access Cloudflare env bindings.
+ * The request-scoped env composed in `src/server.ts` (derived
+ * `BETTER_AUTH_SECRET`, resolved `BETTER_AUTH_URL`, bindings).
  */
 function getCfEnv(): Env {
-  return cfEnv;
+  return getRuntimeEnv();
 }
 
 /**

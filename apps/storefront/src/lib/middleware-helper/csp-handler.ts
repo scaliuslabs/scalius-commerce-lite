@@ -6,38 +6,40 @@ import {
 } from "@scalius/shared/security-csp";
 
 /**
- * Parse additional domains from CSP_ALLOWED environment variable
- * and add them with wildcard subdomains to CSP directives.
+ * Builds the page Content-Security-Policy.
  *
- * Uses request-local coalescing so repeated reads within one SSR render share
- * work without retaining a fetch promise across Worker requests.
+ * Platform origins are passed in explicitly by the middleware from the
+ * request context (seeded from /api/v1/platform). Merchant-managed additional
+ * sources come from the API's storefront CSP settings; there is no
+ * environment-variable source. Reads use request-local coalescing so repeated
+ * calls within one SSR render share work without retaining a fetch promise
+ * across Worker requests.
  */
 
-/** Subset of the Cloudflare runtime env used by CSP functions */
-interface CspEnv {
-  CSP_ALLOWED?: string;
-  PUBLIC_API_BASE_URL?: string;
-  CDN_DOMAIN_URL?: string;
-  R2_PUBLIC_URL?: string;
-  STOREFRONT_URL?: string;
-  BETTER_AUTH_URL?: string;
-  [key: string]: unknown;
+/** Platform origins that are always allowed, resolved per request. */
+export interface CspPlatformOrigins {
+  /** Public API origin (no /api/v1), e.g. https://api.example.com */
+  apiBaseUrl?: string;
+  /** Absolute storefront origin. */
+  storefrontUrl?: string;
+  /** Platform media base URL. */
+  mediaUrl?: string;
+  /** Effective image CDN base (dashboard media setting or platform media host). */
+  cdnBaseUrl?: string;
 }
 
 // Empty sentinel keeps a failed read deterministic within the current request.
 const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
 
-async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
-  let additionalDomains =
-    (env?.CSP_ALLOWED || process.env.CSP_ALLOWED)?.trim() || "";
+async function parseAdditionalDomains(apiBaseUrl: string): Promise<string[]> {
+  let additionalDomains = "";
   try {
-    const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
-    if (apiUrl) {
+    if (apiBaseUrl) {
       const cachedData = await withEdgeCache(
         "global_security_settings",
         async () => {
           try {
-            const url = `${apiUrl}/api/v1/storefront/csp`;
+            const url = `${apiBaseUrl}/api/v1/storefront/csp`;
             const response = await fetch(url, {
               headers: {
                 Accept: "application/json",
@@ -72,7 +74,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
       }
     }
   } catch (e: unknown) {
-    console.error("Failed to fetch CSP_ALLOWED via EdgeCache", e);
+    console.error("Failed to fetch merchant CSP sources via EdgeCache", e);
   }
 
   if (!additionalDomains) {
@@ -142,13 +144,8 @@ function getScriptSrcDirectives(additionalDomains: string[]): string[] {
 // Generate connect-src directives
 function getConnectSrcDirectives(
   additionalDomains: string[],
-  env?: CspEnv,
+  apiBaseUrl: string,
 ): string[] {
-  const apiUrl = (
-    env?.PUBLIC_API_BASE_URL ||
-    import.meta.env.PUBLIC_API_BASE_URL ||
-    ""
-  )?.trim();
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
@@ -159,7 +156,7 @@ function getConnectSrcDirectives(
     ...additionalDomains,
   ];
 
-  const apiOrigin = normalizePlatformOrigin(apiUrl);
+  const apiOrigin = normalizePlatformOrigin(apiBaseUrl);
   if (apiOrigin) directives.push(apiOrigin);
 
   return directives;
@@ -202,23 +199,22 @@ function getWorkerSrcDirectives(additionalDomains: string[]): string[] {
 }
 
 /**
- * Collect all platform-owned URLs from env so they are automatically CSP-allowed.
- * Handles both https (production) and http (local dev) schemes.
+ * Collect the platform-owned origins so they are automatically CSP-allowed.
+ * Handles both https (production) and http (local dev) schemes; malformed
+ * values are dropped rather than widened.
  */
-function getPlatformDomains(env?: CspEnv): string[] {
+function getPlatformDomains(origins: CspPlatformOrigins): string[] {
   const urls: string[] = [];
-  const envKeys = [
-    "CDN_DOMAIN_URL",
-    "R2_PUBLIC_URL",
-    "PUBLIC_API_BASE_URL",
-    "STOREFRONT_URL",
-  ] as const;
+  for (const raw of [
+    origins.cdnBaseUrl,
+    origins.mediaUrl,
+    origins.apiBaseUrl,
+    origins.storefrontUrl,
+  ]) {
+    const candidate = raw?.trim();
+    if (!candidate) continue;
 
-  for (const key of envKeys) {
-    const raw = (env?.[key] as string | undefined)?.trim();
-    if (!raw) continue;
-
-    const origin = normalizePlatformOrigin(raw);
+    const origin = normalizePlatformOrigin(candidate);
     if (origin) urls.push(origin);
   }
 
@@ -227,25 +223,25 @@ function getPlatformDomains(env?: CspEnv): string[] {
 
 /**
  * Applies Content Security Policy (CSP) headers to a given Response object.
- * All platform domains derived from env vars — no hardcoded URLs.
+ * Platform origins come from the per-request context; nothing is hardcoded.
  */
 export async function setPageCspHeader(
   response: Response,
-  env?: CspEnv,
+  origins: CspPlatformOrigins = {},
 ): Promise<Response> {
-  const additionalDomains = await parseAdditionalDomains(env);
-  const platformDomains = getPlatformDomains(env);
+  const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
+  const additionalDomains = await parseAdditionalDomains(apiBaseUrl);
+  const platformDomains = getPlatformDomains(origins);
 
   // Dev mode detection — allow http://localhost in dev, never in production
-  const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
-  const isDev = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
+  const isDev = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
   const localDevSources = isDev
     ? ["http://localhost:*", "http://127.0.0.1:*"]
     : [];
 
   const cspDirectives = [
     `script-src ${getScriptSrcDirectives(additionalDomains).join(" ")}`,
-    `connect-src ${getConnectSrcDirectives(additionalDomains, env).join(" ")}`,
+    `connect-src ${getConnectSrcDirectives(additionalDomains, apiBaseUrl).join(" ")}`,
     `frame-src ${getFrameSrcDirectives(additionalDomains).join(" ")}`,
     `img-src ${getImgSrcDirectives(additionalDomains, platformDomains, localDevSources).join(" ")}`,
     "object-src 'none'",

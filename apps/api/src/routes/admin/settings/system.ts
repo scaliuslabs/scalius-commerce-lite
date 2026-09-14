@@ -148,6 +148,12 @@ function inheritedSecuritySource(
     };
 }
 
+/**
+ * Origins the storefront security policy trusts automatically. They are read
+ * from the composed runtime env, which the Worker fills from the Platform
+ * settings (Settings -> System -> Platform) at request time; they are not
+ * Wrangler vars and cannot be edited on the Security page.
+ */
 export function getInheritedSecuritySources(
     env: Record<string, unknown>,
 ): Array<z.infer<typeof inheritedSecuritySourceSchema>> {
@@ -157,35 +163,35 @@ export function getInheritedSecuritySources(
             "Storefront",
             "storefront",
             env.STOREFRONT_URL,
-            "The storefront trusts its own origin by default.",
+            "The storefront trusts its own origin by default. Set it as the Storefront URL in Settings -> System -> Platform.",
         ),
         inheritedSecuritySource(
             "api",
             "Commerce API",
             "api",
             env.PUBLIC_API_BASE_URL,
-            "Buyer requests can connect to this exact API origin.",
+            "Buyer requests can connect to this exact API origin. Set it as the API URL in Settings -> System -> Platform.",
         ),
         inheritedSecuritySource(
             "dashboard",
             "Admin dashboard",
             "dashboard",
             env.BETTER_AUTH_URL,
-            "Admin sessions and credentialed API requests recognize this exact origin.",
+            "Admin sessions and credentialed API requests recognize this exact origin. Set it as the Dashboard URL in Settings -> System -> Platform.",
         ),
         inheritedSecuritySource(
             "cdn",
             "Canonical media CDN",
             "media",
             env.CDN_DOMAIN_URL,
-            "Storefront images can load from this exact media origin.",
+            "Storefront images can load from this exact media host. It is derived from the Media URL in Settings -> System -> Platform.",
         ),
         inheritedSecuritySource(
             "r2",
             "Public media storage",
             "media",
             env.R2_PUBLIC_URL,
-            "Existing public media can load from this exact storage origin.",
+            "Existing public media can load from this exact media origin. Set it as the Media URL in Settings -> System -> Platform.",
         ),
     ];
 }

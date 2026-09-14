@@ -1,11 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  deriveRuntimeSecret,
+  RUNTIME_SECRET_PURPOSES,
+} from "@scalius/shared/runtime-secrets";
+
+const MASTER_SECRET = "storefront-purge-test-master-secret-0123456789abcdef";
 
 const mocks = vi.hoisted(() => ({
-  cfEnv: { PURGE_TOKEN: "secret" },
+  cfEnv: { SCALIUS_SECRET: undefined as string | undefined },
   purgeGroups: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
+
+// The purge token is never installed: it is derived from SCALIUS_SECRET with
+// the same purpose label the API uses.
+let secret = "";
+beforeAll(async () => {
+  secret = await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.PURGE_TOKEN);
+});
 
 function context(request: Request) {
   return {
@@ -25,13 +38,48 @@ describe("storefront native cache purge route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.purgeGroups.mockResolvedValue(undefined);
-    mocks.cfEnv.PURGE_TOKEN = "secret";
+    mocks.cfEnv.SCALIUS_SECRET = MASTER_SECRET;
+  });
+
+  it("fails closed when the master secret is missing or too short", async () => {
+    const { POST } = await import("../../../pages/api/purge-cache");
+    for (const value of [undefined, "", "too-short"]) {
+      mocks.cfEnv.SCALIUS_SECRET = value;
+      const request = new Request("https://shop.example/api/purge-cache", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ groups: ["products"] }),
+      });
+      const response = await POST(context(request));
+      expect(response.status).toBe(500);
+    }
+    expect(mocks.purgeGroups).not.toHaveBeenCalled();
+  });
+
+  it("rejects the master secret itself and stale tokens as purge credentials", async () => {
+    const { POST } = await import("../../../pages/api/purge-cache");
+    for (const token of [MASTER_SECRET, "secret", `${secret}x`]) {
+      const request = new Request("https://shop.example/api/purge-cache", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ groups: ["products"] }),
+      });
+      const response = await POST(context(request));
+      expect(response.status).toBe(401);
+    }
+    expect(mocks.purgeGroups).not.toHaveBeenCalled();
   });
 
   it("rejects purge credentials in query strings", async () => {
     const { GET } = await import("../../../pages/api/purge-cache");
     const request = new Request(
-      "https://shop.example/api/purge-cache?token=secret",
+      `https://shop.example/api/purge-cache?token=${secret}`,
     );
     const response = await GET(context(request));
     expect(response.status).toBe(400);
@@ -64,7 +112,7 @@ describe("storefront native cache purge route", () => {
     const request = new Request("https://shop.example/api/purge-cache", {
       method: "POST",
       headers: {
-        Authorization: "Bearer secret",
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ groups: [] }),
@@ -79,7 +127,7 @@ describe("storefront native cache purge route", () => {
     const request = new Request("https://shop.example/api/purge-cache", {
       method: "POST",
       headers: {
-        Authorization: "Bearer secret",
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ groups: ["products", "layout", "products"] }),
@@ -100,7 +148,7 @@ describe("storefront native cache purge route", () => {
     const request = new Request("https://shop.example/api/purge-cache", {
       method: "POST",
       headers: {
-        Authorization: "Bearer secret",
+        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ groups: ["products"] }),

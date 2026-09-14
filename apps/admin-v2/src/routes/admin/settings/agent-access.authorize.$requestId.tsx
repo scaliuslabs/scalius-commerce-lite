@@ -8,8 +8,9 @@ import { RouteErrorComponent } from "~/lib/route-error";
 
 const getTrustedApiOrigin = createServerFn({ method: "GET" }).handler(
   async () => {
-    const { env } = await import("cloudflare:workers");
-    const configured = (env as Env).PUBLIC_API_BASE_URL;
+    // Platform apiUrl resolved per request in src/server.ts.
+    const { getRuntimeEnv } = await import("~/lib/runtime-env.server");
+    const configured = getRuntimeEnv().PUBLIC_API_BASE_URL;
     if (!configured) throw new Error("Agent authorization is not configured");
     const url = new URL(configured);
     if (url.protocol !== "https:" && url.hostname !== "localhost") {

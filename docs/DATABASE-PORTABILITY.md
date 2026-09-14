@@ -25,16 +25,22 @@ retirement. Per-merchant Workers and resources remain isolated.
 ## Runtime contract
 
 `@scalius/database` is the only runtime provider boundary. D1 is selected when
-no external database credentials are present. A Turso deployment requires:
+no external database credentials are present. A Turso deployment installs:
 
-- `DATABASE_PROVIDER=turso`
 - `TURSO_DATABASE_URL`
 - `TURSO_AUTH_TOKEN`
+- optionally `DATABASE_PROVIDER=turso` as an explicit pin
 
-A PostgreSQL deployment requires:
+A PostgreSQL deployment installs:
 
-- `DATABASE_PROVIDER=postgres`
 - either `POSTGRES_DATABASE_URL` or a `HYPERDRIVE` binding
+- optionally `DATABASE_PROVIDER=postgres` as an explicit pin
+
+These are the only optional runtime secrets beyond the two every deployment
+installs (`SCALIUS_SECRET` on all workers, `CREDENTIAL_ENCRYPTION_KEY` on API
+and admin). None of them appear in the checked-in Wrangler configs, which carry
+no `vars` at all; the deployment operator installs each one with
+`wrangler secret put` on API and admin.
 
 `POSTGRES_DATABASE_URL` alone is sufficient for Neon and generic PostgreSQL.
 For generic PostgreSQL on production Workers, the deployment operator should

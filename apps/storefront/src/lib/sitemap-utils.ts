@@ -127,12 +127,12 @@ export function generateSitemapIndex(sitemaps: SitemapIndexEntry[], baseUrl?: st
 }
 
 /**
- * Gets the base URL from environment
+ * Gets the absolute storefront base URL from the per-request context.
  */
 export function getBaseUrl(): string {
   const rawUrl = getRuntimeStorefrontUrl();
   if (!rawUrl.trim()) {
-    throw new Error('STOREFRONT_URL environment variable is not set');
+    throw new Error('STOREFRONT_URL is not configured');
   }
 
   const normalized = normalizeAbsoluteStorefrontOriginUrl(rawUrl);

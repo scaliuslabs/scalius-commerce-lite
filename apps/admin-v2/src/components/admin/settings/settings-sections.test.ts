@@ -18,6 +18,8 @@ import {
 describe("settings section normalization", () => {
   it("keeps every supported general settings deep link", () => {
     expect(normalizeGeneralSettingsSection("media")).toBe("media");
+    expect(normalizeGeneralSettingsSection("platform")).toBe("platform");
+    expect(normalizeGeneralSettingsPanel("platform", "navigation")).toBeUndefined();
   });
 
   it("fails closed to the general settings default", () => {

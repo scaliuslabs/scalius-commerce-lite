@@ -12,11 +12,13 @@ vi.mock("~/lib/api", () => mocks);
 import {
   approveAgentAuthorizationRequest,
   approveAgentDeviceAuthorization,
+  countClearableAgentConnections,
   createAgentToken,
   getAgentConnection,
   listAgentAuditEvents,
   listAgentConnections,
   lookupAgentDeviceAuthorization,
+  purgeRevokedAgentConnections,
   revokeAgentGrant,
   rotateAgentToken,
   updateAgentGrant,
@@ -171,6 +173,46 @@ describe("Agent Access dashboard API client", () => {
       3,
       "/agent-access/device-authorizations/dev_1/deny",
       {},
+    );
+  });
+
+  it("clears revoked and expired connections through the documented purge route", async () => {
+    mocks.apiDelete.mockResolvedValue({ status: "purged", count: 4, credentials: 3, artifacts: 1 });
+
+    await expect(purgeRevokedAgentConnections()).resolves.toEqual({
+      status: "purged",
+      count: 4,
+      credentials: 3,
+      artifacts: 1,
+    });
+    await purgeRevokedAgentConnections("storefront");
+
+    expect(mocks.apiDelete).toHaveBeenNthCalledWith(1, "/agent-access/connections/revoked");
+    expect(mocks.apiDelete).toHaveBeenNthCalledWith(
+      2,
+      "/agent-access/connections/revoked?resource=storefront",
+    );
+  });
+
+  it("counts clearable connections from the same revoked and expired list filters the purge deletes", async () => {
+    mocks.apiGet
+      .mockResolvedValueOnce({ connections: [], pagination: { page: 1, limit: 1, total: 3, totalPages: 3 } })
+      .mockResolvedValueOnce({ connections: [], pagination: { page: 1, limit: 1, total: 2, totalPages: 2 } });
+
+    await expect(countClearableAgentConnections()).resolves.toEqual({
+      revoked: 3,
+      expired: 2,
+      total: 5,
+    });
+    expect(mocks.apiGet).toHaveBeenNthCalledWith(
+      1,
+      "/agent-access/connections",
+      { page: "1", limit: "1", status: "revoked" },
+    );
+    expect(mocks.apiGet).toHaveBeenNthCalledWith(
+      2,
+      "/agent-access/connections",
+      { page: "1", limit: "1", status: "expired" },
     );
   });
 

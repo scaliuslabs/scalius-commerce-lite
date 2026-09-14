@@ -3,18 +3,9 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
-// Vite / Astro build-time environment variables (import.meta.env).
-// ONLY PUBLIC_ prefixed vars belong here — they are baked into the JS bundle at build time.
-// Secrets (API_TOKEN, JWT_SECRET, PURGE_TOKEN) must NEVER be here — they come from
-// Cloudflare Workers runtime bindings (env.* via wrangler secret put or .dev.vars).
-interface ImportMetaEnv {
-  readonly PUBLIC_API_URL: string;
-  readonly PUBLIC_API_BASE_URL: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
+// No build-time environment variables are declared here. Public origins are
+// resolved per request from the API (/api/v1/platform) and secrets are derived
+// from the single installed master secret; nothing is baked into the bundle.
 
 // ---------------------------------------------------------------------------
 // Minimal Cloudflare Workers type stubs
@@ -93,12 +84,12 @@ interface WorkerEntrypointFetcher {
 }
 
 // Cloudflare Workers environment bindings (global Env interface).
-// Must stay in sync with apps/storefront/wrangler.jsonc.
+// Must stay in sync with apps/storefront/wrangler.jsonc (checked by
+// scripts/check-worker-env.mjs). The Worker has no vars: every runtime value
+// is derived from SCALIUS_SECRET or fetched from the API per request.
 interface Env {
   // Static assets binding (required by @astrojs/cloudflare)
   ASSETS: Fetcher;
-
-  // Cloudflare KV namespace for cache-busting control
 
   // Astro session storage for storefront SSR
   SESSION: KVNamespace;
@@ -106,18 +97,9 @@ interface Env {
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
 
-  // Secrets (set via `wrangler secret put`)
-  API_TOKEN?: string;
-  JWT_SECRET?: string;
-  PURGE_TOKEN?: string;
-
-  // Variables (set in wrangler.jsonc vars)
-  PUBLIC_API_URL?: string;
-  PUBLIC_API_BASE_URL?: string;
-  STOREFRONT_URL?: string;
-  DASHBOARD_URL?: string;
-  CACHE_NAMESPACE?: string;
-  CDN_DOMAIN_URL?: string;
+  // The only installed secret (`wrangler secret put SCALIUS_SECRET`).
+  // API_TOKEN and PURGE_TOKEN are derived from it at request time.
+  SCALIUS_SECRET?: string;
 
   [key: string]: unknown;
 }

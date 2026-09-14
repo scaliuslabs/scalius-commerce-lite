@@ -1,0 +1,130 @@
+// apps/api/src/routes/admin/settings/platform.ts
+// Settings -> System -> Platform: the deployment's public origins.
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
+import {
+  getPlatformSettings,
+  invalidatePlatformConfigCache,
+  savePlatformSettings,
+} from "@scalius/core/modules/settings/platform-settings.service";
+import {
+  invalidateSiteSettingsCache,
+  invalidateStorefrontUrlCache,
+} from "@scalius/core/modules/settings";
+import {
+  PLATFORM_CORS_ORIGINS_MAX_COUNT,
+  PLATFORM_URL_MAX_LENGTH,
+  getPlatformConfigReadiness,
+} from "@scalius/shared/platform-config";
+import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { ok } from "../../../utils/api-response";
+import { successEnvelope, errorResponses } from "../../../schemas/responses";
+
+const app = new OpenAPIHono<{ Bindings: Env }>();
+
+// Origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
+const PLATFORM_CACHE_GROUPS = ["layout", "homepage", "discovery", "checkout"] as const;
+
+const platformSettingsSchema = z.object({
+  storefrontUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
+  apiUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
+  dashboardUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
+  mediaUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
+  customerAuthCookieDomain: z.string().max(253),
+  corsAllowedOrigins: z.array(z.string().max(PLATFORM_URL_MAX_LENGTH)).max(PLATFORM_CORS_ORIGINS_MAX_COUNT),
+});
+
+const platformSettingsResponseSchema = platformSettingsSchema.extend({
+  readiness: z.object({
+    complete: z.boolean(),
+    missing: z.array(z.enum(["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"])),
+  }),
+  /** Origins the current request resolved, including local development defaults. */
+  effective: z.object({
+    storefrontUrl: z.string(),
+    apiUrl: z.string(),
+    dashboardUrl: z.string(),
+    mediaUrl: z.string(),
+  }),
+});
+
+const updatePlatformSettingsSchema = platformSettingsSchema.partial();
+
+function respond(
+  c: Context<{ Bindings: Env }>,
+  stored: Awaited<ReturnType<typeof getPlatformSettings>>,
+) {
+  const effective = c.env.PLATFORM_CONFIG;
+  return ok(c, {
+    ...stored,
+    readiness: getPlatformConfigReadiness(stored),
+    effective: {
+      storefrontUrl: effective?.storefrontUrl ?? stored.storefrontUrl,
+      apiUrl: effective?.apiUrl ?? stored.apiUrl,
+      dashboardUrl: effective?.dashboardUrl ?? stored.dashboardUrl,
+      mediaUrl: effective?.mediaUrl ?? stored.mediaUrl,
+    },
+  });
+}
+
+const getPlatformRoute = createRoute({
+  method: "get",
+  path: "/platform",
+  tags: ["Admin - Settings"],
+  summary: "Get platform origins",
+  operationId: "dashboard.settings.platform_get",
+  responses: {
+    200: {
+      description: "Platform origins",
+      content: { "application/json": { schema: successEnvelope(platformSettingsResponseSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getPlatformRoute, async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  const stored = await getPlatformSettings(c.get("db"));
+  return respond(c, stored);
+});
+
+const updatePlatformRoute = createRoute({
+  method: "put",
+  path: "/platform",
+  tags: ["Admin - Settings"],
+  summary: "Save platform origins",
+  operationId: "dashboard.settings.platform_update",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: updatePlatformSettingsSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Platform origins saved",
+      content: { "application/json": { schema: successEnvelope(platformSettingsResponseSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(updatePlatformRoute, async (c) => {
+  const db = c.get("db");
+  const patch = c.req.valid("json");
+  const stored = await savePlatformSettings(db, patch);
+
+  const kv = c.env.CACHE;
+  await Promise.all([
+    invalidatePlatformConfigCache(kv),
+    invalidateSiteSettingsCache(kv),
+    invalidateStorefrontUrlCache(kv),
+  ]);
+  await invalidateApiAndScheduleStorefrontGroups(PLATFORM_CACHE_GROUPS, c);
+
+  c.header("Cache-Control", "private, no-store");
+  return respond(c, stored);
+});
+
+export { app as platformSettingsRoutes };
+export default app;

@@ -693,7 +693,7 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     surface: "dashboard",
     kind: "write",
     prompt: "Change the canonical storefront origin only after validating it is absolute HTTPS, then probe discovery resources.",
-    expectedOperationIds: ["dashboard.settings.storefront_url_get", "dashboard.settings.storefront_url_update", "dashboard.seo.live_probe"],
+    expectedOperationIds: ["dashboard.settings.storefront_url_get", "dashboard.settings.storefront_url_update", "dashboard.settings.platform_get", "dashboard.settings.platform_update", "dashboard.seo.live_probe"],
     requiresFacts: true,
     requiresConfirmation: true,
     requiresVerification: true,
