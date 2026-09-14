@@ -15,8 +15,10 @@ describe("agent continuation same-origin proxy", () => {
     expect(source).toContain("shouldRejectCrossOriginCookieRequest");
     expect(source).toContain("readAgentContinuationCookie");
     expect(source).toContain('request.headers.get("cookie")');
-    expect(source).toContain("fetchWithRetry");
-    expect(source).toMatch(/REQUEST_TIMEOUT_MS[\s\S]*true,[\s\S]*false/);
+    expect(source).toContain("apiFetch");
+    expect(source).toMatch(
+      /REQUEST_TIMEOUT_MS[\s\S]*auth: true[\s\S]*logTerminalFailure: false/,
+    );
   });
 
   it("turns recovery proof into an HttpOnly receipt cookie and strips it from browser JSON", () => {

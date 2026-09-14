@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 
 import { AgentAccessSettingsPage } from "~/components/admin/agent-access";
+import { SettingsLayout } from "~/components/admin/settings/SettingsLayout";
 import { agentConnectionsQueryOptions } from "~/components/admin/agent-access/api";
 import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -43,12 +44,14 @@ function AgentAccessRoute() {
   if (isAgentAccessChild) return <Outlet />;
 
   return (
-    <AgentAccessSettingsPage
-      availablePermissions={[...context.permissions].sort()}
-      canManage={
-        context.isSuperAdmin &&
-        context.permissions.includes(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE)
-      }
-    />
+    <SettingsLayout pathname="/admin/settings/agent-access">
+      <AgentAccessSettingsPage
+        availablePermissions={[...context.permissions].sort()}
+        canManage={
+          context.isSuperAdmin &&
+          context.permissions.includes(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE)
+        }
+      />
+    </SettingsLayout>
   );
 }

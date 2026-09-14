@@ -1,14 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Globe,
-  Loader2,
-  Plus,
-  RotateCcw,
-  Save,
-  X,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -18,7 +9,13 @@ import {
   normalizePlatformOriginUrl,
 } from "@scalius/shared/platform-config";
 
-import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import {
+  ContextualSaveBar,
+  FieldError,
+  InlineHelp,
+  SettingsSection,
+  SkeletonPage,
+} from "~/components/admin/shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -195,7 +192,7 @@ export function PlatformSettingsBuilder() {
         queryClient.invalidateQueries({ queryKey: queryKeys.settings.seoDiscoveryLiveProbe() }),
       ]);
       toast.success(
-        payload.readiness.complete
+        payload.readiness.status === "ready"
           ? "Platform origins saved"
           : `Platform origins saved. Still missing: ${describeMissingPlatformOrigins(payload.readiness.missing)}.`,
       );
@@ -243,23 +240,40 @@ export function PlatformSettingsBuilder() {
   }
 
   if (!draft || !saved || !platformQuery.data) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <SkeletonPage showHeader={false} sections={2} rowsPerSection={4} label="Loading platform origins" />;
   }
 
   const { readiness, effective } = platformQuery.data;
+  const showSaveBar = dirty || hasPendingInput;
+  const saveDisabledReason = hasErrors
+    ? "Fix the highlighted fields before saving."
+    : !dirty
+      ? "Add the pending origin or clear it before saving."
+      : undefined;
+
+  function discardDraft() {
+    setDraft(saved);
+    setCorsDraft("");
+    setCorsError(null);
+  }
 
   return (
-    <>
-      <UnsavedChangesGuard
-        isDirty={dirty || hasPendingInput || saveMutation.isPending}
-        isSubmitting={false}
-        allowSamePathStateNavigation
+    <div className="max-w-5xl">
+      <ContextualSaveBar
+        isDirty={showSaveBar}
+        saving={saveMutation.isPending}
+        saveDisabled={!dirty || hasErrors}
+        saveDisabledReason={saveDisabledReason}
+        canSave={canManage}
+        saveLabel="Save platform"
+        allowSamePathNavigation
+        // The settings section picker is sticky on narrow widths.
+        stickyClassName="sticky top-15 z-30 lg:top-0"
+        onDiscard={discardDraft}
+        onSave={() => saveMutation.mutate(buildPlatformPatch(draft, saved))}
       />
-      <div className="max-w-4xl space-y-5">
+
+      <div className="space-y-6">
         {!canManage ? (
           <Alert>
             <AlertDescription>
@@ -268,7 +282,7 @@ export function PlatformSettingsBuilder() {
           </Alert>
         ) : null}
 
-        {readiness.complete ? (
+        {readiness.status === "ready" ? (
           <Alert role="status" data-testid="platform-readiness">
             <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             <AlertTitle>Platform origins configured</AlertTitle>
@@ -288,24 +302,18 @@ export function PlatformSettingsBuilder() {
           </Alert>
         )}
 
-        <section className="rounded-lg border bg-background p-4">
-          <div className="flex items-start gap-3">
-            <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Public origins</h3>
-              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Saved in the database and shared by the API, storefront, and dashboard Workers.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-4">
+        <SettingsSection
+          title="Public origins"
+          description="Saved in the database and shared by the API, storefront, and dashboard Workers."
+        >
+          <div className="grid gap-4">
             {PLATFORM_URL_FIELDS.map((field) => {
               const value = draft[field.key];
               const error = errors[field.key];
               const effectiveValue = effective[field.key];
               const usesFallback = !saved[field.key] && Boolean(effectiveValue);
               const inputId = `platform-${field.key}`;
+              const helpId = `${inputId}-help`;
               return (
                 <div key={field.key} className="space-y-1.5">
                   <Label htmlFor={inputId}>{field.label}</Label>
@@ -320,16 +328,15 @@ export function PlatformSettingsBuilder() {
                     disabled={!canEdit}
                     placeholder={field.placeholder}
                     aria-invalid={Boolean(error)}
-                    aria-describedby={`${inputId}-help`}
+                    aria-describedby={helpId}
                     className="min-h-11 sm:min-h-9"
                     onChange={(event) => setField(field.key, event.target.value)}
                   />
-                  <p
-                    id={`${inputId}-help`}
-                    className={`text-xs leading-5 ${error ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {error ?? field.help}
-                  </p>
+                  {error ? (
+                    <FieldError id={helpId}>{error}</FieldError>
+                  ) : (
+                    <InlineHelp id={helpId}>{field.help}</InlineHelp>
+                  )}
                   {usesFallback ? (
                     <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
                       Not saved. Currently effective: <code>{effectiveValue}</code> (automatic fallback, not a configured value).
@@ -339,15 +346,13 @@ export function PlatformSettingsBuilder() {
               );
             })}
           </div>
-        </section>
+        </SettingsSection>
 
-        <section className="rounded-lg border bg-background p-4">
-          <h3 className="text-sm font-semibold">Customer sessions and CORS</h3>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-            Optional. The platform origins above are always trusted; list only additional first-party origins.
-          </p>
-
-          <div className="mt-4 space-y-1.5">
+        <SettingsSection
+          title="Customer sessions and CORS"
+          description="Optional. The platform origins above are always trusted; list only additional first-party origins."
+        >
+          <div className="space-y-1.5">
             <Label htmlFor="platform-customerAuthCookieDomain">Customer cookie domain</Label>
             <Input
               id="platform-customerAuthCookieDomain"
@@ -362,13 +367,15 @@ export function PlatformSettingsBuilder() {
               className="min-h-11 sm:min-h-9"
               onChange={(event) => setField("customerAuthCookieDomain", event.target.value)}
             />
-            <p
-              id="platform-customerAuthCookieDomain-help"
-              className={`text-xs leading-5 ${errors.customerAuthCookieDomain ? "text-destructive" : "text-muted-foreground"}`}
-            >
-              {errors.customerAuthCookieDomain
-                ?? "Cookie Domain attribute for customer sessions shared across subdomains. Leave empty for host-only cookies."}
-            </p>
+            {errors.customerAuthCookieDomain ? (
+              <FieldError id="platform-customerAuthCookieDomain-help">
+                {errors.customerAuthCookieDomain}
+              </FieldError>
+            ) : (
+              <InlineHelp id="platform-customerAuthCookieDomain-help">
+                Cookie Domain attribute for customer sessions shared across subdomains. Leave empty for host-only cookies.
+              </InlineHelp>
+            )}
           </div>
 
           <div className="mt-4 space-y-2">
@@ -404,12 +411,13 @@ export function PlatformSettingsBuilder() {
                 Add origin
               </Button>
             </div>
-            <p
-              id="platform-cors-help"
-              className={`text-xs leading-5 ${corsError ? "text-destructive" : "text-muted-foreground"}`}
-            >
-              {corsError ?? "Exact HTTPS origins allowed to make credentialed API requests."}
-            </p>
+            {corsError ? (
+              <FieldError id="platform-cors-help">{corsError}</FieldError>
+            ) : (
+              <InlineHelp id="platform-cors-help">
+                Exact HTTPS origins allowed to make credentialed API requests.
+              </InlineHelp>
+            )}
             {draft.corsAllowedOrigins.length > 0 ? (
               <div className="divide-y rounded-md border">
                 {draft.corsAllowedOrigins.map((origin) => (
@@ -439,41 +447,9 @@ export function PlatformSettingsBuilder() {
               </p>
             )}
           </div>
-        </section>
-
-        {dirty || hasPendingInput ? (
-          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 sm:min-h-9"
-              disabled={!canEdit}
-              onClick={() => {
-                setDraft(saved);
-                setCorsDraft("");
-                setCorsError(null);
-              }}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              className="min-h-11 sm:min-h-9 sm:min-w-36"
-              disabled={!canEdit || !dirty || hasErrors}
-              onClick={() => saveMutation.mutate(buildPlatformPatch(draft, saved))}
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              Save platform
-            </Button>
-          </div>
-        ) : null}
+        </SettingsSection>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -160,14 +160,14 @@ describe("notification channel settings", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.getSmsProviderReadiness.mockResolvedValue({
+            status: "ready",
+            issues: [],
             activeProvider: "gennet",
-            configured: true,
-            error: null,
         });
         mocks.getEmailProviderReadiness.mockResolvedValue({
-            configured: true,
+            status: "ready",
+            issues: [],
             provider: "cloudflare",
-            error: null,
         });
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
             accessTokenConfigured: true,
@@ -231,9 +231,12 @@ describe("notification channel settings", () => {
 
     it("rejects SMS notification saves before the active provider is ready", async () => {
         mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            status: "incomplete",
+            issues: [{
+                code: "missing_sms_provider_credentials",
+                message: "No active SMS provider selected",
+            }],
             activeProvider: null,
-            configured: false,
-            error: "No active SMS provider selected",
         });
         const db = createSettingsDb();
 
@@ -249,9 +252,12 @@ describe("notification channel settings", () => {
 
     it("rejects email notification saves before the email provider is ready", async () => {
         mocks.getEmailProviderReadiness.mockResolvedValueOnce({
-            configured: false,
+            status: "incomplete",
+            issues: [{
+                code: "missing_email_provider_credentials",
+                message: "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
+            }],
             provider: "cloudflare",
-            error: "Configure Cloudflare Email or save a Resend API key before enabling email delivery.",
         });
         const db = createSettingsDb(JSON.stringify({ order_created: [] }));
 

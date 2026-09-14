@@ -10,6 +10,11 @@
 import { eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { settings } from "@scalius/database/schema";
+import {
+  readiness,
+  readinessIssue,
+  type Readiness,
+} from "@scalius/shared/readiness";
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
   encodeEncryptedCredential,
@@ -80,10 +85,15 @@ export interface SmsSettingsData {
   gennetSid: string;
 }
 
-export interface SmsProviderReadiness {
+/** Stable issue code for SMS provider setup. */
+export const SMS_READINESS_CODE = "missing_sms_provider_credentials";
+
+/**
+ * The shared readiness vocabulary plus the typed extra callers need: which
+ * provider the merchant selected.
+ */
+export interface SmsProviderReadiness extends Readiness {
   activeProvider: SmsProviderId | null;
-  configured: boolean;
-  error: string | null;
 }
 
 type SmsSettingValues = Record<string, string>;
@@ -283,12 +293,16 @@ export async function getSmsProviderReadiness(
 ): Promise<SmsProviderReadiness> {
   const vals = await readSmsSettingValues(db);
   const resolved = await instantiateSmsProvider(vals, encryptionKey);
+  const configured = Boolean(resolved.provider);
+  const value = configured
+    ? readiness.ready()
+    : readiness.incomplete([readinessIssue(
+        SMS_READINESS_CODE,
+        resolved.error
+          ?? "Configure an SMS provider before sending SMS messages.",
+      )]);
 
-  return {
-    activeProvider: resolved.activeProvider,
-    configured: Boolean(resolved.provider),
-    error: resolved.error,
-  };
+  return { ...value, activeProvider: resolved.activeProvider };
 }
 
 // ---------------------------------------------------------------------------

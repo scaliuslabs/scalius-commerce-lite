@@ -8,8 +8,6 @@ import {
   LogOut,
   MonitorSmartphone,
   RefreshCw,
-  ShieldCheck,
-  ShieldQuestion,
   Smartphone,
   Tablet,
 } from "lucide-react";
@@ -26,16 +24,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
+import { EmptyState, SettingsSection, StatusBadge } from "~/components/admin/shell";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   revokeAccountSession,
@@ -103,14 +94,14 @@ function AccountSessionRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="truncate text-sm font-medium">{session.deviceLabel}</p>
           {session.current && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+            <StatusBadge tone="info" srLabel="Device:">
               Current
-            </Badge>
+            </StatusBadge>
           )}
           {session.impersonated && (
-            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+            <StatusBadge tone="attention" srLabel="Device:">
               Impersonated
-            </Badge>
+            </StatusBadge>
           )}
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -118,26 +109,20 @@ function AccountSessionRow({
           {session.networkHint ? ` · Network ${session.networkHint}` : ""}
           {` · Expires ${formatSessionDate(session.expiresAt)}`}
         </p>
-        <div
-          className={
-            session.twoFactorVerified
-              ? "mt-1 flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400"
-              : "mt-1 flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400"
-          }
-        >
-          {session.twoFactorVerified ? (
-            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <ShieldQuestion className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {session.twoFactorVerified
-            ? "Two-factor verified for this session"
-            : "Two-factor not verified for this session"}
+        <div className="mt-1.5">
+          <StatusBadge
+            tone={session.twoFactorVerified ? "success" : "attention"}
+            srLabel="Two-factor:"
+          >
+            {session.twoFactorVerified
+              ? "Two-factor verified for this session"
+              : "Two-factor not verified for this session"}
+          </StatusBadge>
         </div>
       </div>
 
       {session.current ? (
-        <div className="col-start-2 flex min-h-9 items-center gap-1.5 justify-self-start text-xs font-medium text-muted-foreground sm:col-start-3 sm:row-start-1 sm:justify-self-end">
+        <div className="col-start-2 flex min-h-11 items-center gap-1.5 justify-self-start text-xs font-medium text-muted-foreground sm:col-start-3 sm:row-start-1 sm:min-h-9 sm:justify-self-end">
           <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
           Protected
         </div>
@@ -252,152 +237,125 @@ export function AccountSessions() {
     },
   });
 
+  const sessionCountLabel = sessionsQuery.data?.hasMore
+    ? `${sessions.length}+ signed in`
+    : `${sessions.length} signed in`;
+
   return (
-    <Card className="max-w-4xl rounded-xl shadow-none">
-      <CardHeader className="gap-3 border-b p-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
-        <div className="min-w-0 space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MonitorSmartphone className="h-4 w-4" aria-hidden="true" />
-            Active sessions
-            {!sessionsQuery.isPending && !sessionsQuery.error && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                {sessionsQuery.data?.hasMore
-                  ? `${sessions.length}+`
-                  : sessions.length}
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Review where this account is signed in and remove devices you no
-            longer recognize.
-          </CardDescription>
-        </div>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 w-full shrink-0 sm:min-h-9 sm:w-auto"
-              disabled={
-                !canRevokeOthers ||
-                revokeOne.isPending ||
-                revokeOthers.isPending
-              }
+    <SettingsSection
+      title="Active sessions"
+      description="Every device this account is signed in on. Signing a device out forces a fresh sign-in with two-factor authentication."
+      contentClassName="p-0"
+      actions={
+        <>
+          {!sessionsQuery.isPending && !sessionsQuery.error ? (
+            <span
+              data-testid="account-sessions-count"
+              className="mr-auto text-xs text-muted-foreground"
             >
-              {revokeOthers.isPending ? (
-                <Loader2 className="animate-spin" aria-hidden="true" />
-              ) : (
-                <LogOut aria-hidden="true" />
-              )}
-              Sign out other devices
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-w-sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Sign out every other device?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Your current session will stay active. Every other device must
-                sign in and complete two-factor authentication again.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="min-h-11 sm:min-h-9">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                className="min-h-11 sm:min-h-9"
-                onClick={() => revokeOthers.mutate()}
+              {sessionCountLabel}
+            </span>
+          ) : null}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 shrink-0 sm:min-h-9"
+                disabled={
+                  !canRevokeOthers ||
+                  revokeOne.isPending ||
+                  revokeOthers.isPending
+                }
               >
+                {revokeOthers.isPending ? (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <LogOut aria-hidden="true" />
+                )}
                 Sign out other devices
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardHeader>
-
-      <CardContent className="p-0">
-        {sessionsQuery.isPending ? (
-          <AccountSessionsLoading />
-        ) : sessionsQuery.error ? (
-          <div role="alert" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2">
-              <AlertCircle
-                className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
-                aria-hidden="true"
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="max-w-sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sign out every other device?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your current session will stay active. Every other device must
+                  sign in and complete two-factor authentication again.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11 sm:min-h-9">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  className="min-h-11 sm:min-h-9"
+                  onClick={() => revokeOthers.mutate()}
+                >
+                  Sign out other devices
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      }
+    >
+      {sessionsQuery.isPending ? (
+        <AccountSessionsLoading />
+      ) : sessionsQuery.error ? (
+        <EmptyState
+          bordered={false}
+          icon={AlertCircle}
+          heading="Sessions are unavailable"
+          body="Device access cannot be changed until the session list loads."
+          action={{
+            label: "Retry",
+            icon: RefreshCw,
+            variant: "outline",
+            disabled: sessionsQuery.isFetching,
+            onClick: () => void sessionsQuery.refetch(),
+          }}
+        />
+      ) : sessions.length === 0 ? (
+        <EmptyState
+          bordered={false}
+          icon={MonitorSmartphone}
+          heading="No active session was returned"
+          body="Retry before changing device access."
+          action={{
+            label: "Retry",
+            icon: RefreshCw,
+            variant: "outline",
+            disabled: sessionsQuery.isFetching,
+            onClick: () => void sessionsQuery.refetch(),
+          }}
+        />
+      ) : (
+        <>
+          <div className="divide-y">
+            {sessions.map((session) => (
+              <AccountSessionRow
+                key={session.commandId}
+                session={session}
+                actionDisabled={revokeOne.isPending || revokeOthers.isPending}
+                revoking={
+                  revokeOne.isPending &&
+                  revokeOne.variables === session.commandId
+                }
+                onRevoke={(commandId) => revokeOne.mutate(commandId)}
               />
-              <div>
-                <p className="text-sm font-medium">Sessions are unavailable</p>
-                <p className="text-xs text-muted-foreground">
-                  Device access cannot be changed until the session list loads.
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 shrink-0 sm:min-h-9"
-              onClick={() => void sessionsQuery.refetch()}
-              disabled={sessionsQuery.isFetching}
-            >
-              <RefreshCw
-                className={sessionsQuery.isFetching ? "animate-spin" : ""}
-                aria-hidden="true"
-              />
-              Retry
-            </Button>
+            ))}
           </div>
-        ) : sessions.length === 0 ? (
-          <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
-            <div>
-              <p className="text-sm font-medium">No active session was returned</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Retry before changing device access.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 sm:min-h-9"
-              onClick={() => void sessionsQuery.refetch()}
-              disabled={sessionsQuery.isFetching}
-            >
-              <RefreshCw
-                className={sessionsQuery.isFetching ? "animate-spin" : ""}
-                aria-hidden="true"
-              />
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="divide-y">
-              {sessions.map((session) => (
-                <AccountSessionRow
-                  key={session.commandId}
-                  session={session}
-                  actionDisabled={revokeOne.isPending || revokeOthers.isPending}
-                  revoking={
-                    revokeOne.isPending &&
-                    revokeOne.variables === session.commandId
-                  }
-                  onRevoke={(commandId) => revokeOne.mutate(commandId)}
-                />
-              ))}
-            </div>
-            {sessionsQuery.data?.hasMore && (
-              <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
-                Only the 25 most recent sessions are shown. “Sign out other
-                devices” still revokes every other session.
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          {sessionsQuery.data?.hasMore && (
+            <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
+              Only the 25 most recent sessions are shown. “Sign out other
+              devices” still revokes every other session.
+            </p>
+          )}
+        </>
+      )}
+    </SettingsSection>
   );
 }

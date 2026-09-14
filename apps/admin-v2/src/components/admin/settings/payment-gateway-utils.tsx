@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { InlineHelp } from "~/components/admin/shell";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
 import {
   Loader2, Save, CheckCircle2, AlertTriangle, ExternalLink,
   Eye, EyeOff, Banknote,
@@ -65,16 +66,17 @@ export function PasswordInput({ id, value, onChange, placeholder, configured }: 
     <div className="relative">
       <Input id={id} type={show ? "text" : "password"} value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={configured ? MASKED : placeholder} className="font-mono pr-10" />
+        placeholder={configured ? MASKED : placeholder}
+        className="min-h-11 pr-11 font-mono sm:min-h-9" />
       <button type="button" onClick={() => setShow((s) => !s)}
         aria-controls={id}
         aria-label={`${show ? "Hide" : "Show"} credential value`}
-        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
       {configured && value === MASKED && (
-        <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
-          <CheckCircle2 className="h-3 w-3" /> Configured -- type to replace
+        <p className="mt-1 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Saved. Type a new value to replace it.
         </p>
       )}
     </div>
@@ -95,8 +97,8 @@ export function SaveBtn({ saving, dirty, onReset, label }: { saving: boolean; di
     <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="text-xs text-muted-foreground" aria-live="polite">{dirty ? "Unsaved provider changes" : "Provider settings saved"}</span>
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
-      <Button type="button" variant="ghost" disabled={!dirty || saving} size="sm" onClick={onReset}>Reset</Button>
-      <Button type="submit" disabled={!dirty || saving} size="sm">
+      <Button type="button" variant="ghost" disabled={!dirty || saving} size="sm" className="min-h-11 sm:min-h-9" onClick={onReset}>Discard</Button>
+      <Button type="submit" disabled={!dirty || saving} size="sm" className="min-h-11 sm:min-h-9">
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
         {label}
       </Button>
@@ -110,13 +112,13 @@ export function SandboxToggle({ id, checked, onChange, extra }: {
 }) {
   return (
     <div className="flex items-center justify-between">
-      <div>
+      <div className="min-w-0">
         <Label htmlFor={id} className="text-sm font-medium">Sandbox mode</Label>
-        <p className="text-xs text-muted-foreground">Use test credentials</p>
+        <InlineHelp id={`${id}-help`}>Sends payment sessions to the provider test environment.</InlineHelp>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex min-h-11 shrink-0 items-center gap-2">
         {extra}
-        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+        <Switch id={id} aria-describedby={`${id}-help`} checked={checked} onCheckedChange={onChange} />
       </div>
     </div>
   );

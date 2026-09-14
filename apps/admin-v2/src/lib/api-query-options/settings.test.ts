@@ -42,7 +42,7 @@ describe("checkoutReadinessQueryOptions", () => {
         JSON.stringify({
           success: true,
           data: {
-            ready: true,
+            status: "ready",
             hasActiveShippingMethod: true,
             hasActiveDeliveryHierarchy: true,
             issues: [],
@@ -65,7 +65,7 @@ describe("checkoutReadinessQueryOptions", () => {
       },
     );
     expect(result).toEqual({
-      ready: true,
+      status: "ready",
       hasActiveShippingMethod: true,
       hasActiveDeliveryHierarchy: true,
       issues: [],

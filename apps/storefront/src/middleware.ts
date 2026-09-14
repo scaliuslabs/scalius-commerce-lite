@@ -6,13 +6,12 @@ import {
   redirectPlaintextRequest,
 } from "@scalius/shared/http-security";
 
-import { apiContext } from "@/lib/api/context";
-import { createRequestApiContext } from "@/lib/api/request-context";
 import {
   getRuntimeApiBaseUrl,
   getRuntimeMediaUrl,
   getRuntimeStorefrontUrl,
-} from "@/lib/api/runtime-env";
+  runWithRequestRuntime,
+} from "@/lib/api/runtime";
 import { getCdnBase } from "@/lib/media-url";
 import {
   isPrivateStorefrontPathname,
@@ -114,13 +113,12 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
-// Seeds the request-scoped context: derived secrets from SCALIUS_SECRET and
+// Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET and
 // public origins from the API's /api/v1/platform response. Nothing is read
 // from Wrangler vars or import.meta.env, and nothing is retained across requests.
-const apiContextMiddleware = defineMiddleware(async ({ request }, next) => {
-  const store = await createRequestApiContext(request, getEnv());
-  return apiContext.run(store, next);
-});
+const requestRuntimeMiddleware = defineMiddleware(({ request }, next) =>
+  runWithRequestRuntime(request, getEnv(), next),
+);
 
 const transportSecurityMiddleware = defineMiddleware(
   async ({ request }, next) => {
@@ -138,6 +136,6 @@ const transportSecurityMiddleware = defineMiddleware(
 
 export const onRequest = sequence(
   transportSecurityMiddleware,
-  apiContextMiddleware,
+  requestRuntimeMiddleware,
   responsePolicyMiddleware,
 );

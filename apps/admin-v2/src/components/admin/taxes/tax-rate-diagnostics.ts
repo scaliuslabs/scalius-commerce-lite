@@ -2,7 +2,7 @@ import type {
   TaxConfigurationPayload,
   TaxJurisdictionType,
   TaxRateRecord,
-} from "@/lib/api-functions/taxes";
+} from "~/lib/api-functions/taxes";
 
 const MAX_VISIBLE_OVERLAPS = 8;
 

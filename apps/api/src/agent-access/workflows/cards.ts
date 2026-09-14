@@ -780,7 +780,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
           input: { template: {}, dependencies: [], defaults: [] },
           output: {
             selectors: [
-              { pointer: "/data/ready", alias: "ready" },
+              { pointer: "/data/status", alias: "status" },
               {
                 pointer: "/data/hasActiveShippingMethod",
                 alias: "hasActiveShippingMethod",
@@ -797,7 +797,15 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
                 pointer: "/data/hasUsableCustomerSignIn",
                 alias: "hasUsableCustomerSignIn",
               },
-              { pointer: "/data/issues", alias: "issues", maxItems: 20 },
+              {
+                pointer: "/data/issues",
+                alias: "issues",
+                maxItems: 20,
+                fields: [
+                  { pointer: "/code", alias: "code" },
+                  { pointer: "/message", alias: "message" },
+                ],
+              },
             ],
           },
           policies: dailyReadPolicies,

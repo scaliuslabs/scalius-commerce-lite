@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
-import { getRuntimeApiBaseUrl } from "@/lib/api/runtime-env";
+import { apiFetch } from "@/lib/api/transport";
+import { getRuntimeApiBaseUrl } from "@/lib/api/runtime";
 import { createAgentContinuationCookieHeader } from "@/lib/agent-continuation-cookie";
 import {
   browserContinuationRelayResponse,
@@ -69,18 +69,15 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const upstream = await fetchWithRetry(
-      createApiUrl("/storefront/agent-continuations/bootstrap"),
+    const upstream = await apiFetch(
+      "/storefront/agent-continuations/bootstrap",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ continuationCode }),
         cache: "no-store",
       },
-      0,
-      REQUEST_TIMEOUT_MS,
-      true,
-      false,
+      { retries: 0, timeout: REQUEST_TIMEOUT_MS, auth: true, logTerminalFailure: false },
     );
     const payload = asRecord(await upstream.json().catch(() => null));
     const data = asRecord(payload?.data);

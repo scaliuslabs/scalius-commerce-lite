@@ -28,7 +28,13 @@ describe("NavigationConfigReadinessNotice", () => {
     act(() => root.render(
       <NavigationConfigReadinessNotice
         section="header"
-        readiness={{ state: "legacy_normalized" }}
+        readiness={{
+          status: "incomplete",
+          issues: [{
+            code: "navigation.legacy_normalized",
+            message: "Existing header links were safely converted.",
+          }],
+        }}
       />,
     ));
 
@@ -41,7 +47,13 @@ describe("NavigationConfigReadinessNotice", () => {
     act(() => root.render(
       <NavigationConfigReadinessNotice
         section="footer"
-        readiness={{ state: "invalid" }}
+        readiness={{
+          status: "error",
+          issues: [{
+            code: "navigation.invalid",
+            message: "The saved footer could not be read.",
+          }],
+        }}
       />,
     ));
 
@@ -54,7 +66,7 @@ describe("NavigationConfigReadinessNotice", () => {
     act(() => root.render(
       <NavigationConfigReadinessNotice
         section="header"
-        readiness={{ state: "ready" }}
+        readiness={{ status: "ready", issues: [] }}
       />,
     ));
 

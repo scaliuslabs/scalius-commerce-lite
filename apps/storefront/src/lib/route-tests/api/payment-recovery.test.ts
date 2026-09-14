@@ -3,14 +3,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
   shouldRejectCrossOriginCookieRequest: vi.fn(),
 }));
 
-vi.mock("@/lib/api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("@/lib/api/transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
@@ -22,15 +20,14 @@ import { POST as verifyCode } from "../../../pages/api/payment-recovery/verify";
 import { getOrderReceiptCookieName } from "../../order-receipt-cookie";
 
 beforeEach(() => {
-  mocks.createApiUrl.mockClear();
-  mocks.fetchWithRetry.mockReset();
+  mocks.apiFetch.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
 });
 
 describe("payment recovery storefront proxies", () => {
   it("requests a code through the public API without exposing contact hints", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
         message: "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.",
@@ -48,7 +45,7 @@ describe("payment recovery storefront proxies", () => {
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
-    const [, requestInit, retries, timeout, requiresAuth] = mocks.fetchWithRetry.mock.calls[0]!;
+    const [apiPath, requestInit, policy] = mocks.apiFetch.mock.calls[0]!;
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -58,15 +55,13 @@ describe("payment recovery storefront proxies", () => {
     });
     expect(JSON.stringify(json)).not.toContain("01775528888");
     expect(JSON.stringify(json)).not.toContain("chk_");
-    expect(mocks.createApiUrl).toHaveBeenCalledWith("/orders/payment-recovery/send-otp");
+    expect(apiPath).toBe("/orders/payment-recovery/send-otp");
     expect(JSON.parse(String(requestInit.body))).toEqual({ orderId: "order_1", channel: "sms" });
-    expect(retries).toBe(0);
-    expect(timeout).toBe(8000);
-    expect(requiresAuth).toBe(false);
+    expect(policy).toEqual({ retries: 0, timeout: 8000, auth: false });
   });
 
   it("returns stable error classification without forwarding backend copy", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
         code: "RATE_LIMIT_EXCEEDED",
@@ -92,7 +87,7 @@ describe("payment recovery storefront proxies", () => {
   });
 
   it("sets the receipt cookie on verified recovery without returning the token in JSON", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
         orderId: "order_1",
@@ -121,19 +116,17 @@ describe("payment recovery storefront proxies", () => {
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
-    const [, requestInit, retries, timeout, requiresAuth] = mocks.fetchWithRetry.mock.calls[0]!;
+    const [apiPath, requestInit, policy] = mocks.apiFetch.mock.calls[0]!;
     const cookie = response.headers.get("Set-Cookie") ?? "";
 
     expect(response.status).toBe(200);
-    expect(mocks.createApiUrl).toHaveBeenCalledWith("/orders/payment-recovery/verify-otp");
+    expect(apiPath).toBe("/orders/payment-recovery/verify-otp");
     expect(JSON.parse(String(requestInit.body))).toEqual({
       orderId: "order_1",
       channel: "sms",
       code: "123456",
     });
-    expect(retries).toBe(0);
-    expect(timeout).toBe(8000);
-    expect(requiresAuth).toBe(true);
+    expect(policy).toEqual({ retries: 0, timeout: 8000, auth: true });
     expect(json).toEqual({
       success: true,
       redirectUrl: "/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",
@@ -145,7 +138,7 @@ describe("payment recovery storefront proxies", () => {
   });
 
   it("classifies verification failures without forwarding backend copy", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
         code: "VALIDATION_ERROR",
@@ -185,6 +178,6 @@ describe("payment recovery storefront proxies", () => {
     } as never);
 
     expect(response.status).toBe(403);
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 });

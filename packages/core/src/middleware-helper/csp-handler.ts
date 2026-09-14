@@ -48,8 +48,12 @@ function getEssentialDomains(): string[] {
   ]);
 }
 
-/** KV key holding the merchant-managed CSP sources saved from the dashboard. */
-export const CSP_ALLOWED_DOMAINS_CACHE_KEY = "security:csp_allowed_domains";
+/**
+ * KV key holding the merchant-managed CSP sources saved from the dashboard.
+ * Owned by the security settings document; re-exported for existing importers.
+ */
+export { CSP_ALLOWED_DOMAINS_CACHE_KEY } from "../modules/settings/security-settings.service";
+import { CSP_ALLOWED_DOMAINS_CACHE_KEY } from "../modules/settings/security-settings.service";
 
 /**
  * Merchant CSP sources come only from the dashboard security settings, which

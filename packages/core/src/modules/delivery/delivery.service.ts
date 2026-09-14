@@ -22,6 +22,7 @@ import {
   getDeliveryProviderSetupFingerprint,
 } from "./provider-readiness";
 import type { DeliveryProviderReadinessSummary } from "./provider-readiness";
+import { readinessMessages } from "@scalius/shared/readiness";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
@@ -126,7 +127,7 @@ function providerActionFailureMessage(
   providerId: string,
   summary: DeliveryProviderReadinessSummary,
 ): string {
-  const blockerMessages = summary.blockers.map((blocker) => blocker.message);
+  const blockerMessages = readinessMessages(summary);
   return `Delivery provider ${providerId} is not ready for shipment creation: ${blockerMessages.join(" ")}`;
 }
 

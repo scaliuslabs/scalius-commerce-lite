@@ -32,8 +32,15 @@ function specWithPaths(paths: OpenApiDocument["paths"]): OpenApiDocument {
 describe("finalizeOpenApiContract", () => {
   it("adds truthful security schemes and operation security from runtime middleware rules", () => {
     const spec = finalizeOpenApiContract(specWithPaths({
-      "/api/v1/admin/products": { get: { responses: {} } },
-      "/api/v1/admin/agent-access/connections": { get: { responses: {} } },
+      "/api/v1/admin/products": {
+        get: { operationId: "dashboard.products.list", responses: {} },
+      },
+      "/api/v1/admin/agent-access/connections": {
+        get: {
+          operationId: "dashboard.agent_access.connections.list",
+          responses: {},
+        },
+      },
       "/api/v1/admin/inventory/scanner/lookup": { get: { responses: {} } },
       "/api/v1/cache/groups": {
         get: {
@@ -43,8 +50,12 @@ describe("finalizeOpenApiContract", () => {
       },
       "/api/v1/auth/token": { get: { responses: {} } },
       "/api/v1/auth/me": { get: { responses: {} } },
-      "/api/v1/agent-auth/device/start": { post: { responses: {} } },
-      "/api/v1/agent-auth/revoke": { post: { responses: {} } },
+      "/api/v1/agent-auth/device/start": {
+        post: { operationId: "system.agent_auth.device_start", responses: {} },
+      },
+      "/api/v1/agent-auth/revoke": {
+        post: { operationId: "system.agent_auth.revoke", responses: {} },
+      },
       "/api/v1/storefront/agent-continuations/{continuationId}": {
         get: {
           operationId: "system.storefront_continuations.get",
@@ -54,7 +65,9 @@ describe("finalizeOpenApiContract", () => {
       "/api/v1/customer-auth/send-otp": { post: { responses: {} } },
       "/api/v1/customer-auth/me": { get: { responses: {} } },
       "/api/v1/orders/status/{token}": { get: { responses: {} } },
-      "/api/v1/products": { get: { responses: {} } },
+      "/api/v1/products": {
+        get: { operationId: "storefront.products.list", responses: {} },
+      },
       "/api/v1/admin/explicit-public": { get: { security: [], responses: {} } },
     }));
 
@@ -161,8 +174,14 @@ describe("finalizeOpenApiContract", () => {
   it("assigns stable metadata and derived RBAC without widening unreviewed routes", () => {
     const spec = finalizeOpenApiContract(specWithPaths({
       "/api/v1/admin/products": {
-        get: { summary: "List products", tags: ["Products"], responses: {} },
+        get: {
+          operationId: "dashboard.products.list",
+          summary: "List products",
+          tags: ["Products"],
+          responses: {},
+        },
         post: {
+          operationId: "dashboard.products.create",
           summary: "Create product",
           tags: ["Products"],
           requestBody: { content: { "application/json": { schema: { type: "object" } } } },
@@ -170,10 +189,16 @@ describe("finalizeOpenApiContract", () => {
         },
       },
       "/api/v1/products": {
-        get: { summary: "Storefront products", tags: ["Products"], responses: {} },
+        get: {
+          operationId: "storefront.products.list",
+          summary: "Storefront products",
+          tags: ["Products"],
+          responses: {},
+        },
       },
       "/api/v1/storefront/agent-contexts": {
         post: {
+          operationId: "storefront.context.create",
           summary: "Create context",
           tags: ["Agent Contexts"],
           responses: {},
@@ -181,6 +206,7 @@ describe("finalizeOpenApiContract", () => {
       },
       "/api/v1/agent-auth/device/start": {
         post: {
+          operationId: "system.agent_auth.device_start",
           summary: "Start device pairing",
           tags: ["Agent Authentication"],
           responses: {},
@@ -188,6 +214,7 @@ describe("finalizeOpenApiContract", () => {
       },
       "/api/v1/agent-auth/device/token": {
         post: {
+          operationId: "system.agent_auth.device_token",
           summary: "Poll device pairing",
           tags: ["Agent Authentication"],
           responses: {},
@@ -195,6 +222,7 @@ describe("finalizeOpenApiContract", () => {
       },
       "/api/v1/agent-auth/device/ack": {
         post: {
+          operationId: "system.agent_auth.device_ack",
           summary: "Acknowledge device pairing",
           tags: ["Agent Authentication"],
           responses: {},
@@ -202,6 +230,7 @@ describe("finalizeOpenApiContract", () => {
       },
       "/api/v1/agent-auth/revoke": {
         post: {
+          operationId: "system.agent_auth.revoke",
           summary: "Revoke current credential",
           tags: ["Agent Authentication"],
           requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
@@ -212,7 +241,12 @@ describe("finalizeOpenApiContract", () => {
         get: { summary: "List orders", tags: ["Orders"], responses: {} },
       },
       "/api/v1/admin/agent-access/connections": {
-        get: { summary: "List agent connections", tags: ["Agent Access"], responses: {} },
+        get: {
+          operationId: "dashboard.agent_access.connections.list",
+          summary: "List agent connections",
+          tags: ["Agent Access"],
+          responses: {},
+        },
       },
     }));
 

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 
 const PAYMENT_RECOVERY_TIMEOUT_MS = 8_000;
@@ -66,17 +66,15 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_VERIFICATION" }, 400);
     }
 
-    const response = await fetchWithRetry(
-      createApiUrl("/orders/payment-recovery/verify-otp"),
+    const response = await apiFetch(
+      "/orders/payment-recovery/verify-otp",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, channel, code }),
         cache: "no-store",
       },
-      0,
-      PAYMENT_RECOVERY_TIMEOUT_MS,
-      true,
+      { retries: 0, timeout: PAYMENT_RECOVERY_TIMEOUT_MS, auth: true },
     );
 
     const json = await response.json().catch(() => ({}) as Record<string, unknown>);

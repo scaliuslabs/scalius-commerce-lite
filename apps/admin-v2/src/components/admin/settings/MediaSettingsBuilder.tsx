@@ -1,22 +1,20 @@
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ContextualSaveBar,
+  InlineHelp,
+  SettingsSection,
+  SkeletonPage,
+  StatusBadge,
+} from "@/components/admin/shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { getMediaSettings, updateMediaSettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
-import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface MediaSettingsValues {
   enabled: boolean;
@@ -103,9 +101,12 @@ export default function MediaSettingsBuilder() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <SkeletonPage
+        showHeader={false}
+        sections={2}
+        rowsPerSection={4}
+        label="Loading media settings"
+      />
     );
   }
 
@@ -121,122 +122,123 @@ export default function MediaSettingsBuilder() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5">
-      <UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false} allowSamePathStateNavigation />
+    <div className="max-w-5xl">
+      <ContextualSaveBar
+        isDirty={isDirty || isSaving}
+        saving={isSaving}
+        saveDisabled={!isDirty || !isLoaded}
+        saveDisabledReason="Reload the media settings before saving."
+        saveLabel="Save changes"
+        allowSamePathNavigation
+        // The settings section picker is sticky on narrow widths.
+        stickyClassName="sticky top-15 z-30 lg:top-0"
+        onDiscard={reset}
+        onSave={handleSubmit}
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Image delivery</CardTitle>
-          <CardDescription>
-            Serve correctly sized images through Cloudflare.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
-            <Label htmlFor="image-optimization-enabled">Image optimization</Label>
-            <Switch
-              id="image-optimization-enabled"
-              checked={values.enabled}
-              onCheckedChange={(checked) => setValue("enabled", checked)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="canonical-cdn-url">Delivery host</Label>
-            <Input
-              id="canonical-cdn-url"
-              value={values.canonicalCdnUrl}
-              onChange={(event) => setValue("canonicalCdnUrl", event.target.value)}
-              placeholder="cdn.example.com"
-              className="min-h-11 sm:min-h-9"
-            />
-            <p className="text-xs text-muted-foreground">
-              Leave blank to use the deployed CDN host.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <details
-        className="group rounded-lg border bg-card"
-        open={advancedOpen}
-        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
-      >
-        <summary
-          aria-label={`Advanced host rules, ${configuredHostCount === 0 ? "none configured" : `${configuredHostCount} configured`}`}
-          className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden"
+      <div className="space-y-6">
+        <SettingsSection
+          title="Image delivery"
+          description="Resizes product images through Cloudflare before buyers download them."
         >
-          <span>Advanced host rules</span>
-          <span className="ml-auto text-xs font-normal text-muted-foreground">
-            {configuredHostCount === 0
-              ? "Optional"
-              : `${configuredHostCount} host${configuredHostCount === 1 ? "" : "s"}`}
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="space-y-4 border-t px-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="allowed-image-hosts">Resizable hosts</Label>
-            <Textarea
-              id="allowed-image-hosts"
-              value={values.allowedImageHostsText}
-              onChange={(event) =>
-                setValue("allowedImageHostsText", event.target.value)
-              }
-              placeholder={"media.example.com\ncdn.example.com"}
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">
-              Hosts that support Cloudflare image transformations, one per line.
-            </p>
-          </div>
+          <div className="space-y-4">
+            <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
+              <Label htmlFor="image-optimization-enabled">Image optimization</Label>
+              <Switch
+                id="image-optimization-enabled"
+                checked={values.enabled}
+                aria-describedby="image-optimization-help"
+                onCheckedChange={(checked) => setValue("enabled", checked)}
+              />
+            </div>
+            <InlineHelp id="image-optimization-help">
+              Turn this off to serve every image at its original size.
+            </InlineHelp>
 
-          <div className="space-y-2">
-            <Label htmlFor="canonical-host-aliases">Previous host aliases</Label>
-            <Textarea
-              id="canonical-host-aliases"
-              value={values.canonicalHostAliasesText}
-              onChange={(event) =>
-                setValue("canonicalHostAliasesText", event.target.value)
-              }
-              placeholder={"old-media.example.com\nr2-public.example.com"}
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">
-              Existing URLs from these hosts keep their path and use the delivery host.
-            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="canonical-cdn-url">Delivery host</Label>
+              <Input
+                id="canonical-cdn-url"
+                value={values.canonicalCdnUrl}
+                onChange={(event) => setValue("canonicalCdnUrl", event.target.value)}
+                placeholder="cdn.example.com"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-describedby="canonical-cdn-url-help"
+                className="min-h-11 sm:min-h-9"
+              />
+              <InlineHelp id="canonical-cdn-url-help">
+                Leave blank to use the deployed CDN host.
+              </InlineHelp>
+            </div>
           </div>
-        </div>
-      </details>
+        </SettingsSection>
 
-      {isDirty ? (
-        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={reset}
-            disabled={isSaving}
-            className="min-h-11 sm:min-h-9"
+        <SettingsSection
+          title="Host rules"
+          description="Needed only while images still live on a host you moved away from."
+          contentClassName="p-0 sm:p-0"
+        >
+          <details
+            className="group"
+            open={advancedOpen}
+            onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
           >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isSaving || !isLoaded}
-            className="min-h-11 min-w-[140px] sm:min-h-9"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save changes"
-            )}
-          </Button>
-        </div>
-      ) : null}
+            <summary
+              aria-label={`Advanced host rules, ${configuredHostCount === 0 ? "none configured" : `${configuredHostCount} configured`}`}
+              className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium sm:px-6 [&::-webkit-details-marker]:hidden"
+            >
+              <span>Advanced host rules</span>
+              <StatusBadge
+                tone={configuredHostCount === 0 ? "neutral" : "info"}
+                dot={false}
+                className="ml-auto"
+              >
+                {configuredHostCount === 0
+                  ? "Optional"
+                  : `${configuredHostCount} host${configuredHostCount === 1 ? "" : "s"}`}
+              </StatusBadge>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 border-t border-border px-4 py-4 sm:px-6">
+              <div className="space-y-1.5">
+                <Label htmlFor="allowed-image-hosts">Resizable hosts</Label>
+                <Textarea
+                  id="allowed-image-hosts"
+                  value={values.allowedImageHostsText}
+                  onChange={(event) =>
+                    setValue("allowedImageHostsText", event.target.value)
+                  }
+                  placeholder={"media.example.com\ncdn.example.com"}
+                  rows={4}
+                  aria-describedby="allowed-image-hosts-help"
+                />
+                <InlineHelp id="allowed-image-hosts-help">
+                  Images on these hosts are resized by Cloudflare, one host per line.
+                </InlineHelp>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="canonical-host-aliases">Previous host aliases</Label>
+                <Textarea
+                  id="canonical-host-aliases"
+                  value={values.canonicalHostAliasesText}
+                  onChange={(event) =>
+                    setValue("canonicalHostAliasesText", event.target.value)
+                  }
+                  placeholder={"old-media.example.com\nr2-public.example.com"}
+                  rows={4}
+                  aria-describedby="canonical-host-aliases-help"
+                />
+                <InlineHelp id="canonical-host-aliases-help">
+                  Existing URLs from these hosts keep their path and use the delivery host.
+                </InlineHelp>
+              </div>
+            </div>
+          </details>
+        </SettingsSection>
+      </div>
     </div>
   );
 }

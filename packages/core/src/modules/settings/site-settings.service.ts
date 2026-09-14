@@ -27,7 +27,9 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
+import { z } from "zod";
 import { upsertSetting } from "../payments/gateway-settings";
+import { defineSettingsDocument } from "./settings-store";
 import {
   normalizeSupportedCurrencyCode,
   type SupportedCurrencyCode,
@@ -54,6 +56,7 @@ import {
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
+import { readiness, type Readiness } from "@scalius/shared/readiness";
 import {
   isMediaReferenceDeletingGuardError,
   MEDIA_REFERENCE_DELETING_MESSAGE,
@@ -241,6 +244,9 @@ type PartialSeoDiscoverySettings = {
   [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
 };
 type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
+
+const MEDIA_HOST_MAX_LENGTH = 253;
+const MEDIA_HOST_LIST_MAX_COUNT = 24;
 
 export interface MediaOptimizationSettings {
   enabled: boolean;
@@ -442,6 +448,16 @@ export async function saveCurrencySettings(
 // General (header + footer)
 // ─────────────────────────────────────────
 
+/**
+ * Stable issue codes for a saved navigation section. `legacy_normalized` means
+ * the stored links were safely converted and need one explicit save;
+ * `invalid` means the section could not be read, so editing stays locked.
+ */
+export const NAVIGATION_READINESS_CODES = {
+  legacyNormalized: "navigation.legacy_normalized",
+  invalid: "navigation.invalid",
+} as const;
+
 export function stripEmbeddedNavigation(
   section: SitePresentationSection,
   config: Record<string, unknown>,
@@ -476,13 +492,9 @@ export async function getGeneralSettings(db: Database) {
       footer: row?.footerConfigRevision ?? 0,
     },
     navigationReadiness: {
-      header: {
-        state: "ready" as const,
-      },
-      footer: {
-        state: "ready" as const,
-      },
-    },
+      header: readiness.ready(),
+      footer: readiness.ready(),
+    } satisfies Record<SitePresentationSection, Readiness>,
   };
 }
 
@@ -1368,51 +1380,51 @@ export async function resolveThemePreviewSession(
 // Media / Image optimization
 // ─────────────────────────────────────────
 
+const mediaOptimizationDocumentSchema = z
+  .object({
+    enabled: z.boolean(),
+    canonicalCdnUrl: z.string().max(MEDIA_HOST_MAX_LENGTH),
+    allowedImageHosts: z.array(z.string().max(MEDIA_HOST_MAX_LENGTH)).max(MEDIA_HOST_LIST_MAX_COUNT),
+    canonicalHostAliases: z.array(z.string().max(MEDIA_HOST_MAX_LENGTH)).max(MEDIA_HOST_LIST_MAX_COUNT),
+  })
+  .transform((value): MediaOptimizationSettings => ({
+    enabled: value.enabled,
+    canonicalCdnUrl: normalizeMediaHost(value.canonicalCdnUrl),
+    allowedImageHosts: normalizeHostList(value.allowedImageHosts),
+    canonicalHostAliases: normalizeHostList(value.canonicalHostAliases),
+  }));
+
+/**
+ * Media delivery hosts. Already one JSON row before the store existed, so
+ * there is nothing to assemble from legacy rows. It stays uncached here
+ * because the storefront projection reads the same row inside its own cached
+ * layout query; a second KV copy would be a second source of truth.
+ */
+export const mediaOptimizationDocument = defineSettingsDocument<MediaOptimizationSettings>({
+  category: MEDIA_SETTINGS_CATEGORY,
+  key: IMAGE_OPTIMIZATION_KEY,
+  label: "media optimization",
+  schema: mediaOptimizationDocumentSchema,
+  defaults: {
+    enabled: true,
+    canonicalCdnUrl: "",
+    allowedImageHosts: [],
+    canonicalHostAliases: [],
+  },
+  invalidationGroups: ["media"],
+});
+
 export async function getMediaOptimizationSettings(
   db: Database,
 ): Promise<MediaOptimizationSettings> {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.category, MEDIA_SETTINGS_CATEGORY),
-        eq(settings.key, IMAGE_OPTIMIZATION_KEY),
-      ),
-    )
-    .get();
-
-  return parseMediaOptimizationSettings(row?.value);
+  return mediaOptimizationDocument.read(db);
 }
 
 export async function saveMediaOptimizationSettings(
   db: Database,
   data: Partial<MediaOptimizationSettings>,
 ): Promise<MediaOptimizationSettings> {
-  const current = await getMediaOptimizationSettings(db);
-  const settingsToSave: MediaOptimizationSettings = {
-    enabled: typeof data.enabled === "boolean" ? data.enabled : current.enabled,
-    canonicalCdnUrl:
-      data.canonicalCdnUrl !== undefined
-        ? normalizeMediaHost(data.canonicalCdnUrl)
-        : current.canonicalCdnUrl,
-    allowedImageHosts:
-      data.allowedImageHosts !== undefined
-        ? normalizeHostList(data.allowedImageHosts)
-        : current.allowedImageHosts,
-    canonicalHostAliases:
-      data.canonicalHostAliases !== undefined
-        ? normalizeHostList(data.canonicalHostAliases)
-        : current.canonicalHostAliases,
-  };
-
-  await upsertSetting(
-    db,
-    MEDIA_SETTINGS_CATEGORY,
-    IMAGE_OPTIMIZATION_KEY,
-    JSON.stringify(settingsToSave),
-  );
-  return settingsToSave;
+  return mediaOptimizationDocument.write(db, data);
 }
 
 // ─────────────────────────────────────────

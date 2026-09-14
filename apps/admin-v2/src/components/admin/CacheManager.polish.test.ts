@@ -23,9 +23,15 @@ describe("cache workspace presentation", () => {
     expect(source).toContain("min-h-11");
   });
 
-  it("uses the compact route heading shared by current settings pages", () => {
+  it("uses the settings frame and its shared page header", () => {
     const source = readSource("../../routes/admin/settings/cache.tsx");
-    expect(source).toContain("text-xl font-semibold tracking-tight");
+    // Every standalone settings route shares one frame: the settings
+    // navigation on the left and a PageHeader naming the page.
+    expect(source).toContain("<SettingsLayout");
+    expect(source).toContain('pathname="/admin/settings/cache"');
+    expect(source).toContain('title="Cache"');
+    expect(source).toContain("description=");
+    expect(source).not.toContain("<h1");
     expect(source).not.toContain("text-3xl");
   });
 });

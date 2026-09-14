@@ -131,19 +131,22 @@ describe("notification channel settings routes", () => {
         });
         mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(false);
         mocks.getEmailProviderReadiness.mockResolvedValue({
-            configured: true,
+            status: "ready",
+            issues: [],
             provider: "cloudflare",
-            error: null,
         });
         mocks.getSmsProviderReadiness.mockResolvedValue({
+            status: "incomplete",
+            issues: [{
+                code: "missing_sms_provider_credentials",
+                message: "No active SMS provider selected",
+            }],
             activeProvider: null,
-            configured: false,
-            error: "No active SMS provider selected",
         });
         mocks.getNotificationProviderBlock.mockResolvedValue(null);
         mocks.getFirebaseServiceAccountReadiness.mockResolvedValue({
-            configured: true,
-            error: null,
+            status: "ready",
+            issues: [],
             source: "settings",
         });
         mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
@@ -158,11 +161,9 @@ describe("notification channel settings routes", () => {
         const body = await response.json() as {
             success: boolean;
             data: {
-                smsProviderConfigured: boolean;
-                smsProviderError: string | null;
-                emailConfigured: boolean;
-                emailError: string | null;
-                whatsappConfigured: boolean;
+                sms: { status: string; issues: Array<{ message: string }> };
+                email: { status: string; issues: Array<{ message: string }> };
+                whatsapp: { status: string };
             };
         };
 
@@ -170,11 +171,12 @@ describe("notification channel settings routes", () => {
         expect(body).toMatchObject({
             success: true,
             data: {
-                smsProviderConfigured: false,
-                smsProviderError: "No active SMS provider selected",
-                emailConfigured: true,
-                emailError: null,
-                whatsappConfigured: false,
+                sms: {
+                    status: "incomplete",
+                    issues: [{ message: "No active SMS provider selected" }],
+                },
+                email: { status: "ready", issues: [] },
+                whatsapp: { status: "incomplete" },
             },
         });
         expect(mocks.getEmailProviderReadiness).toHaveBeenCalledWith({
@@ -187,9 +189,9 @@ describe("notification channel settings routes", () => {
 
     it("reports configured SMS providers as unready while delivery is paused", async () => {
         mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+            status: "ready",
+            issues: [],
             activeProvider: "smsnetbd",
-            configured: true,
-            error: null,
         });
         mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
             options.channel === "sms" && options.provider === "smsnetbd"
@@ -208,14 +210,13 @@ describe("notification channel settings routes", () => {
         }, env);
         const body = await response.json() as {
             data: {
-                smsProviderConfigured: boolean;
-                smsProviderError: string | null;
+                sms: { status: string; issues: Array<{ message: string }> };
             };
         };
 
         expect(response.status).toBe(200);
-        expect(body.data.smsProviderConfigured).toBe(false);
-        expect(body.data.smsProviderError).toBe("sms/smsnetbd paused");
+        expect(body.data.sms.status).toBe("incomplete");
+        expect(body.data.sms.issues[0]?.message).toBe("sms/smsnetbd paused");
     });
 
     it("reports email notifications as unready while provider delivery is paused", async () => {
@@ -236,14 +237,13 @@ describe("notification channel settings routes", () => {
         }, env);
         const body = await response.json() as {
             data: {
-                emailConfigured: boolean;
-                emailError: string | null;
+                email: { status: string; issues: Array<{ message: string }> };
             };
         };
 
         expect(response.status).toBe(200);
-        expect(body.data.emailConfigured).toBe(false);
-        expect(body.data.emailError).toBe("email/cloudflare paused");
+        expect(body.data.email.status).toBe("incomplete");
+        expect(body.data.email.issues[0]?.message).toBe("email/cloudflare paused");
     });
 
     it("maps unready SMS channel saves to a customer-safe 400", async () => {
@@ -366,8 +366,11 @@ describe("notification channel settings routes", () => {
 
     it("returns Firebase push readiness with admin notification channels", async () => {
         mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            configured: false,
-            error: "Configure Firebase service account credentials before enabling admin push notifications.",
+            status: "incomplete",
+            issues: [{
+                code: "missing_firebase_service_account",
+                message: "Configure Firebase service account credentials before enabling admin push notifications.",
+            }],
             source: "none",
         });
         const { app, env } = createTestApp();
@@ -379,8 +382,7 @@ describe("notification channel settings routes", () => {
             success: boolean;
             data: {
                 channels: Record<string, string[]>;
-                pushConfigured: boolean;
-                pushError: string | null;
+                push: { status: string; issues: Array<{ message: string }> };
             };
         };
 
@@ -389,8 +391,12 @@ describe("notification channel settings routes", () => {
             success: true,
             data: {
                 channels: { order_created: ["push"] },
-                pushConfigured: false,
-                pushError: "Configure Firebase service account credentials before enabling admin push notifications.",
+                push: {
+                    status: "incomplete",
+                    issues: [{
+                        message: "Configure Firebase service account credentials before enabling admin push notifications.",
+                    }],
+                },
             },
         });
         expect(mocks.getFirebaseServiceAccountReadiness).toHaveBeenCalledWith(
@@ -413,20 +419,22 @@ describe("notification channel settings routes", () => {
         }, env);
         const body = await response.json() as {
             data: {
-                pushConfigured: boolean;
-                pushError: string | null;
+                push: { status: string; issues: Array<{ message: string }> };
             };
         };
 
         expect(response.status).toBe(200);
-        expect(body.data.pushConfigured).toBe(false);
-        expect(body.data.pushError).toBe("push/fcm paused");
+        expect(body.data.push.status).toBe("incomplete");
+        expect(body.data.push.issues[0]?.message).toBe("push/fcm paused");
     });
 
     it("rejects admin push saves when Firebase readiness is not configured", async () => {
         mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            configured: false,
-            error: "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+            status: "incomplete",
+            issues: [{
+                code: "unusable_firebase_service_account",
+                message: "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
+            }],
             source: "settings",
         });
         const { app, env } = createTestApp();
@@ -448,8 +456,11 @@ describe("notification channel settings routes", () => {
 
     it("allows disabling admin push even when Firebase is not configured", async () => {
         mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            configured: false,
-            error: "Configure Firebase service account credentials before enabling admin push notifications.",
+            status: "incomplete",
+            issues: [{
+                code: "missing_firebase_service_account",
+                message: "Configure Firebase service account credentials before enabling admin push notifications.",
+            }],
             source: "none",
         });
         mocks.updateAdminNotificationChannels.mockResolvedValueOnce({
@@ -471,7 +482,7 @@ describe("notification channel settings routes", () => {
             success: true,
             data: {
                 channels: { order_created: [] },
-                pushConfigured: false,
+                push: { status: "incomplete" },
             },
         });
         expect(mocks.updateAdminNotificationChannels).toHaveBeenCalledWith(

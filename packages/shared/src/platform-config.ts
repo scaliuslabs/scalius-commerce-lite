@@ -10,6 +10,8 @@
  * test can share the same normalization rules.
  */
 
+import { readiness, readinessIssue, type Readiness } from "./readiness";
+
 export interface PlatformConfig {
   /** Canonical public storefront origin, e.g. https://shop.example.com */
   storefrontUrl: string;
@@ -208,12 +210,39 @@ export function storefrontPurgeUrl(storefrontUrl: string): string {
   return origin ? `${origin}/api/purge-cache` : "";
 }
 
-export interface PlatformConfigReadiness {
-  complete: boolean;
+const PLATFORM_URL_LABELS: Record<PlatformUrlKey, string> = {
+  storefrontUrl: "Storefront URL",
+  apiUrl: "API URL",
+  dashboardUrl: "Dashboard URL",
+  mediaUrl: "Media URL",
+};
+
+const PLATFORM_URL_ISSUE_CODES: Record<PlatformUrlKey, string> = {
+  storefrontUrl: "missing_storefront_url",
+  apiUrl: "missing_api_url",
+  dashboardUrl: "missing_dashboard_url",
+  mediaUrl: "missing_media_url",
+};
+
+export const PLATFORM_READINESS_FIX =
+  "Set it in the dashboard under Settings -> System -> Platform.";
+
+/**
+ * The shared readiness vocabulary plus the typed extra callers need: exactly
+ * which platform origins are still unset.
+ */
+export interface PlatformConfigReadiness extends Readiness {
   missing: PlatformUrlKey[];
 }
 
 export function getPlatformConfigReadiness(config: PlatformConfig): PlatformConfigReadiness {
   const missing = PLATFORM_URL_KEYS.filter((key) => !config[key]);
-  return { complete: missing.length === 0, missing };
+  return {
+    ...readiness.from(missing.map((key) => readinessIssue(
+      PLATFORM_URL_ISSUE_CODES[key],
+      `${PLATFORM_URL_LABELS[key]} is not configured.`,
+      PLATFORM_READINESS_FIX,
+    ))),
+    missing,
+  };
 }

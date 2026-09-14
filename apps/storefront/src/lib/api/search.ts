@@ -1,6 +1,6 @@
 // src/lib/api/search.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { SearchResults } from "./types";
 import { unwrapData } from "./unwrap";
 import { getApiV1Search } from "@scalius/api-client/sdk";

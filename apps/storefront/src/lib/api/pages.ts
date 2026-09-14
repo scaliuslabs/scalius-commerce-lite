@@ -1,8 +1,8 @@
 // src/lib/api/pages.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { Page, PaginatedResponse } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import {

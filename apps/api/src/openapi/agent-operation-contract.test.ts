@@ -14,6 +14,18 @@ import {
   assertOpenApiContractModuleFresh,
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
+import {
+  OPERATIONS,
+  methodRisk,
+  operationSurface,
+  registryEntry,
+  type OperationRegistryEntry,
+} from "./operation-registry";
+import {
+  AGENT_STOREFRONT_INTENT_ROUTES,
+  DASHBOARD_AGENT_WORKFLOW_ROUTES,
+  buildAgentWorkflowCatalog,
+} from "../agent-access/workflows";
 
 function finalizedDocument(): OpenApiDocument {
   return finalizeOpenApiContract(
@@ -619,5 +631,123 @@ describe("agent operation contract", () => {
 
   it("keeps the dependency-free CLI workflow resolver byte-for-byte generated", () => {
     expect(() => assertCliWorkflowResolverCoreFresh()).not.toThrow();
+  });
+
+  it("registers every documented route in the single operation registry", () => {
+    const unregistered = manifest
+      .filter((operation) => registryEntry(operation.operationId) === undefined)
+      .map((operation) => `${operation.method} ${operation.pathTemplate} -> ${operation.operationId}`);
+    expect(unregistered).toEqual([]);
+    expect(manifest).toHaveLength(Object.keys(OPERATIONS).length);
+  });
+
+  it("keeps every registry row backed by exactly one live route", () => {
+    const routed = new Map<string, number>();
+    for (const operation of manifest) {
+      routed.set(operation.operationId, (routed.get(operation.operationId) ?? 0) + 1);
+    }
+    const orphaned = Object.keys(OPERATIONS).filter((operationId) => !routed.has(operationId));
+    const duplicated = [...routed].filter(([, count]) => count > 1).map(([operationId]) => operationId);
+    expect(orphaned).toEqual([]);
+    expect(duplicated).toEqual([]);
+  });
+
+  it("derives surface and access from the route unless the registry states otherwise", () => {
+    const mismatched: string[] = [];
+    for (const operation of manifest) {
+      const entry = registryEntry(operation.operationId) as OperationRegistryEntry;
+      if (operationSurface(operation.operationId) !== operation.surface) {
+        mismatched.push(`${operation.operationId} surface`);
+      }
+      const derivedRisk = methodRisk(operation.method);
+      const declaredRisk = entry.risk;
+      if (declaredRisk === undefined && operation.risk !== derivedRisk) {
+        mismatched.push(`${operation.operationId} risk`);
+      }
+      if (declaredRisk !== undefined && declaredRisk === derivedRisk) {
+        mismatched.push(`${operation.operationId} redundant risk`);
+      }
+    }
+    expect(mismatched).toEqual([]);
+  });
+
+  it("requires a JSON request body on every executable mutation that documents one", () => {
+    const optionalBodies: string[] = [];
+    for (const [pathTemplate, pathItem] of Object.entries(document.paths ?? {})) {
+      if (!pathItem || typeof pathItem !== "object") continue;
+      for (const [method, rawOperation] of Object.entries(pathItem)) {
+        if (!HTTP_METHODS.has(method.toLowerCase())) continue;
+        const operation = rawOperation as Record<string, unknown>;
+        const metadata = operation["x-scalius-agent"] as { exposure: string; risk: string };
+        const requestBody = operation.requestBody as { required?: boolean } | undefined;
+        if (
+          metadata.exposure === "execute" &&
+          metadata.risk !== "read" &&
+          requestBody !== undefined &&
+          requestBody.required !== true
+        ) {
+          optionalBodies.push(`${method.toUpperCase()} ${pathTemplate}`);
+        }
+      }
+    }
+    expect(optionalBodies).toEqual([]);
+  });
+
+  it("bounds the public product section read without operational inventory counters", () => {
+    const operation = JSON.stringify(
+      (document.paths ?? {})["/api/v1/products/{slug}/sections/{section}"],
+    );
+    expect(operation).toContain('"maxLength":12000');
+    expect(operation).toContain('"maxItems":10');
+    expect(operation).toContain('"availabilityBand"');
+    expect(operation).not.toContain('"reservedStock"');
+    expect(operation).not.toContain('"lowStockThreshold"');
+    expect(operation).not.toContain('"trackInventory"');
+  });
+
+  // A dashboard intent may verify its outcome through a storefront read, so the
+  // reference surface is deliberately not constrained to the intent surface.
+  it("keeps every curated intent operation reference live and executable", () => {
+    const broken: string[] = [];
+    for (const route of [
+      ...DASHBOARD_AGENT_WORKFLOW_ROUTES,
+      ...AGENT_STOREFRONT_INTENT_ROUTES,
+    ]) {
+      for (const operationId of route.operationIds) {
+        const entry = registryEntry(operationId);
+        if (!entry) {
+          broken.push(`${route.id} -> unknown ${operationId}`);
+          continue;
+        }
+        if (entry.exposure === "excluded" || entry.exposure === "device") {
+          broken.push(`${route.id} -> non-executable ${operationId}`);
+        }
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("reaches every dashboard operation through an intent, catalog coverage, or an internal marker", () => {
+    const catalog = buildAgentWorkflowCatalog(manifest);
+    const intentOperationIds = new Set(
+      DASHBOARD_AGENT_WORKFLOW_ROUTES.flatMap((route) => route.operationIds),
+    );
+    const coveredOperationIds = new Set(
+      catalog.coverage.operations.map((entry) => entry.operationId),
+    );
+    const unreachable = manifest
+      .filter(
+        (operation) =>
+          operation.surface === "dashboard" && operation.exposure === "execute",
+      )
+      .filter(
+        (operation) =>
+          !intentOperationIds.has(operation.operationId) &&
+          !coveredOperationIds.has(operation.operationId) &&
+          registryEntry(operation.operationId)?.internal !== true,
+      )
+      .map((operation) => operation.operationId);
+    expect(unreachable).toEqual([]);
+    expect(intentOperationIds.size).toBeGreaterThan(0);
   });
 });

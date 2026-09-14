@@ -20,6 +20,7 @@ import {
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness } from "../../integrations/email";
+import { isReady } from "@scalius/shared/readiness";
 
 // ─────────────────────────────────────────
 // Types
@@ -375,9 +376,10 @@ export async function updateNotificationChannels(
 
     if (channelWasEnabled(channels, currentChannels, "email")) {
         const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
-        if (!emailReadiness.configured) {
+        if (!isReady(emailReadiness)) {
             throw new ValidationError(
-                emailReadiness.error ?? "Configure a transactional email provider before enabling email order notifications.",
+                emailReadiness.issues[0]?.message
+                    ?? "Configure a transactional email provider before enabling email order notifications.",
             );
         }
         await assertNotificationProviderNotPaused(db, {
@@ -392,9 +394,10 @@ export async function updateNotificationChannels(
 
     if (channelWasEnabled(channels, currentChannels, "sms")) {
         const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
-        if (!smsReadiness.configured) {
+        if (!isReady(smsReadiness)) {
+            const detail = smsReadiness.issues[0]?.message;
             throw new ValidationError(
-                `Configure an active SMS provider before enabling SMS order notifications.${smsReadiness.error ? ` ${smsReadiness.error}` : ""}`,
+                `Configure an active SMS provider before enabling SMS order notifications.${detail ? ` ${detail}` : ""}`,
             );
         }
         if (smsReadiness.activeProvider) {

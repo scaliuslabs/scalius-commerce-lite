@@ -16,6 +16,7 @@ import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-i
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
+import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const MASKED_VALUE = "••••••••••••";
@@ -229,13 +230,14 @@ async function serializeProviderForClient(
         updatedAt: requiredTimestampForClient(provider.updatedAt),
         readiness: {
             status: readiness.status,
+            lifecycle: readiness.lifecycle,
             configured: readiness.configured,
             tested: readiness.tested,
             active: readiness.active,
             canCreateShipment: readiness.active,
-            blockers: readiness.blockers.slice(0, 20).map((blocker) => ({
-                code: blocker.code.slice(0, 100),
-                message: blocker.message.slice(0, 500),
+            issues: readiness.issues.slice(0, 20).map((issue) => ({
+                code: issue.code.slice(0, 100),
+                message: issue.message.slice(0, 500),
             })),
             activationBlockers: readiness.activationBlockers.slice(0, 20).map((blocker) => ({
                 source: blocker.source.slice(0, 100),
@@ -259,16 +261,13 @@ const deliveryProviderSchema = z.object({
     credentials: z.string().max(4096),
     config: z.string().max(4096),
     isActive: z.boolean(),
-    readiness: z.object({
-        status: z.enum(["draft", "configured", "tested", "active", "blocked"]),
+    readiness: readinessSchema.extend({
+        /** Setup lifecycle position; the readiness verdict is `status`. */
+        lifecycle: z.enum(["draft", "configured", "tested", "active", "blocked"]),
         configured: z.boolean(),
         tested: z.boolean(),
         active: z.boolean(),
         canCreateShipment: z.boolean(),
-        blockers: z.array(z.object({
-            code: z.string(),
-            message: z.string(),
-        })),
         activationBlockers: z.array(z.object({
             source: z.string(),
             key: z.string(),

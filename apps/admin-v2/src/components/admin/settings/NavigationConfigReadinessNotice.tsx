@@ -1,6 +1,7 @@
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 
 import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import { isNavigationConfigUnreadable } from "./navigation-readiness";
 
 interface NavigationConfigReadinessNoticeProps {
   section: "header" | "footer";
@@ -11,10 +12,12 @@ export function NavigationConfigReadinessNotice({
   section,
   readiness,
 }: NavigationConfigReadinessNoticeProps) {
-  if (!readiness || readiness.state === "ready") return null;
+  if (!readiness || readiness.status === "ready") return null;
 
   const sectionLabel = section === "header" ? "Header" : "Footer";
-  const isInvalid = readiness.state === "invalid";
+  // An unreadable section is worse than one that only needs a save, so it wins
+  // whenever both are reported.
+  const isInvalid = isNavigationConfigUnreadable(readiness);
   const Icon = isInvalid ? ShieldAlert : AlertTriangle;
 
   return (

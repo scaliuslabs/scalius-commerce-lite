@@ -16,12 +16,18 @@ const baseSettings: EmailRuntimeSettings = {
 
 function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
   return {
+    // `.get()` is the settings-document row read (absent here, so the legacy
+    // per-key rows are assembled); `.all()` is the legacy category read.
     select: () => ({
       from: () => ({
         where: () => ({
           all: async () => rows,
+          get: async () => undefined,
         }),
       }),
+    }),
+    insert: () => ({
+      values: () => ({ onConflictDoUpdate: () => ({ statement: "upsert-email-config" }) }),
     }),
   };
 }
@@ -315,11 +321,11 @@ describe("email provider selection", () => {
       ]),
       env: { EMAIL: { send: vi.fn() } },
     })).resolves.toMatchObject({
-      configured: true,
+      status: "ready",
       cloudflareBindingConfigured: true,
       resendConfigured: false,
       senderConfigured: true,
-      error: null,
+      issues: [],
     });
 
     await expect(getEmailProviderReadiness({
@@ -330,7 +336,7 @@ describe("email provider selection", () => {
       ]),
       encryptionKey: wrongKey,
     })).resolves.toMatchObject({
-      configured: false,
+      status: "incomplete",
       cloudflareBindingConfigured: false,
       resendConfigured: false,
       senderConfigured: true,
@@ -345,11 +351,11 @@ describe("email provider selection", () => {
       env: { EMAIL: { send: vi.fn() } },
       encryptionKey: wrongKey,
     })).resolves.toMatchObject({
-      configured: false,
+      status: "incomplete",
       cloudflareBindingConfigured: true,
       resendConfigured: false,
       senderConfigured: true,
-      error: expect.stringContaining("Resend API key"),
+      issues: [expect.objectContaining({ message: expect.stringContaining("Resend API key") })],
     });
 
     await expect(getEmailProviderReadiness({
@@ -360,11 +366,11 @@ describe("email provider selection", () => {
       ]),
       encryptionKey: key,
     })).resolves.toMatchObject({
-      configured: false,
+      status: "incomplete",
       cloudflareBindingConfigured: false,
       resendConfigured: true,
       senderConfigured: true,
-      error: "The selected Cloudflare Email provider requires the EMAIL binding.",
+      issues: [expect.objectContaining({ message: "The selected Cloudflare Email provider requires the EMAIL binding." })],
     });
 
     await expect(getEmailProviderReadiness({
@@ -373,9 +379,9 @@ describe("email provider selection", () => {
       ]),
       env: { EMAIL: { send: vi.fn() } },
     })).resolves.toMatchObject({
-      configured: false,
+      status: "incomplete",
       senderConfigured: false,
-      error: "Sender email is required before enabling email delivery.",
+      issues: [expect.objectContaining({ message: "Sender email is required before enabling email delivery." })],
     });
   });
 
@@ -389,20 +395,20 @@ describe("email provider selection", () => {
       db,
       env: { LOCAL_MAILPIT_URL: "http://127.0.0.1:8025" },
     })).resolves.toMatchObject({
-      configured: true,
+      status: "ready",
       provider: "mailpit",
       cloudflareBindingConfigured: false,
       resendConfigured: false,
-      error: null,
+      issues: [],
     });
 
     await expect(getEmailProviderReadiness({
       db,
       env: { LOCAL_MAILPIT_URL: "https://mail.example.com" },
     })).resolves.toMatchObject({
-      configured: false,
+      status: "incomplete",
       provider: "cloudflare",
-      error: "The selected Cloudflare Email provider requires the EMAIL binding.",
+      issues: [expect.objectContaining({ message: "The selected Cloudflare Email provider requires the EMAIL binding." })],
     });
   });
 });

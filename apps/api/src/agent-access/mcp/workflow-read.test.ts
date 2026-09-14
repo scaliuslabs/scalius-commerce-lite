@@ -150,12 +150,15 @@ function dailyData(): Record<string, unknown> {
     },
     "dashboard.checkout.readiness_get": {
       data: {
-        ready: true,
         hasActiveShippingMethod: true,
         hasActiveDeliveryHierarchy: true,
         customerSignInRequired: false,
         hasUsableCustomerSignIn: true,
-        issues: ["payment_gateway_degraded"],
+        status: "incomplete",
+        issues: [{
+          code: "payment_gateway_degraded",
+          message: "One payment gateway is degraded.",
+        }],
         merchantEmail: "hidden-merchant@example.com",
       },
     },
@@ -369,12 +372,15 @@ describe("executeAuthorizedWorkflowRead", () => {
           }],
         },
         "readiness.checkout": {
-          ready: true,
+          status: "incomplete",
           hasActiveShippingMethod: true,
           hasActiveDeliveryHierarchy: true,
           customerSignInRequired: false,
           hasUsableCustomerSignIn: true,
-          issues: ["payment_gateway_degraded"],
+          issues: [{
+            code: "payment_gateway_degraded",
+            message: "One payment gateway is degraded.",
+          }],
         },
         "readiness.payments": {
           enabledMethods: ["sslcommerz", "cod"],

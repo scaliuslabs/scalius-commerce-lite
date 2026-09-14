@@ -78,26 +78,20 @@ describe("GeneralSettingsPage editor isolation", () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(
       "Header settings could not be opened.",
     );
-    expect(host.textContent).toContain("General settings");
+    expect(host.textContent).toContain("Settings");
     expect(host.textContent).not.toContain("Something went wrong loading settings");
 
-    const footerTab = Array.from(
-      host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-    ).find((button) => button.textContent?.trim() === "Footer");
-    if (!footerTab) throw new Error("Expected Footer settings tab");
+    const footerTab = host.querySelector<HTMLButtonElement>(
+      '[data-settings-nav="sidebar"] [data-settings-nav-section="footer"]',
+    );
+    if (!footerTab) throw new Error("Expected Footer settings destination");
 
     await act(async () => {
-      footerTab.dispatchEvent(
-        new MouseEvent("mousedown", {
-          bubbles: true,
-          cancelable: true,
-          button: 0,
-        }),
-      );
+      footerTab.click();
     });
 
     expect(host.textContent).toContain("Footer editor ready");
-    expect(host.textContent).toContain("General settings");
+    expect(host.textContent).toContain("Settings");
   });
 
   it("retains the country draft and guard while visiting another section", async () => {
@@ -109,29 +103,35 @@ describe("GeneralSettingsPage editor isolation", () => {
       routeId: "/admin/settings/", fullPath: "/admin/settings/", pathname: "/admin/settings",
       search: { section: "countries" },
     };
-    for (const section of ["Footer", "Customer countries"]) {
-      const tab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-        .find((button) => button.textContent?.trim() === section)!;
+    for (const section of ["footer", "countries"]) {
+      const destination = host.querySelector<HTMLButtonElement>(
+        `[data-settings-nav="sidebar"] [data-settings-nav-section="${section}"]`,
+      )!;
       await act(async () => {
-        tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
+        destination.click();
       });
       expect(host.querySelector("#mode-exclude")).toBe(mode);
       expect(mode.getAttribute("data-state")).toBe("checked");
-      expect(mode.closest('[role="tabpanel"]')?.getAttribute("data-state"))
-        .toBe(section === "Footer" ? "inactive" : "active");
+      expect(mode.closest("[data-settings-panel]")?.getAttribute("data-state"))
+        .toBe(section === "footer" ? "inactive" : "active");
       const guard = api.blocker.mock.calls.at(-1)![0];
       expect(guard.shouldBlockFn({ current, next: { ...current, search: { section: "footer" } } })).toBe(false);
       expect(guard.shouldBlockFn({
         current,
         next: { routeId: "/admin/orders/", fullPath: "/admin/orders/", pathname: "/admin/orders" },
       })).toBe(true);
-      expect(guard.enableBeforeUnload).toBe(true);
+      // The contextual save bar owns `beforeunload` in its own effect, so the
+      // router blocker only has to stay armed while the draft is dirty.
+      expect(guard.enableBeforeUnload).toBe(false);
+      expect(guard.disabled).toBe(false);
     }
     expect(api.getCountries).toHaveBeenCalledTimes(1);
     expect(api.updateCountries).not.toHaveBeenCalled();
-    const reset = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Reset")!;
-    await act(async () => { reset.click(); });
+    const discard = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Discard",
+    )!;
+    await act(async () => { discard.click(); });
     expect(mode.getAttribute("data-state")).toBe("unchecked");
-    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
+    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(true);
   });
 });

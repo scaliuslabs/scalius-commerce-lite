@@ -24,10 +24,15 @@ describe("email settings workspace", () => {
 
   it("protects edits and unsaved drafts", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
-    expect(source).toContain("<UnsavedChangesGuard");
-    expect(source).toContain("disabled={!canEdit || !dirty}");
-    expect(source).toContain("{dirty || saveMutation.isPending ? (");
-    expect(source).toContain("Reset");
+    // The page saves through one contextual save bar, which also owns the
+    // navigation guard; there are no per-card Save/Reset buttons left.
+    expect(source).toContain("<ContextualSaveBar");
+    expect(source).toContain("isDirty={dirty || saveMutation.isPending}");
+    expect(source).toContain("canSave={canManage}");
+    expect(source).toContain("onDiscard={() => setDraft(savedDraft)}");
+    expect(source).toContain("onSave={handleSave}");
+    expect(source).not.toContain("<UnsavedChangesGuard");
+    expect(source).not.toContain("Save changes");
   });
 
   it("uses mobile-sized form controls", () => {

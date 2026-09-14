@@ -1,3 +1,8 @@
+import {
+  type Readiness,
+  type ReadinessIssue,
+  type ReadinessStatus,
+} from "@scalius/shared/readiness";
 import { ValidationError } from "../../errors";
 
 export type DeliveryProviderActivationRequirement = {
@@ -10,19 +15,26 @@ export type DeliveryProviderActivationBlocker = DeliveryProviderActivationRequir
   message: string;
 };
 
-export type DeliveryProviderReadinessStatus = "draft" | "configured" | "tested" | "active" | "blocked";
+/**
+ * Where a provider sits on the setup path. This is a lifecycle position, not a
+ * readiness verdict -- the verdict is the shared `status` on the summary below.
+ */
+export type DeliveryProviderLifecycle = "draft" | "configured" | "tested" | "active" | "blocked";
 
-export type DeliveryProviderReadinessBlocker = {
+export type DeliveryProviderReadinessBlocker = ReadinessIssue & {
   code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable";
-  message: string;
 };
 
-export type DeliveryProviderReadinessSummary = {
-  status: DeliveryProviderReadinessStatus;
+/**
+ * The shared readiness vocabulary (`status` + `issues`) plus the typed extras
+ * the delivery settings screen renders.
+ */
+export type DeliveryProviderReadinessSummary = Readiness & {
+  issues: DeliveryProviderReadinessBlocker[];
+  lifecycle: DeliveryProviderLifecycle;
   configured: boolean;
   tested: boolean;
   active: boolean;
-  blockers: DeliveryProviderReadinessBlocker[];
   activationBlockers: DeliveryProviderActivationBlocker[];
   lastTestAttemptAt?: Date | number | string | null;
   lastTestSuccessAt?: Date | number | string | null;
@@ -357,27 +369,34 @@ export function getDeliveryProviderReadinessSummary(
     });
   }
 
-  let status: DeliveryProviderReadinessStatus;
+  let lifecycle: DeliveryProviderLifecycle;
   if (active) {
-    status = "active";
+    lifecycle = "active";
   } else if (input.isActive && blockers.length > 0) {
-    status = "blocked";
+    lifecycle = "blocked";
   } else if (!configured) {
-    status = activationBlockers.length > 0 && activationBlockers.some((blocker) => blocker.key === "type")
+    lifecycle = activationBlockers.length > 0 && activationBlockers.some((blocker) => blocker.key === "type")
       ? "blocked"
       : "draft";
   } else if (tested) {
-    status = "tested";
+    lifecycle = "tested";
   } else {
-    status = "configured";
+    lifecycle = "configured";
   }
 
+  // Unreadable credentials are a platform failure, not merchant setup left undone.
+  const status: ReadinessStatus = active
+    ? "ready"
+    : blockers.some((blocker) => blocker.code === "unreadable")
+      ? "error"
+      : "incomplete";
   return {
     status,
+    issues: blockers,
+    lifecycle,
     configured,
     tested,
     active,
-    blockers,
     activationBlockers,
     lastTestAttemptAt: input.lastTestAttemptAt,
     lastTestSuccessAt: input.lastTestSuccessAt,

@@ -290,7 +290,7 @@ describe("admin route graph boundaries", () => {
     expect(customerChannelBlock).toContain('{ key: "whatsapp"');
     expect(customerChannelBlock).not.toContain('{ key: "push"');
     expect(adminChannelBlock).toContain('{ key: "push"');
-    expect(notificationSource).toContain("smsProviderConfigured");
+    expect(notificationSource).toContain("setIsSmsConfigured(isReady(data?.sms))");
     expect(notificationSource).toContain("buildCustomerNotificationConfig");
     expect(notificationSource).toContain("serializeCustomerNotificationConfig");
     expect(notificationSource).toContain(
@@ -309,7 +309,7 @@ describe("admin route graph boundaries", () => {
     expect(notificationSource).toContain(
       "Saved push rules stay paused until delivery recovers.",
     );
-    expect(notificationSource).toContain("pushConfigured");
+    expect(notificationSource).toContain("setIsPushConfigured(isReady(data?.push))");
     expect(notificationSource).toContain("checked={channels[event.key].push}");
     expect(policySource).toContain(
       "Provider readiness controls delivery, not merchant intent.",
@@ -1085,7 +1085,11 @@ describe("admin route graph boundaries", () => {
       "Checkout-flow saves are locked until Payment Gateways loads successfully.",
     );
     expect(source).toContain("Retry payment check");
-    expect(source).toContain("disabled={saving || saveBlocked}");
+    // The page now saves through one contextual save bar, which locks Save on
+    // the same fail-closed condition and says why.
+    expect(source).toContain("saveDisabled={saveBlocked}");
+    expect(source).toContain("saveDisabledReason={saveDisabledReason}");
+    expect(source).toContain("saving={saving}");
   });
 
   it("keeps new-discount type selection off the decorative animation runtime", () => {

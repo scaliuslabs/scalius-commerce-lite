@@ -1,29 +1,37 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
+import { ArrowUpRight, Loader2, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EmptyState } from "~/components/admin/shell/EmptyState";
+import { IndexFilters } from "~/components/admin/shell/IndexFilters";
+import { IndexTable, type IndexTableColumn } from "~/components/admin/shell/IndexTable";
+import { InlineHelp } from "~/components/admin/shell/InlineHelp";
+import { StatusBadge } from "~/components/admin/shell/StatusBadge";
+import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import {
   updateTaxClassification,
   type TaxClassificationItem,
   type TaxClassificationKind,
   type TaxConfigurationPayload,
-} from "@/lib/api-functions/taxes";
-import { getServerFnError } from "@/lib/api-helpers";
-import { taxClassificationsQueryOptions } from "@/lib/api-query-options/taxes";
-import { queryKeys } from "@/lib/query-keys";
+} from "~/lib/api-functions/taxes";
+import { getServerFnError } from "~/lib/api-helpers";
+import { taxClassificationsQueryOptions } from "~/lib/api-query-options/taxes";
+import { queryKeys } from "~/lib/query-keys";
 import type { TaxClassificationRouteState } from "./tax-classification-route-state";
 
 const PAGE_SIZE = 25;
 const INHERIT = "__inherit__";
+/** The search lives in the URL, so it is committed on a pause, not per keystroke. */
+const SEARCH_COMMIT_DELAY_MS = 350;
 
 export function TaxClassificationsPanel({
   configuration,
@@ -38,10 +46,13 @@ export function TaxClassificationsPanel({
 }) {
   const queryClient = useQueryClient();
   const { kind, page, search } = routeState;
-  const [searchDraft, setSearchDraft] = useState(search);
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => setSearchDraft(search), [search]);
+  function commitSearch(value: string) {
+    const next = value.trim();
+    if (next === search) return;
+    onRouteStateChange({ kind, search: next, page: 1 });
+  }
 
   const queryInput = { kind, page, limit: PAGE_SIZE, ...(search ? { search } : {}) };
   const classificationQuery = useQuery({
@@ -60,7 +71,7 @@ export function TaxClassificationsPanel({
       } });
     },
     onSuccess: async () => {
-      toast.success("Tax classification updated");
+      toast.success("Saved");
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.settings.taxClassifications(),
@@ -96,6 +107,7 @@ export function TaxClassificationsPanel({
   ]);
 
   function changeKind(nextKind: TaxClassificationKind) {
+    if (nextKind === kind) return;
     onRouteStateChange({ kind: nextKind, search: "", page: 1 });
   }
 
@@ -105,7 +117,7 @@ export function TaxClassificationsPanel({
         to="/admin/products/$productId/edit"
         params={{ productId: item.productId }}
         aria-label={`Open ${item.label} in the product editor`}
-        className="group inline-flex min-h-11 max-w-full items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+        className="group inline-flex min-h-11 max-w-full items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
       >
         <span className="truncate">{item.label}</span>
         <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
@@ -113,168 +125,158 @@ export function TaxClassificationsPanel({
     );
   }
 
-  function renderClassificationSelect(item: TaxClassificationItem) {
-    return (
-      <div className="flex items-center gap-2">
-        <Select
-          value={item.taxClassId ?? INHERIT}
-          disabled={!canManage || updateMutation.isPending || isTransitioning}
-          onValueChange={(value) => updateMutation.mutate({
-            item,
-            taxClassId: value === INHERIT ? null : value,
-          })}
-        >
-          <SelectTrigger
-            aria-label={`Tax class for ${item.label}`}
-            className="min-h-11 min-w-0 flex-1 md:min-h-9"
+  const columns: IndexTableColumn<TaxClassificationItem>[] = [
+    {
+      id: "item",
+      header: "Catalog item",
+      mobileLabel: "Item",
+      cell: (item) => (
+        <span className="flex min-w-0 flex-col">
+          {renderItemLink(item)}
+          {item.sku ? (
+            <span className="truncate text-xs text-muted-foreground">SKU {item.sku}</span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: "source",
+      header: "Current source",
+      mobileLabel: "Source",
+      cell: (item) => (
+        item.taxClassName ? (
+          <StatusBadge tone="info" dot={false} srLabel="Source:">
+            Explicit · {item.taxClassName}
+          </StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral" dot={false} srLabel="Source:">
+            {item.kind === "variant" ? "Product / store default" : "Store default"}
+          </StatusBadge>
+        )
+      ),
+    },
+    {
+      id: "assigned",
+      header: "Assigned class",
+      mobileLabel: "Assigned class",
+      className: "sm:w-[18rem]",
+      headerClassName: "sm:w-[18rem]",
+      cell: (item) => (
+        <span className="flex items-center gap-2">
+          <Select
+            value={item.taxClassId ?? INHERIT}
+            disabled={!canManage || updateMutation.isPending || isTransitioning}
+            onValueChange={(value) => updateMutation.mutate({
+              item,
+              taxClassId: value === INHERIT ? null : value,
+            })}
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={INHERIT}>
-              {kind === "variant" ? "Inherit product/default" : "Inherit store default"}
-            </SelectItem>
-            {configuration.classes.map((taxClass) => (
-              <SelectItem key={taxClass.id} value={taxClass.id}>
-                {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
+            <SelectTrigger
+              aria-label={`Tax class for ${item.label}`}
+              className="min-h-11 min-w-0 flex-1 sm:min-h-9"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={INHERIT} className="min-h-11 sm:min-h-9">
+                {item.kind === "variant" ? "Inherit product/default" : "Inherit store default"}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {savingId === item.id ? (
-          <span role="status" className="shrink-0">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            <span className="sr-only">Saving classification</span>
-          </span>
-        ) : null}
-      </div>
-    );
-  }
+              {configuration.classes.map((taxClass) => (
+                <SelectItem key={taxClass.id} value={taxClass.id} className="min-h-11 sm:min-h-9">
+                  {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {savingId === item.id ? (
+            <span role="status" className="shrink-0">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span className="sr-only">Saving classification</span>
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+
+  const items = classificationQuery.data?.items ?? [];
 
   return (
-    <Card>
-      <CardHeader className="gap-4">
-        <div>
-          <CardTitle>Catalog classification</CardTitle>
-          <CardDescription className="mt-1">
-            A SKU class overrides its product class; a product class overrides the store default.
-          </CardDescription>
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <Tabs value={kind} onValueChange={(value) => changeKind(value as TaxClassificationKind)}>
-            <TabsList>
-              <TabsTrigger value="product" className="min-h-11 md:min-h-9">Products</TabsTrigger>
-              <TabsTrigger value="variant" className="min-h-11 md:min-h-9">SKUs</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <form
-            method="get"
-            className="flex w-full max-w-md gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onRouteStateChange({
-                kind,
-                search: searchDraft.trim(),
-                page: 1,
-              });
-            }}
+    <div className="space-y-4">
+      <InlineHelp>
+        A SKU class overrides its product class, and a product class overrides the store
+        default.
+      </InlineHelp>
+
+      <IndexFilters
+        label="Filter catalog classification"
+        searchValue={search}
+        onSearchChange={commitSearch}
+        searchDebounceMs={SEARCH_COMMIT_DELAY_MS}
+        searchPlaceholder={kind === "product"
+          ? "Search product name or slug"
+          : "Search product, SKU, or option"}
+        filters={[
+          { id: "product", label: "Products" },
+          { id: "variant", label: "SKUs" },
+        ]}
+        activeFilterId={kind}
+        onFilterChange={(id) => changeKind(id as TaxClassificationKind)}
+      />
+
+      {classificationQuery.isError ? (
+        <div
+          role="alert"
+          className="flex flex-col items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+        >
+          <p>{getServerFnError(classificationQuery.error, "Classifications could not be loaded.")}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 sm:min-h-9"
+            onClick={() => void classificationQuery.refetch()}
           >
-            <Input
-              value={searchDraft}
-              maxLength={180}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              placeholder={kind === "product" ? "Search product name or slug" : "Search product, SKU, or option"}
-              aria-label="Search tax classifications"
-              className="min-h-11 min-w-0 md:min-h-9"
-            />
-            <Button type="submit" variant="outline" aria-label="Search" className="min-h-11 min-w-11 md:min-h-10 md:min-w-10">
-              <Search className="h-4 w-4" />
-            </Button>
-          </form>
+            Try again
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {classificationQuery.isPending ? (
-          <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-        ) : classificationQuery.isError ? (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-            <p>{getServerFnError(classificationQuery.error, "Classifications could not be loaded.")}</p>
-            <Button type="button" variant="outline" className="min-h-11 md:min-h-9" onClick={() => void classificationQuery.refetch()}>
-              Try again
-            </Button>
-          </div>
-        ) : classificationQuery.data.items.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">No matching {kind === "product" ? "products" : "SKUs"}.</div>
-        ) : (
-          <div aria-busy={isTransitioning} className={isTransitioning ? "opacity-60" : undefined}>
-            {isTransitioning ? (
-              <p role="status" className="mb-2 text-xs text-muted-foreground">Loading classifications…</p>
-            ) : null}
-
-            <div className="space-y-2 md:hidden">
-              {classificationQuery.data.items.map((item) => (
-                <div key={`${item.kind}:${item.id}`} className="rounded-lg border bg-background p-3">
-                  <div className="min-w-0">
-                    {renderItemLink(item)}
-                    {item.sku ? (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">SKU {item.sku}</p>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
-                    <span className="text-xs font-medium text-muted-foreground">Source</span>
-                    {item.taxClassName ? (
-                      <Badge variant="outline">Explicit · {item.taxClassName}</Badge>
-                    ) : (
-                      <Badge variant="secondary">
-                        {kind === "variant" ? "Product / store default" : "Store default"}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="mt-3">
-                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">Assigned class</p>
-                    {renderClassificationSelect(item)}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader><TableRow><TableHead>Catalog item</TableHead><TableHead>Current source</TableHead><TableHead className="w-[18rem]">Assigned class</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {classificationQuery.data.items.map((item) => (
-                    <TableRow key={`${item.kind}:${item.id}`}>
-                      <TableCell>
-                        {renderItemLink(item)}
-                        {item.sku ? <div className="text-xs text-muted-foreground">SKU {item.sku}</div> : null}
-                      </TableCell>
-                      <TableCell>
-                        {item.taxClassName ? (
-                          <Badge variant="outline">Explicit · {item.taxClassName}</Badge>
-                        ) : (
-                          <Badge variant="secondary">
-                            {kind === "variant" ? "Product / store default" : "Store default"}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{renderClassificationSelect(item)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between border-t pt-4 text-sm text-muted-foreground">
-          <span>{total.toLocaleString()} item{total === 1 ? "" : "s"}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="h-11 w-11 md:h-10 md:w-10" aria-label="Previous page" disabled={page <= 1 || classificationQuery.isFetching} onClick={() => onRouteStateChange({ kind, search, page: Math.max(1, page - 1) })}><ChevronLeft className="h-4 w-4" /></Button>
-            <span>Page {page} of {totalPages}</span>
-            <Button variant="outline" size="icon" className="h-11 w-11 md:h-10 md:w-10" aria-label="Next page" disabled={page >= totalPages || classificationQuery.isFetching} onClick={() => onRouteStateChange({ kind, search, page: Math.min(totalPages, page + 1) })}><ChevronRight className="h-4 w-4" /></Button>
-          </div>
+      ) : (
+        <div aria-busy={isTransitioning || undefined}>
+          <IndexTable
+            label="Catalog tax classification"
+            items={items}
+            columns={columns}
+            getRowId={(item) => `${item.kind}:${item.id}`}
+            loading={classificationQuery.isPending}
+            loadingRowCount={6}
+            empty={(
+              <EmptyState
+                icon={ReceiptText}
+                heading={kind === "product" ? "No matching products" : "No matching SKUs"}
+                body={search
+                  ? "Change the search to find the catalog item you want to classify."
+                  : "Catalog items appear here once products are published."}
+                action={search ? {
+                  label: "Clear search",
+                  variant: "outline",
+                  onClick: () => commitSearch(""),
+                } : undefined}
+              />
+            )}
+            pagination={{
+              page,
+              pageSize: PAGE_SIZE,
+              total,
+              disabled: classificationQuery.isFetching,
+              itemLabel: kind === "product" ? "products" : "SKUs",
+              onPageChange: (nextPage) => onRouteStateChange({
+                kind,
+                search,
+                page: Math.min(totalPages, Math.max(1, nextPage)),
+              }),
+            }}
+          />
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

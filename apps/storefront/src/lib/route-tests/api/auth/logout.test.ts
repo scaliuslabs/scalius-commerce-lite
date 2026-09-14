@@ -1,20 +1,20 @@
+// @vitest-environment node
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   rejectCrossOrigin: true,
-  cfEnv: { BACKEND_API: undefined as Fetcher | undefined },
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: () => mocks.rejectCrossOrigin,
 }));
 
+import { requestRuntime } from "@/lib/api/runtime";
 import { POST } from "../../../../pages/api/auth/logout";
 
 beforeEach(() => {
   mocks.rejectCrossOrigin = true;
-  mocks.cfEnv.BACKEND_API = undefined;
 });
 
 afterEach(() => {
@@ -44,16 +44,18 @@ describe("logout proxy backend revocation", () => {
     vi.stubEnv("DEV", false);
     mocks.rejectCrossOrigin = false;
     const bindingFetch = vi.fn(async () => new Response(null, { status: 204 }));
-    mocks.cfEnv.BACKEND_API = { fetch: bindingFetch } as unknown as Fetcher;
     const httpFetch = vi.fn();
     vi.stubGlobal("fetch", httpFetch);
 
-    const response = await POST({
-      request: new Request("https://storefront.example.test/api/auth/logout", {
-        method: "POST",
-        headers: { Cookie: "cs_tok=session", Origin: "https://storefront.example.test" },
-      }),
-    } as never);
+    const response = await requestRuntime.run(
+      { BACKEND_API: { fetch: bindingFetch } as unknown as Fetcher },
+      () => POST({
+        request: new Request("https://storefront.example.test/api/auth/logout", {
+          method: "POST",
+          headers: { Cookie: "cs_tok=session", Origin: "https://storefront.example.test" },
+        }),
+      } as never),
+    );
 
     expect(response.status).toBe(200);
     expect(bindingFetch).toHaveBeenCalledWith(

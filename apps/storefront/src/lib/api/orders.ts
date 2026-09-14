@@ -1,6 +1,6 @@
 // src/lib/api/orders.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { apiFetch } from "./transport";
 import type { OrderReceipt, CreateOrderPayload } from "./types";
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
@@ -140,12 +140,12 @@ export async function createOrder(
   options: CreateOrderOptions = {},
 ): Promise<CreateOrderResult> {
   try {
-    // Use fetchWithRetry directly for orders because this mutation must not
-    // be retried automatically. The 202 branch below is legacy compatibility;
+    // Call apiFetch with retries: 0 because this mutation must not be retried
+    // automatically. The 202 branch below is legacy compatibility;
     // the normal buyer path returns a committed order synchronously.
-    const url = createApiUrl("/orders");
-    const response = await fetchWithRetry(
-      url,
+    const path = "/orders";
+    const response = await apiFetch(
+      path,
       {
         method: "POST",
         headers: {
@@ -157,9 +157,8 @@ export async function createOrder(
         body: JSON.stringify(payload),
         cache: "no-store",
       },
-      0, // Do not retry the actual creation to prevent double ingestion
-      15000,
-      false,
+      // Do not retry the actual creation to prevent double ingestion
+      { retries: 0, timeout: 15000, auth: false },
     );
 
     const data = await response.json() as {
@@ -205,12 +204,10 @@ export async function createOrder(
       for (let i = 0; i < pollIntervals.length; i++) {
         await new Promise(resolve => setTimeout(resolve, pollIntervals[i]));
 
-        const statusRes = await fetchWithRetry(
-          createApiUrl(`/orders/status/${encodeURIComponent(statusToken)}`),
+        const statusRes = await apiFetch(
+          `/orders/status/${encodeURIComponent(statusToken)}`,
           {},
-          2,
-          5000,
-          false,
+          { retries: 2, timeout: 5000, auth: false },
         );
 
         if (statusRes.ok) {
@@ -219,8 +216,8 @@ export async function createOrder(
           // But 202 responses use raw c.json(): { status: "processing" }
           const statusData = statusJson.data ?? statusJson;
           if (statusData.status === "completed") {
-            const replayResponse = await fetchWithRetry(
-              url,
+            const replayResponse = await apiFetch(
+              path,
               {
                 method: "POST",
                 headers: {
@@ -232,9 +229,7 @@ export async function createOrder(
                 body: JSON.stringify(payload),
                 cache: "no-store",
               },
-              0,
-              15000,
-              false,
+              { retries: 0, timeout: 15000, auth: false },
             );
             const replayData = await replayResponse.json() as {
               success?: boolean;
@@ -294,17 +289,15 @@ export async function validateCartItems(
   options: CartValidationOptions = {},
 ): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown }> {
   try {
-    const response = await fetchWithRetry(
-      createApiUrl("/orders/cart-validation"),
+    const response = await apiFetch(
+      "/orders/cart-validation",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items, ...options }),
         cache: "no-store",
       },
-      1,
-      8000,
-      false,
+      { retries: 1, timeout: 8000, auth: false },
     );
 
     const json = await response.json() as {
@@ -343,15 +336,13 @@ export async function getOrderReceipt(
     return null;
   }
 
-  const response = await fetchWithRetry(
-    createApiUrl(`/orders/receipt/${encodeURIComponent(orderId)}`),
+  const response = await apiFetch(
+    `/orders/receipt/${encodeURIComponent(orderId)}`,
     {
       headers: { "X-Receipt-Token": receiptToken },
       cache: "no-store",
     },
-    2,
-    5000,
-    false,
+    { retries: 2, timeout: 5000, auth: false },
   );
   if (!response.ok) throw new OrderReceiptAccessError(response.status);
 

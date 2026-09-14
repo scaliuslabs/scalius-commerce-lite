@@ -5,6 +5,7 @@ import type { Context } from "hono";
 import {
   getPlatformSettings,
   invalidatePlatformConfigCache,
+  platformSettingsDocument,
   savePlatformSettings,
 } from "@scalius/core/modules/settings/platform-settings.service";
 import {
@@ -13,17 +14,16 @@ import {
 } from "@scalius/core/modules/settings";
 import {
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
+  PLATFORM_URL_KEYS,
   PLATFORM_URL_MAX_LENGTH,
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { readinessSchema } from "../../../schemas/readiness";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-// Origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
-const PLATFORM_CACHE_GROUPS = ["layout", "homepage", "discovery", "checkout"] as const;
 
 const platformSettingsSchema = z.object({
   storefrontUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
@@ -35,9 +35,9 @@ const platformSettingsSchema = z.object({
 });
 
 const platformSettingsResponseSchema = platformSettingsSchema.extend({
-  readiness: z.object({
-    complete: z.boolean(),
-    missing: z.array(z.enum(["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"])),
+  readiness: readinessSchema.extend({
+    /** Typed extra: exactly which platform origins are still unset. */
+    missing: z.array(z.enum(PLATFORM_URL_KEYS)),
   }),
   /** Origins the current request resolved, including local development defaults. */
   effective: z.object({
@@ -120,7 +120,10 @@ app.openapi(updatePlatformRoute, async (c) => {
     invalidateSiteSettingsCache(kv),
     invalidateStorefrontUrlCache(kv),
   ]);
-  await invalidateApiAndScheduleStorefrontGroups(PLATFORM_CACHE_GROUPS, c);
+  await invalidateApiAndScheduleStorefrontGroups(
+    platformSettingsDocument.invalidationGroups,
+    c,
+  );
 
   c.header("Cache-Control", "private, no-store");
   return respond(c, stored);

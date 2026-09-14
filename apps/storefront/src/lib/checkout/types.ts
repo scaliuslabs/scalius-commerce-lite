@@ -2,6 +2,7 @@ import type {
   CustomerAuthMethod,
   CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import type { Readiness } from "@scalius/shared/readiness";
 import type { CartValidationIssue } from "../api/orders";
 
 export interface GatewayMeta {
@@ -67,11 +68,9 @@ export interface CheckoutConfig {
   partialPaymentAmount: number;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
-  checkoutReadiness?: {
-    ready: boolean;
+  checkoutReadiness?: Readiness & {
     hasActiveShippingMethod: boolean;
     hasActiveDeliveryHierarchy: boolean;
-    issues: string[];
   };
   unavailable?: boolean;
   unavailableMessage?: string;

@@ -1,6 +1,6 @@
 // src/lib/api/discounts.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
 import { unwrapData } from "./unwrap";

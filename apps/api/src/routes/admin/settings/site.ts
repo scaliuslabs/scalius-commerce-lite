@@ -55,6 +55,7 @@ import {
   createThemePreviewSession,
   saveThemeSettings,
   getMediaOptimizationSettings,
+  mediaOptimizationDocument,
   isValidMediaHostInput,
   saveMediaOptimizationSettings,
   getSeoSettings,
@@ -82,6 +83,7 @@ import {
   conflictResponse,
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
+import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
@@ -93,7 +95,6 @@ const STOREFRONT_URL_CACHE_GROUPS = [
 ] as const;
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
-const MEDIA_CACHE_GROUPS = ["media"] as const;
 async function deleteLegacyCurrencyGatewayCache(
   kv?: KVNamespace | null,
 ): Promise<void> {
@@ -213,10 +214,6 @@ app.openapi(saveCurrencyRoute, async (c) => {
 // GENERAL (header + footer config)
 // ─────────────────────────────────────────
 
-const navigationConfigReadinessSchema = z.object({
-  state: z.enum(["ready", "legacy_normalized", "invalid"]),
-  message: z.string().optional(),
-});
 
 const getGeneralRoute = createRoute({
   method: "get",
@@ -238,8 +235,8 @@ const getGeneralRoute = createRoute({
                 footer: z.number().int().nonnegative(),
               }),
               navigationReadiness: z.object({
-                header: navigationConfigReadinessSchema,
-                footer: navigationConfigReadinessSchema,
+                header: readinessSchema,
+                footer: readinessSchema,
               }),
             }),
           ),
@@ -1093,7 +1090,10 @@ app.openapi(saveMediaOptimizationRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
   const saved = await saveMediaOptimizationSettings(db, body);
-  await invalidateApiAndScheduleStorefrontGroups(MEDIA_CACHE_GROUPS, c);
+  await invalidateApiAndScheduleStorefrontGroups(
+    mediaOptimizationDocument.invalidationGroups,
+    c,
+  );
   return ok(c, {
     message: "Media settings saved successfully",
     ...projectMediaOptimizationSettings(saved),

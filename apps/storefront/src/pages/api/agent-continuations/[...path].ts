@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import { readAgentContinuationCookie } from "@/lib/agent-continuation-cookie";
@@ -74,13 +74,10 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (method === "POST") headers.set("Content-Type", "application/json");
     const connectingIp = request.headers.get("cf-connecting-ip");
     if (connectingIp) headers.set("cf-connecting-ip", connectingIp);
-    const upstream = await fetchWithRetry(
-      createApiUrl(`/storefront/agent-continuations/${path}`),
+    const upstream = await apiFetch(
+      `/storefront/agent-continuations/${path}`,
       { method, headers, body, cache: "no-store" },
-      0,
-      REQUEST_TIMEOUT_MS,
-      true,
-      false,
+      { retries: 0, timeout: REQUEST_TIMEOUT_MS, auth: true, logTerminalFailure: false },
     );
     const payload = await upstream.json().catch(() => null);
     const responseHeaders = new Headers({

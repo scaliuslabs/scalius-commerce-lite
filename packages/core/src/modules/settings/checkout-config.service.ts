@@ -16,6 +16,7 @@ import {
     type CustomerAuthMethod,
     type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import { isReady } from "@scalius/shared/readiness";
 import { getRegisteredGateways } from "../payments/gateway-registry";
 import { isPaymentGatewayCurrencyEligible } from "../payments/gateway-currency-policy";
 import {
@@ -116,7 +117,7 @@ export async function getCheckoutConfig(
     const partialPaymentAmount = siteSettingsRow?.partialPaymentAmount ?? 0;
     const checkoutReadiness = await getCheckoutReadiness(db, { encryptionKey, runtimeEnv });
 
-    if (!checkoutReadiness.ready) {
+    if (!isReady(checkoutReadiness)) {
         return {
             gateways: [],
             guestCheckoutEnabled: siteSettingsRow?.guestCheckoutEnabled ?? true,

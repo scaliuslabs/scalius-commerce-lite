@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CacheManager } from "~/components/admin/CacheManager";
+import { SettingsLayout } from "~/components/admin/settings/SettingsLayout";
 import { cacheGroupsQueryOptions } from "~/lib/api-query-options/cache";
 import { RouteErrorComponent } from "~/lib/route-error";
 
@@ -16,15 +17,12 @@ export const Route = createFileRoute("/admin/settings/cache")({
 
 function CacheSettingsPage() {
   return (
-    <div className="container max-w-6xl space-y-4 py-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Cache</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Inspect or purge the public API and storefront cache domains.
-        </p>
-      </div>
-
+    <SettingsLayout
+      pathname="/admin/settings/cache"
+      title="Cache"
+      description="Inspect or purge the public API and storefront cache domains."
+    >
       <CacheManager />
-    </div>
+    </SettingsLayout>
   );
 }

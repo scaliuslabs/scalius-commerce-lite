@@ -1,12 +1,7 @@
 import type { APIRoute } from "astro";
 import { env as cfEnv } from "cloudflare:workers";
-import {
-  deriveRuntimeSecret,
-  readMasterSecret,
-  RUNTIME_SECRET_PURPOSES,
-  type MasterSecretEnvironment,
-} from "@scalius/shared/runtime-secrets";
 
+import { deriveRuntimeTokens, type RequestRuntimeEnv } from "@/lib/api/runtime";
 import { getPurgeTokenFromHeaders, PURGE_TOKEN_HEADER } from "@/lib/purge-auth";
 
 export const prerender = false;
@@ -62,8 +57,10 @@ export const GET: APIRoute = async ({ url }) => {
 export const POST: APIRoute = async ({ request, url, locals }) => {
   // The purge token is derived from the master secret on every call; the API
   // derives the same value, so nothing is installed or shared out of band.
-  const masterSecret = readMasterSecret(cfEnv as MasterSecretEnvironment);
-  if (!masterSecret) return json({ error: "Server configuration error" }, 500);
+  const { PURGE_TOKEN: expectedToken } = await deriveRuntimeTokens(
+    cfEnv as RequestRuntimeEnv,
+  );
+  if (!expectedToken) return json({ error: "Server configuration error" }, 500);
   if (url.searchParams.has("token")) {
     return json(
       {
@@ -74,10 +71,6 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   }
 
   const providedToken = getPurgeTokenFromHeaders(request.headers);
-  const expectedToken = await deriveRuntimeSecret(
-    masterSecret,
-    RUNTIME_SECRET_PURPOSES.PURGE_TOKEN,
-  );
   if (!providedToken || !(await timingSafeCompare(providedToken, expectedToken))) {
     return json({ error: "Unauthorized" }, 401);
   }

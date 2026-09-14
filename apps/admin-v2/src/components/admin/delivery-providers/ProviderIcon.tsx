@@ -1,3 +1,4 @@
+import type { ReadinessStatus } from "@scalius/shared/readiness";
 import { Truck, Package } from "lucide-react";
 import {
   OfficialProviderMark,
@@ -50,25 +51,32 @@ export const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = 
   { value: "steadfast", label: "Steadfast" },
 ];
 
-export type DeliveryProviderReadinessStatus =
+/** Setup lifecycle position. The readiness verdict is the shared `status`. */
+export type DeliveryProviderLifecycle =
   | "draft"
   | "configured"
   | "tested"
   | "active"
   | "blocked";
 
-export interface DeliveryProviderReadinessBlocker {
+/** The shared readiness verdict itself; never a lifecycle position. */
+export type DeliveryProviderReadinessStatus = ReadinessStatus;
+
+/** Mirrors `ReadinessIssue` in packages/shared/src/readiness.ts. */
+export interface DeliveryProviderReadinessIssue {
   code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
   message: string;
+  fix?: string;
 }
 
 export interface DeliveryProviderReadiness {
   status: DeliveryProviderReadinessStatus;
+  lifecycle: DeliveryProviderLifecycle;
   configured?: boolean;
   tested?: boolean;
   active?: boolean;
   canCreateShipment: boolean;
-  blockers: DeliveryProviderReadinessBlocker[];
+  issues: DeliveryProviderReadinessIssue[];
   activationBlockers?: Array<{
     source: "credentials" | "config" | string;
     key: string;
@@ -93,7 +101,7 @@ export interface DeliveryProviderRecord {
   updatedAt?: Date | string | number;
 }
 
-const READINESS_LABELS: Record<DeliveryProviderReadinessStatus, string> = {
+const LIFECYCLE_LABELS: Record<DeliveryProviderLifecycle, string> = {
   draft: "Draft",
   configured: "Configured",
   tested: "Tested",
@@ -101,7 +109,7 @@ const READINESS_LABELS: Record<DeliveryProviderReadinessStatus, string> = {
   blocked: "Blocked",
 };
 
-const FALLBACK_INACTIVE_BLOCKER: DeliveryProviderReadinessBlocker = {
+const FALLBACK_INACTIVE_ISSUE: DeliveryProviderReadinessIssue = {
   code: "inactive",
   message: "Turn on this provider after setup and testing.",
 };
@@ -114,12 +122,13 @@ export function resolveProviderReadiness(
       provider.readiness.canCreateShipment ?? provider.readiness.active ?? false;
     return {
       status: provider.readiness.status,
+      lifecycle: provider.readiness.lifecycle,
       configured: provider.readiness.configured,
       tested: provider.readiness.tested,
       active: provider.readiness.active,
       canCreateShipment,
-      blockers: Array.isArray(provider.readiness.blockers)
-        ? provider.readiness.blockers
+      issues: Array.isArray(provider.readiness.issues)
+        ? provider.readiness.issues
         : [],
       activationBlockers: provider.readiness.activationBlockers,
       lastTestAttemptAt: provider.readiness.lastTestAttemptAt ?? null,
@@ -128,10 +137,12 @@ export function resolveProviderReadiness(
     };
   }
 
+  // No readiness on the record: trust only the saved active flag.
   return {
-    status: provider.isActive ? "active" : "draft",
+    status: provider.isActive ? "ready" : "incomplete",
+    lifecycle: provider.isActive ? "active" : "draft",
     canCreateShipment: provider.isActive,
-    blockers: provider.isActive ? [] : [FALLBACK_INACTIVE_BLOCKER],
+    issues: provider.isActive ? [] : [FALLBACK_INACTIVE_ISSUE],
     activationBlockers: [],
     lastTestAttemptAt: null,
     lastTestSuccessAt: null,
@@ -140,37 +151,37 @@ export function resolveProviderReadiness(
 }
 
 export function getProviderReadinessLabel(
-  readiness: Pick<DeliveryProviderReadiness, "status">,
+  readiness: Pick<DeliveryProviderReadiness, "lifecycle">,
 ) {
-  return READINESS_LABELS[readiness.status] ?? "Draft";
+  return LIFECYCLE_LABELS[readiness.lifecycle] ?? "Draft";
 }
 
 export function getProviderReadinessBadgeClass(
-  readiness: Pick<DeliveryProviderReadiness, "status" | "canCreateShipment">,
+  readiness: Pick<DeliveryProviderReadiness, "lifecycle" | "canCreateShipment">,
 ) {
-  if (!readiness.canCreateShipment || readiness.status === "blocked") {
+  if (!readiness.canCreateShipment || readiness.lifecycle === "blocked") {
     return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
   }
-  if (readiness.status === "active") {
+  if (readiness.lifecycle === "active") {
     return "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300";
   }
-  if (readiness.status === "tested") {
+  if (readiness.lifecycle === "tested") {
     return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
   }
-  if (readiness.status === "configured") {
+  if (readiness.lifecycle === "configured") {
     return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
   return "text-muted-foreground";
 }
 
 export function getProviderReadinessMessage(
-  readiness: Pick<DeliveryProviderReadiness, "canCreateShipment" | "blockers">,
+  readiness: Pick<DeliveryProviderReadiness, "canCreateShipment" | "issues">,
 ) {
   if (readiness.canCreateShipment) {
     return "Ready to create shipments.";
   }
-  const blocker = readiness.blockers[0];
-  if (blocker?.message) return blocker.message;
+  const issue = readiness.issues[0];
+  if (issue?.message) return issue.message;
   return "Complete provider setup before creating shipments.";
 }
 

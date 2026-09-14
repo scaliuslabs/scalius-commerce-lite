@@ -1,8 +1,8 @@
 // src/lib/api/header.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { HeaderData } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { getApiV1Header } from "@scalius/api-client/sdk";
 

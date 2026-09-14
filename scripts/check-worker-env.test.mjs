@@ -5,6 +5,7 @@ import {
   ALLOWED_WRANGLER_VARS,
   apps,
   collectConfigNames,
+  collectDuplicateEnvDeclarations,
   collectWranglerVarsViolations,
   extractEnvNames,
   runWorkerEnvCheck,
@@ -150,6 +151,52 @@ describe("worker env check: allowlists", () => {
       "OAUTH_PROVIDER",
     ]) {
       expect(api.extraEnv).toContain(name);
+    }
+  });
+});
+
+describe("worker env check: one Env declaration per Worker", () => {
+  it("declares exactly one Env file per app", () => {
+    for (const app of apps) {
+      expect(app.envFiles, app.name).toHaveLength(1);
+    }
+    expect(apps.find((app) => app.name === "api").envFiles).toEqual([
+      "apps/api/src/env.d.ts",
+    ]);
+  });
+
+  it("keeps the Hono augmentation free of a second Env declaration", () => {
+    const source = readFileSync(resolve(root, "apps/api/src/hono-env.d.ts"), "utf8");
+    expect(source).toContain("ContextVariableMap");
+    expect([...extractEnvNames(source)]).toEqual([]);
+  });
+
+  it("fails closed when another declaration file in the Worker redeclares Env", () => {
+    const [message] = collectDuplicateEnvDeclarations(apps.find((app) => app.name === "api"), {
+      listDeclarationFilesImpl: () => [
+        "apps/api/src/env.d.ts",
+        "apps/api/src/hono-env.d.ts",
+      ],
+      readTextImpl: () => "declare global { type Env = { CACHE: KVNamespace } }",
+    });
+
+    expect(message).toContain("apps/api/src/hono-env.d.ts declares a second Env block");
+    expect(message).toContain("apps/api/src/env.d.ts");
+  });
+
+  it("passes when only the declared Env file declares Env", () => {
+    expect(collectDuplicateEnvDeclarations(apps.find((app) => app.name === "api"), {
+      listDeclarationFilesImpl: () => [
+        "apps/api/src/env.d.ts",
+        "apps/api/src/hono-env.d.ts",
+      ],
+      readTextImpl: () => "declare module \"hono\" { interface ContextVariableMap { env: Env } }",
+    })).toEqual([]);
+  });
+
+  it("reports no duplicate Env blocks anywhere in the committed Workers", () => {
+    for (const app of apps) {
+      expect(collectDuplicateEnvDeclarations(app), app.name).toEqual([]);
     }
   });
 });

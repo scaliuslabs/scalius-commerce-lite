@@ -1,48 +1,36 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "@scalius/database/client";
-import { settings } from "@scalius/database/schema";
-import { and, eq } from "drizzle-orm";
+import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
 import { errorResponses } from "../schemas/responses";
 
 const ALLOWED_PROXY_PROTOCOLS = new Set(["https:"]);
 
 /** KV mirror written by the Security settings save handler. */
-export const CSP_ALLOWED_DOMAINS_CACHE_KEY = "security:csp_allowed_domains";
+export { CSP_ALLOWED_DOMAINS_CACHE_KEY } from "@scalius/core/modules/settings/security-settings.service";
 
 /**
  * The merchant CSP allow-list is dashboard-managed (Settings -> Security).
- * The save handler writes the normalized value to both the `settings` row
- * (category "security", key "csp_allowed_domains") and the KV mirror. KV is
- * read first; on a KV miss (never written, or namespace reset) the row is
- * read once and mirrored back so later requests stay on the KV path.
+ * The settings document owns the storage, the KV mirror, and the read order:
+ * KV first, then the `settings` row once on a miss, mirrored back so later
+ * requests stay on the KV path. Failing to read anything yields the empty
+ * default, which blocks every proxy target.
  */
 async function readMerchantCspAllowedDomains(env: Env): Promise<string> {
-  try {
-    const cached = await env.CACHE?.get(CSP_ALLOWED_DOMAINS_CACHE_KEY);
-    if (typeof cached === "string") return cached;
-  } catch (error: unknown) {
-    console.error("[Partytown Proxy] Failed to read CSP allow-list from KV", error);
-  }
+  const ctx = { kv: env.CACHE };
+  // A KV hit answers without opening the relational provider at all.
+  const cached = await securitySettingsDocument.readCached(ctx);
+  if (cached) return cached.cspAllowedDomains;
 
-  let stored = "";
   try {
-    const row = await getDb(env)
-      .select({ value: settings.value })
-      .from(settings)
-      .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
-      .get();
-    stored = row?.value ?? "";
+    // On a miss the document reads the row once and mirrors it back to KV.
+    const value = await securitySettingsDocument.read(getDb(env), ctx, {
+      skipCache: true,
+    });
+    return value.cspAllowedDomains;
   } catch (error: unknown) {
-    console.error("[Partytown Proxy] Failed to read CSP allow-list from settings", error);
+    console.error("[Partytown Proxy] Failed to read the CSP allow-list", error);
     return "";
   }
-
-  try {
-    await env.CACHE?.put(CSP_ALLOWED_DOMAINS_CACHE_KEY, stored);
-  } catch (error: unknown) {
-    console.error("[Partytown Proxy] Failed to mirror CSP allow-list to KV", error);
-  }
-  return stored;
 }
 
 async function getAllowedDomainsAsync(c: { env: Env; req: { url: string } }): Promise<string[]> {

@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createOrder: vi.fn(),
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
   shouldRejectCrossOriginCookieRequest: vi.fn(),
 }));
 
@@ -13,14 +12,8 @@ vi.mock("../../../api/orders", () => ({
   createOrder: mocks.createOrder,
 }));
 
-vi.mock("../../../api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
-}));
-
-vi.mock("@/lib/api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("@/lib/api/transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
@@ -32,8 +25,7 @@ import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
   mocks.createOrder.mockReset();
-  mocks.createApiUrl.mockClear();
-  mocks.fetchWithRetry.mockReset();
+  mocks.apiFetch.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
 });
@@ -195,7 +187,7 @@ describe("checkout create-order proxy Origin guard", () => {
     const setCookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
     expect(json.data).toMatchObject({
       id: "order_1",
     });
@@ -217,7 +209,7 @@ describe("checkout create-order proxy Origin guard", () => {
       totalAmount: 125,
       paymentMethod: "sslcommerz",
     });
-    mocks.fetchWithRetry.mockResolvedValueOnce({
+    mocks.apiFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         success: true,
@@ -251,16 +243,14 @@ describe("checkout create-order proxy Origin guard", () => {
       expect.not.objectContaining({ initialPaymentSession: true }),
       { customerSessionToken: null },
     );
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/payment/sslcommerz/session",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/payment/sslcommerz/session",
       expect.objectContaining({
         method: "POST",
         cache: "no-store",
         body: JSON.stringify({ orderId: "order_1", receiptToken: "receipt_1" }),
       }),
-      0,
-      15000,
-      false,
+      { retries: 0, timeout: 15000, auth: false },
     );
     expect(json.data?.initialPaymentSession).toEqual({
       gateway: "sslcommerz",
@@ -279,7 +269,7 @@ describe("checkout create-order proxy Origin guard", () => {
       totalAmount: 125,
       paymentMethod: "polar",
     });
-    mocks.fetchWithRetry.mockResolvedValueOnce({
+    mocks.apiFetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: "Polar unavailable" }),
     });
@@ -319,7 +309,7 @@ describe("checkout create-order proxy Origin guard", () => {
       totalAmount: 125,
       paymentMethod: "sslcommerz",
     });
-    mocks.fetchWithRetry.mockResolvedValueOnce({
+    mocks.apiFetch.mockResolvedValueOnce({
       ok: true,
       status: 202,
       json: async () => ({

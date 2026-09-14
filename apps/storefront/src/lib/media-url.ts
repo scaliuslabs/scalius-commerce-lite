@@ -12,7 +12,7 @@ import {
   getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases,
   getRuntimeImageOptimizationEnabled,
-} from "./api/runtime-env";
+} from "./api/runtime";
 
 function normalizeCdnDomain(value: string | null | undefined): string {
   const raw = value?.trim();

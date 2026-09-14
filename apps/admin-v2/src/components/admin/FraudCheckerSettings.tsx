@@ -10,26 +10,24 @@ import {
   deleteFraudCheckerProvider,
   testFraudCheckerProvider,
 } from "~/lib/api-functions/fraud-checker";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "~/components/ui/select";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,12 +37,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "~/components/ui/alert-dialog";
 import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
   Loader2,
+  MoreHorizontal,
   Plus,
   Pencil,
   ShieldCheck,
@@ -61,8 +60,18 @@ import type { FraudCheckProviderType } from "@scalius/core/modules/fraud-checker
 import {
   OfficialProviderMark,
 } from "~/components/admin/settings/provider-marks";
+import {
+  ContextualSaveBar,
+  EmptyState,
+  FieldError,
+  IndexTable,
+  InlineHelp,
+  SettingsSection,
+  StatusBadge,
+  type IndexTableColumn,
+  type StatusTone,
+} from "~/components/admin/shell";
 import { getFraudProviderMarkId } from "./fraud-provider-presentation";
-import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
@@ -105,6 +114,19 @@ interface ProviderTestState {
 }
 
 const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
+
+/** Connection evidence is per browser session, so the label always says so. */
+function connectionLabel(state: ProviderTestState | undefined): string {
+  if (state?.status === "passed") return "Passed this session";
+  if (state?.status === "failed") return "Failed this session";
+  return "Not checked this session";
+}
+
+function connectionTone(state: ProviderTestState | undefined): StatusTone {
+  if (state?.status === "passed") return "success";
+  if (state?.status === "failed") return "critical";
+  return "neutral";
+}
 
 function FraudProviderMark({
   providerType,
@@ -230,9 +252,10 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     setSelectedProvider(null);
   };
 
-  const handleEdit = () => {
-    if (!selectedProvider || !canEdit) return;
-    resetForm(selectedProvider);
+  const handleEdit = (provider: FraudProvider) => {
+    if (!canEdit) return;
+    setSelectedProvider(provider);
+    resetForm(provider);
     setIsEditing(true);
     setIsCreating(false);
   };
@@ -241,6 +264,11 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     setIsEditing(false);
     setIsCreating(false);
     if (selectedProvider) resetForm(selectedProvider);
+  };
+
+  /** Restores the last saved values without leaving the editor. */
+  const handleDiscardDraft = () => {
+    resetForm(isCreating ? undefined : (selectedProvider ?? undefined));
   };
 
   const handleSave = async (values: ProviderFormValues) => {
@@ -293,14 +321,14 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     }
   };
 
-  const handleTest = async () => {
-    if (!selectedProvider) return;
+  const handleTest = async (provider: FraudProvider) => {
+    setSelectedProvider(provider);
     setIsTesting(true);
     try {
-      const result = await testFraudCheckerProvider({ data: { id: selectedProvider.id } });
+      const result = await testFraudCheckerProvider({ data: { id: provider.id } });
       setTestStates((current) => ({
         ...current,
-        [selectedProvider.id]: {
+        [provider.id]: {
           status: result.success ? "passed" : "failed",
           message:
             result.message ||
@@ -317,7 +345,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
         error instanceof Error ? error.message : "Failed to test provider";
       setTestStates((current) => ({
         ...current,
-        [selectedProvider.id]: { status: "failed", message },
+        [provider.id]: { status: "failed", message },
       }));
       toast.error(message);
     } finally {
@@ -331,403 +359,493 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   const selectedTestState = selectedProvider
     ? testStates[selectedProvider.id]
     : undefined;
+  const isDraftDirty = isEditing && form.formState.isDirty;
+
+  const providerColumns: IndexTableColumn<FraudProvider>[] = [
+    {
+      id: "provider",
+      header: "Provider",
+      cell: (provider) => (
+        <span
+          className="flex min-w-0 items-center gap-2"
+          aria-current={selectedProvider?.id === provider.id ? "true" : undefined}
+        >
+          <FraudProviderMark providerType={provider.providerType} />
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{provider.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "availability",
+      header: "Used in Orders",
+      mobileLabel: "Used in Orders",
+      cell: (provider) => (
+        <StatusBadge
+          tone={provider.isActive ? "success" : "neutral"}
+          srLabel="Used in Orders:"
+        >
+          {provider.isActive ? "Active" : "Inactive"}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "connection",
+      header: "Connection",
+      mobileLabel: "Connection",
+      cell: (provider) => (
+        <StatusBadge
+          tone={connectionTone(testStates[provider.id])}
+          srLabel="Connection:"
+        >
+          {connectionLabel(testStates[provider.id])}
+        </StatusBadge>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      <UnsavedChangesGuard
-        isDirty={isEditing && form.formState.isDirty}
-        isSubmitting={isSaving}
+    <div>
+      <ContextualSaveBar
+        isDirty={isDraftDirty || isSaving}
+        saving={isSaving}
+        canSave={canEdit}
+        saveLabel="Save provider"
+        stickyClassName="sticky top-15 z-30 lg:top-0"
+        onDiscard={handleDiscardDraft}
+        onSave={() => void form.handleSubmit(handleSave)()}
       />
 
-      {!canEdit && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Read-only access</AlertTitle>
-          <AlertDescription>
-            You can inspect providers and test saved connections, but you cannot
-            change their configuration.
-          </AlertDescription>
-        </Alert>
-      )}
+      <div className="space-y-6">
+        {!canEdit && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <AlertTitle>Read-only access</AlertTitle>
+            <AlertDescription>
+              You can inspect providers and test saved connections, but you cannot
+              change their configuration.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {providers.length === 0 && !isCreating ? (
-        <Card className="shadow-none">
-          <CardContent className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
-            <div className="grid size-10 place-items-center rounded-full bg-muted">
-              <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+        {providers.length === 0 && !isCreating ? (
+          <EmptyState
+            icon={ShieldCheck}
+            heading="No fraud provider"
+            body={`${canEdit
+              ? "Add a provider to check customer risk from an order."
+              : "No provider is available for order risk checks."} Checks are manual and never block checkout.`}
+            action={
+              canEdit
+                ? { label: "Add provider", icon: Plus, onClick: handleCreate }
+                : undefined
+            }
+          />
+        ) : null}
+
+        {providers.length > 0 ? (
+          <section aria-labelledby="fraud-providers-heading" className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="fraud-providers-heading" className="text-sm font-semibold leading-5">
+                Providers
+              </h2>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreate}
+                  disabled={isEditing}
+                  className="min-h-11 gap-1.5 sm:min-h-9"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add provider
+                </Button>
+              )}
             </div>
-            <h2 className="mt-3 text-base font-semibold">No fraud provider</h2>
-            <p className="mt-1 max-w-md text-sm text-muted-foreground">
-              {canEdit
-                ? "Add a provider to check customer risk from an order."
-                : "No provider is available for order risk checks."}{" "}
+            <IndexTable
+              items={providers}
+              columns={providerColumns}
+              getRowId={(provider) => provider.id}
+              label="Fraud check providers"
+              // While an editor is open the list stays read-only so a draft
+              // cannot be lost by opening another provider.
+              onRowClick={isEditing ? undefined : handleSelect}
+              rowActions={(provider) => (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 sm:h-9 sm:w-9"
+                      disabled={isEditing}
+                      aria-label={`Actions for ${provider.name}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleSelect(provider)}>
+                      Review setup
+                    </DropdownMenuItem>
+                    {canEdit && (
+                      <DropdownMenuItem onClick={() => handleEdit(provider)}>
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      disabled={isTesting}
+                      onClick={() => void handleTest(provider)}
+                    >
+                      <TestTube className="h-3.5 w-3.5" aria-hidden="true" />
+                      Test connection
+                    </DropdownMenuItem>
+                    {canEdit && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeleteTarget(provider)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            />
+            <InlineHelp>
+              Risk lookup services a merchant can run by hand from an order.
               Checks are manual and never block checkout.
-            </p>
-            {canEdit && (
+            </InlineHelp>
+          </section>
+        ) : null}
+
+        {(selectedProvider || isCreating) && isEditing ? (
+          <SettingsSection
+            title={isCreating ? "New provider" : "Edit provider"}
+            description="Credentials are stored encrypted and used only for manual order lookups."
+            actions={
               <Button
                 type="button"
-                className="mt-4 min-h-11 gap-1.5 sm:min-h-9"
-                onClick={handleCreate}
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                className="min-h-11 sm:min-h-9"
               >
-                <Plus className="h-4 w-4" />
-                Add provider
+                Cancel
               </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div
-          className={
-            providers.length === 0
-              ? "mx-auto w-full max-w-2xl"
-              : "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,2fr)]"
-          }
-        >
-          {providers.length > 0 && (
-            <Card className="shadow-none">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Providers</CardTitle>
-                  {canEdit && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCreate}
-                      disabled={isEditing}
-                      className="min-h-11 gap-1.5 text-xs sm:min-h-8"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Add
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ul className="space-y-1.5">
-                  {providers.map((provider) => (
-                    <li key={provider.id}>
-                      <button
-                        type="button"
-                        className={`flex min-h-11 w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                          selectedProvider?.id === provider.id
-                            ? "border-border bg-accent"
-                            : "border-transparent hover:bg-accent/50"
-                        }`}
-                        aria-pressed={selectedProvider?.id === provider.id}
-                        disabled={isEditing}
-                        onClick={() => handleSelect(provider)}
-                      >
-                        <FraudProviderMark providerType={provider.providerType} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{provider.name}</span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
-                          </span>
-                        </span>
-                        <Badge
-                          variant={provider.isActive ? "default" : "secondary"}
-                          className="shrink-0 text-[10px]"
-                        >
-                          {provider.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="min-w-0 shadow-none">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              {(selectedProvider || isCreating) ? (
-                <FraudProviderMark
-                  providerType={isCreating ? providerType : selectedProvider?.providerType}
-                  size="md"
-                />
-              ) : null}
-              {isCreating ? "New provider" : selectedProvider ? selectedProvider.name : "Select a provider"}
-            </CardTitle>
-            {!isCreating && !selectedProvider && (
-              <CardDescription className="text-xs">
-                Choose a provider to review setup, usage, and connection state.
-              </CardDescription>
-            )}
-          </CardHeader>
-          <CardContent>
-            {(selectedProvider || isCreating) && isEditing ? (
-              <form
-                method="post"
-                onSubmit={form.handleSubmit(handleSave)}
-                className="space-y-4"
-                noValidate
-              >
-                <div className="space-y-1.5">
-                  <Label htmlFor="providerType">Provider type</Label>
-                  <Select value={providerType} onValueChange={handleProviderTypeChange}>
-                    <SelectTrigger id="providerType" className="min-h-11 text-sm sm:min-h-8">
-                      <SelectValue placeholder="Select provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FRAUD_CHECK_PROVIDER_DEFINITIONS.map((definition) => (
-                        <SelectItem key={definition.value} value={definition.value}>
-                          <span className="flex items-center gap-2">
-                            <FraudProviderMark providerType={definition.value} />
-                            {definition.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">{providerDefinition.helpText}</p>
-                  {form.formState.errors.providerType && (
-                    <p className="text-xs text-destructive">{form.formState.errors.providerType.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">Internal name</Label>
-                  <Input
-                    id="name"
-                    {...form.register("name")}
-                    className="min-h-11 text-sm sm:min-h-8"
-                    placeholder="For example, FraudBD production"
-                  />
-                  {form.formState.errors.name && (
-                    <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="apiUrl">API URL</Label>
-                  <Input
-                    id="apiUrl"
-                    {...form.register("apiUrl")}
-                    className="min-h-11 text-sm sm:min-h-8"
-                    placeholder="https://fraudchecker.link/api/v1/qc/"
-                  />
-                  {form.formState.errors.apiUrl && (
-                    <p className="text-xs text-destructive">{form.formState.errors.apiUrl.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="apiKey">{providerDefinition.apiKeyLabel}</Label>
-                  <Input
-                    id="apiKey"
-                    type="password"
-                    {...form.register("apiKey")}
-                    className="min-h-11 text-sm sm:min-h-8"
-                    placeholder={credentialPlaceholder(providerDefinition.apiKeyLabel, "Enter API key")}
-                  />
-                  {form.formState.errors.apiKey && (
-                    <p className="text-xs text-destructive">{form.formState.errors.apiKey.message}</p>
-                  )}
-                </div>
-
-                {needsApiSecret && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="apiSecret">{providerDefinition.apiSecretLabel}</Label>
-                    <Input
-                      id="apiSecret"
-                      type="password"
-                      {...form.register("apiSecret")}
-                      className="min-h-11 text-sm sm:min-h-8"
-                      placeholder={credentialPlaceholder(providerDefinition.apiSecretLabel, "Enter API secret")}
-                    />
-                    {form.formState.errors.apiSecret && (
-                      <p className="text-xs text-destructive">{form.formState.errors.apiSecret.message}</p>
-                    )}
-                  </div>
-                )}
-
-                {needsUserId && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="userId">{providerDefinition.userIdLabel}</Label>
-                    <Input
-                      id="userId"
-                      {...form.register("userId")}
-                      className="min-h-11 text-sm sm:min-h-8"
-                      placeholder={credentialPlaceholder(providerDefinition.userIdLabel, "Enter user ID")}
-                    />
-                    {form.formState.errors.userId && (
-                      <p className="text-xs text-destructive">{form.formState.errors.userId.message}</p>
-                    )}
-                  </div>
-                )}
-
-                <div className="rounded-md border px-3 py-2.5">
-                  <div className="flex min-h-11 items-center justify-between gap-3">
-                    <div>
-                      <Label htmlFor="isActive" className="cursor-pointer text-sm font-medium">
-                        Available in Orders
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Manual check only; checkout remains unaffected.
-                      </p>
-                    </div>
-                    <Switch
-                      id="isActive"
-                      checked={form.watch("isActive")}
-                      onCheckedChange={(checked) =>
-                        form.setValue("isActive", checked, { shouldDirty: true })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <details className="rounded-md border px-3 py-2 text-sm">
-                  <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-8">
-                    Technical details
-                  </summary>
-                  <div className="mt-2 flex flex-wrap items-center gap-3 border-t pt-2 text-xs text-muted-foreground">
-                    <span>{providerDefinition.requestFormatHint}</span>
-                    {providerDefinition.docsUrl && (
-                      <a
-                        href={providerDefinition.docsUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1 text-primary hover:underline sm:min-h-8"
-                      >
-                        Provider docs
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </details>
-
-                <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={isSaving || !form.formState.isDirty}
-                    className="min-h-11 sm:min-h-8"
+            }
+          >
+            <form
+              method="post"
+              onSubmit={form.handleSubmit(handleSave)}
+              className="space-y-4"
+              noValidate
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="providerType">Provider type</Label>
+                <Select value={providerType} onValueChange={handleProviderTypeChange}>
+                  <SelectTrigger
+                    id="providerType"
+                    aria-describedby="providerType-help"
+                    aria-invalid={Boolean(form.formState.errors.providerType)}
+                    className="min-h-11 text-sm sm:min-h-9"
                   >
-                    {isSaving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                    Save provider
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="min-h-11 sm:min-h-8">
-                    Cancel
-                  </Button>
-                  {form.formState.isDirty && (
-                    <span className="self-center text-xs text-muted-foreground" aria-live="polite">
-                      Unsaved changes
-                    </span>
-                  )}
-                </div>
-              </form>
-            ) : selectedProvider ? (
-              <div className="space-y-4">
-                <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <div className="rounded-md border bg-muted/20 px-3 py-2">
-                    <dt className="text-xs text-muted-foreground">Setup</dt>
-                    <dd className="mt-1 text-sm font-medium">Credentials saved</dd>
-                  </div>
-                  <div className="rounded-md border bg-muted/20 px-3 py-2">
-                    <dt className="text-xs text-muted-foreground">Used in Orders</dt>
-                    <dd className="mt-1 text-sm font-medium">
-                      {selectedProvider.isActive ? "Active" : "Inactive"}
-                    </dd>
-                  </div>
-                  <div className="rounded-md border bg-muted/20 px-3 py-2">
-                    <dt className="text-xs text-muted-foreground">Connection</dt>
-                    <dd className="mt-1 text-sm font-medium">
-                      {selectedTestState?.status === "passed"
-                        ? "Passed this session"
-                        : selectedTestState?.status === "failed"
-                          ? "Failed this session"
-                          : "Not checked this session"}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div>
-                  <Badge variant="outline">{selectedDefinition?.label}</Badge>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {selectedDefinition?.helpText}
-                  </p>
-                </div>
-
-                {selectedTestState && (
-                  <Alert variant={selectedTestState.status === "failed" ? "destructive" : "default"}>
-                    {selectedTestState.status === "passed" ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <AlertCircle className="h-4 w-4" />
-                    )}
-                    <AlertTitle>
-                      {selectedTestState.status === "passed" ? "Connection passed" : "Connection failed"}
-                    </AlertTitle>
-                    <AlertDescription>{selectedTestState.message}</AlertDescription>
-                  </Alert>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FRAUD_CHECK_PROVIDER_DEFINITIONS.map((definition) => (
+                      <SelectItem key={definition.value} value={definition.value}>
+                        <span className="flex items-center gap-2">
+                          <FraudProviderMark providerType={definition.value} />
+                          {definition.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.providerType ? (
+                  <FieldError id="providerType-help">
+                    {form.formState.errors.providerType.message}
+                  </FieldError>
+                ) : (
+                  <InlineHelp id="providerType-help">
+                    {providerDefinition.helpText}
+                  </InlineHelp>
                 )}
+              </div>
 
-                <details className="rounded-md border px-3 py-2 text-sm">
-                  <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-8">
-                    Technical details
-                  </summary>
-                  <dl className="mt-2 space-y-2 border-t pt-2 text-xs">
-                    <div>
-                      <dt className="text-muted-foreground">API URL</dt>
-                      <dd className="break-all font-mono">{selectedProvider.apiUrl}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Credentials</dt>
-                      <dd>Stored securely</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Request</dt>
-                      <dd>{selectedDefinition?.requestFormatHint}</dd>
-                    </div>
-                  </dl>
-                  {selectedDefinition?.docsUrl && (
+              <div className="space-y-1.5">
+                <Label htmlFor="name">Internal name</Label>
+                <Input
+                  id="name"
+                  {...form.register("name")}
+                  aria-describedby="name-help"
+                  aria-invalid={Boolean(form.formState.errors.name)}
+                  className="min-h-11 text-sm sm:min-h-9"
+                  placeholder="For example, FraudBD production"
+                />
+                {form.formState.errors.name ? (
+                  <FieldError id="name-help">
+                    {form.formState.errors.name.message}
+                  </FieldError>
+                ) : (
+                  <InlineHelp id="name-help">
+                    Shown in the provider list and on the order risk check.
+                  </InlineHelp>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="apiUrl">API URL</Label>
+                <Input
+                  id="apiUrl"
+                  {...form.register("apiUrl")}
+                  aria-describedby="apiUrl-help"
+                  aria-invalid={Boolean(form.formState.errors.apiUrl)}
+                  className="min-h-11 text-sm sm:min-h-9"
+                  placeholder="https://fraudchecker.link/api/v1/qc/"
+                />
+                {form.formState.errors.apiUrl ? (
+                  <FieldError id="apiUrl-help">
+                    {form.formState.errors.apiUrl.message}
+                  </FieldError>
+                ) : (
+                  <InlineHelp id="apiUrl-help">
+                    Endpoint the lookup request is sent to.
+                  </InlineHelp>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="apiKey">{providerDefinition.apiKeyLabel}</Label>
+                <Input
+                  id="apiKey"
+                  type="password"
+                  {...form.register("apiKey")}
+                  aria-describedby="apiKey-help"
+                  aria-invalid={Boolean(form.formState.errors.apiKey)}
+                  className="min-h-11 text-sm sm:min-h-9"
+                  placeholder={credentialPlaceholder(providerDefinition.apiKeyLabel, "Enter API key")}
+                />
+                <FieldError id="apiKey-help">
+                  {form.formState.errors.apiKey?.message}
+                </FieldError>
+              </div>
+
+              {needsApiSecret && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="apiSecret">{providerDefinition.apiSecretLabel}</Label>
+                  <Input
+                    id="apiSecret"
+                    type="password"
+                    {...form.register("apiSecret")}
+                    aria-describedby="apiSecret-help"
+                    aria-invalid={Boolean(form.formState.errors.apiSecret)}
+                    className="min-h-11 text-sm sm:min-h-9"
+                    placeholder={credentialPlaceholder(providerDefinition.apiSecretLabel, "Enter API secret")}
+                  />
+                  <FieldError id="apiSecret-help">
+                    {form.formState.errors.apiSecret?.message}
+                  </FieldError>
+                </div>
+              )}
+
+              {needsUserId && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="userId">{providerDefinition.userIdLabel}</Label>
+                  <Input
+                    id="userId"
+                    {...form.register("userId")}
+                    aria-describedby="userId-help"
+                    aria-invalid={Boolean(form.formState.errors.userId)}
+                    className="min-h-11 text-sm sm:min-h-9"
+                    placeholder={credentialPlaceholder(providerDefinition.userIdLabel, "Enter user ID")}
+                  />
+                  <FieldError id="userId-help">
+                    {form.formState.errors.userId?.message}
+                  </FieldError>
+                </div>
+              )}
+
+              <div className="rounded-md border px-3 py-2.5">
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="isActive" className="cursor-pointer text-sm font-medium">
+                      Available in Orders
+                    </Label>
+                    <InlineHelp>
+                      Manual check only; checkout remains unaffected.
+                    </InlineHelp>
+                  </div>
+                  <Switch
+                    id="isActive"
+                    checked={form.watch("isActive")}
+                    onCheckedChange={(checked) =>
+                      form.setValue("isActive", checked, { shouldDirty: true })
+                    }
+                  />
+                </div>
+              </div>
+
+              <details className="rounded-md border px-3 py-2 text-sm">
+                <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-9">
+                  Technical details
+                </summary>
+                <div className="mt-2 flex flex-wrap items-center gap-3 border-t pt-2 text-xs text-muted-foreground">
+                  <span>{providerDefinition.requestFormatHint}</span>
+                  {providerDefinition.docsUrl && (
                     <a
-                      href={selectedDefinition.docsUrl}
+                      href={providerDefinition.docsUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs text-primary hover:underline sm:min-h-8"
+                      className="inline-flex min-h-11 items-center gap-1 text-primary hover:underline sm:min-h-9"
                     >
                       Provider docs
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
                     </a>
                   )}
-                </details>
-
-                <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap">
-                  {canEdit && (
-                    <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="min-h-11 sm:min-h-8">
-                      <Pencil className="mr-1 h-3.5 w-3.5" />
-                      Edit
-                    </Button>
-                  )}
-                  <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="min-h-11 sm:min-h-8">
-                    {isTesting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <TestTube className="mr-1 h-3.5 w-3.5" />}
-                    Test connection
-                  </Button>
-                  {canEdit && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setDeleteTarget(selectedProvider)}
-                      className="min-h-11 sm:min-h-8"
-                    >
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Testing sends one provider lookup with the platform test number. Results are shown for this browser session only.
-                </p>
+              </details>
+            </form>
+          </SettingsSection>
+        ) : selectedProvider ? (
+          <SettingsSection
+            title={selectedProvider.name}
+            description={selectedDefinition?.helpText}
+            footer="Testing sends one provider lookup with the platform test number. Results are shown for this browser session only."
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(selectedProvider)}
+                    className="min-h-11 sm:min-h-9"
+                  >
+                    <Pencil className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                    Edit
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleTest(selectedProvider)}
+                  disabled={isTesting}
+                  className="min-h-11 sm:min-h-9"
+                >
+                  {isTesting ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <TestTube className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Test connection
+                </Button>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeleteTarget(selectedProvider)}
+                    className="min-h-11 sm:min-h-9"
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                    Delete
+                  </Button>
+                )}
               </div>
-            ) : null}
-          </CardContent>
-          </Card>
-        </div>
-      )}
+            }
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <FraudProviderMark
+                  providerType={selectedProvider.providerType}
+                  size="md"
+                />
+                <StatusBadge tone="info" dot={false}>
+                  {selectedDefinition?.label}
+                </StatusBadge>
+              </div>
+
+              <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="rounded-md border bg-muted/20 px-3 py-2">
+                  <dt className="text-xs text-muted-foreground">Setup</dt>
+                  <dd className="mt-1 text-sm font-medium">Credentials saved</dd>
+                </div>
+                <div className="rounded-md border bg-muted/20 px-3 py-2">
+                  <dt className="text-xs text-muted-foreground">Used in Orders</dt>
+                  <dd className="mt-1">
+                    <StatusBadge tone={selectedProvider.isActive ? "success" : "neutral"}>
+                      {selectedProvider.isActive ? "Active" : "Inactive"}
+                    </StatusBadge>
+                  </dd>
+                </div>
+                <div className="rounded-md border bg-muted/20 px-3 py-2">
+                  <dt className="text-xs text-muted-foreground">Connection</dt>
+                  <dd className="mt-1">
+                    <StatusBadge tone={connectionTone(selectedTestState)}>
+                      {connectionLabel(selectedTestState)}
+                    </StatusBadge>
+                  </dd>
+                </div>
+              </dl>
+
+              {selectedTestState && (
+                <Alert variant={selectedTestState.status === "failed" ? "destructive" : "default"}>
+                  {selectedTestState.status === "passed" ? (
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  <AlertTitle>
+                    {selectedTestState.status === "passed" ? "Connection passed" : "Connection failed"}
+                  </AlertTitle>
+                  <AlertDescription>{selectedTestState.message}</AlertDescription>
+                </Alert>
+              )}
+
+              <details className="rounded-md border px-3 py-2 text-sm">
+                <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-9">
+                  Technical details
+                </summary>
+                <dl className="mt-2 space-y-2 border-t pt-2 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground">API URL</dt>
+                    <dd className="break-all font-mono">{selectedProvider.apiUrl}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Credentials</dt>
+                    <dd>Stored securely</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Request</dt>
+                    <dd>{selectedDefinition?.requestFormatHint}</dd>
+                  </div>
+                </dl>
+                {selectedDefinition?.docsUrl && (
+                  <a
+                    href={selectedDefinition.docsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs text-primary hover:underline sm:min-h-9"
+                  >
+                    Provider docs
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+                )}
+              </details>
+            </div>
+          </SettingsSection>
+        ) : null}
+      </div>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

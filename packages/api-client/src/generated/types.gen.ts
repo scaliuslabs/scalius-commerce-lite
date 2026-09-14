@@ -7395,12 +7395,16 @@ export type GetApiV1CheckoutConfigResponses = {
                 decimalPlaces: number;
             };
             checkoutReadiness: {
-                ready: boolean;
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
                 hasActiveShippingMethod: boolean;
                 hasActiveDeliveryHierarchy: boolean;
                 customerSignInRequired: boolean;
                 hasUsableCustomerSignIn: boolean;
-                issues: Array<string>;
             };
             unavailable: boolean;
             unavailableMessage?: string;
@@ -28744,12 +28748,20 @@ export type GetApiV1AdminSettingsGeneralResponses = {
             };
             navigationReadiness: {
                 header: {
-                    state: 'ready' | 'legacy_normalized' | 'invalid';
-                    message?: string;
+                    status: 'ready' | 'incomplete' | 'error';
+                    issues: Array<{
+                        code: string;
+                        message: string;
+                        fix?: string;
+                    }>;
                 };
                 footer: {
-                    state: 'ready' | 'legacy_normalized' | 'invalid';
-                    message?: string;
+                    status: 'ready' | 'incomplete' | 'error';
+                    issues: Array<{
+                        code: string;
+                        message: string;
+                        fix?: string;
+                    }>;
                 };
             };
         };
@@ -33037,12 +33049,16 @@ export type GetApiV1AdminSettingsCheckoutReadinessResponses = {
     200: {
         success: true;
         data: {
-            ready: boolean;
+            status: 'ready' | 'incomplete' | 'error';
+            issues: Array<{
+                code: string;
+                message: string;
+                fix?: string;
+            }>;
             hasActiveShippingMethod: boolean;
             hasActiveDeliveryHierarchy: boolean;
             customerSignInRequired: boolean;
             hasUsableCustomerSignIn: boolean;
-            issues: Array<string>;
         };
     };
 };
@@ -33846,8 +33862,14 @@ export type GetApiV1AdminSettingsEmailResponses = {
             senderConfigured: boolean;
             cloudflareBindingConfigured: boolean;
             resendConfigured: boolean;
-            ready: boolean;
-            readinessError: string | null;
+            readiness: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
         };
     };
 };
@@ -34256,7 +34278,12 @@ export type GetApiV1AdminSettingsPlatformResponses = {
             customerAuthCookieDomain: string;
             corsAllowedOrigins: Array<string>;
             readiness: {
-                complete: boolean;
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
                 missing: Array<'storefrontUrl' | 'apiUrl' | 'dashboardUrl' | 'mediaUrl'>;
             };
             effective: {
@@ -34370,7 +34397,12 @@ export type PutApiV1AdminSettingsPlatformResponses = {
             customerAuthCookieDomain: string;
             corsAllowedOrigins: Array<string>;
             readiness: {
-                complete: boolean;
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
                 missing: Array<'storefrontUrl' | 'apiUrl' | 'dashboardUrl' | 'mediaUrl'>;
             };
             effective: {
@@ -35190,15 +35222,17 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
                 config: string;
                 isActive: boolean;
                 readiness?: {
-                    status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                    status: 'ready' | 'incomplete' | 'error';
+                    issues: Array<{
+                        code: string;
+                        message: string;
+                        fix?: string;
+                    }>;
+                    lifecycle: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
                     configured: boolean;
                     tested: boolean;
                     active: boolean;
                     canCreateShipment: boolean;
-                    blockers: Array<{
-                        code: string;
-                        message: string;
-                    }>;
                     activationBlockers: Array<{
                         source: string;
                         key: string;
@@ -35402,15 +35436,17 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             config: string;
             isActive: boolean;
             readiness?: {
-                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+                lifecycle: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
                 configured: boolean;
                 tested: boolean;
                 active: boolean;
                 canCreateShipment: boolean;
-                blockers: Array<{
-                    code: string;
-                    message: string;
-                }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
@@ -35610,15 +35646,17 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             config: string;
             isActive: boolean;
             readiness?: {
-                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+                lifecycle: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
                 configured: boolean;
                 tested: boolean;
                 active: boolean;
                 canCreateShipment: boolean;
-                blockers: Array<{
-                    code: string;
-                    message: string;
-                }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
@@ -35646,15 +35684,17 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             config: string;
             isActive: boolean;
             readiness?: {
-                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+                lifecycle: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
                 configured: boolean;
                 tested: boolean;
                 active: boolean;
                 canCreateShipment: boolean;
-                blockers: Array<{
-                    code: string;
-                    message: string;
-                }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
@@ -36028,15 +36068,17 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             config: string;
             isActive: boolean;
             readiness?: {
-                status: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+                lifecycle: 'draft' | 'configured' | 'tested' | 'active' | 'blocked';
                 configured: boolean;
                 tested: boolean;
                 active: boolean;
                 canCreateShipment: boolean;
-                blockers: Array<{
-                    code: string;
-                    message: string;
-                }>;
                 activationBlockers: Array<{
                     source: string;
                     key: string;
@@ -37401,12 +37443,30 @@ export type GetApiV1AdminSettingsNotificationChannelsResponses = {
                 templateName: string;
                 languageCode: string;
             };
-            whatsappConfigured: boolean;
-            whatsappError: string | null;
-            emailConfigured: boolean;
-            emailError: string | null;
-            smsProviderConfigured: boolean;
-            smsProviderError: string | null;
+            whatsapp: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
+            email: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
+            sms: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
         };
     };
 };
@@ -37527,12 +37587,30 @@ export type PutApiV1AdminSettingsNotificationChannelsResponses = {
                 templateName: string;
                 languageCode: string;
             };
-            whatsappConfigured: boolean;
-            whatsappError: string | null;
-            emailConfigured: boolean;
-            emailError: string | null;
-            smsProviderConfigured: boolean;
-            smsProviderError: string | null;
+            whatsapp: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
+            email: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
+            sms: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
         };
     };
 };
@@ -37627,8 +37705,14 @@ export type GetApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
-            pushConfigured: boolean;
-            pushError: string | null;
+            push: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
         };
     };
 };
@@ -37741,8 +37825,14 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses = {
             channels: {
                 [key: string]: Array<string>;
             };
-            pushConfigured: boolean;
-            pushError: string | null;
+            push: {
+                status: 'ready' | 'incomplete' | 'error';
+                issues: Array<{
+                    code: string;
+                    message: string;
+                    fix?: string;
+                }>;
+            };
         };
     };
 };

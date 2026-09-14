@@ -27,5 +27,6 @@ export {
   ResendEmailProvider,
   getEmailProviderReadiness,
   getEmailRuntimeSettings,
-  readEmailSetting,
 } from "./email/index";
+export { emailSettingsDocument } from "./email/settings";
+export type { EmailSettingsDocument } from "./email/settings";

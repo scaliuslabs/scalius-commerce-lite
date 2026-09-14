@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../edge-cache", () => ({
+vi.mock("@/lib/api/transport", () => ({
   CACHE_TTL: { SHORT: 300 },
   withEdgeCache: async (_key: string, loader: () => Promise<unknown>) =>
     loader(),

@@ -5,6 +5,7 @@ import { ValidationError } from "../../errors";
 import {
   getActiveSmsProvider,
   getSmsProviderReadiness,
+  SMS_READINESS_CODE,
   getSmsSettings,
   saveSmsSettings,
 } from "./sms-settings";
@@ -26,9 +27,9 @@ describe("SMS settings readiness", () => {
     const result = await getSmsProviderReadiness(createSmsSettingsDb([]) as never);
 
     expect(result).toEqual({
+      status: "incomplete",
+      issues: [{ code: SMS_READINESS_CODE, message: "No active SMS provider selected" }],
       activeProvider: null,
-      configured: false,
-      error: "No active SMS provider selected",
     });
   });
 
@@ -38,9 +39,9 @@ describe("SMS settings readiness", () => {
     ]) as never);
 
     expect(result).toEqual({
+      status: "incomplete",
+      issues: [{ code: SMS_READINESS_CODE, message: "BDBulkSMS token is required" }],
       activeProvider: "bdbulksms",
-      configured: false,
-      error: "BDBulkSMS token is required",
     });
   });
 
@@ -53,9 +54,9 @@ describe("SMS settings readiness", () => {
     ]);
 
     await expect(getSmsProviderReadiness(db as never)).resolves.toEqual({
+      status: "ready",
+      issues: [],
       activeProvider: "gennet",
-      configured: true,
-      error: null,
     });
     await expect(getSmsSettings(db as never)).resolves.toMatchObject({
       activeProvider: "gennet",
@@ -72,10 +73,10 @@ describe("SMS settings readiness", () => {
       { key: "active_provider", value: "smsnetbd" },
       { key: "smsnetbd_api_key", value: "dummy" },
       { key: "smsnetbd_sender_id", value: "SCALIUS" },
-    ]) as never)).resolves.toEqual({
+    ]) as never)).resolves.toMatchObject({
+      status: "incomplete",
       activeProvider: "smsnetbd",
-      configured: false,
-      error: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS.",
+      issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS." }],
     });
 
     await expect(getSmsProviderReadiness(createSmsSettingsDb([
@@ -83,10 +84,10 @@ describe("SMS settings readiness", () => {
       { key: "gennet_api_token", value: "realish-token-789" },
       { key: "gennet_base_url", value: "https://example.gennet.com.bd" },
       { key: "gennet_sid", value: "SCALIUS" },
-    ]) as never)).resolves.toEqual({
+    ]) as never)).resolves.toMatchObject({
+      status: "incomplete",
       activeProvider: "gennet",
-      configured: false,
-      error: "GenNet base URL looks like a placeholder. Save a real provider value before enabling SMS.",
+      issues: [{ code: SMS_READINESS_CODE, message: "GenNet base URL looks like a placeholder. Save a real provider value before enabling SMS." }],
     });
   });
 
@@ -152,15 +153,15 @@ describe("SMS settings readiness", () => {
       { key: "bdbulksms_token", value: encryptedToken },
     ]);
 
-    await expect(getSmsProviderReadiness(db as never)).resolves.toEqual({
+    await expect(getSmsProviderReadiness(db as never)).resolves.toMatchObject({
+      status: "incomplete",
       activeProvider: "bdbulksms",
-      configured: false,
-      error: "BDBulkSMS token is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured.",
+      issues: [{ code: SMS_READINESS_CODE, message: "BDBulkSMS token is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured." }],
     });
     await expect(getSmsProviderReadiness(db as never, key)).resolves.toEqual({
+      status: "ready",
+      issues: [],
       activeProvider: "bdbulksms",
-      configured: true,
-      error: null,
     });
   });
 
@@ -173,10 +174,10 @@ describe("SMS settings readiness", () => {
       { key: "smsnetbd_sender_id", value: "SCALIUS" },
     ]);
 
-    await expect(getSmsProviderReadiness(db as never, wrongKey)).resolves.toEqual({
+    await expect(getSmsProviderReadiness(db as never, wrongKey)).resolves.toMatchObject({
+      status: "incomplete",
       activeProvider: "smsnetbd",
-      configured: false,
-      error: "SMS.net.bd API key could not be decrypted with the configured credential key.",
+      issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key could not be decrypted with the configured credential key." }],
     });
   });
 

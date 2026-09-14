@@ -1,60 +1,68 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, ReceiptText, RotateCcw, Save } from "lucide-react";
+import { CheckCircle2, CircleOff } from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import { ContextualSaveBar } from "~/components/admin/shell/ContextualSaveBar";
+import { FieldError } from "~/components/admin/shell/FieldError";
+import { InlineHelp } from "~/components/admin/shell/InlineHelp";
+import { SettingsSection } from "~/components/admin/shell/SettingsSection";
+import { StatusBadge } from "~/components/admin/shell/StatusBadge";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { Switch } from "~/components/ui/switch";
 import {
   saveTaxSettings,
   type TaxConfigurationPayload,
   type UpdateTaxSettingsInput,
-} from "@/lib/api-functions/taxes";
-import { getServerFnError } from "@/lib/api-helpers";
-import { queryKeys } from "@/lib/query-keys";
-import { taxSettingsFormIsDirty, taxSettingsIssue } from "./tax-form";
+} from "~/lib/api-functions/taxes";
+import { getServerFnError } from "~/lib/api-helpers";
+import { queryKeys } from "~/lib/query-keys";
+import {
+  buildTaxSettingsDraft,
+  taxSettingsFieldIssues,
+  taxSettingsSaveBarState,
+} from "./tax-form";
+import { getTaxReadiness } from "./tax-readiness";
+import type { TaxWorkspaceRouteSection } from "./tax-workspace-sections";
 
 const NO_CLASS = "__none__";
 
 export function TaxSettingsPanel({
   configuration,
   canManage,
+  onOpenTarget,
 }: {
   configuration: TaxConfigurationPayload;
   canManage: boolean;
+  /** Sends the merchant to the workspace destination readiness points at. */
+  onOpenTarget: (target: TaxWorkspaceRouteSection) => void;
 }) {
   const queryClient = useQueryClient();
-  const savedForm: UpdateTaxSettingsInput = {
-    expectedVersion: configuration.settings.version,
-    enabled: configuration.settings.enabled,
-    pricesIncludeTax: configuration.settings.pricesIncludeTax,
-    taxShipping: configuration.settings.taxShipping,
-    defaultTaxClassId: configuration.settings.defaultTaxClassId,
-    shippingTaxClassId: configuration.settings.shippingTaxClassId,
-    displayLabel: configuration.settings.displayLabel,
-  };
+  const savedForm: UpdateTaxSettingsInput = buildTaxSettingsDraft(configuration.settings);
   const [form, setForm] = useState<UpdateTaxSettingsInput>(() => savedForm);
 
   useEffect(() => {
-    setForm(savedForm);
-    // The settings object is the versioned authority. Individual fields are
-    // deliberately listed so a refetch only resets after saved state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setForm(buildTaxSettingsDraft(configuration.settings));
+    // The settings object is the versioned authority. A refetch only resets the
+    // draft after the saved state itself changes.
   }, [configuration.settings]);
 
-  const issue = taxSettingsIssue(form, configuration);
-  const isDirty = taxSettingsFormIsDirty(form, savedForm);
+  const fieldIssues = taxSettingsFieldIssues(form, configuration);
+  const saveBar = taxSettingsSaveBarState(form, savedForm, configuration, { canManage });
+  const readiness = getTaxReadiness(configuration);
   const saveMutation = useMutation({
     mutationFn: () => saveTaxSettings({ data: form }),
     onSuccess: async () => {
-      toast.success("Tax settings saved");
+      toast.success("Saved");
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxes() });
     },
     onError: (error) => {
@@ -63,65 +71,114 @@ export function TaxSettingsPanel({
   });
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-      <UnsavedChangesGuard
-        isDirty={isDirty}
-        isSubmitting={saveMutation.isPending}
-      />
-      <Card>
-        <CardHeader className="gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle>Calculation policy</CardTitle>
-              <CardDescription className="mt-1">
-                Rates are merchant-entered. Scalius never invents a legal rate.
-              </CardDescription>
-            </div>
-            <Badge variant={form.enabled ? "default" : "secondary"}>
-              {form.enabled ? "Enabled" : "Disabled"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-5 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="tax-display-label">Buyer-facing label</Label>
-              <Input
-                className="min-h-11 md:min-h-9"
-                id="tax-display-label"
-                value={form.displayLabel}
-                maxLength={80}
-                onChange={(event) => setForm((current) => ({
-                  ...current,
-                  displayLabel: event.target.value,
-                }))}
-                placeholder="Tax"
-                disabled={!canManage}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Default product class</Label>
-              <Select
-                disabled={!canManage}
-                value={form.defaultTaxClassId ?? NO_CLASS}
-                onValueChange={(value) => setForm((current) => ({
-                  ...current,
-                  defaultTaxClassId: value === NO_CLASS ? null : value,
-                }))}
-              >
-                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Default product tax class"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CLASS}>Not configured</SelectItem>
-                  {configuration.classes.map((taxClass) => (
-                    <SelectItem key={taxClass.id} value={taxClass.id}>
-                      {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Shipping class</Label>
+    <div className="space-y-8">
+      <ContextualSaveBar
+        isDirty={saveBar.visible}
+        saving={saveMutation.isPending}
+        canSave={saveBar.canSave}
+        saveDisabled={saveBar.saveDisabled}
+        saveDisabledReason={saveBar.disabledReason ?? undefined}
+        onSave={() => saveMutation.mutate()}
+        onDiscard={() => setForm(savedForm)}
+      >
+        {saveBar.disabledReason ? (
+          <span className="truncate text-xs leading-5 text-muted-foreground">
+            {saveBar.disabledReason}
+          </span>
+        ) : null}
+      </ContextualSaveBar>
+
+      <SettingsSection
+        id="tax-calculation"
+        title="Calculation policy"
+        description="Decides whether checkout charges tax at all, and whether your listed prices already contain it."
+      >
+        <div className="space-y-4">
+          <ToggleRow
+            id="tax-enabled"
+            label="Calculate tax at checkout"
+            help={form.enabled
+              ? "Checkout applies the saved classes and rates to every new order."
+              : "Checkout records zero tax on every new order."}
+            checked={form.enabled}
+            disabled={!canManage}
+            onCheckedChange={(enabled) => setForm((current) => ({ ...current, enabled }))}
+          />
+          <ToggleRow
+            id="tax-inclusive"
+            label="Prices include tax"
+            help={form.pricesIncludeTax
+              ? "Tax is extracted from the listed price, so the buyer pays the price shown."
+              : "Tax is added after discounts, on top of the listed price."}
+            checked={form.pricesIncludeTax}
+            disabled={!canManage}
+            onCheckedChange={(pricesIncludeTax) => setForm((current) => ({
+              ...current,
+              pricesIncludeTax,
+            }))}
+          />
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="tax-default-class"
+        title="Default product class"
+        description="The class checkout uses for any product or SKU without its own class."
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="tax-default-class-select">Default product class</Label>
+          <Select
+            disabled={!canManage}
+            value={form.defaultTaxClassId ?? NO_CLASS}
+            onValueChange={(value) => setForm((current) => ({
+              ...current,
+              defaultTaxClassId: value === NO_CLASS ? null : value,
+            }))}
+          >
+            <SelectTrigger
+              id="tax-default-class-select"
+              className="min-h-11 sm:min-h-9"
+              aria-label="Default product tax class"
+              aria-invalid={fieldIssues.defaultTaxClassId ? true : undefined}
+              aria-describedby="tax-default-class-help"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CLASS} className="min-h-11 sm:min-h-9">Not configured</SelectItem>
+              {configuration.classes.map((taxClass) => (
+                <SelectItem key={taxClass.id} value={taxClass.id} className="min-h-11 sm:min-h-9">
+                  {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <InlineHelp id="tax-default-class-help">
+            Products keep their own class when one is assigned in Classification.
+          </InlineHelp>
+          <FieldError>{fieldIssues.defaultTaxClassId}</FieldError>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="tax-shipping"
+        title="Shipping tax"
+        description="Applies a class to the delivery charge, separately from the items in the order."
+      >
+        <div className="space-y-4">
+          <ToggleRow
+            id="tax-shipping-toggle"
+            label="Tax shipping"
+            help={form.taxShipping
+              ? "The delivery charge is taxed with the class selected below."
+              : "Delivery charges are never taxed."}
+            checked={form.taxShipping}
+            disabled={!canManage}
+            onCheckedChange={(taxShipping) => setForm((current) => ({ ...current, taxShipping }))}
+          />
+          {form.taxShipping ? (
+            <div className="space-y-1.5 border-t border-border pt-4">
+              <Label htmlFor="tax-shipping-class-select">Shipping class</Label>
               <Select
                 disabled={!canManage}
                 value={form.shippingTaxClassId ?? NO_CLASS}
@@ -130,128 +187,160 @@ export function TaxSettingsPanel({
                   shippingTaxClassId: value === NO_CLASS ? null : value,
                 }))}
               >
-                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Shipping tax class"><SelectValue /></SelectTrigger>
+                <SelectTrigger
+                  id="tax-shipping-class-select"
+                  className="min-h-11 sm:min-h-9"
+                  aria-label="Shipping tax class"
+                  aria-invalid={fieldIssues.shippingTaxClassId ? true : undefined}
+                  aria-describedby="tax-shipping-class-help"
+                >
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_CLASS}>Use default class</SelectItem>
+                  <SelectItem value={NO_CLASS} className="min-h-11 sm:min-h-9">Use default class</SelectItem>
                   {configuration.classes.map((taxClass) => (
-                    <SelectItem key={taxClass.id} value={taxClass.id}>
+                    <SelectItem key={taxClass.id} value={taxClass.id} className="min-h-11 sm:min-h-9">
                       {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <InlineHelp id="tax-shipping-class-help">
+                Leaving this on the default class taxes delivery at the same rate as
+                unclassified products.
+              </InlineHelp>
+              <FieldError>{fieldIssues.shippingTaxClassId}</FieldError>
             </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <PolicySwitch
-              id="tax-enabled"
-              label="Calculate tax"
-              description="Apply the saved rules at checkout."
-              checked={form.enabled}
-              disabled={!canManage}
-              onCheckedChange={(enabled) => setForm((current) => ({ ...current, enabled }))}
-            />
-            <PolicySwitch
-              id="tax-inclusive"
-              label="Prices include tax"
-              description="Extract tax from listed prices instead of adding it."
-              checked={form.pricesIncludeTax}
-              disabled={!canManage}
-              onCheckedChange={(pricesIncludeTax) => setForm((current) => ({
-                ...current,
-                pricesIncludeTax,
-              }))}
-            />
-            <PolicySwitch
-              id="tax-shipping"
-              label="Tax shipping"
-              description="Apply the selected class to delivery charges."
-              checked={form.taxShipping}
-              disabled={!canManage}
-              onCheckedChange={(taxShipping) => setForm((current) => ({ ...current, taxShipping }))}
-            />
-          </div>
-
-          {issue ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Configuration needs attention</AlertTitle>
-              <AlertDescription>{issue}</AlertDescription>
-            </Alert>
           ) : null}
+        </div>
+      </SettingsSection>
 
-          {isDirty ? (
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-            <Button
-              type="button"
-              className="min-h-11 md:min-h-10"
-              variant="outline"
-              onClick={() => setForm(savedForm)}
-              disabled={!canManage || !isDirty || saveMutation.isPending}
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              className="min-h-11 md:min-h-10"
-              onClick={() => saveMutation.mutate()}
-              disabled={!canManage || !isDirty || Boolean(issue) || saveMutation.isPending}
-            >
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save policy
-            </Button>
-          </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      <SettingsSection
+        id="tax-label"
+        title="Buyer-facing label"
+        description="The word buyers see beside the tax amount at checkout and on receipts."
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="tax-display-label">Buyer-facing label</Label>
+          <Input
+            className="min-h-11 sm:min-h-9 sm:max-w-xs"
+            id="tax-display-label"
+            value={form.displayLabel}
+            maxLength={80}
+            aria-invalid={fieldIssues.displayLabel ? true : undefined}
+            aria-describedby="tax-display-label-help"
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              displayLabel: event.target.value,
+            }))}
+            placeholder="Tax"
+            disabled={!canManage}
+          />
+          <InlineHelp id="tax-display-label-help">
+            Use the term your buyers expect, such as VAT or GST.
+          </InlineHelp>
+          <FieldError>{fieldIssues.displayLabel}</FieldError>
+        </div>
+      </SettingsSection>
 
-      <Card className="h-fit border-primary/20 bg-primary/[0.03]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ReceiptText className="h-4 w-4 text-primary" />
-            Checkout outcome
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">
+      <SettingsSection
+        id="tax-outcome"
+        title="Checkout outcome"
+        description="What the settings above do to a new order, before any per-product class is applied."
+      >
+        <ul className="space-y-2 text-sm">
+          <li className="font-medium">
             {!form.enabled
               ? "Checkout does not charge tax."
               : form.pricesIncludeTax
                 ? "Matching tax is included in the displayed price."
                 : "Matching tax is added after discounts at checkout."}
-          </p>
-          <p>{form.taxShipping ? "Delivery charges use the selected shipping class." : "Delivery charges are not taxed."}</p>
-          <p>Existing orders keep the tax totals they had when customers placed them.</p>
-        </CardContent>
-      </Card>
+          </li>
+          <li className="text-muted-foreground">
+            {form.taxShipping
+              ? "Delivery charges use the selected shipping class."
+              : "Delivery charges are not taxed."}
+          </li>
+          <li className="text-muted-foreground">
+            Existing orders keep the tax totals they had when customers placed them.
+          </li>
+        </ul>
+      </SettingsSection>
+
+      <SettingsSection
+        id="tax-setup-checks"
+        title="Setup checks"
+        description="Saved state only. Rates are merchant-entered, and Scalius never invents a legal rate."
+        footer={(
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>{readiness.description}</span>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => onOpenTarget(readiness.nextTab)}
+            >
+              {readiness.nextAction}
+            </Button>
+          </div>
+        )}
+      >
+        <dl className="space-y-3">
+          {readiness.steps.map((step) => (
+            <div key={step.id} className="flex items-start gap-2.5">
+              {step.ready ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+              ) : (
+                <CircleOff className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              )}
+              <div className="min-w-0">
+                <dt className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  {step.label}
+                  <StatusBadge tone={step.ready ? "success" : "attention"} srLabel="Check:">
+                    {step.ready ? "Ready" : "Needs attention"}
+                  </StatusBadge>
+                </dt>
+                <dd className="mt-0.5 text-[13px] leading-5 text-muted-foreground">
+                  {step.detail}
+                </dd>
+              </div>
+            </div>
+          ))}
+        </dl>
+      </SettingsSection>
     </div>
   );
 }
 
-function PolicySwitch({
+function ToggleRow({
   id,
   label,
-  description,
+  help,
   checked,
   disabled,
   onCheckedChange,
 }: {
   id: string;
   label: string;
-  description: string;
+  help: string;
   checked: boolean;
   disabled: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border p-4">
-      <div className="space-y-1">
-        <Label htmlFor={id}>{label}</Label>
-        <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+    <div>
+      <div className="flex items-center justify-between gap-4">
+        <Label htmlFor={id} className="text-sm">{label}</Label>
+        <Switch
+          className="relative shrink-0 after:absolute after:-inset-x-1.5 after:-inset-y-3"
+          id={id}
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={`${id}-help`}
+          onCheckedChange={onCheckedChange}
+        />
       </div>
-      <Switch className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3" id={id} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+      <InlineHelp id={`${id}-help`} className="mt-1 max-w-prose">{help}</InlineHelp>
     </div>
   );
 }

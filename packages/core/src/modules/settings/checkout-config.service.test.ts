@@ -148,7 +148,7 @@ describe("getCheckoutConfig", () => {
             undefined,
         );
         expect(config.unavailable).toBe(false);
-        expect(config.checkoutReadiness.ready).toBe(true);
+        expect(config.checkoutReadiness.status).toBe("ready");
         expect(config.currency).toEqual({
             code: "BDT",
             symbol: "৳",
@@ -339,12 +339,12 @@ describe("getCheckoutConfig", () => {
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
         expect(config.checkoutReadiness).toMatchObject({
-            ready: false,
+            status: "incomplete",
             hasActiveShippingMethod: false,
             hasActiveDeliveryHierarchy: true,
         });
-        expect(config.checkoutReadiness.issues).toContain(
-            "Add at least one active shipping method before checkout can accept orders.",
+        expect(config.checkoutReadiness.issues).toContainEqual(
+            expect.objectContaining({ message:            "Add at least one active shipping method before checkout can accept orders.", }),
         );
         expect(mocks.getPaymentGatewaySettingsSnapshot).not.toHaveBeenCalled();
     });
@@ -362,12 +362,12 @@ describe("getCheckoutConfig", () => {
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
         expect(config.checkoutReadiness).toMatchObject({
-            ready: false,
+            status: "incomplete",
             hasActiveShippingMethod: true,
             hasActiveDeliveryHierarchy: false,
         });
-        expect(config.checkoutReadiness.issues).toContain(
-            "Add at least one active city with an active zone before checkout can accept orders.",
+        expect(config.checkoutReadiness.issues).toContainEqual(
+            expect.objectContaining({ message:            "Add at least one active city with an active zone before checkout can accept orders.", }),
         );
         expect(mocks.getPaymentGatewaySettingsSnapshot).not.toHaveBeenCalled();
     });
@@ -385,12 +385,12 @@ describe("getCheckoutConfig", () => {
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
         expect(config.checkoutReadiness).toMatchObject({
-            ready: false,
+            status: "incomplete",
             customerSignInRequired: true,
             hasUsableCustomerSignIn: false,
         });
-        expect(config.checkoutReadiness.issues).toContain(
-            "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
+        expect(config.checkoutReadiness.issues).toContainEqual(
+            expect.objectContaining({ message:            "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.", }),
         );
         expect(mocks.getPaymentGatewaySettingsSnapshot).not.toHaveBeenCalled();
     });

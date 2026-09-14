@@ -3,14 +3,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  createApiUrl: vi.fn((path: string) => `https://api.example.test/api/v1${path}`),
-  fetchWithRetry: vi.fn(),
+  apiFetch: vi.fn(),
   shouldRejectCrossOriginCookieRequest: vi.fn(),
 }));
 
-vi.mock("@/lib/api/client", () => ({
-  createApiUrl: mocks.createApiUrl,
-  fetchWithRetry: mocks.fetchWithRetry,
+vi.mock("@/lib/api/transport", () => ({
+  apiFetch: mocks.apiFetch,
 }));
 
 vi.mock("@scalius/shared/request-origin-guard", () => ({
@@ -24,8 +22,7 @@ import { POST as stripeReconcilePost } from "../../../../pages/api/checkout/stri
 import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
-  mocks.createApiUrl.mockClear();
-  mocks.fetchWithRetry.mockReset();
+  mocks.apiFetch.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReset();
   mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(false);
 });
@@ -64,7 +61,7 @@ describe("checkout payment-session proxies", () => {
 
     expect(response.status).toBe(400);
     expect(json.error).toContain("Private receipt proof is missing");
-    expect(mocks.fetchWithRetry).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -84,7 +81,7 @@ describe("checkout payment-session proxies", () => {
       post: polarPost,
     },
   ])("preserves backend 202 processing responses for $label", async ({ endpoint, post }) => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
         status: "processing",
@@ -111,7 +108,7 @@ describe("checkout payment-session proxies", () => {
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
-    const [, requestInit] = mocks.fetchWithRetry.mock.calls[0]!;
+    const [, requestInit] = mocks.apiFetch.mock.calls[0]!;
     const backendBody = JSON.parse(String(requestInit.body)) as Record<string, unknown>;
 
     expect(response.status).toBe(202);
@@ -125,15 +122,13 @@ describe("checkout payment-session proxies", () => {
     });
     expect(json).not.toHaveProperty("gatewayUrl");
     expect(json).not.toHaveProperty("clientSecret");
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/payment\/(?:stripe\/intent|sslcommerz\/session|polar\/session)$/),
       expect.objectContaining({
         method: "POST",
         cache: "no-store",
       }),
-      0,
-      15000,
-      false,
+      { retries: 0, timeout: 15000, auth: false },
     );
     expect(backendBody).toMatchObject({
       orderId: "order_1",
@@ -145,7 +140,7 @@ describe("checkout payment-session proxies", () => {
   });
 
   it("keeps Stripe receipt proof server-side while forwarding reconciliation", async () => {
-    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: { status: "scheduled", providerStatus: "succeeded" },
     }), {
@@ -167,19 +162,17 @@ describe("checkout payment-session proxies", () => {
         }),
       }),
     } as never);
-    const [, requestInit] = mocks.fetchWithRetry.mock.calls[0]!;
+    const [, requestInit] = mocks.apiFetch.mock.calls[0]!;
 
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({
       success: true,
       data: { status: "scheduled", providerStatus: "succeeded" },
     });
-    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/payment/stripe/reconcile",
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      "/payment/stripe/reconcile",
       expect.objectContaining({ method: "POST", cache: "no-store" }),
-      0,
-      15000,
-      false,
+      { retries: 0, timeout: 15000, auth: false },
     );
     expect(JSON.parse(String(requestInit.body))).toEqual({
       orderId: "order_1",

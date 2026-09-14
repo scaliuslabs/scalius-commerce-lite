@@ -9,7 +9,7 @@ import type { APIRoute, APIContext } from "astro";
 import { getFeedProducts } from "@/lib/api/products";
 import type { Product } from "@/lib/api/types";
 import { getLayoutData, getSeoSettings } from "@/lib/api";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import {

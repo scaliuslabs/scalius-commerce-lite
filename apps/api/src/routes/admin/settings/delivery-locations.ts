@@ -7,6 +7,7 @@ import {
     getLocationById,
     updateLocation,
 } from "@scalius/core/modules/delivery/locations";
+import { isReady, readinessMessages } from "@scalius/shared/readiness";
 import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
@@ -29,8 +30,8 @@ async function assertDeliveryLocationsCanBeRemovedFromCheckout(
         getCheckoutDeliveryReadiness(db),
         getCheckoutDeliveryReadiness(db, { excludeDeliveryLocationIds: ids }),
     ]);
-    if (currentReadiness.ready && !nextReadiness.ready) {
-        throw new ValidationError([CHECKOUT_BREAKING_LOCATION_MESSAGE, ...nextReadiness.issues].join(" "));
+    if (isReady(currentReadiness) && !isReady(nextReadiness)) {
+        throw new ValidationError([CHECKOUT_BREAKING_LOCATION_MESSAGE, ...readinessMessages(nextReadiness)].join(" "));
     }
 }
 
@@ -38,7 +39,7 @@ async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
     db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
 ) {
     const currentReadiness = await getCheckoutDeliveryReadiness(db);
-    if (currentReadiness.ready) {
+    if (isReady(currentReadiness)) {
         throw new ValidationError([
             CHECKOUT_BREAKING_LOCATION_MESSAGE,
             "Deleting all delivery locations would remove every active city and zone.",

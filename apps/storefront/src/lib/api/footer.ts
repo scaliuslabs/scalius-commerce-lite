@@ -1,8 +1,8 @@
 // src/lib/api/footer.ts
 
-import { getConfiguredSdkClient } from "./client";
+import { getConfiguredSdkClient } from "./transport";
 import type { FooterData } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { getApiV1Footer } from "@scalius/api-client/sdk";
 

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getEmailProviderReadiness: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
-  readEmailSetting: vi.fn(),
+  readEmailDocument: vi.fn(),
   firstWhatsAppPlaceholderConfigError: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   getSmsProviderReadiness: vi.fn(),
@@ -28,6 +28,10 @@ const mocks = vi.hoisted(() => ({
   getActivePaymentMethods: vi.fn(),
   safeBatch: vi.fn(),
   prepareSettingAggregateStatements: vi.fn(),
+  prepareEmailDocumentWrite: vi.fn(),
+  prepareWhatsAppDocumentWrite: vi.fn(),
+  prepareFirebaseDocumentWrite: vi.fn(),
+  readFirebaseSettings: vi.fn(),
   buildClearNotificationProviderBlocksStatement: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
 }));
@@ -39,8 +43,11 @@ vi.mock("@scalius/core/modules/settings", () => ({
 vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
   getCheckoutReadiness: mocks.getCheckoutReadiness,
   getCustomerSignInReadiness: mocks.getCustomerSignInReadiness,
-  CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE:
-    "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
+  CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: {
+    code: "unusable_customer_sign_in",
+    message:
+      "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
+  },
 }));
 
 vi.mock("@scalius/core/modules/settings/checkout-flow-admin.service", async (importOriginal) => {
@@ -75,12 +82,17 @@ vi.mock("@scalius/core/modules/settings/settings-write", () => ({
 vi.mock("@scalius/core/integrations/email", () => ({
   getEmailProviderReadiness: mocks.getEmailProviderReadiness,
   getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
-  readEmailSetting: mocks.readEmailSetting,
+  emailSettingsDocument: {
+    invalidationGroups: ["checkout"],
+    prepareWrite: mocks.prepareEmailDocumentWrite,
+    read: mocks.readEmailDocument,
+  },
 }));
 
 vi.mock("@scalius/core/integrations/whatsapp", () => ({
   firstWhatsAppPlaceholderConfigError: mocks.firstWhatsAppPlaceholderConfigError,
   getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
+  whatsappAccessTokenDocument: { prepareWrite: mocks.prepareWhatsAppDocumentWrite },
   WHATSAPP_ACCESS_TOKEN_KEY: "access_token",
   WHATSAPP_SETTINGS_CATEGORY: "whatsapp",
 }));
@@ -91,6 +103,10 @@ vi.mock("@scalius/core/integrations/sms", () => ({
 
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
   normalizeFirebaseServiceAccountJson: mocks.normalizeFirebaseServiceAccountJson,
+  readFirebaseSettings: mocks.readFirebaseSettings,
+  firebaseSettingsDocument: {
+    prepareWrite: mocks.prepareFirebaseDocumentWrite,
+  },
 }));
 
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
@@ -149,6 +165,26 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.safeBatch.mockResolvedValue([]);
   mocks.prepareSettingAggregateStatements.mockResolvedValue([]);
+  mocks.prepareWhatsAppDocumentWrite.mockResolvedValue({
+    value: { accessToken: "" },
+    statements: [{ statement: "whatsapp-access-token" }],
+    commitCache: async () => undefined,
+  });
+  mocks.prepareEmailDocumentWrite.mockResolvedValue({
+    value: {},
+    statements: [{ statement: "email-document" }],
+    commitCache: async () => undefined,
+  });
+  mocks.prepareFirebaseDocumentWrite.mockResolvedValue({
+    value: {},
+    statements: [{ statement: "firebase-document" }],
+    commitCache: async () => undefined,
+  });
+  mocks.readFirebaseSettings.mockResolvedValue({
+    serviceAccountStored: false,
+    serviceAccountJson: undefined,
+    publicConfig: {},
+  });
   mocks.buildClearNotificationProviderBlocksStatement.mockReturnValue({
     statement: "clear-provider-health",
   });
@@ -163,17 +199,60 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
     cloudflareBindingConfigured: true,
     resendCredentialError: null,
   });
-  mocks.getEmailProviderReadiness.mockResolvedValue({
-    configured: true,
+  // The email save handler judges the settings a save would leave behind by
+  // handing them to this same reader, so the fake honours an explicit
+  // `settings` override instead of always answering "ready".
+  mocks.getEmailProviderReadiness.mockImplementation(async (context?: {
+    settings?: {
+      provider: string;
+      sender: string;
+      senderConfigured: boolean;
+      hasResendApiKey: boolean;
+      cloudflareBindingConfigured: boolean;
+      localMailpitUrl?: string | null;
+    };
+  }) => {
+    const settings = context?.settings;
+    if (!settings) {
+      return {
+        status: "ready",
+        issues: [],
+        provider: "cloudflare",
+        sender: "orders@example.com",
+        senderConfigured: true,
+        cloudflareBindingConfigured: true,
+        resendConfigured: false,
+      };
+    }
+    const providerConfigured = Boolean(settings.localMailpitUrl)
+      || (settings.provider === "resend"
+        ? settings.hasResendApiKey
+        : settings.cloudflareBindingConfigured);
+    const issues = [
+      ...(settings.senderConfigured ? [] : [{
+        code: "missing_email_sender",
+        message: "Sender email is required before enabling email delivery.",
+      }]),
+      ...(providerConfigured ? [] : [{
+        code: "missing_email_provider_credentials",
+        message: "The selected email provider is not configured.",
+      }]),
+    ];
+    return {
+      status: issues.length === 0 ? "ready" : "incomplete",
+      issues,
+      provider: settings.provider,
+      sender: settings.sender,
+      senderConfigured: settings.senderConfigured,
+      cloudflareBindingConfigured: settings.cloudflareBindingConfigured,
+      resendConfigured: settings.hasResendApiKey,
+    };
+  });
+  mocks.readEmailDocument.mockResolvedValue({
     provider: "cloudflare",
     sender: "orders@example.com",
-    senderConfigured: true,
-    cloudflareBindingConfigured: true,
-    resendConfigured: false,
-    error: null,
-    blockers: [],
+    resendApiKey: "",
   });
-  mocks.readEmailSetting.mockResolvedValue("orders@example.com");
   mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
     accessToken: undefined,
     accessTokenConfigured: false,
@@ -182,13 +261,13 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
     accessTokenSource: "none",
   });
   mocks.getSmsProviderReadiness.mockResolvedValue({
+    status: "ready",
+    issues: [],
     activeProvider: "bdbulksms",
-    configured: true,
-    error: null,
   });
   mocks.normalizeFirebaseServiceAccountJson.mockImplementation((value: string) => value.trim());
   mocks.getCheckoutReadiness.mockResolvedValue({
-    ready: true,
+    status: "ready",
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
     customerSignInRequired: false,
@@ -339,12 +418,15 @@ describe("system settings cache invalidation", () => {
 
   it("returns checkout readiness from the shared checker", async () => {
     mocks.getCheckoutReadiness.mockResolvedValueOnce({
-      ready: false,
+      status: "incomplete",
       hasActiveShippingMethod: true,
       hasActiveDeliveryHierarchy: false,
       customerSignInRequired: false,
       hasUsableCustomerSignIn: true,
-      issues: ["Add at least one active city with an active zone before checkout can accept orders."],
+      issues: [{
+        code: "missing_active_delivery_location",
+        message: "Add at least one active city with an active zone before checkout can accept orders.",
+      }],
     });
     const { app, env, executionCtx } = createTestApp();
 
@@ -352,12 +434,12 @@ describe("system settings cache invalidation", () => {
     const body = await response.json() as {
       success: boolean;
       data: {
-        ready: boolean;
+        status: string;
         hasActiveShippingMethod: boolean;
         hasActiveDeliveryHierarchy: boolean;
         customerSignInRequired: boolean;
         hasUsableCustomerSignIn: boolean;
-        issues: string[];
+        issues: Array<{ code: string; message: string }>;
       };
     };
 
@@ -365,21 +447,25 @@ describe("system settings cache invalidation", () => {
     expect(body).toMatchObject({
       success: true,
       data: {
-        ready: false,
+        status: "incomplete",
         hasActiveShippingMethod: true,
         hasActiveDeliveryHierarchy: false,
       },
     });
-    expect(body.data.issues).toEqual([
-      "Add at least one active city with an active zone before checkout can accept orders.",
-    ]);
+    expect(body.data.issues).toEqual([{
+      code: "missing_active_delivery_location",
+      message: "Add at least one active city with an active zone before checkout can accept orders.",
+    }]);
   });
 
   it("rejects SMS customer auth policy before writes when no SMS provider is ready", async () => {
     mocks.getSmsProviderReadiness.mockResolvedValueOnce({
+      status: "incomplete",
+      issues: [{
+        code: "missing_sms_provider_credentials",
+        message: "No active SMS provider selected",
+      }],
       activeProvider: null,
-      configured: false,
-      error: "No active SMS provider selected",
     });
     const { app, env, executionCtx } = createTestApp();
 
@@ -400,17 +486,22 @@ describe("system settings cache invalidation", () => {
 
   it("rejects email customer auth policy before writes when no email provider is ready", async () => {
     mocks.getEmailProviderReadiness.mockResolvedValueOnce({
-      configured: false,
+      status: "incomplete",
+      issues: [
+        {
+          code: "missing_email_sender",
+          message: "Sender email is required before enabling Email OTP.",
+        },
+        {
+          code: "missing_email_provider_credentials",
+          message: "Configure Cloudflare Email or save a Resend API key before enabling Email OTP.",
+        },
+      ],
       provider: "cloudflare",
       sender: "noreply@example.com",
       senderConfigured: false,
       cloudflareBindingConfigured: false,
       resendConfigured: false,
-      error: "Sender email is required before enabling Email OTP.",
-      blockers: [
-        "Sender email is required before enabling Email OTP.",
-        "Configure Cloudflare Email or save a Resend API key before enabling Email OTP.",
-      ],
     });
     const { app, env, executionCtx } = createTestApp();
 
@@ -646,21 +737,20 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
+    expect(mocks.prepareWhatsAppDocumentWrite).toHaveBeenCalledWith(
       expect.anything(),
-      [{
-        category: "whatsapp",
-        key: "access_token",
-        value: "EAAG_meta_token",
-        encrypted: true,
-      }],
-      "credential-key",
+      { accessToken: "EAAG_meta_token" },
+      { encryptionKey: "credential-key" },
     );
     expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "whatsapp" },
     );
-    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    // The credential statement commits in the same batch as the auth policy.
+    expect(mocks.safeBatch).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.arrayContaining([{ statement: "whatsapp-access-token" }]),
+    );
   });
 
   it("rejects clearing WhatsApp credentials while the saved sign-in policy still uses WhatsApp", async () => {
@@ -901,23 +991,28 @@ describe("system settings cache invalidation", () => {
         senderConfigured: true,
         cloudflareBindingConfigured: true,
         resendConfigured: false,
-        ready: true,
-        readinessError: null,
+        readiness: { status: "ready", issues: [] },
       },
     });
   });
 
   it("bounds email sender and readiness errors below the operation ceiling", async () => {
-    mocks.readEmailSetting.mockResolvedValueOnce("s".repeat(100_000));
+    mocks.readEmailDocument.mockResolvedValueOnce({
+      provider: "cloudflare",
+      sender: "s".repeat(100_000),
+      resendApiKey: "",
+    });
     mocks.getEmailProviderReadiness.mockResolvedValueOnce({
-      configured: false,
+      status: "incomplete",
+      issues: [{
+        code: "missing_email_provider_credentials",
+        message: "e".repeat(100_000),
+      }],
       provider: "resend",
       sender: "",
       senderConfigured: false,
       cloudflareBindingConfigured: false,
       resendConfigured: true,
-      error: "e".repeat(100_000),
-      blockers: [],
     });
     mocks.getEmailRuntimeSettings.mockResolvedValueOnce({
       provider: "resend",
@@ -938,7 +1033,7 @@ describe("system settings cache invalidation", () => {
     expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
     expect(body.data.apiKey).toBe("••••••••••••");
     expect(body.data.sender).toHaveLength(320);
-    expect(body.data.readinessError).toHaveLength(1_000);
+    expect(body.data.readiness.issues[0].message).toHaveLength(1_000);
     expect(responseText).not.toContain("raw-resend-key-must-not-leak");
   });
 
@@ -952,13 +1047,10 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
+    expect(mocks.prepareEmailDocumentWrite).toHaveBeenCalledWith(
       expect.anything(),
-      [
-        { category: "email", key: "email_provider", value: "cloudflare" },
-        { category: "email", key: "email_sender", value: "orders@example.com" },
-      ],
-      undefined,
+      { provider: "cloudflare", sender: "orders@example.com" },
+      { encryptionKey: "credential-key" },
     );
     expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
@@ -981,14 +1073,10 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
+    expect(mocks.prepareEmailDocumentWrite).toHaveBeenCalledWith(
       expect.anything(),
-      [
-        { category: "email", key: "email_provider", value: "resend" },
-        { category: "email", key: "resend_api_key", value: "re_secret_key", encrypted: true },
-        { category: "email", key: "email_sender", value: "orders@example.com" },
-      ],
-      "credential-key",
+      { provider: "resend", sender: "orders@example.com", resendApiKey: "re_secret_key" },
+      { encryptionKey: "credential-key" },
     );
     expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
@@ -1044,8 +1132,6 @@ describe("system settings cache invalidation", () => {
       project_id: "scalius-test",
     });
 
-    const statements = [{ statement: "credential" }, { statement: "public-config" }];
-    mocks.prepareSettingAggregateStatements.mockResolvedValueOnce(statements);
     const response = await requestJson(app, env, executionCtx, "/firebase", {
       serviceAccount,
       publicConfig: { projectId: "scalius-test" },
@@ -1053,20 +1139,17 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.normalizeFirebaseServiceAccountJson).toHaveBeenCalledWith(serviceAccount);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(
+    expect(mocks.prepareFirebaseDocumentWrite).toHaveBeenCalledWith(
       expect.anything(),
-      [
-        { category: "firebase", key: "service_account", value: serviceAccount, encrypted: true },
-        { category: "firebase", key: "public_config", value: '{"projectId":"scalius-test"}', type: "json" },
-      ],
-      "credential-key",
+      { serviceAccount, publicConfig: { projectId: "scalius-test" } },
+      { encryptionKey: "credential-key" },
     );
     expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "push" },
     );
     expect(mocks.safeBatch).toHaveBeenCalledExactlyOnceWith(expect.anything(), [
-      { statement: "credential" }, { statement: "public-config" }, { statement: "clear-provider-health" },
+      { statement: "firebase-document" }, { statement: "clear-provider-health" },
     ]);
     expect(mocks.clearNotificationProviderBlocks).not.toHaveBeenCalled();
   });
@@ -1077,10 +1160,12 @@ describe("system settings cache invalidation", () => {
       private_key: "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----\n",
       project_id: "scalius-test",
     });
-    const { app, env, executionCtx } = createTestApp([
-      { key: "service_account", value: privateServiceAccount },
-      { key: "public_config", value: JSON.stringify({ projectId: "scalius-test" }) },
-    ]);
+    const { app, env, executionCtx } = createTestApp();
+    mocks.readFirebaseSettings.mockResolvedValue({
+      serviceAccountStored: true,
+      serviceAccountJson: privateServiceAccount,
+      publicConfig: { projectId: "scalius-test" },
+    });
 
     const response = await requestGet(app, env, executionCtx, "/firebase");
     const text = await response.text();
@@ -1105,9 +1190,11 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.normalizeFirebaseServiceAccountJson).not.toHaveBeenCalled();
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
-      { category: "firebase", key: "public_config", value: '{"projectId":"scalius-test"}', type: "json" },
-    ], undefined);
+    expect(mocks.prepareFirebaseDocumentWrite).toHaveBeenCalledWith(
+      expect.anything(),
+      { publicConfig: { projectId: "scalius-test" } },
+      { encryptionKey: "credential-key" },
+    );
     expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
   });
 
@@ -1119,10 +1206,11 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
-      { category: "firebase", key: "service_account", value: "", encrypted: false },
-      { category: "firebase", key: "public_config", value: "{}", type: "json" },
-    ], undefined);
+    expect(mocks.prepareFirebaseDocumentWrite).toHaveBeenCalledWith(
+      expect.anything(),
+      { serviceAccount: "", publicConfig: {} },
+      { encryptionKey: undefined },
+    );
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
     expect(mocks.buildClearNotificationProviderBlocksStatement).toHaveBeenCalledWith(expect.anything(), { channel: "push" });
     expect(mocks.clearNotificationProviderBlocks).not.toHaveBeenCalled();
@@ -1131,20 +1219,22 @@ describe("system settings cache invalidation", () => {
   it("preserves omitted Firebase credentials and skips a wholly empty update", async () => {
     const { app, env, executionCtx } = createTestApp();
     expect((await requestJson(app, env, executionCtx, "/firebase", {})).status).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.prepareFirebaseDocumentWrite).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
 
     expect((await requestJson(app, env, executionCtx, "/firebase", { publicConfig: {} })).status).toBe(200);
-    expect(mocks.prepareSettingAggregateStatements).toHaveBeenCalledWith(expect.anything(), [
-      { category: "firebase", key: "public_config", value: "{}", type: "json" },
-    ], undefined);
+    expect(mocks.prepareFirebaseDocumentWrite).toHaveBeenCalledWith(
+      expect.anything(),
+      { publicConfig: {} },
+      { encryptionKey: "credential-key" },
+    );
     expect(mocks.buildClearNotificationProviderBlocksStatement).not.toHaveBeenCalled();
   });
 
   it.each(["preparation", "batch"])("reports Firebase %s failure without separate writes or health cleanup", async (stage) => {
     const { app, db, env, executionCtx } = createTestApp();
-    if (stage === "preparation") mocks.prepareSettingAggregateStatements.mockRejectedValueOnce(new Error("encryption failed"));
+    if (stage === "preparation") mocks.prepareFirebaseDocumentWrite.mockRejectedValueOnce(new Error("encryption failed"));
     else mocks.safeBatch.mockRejectedValueOnce(new Error("transaction failed"));
 
     const response = await requestJson(app, env, executionCtx, "/firebase", {
@@ -1174,7 +1264,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(503);
-    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.prepareFirebaseDocumentWrite).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
@@ -1190,7 +1280,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
-    expect(mocks.prepareSettingAggregateStatements).not.toHaveBeenCalled();
+    expect(mocks.prepareFirebaseDocumentWrite).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 });

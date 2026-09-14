@@ -3,7 +3,7 @@ import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   availableQuantityForVariant,

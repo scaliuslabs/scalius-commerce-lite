@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 
 const PAYMENT_RECOVERY_TIMEOUT_MS = 8_000;
 const ACCEPTED_RESULT_CODE = "PAYMENT_RECOVERY_CODE_REQUEST_ACCEPTED";
@@ -48,8 +48,8 @@ export const POST: APIRoute = async ({ request }) => {
       return jsonResponse({ success: true, resultCode: ACCEPTED_RESULT_CODE });
     }
 
-    const response = await fetchWithRetry(
-      createApiUrl("/orders/payment-recovery/send-otp"),
+    const response = await apiFetch(
+      "/orders/payment-recovery/send-otp",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,9 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
         }),
         cache: "no-store",
       },
-      0,
-      PAYMENT_RECOVERY_TIMEOUT_MS,
-      false,
+      { retries: 0, timeout: PAYMENT_RECOVERY_TIMEOUT_MS, auth: false },
     );
 
     const json = await response.json().catch(() => ({}) as Record<string, unknown>);

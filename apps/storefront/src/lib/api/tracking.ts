@@ -1,6 +1,6 @@
 // src/lib/api/tracking.ts
 
-import { createApiUrl, fetchWithRetry } from "./client";
+import { apiFetch } from "./transport";
 
 /**
  * Defines the payload structure for sending a server-side event
@@ -61,8 +61,8 @@ export interface MetaCapiEventPayload {
  */
 export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<void> {
   try {
-    await fetchWithRetry(
-      createApiUrl("/meta/events"),
+    await apiFetch(
+      "/meta/events",
       {
         method: "POST",
         headers: {
@@ -73,10 +73,7 @@ export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<
         cache: "no-store",
         keepalive: true,
       },
-      0,
-      2500,
-      false,
-      false,
+      { retries: 0, timeout: 2500, auth: false, logTerminalFailure: false },
     );
   } catch {
     // Buyer telemetry is best-effort. The API circuit breaker owns provider

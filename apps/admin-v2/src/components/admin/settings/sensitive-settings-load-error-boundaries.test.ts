@@ -37,17 +37,17 @@ describe("sensitive settings load-error boundaries", () => {
       {
         source: readFileSync(EMAIL_SOURCE, "utf8"),
         title: "Email settings unavailable",
-        saveLabel: "Save changes",
+        saveLabel: 'saveLabel="Save email settings"',
       },
       {
         source: readFileSync(FIREBASE_SOURCE, "utf8"),
         title: "Firebase settings unavailable",
-        saveLabel: "Save changes",
+        saveLabel: 'saveLabel="Save push settings"',
       },
       {
         source: readFileSync(AUTH_SOURCE, "utf8"),
         title: "Auth settings unavailable",
-        saveLabel: "Save changes",
+        saveLabel: 'saveLabel="Save sign-in settings"',
       },
     ];
 

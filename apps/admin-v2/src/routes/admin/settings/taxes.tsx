@@ -1,12 +1,13 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { Suspense, useCallback } from "react";
 
-import { TaxSettingsPage } from "~/components/admin/taxes";
+import { TaxSettingsPage, TaxSettingsPageSkeleton } from "~/components/admin/taxes";
 import {
   normalizeTaxClassificationRouteState,
   type TaxClassificationRouteState,
 } from "~/components/admin/taxes/tax-classification-route-state";
 import {
+  normalizeTaxWorkspacePreview,
   normalizeTaxWorkspaceSection,
   type TaxWorkspaceSection,
 } from "~/components/admin/taxes/tax-workspace-sections";
@@ -27,10 +28,29 @@ export async function requireFreshTaxesRouteAuthority() {
   return context;
 }
 
-export function validateTaxesSearch(search: Record<string, unknown>) {
+/**
+ * Route search shape. Declared as a type alias (not an interface) so it keeps
+ * an implicit index signature and can still be read as a plain record by the
+ * classification normalizer.
+ */
+export type TaxesRouteSearch = {
+  section: TaxWorkspaceSection;
+  /** The calculation preview sheet is open. */
+  preview?: true;
+  kind?: "variant";
+  query?: string;
+  page?: number;
+};
+
+export function validateTaxesSearch(
+  search: Record<string, unknown>,
+): TaxesRouteSearch {
   const classification = normalizeTaxClassificationRouteState(search);
   return {
+    // Retired `?section=` values (policy, preview) resolve onto the redesigned
+    // tabs so saved links keep landing on the same capability.
     section: normalizeTaxWorkspaceSection(search.section),
+    ...(normalizeTaxWorkspacePreview(search) ? { preview: true } : {}),
     ...(classification.kind === "variant" ? { kind: classification.kind } : {}),
     ...(classification.search ? { query: classification.search } : {}),
     ...(classification.page > 1 ? { page: classification.page } : {}),
@@ -52,6 +72,7 @@ function TaxesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const classificationRouteState = normalizeTaxClassificationRouteState(search);
+  const previewOpen = Boolean(search.preview);
   const rememberWorkspaceScroll = useWorkspaceScrollMemory(
     `${search.section}:${classificationRouteState.kind}:${classificationRouteState.search}:${classificationRouteState.page}`,
   );
@@ -62,6 +83,19 @@ function TaxesPage() {
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,
+          preview: undefined,
+        })) as never,
+      });
+    },
+    [navigate],
+  );
+  const handlePreviewOpenChange = useCallback(
+    (open: boolean) => {
+      void navigate({
+        resetScroll: false,
+        search: ((previous: Record<string, unknown>) => ({
+          ...previous,
+          preview: open ? true : undefined,
         })) as never,
       });
     },
@@ -89,12 +123,16 @@ function TaxesPage() {
       onPointerDownCapture={rememberWorkspaceScroll}
       onKeyDownCapture={rememberWorkspaceScroll}
     >
-      <TaxSettingsPage
-        section={search.section}
-        onSectionChange={handleSectionChange}
-        classificationRouteState={classificationRouteState}
-        onClassificationRouteStateChange={handleClassificationRouteStateChange}
-      />
+      <Suspense fallback={<TaxSettingsPageSkeleton />}>
+        <TaxSettingsPage
+          section={search.section}
+          onSectionChange={handleSectionChange}
+          previewOpen={previewOpen}
+          onPreviewOpenChange={handlePreviewOpenChange}
+          classificationRouteState={classificationRouteState}
+          onClassificationRouteStateChange={handleClassificationRouteStateChange}
+        />
+      </Suspense>
     </div>
   );
 }

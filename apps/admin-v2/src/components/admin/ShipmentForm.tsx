@@ -73,7 +73,7 @@ const ShipmentForm: FC<ShipmentFormProps> = ({
         getProviderReadinessMessage(
           selectedReadiness ?? {
             canCreateShipment: false,
-            blockers: [],
+            issues: [],
           },
         ),
       );

@@ -1,14 +1,15 @@
 // src/lib/api/checkout.ts
 // Fetches checkout configuration from the backend (enabled payment gateways).
 
-import { getConfiguredSdkClient } from "./client";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getConfiguredSdkClient } from "./transport";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import { getApiV1CheckoutConfig } from "@scalius/api-client/sdk";
 import type {
   CustomerAuthMethod,
   CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import type { Readiness } from "@scalius/shared/readiness";
 
 export interface GatewayConfig {
   id: "stripe" | "sslcommerz" | "polar" | "cod";
@@ -41,11 +42,9 @@ export interface CheckoutConfig {
     symbol: string;
     decimalPlaces: number;
   };
-  checkoutReadiness?: {
-    ready: boolean;
+  checkoutReadiness?: Readiness & {
     hasActiveShippingMethod: boolean;
     hasActiveDeliveryHierarchy: boolean;
-    issues: string[];
   };
   unavailable?: boolean;
   unavailableMessage?: string;

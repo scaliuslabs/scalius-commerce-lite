@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";

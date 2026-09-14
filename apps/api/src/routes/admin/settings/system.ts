@@ -2,18 +2,26 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { safeBatch } from "@scalius/database/client";
 import { settings, siteSettings } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import { getEmailProviderReadiness, getEmailRuntimeSettings, readEmailSetting } from "@scalius/core/integrations/email";
+import {
+    emailSettingsDocument,
+    getEmailProviderReadiness,
+    getEmailRuntimeSettings,
+    type EmailSettingsDocument,
+} from "@scalius/core/integrations/email";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
+    firebaseSettingsDocument,
     normalizeFirebaseServiceAccountJson,
+    readFirebaseSettings,
+    type FirebaseSettingsDocument,
 } from "@scalius/core/integrations/firebase/settings";
 import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
+    whatsappAccessTokenDocument,
     WHATSAPP_ACCESS_TOKEN_KEY,
     WHATSAPP_SETTINGS_CATEGORY,
 } from "@scalius/core/integrations/whatsapp";
@@ -39,6 +47,7 @@ import {
     saveCheckoutFlowSettingsDocument,
 } from "@scalius/core/modules/settings/checkout-flow-admin.service";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
+import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
 import {
     prepareSettingAggregateStatements,
     type SettingAggregateWrite,
@@ -70,10 +79,12 @@ import {
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
+import { readinessSchema } from "../../../schemas/readiness";
+import { isReady, type Readiness } from "@scalius/shared/readiness";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
-const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 const MERCHANT_CSP_INPUT_MAX_LENGTH = 65_536;
 const MERCHANT_CSP_ORIGIN_MAX_LENGTH = 512;
 const MERCHANT_CSP_SOURCE_MAX_COUNT = 100;
@@ -203,13 +214,26 @@ const customerAuthPolicySchema = z.object({
     defaultOtpChannel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
 });
 
-const checkoutReadinessResponseSchema = z.object({
-    ready: z.boolean(),
+/**
+ * A provider message is merchant copy from a third party; bound it so one
+ * pathological string cannot push the response past the operation ceiling.
+ */
+function boundedReadiness(value: Readiness): Readiness {
+    return {
+        status: value.status,
+        issues: value.issues.map((issue) => ({
+            ...issue,
+            message: issue.message.slice(0, PROVIDER_STATUS_ERROR_MAX_LENGTH),
+            ...(issue.fix ? { fix: issue.fix.slice(0, PROVIDER_STATUS_ERROR_MAX_LENGTH) } : {}),
+        })),
+    };
+}
+
+const checkoutReadinessResponseSchema = readinessSchema.extend({
     hasActiveShippingMethod: z.boolean(),
     hasActiveDeliveryHierarchy: z.boolean(),
     customerSignInRequired: z.boolean(),
     hasUsableCustomerSignIn: z.boolean(),
-    issues: z.array(z.string()),
 });
 
 function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
@@ -327,7 +351,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
             customerSignInRequiredOverride: true,
         });
         if (!signInReadiness.hasUsableCustomerSignIn) {
-            throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE);
+            throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE.message);
         }
     }
     const [activePaymentMethods, currencySettings] = await Promise.all([
@@ -516,18 +540,18 @@ app.openapi(saveAuthRoute, async (c) => {
                 env: c.env as Record<string, unknown>,
                 encryptionKey: credentialEncryptionKey,
             });
-            if (!emailReadiness.configured) {
+            if (!isReady(emailReadiness)) {
                 throw new ValidationError(
-                    `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.error ?? ""}`.trim(),
+                    `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.issues[0]?.message ?? ""}`.trim(),
                 );
             }
         }
 
         if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
             const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
-            if (!smsReadiness.configured) {
+            if (!isReady(smsReadiness)) {
                 throw new ValidationError(
-                    `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.error ?? ""}`.trim(),
+                    `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.issues[0]?.message ?? ""}`.trim(),
                 );
             }
         }
@@ -569,24 +593,22 @@ app.openapi(saveAuthRoute, async (c) => {
         const whatsappAccessTokenChanged =
             typeof body.whatsappAccessToken === "string"
             && body.whatsappAccessToken !== MASKED;
-        if (whatsappAccessTokenChanged && incomingWhatsAppAccessToken) {
-            settingWrites.push({
-                category: WHATSAPP_SETTINGS_CATEGORY,
-                key: WHATSAPP_ACCESS_TOKEN_KEY,
-                value: incomingWhatsAppAccessToken,
-                encrypted: true,
-            });
-        }
         if (whatsappAccessTokenChanged) {
             updates.whatsappAccessToken = null;
         }
 
-        const statements = await prepareSettingAggregateStatements(
-            db,
-            settingWrites,
-            credentialWriteKey,
-        );
-        if (whatsappAccessTokenChanged && !incomingWhatsAppAccessToken) {
+        const statements = await prepareSettingAggregateStatements(db, settingWrites, undefined);
+        if (whatsappAccessTokenChanged && incomingWhatsAppAccessToken) {
+            // The document owns WhatsApp credential storage and encryption; the
+            // statement joins this batch so the policy and the token commit
+            // together.
+            const prepared = await whatsappAccessTokenDocument.prepareWrite(
+                db,
+                { accessToken: incomingWhatsAppAccessToken },
+                { encryptionKey: credentialWriteKey },
+            );
+            statements.push(...prepared.statements);
+        } else if (whatsappAccessTokenChanged) {
             statements.push(db.delete(settings).where(and(
                 eq(settings.category, WHATSAPP_SETTINGS_CATEGORY),
                 eq(settings.key, WHATSAPP_ACCESS_TOKEN_KEY),
@@ -630,19 +652,18 @@ const getSecurityRoute = createRoute({
 });
 
 app.openapi(getSecurityRoute, async (c) => {
-    const db = c.get("db");
-        const row = await db
-            .select({ value: settings.value })
-            .from(settings)
-            .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
-            .get();
+    const stored = await securitySettingsDocument.read(
+        c.get("db"),
+        {},
+        { skipCache: true },
+    );
 
-        return ok(c, {
-            cspAllowedDomains: normalizeStoredMerchantCspSources(
-                row?.value || "",
-                c.env as Record<string, unknown>,
-            ),
-        });
+    return ok(c, {
+        cspAllowedDomains: normalizeStoredMerchantCspSources(
+            stored.cspAllowedDomains,
+            c.env as Record<string, unknown>,
+        ),
+    });
 });
 
 const getSecurityRuntimeSourcesRoute = createRoute({
@@ -699,31 +720,19 @@ app.openapi(saveSecurityRoute, async (c) => {
     const { cspAllowedDomains } = c.req.valid("json");
 
         if (typeof cspAllowedDomains === "string") {
-            const normalizedCspAllowedDomains = normalizeStoredMerchantCspSources(
-                cspAllowedDomains,
-                c.env as Record<string, unknown>,
-            );
-            await db
-                .insert(settings)
-                .values({
-                    id: `set_${nanoid(10)}`,
-                    key: "csp_allowed_domains",
-                    value: normalizedCspAllowedDomains,
-                    type: "string",
-                    category: "security"
-                })
-                .onConflictDoUpdate({
-                    target: [settings.key, settings.category],
-                    set: { value: normalizedCspAllowedDomains, updatedAt: sql`(unixepoch())` }
-                });
+            const saved = await securitySettingsDocument.write(db, {
+                cspAllowedDomains: normalizeStoredMerchantCspSources(
+                    cspAllowedDomains,
+                    c.env as Record<string, unknown>,
+                ),
+            });
 
+            // The KV mirror is the storefront CSP handler's and the Partytown
+            // proxy's read path, so it is refreshed outside the response path.
             const env = c.env as Env | undefined;
             if (env?.CACHE) {
-                const cacheWrite = env.CACHE
-                    .put("security:csp_allowed_domains", normalizedCspAllowedDomains)
-                    .catch((error) => {
-                        console.error("[Settings] Failed to cache CSP allowed domains:", error);
-                    });
+                const cacheWrite = securitySettingsDocument
+                    .writeCached({ kv: env.CACHE }, saved);
 
                 const executionCtx = getOptionalExecutionContext(c);
                 if (executionCtx) {
@@ -732,7 +741,10 @@ app.openapi(saveSecurityRoute, async (c) => {
                     void cacheWrite;
                 }
             }
-            await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+            await invalidateApiAndScheduleStorefrontGroups(
+                securitySettingsDocument.invalidationGroups,
+                c,
+            );
         }
 
         return ok(c, { message: "Security settings saved successfully" });
@@ -756,8 +768,7 @@ const getEmailRoute = createRoute({
             senderConfigured: z.boolean(),
             cloudflareBindingConfigured: z.boolean(),
             resendConfigured: z.boolean(),
-            ready: z.boolean(),
-            readinessError: z.string().max(PROVIDER_STATUS_ERROR_MAX_LENGTH).nullable(),
+            readiness: readinessSchema,
         })) } } },
         ...errorResponses,
     }
@@ -776,20 +787,16 @@ app.openapi(getEmailRoute, async (c) => {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
             settings: emailSettings,
         });
-        const sender = await readEmailSetting(db, "email_sender");
+        const { sender } = await emailSettingsDocument.read(db);
 
         return ok(c, {
             provider: emailSettings.provider,
             apiKey: emailSettings.hasResendApiKey ? MASKED : "",
-            sender: (sender || "").slice(0, EMAIL_SENDER_MAX_LENGTH),
+            sender: sender.slice(0, EMAIL_SENDER_MAX_LENGTH),
             senderConfigured: emailReadiness.senderConfigured,
             cloudflareBindingConfigured: emailSettings.cloudflareBindingConfigured,
             resendConfigured: emailSettings.hasResendApiKey,
-            ready: emailReadiness.configured,
-            readinessError:
-                typeof emailReadiness.error === "string"
-                    ? emailReadiness.error.slice(0, PROVIDER_STATUS_ERROR_MAX_LENGTH)
-                    : null,
+            readiness: boundedReadiness(emailReadiness),
         });
 });
 
@@ -819,7 +826,7 @@ const saveEmailRoute = createRoute({
 app.openapi(saveEmailRoute, async (c) => {
     const db = c.get("db");
         const { apiKey, sender, provider } = c.req.valid("json");
-        const writes: SettingAggregateWrite[] = [];
+        const patch: Partial<EmailSettingsDocument> = {};
         const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const [currentEmailSettings, [currentSiteSettings], currentPolicyRow] = await Promise.all([
             getEmailRuntimeSettings({
@@ -842,7 +849,7 @@ app.openapi(saveEmailRoute, async (c) => {
         ]);
 
         if (provider) {
-            writes.push({ category: "email", key: "email_provider", value: provider });
+            patch.provider = provider;
         }
 
         let credentialWriteKey: string | undefined;
@@ -850,58 +857,60 @@ app.openapi(saveEmailRoute, async (c) => {
             const trimmedApiKey = apiKey.trim();
             if (trimmedApiKey) {
                 credentialWriteKey = requireEncryptionKey(c.env as Record<string, unknown>);
-                writes.push({
-                    category: "email",
-                    key: "resend_api_key",
-                    value: trimmedApiKey,
-                    encrypted: true,
-                });
+                patch.resendApiKey = trimmedApiKey;
             } else {
-                writes.push({ category: "email", key: "resend_api_key", value: "" });
+                patch.resendApiKey = "";
             }
         }
 
         if (typeof sender === "string") {
-            writes.push({ category: "email", key: "email_sender", value: sender.trim() });
+            patch.sender = sender.trim();
         }
 
         const effectiveCustomerAuthPolicy = normalizeCustomerAuthPolicy(
             parseCustomerAuthPolicy(currentPolicyRow?.value),
             currentSiteSettings?.authVerificationMethod,
         );
-        if (writes.length > 0 && customerAuthPolicyUsesEmailProvider(effectiveCustomerAuthPolicy)) {
-            const nextProvider = provider ?? currentEmailSettings.provider;
-            const nextSenderConfigured = typeof sender === "string"
-                ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sender.trim())
-                : currentEmailSettings.senderConfigured;
-            const nextResendConfigured = typeof apiKey === "string" && apiKey !== MASKED
-                ? Boolean(apiKey.trim())
-                : currentEmailSettings.hasResendApiKey;
-            const nextProviderConfigured = Boolean(currentEmailSettings.localMailpitUrl)
-                || (nextProvider === "resend"
-                    ? nextResendConfigured
-                    : currentEmailSettings.cloudflareBindingConfigured);
-            if (!nextSenderConfigured || !nextProviderConfigured) {
+        const emailSettingsTouched = Object.keys(patch).length > 0;
+        if (emailSettingsTouched && customerAuthPolicyUsesEmailProvider(effectiveCustomerAuthPolicy)) {
+            // Judge the settings this save would leave behind with the one
+            // shared email readiness rule instead of re-deriving it here.
+            const nextResendApiKey = typeof apiKey === "string" && apiKey !== MASKED
+                ? (apiKey.trim() || null)
+                : currentEmailSettings.resendApiKey;
+            const nextSender = typeof sender === "string" ? sender.trim() : currentEmailSettings.sender;
+            const nextReadiness = await getEmailProviderReadiness({
+                env: c.env as Record<string, unknown>,
+                settings: {
+                    ...currentEmailSettings,
+                    provider: provider ?? currentEmailSettings.provider,
+                    sender: nextSender,
+                    senderConfigured: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextSender),
+                    resendApiKey: nextResendApiKey,
+                    hasResendApiKey: Boolean(nextResendApiKey),
+                },
+            });
+            if (!isReady(nextReadiness)) {
                 throw new ValidationError(
                     "Email OTP is enabled for customer sign-in. Keep a valid sender and the selected email provider configured, or remove Email OTP first.",
                 );
             }
         }
 
-        if (writes.length > 0) {
-            const statements = await prepareSettingAggregateStatements(
-                db,
-                writes,
-                credentialWriteKey,
-            );
-            statements.push(buildClearNotificationProviderBlocksStatement(
-                db,
-                { channel: "email" },
-            ));
-            await safeBatch(db, statements);
+        if (emailSettingsTouched) {
+            const prepared = await emailSettingsDocument.prepareWrite(db, patch, {
+                encryptionKey: credentialWriteKey ?? credentialEncryptionKey,
+            });
+            await safeBatch(db, [
+                ...prepared.statements,
+                buildClearNotificationProviderBlocksStatement(db, { channel: "email" }),
+            ]);
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
-            await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+            await invalidateApiAndScheduleStorefrontGroups(
+                emailSettingsDocument.invalidationGroups,
+                c,
+            );
         }
         return ok(c, { message: "Email settings saved successfully" });
 });
@@ -923,19 +932,15 @@ const getFirebaseRoute = createRoute({
 });
 
 app.openapi(getFirebaseRoute, async (c) => {
-    const db = c.get("db");
-        const results = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "firebase")).all();
+    const stored = await readFirebaseSettings(
+        c.get("db"),
+        getCredentialEncryptionKey(c.env as Record<string, unknown>),
+    );
 
-        const config: { serviceAccount: string; publicConfig: Record<string, unknown> } = { serviceAccount: "", publicConfig: {} };
-
-        results.forEach((row) => {
-            if (row.key === "service_account") config.serviceAccount = row.value ? MASKED : "";
-            if (row.key === "public_config") {
-                try { config.publicConfig = JSON.parse(row.value); } catch { config.publicConfig = {}; }
-            }
-        });
-
-        return ok(c, config);
+    return ok(c, {
+        serviceAccount: stored.serviceAccountStored ? MASKED : "",
+        publicConfig: stored.publicConfig,
+    });
 });
 
 const saveFirebaseSchema = z.object({
@@ -960,25 +965,26 @@ const saveFirebaseRoute = createRoute({
 app.openapi(saveFirebaseRoute, async (c) => {
     const db = c.get("db");
     const { serviceAccount, publicConfig } = c.req.valid("json");
-    const writes: SettingAggregateWrite[] = [];
+    const patch: Partial<FirebaseSettingsDocument> = {};
     let encryptionKey: string | undefined;
     const credentialChanged = typeof serviceAccount === "string" && serviceAccount !== MASKED;
 
     if (credentialChanged) {
         const normalizedServiceAccount = normalizeFirebaseServiceAccountJson(serviceAccount);
         if (normalizedServiceAccount) encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
-        writes.push({
-            category: "firebase", key: "service_account", value: normalizedServiceAccount,
-            encrypted: Boolean(normalizedServiceAccount),
-        });
+        patch.serviceAccount = normalizedServiceAccount;
     }
 
     if (publicConfig) {
-        writes.push({ category: "firebase", key: "public_config", value: JSON.stringify(publicConfig), type: "json" });
+        patch.publicConfig = publicConfig;
     }
 
-    if (writes.length > 0) {
-        const statements = await prepareSettingAggregateStatements(db, writes, encryptionKey);
+    if (Object.keys(patch).length > 0) {
+        const prepared = await firebaseSettingsDocument.prepareWrite(db, patch, {
+            encryptionKey: encryptionKey
+                ?? getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        });
+        const statements = [...prepared.statements];
         if (credentialChanged) {
             statements.push(buildClearNotificationProviderBlocksStatement(db, { channel: "push" }));
         }

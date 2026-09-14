@@ -214,7 +214,7 @@ describe("MCP split operation execution", () => {
       "dashboard.inventory_alerts.list": { data: { alerts: [] } },
       "dashboard.checkout.readiness_get": {
         data: {
-          ready: true,
+          status: "ready",
           hasActiveShippingMethod: true,
           hasActiveDeliveryHierarchy: true,
           customerSignInRequired: false,

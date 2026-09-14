@@ -80,19 +80,21 @@ describe("theme and account settings workspace", () => {
       "components/admin/account-settings/AccountSettingsContainer.tsx",
     );
 
-    expect(source).toContain("Personal");
-    expect(source).toContain("Store access");
-    expect(source).toContain('{ value: "profile" as const, label: "Profile"');
+    // Personal sections first, then the ones that administer the store — one
+    // strip, so the content keeps the full width of the settings page.
+    expect(source).toContain("personalSections");
+    expect(source).toContain("storeSections");
+    expect(source).toContain('{ value: "profile", label: "Profile"');
     expect(source).toContain('activeSection === "profile"');
     expect(source).toContain("Administrators");
     expect(source).toContain("Sessions");
     expect(source).toContain("AccountSessions");
-    expect(source).toContain('aria-label="Account settings"');
-    expect(source).toContain('aria-label="Account settings section"');
-    expect(source).toContain('aria-current={active ? "page" : undefined}');
+    expect(source).toContain("<PageTabs");
+    expect(source).toContain('label="Account settings section"');
+    expect(source).toContain('role="tabpanel"');
     expect(source).not.toContain("overflow-x-auto");
-    expect(source.match(/<SelectLabel/g)).toHaveLength(2);
-    expect(source).toContain("min-h-11");
+    expect(source).not.toContain("<SelectLabel");
+    expect(source).not.toContain('aria-label="Account settings"');
     expect(source).toContain("renderSection");
     expect(source).not.toContain("TabsList");
 

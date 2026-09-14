@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import type { CartValidationIssue } from "@/lib/api/orders";
-import { createApiUrl, fetchWithRetry } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/transport";
 import {
   normalizeTaxQuoteRequest,
   parseTaxQuoteEnvelope,
@@ -126,8 +126,8 @@ export const POST: APIRoute = async ({ request }) => {
     const customerSessionToken = getCustomerSessionTokenFromCookie(
       request.headers.get("cookie"),
     );
-    const upstream = await fetchWithRetry(
-      createApiUrl(TAX_QUOTE_API_PATH),
+    const upstream = await apiFetch(
+      TAX_QUOTE_API_PATH,
       {
         method: "POST",
         headers: {
@@ -140,9 +140,7 @@ export const POST: APIRoute = async ({ request }) => {
         body: JSON.stringify(normalizedRequest),
         cache: "no-store",
       },
-      0,
-      TAX_QUOTE_UPSTREAM_TIMEOUT_MS,
-      false,
+      { retries: 0, timeout: TAX_QUOTE_UPSTREAM_TIMEOUT_MS, auth: false },
     );
 
     if (!upstream.ok) {

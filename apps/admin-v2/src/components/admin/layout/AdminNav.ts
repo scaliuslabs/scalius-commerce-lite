@@ -10,26 +10,15 @@ import {
   Images,
   FileText,
   Settings,
-  SlidersHorizontal,
-  Truck,
-  Database,
   ShoppingBag,
   BadgePercent,
   BarChart3,
   Users,
-  ShieldAlert,
-  Bell,
-  UserCog,
-  Bot,
   Warehouse,
-  Palette,
   Package,
-  ReceiptText,
   Boxes,
   CircleDollarSign,
-  GalleryHorizontalEnd,
   LibraryBig,
-  ShoppingBasket,
   Megaphone,
   Menu,
   Newspaper,
@@ -262,85 +251,17 @@ export const allNavSections: NavSection[] = [
           },
         ],
       },
-      // Settings — collapsed by default
+      // Settings — one entry. Every settings destination (the general sections
+      // and the standalone settings routes) is listed by the settings area's
+      // own navigation, so the sidebar no longer carries a second, partial
+      // copy of the same menu. See settings/settings-navigation.ts.
+      //
+      // Deliberately ungated: the account section inside settings is available
+      // to every signed-in operator, exactly as the old "Account" sub-item was.
       {
         name: "Settings",
         href: "/admin/settings",
         icon: Settings,
-        subItems: [
-          {
-            name: "General",
-            href: "/admin/settings",
-            icon: SlidersHorizontal,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Theme",
-            href: "/admin/settings/theme",
-            icon: Palette,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Account",
-            href: "/admin/settings/account",
-            icon: UserCog,
-          },
-          {
-            name: "Agent Access",
-            href: "/admin/settings/agent-access",
-            icon: Bot,
-            requiredPermission: NAV_PERMISSIONS.AGENT_ACCESS_VIEW,
-          },
-          {
-            name: "Notifications",
-            href: "/admin/settings/notifications",
-            icon: Bell,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-          },
-          {
-            name: "Hero Sliders",
-            href: "/admin/settings/hero-sliders",
-            icon: GalleryHorizontalEnd,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_HEADER_EDIT,
-          },
-          {
-            name: "Checkout",
-            href: "/admin/settings/checkout",
-            icon: ShoppingBasket,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Taxes",
-            href: "/admin/settings/taxes",
-            icon: ReceiptText,
-            requiredPermission: NAV_PERMISSIONS.TAXES_VIEW,
-          },
-          {
-            name: "Delivery",
-            href: "/admin/settings/delivery-providers",
-            icon: Truck,
-            requiredPermission:
-              NAV_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-          },
-          {
-            name: "Fraud checks",
-            href: "/admin/settings/fraud-checker",
-            icon: ShieldAlert,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-          },
-          {
-            name: "Meta conversions",
-            href: "/admin/settings/meta-conversion",
-            icon: MetaCapiNavIcon,
-            requiredPermission: NAV_PERMISSIONS.ANALYTICS_VIEW,
-          },
-          {
-            name: "Cache",
-            href: "/admin/settings/cache",
-            icon: Database,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_CACHE_VIEW,
-          },
-        ],
       },
     ],
   },

@@ -9,7 +9,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1Search: mocks.getApiV1Search,
 }));
 
-vi.mock("./client", () => ({
+vi.mock("./transport", () => ({
   getConfiguredSdkClient: mocks.getConfiguredSdkClient,
 }));
 

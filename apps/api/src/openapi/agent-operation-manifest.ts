@@ -1,4 +1,9 @@
 import type { AgentWorkflowCatalog } from "../agent-access/workflows/types";
+import {
+  CONTINUATION_OUTPUTS,
+  DEVICE_OPERATION_IDS,
+  ONE_TIME_SECRET_OPERATION_IDS,
+} from "./operation-registry";
 
 export const AGENT_OPERATION_ID_PATTERN =
   /^(dashboard|storefront|system)(\.[a-z][a-z0-9_]*){2,}$/;
@@ -175,10 +180,6 @@ const AGENT_OPERATION_TRANSPORTS = new Set<AgentOperationTransport>([
 const AGENT_OPERATION_METHOD_SET = new Set<string>(
   AGENT_OPERATION_HTTP_METHODS,
 );
-const ONE_TIME_SECRET_OPERATION_IDS = new Set([
-  "dashboard.agent_access.tokens.create",
-  "dashboard.agent_access.tokens.rotate",
-]);
 const ONE_TIME_SECRET_MAXIMUM_RESPONSE_BYTES = 16_384;
 const AGENT_MAX_REQUEST_BYTES = 1024 * 1024;
 const AGENT_ARTIFACT_DELIVERIES = new Set<AgentArtifactOutput["delivery"]>([
@@ -196,49 +197,6 @@ const AGENT_CONTINUATION_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const MERCHANT_DESTRUCTIVE_ACTION_PATTERN =
   /(?:^|_)(?:trash|archive|delete)(?:_|$)/;
 const MERCHANT_RESTORE_ACTION_PATTERN = /(?:^|_)restore(?:_|$)/;
-const REVIEWED_MERCHANT_RESOURCE_RISK_EXCEPTIONS = new Set<string>();
-const REVIEWED_CONTINUATION_OUTPUTS: Readonly<
-  Record<string, AgentContinuationOutput>
-> = {
-  "dashboard.theme.preview_session_create": {
-    method: "POST",
-    urlJsonPointer: "/data/continuation/url",
-    fieldsJsonPointer: "/data/continuation/fields",
-    sensitiveFields: ["continuationCode"],
-  },
-  "storefront.customer_auth.begin": {
-    method: "POST",
-    urlJsonPointer: "/data/browser/url",
-    fieldsJsonPointer: "/data/browser/fields",
-    sensitiveFields: ["continuationCode"],
-  },
-  "storefront.orders.payment.begin": {
-    method: "POST",
-    urlJsonPointer: "/data/browser/url",
-    fieldsJsonPointer: "/data/browser/fields",
-    sensitiveFields: ["continuationCode"],
-  },
-  "storefront.payment_recovery.begin": {
-    method: "POST",
-    urlJsonPointer: "/data/browser/url",
-    fieldsJsonPointer: "/data/browser/fields",
-    sensitiveFields: ["continuationCode"],
-  },
-};
-
-const REVIEWED_DEVICE_OPERATION_IDS = new Set([
-  "system.agent_auth.device_start",
-  "system.agent_auth.device_token",
-  "system.agent_auth.device_ack",
-  "system.agent_auth.revoke",
-  "dashboard.account.password_change",
-  "dashboard.account.two_factor.method_challenge",
-  "dashboard.account.two_factor.method_update",
-  "dashboard.account.two_factor.verify",
-  "dashboard.scanner_device.create_link",
-  "dashboard.notifications.fcm_device_register",
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -516,11 +474,7 @@ export function parseAgentOperationMetadata(
       : {}),
   };
 
-  if (
-    metadata.surface === "dashboard" &&
-    metadata.exposure !== "excluded" &&
-    !REVIEWED_MERCHANT_RESOURCE_RISK_EXCEPTIONS.has(operationLabel)
-  ) {
+  if (metadata.surface === "dashboard" && metadata.exposure !== "excluded") {
     const action = operationLabel.split(".").at(-1) ?? "";
     const expectedRisk = MERCHANT_DESTRUCTIVE_ACTION_PATTERN.test(action)
       ? "destructive"
@@ -556,7 +510,7 @@ export function parseAgentOperationMetadata(
   if (
     metadata.exposure === "device" &&
     (
-      !REVIEWED_DEVICE_OPERATION_IDS.has(operationLabel) ||
+      !DEVICE_OPERATION_IDS.has(operationLabel) ||
       metadata.risk !== "security" ||
       metadata.batch !== "forbidden" ||
       metadata.transport !== "json" ||
@@ -591,7 +545,7 @@ export function parseAgentOperationMetadata(
     );
   }
   if (metadata.continuationOutput) {
-    const reviewedPolicy = REVIEWED_CONTINUATION_OUTPUTS[operationLabel];
+    const reviewedPolicy = CONTINUATION_OUTPUTS[operationLabel];
     const validContinuationPolicy =
       reviewedPolicy !== undefined &&
       metadata.exposure === "continuation" &&

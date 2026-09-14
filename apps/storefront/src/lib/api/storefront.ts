@@ -2,8 +2,8 @@
 // Consolidated storefront API functions for maximum performance
 // Reduces multiple API calls to single optimized requests
 
-import { getConfiguredSdkClient } from "./client";
-import { withEdgeCache, CACHE_TTL } from "@/lib/edge-cache";
+import { getConfiguredSdkClient } from "./transport";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
@@ -25,7 +25,7 @@ import {
   getApiV1StorefrontHomepage,
   getApiV1StorefrontLayout,
 } from "@scalius/api-client/sdk";
-import { createApiUrl, fetchWithRetry } from "./client";
+import { apiFetch } from "./transport";
 
 // =============================================
 // HOMEPAGE DATA TYPES
@@ -185,17 +185,15 @@ export async function resolveThemePreview(
   const normalizedToken = token.trim();
   if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
   try {
-    const response = await fetchWithRetry(
-      createApiUrl("/storefront/theme-preview/resolve"),
+    const response = await apiFetch(
+      "/storefront/theme-preview/resolve",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: normalizedToken }),
         cache: "no-store",
       },
-      0,
-      4_000,
-      false,
+      { retries: 0, timeout: 4_000, auth: false },
     );
     if (!response.ok) {
       await response.body?.cancel();

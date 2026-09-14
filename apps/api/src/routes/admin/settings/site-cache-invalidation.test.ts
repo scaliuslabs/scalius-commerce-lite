@@ -66,6 +66,7 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   rollbackThemeSettings: mocks.rollbackThemeSettings,
   createThemePreviewSession: mocks.createThemePreviewSession,
   getMediaOptimizationSettings: mocks.getMediaOptimizationSettings,
+  mediaOptimizationDocument: { invalidationGroups: ["media"] },
   isValidMediaHostInput: mocks.isValidMediaHostInput,
   saveMediaOptimizationSettings: mocks.saveMediaOptimizationSettings,
   getSeoSettings: mocks.getSeoSettings,
@@ -126,8 +127,8 @@ function createTestApp() {
     headerConfig: {},
     footerConfig: {},
     navigationReadiness: {
-      header: { state: "ready" },
-      footer: { state: "ready" },
+      header: { status: "ready", issues: [] },
+      footer: { status: "ready", issues: [] },
     },
   });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
@@ -530,8 +531,8 @@ describe("site settings cache invalidation", () => {
       },
       revisions: { header: 7, footer: 9 },
       navigationReadiness: {
-        header: { state: "ready" },
-        footer: { state: "ready" },
+        header: { status: "ready", issues: [] },
+        footer: { status: "ready", issues: [] },
       },
     });
 
@@ -565,8 +566,8 @@ describe("site settings cache invalidation", () => {
       footerConfig: {},
       revisions: { header: 0, footer: 0 },
       navigationReadiness: {
-        header: { state: "ready" },
-        footer: { state: "ready" },
+        header: { status: "ready", issues: [] },
+        footer: { status: "ready", issues: [] },
       },
     });
 
@@ -660,10 +661,13 @@ describe("site settings cache invalidation", () => {
       },
       navigationReadiness: {
         header: {
-          state: "invalid",
-          message: "Stored header configuration is invalid.",
+          status: "error",
+          issues: [{
+            code: "navigation.invalid",
+            message: "Stored header configuration is invalid.",
+          }],
         },
-        footer: { state: "ready" },
+        footer: { status: "ready", issues: [] },
       },
     });
 
@@ -681,8 +685,11 @@ describe("site settings cache invalidation", () => {
         headerConfig: { navigation: [] },
         footerConfig: { menus: [{ id: "help" }] },
         navigationReadiness: {
-          header: { state: "invalid" },
-          footer: { state: "ready" },
+          header: {
+            status: "error",
+            issues: [{ code: "navigation.invalid" }],
+          },
+          footer: { status: "ready", issues: [] },
         },
       },
     });

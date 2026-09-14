@@ -34,14 +34,26 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain(
       "const readinessPending = !readiness && !checkoutReadinessError",
     );
-    expect(flowSource).toContain('previewLoading\n        ? "border-border bg-card"');
+    // Loading is a neutral tone; only a confirmed issue is critical.
+    expect(flowSource).toContain(
+      'previewLoading\n        ? { label: "Checking", tone: "neutral" }',
+    );
+    expect(flowSource).toContain(
+      'hasConfirmedPreviewIssue\n            ? { label: "Needs setup", tone: "critical" }',
+    );
   });
 
   it("keeps checkout flow compact, mobile-safe, and explicit about immutable buyer facts", () => {
     expect(flowSource).toContain('method="post"');
-    expect(flowSource).toContain("lg:grid-cols-[minmax(0,1fr)_20rem]");
-    expect(flowSource).toContain("grid grid-cols-2 gap-2 sm:flex");
-    expect(flowSource).toContain("min-h-11 w-full sm:min-h-9 sm:w-auto sm:min-w-[164px]");
+    // One annotated section per group and exactly one page-level save bar.
+    expect(flowSource.match(/<SettingsSection/g)).toHaveLength(4);
+    expect(flowSource.match(/<ContextualSaveBar/g)).toHaveLength(1);
+    expect(flowSource).toContain('saveLabel="Save checkout flow"');
+    expect(flowSource).toContain('stickyClassName="sticky top-15 z-30 lg:top-0"');
+    expect(flowSource).toContain("allowSamePathNavigation");
+    // No per-card save/reset row survives beside the bar.
+    expect(flowSource).not.toContain('type="submit"');
+    expect(flowSource).not.toContain("Reset");
     expect(flowSource.match(/flex min-h-11 min-w-11 shrink-0 items-center justify-end/g)).toHaveLength(2);
     expect(flowSource).toContain("Phone number is always required.");
     expect(flowSource).toContain("The remaining balance is due on delivery.");
@@ -51,7 +63,7 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain("Your unsaved values are still here.");
     expect(flowSource).toContain("Merge my changes");
     expect(flowSource).toContain("Use latest saved version");
-    expect(flowSource).toContain("<UnsavedChangesGuard");
+    expect(flowSource).not.toContain("<UnsavedChangesGuard");
     expect(flowSource).toContain("Customer sign-in verification must be ready before requiring an account");
     expect(flowSource).toContain("checkoutSettingsStale");
     expect(flowSource).toContain("Your draft is preserved and saving is locked.");
@@ -66,7 +78,7 @@ describe("checkout settings status presentation", () => {
     for (const label of ["Checking", "Ready", "Unavailable", "Needs setup"]) {
       expect(flowSource).toContain(`label: "${label}"`);
     }
-    expect(gatewaysSource).toContain("outcome.environmentLabel");
+    expect(gatewaysSource).toContain("getMethodOutcome(method).environmentLabel");
     expect(gatewaysSource).toContain("Choose which eligible methods appear at checkout, their display order, and the preselected option.");
     expect(gatewaysSource).toContain("Checkout display order");
     expect(gatewaysSource).toContain("Move ${META[method].label} up");
@@ -93,12 +105,14 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("loadMethods(false, false, true)");
     expect(gatewaysSource).toContain("loadMethods(false, true, true)");
     expect(gatewaysSource).toContain("getEligibleDefaultPaymentMethods");
-    expect(gatewaysSource).toContain("<UnsavedChangesGuard");
+    expect(gatewaysSource).not.toContain("<UnsavedChangesGuard");
+    expect(gatewaysSource.match(/<ContextualSaveBar/g)).toHaveLength(1);
+    expect(gatewaysSource).toContain('saveLabel="Save payment methods"');
     expect(gatewaysSource).toContain("dirty={stripeDirty}");
     expect(gatewaysSource).toContain("dirty={sslDirty}");
     expect(gatewaysSource).toContain("dirty={polarDirty}");
-    expect(gatewaysSource).toContain("lg:grid-cols-2");
-    expect(gatewaysSource).toContain("Loading payment settings…");
+    expect(gatewaysSource).toContain("<IndexTable");
+    expect(gatewaysSource).toContain('label="Loading payment settings"');
     expect(gatewayUtilsSource).toContain("Provider settings saved");
     expect(gatewayUtilsSource).toContain("Unsaved provider changes");
     expect(gatewayUtilsSource).toContain('aria-label={`${show ? "Hide" : "Show"} credential value`}');
@@ -121,11 +135,11 @@ describe("checkout settings status presentation", () => {
       "Approval and payment processing stay with the order.",
     );
     expect(requestsSource).toContain("Unsaved customer request changes");
-    expect(requestsSource).toContain("{dirty ? <div className=\"fixed");
-    expect(requestsSource).toContain("<UnsavedChangesGuard");
+    expect(requestsSource).not.toContain("<UnsavedChangesGuard");
+    expect(requestsSource.match(/<ContextualSaveBar/g)).toHaveLength(1);
     expect(requestsSource).toContain("isDirty={dirty}");
-    expect(requestsSource).toContain("isSubmitting={saveMutation.isPending}");
-    expect(requestsSource).toContain("disabled={!canManage || !dirty || saveMutation.isPending}");
+    expect(requestsSource).toContain("saving={saveMutation.isPending}");
+    expect(requestsSource).toContain("canSave={canManage}");
     expect(requestsSource).toContain("Save policy");
   });
 });

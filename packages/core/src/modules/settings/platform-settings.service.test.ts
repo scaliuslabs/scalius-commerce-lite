@@ -133,6 +133,47 @@ describe("platform settings storage", () => {
     await expect(getConfiguredStorefrontUrl(db)).resolves.toBe("");
   });
 
+  it("assembles the pre-document per-key rows and writes the document back", async () => {
+    const insert = sqlite.prepare(
+      "INSERT INTO settings (id, key, value, type, category) VALUES (?, ?, ?, 'string', ?)",
+    );
+    insert.run("s1", "api_url", "https://api.example.com", PLATFORM_SETTINGS_CATEGORY);
+    insert.run("s2", "dashboard_url", "https://dashboard.example.com", PLATFORM_SETTINGS_CATEGORY);
+    insert.run("s3", "media_url", "https://cdn.example.com", PLATFORM_SETTINGS_CATEGORY);
+    insert.run("s4", "customer_auth_cookie_domain", "example.com", PLATFORM_SETTINGS_CATEGORY);
+    insert.run(
+      "s5",
+      "cors_allowed_origins",
+      JSON.stringify(["https://mobile.example.com"]),
+      PLATFORM_SETTINGS_CATEGORY,
+    );
+
+    await expect(getPlatformSettings(db)).resolves.toEqual({
+      ...EMPTY_PLATFORM_CONFIG,
+      apiUrl: "https://api.example.com",
+      dashboardUrl: "https://dashboard.example.com",
+      mediaUrl: "https://cdn.example.com",
+      customerAuthCookieDomain: "example.com",
+      corsAllowedOrigins: ["https://mobile.example.com"],
+    });
+
+    // The document row is written back; the legacy rows stay untouched so no
+    // D1 migration is required and a rollback keeps reading production data.
+    expect(storedPlatformRows(sqlite).config).toBe(JSON.stringify({
+      apiUrl: "https://api.example.com",
+      dashboardUrl: "https://dashboard.example.com",
+      mediaUrl: "https://cdn.example.com",
+      customerAuthCookieDomain: "example.com",
+      corsAllowedOrigins: ["https://mobile.example.com"],
+    }));
+
+    // A later read comes from the document, not the legacy rows.
+    sqlite.exec("UPDATE settings SET value = 'https://stale.example.com' WHERE key = 'api_url'");
+    await expect(getPlatformSettings(db)).resolves.toMatchObject({
+      apiUrl: "https://api.example.com",
+    });
+  });
+
   it("round-trips every field through save and get", async () => {
     const saved = await savePlatformSettings(db, {
       ...PRODUCTION_PATCH,
@@ -148,11 +189,13 @@ describe("platform settings storage", () => {
     await expect(getPlatformSettings(db)).resolves.toEqual(saved);
     await expect(getConfiguredStorefrontUrl(db)).resolves.toBe("https://shop.example.com");
     expect(storedPlatformRows(sqlite)).toEqual({
-      api_url: "https://api.example.com",
-      cors_allowed_origins: JSON.stringify(["https://mobile.example.com", "https://kiosk.example.com"]),
-      customer_auth_cookie_domain: "example.com",
-      dashboard_url: "https://dashboard.example.com",
-      media_url: "https://cdn.example.com",
+      config: JSON.stringify({
+        apiUrl: "https://api.example.com",
+        dashboardUrl: "https://dashboard.example.com",
+        mediaUrl: "https://cdn.example.com",
+        customerAuthCookieDomain: "example.com",
+        corsAllowedOrigins: ["https://mobile.example.com", "https://kiosk.example.com"],
+      }),
     });
     expect(
       sqlite.prepare("SELECT storefront_url FROM site_settings").get(),
@@ -188,11 +231,13 @@ describe("platform settings storage", () => {
       storefrontUrl: "https://shop.example.com",
     });
     expect(storedPlatformRows(sqlite)).toEqual({
-      api_url: "",
-      cors_allowed_origins: "[]",
-      customer_auth_cookie_domain: "",
-      dashboard_url: "",
-      media_url: "",
+      config: JSON.stringify({
+        apiUrl: "",
+        dashboardUrl: "",
+        mediaUrl: "",
+        customerAuthCookieDomain: "",
+        corsAllowedOrigins: [],
+      }),
     });
   });
 
@@ -325,7 +370,7 @@ describe("platform config KV cache", () => {
       readCachedPlatformConfig(createKv({ [PLATFORM_CONFIG_CACHE_KEY]: "{not json" })),
     ).resolves.toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("KV read failed");
+    expect(String(warn.mock.calls[0]?.[0])).toContain("is not decodable");
   });
 
   it("normalizes cached values so a stale or tampered entry cannot widen the config", async () => {

@@ -2,7 +2,7 @@
 // Utility for parallelizing layout and page data fetches to reduce cold start latency
 
 import { getLayoutData, type LayoutData } from "./api";
-import { setRuntimeImageCdnPolicy } from "./api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "./api/runtime";
 
 export type PageDataResult<T> = {
   layoutData: LayoutData | null;

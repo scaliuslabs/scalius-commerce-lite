@@ -20,18 +20,28 @@ describe("notification rules workspace", () => {
     expect(source).toContain("readyDescription");
   });
 
-  it("protects rule changes with permissions, reset, and navigation guards", () => {
+  it("protects rule changes with permissions, discard, and navigation guards", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
-    expect(source).toContain("<UnsavedChangesGuard");
+    // One contextual save bar covers both audiences: it stays armed while
+    // either draft is dirty, and Save/Discard act on the audience on screen.
+    expect(source).toContain("<ContextualSaveBar");
+    expect(source).toContain("isDirty={customerDirty || adminDirty}");
+    expect(source).toContain("canSave={canManage}");
+    expect(source).toContain("onDiscard={discardAudienceDraft}");
+    expect(source).toContain(
+      'onSave={audience === "customers" ? handleSave : handleAdminSave}',
+    );
     expect(source).toContain("setChannels(savedChannels)");
     expect(source).toContain("setAdminChannels(savedAdminChannels)");
+    expect(source).not.toContain("<UnsavedChangesGuard");
   });
 
   it("uses mobile-safe action and template controls", () => {
-    expect(source).toContain(
-      "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
-    );
-    expect(source).toContain("min-h-11 min-w-0 sm:min-h-9");
+    // The save pair moved into the contextual save bar, which already gives
+    // both actions full-width 44px targets below `sm`.
+    expect(source).not.toContain("Save customer rules\n");
+    expect(source).toContain('saveLabel={audienceSaveLabel}');
+    expect(source).toContain("min-h-11");
     expect(source).toContain('className="h-11 sm:h-9"');
     expect(source).not.toContain("flex-col-reverse");
   });
@@ -56,6 +66,7 @@ describe("notification rules workspace", () => {
     expect(source).toContain('aria-label="Notification audience"');
     expect(source).toContain('audience === "customers" ? <Card role="tabpanel">');
     expect(source).toContain('audience === "admins" ? <Card role="tabpanel">');
+    expect(source).toContain('audience === "customers" ? isSaving : isAdminSaving');
     expect(source).toContain("Administrators");
   });
 });

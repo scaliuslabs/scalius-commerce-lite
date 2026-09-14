@@ -12,6 +12,13 @@ import { getRequestCorrelation } from "../utils/http-correlation";
 import { logOpsEvent } from "../utils/ops-log";
 import { MASTER_SECRET_NAME, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { EMPTY_PLATFORM_CONFIG, getPlatformConfigReadiness } from "@scalius/shared/platform-config";
+import {
+  isReady,
+  readiness,
+  readinessIssue,
+  type Readiness,
+  type ReadinessIssue,
+} from "@scalius/shared/readiness";
 
 const READINESS_REMOTE_PROBE_TIMEOUT_MS = 5000;
 const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
@@ -188,45 +195,73 @@ async function r2Check(
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
 
-function configCheck(env: Env): CheckResult {
-  const missing: string[] = [];
-  if (!readMasterSecret(env)) missing.push(MASTER_SECRET_NAME);
-  if (!String(env.CREDENTIAL_ENCRYPTION_KEY ?? "").trim()) {
-    missing.push("CREDENTIAL_ENCRYPTION_KEY");
+/**
+ * Projects the shared readiness vocabulary onto this endpoint's per-check probe
+ * format. `/readyz` is an infrastructure probe consumed by deploy.mjs and the
+ * ops scripts, so the wire shape here stays `{ status, latencyMs, detail }`
+ * while the reasoning lives in the one shared model.
+ */
+function readinessCheck(
+  name: string,
+  value: Readiness,
+  readyDetail: string,
+): CheckResult {
+  if (isReady(value)) {
+    return { name, required: true, check: { status: "ok", detail: readyDetail } };
   }
 
   return {
-    name: "runtime_config",
+    name,
     required: true,
     check: {
-      status: missing.length === 0 ? "ok" : "missing",
-      detail: missing.length > 0
-        ? `missing ${missing.join(", ")}`
-        : "required secrets installed",
+      status: value.status === "error" ? "error" : "missing",
+      detail: value.issues.map((issue) => issue.message).join("; "),
     },
   };
 }
 
+/** The two installed secrets. Everything else is derived or merchant-configured. */
+function runtimeConfigReadiness(env: Env): Readiness {
+  const issues: ReadinessIssue[] = [];
+  if (!readMasterSecret(env)) {
+    issues.push(readinessIssue(
+      "missing_scalius_secret",
+      `${MASTER_SECRET_NAME} is not installed.`,
+      `Install it with \`wrangler secret put ${MASTER_SECRET_NAME}\`.`,
+    ));
+  }
+  if (!String(env.CREDENTIAL_ENCRYPTION_KEY ?? "").trim()) {
+    issues.push(readinessIssue(
+      "missing_credential_encryption_key",
+      "CREDENTIAL_ENCRYPTION_KEY is not installed.",
+      "Install it with `wrangler secret put CREDENTIAL_ENCRYPTION_KEY`.",
+    ));
+  }
+  return readiness.from(issues);
+}
+
+function configCheck(env: Env): CheckResult {
+  return readinessCheck(
+    "runtime_config",
+    runtimeConfigReadiness(env),
+    "required secrets installed",
+  );
+}
+
 /** Platform origins are merchant-configured; they gate CORS, cookies, links, and discovery. */
 function platformCheck(env: Env): CheckResult {
-  const readiness = getPlatformConfigReadiness(env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG);
-  return {
-    name: "platform_config",
-    required: true,
-    check: {
-      status: readiness.complete ? "ok" : "missing",
-      detail: readiness.complete
-        ? "platform origins configured"
-        : `missing ${readiness.missing.join(", ")}; set them in Settings -> System -> Platform`,
-    },
-  };
+  return readinessCheck(
+    "platform_config",
+    getPlatformConfigReadiness(env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG),
+    "platform origins configured",
+  );
 }
 
 function flattenChecks(checks: CheckResult[]): Record<string, ReadinessCheck> {
   return Object.fromEntries(checks.map((result) => [result.name, result.check]));
 }
 
-function isReady(checks: CheckResult[]): boolean {
+function allChecksReady(checks: CheckResult[]): boolean {
   return checks.every((result) => !result.required || result.check.status === "ok");
 }
 
@@ -287,7 +322,7 @@ app.get("/readyz", async (c) => {
     configCheck(env),
     platformCheck(env),
   ];
-  const ready = isReady(checks);
+  const ready = allChecksReady(checks);
   const durationMs = nowMs() - started;
 
   c.header("Cache-Control", "no-store");

@@ -1,21 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Check,
-  Loader2,
-  Pencil,
-  Trash2,
-  Upload,
-  UserRound,
-  X,
-} from "lucide-react";
+import { Label } from "~/components/ui/label";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
@@ -25,7 +12,14 @@ import { updateProfile } from "~/lib/api-functions/auth-management";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
-import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import {
+  ContextualSaveBar,
+  FieldError,
+  InlineHelp,
+  SettingsSection,
+} from "~/components/admin/shell";
+
+const NAME_ERROR = "Use at least 2 characters so colleagues can recognise you.";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -43,17 +37,20 @@ interface ProfileHeaderProps {
 export function ProfileHeader({ user }: ProfileHeaderProps) {
   const router = useRouter();
   const currentUserIdRef = useRef(user.id);
-  const isEditingRef = useRef(false);
+  const hasChangesRef = useRef(false);
   const [savedName, setSavedName] = useState(user.name);
   const [savedImage, setSavedImage] = useState(user.image || "");
   const [name, setName] = useState(user.name);
   const [image, setImage] = useState(user.image || "");
   const [isLoading, setIsLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+
+  const normalizedName = name.trim();
+  const hasChanges = normalizedName !== savedName || image !== savedImage;
+  const nameError = normalizedName.length < 2 ? NAME_ERROR : null;
 
   useEffect(() => {
-    isEditingRef.current = isEditing;
-  }, [isEditing]);
+    hasChangesRef.current = hasChanges;
+  }, [hasChanges]);
 
   useEffect(() => {
     const nextSavedName = user.name;
@@ -64,29 +61,25 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     setSavedName(nextSavedName);
     setSavedImage(nextSavedImage);
 
-    if (isDifferentUser || !isEditingRef.current) {
+    // A refresh of the signed-in user must not throw away an unsaved draft,
+    // but switching accounts always resets the form to the new identity.
+    if (isDifferentUser || !hasChangesRef.current) {
       setName(nextSavedName);
       setImage(nextSavedImage);
-      if (isDifferentUser) setIsEditing(false);
     }
   }, [user.id, user.name, user.image]);
 
-  const normalizedName = name.trim();
-  const hasChanges = normalizedName !== savedName || image !== savedImage;
-
   const handleImageSelect = (file: MediaFile) => {
     setImage(file.url);
-    setIsEditing(true);
   };
 
   const removeImage = () => {
     setImage("");
-    setIsEditing(true);
   };
 
   const handleSave = async () => {
-    if (normalizedName.length < 2) {
-      toast.error("Name must be at least 2 characters");
+    if (nameError) {
+      toast.error(NAME_ERROR);
       return;
     }
 
@@ -105,7 +98,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
       setSavedImage(updatedImage);
       setName(updatedName);
       setImage(updatedImage);
-      setIsEditing(false);
       void refreshAdminRouteContext(router);
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to update profile"));
@@ -114,27 +106,30 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     }
   };
 
-  const handleCancel = () => {
+  const handleDiscard = () => {
     setName(savedName);
     setImage(savedImage);
-    setIsEditing(false);
   };
 
   return (
     <>
-      <UnsavedChangesGuard
-        isDirty={isEditing && hasChanges}
-        isSubmitting={isLoading}
+      <ContextualSaveBar
+        isDirty={hasChanges}
+        saving={isLoading}
+        saveDisabled={Boolean(nameError)}
+        saveDisabledReason="Fix the highlighted fields before saving."
+        saveLabel="Save profile"
+        allowSamePathNavigation
+        stickyClassName="sticky top-15 z-30 lg:top-0"
+        onDiscard={handleDiscard}
+        onSave={() => void handleSave()}
       />
-    <Card className="max-w-4xl rounded-xl shadow-none">
-      <CardHeader className="border-b p-4">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <UserRound className="h-4 w-4" aria-hidden="true" />
-          Profile
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4">
-        <div className="grid gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-center">
+
+      <SettingsSection
+        title="Profile"
+        description="The name and photo other administrators see next to your activity."
+      >
+        <div className="grid gap-4 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-start">
           <div className="relative h-12 w-12">
             <div className="h-12 w-12 overflow-hidden rounded-full border bg-muted">
               {image ? (
@@ -153,13 +148,14 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 </div>
               )}
             </div>
-            {image && isEditing && (
+            {image && (
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
                 className="absolute -bottom-1 -right-1 h-11 w-11 rounded-full sm:h-8 sm:w-8"
                 onClick={removeImage}
+                disabled={isLoading}
                 title="Remove photo"
                 aria-label="Remove profile photo"
               >
@@ -168,85 +164,51 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             )}
           </div>
 
-          <div className="min-w-0 space-y-2.5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0 flex-1 space-y-1.5">
-                {isEditing ? (
-                  <Input
-                    id="profile-display-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !isLoading && hasChanges) {
-                        event.preventDefault();
-                        void handleSave();
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        handleCancel();
-                      }
-                    }}
-                    className="min-h-11 max-w-xl text-base font-semibold sm:min-h-9"
-                    placeholder="Display name"
-                    aria-label="Display name"
-                    autoFocus
-                  />
-                ) : (
-                  <h2 className="truncate text-base font-semibold">{name}</h2>
-                )}
-                <p className="break-words text-sm text-muted-foreground">{user.email}</p>
-              </div>
-
-              <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 sm:min-h-9 sm:justify-end">
-                <div
-                  className="flex min-h-11 flex-wrap items-center gap-2 sm:min-h-9"
-                  data-profile-edit-actions
-                >
-                  {!isEditing ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 sm:min-h-9"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit profile
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-11 sm:min-h-9"
-                        onClick={handleCancel}
-                        disabled={isLoading}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="min-h-11 sm:min-h-9"
-                        onClick={handleSave}
-                        disabled={isLoading || !hasChanges}
-                      >
-                        {isLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5" />
-                        )}
-                        Save profile
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+          <div className="min-w-0 space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-display-name">Display name</Label>
+              <Input
+                id="profile-display-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !isLoading && hasChanges) {
+                    event.preventDefault();
+                    void handleSave();
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    handleDiscard();
+                  }
+                }}
+                disabled={isLoading}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby="profile-display-name-help"
+                className="min-h-11 max-w-xl sm:min-h-9"
+                placeholder="Display name"
+                aria-label="Display name"
+              />
+              {nameError ? (
+                <FieldError id="profile-display-name-help">{nameError}</FieldError>
+              ) : (
+                <InlineHelp id="profile-display-name-help">
+                  Shown in the administrator list, audit entries, and shared work.
+                </InlineHelp>
+              )}
             </div>
 
-            <div className="flex min-h-11 flex-wrap items-center gap-2 border-t pt-2.5 sm:min-h-9 sm:border-t-0 sm:pt-0">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium leading-none">Email</p>
+              <p className="break-words text-sm text-muted-foreground">{user.email}</p>
+              <InlineHelp>
+                Changing the sign-in email needs a Super Admin; it is not editable here.
+              </InlineHelp>
+            </div>
+
+            <div
+              className="flex min-h-11 flex-wrap items-center gap-2 border-t pt-3 sm:min-h-9"
+              data-profile-edit-actions
+            >
               <MediaManager
                 capability="image"
                 onSelect={handleImageSelect}
@@ -262,7 +224,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                   </Button>
                 }
               />
-              {image && isEditing && (
+              {image && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -278,8 +240,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </SettingsSection>
     </>
   );
 }

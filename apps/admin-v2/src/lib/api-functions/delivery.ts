@@ -1,3 +1,4 @@
+import type { ReadinessStatus } from "@scalius/shared/readiness";
 import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 
@@ -5,25 +6,32 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonRecord = { [key: string]: JsonValue };
 
-export type DeliveryProviderReadinessStatus =
+/** Setup lifecycle position. The readiness verdict is the shared `status`. */
+export type DeliveryProviderLifecycle =
   | "draft"
   | "configured"
   | "tested"
   | "active"
   | "blocked";
 
-export interface DeliveryProviderReadinessBlocker {
+/** The shared readiness verdict itself; never a lifecycle position. */
+export type DeliveryProviderReadinessStatus = ReadinessStatus;
+
+/** Mirrors `ReadinessIssue` in packages/shared/src/readiness.ts. */
+export interface DeliveryProviderReadinessIssue {
   code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
   message: string;
+  fix?: string;
 }
 
 export interface DeliveryProviderReadiness {
   status: DeliveryProviderReadinessStatus;
+  lifecycle: DeliveryProviderLifecycle;
   configured?: boolean;
   tested?: boolean;
   active?: boolean;
   canCreateShipment: boolean;
-  blockers: DeliveryProviderReadinessBlocker[];
+  issues: DeliveryProviderReadinessIssue[];
   activationBlockers?: Array<{
     source: "credentials" | "config" | string;
     key: string;

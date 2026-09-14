@@ -15,7 +15,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { createApiUrl } from "@/lib/api/client";
+import { createApiUrl } from "@/lib/api/transport";
 import { normalizeSearchQuery } from "@/lib/search-query";
 
 interface SearchResultItem {
