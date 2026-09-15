@@ -128,7 +128,7 @@ describe("RBAC permission cache", () => {
     expect(kv.put).toHaveBeenCalledWith(
       `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
       JSON.stringify([PERMISSIONS.ORDERS_VIEW]),
-      { expirationTtl: 300 },
+      { expirationTtl: 3600 },
     );
   });
 

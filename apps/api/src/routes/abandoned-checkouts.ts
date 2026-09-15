@@ -4,7 +4,8 @@ import { abandonedCheckouts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
-import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
+import { getClientIp } from "@scalius/shared/rate-limit";
+import { enforceRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
 import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/orders";
@@ -42,14 +43,16 @@ const saveAbandonedCheckoutRoute = createRoute({
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
-  // Rate limit: 10 abandoned checkout saves per minute per IP
-  const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-  if (kv) {
-    const ip = getClientIp(c.req.raw);
-    const result = await rateLimit({ kv, key: `abandoned:${ip}`, limit: 10, windowMs: 60_000 });
-    if (!result.allowed) {
-      throw new RateLimitError("Too many requests. Please try again later.");
-    }
+  // Rate limit: 10 abandoned checkout saves per minute per IP. The native
+  // binding is preferred because the KV counter costs a write per request.
+  const allowed = await enforceRateLimit({
+    limiter: c.env.ABANDONED_CHECKOUT_RATE_LIMITER,
+    kv: c.env.CACHE as KVNamespace | undefined,
+    key: `abandoned:${getClientIp(c.req.raw)}`,
+    limit: 10,
+  });
+  if (!allowed) {
+    throw new RateLimitError("Too many requests. Please try again later.");
   }
 
   const db = c.get("db");

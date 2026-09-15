@@ -59,12 +59,12 @@ describe("public API cache gateway policy", () => {
     "/api/v1/categories/fish/products",
     "/api/v1/collections/featured",
     "/api/v1/storefront/homepage",
-  ])("bounds availability-bearing %s responses to five seconds", (path) => {
+  ])("keeps availability-bearing %s responses resident for one week", (path) => {
     expect(
       getPublicApiCachePolicy(
         new Request(`https://api.example.com${path}`),
       )?.edgeTtlSeconds,
-    ).toBe(3600);
+    ).toBe(7 * 86_400);
   });
 
   it("rejects unbounded query-cardinality inputs", () => {
@@ -99,7 +99,7 @@ describe("public API cache gateway policy", () => {
       "public, max-age=0, no-cache, must-revalidate",
     );
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=3600, must-revalidate",
+      `public, max-age=${30 * 86_400}, must-revalidate`,
     );
     expect(response.headers.get("Cache-Tag")).toBe("categories");
   });

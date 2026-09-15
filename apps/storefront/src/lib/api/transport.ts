@@ -457,9 +457,12 @@ export async function withEdgeCache<T>(
 }
 
 export const CACHE_TTL = {
-  // Native domain purges own freshness; the hour is a failure-only backstop.
-  AVAILABILITY: 3_600,
-  LONG: 86_400,
+  // Native tag purges own freshness. Every merchant write and every stock band
+  // transition purges the affected tags directly and through the durable retry
+  // sweep, so the edge TTL is only the failure backstop and can stay long
+  // enough that visitors almost never pay for a cold render.
+  AVAILABILITY: 7 * 86_400,
+  LONG: 30 * 86_400,
   MEDIUM: 3_600,
   SHORT: 300,
 } as const;

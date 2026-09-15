@@ -34,7 +34,10 @@ import { saveStorefrontUrl } from "./site-settings.service";
 
 export const PLATFORM_SETTINGS_CATEGORY = "platform";
 export const PLATFORM_CONFIG_CACHE_KEY = "platform:config:v1";
-const PLATFORM_CONFIG_CACHE_TTL_SECONDS = 300;
+// Read on every API and storefront request. Every save deletes the key, so an
+// expiring entry only adds one KV write per Worker every five minutes; the
+// document store treats 0 as "no expiration".
+const PLATFORM_CONFIG_CACHE_TTL_SECONDS = 0;
 const PLATFORM_DOCUMENT_KEY = "config";
 
 /** Pre-document per-key rows, still the source of truth until first read. */

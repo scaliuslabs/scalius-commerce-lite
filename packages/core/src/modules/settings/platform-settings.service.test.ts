@@ -335,17 +335,18 @@ describe("platform config KV cache", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses the versioned cache key and a bounded TTL", async () => {
+  it("uses the versioned cache key without an expiring TTL", async () => {
     const kv = createKv();
     const config = { ...EMPTY_PLATFORM_CONFIG, ...PRODUCTION_PATCH };
 
     await cachePlatformConfig(kv, config);
 
     expect(PLATFORM_CONFIG_CACHE_KEY).toBe("platform:config:v1");
+    // Every save deletes the key; an expiring entry would re-write KV on every
+    // Worker every few minutes for a value that only changes on save.
     expect(kv.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(config),
-      { expirationTtl: 300 },
     );
     await expect(readCachedPlatformConfig(kv)).resolves.toEqual(config);
     expect(kv.get).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY, { cacheTtl: 60 });
@@ -457,7 +458,6 @@ describe("resolvePlatformConfig", () => {
     expect(kv.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(resolved),
-      { expirationTtl: 300 },
     );
     expect(JSON.parse(kv.store.get(PLATFORM_CONFIG_CACHE_KEY) ?? "null")).toEqual(resolved);
   });
