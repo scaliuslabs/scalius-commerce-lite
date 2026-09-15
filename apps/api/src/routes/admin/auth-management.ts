@@ -2,6 +2,8 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
+import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
 import { and, desc, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
@@ -2035,20 +2037,67 @@ async function firstAdminExists(db: Database): Promise<boolean> {
 
 // ── Admin Exists Check (for setup page) ──
 
+function isSetupTokenRequired(env: Env): boolean {
+    return env.PLATFORM_CONFIG?.setupTokenRequired === true;
+}
+
+async function sha256Digest(value: string): Promise<Uint8Array> {
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+
+/** Constant-time comparison over fixed-length digests so token length never leaks. */
+async function setupTokenMatches(provided: string, expected: string): Promise<boolean> {
+    const [a, b] = await Promise.all([sha256Digest(provided), sha256Digest(expected)]);
+    let mismatch = 0;
+    for (let index = 0; index < a.length; index += 1) mismatch |= (a[index] ?? 0) ^ (b[index] ?? 0);
+    return mismatch === 0;
+}
+
+/**
+ * Gated first-admin setup (issue #358). When the Platform setting requires a
+ * token, the request must carry the HKDF-derived `ADMIN_SETUP_TOKEN`; the
+ * value is compared after the setup rate limit so guesses are bounded, and it
+ * is never logged or echoed.
+ */
+async function enforceSetupToken(c: Context<{ Bindings: Env }>, clientIp: string): Promise<void> {
+    const env = c.env;
+    if (!isSetupTokenRequired(env)) return;
+    const expected = env.ADMIN_SETUP_TOKEN;
+    if (typeof expected !== "string" || expected.length === 0) {
+        throw new ServiceUnavailableError("First-admin setup requires a setup token, but the runtime secret is unavailable.");
+    }
+    const provided = c.req.header(ADMIN_SETUP_TOKEN_HEADER)?.trim() ?? "";
+    if (!provided || !(await setupTokenMatches(provided, expected))) {
+        console.warn(`[SECURITY] Setup token rejected. IP: ${clientIp}`);
+        throw new ForbiddenError("A valid setup token is required to complete first-admin setup.");
+    }
+}
+
 const adminExistsRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Setup"],
     summary: "Check if any admin user exists",
     responses: {
-        200: { description: "Admin exists status", content: { "application/json": { schema: successEnvelope(z.object({ adminExists: z.boolean() })) } } },
+        200: {
+            description: "Admin exists status",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        adminExists: z.boolean(),
+                        /** True when POST requires the derived setup token header. */
+                        setupTokenRequired: z.boolean(),
+                    })),
+                },
+            },
+        },
     }
 });
 
 setupApp.openapi(adminExistsRoute, async (c) => {
     const db = c.get("db");
     const adminExists = await firstAdminExists(db);
-    return ok(c, { adminExists });
+    return ok(c, { adminExists, setupTokenRequired: isSetupTokenRequired(c.env) });
 });
 
 const setupSchema = z.object({
@@ -2108,6 +2157,7 @@ setupApp.openapi(setupRoute, async (c) => {
     const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
     const kv = env.CACHE as KVNamespace | undefined;
     await enforceAdminSetupRateLimit(db, ip);
+    await enforceSetupToken(c, ip);
 
     const auth = createAuth(env);
 

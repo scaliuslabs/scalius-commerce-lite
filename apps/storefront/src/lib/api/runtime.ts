@@ -21,6 +21,7 @@
  */
 import {
   mediaHostFromUrl,
+  normalizeDashboardUrl,
   normalizeMediaBaseUrl,
   normalizePlatformOriginUrl,
   PLATFORM_CONFIG_PUBLIC_PATH,
@@ -216,7 +217,8 @@ function parsePlatformEnvelope(payload: unknown): PublicPlatformOrigins | null {
   return {
     storefrontUrl: normalizePlatformOriginUrl(data.storefrontUrl),
     apiUrl: normalizePlatformOriginUrl(data.apiUrl),
-    dashboardUrl: normalizePlatformOriginUrl(data.dashboardUrl),
+    // The dashboard may live below a path prefix on a shared host; keep it.
+    dashboardUrl: normalizeDashboardUrl(data.dashboardUrl),
     mediaUrl: normalizeMediaBaseUrl(data.mediaUrl),
   };
 }

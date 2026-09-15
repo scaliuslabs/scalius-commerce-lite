@@ -220,6 +220,10 @@ interface Env {
 
   // Service bindings
   API: Fetcher;
+  // Static assets binding (wrangler.jsonc `assets.binding`). Used only when
+  // the dashboard is served below a runtime base path; Cloudflare serves
+  // root-level asset paths before the Worker runs.
+  ASSETS?: Fetcher;
 
   // Installed secrets (`wrangler secret put`). Exactly two per deployment.
   SCALIUS_SECRET?: string;
@@ -236,6 +240,7 @@ interface Env {
 
   // Derived per request from SCALIUS_SECRET (src/server.ts). Never installed.
   BETTER_AUTH_SECRET: string;
+  IDENTITY_HANDOFF_SECRET?: string;
 
   // Resolved per request from Platform settings (dashboard -> Settings ->
   // System -> Platform) through GET /api/v1/platform. Never Wrangler vars.

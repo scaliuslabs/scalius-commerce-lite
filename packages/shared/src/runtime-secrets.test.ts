@@ -103,6 +103,9 @@ describe("deriveRuntimeSecrets", () => {
       "PURGE_TOKEN",
       "AGENT_TOKEN_PEPPER",
       "CUSTOMER_SESSION_HASH_KEY",
+      "ADMIN_SETUP_TOKEN",
+      "FRONT_PROXY_SECRET",
+      "IDENTITY_HANDOFF_SECRET",
     ]);
     for (const name of names) {
       expect(derived[name]).toMatch(BASE64URL_43);

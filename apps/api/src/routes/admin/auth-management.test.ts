@@ -2605,3 +2605,97 @@ describe("first-admin setup recovery", () => {
     expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("first-admin setup token gate", () => {
+  const SETUP_TOKEN = "derived-admin-setup-token-0123456789abcdefghijklmnop";
+  const gatedEnv = {
+    ADMIN_SETUP_TOKEN: SETUP_TOKEN,
+    PLATFORM_CONFIG: { setupTokenRequired: true },
+  } as unknown as Env;
+
+  it("advertises the requirement on GET without exposing the token", async () => {
+    const db = createSetupDbMock({ adminExistsResult: undefined });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", { method: "GET" }, gatedEnv);
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(text)).toEqual({
+      success: true,
+      data: { adminExists: false, setupTokenRequired: true },
+    });
+    expect(text).not.toContain(SETUP_TOKEN);
+
+    const open = await app.request("/api/v1/setup", { method: "GET" }, {});
+    await expect(open.json()).resolves.toEqual({
+      success: true,
+      data: { adminExists: false, setupTokenRequired: false },
+    });
+  });
+
+  it("rejects POST without the exact token after the rate limit, without creating anything", async () => {
+    const db = createSetupDbMock({ adminExistsResult: undefined });
+    mocks.createAuth.mockReturnValue({ api: {} });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const app = createSetupTestApp(db);
+
+    const attempts: Record<string, string>[] = [
+      { "Content-Type": "application/json" },
+      { "Content-Type": "application/json", "X-Scalius-Setup-Token": "wrong-token" },
+      { "Content-Type": "application/json", "X-Scalius-Setup-Token": `${SETUP_TOKEN}x` },
+    ];
+    for (const headers of attempts) {
+      const response = await app.request("/api/v1/setup", {
+        method: "POST",
+        headers,
+        body: setupRequestBody(),
+      }, gatedEnv);
+      expect(response.status).toBe(403);
+      const text = await response.text();
+      expect(text).toContain("valid setup token is required");
+      expect(text).not.toContain(SETUP_TOKEN);
+    }
+
+    expect(mocks.enforceAdminSetupRateLimit).toHaveBeenCalledTimes(3);
+    expect(mocks.claimAdminSetup).not.toHaveBeenCalled();
+    expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
+    expect(warn.mock.calls.flat().join(" ")).not.toContain(SETUP_TOKEN);
+    warn.mockRestore();
+  });
+
+  it("completes setup with the exact token and stays open when the gate is off", async () => {
+    const db = createSetupDbMock({ adminExistsResult: undefined });
+    mocks.createAuth.mockReturnValue({ api: {} });
+    const app = createSetupTestApp(db);
+
+    const gated = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Scalius-Setup-Token": ` ${SETUP_TOKEN} ` },
+      body: setupRequestBody(),
+    }, gatedEnv);
+    expect(gated.status, await gated.clone().text()).toBe(201);
+    expect(mocks.completeAdminSetupClaimWithCredentialIdentity).toHaveBeenCalledTimes(1);
+
+    const open = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: setupRequestBody(),
+    }, { PLATFORM_CONFIG: { setupTokenRequired: false } } as unknown as Env);
+    expect(open.status, await open.clone().text()).toBe(201);
+  });
+
+  it("fails closed when the gate is on but the derived token is unavailable", async () => {
+    const db = createSetupDbMock({ adminExistsResult: undefined });
+    const app = createSetupTestApp(db);
+
+    const response = await app.request("/api/v1/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Scalius-Setup-Token": SETUP_TOKEN },
+      body: setupRequestBody(),
+    }, { PLATFORM_CONFIG: { setupTokenRequired: true } } as unknown as Env);
+
+    expect(response.status).toBe(503);
+    expect(mocks.claimAdminSetup).not.toHaveBeenCalled();
+  });
+});

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { getGlobalBroadcastChannel } from "better-auth/client";
 import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
+import { withDashboardBasePath } from "../../lib/dashboard-base-path";
 
 const ADMIN_LOGIN_PATH = "/auth/login";
 
@@ -34,7 +35,7 @@ export function AdminSessionSync() {
 
       redirecting = true;
       clearAdminRouteContextCache();
-      window.location.replace(ADMIN_LOGIN_PATH);
+      window.location.replace(withDashboardBasePath(ADMIN_LOGIN_PATH));
     });
     const cleanup = channel.setup();
 

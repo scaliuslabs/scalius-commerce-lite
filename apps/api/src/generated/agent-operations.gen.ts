@@ -52606,6 +52606,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "maxItems": 20
             },
+            "setupTokenRequired": {
+              "type": "boolean"
+            },
+            "identityHandoff": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "audience": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "jwksUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "localLoginDisabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled",
+                "issuer",
+                "audience",
+                "jwksUrl",
+                "localLoginDisabled"
+              ]
+            },
             "readiness": {
               "type": "object",
               "properties": {
@@ -52679,6 +52712,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "dashboardUrl",
                 "mediaUrl"
               ]
+            },
+            "dashboardBasePath": {
+              "type": "string"
             }
           },
           "required": [
@@ -52688,8 +52724,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "mediaUrl",
             "customerAuthCookieDomain",
             "corsAllowedOrigins",
+            "setupTokenRequired",
+            "identityHandoff",
             "readiness",
-            "effective"
+            "effective",
+            "dashboardBasePath"
           ]
         }
       },
@@ -52764,6 +52803,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "maxLength": 2048
                   },
                   "maxItems": 20
+                },
+                "setupTokenRequired": {
+                  "type": "boolean"
+                },
+                "identityHandoff": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "issuer": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "audience": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "jwksUrl": {
+                      "type": "string",
+                      "maxLength": 2048
+                    },
+                    "localLoginDisabled": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               }
             }
@@ -52810,6 +52875,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "maxLength": 2048
               },
               "maxItems": 20
+            },
+            "setupTokenRequired": {
+              "type": "boolean"
+            },
+            "identityHandoff": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "audience": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "jwksUrl": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "localLoginDisabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled",
+                "issuer",
+                "audience",
+                "jwksUrl",
+                "localLoginDisabled"
+              ]
             },
             "readiness": {
               "type": "object",
@@ -52884,6 +52982,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "dashboardUrl",
                 "mediaUrl"
               ]
+            },
+            "dashboardBasePath": {
+              "type": "string"
             }
           },
           "required": [
@@ -52893,8 +52994,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "mediaUrl",
             "customerAuthCookieDomain",
             "corsAllowedOrigins",
+            "setupTokenRequired",
+            "identityHandoff",
             "readiness",
-            "effective"
+            "effective",
+            "dashboardBasePath"
           ]
         }
       },
@@ -73989,13 +74093,45 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "mediaUrl": {
               "type": "string"
+            },
+            "setupTokenRequired": {
+              "type": "boolean"
+            },
+            "identityHandoff": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "audience": {
+                  "type": "string"
+                },
+                "jwksUrl": {
+                  "type": "string"
+                },
+                "localLoginDisabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled",
+                "issuer",
+                "audience",
+                "jwksUrl",
+                "localLoginDisabled"
+              ]
             }
           },
           "required": [
             "storefrontUrl",
             "apiUrl",
             "dashboardUrl",
-            "mediaUrl"
+            "mediaUrl",
+            "setupTokenRequired",
+            "identityHandoff"
           ]
         }
       },
@@ -76888,6 +77024,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Static X-API-Token exchange that mints a short-lived service JWT; it is infrastructure authentication, not an agent grant or merchant capability, and its bearer output must not enter agent results.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "system.meta.get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/meta",
+    "summary": "Get the runtime release, API majors, database schema revision, and automation contracts",
+    "tags": [
+      "Platform"
+    ],
+    "surface": "system",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Unauthenticated deployment compatibility probe for automation; it carries no merchant capability.",
     "rbac": {
       "type": "public"
     },

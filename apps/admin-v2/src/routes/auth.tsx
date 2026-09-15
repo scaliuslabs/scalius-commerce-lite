@@ -11,6 +11,8 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import logoLight from "~/assets/logo-light.png";
 import logoDark from "~/assets/logo-dark.png";
+// See AppSidebar: bundled asset URLs are host-root and the prefix is runtime.
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 export const Route = createFileRoute("/auth")({
   component: AuthLayout,
@@ -22,12 +24,12 @@ function AuthLayout() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <img
-            src={logoLight}
+            src={withDashboardBasePath(logoLight)}
             alt="Scalius"
             className="mx-auto block h-14 dark:hidden"
           />
           <img
-            src={logoDark}
+            src={withDashboardBasePath(logoDark)}
             alt="Scalius"
             className="mx-auto hidden h-14 dark:block"
           />

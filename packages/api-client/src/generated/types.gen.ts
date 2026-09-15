@@ -3048,11 +3048,87 @@ export type GetApiV1PlatformResponses = {
             apiUrl: string;
             dashboardUrl: string;
             mediaUrl: string;
+            setupTokenRequired: boolean;
+            identityHandoff: {
+                enabled: boolean;
+                issuer: string;
+                audience: string;
+                jwksUrl: string;
+                localLoginDisabled: boolean;
+            };
         };
     };
 };
 
 export type GetApiV1PlatformResponse = GetApiV1PlatformResponses[keyof GetApiV1PlatformResponses];
+
+export type GetApiV1MetaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/meta';
+};
+
+export type GetApiV1MetaErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1MetaError = GetApiV1MetaErrors[keyof GetApiV1MetaErrors];
+
+export type GetApiV1MetaResponses = {
+    /**
+     * Compatibility discovery document
+     */
+    200: {
+        success: true;
+        data: {
+            platform: {
+                name: 'scalius-commerce';
+                version: string;
+            };
+            api: {
+                current: string;
+                supportedMajors: Array<string>;
+                basePath: string;
+                openapi: string;
+            };
+            database: {
+                provider: 'd1' | 'turso' | 'postgres' | null;
+                schema: {
+                    expected: {
+                        version: number;
+                        name: string;
+                    };
+                    applied: {
+                        version: number;
+                        name: string;
+                    } | null;
+                    status: 'current' | 'behind' | 'ahead' | 'diverged' | 'unavailable';
+                    detail?: string;
+                };
+            };
+            automation: {
+                setupTokenRequired: boolean;
+                identityHandoffEnabled: boolean;
+                localLoginDisabled: boolean;
+                dashboardBasePath: string;
+                frontProxySignature: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1MetaResponse = GetApiV1MetaResponses[keyof GetApiV1MetaResponses];
 
 export type PostApiV1StorefrontAgentContextsData = {
     body?: never;
@@ -34277,6 +34353,14 @@ export type GetApiV1AdminSettingsPlatformResponses = {
             mediaUrl: string;
             customerAuthCookieDomain: string;
             corsAllowedOrigins: Array<string>;
+            setupTokenRequired: boolean;
+            identityHandoff: {
+                enabled: boolean;
+                issuer: string;
+                audience: string;
+                jwksUrl: string;
+                localLoginDisabled: boolean;
+            };
             readiness: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -34292,6 +34376,7 @@ export type GetApiV1AdminSettingsPlatformResponses = {
                 dashboardUrl: string;
                 mediaUrl: string;
             };
+            dashboardBasePath: string;
         };
     };
 };
@@ -34306,6 +34391,14 @@ export type PutApiV1AdminSettingsPlatformData = {
         mediaUrl?: string;
         customerAuthCookieDomain?: string;
         corsAllowedOrigins?: Array<string>;
+        setupTokenRequired?: boolean;
+        identityHandoff?: {
+            enabled?: boolean;
+            issuer?: string;
+            audience?: string;
+            jwksUrl?: string;
+            localLoginDisabled?: boolean;
+        };
     };
     path?: never;
     query?: never;
@@ -34396,6 +34489,14 @@ export type PutApiV1AdminSettingsPlatformResponses = {
             mediaUrl: string;
             customerAuthCookieDomain: string;
             corsAllowedOrigins: Array<string>;
+            setupTokenRequired: boolean;
+            identityHandoff: {
+                enabled: boolean;
+                issuer: string;
+                audience: string;
+                jwksUrl: string;
+                localLoginDisabled: boolean;
+            };
             readiness: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -34411,6 +34512,7 @@ export type PutApiV1AdminSettingsPlatformResponses = {
                 dashboardUrl: string;
                 mediaUrl: string;
             };
+            dashboardBasePath: string;
         };
     };
 };
@@ -55147,6 +55249,7 @@ export type GetApiV1SetupResponses = {
         success: true;
         data: {
             adminExists: boolean;
+            setupTokenRequired: boolean;
         };
     };
 };

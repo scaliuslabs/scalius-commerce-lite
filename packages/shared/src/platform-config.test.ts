@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isReady } from "./readiness";
 
 import {
+  EMPTY_IDENTITY_HANDOFF_CONFIG,
   EMPTY_PLATFORM_CONFIG,
   INTERNAL_SERVICE_ORIGIN,
   LOCAL_DEVELOPMENT_PLATFORM_CONFIG,
@@ -20,6 +21,16 @@ import {
   normalizeMediaBaseUrl,
   normalizePlatformConfig,
   normalizePlatformOriginUrl,
+  dashboardBasePathFromUrl,
+  dashboardReservedSegment,
+  emptyPlatformConfig,
+  joinPlatformUrl,
+  normalizeDashboardBasePath,
+  normalizeDashboardUrl,
+  normalizeIdentityHandoffConfig,
+  normalizeJwksUrl,
+  prefixDashboardBasePath,
+  stripDashboardBasePath,
   publicRequestOrigin,
   storefrontPurgeUrl,
   withLocalDevelopmentDefaults,
@@ -33,6 +44,8 @@ const PRODUCTION_CONFIG: PlatformConfig = {
   mediaUrl: "https://cdn.example.com",
   customerAuthCookieDomain: "example.com",
   corsAllowedOrigins: ["https://mobile.example.com"],
+  setupTokenRequired: false,
+  identityHandoff: { ...EMPTY_IDENTITY_HANDOFF_CONFIG },
 };
 
 describe("platform config constants", () => {
@@ -47,6 +60,14 @@ describe("platform config constants", () => {
       mediaUrl: "http://localhost:8787/api/v1/media",
       customerAuthCookieDomain: "",
       corsAllowedOrigins: [],
+      setupTokenRequired: false,
+      identityHandoff: {
+        enabled: false,
+        issuer: "",
+        audience: "",
+        jwksUrl: "",
+        localLoginDisabled: false,
+      },
     });
     expect(EMPTY_PLATFORM_CONFIG).toEqual({
       storefrontUrl: "",
@@ -55,7 +76,20 @@ describe("platform config constants", () => {
       mediaUrl: "",
       customerAuthCookieDomain: "",
       corsAllowedOrigins: [],
+      setupTokenRequired: false,
+      identityHandoff: {
+        enabled: false,
+        issuer: "",
+        audience: "",
+        jwksUrl: "",
+        localLoginDisabled: false,
+      },
     });
+    expect(Object.isFrozen(EMPTY_IDENTITY_HANDOFF_CONFIG)).toBe(true);
+    const fresh = emptyPlatformConfig();
+    expect(fresh).toEqual(EMPTY_PLATFORM_CONFIG);
+    expect(fresh.identityHandoff).not.toBe(EMPTY_PLATFORM_CONFIG.identityHandoff);
+    expect(fresh.corsAllowedOrigins).not.toBe(EMPTY_PLATFORM_CONFIG.corsAllowedOrigins);
     expect(Object.isFrozen(EMPTY_PLATFORM_CONFIG)).toBe(true);
     expect(Object.isFrozen(LOCAL_DEVELOPMENT_PLATFORM_CONFIG)).toBe(true);
   });
@@ -230,6 +264,8 @@ describe("normalizePlatformConfig", () => {
       dashboardUrl: "",
       mediaUrl: "https://cdn.example.com/assets",
       customerAuthCookieDomain: "example.com",
+      setupTokenRequired: false,
+      identityHandoff: { ...EMPTY_IDENTITY_HANDOFF_CONFIG },
       corsAllowedOrigins: ["https://mobile.example.com"],
     });
   });
@@ -245,6 +281,153 @@ describe("normalizePlatformConfig", () => {
     const normalized = normalizePlatformConfig({});
     expect(normalized).not.toBe(EMPTY_PLATFORM_CONFIG);
     expect(normalized.corsAllowedOrigins).not.toBe(EMPTY_PLATFORM_CONFIG.corsAllowedOrigins);
+    expect(normalized.identityHandoff).not.toBe(EMPTY_PLATFORM_CONFIG.identityHandoff);
+  });
+
+  it("keeps a dashboard path prefix and the automation flags", () => {
+    expect(normalizePlatformConfig({
+      storefrontUrl: "https://shop.example.com",
+      dashboardUrl: "https://shop.example.com/dashboard/",
+      setupTokenRequired: true,
+      identityHandoff: {
+        enabled: true,
+        issuer: "https://idp.example.com",
+        audience: "scalius:store-1",
+        jwksUrl: "https://idp.example.com/.well-known/jwks.json",
+        localLoginDisabled: true,
+      },
+    })).toMatchObject({
+      dashboardUrl: "https://shop.example.com/dashboard",
+      setupTokenRequired: true,
+      identityHandoff: {
+        enabled: true,
+        issuer: "https://idp.example.com",
+        audience: "scalius:store-1",
+        jwksUrl: "https://idp.example.com/.well-known/jwks.json",
+        localLoginDisabled: true,
+      },
+    });
+    expect(normalizePlatformConfig({ setupTokenRequired: "true" }).setupTokenRequired).toBe(false);
+  });
+});
+
+describe("dashboard URL with a path prefix", () => {
+  it("accepts an origin or a lowercase path prefix without a trailing slash", () => {
+    expect(normalizeDashboardUrl("https://dashboard.example.com")).toBe("https://dashboard.example.com");
+    expect(normalizeDashboardUrl("https://dashboard.example.com/")).toBe("https://dashboard.example.com");
+    expect(normalizeDashboardUrl("https://shop.example.com/dashboard")).toBe("https://shop.example.com/dashboard");
+    expect(normalizeDashboardUrl("https://shop.example.com/ops/dashboard/")).toBe("https://shop.example.com/ops/dashboard");
+    expect(normalizeDashboardUrl("https://shop.example.com//dashboard//")).toBe("https://shop.example.com/dashboard");
+    expect(normalizeDashboardUrl("http://localhost:4323/dashboard")).toBe("http://localhost:4323/dashboard");
+  });
+
+  it("rejects queries, fragments, uppercase or unsafe segments, and deep prefixes", () => {
+    expect(normalizeDashboardUrl("https://shop.example.com/dashboard?x=1")).toBe("");
+    expect(normalizeDashboardUrl("https://shop.example.com/dashboard#top")).toBe("");
+    expect(normalizeDashboardUrl("https://shop.example.com/Dashboard")).toBe("");
+    expect(normalizeDashboardUrl("https://shop.example.com/dash_board")).toBe("");
+    expect(normalizeDashboardUrl("https://shop.example.com/a/b/c/d/e")).toBe("");
+    expect(normalizeDashboardUrl("https://shop.example.com/../dashboard")).toBe("https://shop.example.com/dashboard");
+    expect(normalizeDashboardUrl("http://shop.example.com/dashboard")).toBe("");
+    expect(normalizeDashboardUrl("")).toBe("");
+  });
+
+  it("derives the base path and reserved segment", () => {
+    expect(normalizeDashboardBasePath("/")).toBe("");
+    expect(normalizeDashboardBasePath("/dashboard/")).toBe("/dashboard");
+    expect(normalizeDashboardBasePath("/Dashboard")).toBeNull();
+    expect(dashboardBasePathFromUrl("https://dashboard.example.com")).toBe("");
+    expect(dashboardBasePathFromUrl("https://shop.example.com/ops/dashboard")).toBe("/ops/dashboard");
+    expect(dashboardBasePathFromUrl("")).toBe("");
+    expect(dashboardReservedSegment("https://dashboard.example.com")).toBeNull();
+    expect(dashboardReservedSegment("https://shop.example.com/ops/dashboard")).toBe("ops");
+    expect(dashboardReservedSegment(undefined)).toBeNull();
+  });
+
+  it("reserves a storefront slug only when the dashboard shares its origin", () => {
+    const storefront = "https://shop.example.com";
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard", storefront)).toBe("dashboard");
+    // Its own hostname takes nothing away from the storefront's URL space.
+    expect(dashboardReservedSegment("https://admin.example.com/dashboard", storefront)).toBeNull();
+    // A different port or scheme is a different origin.
+    expect(dashboardReservedSegment("https://shop.example.com:8443/dashboard", storefront)).toBeNull();
+    // Unknown or unreadable storefront origin: keep the reservation, because a
+    // CMS page shadowing the dashboard is the worse failure.
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard", "")).toBe("dashboard");
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard")).toBe("dashboard");
+    expect(dashboardReservedSegment("https://shop.example.com", storefront)).toBeNull();
+  });
+
+  it("prefixes and strips the runtime base path exactly once", () => {
+    expect(prefixDashboardBasePath("", "/admin/orders")).toBe("/admin/orders");
+    expect(prefixDashboardBasePath("/dashboard", "/admin/orders")).toBe("/dashboard/admin/orders");
+    expect(prefixDashboardBasePath("/dashboard", "/")).toBe("/dashboard/");
+    expect(prefixDashboardBasePath("/dashboard", "/dashboard/admin")).toBe("/dashboard/admin");
+    expect(prefixDashboardBasePath("/dashboard", "/dashboard")).toBe("/dashboard");
+    expect(prefixDashboardBasePath("/dashboard", "/dashboards/x")).toBe("/dashboard/dashboards/x");
+    expect(prefixDashboardBasePath("/ops/dashboard", "assets/app.js")).toBe("/ops/dashboard/assets/app.js");
+
+    expect(stripDashboardBasePath("/admin", "")).toBe("/admin");
+    expect(stripDashboardBasePath("/dashboard", "/dashboard")).toBe("/");
+    expect(stripDashboardBasePath("/dashboard/admin/orders", "/dashboard")).toBe("/admin/orders");
+    expect(stripDashboardBasePath("/dashboards/admin", "/dashboard")).toBeNull();
+    expect(stripDashboardBasePath("/admin", "/dashboard")).toBeNull();
+  });
+
+  it("joins route paths onto a dashboard URL without dropping the prefix", () => {
+    expect(joinPlatformUrl("https://shop.example.com/dashboard", "/auth/reset-password"))
+      .toBe("https://shop.example.com/dashboard/auth/reset-password");
+    expect(joinPlatformUrl("https://dashboard.example.com/", "admin/orders/1"))
+      .toBe("https://dashboard.example.com/admin/orders/1");
+    expect(joinPlatformUrl("https://dashboard.example.com", "")).toBe("https://dashboard.example.com");
+    expect(joinPlatformUrl("", "/admin")).toBe("");
+  });
+});
+
+describe("normalizeIdentityHandoffConfig", () => {
+  it("is disabled without both an issuer and an audience", () => {
+    expect(normalizeIdentityHandoffConfig({ enabled: true, issuer: "https://idp.example.com" }))
+      .toEqual({ ...EMPTY_IDENTITY_HANDOFF_CONFIG, issuer: "https://idp.example.com" });
+    expect(normalizeIdentityHandoffConfig({ enabled: true, audience: "store" }))
+      .toEqual({ ...EMPTY_IDENTITY_HANDOFF_CONFIG, audience: "store" });
+    expect(normalizeIdentityHandoffConfig(undefined)).toEqual(EMPTY_IDENTITY_HANDOFF_CONFIG);
+  });
+
+  it("only disables local login while the handoff is enabled", () => {
+    expect(normalizeIdentityHandoffConfig({
+      enabled: false,
+      issuer: "https://idp.example.com",
+      audience: "store",
+      localLoginDisabled: true,
+    }).localLoginDisabled).toBe(false);
+    expect(normalizeIdentityHandoffConfig({
+      enabled: true,
+      issuer: " https://idp.example.com ",
+      audience: "store",
+      localLoginDisabled: true,
+    })).toEqual({
+      enabled: true,
+      issuer: "https://idp.example.com",
+      audience: "store",
+      jwksUrl: "",
+      localLoginDisabled: true,
+    });
+  });
+
+  it("rejects whitespace, control characters, and overlong claim values", () => {
+    expect(normalizeIdentityHandoffConfig({ issuer: "has space", audience: "a" }).issuer).toBe("");
+    expect(normalizeIdentityHandoffConfig({ issuer: "tab\there", audience: "a" }).issuer).toBe("");
+    expect(normalizeIdentityHandoffConfig({ issuer: "x".repeat(513), audience: "a" }).issuer).toBe("");
+  });
+
+  it("validates the JWKS URL like every other platform URL", () => {
+    expect(normalizeJwksUrl("https://idp.example.com/.well-known/jwks.json?v=1"))
+      .toBe("https://idp.example.com/.well-known/jwks.json?v=1");
+    expect(normalizeJwksUrl("http://localhost:9000/jwks")).toBe("http://localhost:9000/jwks");
+    expect(normalizeJwksUrl("http://idp.example.com/jwks")).toBe("");
+    expect(normalizeJwksUrl("https://idp.example.com/jwks#frag")).toBe("");
+    expect(normalizeJwksUrl("ftp://idp.example.com/jwks")).toBe("");
+    expect(normalizeJwksUrl("https://user:pw@idp.example.com/jwks")).toBe("");
   });
 });
 

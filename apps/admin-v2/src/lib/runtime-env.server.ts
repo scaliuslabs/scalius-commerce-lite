@@ -131,7 +131,10 @@ export async function composeAdminRuntimeEnv(
   const composed: Env = {
     ...env,
     BETTER_AUTH_SECRET: secrets?.BETTER_AUTH_SECRET ?? "",
+    IDENTITY_HANDOFF_SECRET: secrets?.IDENTITY_HANDOFF_SECRET,
     PLATFORM_CONFIG: platform,
+    // The dashboard URL may carry the runtime base path; Better Auth splits
+    // it into origin + basePath, links keep the full value.
     BETTER_AUTH_URL: platform.dashboardUrl || requestOrigin,
     PUBLIC_API_BASE_URL: optional(platform.apiUrl),
     STOREFRONT_URL: optional(platform.storefrontUrl),

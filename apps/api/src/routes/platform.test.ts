@@ -16,6 +16,14 @@ const RESOLVED_CONFIG = {
   mediaUrl: "https://cdn.example.com",
   customerAuthCookieDomain: "example.com",
   corsAllowedOrigins: ["https://mobile.example.com"],
+  setupTokenRequired: true,
+  identityHandoff: {
+    enabled: true,
+    issuer: "https://idp.example.com",
+    audience: "scalius:store-1",
+    jwksUrl: "",
+    localLoginDisabled: true,
+  },
 };
 
 describe("GET /api/v1/platform", () => {
@@ -36,6 +44,14 @@ describe("GET /api/v1/platform", () => {
         apiUrl: "https://api.example.com",
         dashboardUrl: "https://dashboard.example.com",
         mediaUrl: "https://cdn.example.com",
+        setupTokenRequired: true,
+        identityHandoff: {
+          enabled: true,
+          issuer: "https://idp.example.com",
+          audience: "scalius:store-1",
+          jwksUrl: "",
+          localLoginDisabled: true,
+        },
       },
     });
   });
@@ -60,7 +76,20 @@ describe("GET /api/v1/platform", () => {
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
     await expect(response.json()).resolves.toEqual({
       success: true,
-      data: { storefrontUrl: "", apiUrl: "", dashboardUrl: "", mediaUrl: "" },
+      data: {
+        storefrontUrl: "",
+        apiUrl: "",
+        dashboardUrl: "",
+        mediaUrl: "",
+        setupTokenRequired: false,
+        identityHandoff: {
+          enabled: false,
+          issuer: "",
+          audience: "",
+          jwksUrl: "",
+          localLoginDisabled: false,
+        },
+      },
     });
   });
 

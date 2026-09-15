@@ -11,7 +11,9 @@
  *   const navigate = useNavigate()
  *   navigate({ to: '/admin/products' })
  */
+import { withDashboardBasePath } from "../dashboard-base-path";
+
 export function navigateTo(url: string): void {
   if (typeof window === "undefined") return;
-  window.location.href = url;
+  window.location.href = url.startsWith("/") ? withDashboardBasePath(url) : url;
 }

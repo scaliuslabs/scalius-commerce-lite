@@ -1731,6 +1731,13 @@ export const OPERATIONS = {
       "Static X-API-Token exchange that mints a short-lived service JWT; it is infrastructure authentication, not an agent grant or merchant capability, and its bearer output must not enter agent results.",
   },
 
+  "system.meta.get": {
+    exposure: "excluded",
+    principals: ["internal"],
+    limits: { request: 16_384, response: 16_384 },
+    reason:
+      "Unauthenticated deployment compatibility probe for automation; it carries no merchant capability.",
+  },
   "system.setup.get_setup": {
     exposure: "excluded",
     principals: ["internal"],

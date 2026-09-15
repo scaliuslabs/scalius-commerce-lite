@@ -12,6 +12,7 @@ import { runDemoStoreApply } from "./demo-store/run-apply.mjs";
 import { readDemoApplyConfirmation } from "./demo-store/apply/confirmation.mjs";
 import { demoApplyIntentFingerprint } from "./demo-store/apply/authorization.mjs";
 import { preparePrivateApplyPaths, readPrivateApplyJson } from "./demo-store/apply/private-state.mjs";
+import { formatDemoStoreExport, runDemoStoreExport } from "./demo-store/export/run.mjs";
 
 function usage() {
   return `Usage:
@@ -21,6 +22,7 @@ function usage() {
   pnpm demo:store --apply --media-readiness <private-report.json> [--admin-url <origin>]
     [--evidence-dir <workspace/.wrangler/path>] [--resume-file <workspace/.wrangler/path>]
     [--timeout-ms <ms>] [--json]
+  pnpm demo:store --export <dir> --source-db <sqlite file> [--media-source-dir <dir>] [--json]
 
 Plan and compile modes are network-free and write-disabled. Diff mode prompts for admin email and a hidden
 password, performs bounded authenticated GETs, writes local evidence under
@@ -28,7 +30,11 @@ password, performs bounded authenticated GETs, writes local evidence under
 
 Apply requires a complete remote Media readiness report, hidden interactive credentials, an explicit
 demo-reset phrase, and the full displayed intent fingerprint. Header/footer and standalone promotion
-writes remain excluded because their current authorities are not safe for this executor.`;
+writes remain excluded because their current authorities are not safe for this executor.
+
+Export mode is network-free and has no write path to a live store. It reads one local SQLite file
+read-only and writes a portable seed bundle (bundle.json, seed.sql, media-manifest.json and, with
+--media-source-dir, the media objects) that another deployment can load.`;
 }
 
 export function parseDemoStoreArgs(argv) {
@@ -36,6 +42,7 @@ export function parseDemoStoreArgs(argv) {
   const valueOptions = new Map([
     ["--admin-url", "adminUrl"], ["--evidence-dir", "evidenceDir"], ["--timeout-ms", "timeoutMs"],
     ["--media-readiness", "mediaReadiness"], ["--resume-file", "resumeFile"],
+    ["--export", "exportDir"], ["--source-db", "sourceDb"], ["--media-source-dir", "mediaSourceDir"],
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -60,11 +67,14 @@ export function parseDemoStoreArgs(argv) {
       result[matched[1]] = value;
     }
   }
-  if ([result.plan, result.compile, result.diff, result.apply].filter(Boolean).length > 1) {
-    throw new Error("Choose exactly one of --plan, --compile, --diff, or --apply.");
+  const exportRequested = Boolean(result.exportDir);
+  if ([result.plan, result.compile, result.diff, result.apply, exportRequested].filter(Boolean).length > 1) {
+    throw new Error("Choose exactly one of --plan, --compile, --diff, --apply, or --export.");
   }
   if (!result.apply && (result.mediaReadiness || result.resumeFile)) throw new Error("Media readiness and resume options are valid only with --apply.");
   if (result.apply && !result.mediaReadiness) throw new Error("--apply requires an explicit --media-readiness private report path.");
+  if (!exportRequested && (result.sourceDb || result.mediaSourceDir)) throw new Error("Source database and media source options are valid only with --export.");
+  if (exportRequested && !result.sourceDb) throw new Error("--export requires an explicit --source-db SQLite file to read the catalog from.");
   return result;
 }
 
@@ -80,6 +90,7 @@ export async function main(argv = process.argv.slice(2), {
   credentialReader = readAdminCredentials,
   runDiffImpl = runDemoStoreDiff,
   runApplyImpl = runDemoStoreApply,
+  runExportImpl = runDemoStoreExport,
   confirmationReader = readDemoApplyConfirmation,
   prepareApplyPaths = preparePrivateApplyPaths,
   readApplyJson = readPrivateApplyJson,
@@ -89,7 +100,9 @@ export async function main(argv = process.argv.slice(2), {
     log(usage());
     return 0;
   }
-  if (!args.plan && !args.compile && !args.diff && !args.apply) throw new Error(`Choose --plan, --compile, read-only --diff, or guarded --apply.\n${usage()}`);
+  if (!args.plan && !args.compile && !args.diff && !args.apply && !args.exportDir) {
+    throw new Error(`Choose --plan, --compile, read-only --diff, guarded --apply, or read-only --export.\n${usage()}`);
+  }
   if (args.plan) {
     const plan = buildDemoStorePlan();
     log(args.json ? JSON.stringify(plan, null, 2) : formatDemoStorePlan(plan));
@@ -98,6 +111,15 @@ export async function main(argv = process.argv.slice(2), {
   if (args.compile) {
     const compiled = compileDemoStoreAdminCommands(demoStoreManifest);
     log(args.json ? JSON.stringify(compiled, null, 2) : formatDemoStoreCompile(compiled));
+    return 0;
+  }
+  if (args.exportDir) {
+    const summary = await runExportImpl({
+      exportDir: args.exportDir,
+      sourceDb: args.sourceDb,
+      mediaSourceDir: args.mediaSourceDir ?? null,
+    });
+    log(args.json ? JSON.stringify(summary, null, 2) : formatDemoStoreExport(summary));
     return 0;
   }
   const adminOrigin = normalizeAdminOrigin(args.adminUrl ?? "https://dashboard.scalius.com");

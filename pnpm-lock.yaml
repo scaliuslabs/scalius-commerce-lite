@@ -636,6 +636,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260831.1)(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.4)(pg@8.23.0)(sql.js@1.14.1)
+      jose:
+        specifier: ^6.2.8
+        version: 6.2.8
       mimetext:
         specifier: ^3.0.28
         version: 3.0.28

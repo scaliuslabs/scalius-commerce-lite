@@ -48,6 +48,10 @@ import {
 import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
+// Bundled asset URLs are built at the host root. The dashboard may be served
+// below a runtime path prefix, so every one is resolved per render, never once
+// per isolate: the prefix belongs to the request, not to the module.
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 const NAV_ICON_CLASSNAME = "size-4 shrink-0";
 const NAV_ICON_STROKE_WIDTH = 1.75;
@@ -267,19 +271,19 @@ export function AppSidebar() {
         >
           {isCollapsed ? (
             <img
-              src={faviconImg}
+              src={withDashboardBasePath(faviconImg)}
               alt="Scalius"
               className="w-7 h-7 shrink-0 object-contain"
             />
           ) : (
             <>
               <img
-                src={logoLightImg}
+                src={withDashboardBasePath(logoLightImg)}
                 alt="Scalius"
                 className="h-7 w-auto object-contain block dark:hidden"
               />
               <img
-                src={logoDarkImg}
+                src={withDashboardBasePath(logoDarkImg)}
                 alt="Scalius"
                 className="h-7 w-auto object-contain hidden dark:block"
               />

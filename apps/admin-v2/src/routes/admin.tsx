@@ -21,6 +21,7 @@ import {
   getDefaultAdminPath,
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
@@ -30,7 +31,8 @@ export const Route = createFileRoute("/admin")({
       if (location.pathname === "/admin") {
         const defaultPath = getDefaultAdminPath(authContext);
         if (defaultPath !== ADMIN_ACCESS_DENIED_PATH) {
-          throw redirect({ href: defaultPath });
+          // `href` bypasses the router's base path handling; `to` is typed.
+          throw redirect({ href: withDashboardBasePath(defaultPath) });
         }
       }
       throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });
