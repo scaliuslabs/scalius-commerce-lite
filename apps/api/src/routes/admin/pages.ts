@@ -149,7 +149,8 @@ const createPageRoute = createRoute({
 
 /** The dashboard's first path segment is never a valid CMS page slug on a shared host. */
 function reservedDashboardSlugs(env: Env): ReadonlySet<string> {
-  const segment = dashboardReservedSegment(env.PLATFORM_CONFIG?.dashboardUrl);
+  const platform = env.PLATFORM_CONFIG;
+  const segment = dashboardReservedSegment(platform?.dashboardUrl, platform?.storefrontUrl);
   return new Set(segment ? [segment] : []);
 }
 

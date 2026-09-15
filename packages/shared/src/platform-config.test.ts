@@ -344,6 +344,20 @@ describe("dashboard URL with a path prefix", () => {
     expect(dashboardReservedSegment(undefined)).toBeNull();
   });
 
+  it("reserves a storefront slug only when the dashboard shares its origin", () => {
+    const storefront = "https://shop.example.com";
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard", storefront)).toBe("dashboard");
+    // Its own hostname takes nothing away from the storefront's URL space.
+    expect(dashboardReservedSegment("https://admin.example.com/dashboard", storefront)).toBeNull();
+    // A different port or scheme is a different origin.
+    expect(dashboardReservedSegment("https://shop.example.com:8443/dashboard", storefront)).toBeNull();
+    // Unknown or unreadable storefront origin: keep the reservation, because a
+    // CMS page shadowing the dashboard is the worse failure.
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard", "")).toBe("dashboard");
+    expect(dashboardReservedSegment("https://shop.example.com/dashboard")).toBe("dashboard");
+    expect(dashboardReservedSegment("https://shop.example.com", storefront)).toBeNull();
+  });
+
   it("prefixes and strips the runtime base path exactly once", () => {
     expect(prefixDashboardBasePath("", "/admin/orders")).toBe("/admin/orders");
     expect(prefixDashboardBasePath("/dashboard", "/admin/orders")).toBe("/dashboard/admin/orders");

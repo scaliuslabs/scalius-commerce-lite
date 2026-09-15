@@ -659,7 +659,10 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
         IDENTITY_HANDOFF_PATH,
         {
           method: "GET",
-          query: z.object({ token: z.string().min(16).max(MAX_TOKEN_LENGTH) }),
+          // Deliberately permissive: a store that never enabled handoff must
+          // answer 404, not a schema error that proves the route exists. The
+          // verifier below rejects a missing or oversized token itself.
+          query: z.object({ token: z.string().max(MAX_TOKEN_LENGTH).optional() }).optional(),
           metadata: {
             openapi: {
               description: "Sign in with an operator-minted identity handoff token",
@@ -667,9 +670,9 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
             },
           },
         },
-        async (ctx: HandoffEndpointContext<{ token: string }, undefined>) => {
+        async (ctx: HandoffEndpointContext<{ token?: string } | undefined, undefined>) => {
           try {
-            const claims = await verifyIdentityHandoffToken(ctx.query.token, {
+            const claims = await verifyIdentityHandoffToken(ctx.query?.token ?? "", {
               config,
               hmacSecret: options.hmacSecret,
             });
@@ -703,7 +706,8 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
         IDENTITY_HANDOFF_REVOKE_PATH,
         {
           method: "POST",
-          body: z.object({ token: z.string().min(16).max(MAX_TOKEN_LENGTH) }),
+          // Permissive for the same reason as the sign-in endpoint above.
+          body: z.object({ token: z.string().max(MAX_TOKEN_LENGTH).optional() }).optional(),
           metadata: {
             openapi: {
               description: "Revoke an administrator's dashboard sessions with an operator-minted token",
@@ -711,9 +715,9 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
             },
           },
         },
-        async (ctx: HandoffEndpointContext<undefined, { token: string }>) => {
+        async (ctx: HandoffEndpointContext<undefined, { token?: string } | undefined>) => {
           try {
-            const claims = await verifyIdentityHandoffToken(ctx.body.token, {
+            const claims = await verifyIdentityHandoffToken(ctx.body?.token ?? "", {
               config,
               hmacSecret: options.hmacSecret,
             });

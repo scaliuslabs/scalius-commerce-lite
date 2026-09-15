@@ -412,4 +412,35 @@ describe("identityHandoff plugin", () => {
     expect(limit?.pathMatcher("/handoff/revoke")).toBe(true);
     expect(limit?.pathMatcher("/sign-in/email")).toBe(false);
   });
+
+  it("answers 404 on a store that never enabled handoff, whatever the request carries", async () => {
+    const plugin = identityHandoff({
+      db: {} as Database,
+      config: { ...CONFIG, enabled: false },
+      hmacSecret: SECRET,
+      dashboardUrl: "https://shop.example.com/dashboard",
+    });
+    const endpoints = plugin.endpoints as unknown as Record<
+      string,
+      (ctx: Record<string, unknown>) => Promise<unknown>
+    >;
+
+    // A schema rejection would answer 400 and prove the route exists. Nothing
+    // a caller sends — no token, a short token, or none of the parameters at
+    // all — may distinguish a disabled store from one that has no such route.
+    for (const query of [undefined, {}, { token: "short" }]) {
+      const error = await endpoints.identityHandoff!({ query }).then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      expect((error as { status?: string }).status).toBe("NOT_FOUND");
+    }
+    for (const body of [undefined, {}, { token: "short" }]) {
+      const error = await endpoints.identityHandoffRevoke!({ body }).then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      expect((error as { status?: string }).status).toBe("NOT_FOUND");
+    }
+  });
 });

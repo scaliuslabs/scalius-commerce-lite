@@ -267,7 +267,7 @@ describe("dashboard path prefix reservation", () => {
     );
 
     const reservedIndex = source.indexOf(
-      "if (slug === dashboardReservedSegment(getRuntimeDashboardUrl())) {",
+      "if (slug === dashboardReservedSegment(getRuntimeDashboardUrl(), getRuntimeStorefrontUrl())) {",
     );
     const apiCallIndex = source.indexOf("getPageRenderData(slug)");
 
