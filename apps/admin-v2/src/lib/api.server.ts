@@ -266,9 +266,10 @@ export async function apiBaseGet<T>(
 export async function apiBasePost<T>(
   path: string,
   body?: unknown,
+  options?: { headers?: Record<string, string> },
 ): Promise<T> {
   const fullPath = buildPath(path, undefined, false);
-  return readApiFetch("POST", fullPath, { body }, handleResponse<T>);
+  return readApiFetch("POST", fullPath, { body, headers: options?.headers }, handleResponse<T>);
 }
 
 /**

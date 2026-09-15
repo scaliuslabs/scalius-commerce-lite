@@ -34,6 +34,17 @@ vi.mock("sonner", () => ({
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const automationOff = {
+  setupTokenRequired: false,
+  identityHandoff: {
+    enabled: false,
+    issuer: "",
+    audience: "",
+    jwksUrl: "",
+    localLoginDisabled: false,
+  },
+};
+
 const configured: PlatformSettingsPayload = {
   storefrontUrl: "https://shop.example.com",
   apiUrl: "https://api.example.com",
@@ -41,6 +52,7 @@ const configured: PlatformSettingsPayload = {
   mediaUrl: "https://cdn.example.com",
   customerAuthCookieDomain: "example.com",
   corsAllowedOrigins: ["https://app.example.com"],
+  ...automationOff,
   readiness: { status: "ready", issues: [], missing: [] },
   effective: {
     storefrontUrl: "https://shop.example.com",
@@ -48,6 +60,7 @@ const configured: PlatformSettingsPayload = {
     dashboardUrl: "https://dashboard.example.com",
     mediaUrl: "https://cdn.example.com",
   },
+  dashboardBasePath: "",
 };
 
 const unconfigured: PlatformSettingsPayload = {
@@ -57,6 +70,7 @@ const unconfigured: PlatformSettingsPayload = {
   mediaUrl: "",
   customerAuthCookieDomain: "",
   corsAllowedOrigins: [],
+  ...automationOff,
   readiness: { status: "incomplete", issues: [{ code: "platform.missing_origins", message: "Missing origins." }], missing: ["apiUrl", "dashboardUrl", "mediaUrl"] },
   effective: {
     storefrontUrl: "http://localhost:4322",
@@ -64,6 +78,7 @@ const unconfigured: PlatformSettingsPayload = {
     dashboardUrl: "http://localhost:4323",
     mediaUrl: "http://localhost:8787/api/v1/media",
   },
+  dashboardBasePath: "",
 };
 
 describe("Platform settings draft helpers", () => {
@@ -79,6 +94,22 @@ describe("Platform settings draft helpers", () => {
     expect(
       buildPlatformPatch({ ...saved, customerAuthCookieDomain: "" }, saved),
     ).toEqual({ customerAuthCookieDomain: "" });
+    // Automation contracts: the flag alone, or the whole handoff block.
+    expect(buildPlatformPatch({ ...saved, setupTokenRequired: true }, saved)).toEqual({ setupTokenRequired: true });
+    expect(
+      buildPlatformPatch(
+        { ...saved, identityHandoff: { ...saved.identityHandoff, issuer: " https://idp.example.com " } },
+        saved,
+      ),
+    ).toEqual({
+      identityHandoff: {
+        enabled: false,
+        issuer: "https://idp.example.com",
+        audience: "",
+        jwksUrl: "",
+        localLoginDisabled: false,
+      },
+    });
   });
 
   it("validates origins, media base, and cookie domain before save", () => {
@@ -90,8 +121,13 @@ describe("Platform settings draft helpers", () => {
     expect(validatePlatformDraft({ ...draft, apiUrl: "http://api.example.com" })).toMatchObject({
       apiUrl: expect.stringContaining("HTTPS origin"),
     });
-    expect(validatePlatformDraft({ ...draft, dashboardUrl: "https://dashboard.example.com/admin" })).toMatchObject({
-      dashboardUrl: expect.stringContaining("without credentials, path"),
+    // The dashboard URL may carry a lowercase path prefix, nothing else.
+    expect(validatePlatformDraft({ ...draft, dashboardUrl: "https://shop.example.com/dashboard" })).toEqual({});
+    expect(validatePlatformDraft({ ...draft, dashboardUrl: "https://shop.example.com/Dashboard" })).toMatchObject({
+      dashboardUrl: expect.stringContaining("lowercase path prefix"),
+    });
+    expect(validatePlatformDraft({ ...draft, dashboardUrl: "https://shop.example.com/dashboard?x=1" })).toMatchObject({
+      dashboardUrl: expect.stringContaining("lowercase path prefix"),
     });
     expect(validatePlatformDraft({ ...draft, mediaUrl: "https://cdn.example.com/media?x=1" })).toMatchObject({
       mediaUrl: expect.stringContaining("HTTPS base URL"),
@@ -104,6 +140,35 @@ describe("Platform settings draft helpers", () => {
     expect(
       validatePlatformDraft({ ...draft, apiUrl: "", dashboardUrl: "", mediaUrl: "", customerAuthCookieDomain: "" }),
     ).toEqual({});
+  });
+
+  it("keeps the identity handoff block consistent before save", () => {
+    const draft = toPlatformDraft(configured);
+    const handoff = { ...draft.identityHandoff };
+    expect(validatePlatformDraft({ ...draft, identityHandoff: { ...handoff, enabled: true } })).toEqual({
+      identityHandoff: {
+        issuer: "Enter the issuer before enabling identity handoff.",
+        audience: "Enter the audience before enabling identity handoff.",
+      },
+    });
+    expect(validatePlatformDraft({
+      ...draft,
+      identityHandoff: { ...handoff, enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
+    })).toEqual({});
+    expect(validatePlatformDraft({
+      ...draft,
+      identityHandoff: { ...handoff, issuer: "has space", jwksUrl: "http://idp.example.com/jwks" },
+    })).toEqual({
+      identityHandoff: {
+        issuer: expect.stringContaining("single value"),
+        jwksUrl: expect.stringContaining("HTTPS URL"),
+      },
+    });
+    expect(validatePlatformDraft({ ...draft, identityHandoff: { ...handoff, localLoginDisabled: true } })).toEqual({
+      identityHandoff: {
+        localLoginDisabled: "Password sign-in can only be disabled while identity handoff is enabled.",
+      },
+    });
   });
 });
 

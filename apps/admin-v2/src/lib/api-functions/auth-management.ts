@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
 import { apiBaseGet, apiBasePost, apiDelete, apiGet, apiPost } from "../api.server";
 
 export type TwoFactorMethod = "totp" | "email";
@@ -162,12 +163,16 @@ export interface TwoFactorInfoResponse {
 
 export interface SetupStatusResponse {
   adminExists: boolean;
+  /** True when the deployment requires the derived setup token (Platform setting). */
+  setupTokenRequired: boolean;
 }
 
 export interface RunSetupInput {
   name: string;
   email: string;
   password: string;
+  /** Sent as the `X-Scalius-Setup-Token` header, never in the body or URL. */
+  setupToken?: string;
 }
 
 export interface RunSetupResponse {
@@ -302,5 +307,11 @@ export const getSetupStatus = createServerFn({ method: "GET" }).handler(
 export const runSetup = createServerFn({ method: "POST" })
   .validator((data: RunSetupInput) => data)
   .handler(async ({ data }) => {
-    return apiBasePost<RunSetupResponse>("/setup", data);
+    const { setupToken, ...body } = data;
+    const token = setupToken?.trim();
+    return apiBasePost<RunSetupResponse>(
+      "/setup",
+      body,
+      token ? { headers: { [ADMIN_SETUP_TOKEN_HEADER]: token } } : undefined,
+    );
   });

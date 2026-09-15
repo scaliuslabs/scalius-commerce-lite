@@ -144,6 +144,14 @@ function createEnv(overrides: Partial<Env> = {}): Env {
       mediaUrl: "https://cloud.example.test",
       customerAuthCookieDomain: "",
       corsAllowedOrigins: [],
+      setupTokenRequired: false,
+      identityHandoff: {
+        enabled: false,
+        issuer: "",
+        audience: "",
+        jwksUrl: "",
+        localLoginDisabled: false,
+      },
     },
     ...overrides,
   } as Env;
@@ -288,6 +296,14 @@ describe("API readiness route", () => {
           mediaUrl: "",
           customerAuthCookieDomain: "",
           corsAllowedOrigins: [],
+          setupTokenRequired: false,
+          identityHandoff: {
+            enabled: false,
+            issuer: "",
+            audience: "",
+            jwksUrl: "",
+            localLoginDisabled: false,
+          },
         },
       }),
     );
@@ -317,6 +333,14 @@ describe("API readiness route", () => {
         mediaUrl: "https://cloud.example.test",
         customerAuthCookieDomain: "",
         corsAllowedOrigins: [],
+        setupTokenRequired: false,
+        identityHandoff: {
+          enabled: false,
+          issuer: "",
+          audience: "",
+          jwksUrl: "",
+          localLoginDisabled: false,
+        },
       },
     });
 

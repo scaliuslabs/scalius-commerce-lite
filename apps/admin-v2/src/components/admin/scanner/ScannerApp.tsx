@@ -17,6 +17,7 @@ import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
 import { unwrapEnvelope } from "@/lib/api-helpers";
 import { formatAdminTime } from "@/lib/admin-time";
+import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,7 +140,7 @@ async function postInventoryOperation(
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await fetch(url, {
+      const response = await fetch(withDashboardBasePath(url), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -193,7 +194,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
     if (verificationRequestRef.current?.token !== token) {
       verificationRequestRef.current = {
         token,
-        promise: fetch("/api/scanner-token", verificationRequest)
+        promise: fetch(withDashboardBasePath("/api/scanner-token"), verificationRequest)
           .then((res) => {
             if (!res.ok) {
               throw new Error("Invalid or expired scanner session");

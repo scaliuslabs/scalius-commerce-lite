@@ -195,7 +195,8 @@ function agentSurface(path: string): AgentOperationMetadata["surface"] {
     path.startsWith("/storefront/agent-continuations/") ||
     path.startsWith("/agent-auth") ||
     path.startsWith("/auth") ||
-    path === "/setup"
+    path === "/setup" ||
+    path === "/meta"
   ) {
     return "system";
   }

@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 
 function getResetError(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
@@ -48,7 +49,7 @@ export function ResetPasswordForm() {
       // exchanging it for the short-lived HttpOnly reset-session cookie.
       window.history.replaceState(null, "", window.location.pathname);
       resetExchangeRef.current = token
-        ? fetch("/api/auth/reset-session", {
+        ? fetch(withDashboardBasePath("/api/auth/reset-session"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ token }),
@@ -90,7 +91,7 @@ export function ResetPasswordForm() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/reset-password-session", {
+      const response = await fetch(withDashboardBasePath("/api/auth/reset-password-session"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword: password }),

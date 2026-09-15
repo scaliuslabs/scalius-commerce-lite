@@ -183,7 +183,15 @@ export const loginPageGuardHandler = createServerOnlyFn(async () => {
     throw redirect({ to: "/auth/two-factor" });
   }
 
-  return null;
+  // Opt-in identity handoff (Platform settings): the sign-in page hides the
+  // password form when an operator's identity provider owns sign-in.
+  const handoff = env.PLATFORM_CONFIG?.identityHandoff;
+  return {
+    signIn: {
+      localLoginDisabled: handoff?.localLoginDisabled === true,
+      identityHandoffEnabled: handoff?.enabled === true,
+    },
+  };
 });
 
 export const loginPageGuard = createServerFn().handler(loginPageGuardHandler);

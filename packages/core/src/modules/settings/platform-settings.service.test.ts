@@ -30,6 +30,22 @@ const PRODUCTION_PATCH = {
   corsAllowedOrigins: ["https://mobile.example.com"],
 };
 
+const AUTOMATION_DEFAULTS = {
+  setupTokenRequired: false,
+  identityHandoff: {
+    enabled: false,
+    issuer: "",
+    audience: "",
+    jwksUrl: "",
+    localLoginDisabled: false,
+  },
+};
+
+const STORED_AUTOMATION_DEFAULTS = {
+  setupTokenRequired: false,
+  identityHandoff: AUTOMATION_DEFAULTS.identityHandoff,
+};
+
 function createSchema(sqlite: DatabaseSync): void {
   sqlite.exec(`
     CREATE TABLE settings (
@@ -165,6 +181,7 @@ describe("platform settings storage", () => {
       mediaUrl: "https://cdn.example.com",
       customerAuthCookieDomain: "example.com",
       corsAllowedOrigins: ["https://mobile.example.com"],
+      ...STORED_AUTOMATION_DEFAULTS,
     }));
 
     // A later read comes from the document, not the legacy rows.
@@ -184,6 +201,7 @@ describe("platform settings storage", () => {
 
     expect(saved).toEqual({
       ...PRODUCTION_PATCH,
+      ...AUTOMATION_DEFAULTS,
       corsAllowedOrigins: ["https://mobile.example.com", "https://kiosk.example.com"],
     });
     await expect(getPlatformSettings(db)).resolves.toEqual(saved);
@@ -195,6 +213,7 @@ describe("platform settings storage", () => {
         mediaUrl: "https://cdn.example.com",
         customerAuthCookieDomain: "example.com",
         corsAllowedOrigins: ["https://mobile.example.com", "https://kiosk.example.com"],
+        ...STORED_AUTOMATION_DEFAULTS,
       }),
     });
     expect(
@@ -211,7 +230,81 @@ describe("platform settings storage", () => {
 
     expect(updated).toEqual({
       ...PRODUCTION_PATCH,
+      ...AUTOMATION_DEFAULTS,
       mediaUrl: "http://localhost:8787/api/v1/media",
+    });
+  });
+
+  it("stores a dashboard path prefix and the automation contracts", async () => {
+    await savePlatformSettings(db, PRODUCTION_PATCH);
+
+    const saved = await savePlatformSettings(db, {
+      dashboardUrl: "https://shop.example.com/dashboard/",
+      setupTokenRequired: true,
+      identityHandoff: {
+        enabled: true,
+        issuer: " https://idp.example.com ",
+        audience: "scalius:store-1",
+        jwksUrl: "https://idp.example.com/.well-known/jwks.json",
+      },
+    });
+
+    expect(saved).toEqual({
+      ...PRODUCTION_PATCH,
+      dashboardUrl: "https://shop.example.com/dashboard",
+      setupTokenRequired: true,
+      identityHandoff: {
+        enabled: true,
+        issuer: "https://idp.example.com",
+        audience: "scalius:store-1",
+        jwksUrl: "https://idp.example.com/.well-known/jwks.json",
+        localLoginDisabled: false,
+      },
+    });
+    await expect(getPlatformSettings(db)).resolves.toEqual(saved);
+
+    // A later partial patch keeps the untouched handoff fields.
+    const disabledLogin = await savePlatformSettings(db, {
+      identityHandoff: { localLoginDisabled: true },
+    });
+    expect(disabledLogin.identityHandoff).toEqual({
+      ...saved.identityHandoff,
+      localLoginDisabled: true,
+    });
+
+    // Turning the handoff off also re-enables password sign-in.
+    const disabled = await savePlatformSettings(db, {
+      identityHandoff: { enabled: false },
+    });
+    expect(disabled.identityHandoff).toEqual({
+      ...saved.identityHandoff,
+      enabled: false,
+      localLoginDisabled: false,
+    });
+  });
+
+  it("keeps the identity handoff consistent across partial patches", async () => {
+    await savePlatformSettings(db, PRODUCTION_PATCH);
+
+    await expect(savePlatformSettings(db, {
+      identityHandoff: { enabled: true, issuer: "https://idp.example.com" },
+    })).rejects.toThrow("Identity handoff needs an issuer and an audience");
+    await expect(savePlatformSettings(db, {
+      identityHandoff: { localLoginDisabled: true },
+    })).rejects.toThrow("Password sign-in can only be disabled while identity handoff is enabled.");
+    await expect(savePlatformSettings(db, {
+      identityHandoff: { issuer: "has space" },
+    })).rejects.toThrow("Identity handoff issuer must be a single value");
+    await expect(savePlatformSettings(db, {
+      identityHandoff: { jwksUrl: "http://idp.example.com/jwks" },
+    })).rejects.toThrow("Identity handoff JWKS URL must be an HTTPS URL");
+    await expect(savePlatformSettings(db, {
+      dashboardUrl: "https://shop.example.com/Dashboard",
+    })).rejects.toThrow("Dashboard URL must be an HTTPS origin, optionally followed by a lowercase path prefix");
+
+    await expect(getPlatformSettings(db)).resolves.toEqual({
+      ...PRODUCTION_PATCH,
+      ...AUTOMATION_DEFAULTS,
     });
   });
 
@@ -237,6 +330,7 @@ describe("platform settings storage", () => {
         mediaUrl: "",
         customerAuthCookieDomain: "",
         corsAllowedOrigins: [],
+        ...STORED_AUTOMATION_DEFAULTS,
       }),
     });
   });
@@ -326,6 +420,7 @@ describe("platform settings storage", () => {
       mediaUrl: "https://cdn.example.com/assets",
       customerAuthCookieDomain: "example.com",
       corsAllowedOrigins: ["https://a.example.com"],
+      ...AUTOMATION_DEFAULTS,
     });
   });
 });

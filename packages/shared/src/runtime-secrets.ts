@@ -4,8 +4,10 @@
  * Every deployment installs exactly one master secret, `SCALIUS_SECRET`, on
  * each Worker. All other runtime secrets (session signing, JWT signing, the
  * storefront service token, the storefront purge token, the agent token
- * pepper, and the customer session hash key) are derived from it with
- * HKDF-SHA256 and a fixed purpose label. Derived values are never installed,
+ * pepper, the customer session hash key, and the opt-in automation secrets for
+ * first-admin setup, trusted front proxies, and identity handoff) are derived
+ * from it with HKDF-SHA256 and a fixed purpose label. Operators derive the
+ * automation secrets with the same parameters (`scripts/derive-runtime-secret.mjs`). Derived values are never installed,
  * logged, or stored; they are recomputed at Worker entry for each invocation.
  *
  * Rotation: changing `SCALIUS_SECRET` rotates every derived secret at once.
@@ -27,6 +29,12 @@ export const RUNTIME_SECRET_PURPOSES = {
   PURGE_TOKEN: "storefront-purge-token",
   AGENT_TOKEN_PEPPER: "agent-token-pepper",
   CUSTOMER_SESSION_HASH_KEY: "customer-session-hash",
+  /** Gates `POST /api/v1/setup` when the Platform setting requires a token. */
+  ADMIN_SETUP_TOKEN: "admin-setup",
+  /** HMAC key a trusted front proxy uses to sign forwarded host/proto/IP. */
+  FRONT_PROXY_SECRET: "front-proxy",
+  /** HS256 key for operator-minted dashboard identity handoff tokens. */
+  IDENTITY_HANDOFF_SECRET: "identity-handoff",
 } as const;
 
 export type RuntimeSecretName = keyof typeof RUNTIME_SECRET_PURPOSES;

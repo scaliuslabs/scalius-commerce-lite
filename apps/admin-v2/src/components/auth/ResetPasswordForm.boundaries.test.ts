@@ -9,11 +9,11 @@ describe("password reset proof handling", () => {
     expect(source).not.toContain("window.location.search");
     expect(source).toContain('window.history.replaceState(null, "", window.location.pathname)');
     expect(source).toContain("resetExchangeRef.current");
-    expect(source).toContain('fetch("/api/auth/reset-session"');
+    expect(source).toContain('fetch(withDashboardBasePath("/api/auth/reset-session")');
   });
 
   it("submits the new password without putting the reset proof in client payloads", () => {
-    expect(source).toContain('fetch("/api/auth/reset-password-session"');
+    expect(source).toContain('fetch(withDashboardBasePath("/api/auth/reset-password-session")');
     expect(source).toContain('JSON.stringify({ newPassword: password })');
     expect(source).not.toContain("authClient.resetPassword");
   });

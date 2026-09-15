@@ -12,7 +12,10 @@ import {
   cleanupExpiredCustomerAuthOtpRateLimits,
   cleanupExpiredCustomerSessions,
 } from "@scalius/core/modules/customers/customer-auth.service";
-import { cleanupExpiredScannerTokenClaims } from "@scalius/core/auth";
+import {
+  cleanupExpiredScannerTokenClaims,
+  pruneExpiredIdentityHandoffEvents,
+} from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
@@ -442,5 +445,14 @@ async function runScheduledMaintenanceInner(
         `deleted=${scannerTokenClaimsCleanup.deleted}, limit=${scannerTokenClaimsCleanup.limit}, ` +
         `hasMore=${scannerTokenClaimsCleanup.hasMore}`,
     );
+  }
+
+  // Identity handoff audit rows double as the single-use token ledger; they
+  // are retained for 90 days after the token expired, then pruned by index.
+  const handoffEventsPruned = await timed("identity_handoff_audit_prune", () =>
+    pruneExpiredIdentityHandoffEvents(db),
+  );
+  if (handoffEventsPruned > 0) {
+    console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
   }
 }

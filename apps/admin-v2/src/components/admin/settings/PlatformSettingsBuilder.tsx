@@ -12,10 +12,15 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
   normalizeCookieDomain,
+  normalizeDashboardUrl,
+  normalizeIdentityHandoffConfig,
+  normalizeJwksUrl,
   normalizeMediaBaseUrl,
   normalizePlatformOriginUrl,
+  type IdentityHandoffConfig,
 } from "@scalius/shared/platform-config";
 
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
@@ -23,6 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -43,7 +49,13 @@ export interface PlatformDraft {
   mediaUrl: string;
   customerAuthCookieDomain: string;
   corsAllowedOrigins: string[];
+  setupTokenRequired: boolean;
+  identityHandoff: IdentityHandoffConfig;
 }
+
+export type PlatformDraftErrors = Partial<
+  Record<Exclude<keyof PlatformDraft, "identityHandoff">, string>
+> & { identityHandoff?: Partial<Record<keyof IdentityHandoffConfig, string>> };
 
 interface PlatformUrlField {
   key: PlatformUrlKey;
@@ -69,7 +81,7 @@ export const PLATFORM_URL_FIELDS: readonly PlatformUrlField[] = [
     key: "dashboardUrl",
     label: "Dashboard URL",
     placeholder: "https://dashboard.example.com",
-    help: "Admin origin used for sign-in links, password reset emails, and trusted origins.",
+    help: "Admin URL used for sign-in links, password reset emails, and trusted origins. A lowercase path prefix such as https://shop.example.com/dashboard serves the dashboard below that path.",
   },
   {
     key: "mediaUrl",
@@ -85,9 +97,15 @@ const URL_LABELS: Record<PlatformUrlKey, string> = Object.fromEntries(
 
 const ORIGIN_ERROR =
   "Use an HTTPS origin without credentials, path, query, or fragment. HTTP is limited to localhost.";
+const DASHBOARD_URL_ERROR =
+  "Use an HTTPS origin, optionally followed by a lowercase path prefix such as /dashboard, without credentials, query, or fragment. HTTP is limited to localhost.";
 const MEDIA_ERROR =
   "Use an HTTPS base URL without credentials, query, or fragment. HTTP is limited to localhost.";
 const COOKIE_DOMAIN_ERROR = "Use a bare hostname such as example.com.";
+const CLAIM_ERROR =
+  `Use a single value of at most ${IDENTITY_HANDOFF_CLAIM_MAX_LENGTH} characters without spaces.`;
+const JWKS_ERROR =
+  "Use an HTTPS URL without credentials or fragment, or leave empty to sign tokens with the derived secret.";
 
 export function toPlatformDraft(payload: PlatformSettingsPayload): PlatformDraft {
   return {
@@ -97,7 +115,19 @@ export function toPlatformDraft(payload: PlatformSettingsPayload): PlatformDraft
     mediaUrl: payload.mediaUrl,
     customerAuthCookieDomain: payload.customerAuthCookieDomain,
     corsAllowedOrigins: [...payload.corsAllowedOrigins],
+    setupTokenRequired: payload.setupTokenRequired,
+    identityHandoff: { ...payload.identityHandoff },
   };
+}
+
+function sameHandoff(left: IdentityHandoffConfig, right: IdentityHandoffConfig): boolean {
+  return (
+    left.enabled === right.enabled
+    && left.issuer.trim() === right.issuer
+    && left.audience.trim() === right.audience
+    && left.jwksUrl.trim() === right.jwksUrl
+    && left.localLoginDisabled === right.localLoginDisabled
+  );
 }
 
 function sameList(left: readonly string[], right: readonly string[]): boolean {
@@ -121,28 +151,60 @@ export function buildPlatformPatch(
   if (!sameList(draft.corsAllowedOrigins, saved.corsAllowedOrigins)) {
     patch.corsAllowedOrigins = [...draft.corsAllowedOrigins];
   }
+  if (draft.setupTokenRequired !== saved.setupTokenRequired) {
+    patch.setupTokenRequired = draft.setupTokenRequired;
+  }
+  if (!sameHandoff(draft.identityHandoff, saved.identityHandoff)) {
+    // The whole block travels together so the server validates one consistent state.
+    patch.identityHandoff = {
+      enabled: draft.identityHandoff.enabled,
+      issuer: draft.identityHandoff.issuer.trim(),
+      audience: draft.identityHandoff.audience.trim(),
+      jwksUrl: draft.identityHandoff.jwksUrl.trim(),
+      localLoginDisabled: draft.identityHandoff.localLoginDisabled,
+    };
+  }
   return patch;
 }
 
-export function validatePlatformDraft(
-  draft: PlatformDraft,
-): Partial<Record<keyof PlatformDraft, string>> {
-  const errors: Partial<Record<keyof PlatformDraft, string>> = {};
+function validateClaim(value: string): boolean {
+  return normalizeIdentityHandoffConfig({ enabled: true, issuer: value, audience: value }).issuer !== "";
+}
+
+export function validatePlatformDraft(draft: PlatformDraft): PlatformDraftErrors {
+  const errors: PlatformDraftErrors = {};
   if (!draft.storefrontUrl.trim()) {
     errors.storefrontUrl = "Enter the public store origin. It cannot be cleared.";
   } else if (!normalizePlatformOriginUrl(draft.storefrontUrl.trim())) {
     errors.storefrontUrl = ORIGIN_ERROR;
   }
-  for (const key of ["apiUrl", "dashboardUrl"] as const) {
-    const value = draft[key].trim();
-    if (value && !normalizePlatformOriginUrl(value)) errors[key] = ORIGIN_ERROR;
-  }
+  const apiUrl = draft.apiUrl.trim();
+  if (apiUrl && !normalizePlatformOriginUrl(apiUrl)) errors.apiUrl = ORIGIN_ERROR;
+  const dashboardUrl = draft.dashboardUrl.trim();
+  if (dashboardUrl && !normalizeDashboardUrl(dashboardUrl)) errors.dashboardUrl = DASHBOARD_URL_ERROR;
   const mediaUrl = draft.mediaUrl.trim();
   if (mediaUrl && !normalizeMediaBaseUrl(mediaUrl)) errors.mediaUrl = MEDIA_ERROR;
   const cookieDomain = draft.customerAuthCookieDomain.trim();
   if (cookieDomain && !normalizeCookieDomain(cookieDomain)) {
     errors.customerAuthCookieDomain = COOKIE_DOMAIN_ERROR;
   }
+
+  const handoff = draft.identityHandoff;
+  const handoffErrors: NonNullable<PlatformDraftErrors["identityHandoff"]> = {};
+  const issuer = handoff.issuer.trim();
+  const audience = handoff.audience.trim();
+  const jwksUrl = handoff.jwksUrl.trim();
+  if (issuer && !validateClaim(issuer)) handoffErrors.issuer = CLAIM_ERROR;
+  if (audience && !validateClaim(audience)) handoffErrors.audience = CLAIM_ERROR;
+  if (jwksUrl && !normalizeJwksUrl(jwksUrl)) handoffErrors.jwksUrl = JWKS_ERROR;
+  if (handoff.enabled) {
+    if (!issuer) handoffErrors.issuer = "Enter the issuer before enabling identity handoff.";
+    if (!audience) handoffErrors.audience = "Enter the audience before enabling identity handoff.";
+  }
+  if (handoff.localLoginDisabled && !handoff.enabled) {
+    handoffErrors.localLoginDisabled = "Password sign-in can only be disabled while identity handoff is enabled.";
+  }
+  if (Object.keys(handoffErrors).length > 0) errors.identityHandoff = handoffErrors;
   return errors;
 }
 
@@ -211,6 +273,14 @@ export function PlatformSettingsBuilder() {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
   }
 
+  function setHandoffField<K extends keyof IdentityHandoffConfig>(key: K, value: IdentityHandoffConfig[K]) {
+    setDraft((current) => (
+      current
+        ? { ...current, identityHandoff: { ...current.identityHandoff, [key]: value } }
+        : current
+    ));
+  }
+
   function addCorsOrigin() {
     if (!canEdit || !draft) return;
     const origin = normalizePlatformOriginUrl(corsDraft.trim());
@@ -250,7 +320,9 @@ export function PlatformSettingsBuilder() {
     );
   }
 
-  const { readiness, effective } = platformQuery.data;
+  const { readiness, effective, dashboardBasePath } = platformQuery.data;
+  const handoffErrors = errors.identityHandoff ?? {};
+  const handoffDraft = draft.identityHandoff;
 
   return (
     <>
@@ -438,6 +510,107 @@ export function PlatformSettingsBuilder() {
                 No extra origins. The storefront, API, and dashboard origins are trusted automatically.
               </p>
             )}
+          </div>
+        </section>
+
+        <section className="rounded-lg border bg-background p-4" data-testid="platform-automation">
+          <h3 className="text-sm font-semibold">Automated and managed deployments</h3>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            Optional contracts for CI pipelines, one-click installers, and multi-store operators. Everything here is off by default and changes nothing for a self-hosted store.
+            {dashboardBasePath ? (
+              <> The dashboard is currently served below <code>{dashboardBasePath}</code>.</>
+            ) : null}
+          </p>
+
+          <div className="mt-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <Label htmlFor="platform-setupTokenRequired">Require a setup token for first-admin setup</Label>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Gates <code>POST /api/v1/setup</code> behind the <code>X-Scalius-Setup-Token</code> header derived from the master secret, so nobody who finds a fresh deployment can become its first administrator.
+              </p>
+            </div>
+            <label htmlFor="platform-setupTokenRequired" className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+              <Switch
+                id="platform-setupTokenRequired"
+                checked={draft.setupTokenRequired}
+                disabled={!canEdit}
+                onCheckedChange={(value) => setField("setupTokenRequired", value)}
+              />
+            </label>
+          </div>
+
+          <div className="mt-5 border-t pt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="platform-handoff-enabled">Trusted identity handoff</Label>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Lets an operator&apos;s identity provider open this dashboard with a short-lived signed token at <code>/api/auth/handoff</code>. Tokens are HS256-signed with the derived secret unless a JWKS URL is set.
+                </p>
+              </div>
+              <label htmlFor="platform-handoff-enabled" className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+                <Switch
+                  id="platform-handoff-enabled"
+                  checked={handoffDraft.enabled}
+                  disabled={!canEdit}
+                  onCheckedChange={(value) => setHandoffField("enabled", value)}
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4">
+              {([
+                ["issuer", "Issuer", "https://idp.example.com", "Expected iss claim of handoff tokens."],
+                ["audience", "Audience", "scalius:store-1", "Expected aud claim of handoff tokens."],
+                ["jwksUrl", "JWKS URL", "https://idp.example.com/.well-known/jwks.json", "Optional. Verifies RS256/ES256 tokens; leave empty to use the derived HS256 secret."],
+              ] as const).map(([key, label, placeholder, help]) => {
+                const inputId = `platform-handoff-${key}`;
+                const error = handoffErrors[key];
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <Label htmlFor={inputId}>{label}</Label>
+                    <Input
+                      id={inputId}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={handoffDraft[key]}
+                      disabled={!canEdit}
+                      placeholder={placeholder}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={`${inputId}-help`}
+                      className="min-h-11 sm:min-h-9"
+                      onChange={(event) => setHandoffField(key, event.target.value)}
+                    />
+                    <p
+                      id={`${inputId}-help`}
+                      className={`text-xs leading-5 ${error ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {error ?? help}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="platform-handoff-localLoginDisabled">Disable password sign-in</Label>
+                <p
+                  className={`text-xs leading-5 ${handoffErrors.localLoginDisabled ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {handoffErrors.localLoginDisabled
+                    ?? "Hides and refuses the password form while the identity provider owns sign-in. Only available while identity handoff is enabled."}
+                </p>
+              </div>
+              <label htmlFor="platform-handoff-localLoginDisabled" className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">
+                <Switch
+                  id="platform-handoff-localLoginDisabled"
+                  checked={handoffDraft.localLoginDisabled}
+                  disabled={!canEdit || !handoffDraft.enabled}
+                  onCheckedChange={(value) => setHandoffField("localLoginDisabled", value)}
+                />
+              </label>
+            </div>
           </div>
         </section>
 

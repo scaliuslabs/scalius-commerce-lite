@@ -24,6 +24,7 @@ import {
 } from "../api-functions/settings";
 import { extractApiError, unwrapEnvelope } from "../api-helpers";
 import { queryKeys } from "../query-keys";
+import { withDashboardBasePath } from "../dashboard-base-path";
 export { currencySettingsQueryOptions } from "./currency";
 export { storefrontUrlQueryOptions } from "./storefront-url";
 
@@ -98,7 +99,7 @@ async function getCheckoutReadinessForQuery(): Promise<CheckoutReadinessPayload>
     return getCheckoutReadiness();
   }
 
-  const response = await fetch("/api/v1/admin/settings/checkout-readiness", {
+  const response = await fetch(withDashboardBasePath("/api/v1/admin/settings/checkout-readiness"), {
     credentials: "include",
     cache: "no-store",
     headers: {

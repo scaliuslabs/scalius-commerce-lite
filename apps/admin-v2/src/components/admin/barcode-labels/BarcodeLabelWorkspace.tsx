@@ -72,6 +72,7 @@ import {
   type LabelPrintAlignment,
   type LabelQuantityShortcut,
 } from "./barcode-label-model";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 const LABEL_PREFERENCE_KEY = "scalius:barcode-label-preferences:v1";
 
@@ -493,7 +494,7 @@ export function BarcodeLabelWorkspace({
     setArtifactError(null);
     setArtifactBusy(format);
     try {
-      const response = await fetch("/api/v1/admin/inventory/labels/artifact", {
+      const response = await fetch(withDashboardBasePath("/api/v1/admin/inventory/labels/artifact"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

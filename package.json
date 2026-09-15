@@ -21,6 +21,8 @@
     "release:check": "node scripts/release-check.mjs",
     "repo:check": "node scripts/repository-hygiene.mjs && git show --check --format= --no-renames HEAD",
     "demo:store": "node scripts/demo-store.mjs",
+    "secret:derive": "node scripts/derive-runtime-secret.mjs",
+    "auth:handoff-token": "node scripts/mint-identity-handoff-token.mjs",
     "typecheck": "node scripts/turbo-run.mjs typecheck --concurrency=1",
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:reset": "node scripts/dev-reset.mjs",

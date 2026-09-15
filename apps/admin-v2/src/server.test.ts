@@ -4,12 +4,17 @@ import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
 const mocks = vi.hoisted(() => ({
   handlerFetch: vi.fn(),
   withPublicMediaUrl: vi.fn(),
+  handlerOptions: [] as unknown[],
 }));
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
-vi.mock("@tanstack/react-start/server-entry", () => ({
-  default: { fetch: mocks.handlerFetch },
+vi.mock("@tanstack/react-start/server", () => ({
+  defaultStreamHandler: { id: "default-stream-handler" },
+  createStartHandler: (options: unknown) => {
+    mocks.handlerOptions.push(options);
+    return (request: Request, requestOptions?: unknown) => mocks.handlerFetch(request, requestOptions);
+  },
 }));
 
 vi.mock("@scalius/core/integrations/storage", () => ({
@@ -31,7 +36,7 @@ function workerEnv(overrides: Record<string, unknown> = {}): Env {
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     CACHE: {},
     API: {
-      fetch: vi.fn().mockResolvedValue(
+      fetch: vi.fn().mockImplementation(async () =>
         platformResponse({
           storefrontUrl: "https://shop.example.com",
           apiUrl: "https://api.example.com",
@@ -176,5 +181,155 @@ describe("admin Worker entry", () => {
     });
     expect(mocks.handlerFetch).not.toHaveBeenCalled();
     expect(env.API.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin Worker entry below a runtime base path", () => {
+  const BASE_PATH_PLATFORM = {
+    storefrontUrl: "https://shop.example.com",
+    apiUrl: "https://api.example.com",
+    dashboardUrl: "https://shop.example.com/dashboard",
+    mediaUrl: "https://cdn.example.com",
+  };
+
+  function basePathEnv(overrides: Record<string, unknown> = {}): Env {
+    return workerEnv({
+      // A fresh Response per call: one env serves several requests in a test.
+      API: { fetch: vi.fn().mockImplementation(async () => platformResponse(BASE_PATH_PLATFORM)) },
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    vi.stubEnv("DEV", false);
+    mocks.handlerFetch.mockReset();
+    mocks.handlerFetch.mockResolvedValue(new Response("<html></html>", {
+      status: 200,
+      headers: { "content-type": "text/html" },
+    }));
+    mocks.withPublicMediaUrl.mockReset();
+    mocks.withPublicMediaUrl.mockImplementation(
+      (_url: string, callback: () => Promise<Response>) => callback(),
+    );
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes prefixed page routes through untouched and strips the prefix for server functions", async () => {
+    const { default: worker } = await import("./server");
+    const env = basePathEnv();
+
+    await worker.fetch(new Request("https://shop.example.com/dashboard/admin/orders?page=2"), env);
+    expect(mocks.handlerFetch.mock.calls[0]?.[0].url).toBe("https://shop.example.com/dashboard/admin/orders?page=2");
+
+    await worker.fetch(new Request("https://shop.example.com/dashboard/_serverFn/abc123", { method: "POST" }), env);
+    const serverFnRequest = mocks.handlerFetch.mock.calls[1]?.[0] as Request;
+    expect(serverFnRequest.url).toBe("https://shop.example.com/_serverFn/abc123");
+    expect(serverFnRequest.method).toBe("POST");
+  });
+
+  it("serves build assets below the prefix through the assets binding and falls through on 404", async () => {
+    const assetFetch = vi.fn(async (request: Request) =>
+      new URL(request.url).pathname === "/assets/immutable/app.js"
+        ? new Response("console.log(1)", { headers: { "content-type": "text/javascript" } })
+        : new Response("missing", { status: 404 }),
+    );
+    const { default: worker } = await import("./server");
+    const env = basePathEnv({ ASSETS: { fetch: assetFetch } });
+
+    const asset = await worker.fetch(new Request("https://shop.example.com/dashboard/assets/immutable/app.js"), env);
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toBe("console.log(1)");
+    expect(assetFetch.mock.calls[0]?.[0].url).toBe("https://shop.example.com/assets/immutable/app.js");
+    expect(mocks.handlerFetch).not.toHaveBeenCalled();
+
+    // A router-owned file route (the messaging service worker) is not an asset.
+    const routed = await worker.fetch(new Request("https://shop.example.com/dashboard/firebase-messaging-sw.js"), env);
+    expect(routed.status).toBe(200);
+    expect(mocks.handlerFetch.mock.calls[0]?.[0].url).toBe("https://shop.example.com/dashboard/firebase-messaging-sw.js");
+  });
+
+  it("redirects reads outside the prefix and refuses writes, but keeps the health probe", async () => {
+    const { default: worker } = await import("./server");
+    const env = basePathEnv();
+
+    const redirect = await worker.fetch(new Request("https://shop.example.com/admin/orders?page=2"), env);
+    expect(redirect.status).toBe(308);
+    expect(redirect.headers.get("location")).toBe("https://shop.example.com/dashboard/admin/orders?page=2");
+
+    const refused = await worker.fetch(new Request("https://shop.example.com/api/auth/sign-in/email", { method: "POST" }), env);
+    expect(refused.status).toBe(404);
+    await expect(refused.json()).resolves.toMatchObject({ code: "DASHBOARD_BASE_PATH" });
+
+    await worker.fetch(new Request("https://shop.example.com/health"), env);
+    expect(mocks.handlerFetch.mock.calls.at(-1)?.[0].url).toBe("https://shop.example.com/health");
+  });
+
+  it("prefixes manifest asset URLs per request through the Start transform hook", async () => {
+    const { default: worker } = await import("./server");
+    const options = mocks.handlerOptions.at(-1) as {
+      transformAssets: { cache: boolean; transform: (input: { url: string; kind: string }) => string };
+    };
+    expect(options.transformAssets.cache).toBe(false);
+
+    let transformed = "";
+    mocks.handlerFetch.mockImplementation(async () => {
+      transformed = options.transformAssets.transform({ url: "/assets/immutable/app.js", kind: "script" });
+      return new Response("ok");
+    });
+    await worker.fetch(new Request("https://shop.example.com/dashboard/admin"), basePathEnv());
+    expect(transformed).toBe("/dashboard/assets/immutable/app.js");
+
+    mocks.handlerFetch.mockImplementation(async () => {
+      transformed = options.transformAssets.transform({ url: "/assets/immutable/app.js", kind: "script" });
+      return new Response("ok");
+    });
+    await worker.fetch(new Request("https://admin.test/admin"), workerEnv());
+    expect(transformed).toBe("/assets/immutable/app.js");
+  });
+
+  it("honours a signed front proxy before composing the runtime env", async () => {
+    const { RUNTIME_SECRET_PURPOSES } = await import("@scalius/shared/runtime-secrets");
+    const { signFrontProxyRequest, FRONT_PROXY_SIGNATURE_HEADER } = await import("@scalius/shared/trusted-front-proxy");
+    const secret = await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.FRONT_PROXY_SECRET);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = await signFrontProxyRequest(secret, {
+      timestamp,
+      proto: "https",
+      host: "dashboard.example.com",
+      pathname: "/admin",
+      clientIp: null,
+    });
+    const { default: worker } = await import("./server");
+    let seenOrigin = "";
+    mocks.handlerFetch.mockImplementation(async (request: Request) => {
+      const { getRuntimeEnv } = await import("./lib/runtime-env.server");
+      seenOrigin = getRuntimeEnv().BETTER_AUTH_URL ?? "";
+      return new Response(request.url);
+    });
+    const env = workerEnv({
+      API: {
+        fetch: vi.fn().mockResolvedValue(
+          platformResponse({ storefrontUrl: "", apiUrl: "", dashboardUrl: "", mediaUrl: "" }),
+        ),
+      },
+    });
+
+    const response = await worker.fetch(new Request("https://internal.workers.dev/admin", {
+      headers: {
+        "X-Forwarded-Host": "dashboard.example.com",
+        "X-Forwarded-Proto": "https",
+        [FRONT_PROXY_SIGNATURE_HEADER]: signature,
+      },
+    }), env);
+
+    expect(await response.text()).toBe("https://dashboard.example.com/admin");
+    // Without a saved dashboard URL the forwarded origin becomes BETTER_AUTH_URL.
+    expect(seenOrigin).toBe("https://dashboard.example.com");
   });
 });

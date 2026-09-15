@@ -16,6 +16,7 @@ import { LogOut, User, Shield, Loader2 } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
 import { broadcastAdminSignOut } from "@/components/auth/AdminSessionSync";
+import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 
 interface UserMenuProps {
   user: {
@@ -41,7 +42,7 @@ export function UserMenu({ user }: UserMenuProps) {
         throw new Error(result.error.message || "Sign out failed");
       }
       broadcastAdminSignOut();
-      window.location.replace("/auth/login");
+      window.location.replace(withDashboardBasePath("/auth/login"));
     } catch (error: unknown) {
       console.error("Sign out error:", error);
       setIsLoading(false);
