@@ -5,29 +5,32 @@
  * instead of using magic numbers. This makes the cache strategy
  * auditable and adjustable from a single location.
  */
+/**
+ * One year is the longest edge residency Cloudflare honors. Every public route
+ * below is tag-purged by the merchant write that changes it (directly, then
+ * through the durable retry sweep), so the TTL is never the freshness
+ * mechanism; it is the ceiling that lets a rarely edited store stay warm.
+ */
+const EDGE_MAX_TTL = 365 * 86_400;
+
 export const CACHE_TTLS = {
-  /**
-   * 7 days — every merchant write and every buyer-visible stock band
-   * transition purges the affected tags directly and through the durable retry
-   * sweep. The TTL is only the failure backstop, so it stays long enough that
-   * public reads almost never pay for a cold origin render.
-   */
-  AVAILABILITY: 7 * 86_400,
+  /** Buyer-visible price and availability; purged on writes and stock band transitions */
+  AVAILABILITY: EDGE_MAX_TTL,
 
-  /** 30 days — mutation-purged content (categories, pages, collections, layout, navigation) */
-  STANDARD: 30 * 86_400,
+  /** Mutation-purged content (categories, pages, collections, layout, navigation) */
+  STANDARD: EDGE_MAX_TTL,
 
-  /** 1 day — checkout reference data purged by the "checkout" tag (shipping methods) */
-  SHORT: 86_400,
+  /** Checkout reference data purged by the "checkout" tag (shipping methods) */
+  SHORT: EDGE_MAX_TTL,
 
-  /** 1 day — checkout reference data purged by the "checkout" tag (delivery locations) */
-  MEDIUM: 86_400,
+  /** Checkout reference data purged by the "checkout" tag (delivery locations) */
+  MEDIUM: EDGE_MAX_TTL,
 
-  /** 30 days — attribute definitions purged by the "attributes" tag */
-  ATTRIBUTES: 30 * 86_400,
+  /** Attribute definitions purged by the "attributes" tag */
+  ATTRIBUTES: EDGE_MAX_TTL,
 
-  /** 1 hour — checkout gateway readiness; purged by the "checkout" tag on every payment or auth settings save */
-  CHECKOUT_CONFIG: 3600,
+  /** Checkout gateway readiness; purged by the "checkout" tag on every payment, delivery, or auth settings save */
+  CHECKOUT_CONFIG: EDGE_MAX_TTL,
 
   /** 0 — explicitly no caching (analytics config — served fresh) */
   NONE: 0,
