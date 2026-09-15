@@ -162,6 +162,17 @@ describe("createRequestRuntime", () => {
     expect(store.API_TOKEN).toBeDefined();
   });
 
+  it("keeps a dashboard URL that lives below a path prefix on the storefront host", async () => {
+    const backend = binding(async () => platformResponse({
+      ...PLATFORM,
+      dashboardUrl: "https://shop.example.test/dashboard/",
+    }));
+
+    const store = await createRequestRuntime(request, { BACKEND_API: backend });
+
+    expect(store.DASHBOARD_URL).toBe("https://shop.example.test/dashboard");
+  });
+
   it("drops malformed platform values instead of trusting them", async () => {
     const backend = binding(async () => platformResponse({
       storefrontUrl: "http://shop.example.test",

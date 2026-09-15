@@ -6,6 +6,13 @@ import { eq } from "drizzle-orm";
 import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import {
+  EMPTY_IDENTITY_HANDOFF_CONFIG,
+  dashboardBasePathFromUrl,
+  joinPlatformUrl,
+  type PlatformConfig,
+} from "@scalius/shared/platform-config";
+import { identityHandoff } from "./identity-handoff";
 import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
 import {
   AUTH_PASSWORD_MAX_LENGTH,
@@ -26,22 +33,43 @@ function readString(env: Env, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readPlatformConfig(env: Env): PlatformConfig | undefined {
+  const value = (env as Record<string, unknown>).PLATFORM_CONFIG;
+  return value && typeof value === "object" ? (value as PlatformConfig) : undefined;
+}
+
+function originOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Create Better Auth instance with the request's composed environment.
  *
  * `BETTER_AUTH_SECRET` is derived from `SCALIUS_SECRET` at Worker entry and
- * `BETTER_AUTH_URL` is the dashboard origin resolved from Platform settings.
- * Nothing is read from `process.env`; the request `Env` is the only source.
+ * `BETTER_AUTH_URL` is the dashboard URL resolved from Platform settings. The
+ * dashboard URL may carry a path prefix; Better Auth receives the bare origin
+ * as `baseURL` and the prefix inside `basePath`, while every dashboard link is
+ * joined onto the full URL so the prefix survives. Nothing is read from
+ * `process.env`; the request `Env` is the only source.
  */
 export function createAuth(env: Env) {
   const db = getDb(env);
 
   const secret = readString(env, "BETTER_AUTH_SECRET");
-  // The dashboard origin. Never the API origin: reset links open dashboard routes.
-  const baseURL = readString(env, "BETTER_AUTH_URL");
-  const storefrontURL = readString(env, "STOREFRONT_URL");
+  // The dashboard URL. Never the API origin: reset links open dashboard routes.
+  const dashboardUrl = readString(env, "BETTER_AUTH_URL");
+  const baseURL = originOf(dashboardUrl);
+  const dashboardBasePath = dashboardBasePathFromUrl(dashboardUrl);
+  const storefrontURL = originOf(readString(env, "STOREFRONT_URL"));
   const appName = "Scalius Commerce";
   const emailRuntimeContext = getEmailRuntimeContext(env);
+  const platform = readPlatformConfig(env);
+  const handoffConfig = platform?.identityHandoff ?? EMPTY_IDENTITY_HANDOFF_CONFIG;
 
   if (!secret) {
     throw new Error("BETTER_AUTH_SECRET is not set. It is derived from SCALIUS_SECRET at Worker entry.");
@@ -61,6 +89,8 @@ export function createAuth(env: Env) {
     }),
     secret,
     baseURL,
+    // The auth routes live on the dashboard Worker under its base path.
+    basePath: `${dashboardBasePath}/api/auth`,
     appName,
     emailVerification: {
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
@@ -91,7 +121,9 @@ export function createAuth(env: Env) {
       },
     },
     emailAndPassword: {
-      enabled: true,
+      // An operator-managed identity provider may switch password sign-in
+      // off; the Platform settings only allow that while the handoff is on.
+      enabled: !handoffConfig.localLoginDisabled,
       requireEmailVerification: false,
       minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
       maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
@@ -102,7 +134,7 @@ export function createAuth(env: Env) {
         user: { id: string; email: string; name: string };
         token: string;
       }) => {
-        if (!baseURL) {
+        if (!dashboardUrl) {
           throw new Error("BETTER_AUTH_URL is required for password reset links");
         }
         const { sendEmail } = await import("../integrations/email");
@@ -132,7 +164,7 @@ export function createAuth(env: Env) {
           ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
           : "We received a request to reset your password. Click the button below to create a new password.";
         const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
-        const resetLink = new URL("/auth/reset-password", baseURL);
+        const resetLink = new URL(joinPlatformUrl(dashboardUrl, "/auth/reset-password"));
         // Fragments are not sent to Cloudflare or included in Referer. The
         // dashboard exchanges and removes this one-time value immediately.
         resetLink.hash = `token=${encodeURIComponent(token)}`;
@@ -267,6 +299,11 @@ export function createAuth(env: Env) {
         // Limit IPv6 by /64 subnet to prevent bypass attacks
         ipv6Subnet: 64,
       },
+      // Session cookies are scoped to the dashboard base path so a prefixed
+      // dashboard never sends them to the storefront on a shared host.
+      defaultCookieAttributes: {
+        path: dashboardBasePath || "/",
+      },
     },
     plugins: [
       twoFactor({
@@ -312,6 +349,13 @@ export function createAuth(env: Env) {
       admin({
         defaultRole: "user",
         adminRoles: ["admin"],
+      }),
+      identityHandoff({
+        db,
+        config: handoffConfig,
+        hmacSecret: readString(env, "IDENTITY_HANDOFF_SECRET"),
+        dashboardUrl,
+        permissionCache: env.SHARED_AUTH_CACHE,
       }),
     ],
     trustedOrigins: [baseURL, storefrontURL].filter(Boolean) as string[],

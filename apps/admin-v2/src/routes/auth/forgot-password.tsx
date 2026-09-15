@@ -3,6 +3,7 @@ import { redirectIfAuthenticated } from "~/lib/auth.fns";
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import { useHydrated } from "~/hooks/use-hydrated";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 export const Route = createFileRoute("/auth/forgot-password")({
   beforeLoad: () => redirectIfAuthenticated(),
@@ -30,10 +31,10 @@ function ForgotPasswordPage() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("/api/auth/request-password-reset", {
+      const response = await fetch(withDashboardBasePath("/api/auth/request-password-reset"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, redirectTo: "/auth/reset-password" }),
+        body: JSON.stringify({ email, redirectTo: withDashboardBasePath("/auth/reset-password") }),
       });
       if (!response.ok) {
         throw new Error("Password recovery is unavailable");

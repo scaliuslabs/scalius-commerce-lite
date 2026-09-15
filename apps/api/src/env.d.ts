@@ -222,6 +222,9 @@ interface Env {
   PURGE_TOKEN?: string;
   AGENT_TOKEN_PEPPER?: string;
   CUSTOMER_SESSION_HASH_KEY?: string;
+  ADMIN_SETUP_TOKEN?: string;
+  FRONT_PROXY_SECRET?: string;
+  IDENTITY_HANDOFF_SECRET?: string;
 
   // Resolved at Worker entry from Platform settings (dashboard -> Settings ->
   // System -> Platform). Never Wrangler vars.

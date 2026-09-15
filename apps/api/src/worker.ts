@@ -9,7 +9,16 @@ import {
   createDatabaseMigrationFreezeResponse,
   isDatabaseMigrationFrozen,
 } from "@scalius/shared/database-migration-freeze";
-import { describeMissingMasterSecret } from "@scalius/shared/runtime-secrets";
+import {
+  RUNTIME_SECRET_PURPOSES,
+  deriveRuntimeSecret,
+  describeMissingMasterSecret,
+  readMasterSecret,
+} from "@scalius/shared/runtime-secrets";
+import {
+  FRONT_PROXY_SIGNATURE_HEADER,
+  applyTrustedFrontProxy,
+} from "@scalius/shared/trusted-front-proxy";
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
@@ -27,10 +36,30 @@ const PROBE_PATHS = new Set([
   "/api/v1/health/",
   "/api/v1/readyz",
   "/api/v1/readyz/",
+  "/api/v1/meta",
+  "/api/v1/meta/",
 ]);
 
 function isProbePath(pathname: string): boolean {
   return PROBE_PATHS.has(pathname);
+}
+
+/**
+ * Honours a signed front proxy's forwarded host, proto, and client IP. The
+ * signature key is derived from the master secret only when the header is
+ * present; unsigned or invalid headers leave the request untouched. The header
+ * is removed afterwards so the public cache entrypoint does not re-verify it.
+ */
+async function resolveFrontProxy(request: Request, env: Env): Promise<Request> {
+  if (!request.headers.has(FRONT_PROXY_SIGNATURE_HEADER)) return request;
+  const master = readMasterSecret(env);
+  const secret = master
+    ? await deriveRuntimeSecret(master, RUNTIME_SECRET_PURPOSES.FRONT_PROXY_SECRET)
+    : null;
+  const resolved = (await applyTrustedFrontProxy(request, secret)).request;
+  const stripped = new Request(resolved);
+  stripped.headers.delete(FRONT_PROXY_SIGNATURE_HEADER);
+  return stripped;
 }
 
 /**
@@ -64,7 +93,8 @@ async function fetchApiApp(
 }
 
 export class PublicApi extends WorkerEntrypoint<Env> {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(incoming: Request): Promise<Response> {
+    const request = await resolveFrontProxy(incoming, this.env);
     const policy = getPublicApiCachePolicy(request);
     if (!policy) {
       return new Response("Request is not eligible for public caching", {
@@ -96,7 +126,8 @@ export class PublicApi extends WorkerEntrypoint<Env> {
 
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
-  async fetch(request: Request) {
+  async fetch(incoming: Request) {
+    const request = await resolveFrontProxy(incoming, this.env);
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 

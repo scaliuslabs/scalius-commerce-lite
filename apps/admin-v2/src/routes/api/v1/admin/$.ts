@@ -12,6 +12,10 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  dashboardBasePathFromUrl,
+  stripDashboardBasePath,
+} from "@scalius/shared/platform-config";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   ADMIN_API_READ_TIMEOUT_CODE,
@@ -44,6 +48,10 @@ export async function proxyToApi(request: Request): Promise<Response> {
   const { fetchApi, getRuntimeEnv } = await import("../../../../lib/runtime-env.server");
   const env = getRuntimeEnv();
   const url = new URL(request.url);
+  // The browser calls the proxy below the runtime dashboard base path; the API
+  // Worker only knows root-relative /api/v1 paths.
+  const basePath = dashboardBasePathFromUrl(env.PLATFORM_CONFIG?.dashboardUrl);
+  const apiPath = stripDashboardBasePath(url.pathname, basePath) ?? url.pathname;
   const timeout = createAdminApiReadTimeout(request.method, request.signal);
 
   // Forward the full path (/api/v1/admin/...) to the API worker
@@ -65,7 +73,7 @@ export async function proxyToApi(request: Request): Promise<Response> {
   }
 
   try {
-    const response = await fetchApi(env, `${url.pathname}${url.search}`, init);
+    const response = await fetchApi(env, `${apiPath}${url.search}`, init);
     return wrapResponseWithAdminApiReadTimeout(response, timeout);
   } catch (error) {
     timeout.cleanup();

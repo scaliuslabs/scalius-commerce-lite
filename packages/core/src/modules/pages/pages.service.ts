@@ -62,6 +62,24 @@ export {
 
 export interface PageLifecycleAuthority {
   canPublish?: boolean;
+  /**
+   * Page slugs the storefront reserves at request time, such as the first
+   * segment of a dashboard served below the storefront host
+   * (`https://shop.example.com/dashboard` reserves `dashboard`). Static
+   * reservations stay in `@scalius/shared/seo-canonical`.
+   */
+  reservedSlugs?: ReadonlySet<string>;
+}
+
+function assertSlugNotReservedByDashboard(
+  contentType: ContentEntryType,
+  slug: string,
+  authority: PageLifecycleAuthority,
+): void {
+  if (contentType !== "page" || !authority.reservedSlugs?.has(slug.toLowerCase())) return;
+  throw new ValidationError(
+    "This slug is reserved for the dashboard on this host. Choose another page URL.",
+  );
 }
 
 export type AdminPageStatus = "draft" | "scheduled" | "published";
@@ -397,6 +415,7 @@ export async function createPage(
 ): Promise<{ id: string; revision: number }> {
   assertPageLifecycleAuthority(data.isPublished, false, authority);
   assertPageScheduleAuthority(data.publishedAt, null, authority);
+  assertSlugNotReservedByDashboard(data.contentType, data.slug, authority);
   const existing = await db
     .select({ id: pages.id })
     .from(pages)
@@ -523,6 +542,7 @@ export async function updatePage(
   }
 
   const nextSlug = data.slug ?? existing.slug;
+  assertSlugNotReservedByDashboard(existing.contentType, nextSlug, authority);
   if (
     !isValidContentEntryPath(
       existing.contentType,

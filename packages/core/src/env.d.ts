@@ -45,6 +45,12 @@ interface Env {
 
   // Derived at Worker entry from SCALIUS_SECRET (auth/auth.ts). Never installed.
   BETTER_AUTH_SECRET: string;
+  // Derived at Worker entry; HS256 key for identity handoff tokens (auth/identity-handoff.ts).
+  IDENTITY_HANDOFF_SECRET?: string;
+
+  // Resolved at Worker entry from Platform settings (auth/auth.ts reads the
+  // identity handoff block and the dashboard base path).
+  PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
 
   // Resolved at Worker entry from Platform settings. Never Wrangler vars.
   // Read by middleware-helper/csp-handler.ts and notifications/orders link building.

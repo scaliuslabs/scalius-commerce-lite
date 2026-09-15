@@ -10,6 +10,10 @@ import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/
 import { getDb } from "@scalius/database/client";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
+import {
+  dashboardBasePathFromUrl,
+  stripDashboardBasePath,
+} from "@scalius/shared/platform-config";
 import { getRuntimeEnv } from "./runtime-env.server";
 
 const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
@@ -82,10 +86,20 @@ function isRetryableAuthRequest(request: Request): boolean {
   return method === "GET" || method === "HEAD";
 }
 
+/**
+ * The auth routes below the runtime dashboard base path, expressed as the
+ * root-relative path every comparison in this module was written against.
+ */
+function localAuthPath(request: Request): string {
+  const pathname = new URL(request.url).pathname;
+  const basePath = dashboardBasePathFromUrl(getCfEnv().BETTER_AUTH_URL);
+  return stripDashboardBasePath(pathname, basePath) ?? pathname;
+}
+
 function isSignInEmailRequest(request: Request): boolean {
   return (
     request.method.toUpperCase() === "POST" &&
-    new URL(request.url).pathname.endsWith("/api/auth/sign-in/email")
+    localAuthPath(request).endsWith("/api/auth/sign-in/email")
   );
 }
 
@@ -175,7 +189,7 @@ async function resetPasswordFromSession(
   }
 
   const target = new URL(request.url);
-  target.pathname = "/api/auth/reset-password";
+  target.pathname = `${dashboardBasePathFromUrl(getCfEnv().BETTER_AUTH_URL)}/api/auth/reset-password`;
   target.search = "";
   const headers = new Headers(request.headers);
   headers.set("Content-Type", "application/json");
@@ -196,7 +210,7 @@ async function resetPasswordFromSession(
 }
 
 export function shouldRejectPublicAuthRoute(request: Request): boolean {
-  const pathname = new URL(request.url).pathname;
+  const pathname = localAuthPath(request);
   return (
     BLOCKED_PUBLIC_AUTH_PATH_SUFFIXES.some((suffix) => pathname.endsWith(suffix)) ||
     pathname === "/api/auth/admin" ||
@@ -232,7 +246,7 @@ async function markSuccessfulTwoFactorVerification(
   response: Response,
 ): Promise<void> {
   if (!response.ok) return;
-  const pathname = new URL(request.url).pathname;
+  const pathname = localAuthPath(request);
   if (!TWO_FACTOR_VERIFY_PATH_SUFFIXES.some((suffix) => pathname.endsWith(suffix))) {
     return;
   }
@@ -276,7 +290,7 @@ export async function shouldRejectTrustedDeviceVerificationRequest(
   request: Request,
 ): Promise<boolean> {
   if (request.method.toUpperCase() !== "POST") return false;
-  const pathname = new URL(request.url).pathname;
+  const pathname = localAuthPath(request);
   if (!TWO_FACTOR_VERIFY_PATH_SUFFIXES.some((suffix) => pathname.endsWith(suffix))) {
     return false;
   }
@@ -392,7 +406,7 @@ async function runAuthHandlerWithRetry(
     if (delayMs === undefined) break;
     console.warn("Auth handler hit a retryable transient failure; retrying", {
       method: request.method,
-      pathname: new URL(request.url).pathname,
+      pathname: localAuthPath(request),
       status: lastResponse?.status,
       attempt: attempt + 1,
       delayMs,
@@ -465,7 +479,7 @@ export function createAuthHandler(): (request: Request) => Promise<Response> {
   const env = getCfEnv();
   const auth = createAuth(env);
   return async (request: Request) => {
-    const pathname = new URL(request.url).pathname;
+    const pathname = localAuthPath(request);
     if (request.method === "POST" && pathname === RESET_SESSION_PATH) {
       return applyAuthNoStore(await createResetSession(request));
     }

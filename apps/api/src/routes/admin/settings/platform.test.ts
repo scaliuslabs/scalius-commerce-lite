@@ -124,6 +124,7 @@ describe("admin platform settings", () => {
             dashboardUrl: "https://dashboard.example.com",
             mediaUrl: "",
           },
+          dashboardBasePath: "",
         },
       });
     });
@@ -198,8 +199,42 @@ describe("admin platform settings", () => {
             dashboardUrl: "https://dashboard.example.com",
             mediaUrl: "",
           },
+          dashboardBasePath: "",
         },
       });
+    });
+
+    it("passes partial automation patches through and derives the dashboard base path", async () => {
+      const { app, env, db } = createTestApp();
+      const saved = {
+        ...STORED,
+        dashboardUrl: "https://shop.example.com/ops/dashboard",
+        setupTokenRequired: true,
+        identityHandoff: {
+          enabled: true,
+          issuer: "https://idp.example.com",
+          audience: "scalius:store-1",
+          jwksUrl: "",
+          localLoginDisabled: false,
+        },
+      };
+      mocks.savePlatformSettings.mockResolvedValue(saved);
+
+      const response = await putJson(app, env, {
+        dashboardUrl: "https://shop.example.com/ops/dashboard",
+        setupTokenRequired: true,
+        identityHandoff: { enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
+      });
+      const body = await response.json() as { data: Record<string, unknown> };
+
+      expect(response.status).toBe(200);
+      expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
+        dashboardUrl: "https://shop.example.com/ops/dashboard",
+        setupTokenRequired: true,
+        identityHandoff: { enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
+      });
+      expect(body.data.dashboardBasePath).toBe("/ops/dashboard");
+      expect(body.data.identityHandoff).toEqual(saved.identityHandoff);
     });
 
     it("accepts clearing values with empty strings and an empty CORS list", async () => {
@@ -223,6 +258,8 @@ describe("admin platform settings", () => {
       ["an over-long origin", { apiUrl: `https://${"a".repeat(2_100)}.example.com` }],
       ["too many CORS origins", { corsAllowedOrigins: Array.from({ length: 21 }, (_, i) => `https://o${i}.example.com`) }],
       ["an over-long cookie domain", { customerAuthCookieDomain: "a".repeat(254) }],
+      ["a non-boolean setup token flag", { setupTokenRequired: "yes" }],
+      ["an over-long handoff issuer", { identityHandoff: { issuer: "a".repeat(513) } }],
     ])("rejects %s before touching the database", async (_label, body) => {
       const { app, env } = createTestApp();
 

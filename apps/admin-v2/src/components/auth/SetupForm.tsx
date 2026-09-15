@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Mail, Lock, User, AlertCircle } from "lucide-react";
+import { Loader2, Mail, Lock, User, AlertCircle, KeyRound } from "lucide-react";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 interface SignInResponse {
@@ -22,12 +22,13 @@ interface SignInResponse {
   twoFactorMethods?: readonly unknown[];
 }
 
-export function SetupForm() {
+export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?: boolean }) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isHydrated = useHydrated();
@@ -46,11 +47,23 @@ export function SetupForm() {
       return;
     }
 
+    if (setupTokenRequired && !setupToken.trim()) {
+      setError("This deployment requires the setup token from your operator.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       try {
-        await runSetup({ data: { name, email, password } });
+        await runSetup({
+          data: {
+            name,
+            email,
+            password,
+            ...(setupTokenRequired ? { setupToken: setupToken.trim() } : {}),
+          },
+        });
       } catch (setupError: unknown) {
         setError(setupError instanceof Error ? setupError.message : "Failed to create account");
         setIsLoading(false);
@@ -160,6 +173,29 @@ export function SetupForm() {
               />
             </div>
           </div>
+
+          {setupTokenRequired ? (
+            <div className="space-y-2">
+              <Label htmlFor="setupToken">Setup token</Label>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="setupToken"
+                  type="password"
+                  placeholder="Paste the setup token from your operator"
+                  value={setupToken}
+                  onChange={(e) => setSetupToken(e.target.value)}
+                  className="pl-10"
+                  autoComplete="off"
+                  required
+                  disabled={!isHydrated || isLoading}
+                />
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                This deployment gates first-admin setup. The token is sent once as a header and never stored.
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>

@@ -216,6 +216,10 @@ pnpm test                 # Vitest
 pnpm check:env            # Fail on any Wrangler `vars` entry
 pnpm generate:sdk         # Regenerate @scalius/api-client from the OpenAPI spec
 
+# Automated deployments (opt-in, see docs/AUTOMATED-DEPLOYMENTS.md)
+pnpm secret:derive --purpose admin-setup --stdin   # Derive one automation key
+pnpm auth:handoff-token --help                     # Mint a dashboard handoff token
+
 # Build & deploy
 pnpm build
 pnpm run deploy                        # All three Workers
@@ -241,10 +245,12 @@ Wrangler `vars`, everything else in the dashboard.**
 | `CREDENTIAL_ENCRYPTION_KEY` | API, dashboard | AES-256-GCM key for merchant provider credentials at rest; base64 of exactly 32 bytes, identical on both | `openssl rand -base64 32` |
 
 Every per-purpose secret — Better Auth session signing, JWT signing, the
-internal service token, the storefront purge token, the agent token pepper, and
-the customer session hash key — is HKDF-SHA256 derived from `SCALIUS_SECRET` at
-Worker entry (`packages/shared/src/runtime-secrets.ts`). Derived values are
-never installed, stored, or logged.
+internal service token, the storefront purge token, the agent token pepper, the
+customer session hash key, and the three opt-in automation keys (first-admin
+setup token, front-proxy signing key, identity-handoff signing key) — is
+HKDF-SHA256 derived from `SCALIUS_SECRET` at Worker entry
+(`packages/shared/src/runtime-secrets.ts`). Derived values are never installed,
+stored, or logged.
 
 Without `SCALIUS_SECRET` the API fails closed: every request except
 `/api/v1/health` and `/api/v1/readyz` returns `503 RUNTIME_SECRET_MISSING`.
@@ -265,10 +271,17 @@ Public origins are database-backed merchant settings, not environment variables.
 |---------|----------|---------|
 | Storefront URL | yes | Canonical storefront origin (canonical links, sitemaps, purge target) |
 | API URL | yes | Public API origin browsers call |
-| Dashboard URL | yes | Dashboard origin (Better Auth base URL) |
+| Dashboard URL | yes | Dashboard origin, optionally with a path prefix such as `/dashboard` (Better Auth base URL) |
 | Media URL | yes | Public media base URL (R2 custom domain) |
 | Customer cookie domain | no | `Domain` attribute for customer session cookies across subdomains |
 | Extra CORS origins | no | Additional origins allowed to make credentialed API requests |
+| Require a setup token | no | Gates `POST /api/v1/setup` behind a derived token |
+| Identity handoff | no | Issuer, audience, and JWKS URL for external operator sign-in |
+| Disable password sign-in | no | Dashboard accepts only identity handoff (requires it to be enabled) |
+
+The last three belong to the opt-in automation contracts in
+[docs/AUTOMATED-DEPLOYMENTS.md](docs/AUTOMATED-DEPLOYMENTS.md); leave them off
+for a hand-installed store.
 
 The API serves the four origins publicly at `GET /api/v1/platform`
 (`Cache-Control: public, max-age=60`); the storefront and dashboard Workers read
@@ -384,9 +397,13 @@ derived from those origins.
 
 ```bash
 curl https://api.example.com/api/v1/readyz
+curl https://api.example.com/api/v1/meta
 pnpm ops:check
 pnpm release:check
 ```
+
+`GET /api/v1/meta` reports the release, the supported API majors, the database
+provider, and whether the applied schema revision matches this build.
 
 ## Troubleshooting
 

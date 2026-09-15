@@ -6,7 +6,8 @@ import Layout from "../layouts/Layout.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import { getRuntimeDashboardUrl, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
@@ -52,6 +53,18 @@ if (invalidSlugs.some((invalid) => slug.startsWith(invalid))) {
 const validSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 if (!validSlugPattern.test(slug)) {
   return new Response(null, { status: 404 });
+}
+
+// 5. A dashboard served below a path prefix on this host reserves its first
+// segment. Send the visitor to the dashboard instead of rendering a page.
+if (slug === dashboardReservedSegment(getRuntimeDashboardUrl())) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: getRuntimeDashboardUrl() ?? "/",
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
 
 // === NOW SAFE TO MAKE API CALL ===

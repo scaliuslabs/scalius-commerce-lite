@@ -114,6 +114,11 @@ async function signCookieValue(token: string): Promise<string> {
   return `${token}.${encodeBase64(new Uint8Array(signature))}`;
 }
 
+/** What the login guard resolves to when it lets the sign-in page render. */
+const RENDERS_LOGIN_FORM = {
+  signIn: { localLoginDisabled: false, identityHandoffEnabled: false },
+};
+
 describe("admin setup guard cache", () => {
   beforeEach(async () => {
     vi.useRealTimers();
@@ -154,7 +159,7 @@ describe("admin setup guard cache", () => {
     mocks.cfEnv.DB = db.db;
     const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
 
-    await expect(loginPageGuard()).resolves.toBeNull();
+    await expect(loginPageGuard()).resolves.toEqual(RENDERS_LOGIN_FORM);
 
     expect(db.get).toHaveBeenCalledTimes(1);
     const query = compileQuery(db.get.mock.calls[0]?.[0] as SQL).sql;
@@ -337,7 +342,7 @@ describe("admin setup guard cache", () => {
     mocks.cfEnv.DB = db.db;
     const { loginPageGuardHandler: loginPageGuard } = await import("./auth.fns");
 
-    await expect(loginPageGuard()).resolves.toBeNull();
+    await expect(loginPageGuard()).resolves.toEqual(RENDERS_LOGIN_FORM);
 
     expect(db.get).toHaveBeenCalledTimes(1);
   });
@@ -351,7 +356,7 @@ describe("admin setup guard cache", () => {
     const guard = loginPageGuard();
     await vi.advanceTimersByTimeAsync(3_000);
 
-    await expect(guard).resolves.toBeNull();
+    await expect(guard).resolves.toEqual(RENDERS_LOGIN_FORM);
     expect(db.get).toHaveBeenCalledTimes(1);
   });
 

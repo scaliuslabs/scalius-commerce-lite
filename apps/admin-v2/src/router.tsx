@@ -9,6 +9,7 @@ import {
   RECOVERABLE_ROUTE_RELOAD_KEY,
 } from "./lib/recoverable-route-error";
 import { getAdminScrollRestorationKey } from "./lib/admin-scroll-restoration";
+import { getDashboardBasePath } from "./lib/dashboard-base-path";
 
 function DefaultNotFoundComponent() {
   return (
@@ -105,6 +106,16 @@ export function getRouter() {
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
   });
+
+  // The dashboard base path is a runtime Platform setting. TanStack Start
+  // re-applies its build-time basepath ("/") on every `router.update` during
+  // SSR and hydration, so the runtime value is pinned through that seam.
+  const basepath = getDashboardBasePath();
+  if (basepath) {
+    const update = router.update;
+    router.update = (options) => update({ ...options, basepath });
+    router.update({ ...router.options, basepath });
+  }
 
   // SSR dehydration/hydration for React Query — handles streaming automatically
   setupRouterSsrQueryIntegration({ router, queryClient });

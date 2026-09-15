@@ -3,6 +3,7 @@ const DATABASE_MIGRATION_RETRY_AFTER_SECONDS = 60;
 const ALLOWED_API_PROBE_PATHS = new Set([
   "/api/v1/health",
   "/api/v1/readyz",
+  "/api/v1/meta",
 ]);
 
 export interface DatabaseMigrationFreezeEnvironment {

@@ -10717,13 +10717,45 @@
                         },
                         "mediaUrl": {
                           "type": "string"
+                        },
+                        "setupTokenRequired": {
+                          "type": "boolean"
+                        },
+                        "identityHandoff": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "issuer": {
+                              "type": "string"
+                            },
+                            "audience": {
+                              "type": "string"
+                            },
+                            "jwksUrl": {
+                              "type": "string"
+                            },
+                            "localLoginDisabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "issuer",
+                            "audience",
+                            "jwksUrl",
+                            "localLoginDisabled"
+                          ]
                         }
                       },
                       "required": [
                         "storefrontUrl",
                         "apiUrl",
                         "dashboardUrl",
-                        "mediaUrl"
+                        "mediaUrl",
+                        "setupTokenRequired",
+                        "identityHandoff"
                       ]
                     }
                   },
@@ -10791,6 +10823,254 @@
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "system.meta.get",
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Get the runtime release, API majors, database schema revision, and automation contracts",
+        "responses": {
+          "200": {
+            "description": "Compatibility discovery document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "platform": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "enum": [
+                                "scalius-commerce"
+                              ]
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "version"
+                          ]
+                        },
+                        "api": {
+                          "type": "object",
+                          "properties": {
+                            "current": {
+                              "type": "string"
+                            },
+                            "supportedMajors": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "basePath": {
+                              "type": "string"
+                            },
+                            "openapi": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "current",
+                            "supportedMajors",
+                            "basePath",
+                            "openapi"
+                          ]
+                        },
+                        "database": {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "d1",
+                                "turso",
+                                "postgres",
+                                null
+                              ]
+                            },
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "expected": {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "integer"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "version",
+                                    "name"
+                                  ]
+                                },
+                                "applied": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "version": {
+                                      "type": "integer"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "version",
+                                    "name"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "current",
+                                    "behind",
+                                    "ahead",
+                                    "diverged",
+                                    "unavailable"
+                                  ]
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "expected",
+                                "applied",
+                                "status"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "provider",
+                            "schema"
+                          ]
+                        },
+                        "automation": {
+                          "type": "object",
+                          "properties": {
+                            "setupTokenRequired": {
+                              "type": "boolean"
+                            },
+                            "identityHandoffEnabled": {
+                              "type": "boolean"
+                            },
+                            "localLoginDisabled": {
+                              "type": "boolean"
+                            },
+                            "dashboardBasePath": {
+                              "type": "string"
+                            },
+                            "frontProxySignature": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "setupTokenRequired",
+                            "identityHandoffEnabled",
+                            "localLoginDisabled",
+                            "dashboardBasePath",
+                            "frontProxySignature"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "platform",
+                        "api",
+                        "database",
+                        "automation"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "system",
+          "exposure": "excluded",
+          "principals": [
+            "internal"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Unauthenticated deployment compatibility probe for automation; it carries no merchant capability."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -124003,6 +124283,39 @@
                           },
                           "maxItems": 20
                         },
+                        "setupTokenRequired": {
+                          "type": "boolean"
+                        },
+                        "identityHandoff": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "issuer": {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            "audience": {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            "jwksUrl": {
+                              "type": "string",
+                              "maxLength": 2048
+                            },
+                            "localLoginDisabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "issuer",
+                            "audience",
+                            "jwksUrl",
+                            "localLoginDisabled"
+                          ]
+                        },
                         "readiness": {
                           "type": "object",
                           "properties": {
@@ -124076,6 +124389,9 @@
                             "dashboardUrl",
                             "mediaUrl"
                           ]
+                        },
+                        "dashboardBasePath": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -124085,8 +124401,11 @@
                         "mediaUrl",
                         "customerAuthCookieDomain",
                         "corsAllowedOrigins",
+                        "setupTokenRequired",
+                        "identityHandoff",
                         "readiness",
-                        "effective"
+                        "effective",
+                        "dashboardBasePath"
                       ]
                     }
                   },
@@ -124397,6 +124716,32 @@
                       "maxLength": 2048
                     },
                     "maxItems": 20
+                  },
+                  "setupTokenRequired": {
+                    "type": "boolean"
+                  },
+                  "identityHandoff": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "issuer": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "audience": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "jwksUrl": {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      "localLoginDisabled": {
+                        "type": "boolean"
+                      }
+                    }
                   }
                 }
               }
@@ -124447,6 +124792,39 @@
                             "maxLength": 2048
                           },
                           "maxItems": 20
+                        },
+                        "setupTokenRequired": {
+                          "type": "boolean"
+                        },
+                        "identityHandoff": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "issuer": {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            "audience": {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            "jwksUrl": {
+                              "type": "string",
+                              "maxLength": 2048
+                            },
+                            "localLoginDisabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "issuer",
+                            "audience",
+                            "jwksUrl",
+                            "localLoginDisabled"
+                          ]
                         },
                         "readiness": {
                           "type": "object",
@@ -124521,6 +124899,9 @@
                             "dashboardUrl",
                             "mediaUrl"
                           ]
+                        },
+                        "dashboardBasePath": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -124530,8 +124911,11 @@
                         "mediaUrl",
                         "customerAuthCookieDomain",
                         "corsAllowedOrigins",
+                        "setupTokenRequired",
+                        "identityHandoff",
                         "readiness",
-                        "effective"
+                        "effective",
+                        "dashboardBasePath"
                       ]
                     }
                   },
@@ -201005,10 +201389,14 @@
                       "properties": {
                         "adminExists": {
                           "type": "boolean"
+                        },
+                        "setupTokenRequired": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
-                        "adminExists"
+                        "adminExists",
+                        "setupTokenRequired"
                       ]
                     }
                   },

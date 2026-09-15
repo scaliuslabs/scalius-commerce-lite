@@ -258,3 +258,22 @@ describe("storefront page data boundaries", () => {
     expect(source).toContain("const page = pageRenderData?.page ?? null");
   });
 });
+
+describe("dashboard path prefix reservation", () => {
+  it("redirects the reserved dashboard segment before any CMS page read", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,
+      "utf8",
+    );
+
+    const reservedIndex = source.indexOf(
+      "if (slug === dashboardReservedSegment(getRuntimeDashboardUrl())) {",
+    );
+    const apiCallIndex = source.indexOf("getPageRenderData(slug)");
+
+    expect(reservedIndex).toBeGreaterThan(-1);
+    expect(apiCallIndex).toBeGreaterThan(reservedIndex);
+    expect(source).toContain("status: 302");
+    expect(source).toContain('"Cache-Control": "private, no-store"');
+  });
+});

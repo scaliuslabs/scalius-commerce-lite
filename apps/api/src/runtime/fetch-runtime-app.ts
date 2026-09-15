@@ -48,7 +48,8 @@ export function classifyRuntimeApiPath(pathname: string): RuntimeAppName | null 
   if (pathname === "/api/v1" || pathname === "/api/v1/") return "public";
   if (
     pathname === "/api/v1/health" || pathname === "/api/v1/health/" ||
-    pathname === "/api/v1/readyz" || pathname === "/api/v1/readyz/"
+    pathname === "/api/v1/readyz" || pathname === "/api/v1/readyz/" ||
+    pathname === "/api/v1/meta" || pathname === "/api/v1/meta/"
   ) return "probe";
   if (
     pathname === "/api/v1/docs" || pathname === "/api/v1/docs/" ||

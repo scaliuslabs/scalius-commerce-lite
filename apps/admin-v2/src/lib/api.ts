@@ -1,6 +1,7 @@
 import { createIsomorphicFn } from "@tanstack/react-start";
 
 import { AdminApiResponseError } from "./admin-api-error";
+import { withDashboardBasePath } from "./dashboard-base-path";
 import {
   apiDelete as serverApiDelete,
   apiGet as serverApiGet,
@@ -30,7 +31,7 @@ function buildBrowserAdminPath(
   params?: Record<string, string>,
 ): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const fullPath = `/api/v1/admin${normalizedPath}`;
+  const fullPath = withDashboardBasePath(`/api/v1/admin${normalizedPath}`);
   if (!params || Object.keys(params).length === 0) return fullPath;
   return `${fullPath}?${new URLSearchParams(params).toString()}`;
 }
