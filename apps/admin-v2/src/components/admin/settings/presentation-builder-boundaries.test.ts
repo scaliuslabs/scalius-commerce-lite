@@ -88,13 +88,10 @@ describe("header and footer builder workflow boundaries", () => {
     const homepage = source("./HomepagePresentationBuilder.tsx");
 
     expect(homepage).toContain("onDraftStateChange");
-    // Discard restores the last acknowledged revision through the save bar.
-    expect(homepage).toContain("onDiscard={() => saved && setConfig(cloneConfig(saved.config))}");
+    expect(homepage).toContain("cloneConfig(saved.config)");
     expect(homepage).toContain("min-h-11");
     expect(homepage).toContain("md:size-8");
-    // The parent workspace still owns the leave-page guard.
-    expect(homepage).toContain("blockNavigation={false}");
-    expect(homepage).toContain('saveLabel="Save homepage"');
+    expect(homepage).toContain("Reset");
     expect(homepage).not.toContain('r{saved?.revision ?? "—"}');
   });
 });

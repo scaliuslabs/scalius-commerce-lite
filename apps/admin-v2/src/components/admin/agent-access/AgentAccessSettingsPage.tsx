@@ -1,40 +1,23 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Bot,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   KeyRound,
-  MoreHorizontal,
   RefreshCw,
+  Search,
   ShieldCheck,
   Store,
   TerminalSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  EmptyState,
-  IndexFilters,
-  IndexTable,
-  PageHeader,
-  StatusBadge,
-  type IndexTableColumn,
-  type PageHeaderLinkProps,
-  type StatusTone,
-} from "~/components/admin/shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+import { Input } from "~/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -42,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Skeleton } from "~/components/ui/skeleton";
 import { getServerFnError } from "~/lib/api-helpers";
 
 import {
@@ -51,7 +35,7 @@ import {
   revokeAllAgentGrants,
 } from "./api";
 import { ConnectionDetails } from "./ConnectionDetails";
-import { formatAgentAccessDate } from "./ConnectionTable";
+import { ConnectionTable } from "./ConnectionTable";
 import { CreateTokenDialog } from "./CreateTokenDialog";
 import { PurgeRevokedDialog } from "./PurgeRevokedDialog";
 import { RevokeDialog } from "./RevokeDialog";
@@ -68,34 +52,9 @@ const ALL = "all";
 const DEFAULT_STATUS: StatusFilter = "current";
 const EMPTY_CONNECTIONS: AgentConnection[] = [];
 
-const STATUS_TONES: Record<AgentConnection["status"], StatusTone> = {
-  active: "success",
-  pending: "attention",
-  revoked: "critical",
-  expired: "neutral",
-};
-
 type StatusFilter = AgentConnectionStatusFilter | typeof ALL;
 type KindFilter = AgentGrantKind | typeof ALL;
 type ResourceFilter = AgentResource | typeof ALL;
-
-function BreadcrumbLink({ href, className, onClick, children }: PageHeaderLinkProps) {
-  return (
-    <Link to={href} className={className} onClick={onClick}>
-      {children}
-    </Link>
-  );
-}
-
-function ConnectionKindIcon({ kind }: Pick<AgentConnection, "kind">) {
-  if (kind === "oauth") return <Bot aria-hidden="true" />;
-  if (kind === "cli") return <TerminalSquare aria-hidden="true" />;
-  return <KeyRound aria-hidden="true" />;
-}
-
-function connectionName(connection: AgentConnection): string {
-  return connection.label || connection.clientName || "Unnamed connection";
-}
 
 interface AgentAccessSettingsPageProps {
   availablePermissions: string[];
@@ -179,100 +138,46 @@ export function AgentAccessSettingsPage({
   ).length;
   const pagination = connectionsQuery.data?.pagination;
 
-  const columns: IndexTableColumn<AgentConnection>[] = [
-    {
-      id: "connection",
-      header: "Connection",
-      mobileLabel: "Connection",
-      cell: (connection) => (
-        <span className="flex min-w-0 items-center gap-3 py-1.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4">
-            <ConnectionKindIcon kind={connection.kind} />
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate font-medium">{connectionName(connection)}</span>
-            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-              {connection.kind.toUpperCase()} · {connection.ownerName ?? "Former admin"}
-            </span>
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "access",
-      header: "Access",
-      mobileLabel: "Access",
-      cell: (connection) => (
-        <span className="flex flex-wrap items-center justify-end gap-1.5 sm:justify-start">
-          <StatusBadge tone={STATUS_TONES[connection.status]} srLabel="Status:">
-            {connection.status}
-          </StatusBadge>
-          <StatusBadge tone="info" dot={false} srLabel="Resource:">
-            <span className="flex items-center gap-1">
-              {connection.resource === "dashboard" ? (
-                <Bot className="h-3 w-3" aria-hidden="true" />
-              ) : (
-                <Store className="h-3 w-3" aria-hidden="true" />
-              )}
-              {connection.resource}
-            </span>
-          </StatusBadge>
-          <StatusBadge tone="neutral" dot={false} srLabel="Scope:">
-            {connection.preset}
-          </StatusBadge>
-        </span>
-      ),
-    },
-    {
-      id: "lastUsed",
-      header: "Last used",
-      mobileLabel: "Last used",
-      className: "text-xs text-muted-foreground",
-      cell: (connection) => formatAgentAccessDate(connection.lastUsedAt),
-    },
-    {
-      id: "expires",
-      header: "Expires",
-      mobileLabel: "Expires",
-      hideOnMobile: true,
-      className: "text-xs text-muted-foreground",
-      cell: (connection) => formatAgentAccessDate(connection.expiresAt),
-    },
-  ];
-
   return (
     <div className="mx-auto max-w-7xl space-y-5 py-2 sm:py-4">
-      <PageHeader
-        title="Agent access"
-        subtitle="Approve, scope, inspect, revoke, and clear every MCP, CLI, and personal-token connection to this store."
-        breadcrumbs={[
-          { label: "Settings", href: "/admin/settings" },
-          { label: "Agent access" },
-        ]}
-        linkComponent={BreadcrumbLink}
-      >
-        <CreateTokenDialog
-          availablePermissions={availablePermissions}
-          canManage={canManage}
-          onCreated={() => invalidateConnections(queryClient)}
-        />
-        <PurgeRevokedDialog
-          clearable={clearableQuery.data}
-          disabled={!canManage}
-          pending={purgeRevokedMutation.isPending}
-          onConfirm={() => purgeRevokedMutation.mutateAsync()}
-        />
-        <RevokeDialog
-          title="Revoke every agent connection?"
-          description="All active MCP, CLI, and personal-token grants stop on their next request. This cannot be undone."
-          confirmLabel="Revoke all connections"
-          triggerLabel="Revoke all"
-          triggerVariant="destructive"
-          disabled={!canManage}
-          pending={revokeAllMutation.isPending}
-          onConfirm={(reason) => revokeAllMutation.mutateAsync(reason)}
-        />
-      </PageHeader>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border bg-card text-muted-foreground">
+              <Bot className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight">Agent Access</h1>
+          </div>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+            Approve, scope, inspect, revoke, and clear every MCP, CLI, and
+            personal-token connection to this store. Revoked and expired
+            connections stay out of the default view until you clear them.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <CreateTokenDialog
+            availablePermissions={availablePermissions}
+            canManage={canManage}
+            onCreated={() => invalidateConnections(queryClient)}
+          />
+          <PurgeRevokedDialog
+            clearable={clearableQuery.data}
+            disabled={!canManage}
+            pending={purgeRevokedMutation.isPending}
+            onConfirm={() => purgeRevokedMutation.mutateAsync()}
+          />
+          <RevokeDialog
+            title="Revoke every agent connection?"
+            description="All active MCP, CLI, and personal-token grants stop on their next request. This cannot be undone."
+            confirmLabel="Revoke all connections"
+            triggerLabel="Revoke all"
+            triggerVariant="destructive"
+            disabled={!canManage}
+            pending={revokeAllMutation.isPending}
+            onConfirm={(reason) => revokeAllMutation.mutateAsync(reason)}
+          />
+        </div>
+      </header>
 
       <div className="grid gap-2 sm:grid-cols-3">
         <Card className="shadow-none">
@@ -322,217 +227,196 @@ export function AgentAccessSettingsPage({
         </Alert>
       ) : null}
 
-      <div className="space-y-3">
-        <IndexFilters
-          label="Filter agent connections"
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search this page"
-          actions={
-            <>
-              <Select
-                value={resource}
-                onValueChange={(value) => {
-                  setResource(value as ResourceFilter);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by resource">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All resources</SelectItem>
-                  <SelectItem value="dashboard">Dashboard</SelectItem>
-                  <SelectItem value="storefront">Storefront</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={kind}
-                onValueChange={(value) => {
-                  setKind(value as KindFilter);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by connection kind">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All connection types</SelectItem>
-                  <SelectItem value="oauth">OAuth / MCP</SelectItem>
-                  <SelectItem value="pat">Personal token</SelectItem>
-                  <SelectItem value="cli">CLI</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={status}
-                onValueChange={(value) => {
-                  setStatus(value as StatusFilter);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="current">Current</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="revoked">Revoked</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                  <SelectItem value={ALL}>All statuses</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-11 w-11 sm:h-9 sm:w-9"
-                aria-label="Refresh connections"
-                onClick={() => void connectionsQuery.refetch()}
-                disabled={connectionsQuery.isFetching}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${connectionsQuery.isFetching ? "animate-spin" : ""}`}
-                  aria-hidden="true"
-                />
-              </Button>
-            </>
-          }
-        />
+      <Card className="shadow-none">
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_repeat(3,minmax(9rem,auto))_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder="Search this page"
+                className="min-h-11 pl-9 sm:min-h-9"
+                aria-label="Search agent connections on this page"
+              />
+            </div>
+            <Select
+              value={resource}
+              onValueChange={(value) => {
+                setResource(value as ResourceFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by resource">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All resources</SelectItem>
+                <SelectItem value="dashboard">Dashboard</SelectItem>
+                <SelectItem value="storefront">Storefront</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={kind}
+              onValueChange={(value) => {
+                setKind(value as KindFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by connection kind">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All connection types</SelectItem>
+                <SelectItem value="oauth">OAuth / MCP</SelectItem>
+                <SelectItem value="pat">Personal token</SelectItem>
+                <SelectItem value="cli">CLI</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value as StatusFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="min-h-11 sm:min-h-9" aria-label="Filter by status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Current</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="revoked">Revoked</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value={ALL}>All statuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-11 w-11 sm:h-9 sm:w-9"
+              aria-label="Refresh connections"
+              onClick={() => void connectionsQuery.refetch()}
+              disabled={connectionsQuery.isFetching}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${connectionsQuery.isFetching ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            </Button>
+          </div>
 
-        {connectionsQuery.error ? (
-          <Alert variant="destructive">
-            <AlertCircle aria-hidden="true" />
-            <AlertTitle>Connections are unavailable</AlertTitle>
-            <AlertDescription>
-              No access changes are safe until the live connection list loads.
+          {connectionsQuery.isPending ? (
+            <div className="space-y-2" role="status" aria-label="Loading connections">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : connectionsQuery.error ? (
+            <Alert variant="destructive">
+              <AlertCircle aria-hidden="true" />
+              <AlertTitle>Connections are unavailable</AlertTitle>
+              <AlertDescription>
+                No access changes are safe until the live connection list loads.
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void connectionsQuery.refetch()}
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : connections.length === 0 ? (
+            <div className="rounded-lg border border-dashed px-4 py-10 text-center">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border bg-muted/30 text-muted-foreground">
+                <TerminalSquare className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <h2 className="mt-3 text-sm font-semibold">
+                {status === "current" ? "No current agent connections" : "No agent connections"}
+              </h2>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+                Create a personal token here, connect an MCP client through OAuth,
+                or run <code className="rounded bg-muted px-1 py-0.5">scalius auth login</code> for CLI pairing.
+              </p>
+              {status === "current" && (clearableQuery.data?.total ?? 0) > 0 ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="mt-1"
+                  onClick={() => {
+                    setStatus(ALL);
+                    setPage(1);
+                  }}
+                >
+                  Show revoked and expired connections
+                </Button>
+              ) : null}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+              <p className="text-sm font-medium">No connections match these filters</p>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => void connectionsQuery.refetch()}
+                variant="link"
+                className="mt-1"
+                onClick={() => {
+                  setQuery("");
+                  setStatus(DEFAULT_STATUS);
+                  setKind(ALL);
+                  setResource(ALL);
+                  setPage(1);
+                }}
               >
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Retry
+                Clear filters
               </Button>
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <IndexTable
-            label="Agent connections"
-            items={filtered}
-            columns={columns}
-            getRowId={(connection) => connection.id}
-            loading={connectionsQuery.isPending}
-            loadingRowCount={3}
-            onRowClick={setSelectedConnection}
-            rowActions={(connection) => (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-11 w-11 sm:h-9 sm:w-9"
-                    aria-label={`Actions for ${connectionName(connection)}`}
-                  >
-                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setSelectedConnection(connection)}>
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    Inspect connection
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            empty={
-              connections.length === 0 ? (
-                <EmptyState
-                  icon={TerminalSquare}
-                  heading={
-                    status === "current"
-                      ? "No current agent connections"
-                      : "No agent connections"
-                  }
-                  body="Create a personal token here, connect an MCP client through OAuth, or run the CLI pairing command."
-                  secondaryAction={
-                    status === "current" && (clearableQuery.data?.total ?? 0) > 0
-                      ? {
-                          label: "Show revoked and expired connections",
-                          onClick: () => {
-                            setStatus(ALL);
-                            setPage(1);
-                          },
-                        }
-                      : undefined
-                  }
+            </div>
+          ) : (
+            <ConnectionTable
+              connections={filtered}
+              onInspect={setSelectedConnection}
+            />
+          )}
+
+          {pagination && pagination.totalPages > 1 ? (
+            <div className="flex items-center justify-between border-t pt-3">
+              <p className="text-xs text-muted-foreground">
+                {pagination.total} {status === "current" ? "current" : "matching"} connections
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
                 >
-                  <p className="text-xs text-muted-foreground">
-                    CLI pairing runs{" "}
-                    <code className="rounded bg-muted px-1 py-0.5">scalius auth login</code>.
-                  </p>
-                </EmptyState>
-              ) : (
-                <EmptyState
-                  icon={Clock3}
-                  heading="No connections match these filters"
-                  body="Clear the search and filters to see the current connections again."
-                  action={{
-                    label: "Clear filters",
-                    variant: "outline",
-                    onClick: () => {
-                      setQuery("");
-                      setStatus(DEFAULT_STATUS);
-                      setKind(ALL);
-                      setResource(ALL);
-                      setPage(1);
-                    },
-                  }}
-                />
-              )
-            }
-            footer={
-              pagination && pagination.totalPages > 1 ? (
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {pagination.total} {status === "current" ? "current" : "matching"} connections
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 sm:min-h-9"
-                      disabled={page <= 1}
-                      onClick={() => setPage((value) => Math.max(1, value - 1))}
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      Previous
-                    </Button>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {page} / {pagination.totalPages}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 sm:min-h-9"
-                      disabled={page >= pagination.totalPages}
-                      onClick={() => setPage((value) => value + 1)}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-              ) : null
-            }
-          />
-        )}
-      </div>
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  Previous
+                </Button>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {page} / {pagination.totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <ConnectionDetails
         connection={selectedConnection}

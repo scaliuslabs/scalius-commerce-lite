@@ -84,25 +84,11 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
   function button(label: string) {
     return Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim() === label)!;
   }
-  function saveBar() {
-    return host.querySelector('[data-testid="contextual-save-bar"]');
-  }
-  /**
-   * `ContextualSaveBar` owns the guard through `useUnsavedChanges`: the router
-   * blocker is armed with `disabled: !isBlocking` and `beforeunload` is handled
-   * by the hook's own effect, so `enableBeforeUnload` is always false.
-   */
   function expectProtected(protectedState: boolean) {
     const guard = api.blocker.mock.calls.at(-1)![0];
-    expect(guard.enableBeforeUnload).toBe(false);
-    expect(guard.disabled).toBe(!protectedState);
+    expect(guard.enableBeforeUnload).toBe(protectedState);
     expect(guard.shouldBlockFn({
-      current: {
-        pathname: "/admin/settings/checkout",
-        routeId: "/admin/settings/checkout",
-        fullPath: "/admin/settings/checkout",
-      },
-      next: { pathname: "/admin/orders", routeId: "/admin/orders", fullPath: "/admin/orders" },
+      current: { pathname: "/admin/settings/checkout" }, next: { pathname: "/admin/orders" },
     })).toBe(protectedState);
   }
   async function click(target: HTMLElement) {
@@ -126,7 +112,7 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
       guestCheckoutEnabled, checkoutMode: "guest_cod_only", partialPaymentEnabled: false,
       partialPaymentAmount: 150, expectedRevision: 1,
     } });
-    expect(button("Discard").disabled).toBe(true);
+    expect(button("Reset").disabled).toBe(true);
     return save;
   }
   async function acknowledge(save: ReturnType<typeof deferred<CheckoutFlowSettingsPayload>>, saved = savedCod) {
@@ -175,13 +161,12 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
     await click(radio("gateways_only"));
     const canonical = { ...savedCod, guestCheckoutEnabled: false };
     await acknowledge(save, canonical);
-    expect(button("Discard").disabled).toBe(false);
-    await click(button("Discard"));
+    expect(button("Reset").disabled).toBe(false);
+    await click(button("Reset"));
     expect(radio("guest_cod_only").getAttribute("data-state")).toBe("checked");
     expect(host.querySelector("#guest-checkout")!.getAttribute("data-state")).toBe("unchecked");
     expect(host.textContent).toContain("Checkout flow is saved · revision 2");
-    // A clean page has nothing to save: the contextual save bar is gone.
-    expect(saveBar()).toBeNull();
+    expect(button("Save checkout flow").disabled).toBe(true);
     expectProtected(false);
   });
 
@@ -303,49 +288,5 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
       : "Checkout flow is saved · revision 2");
     expectProtected(dirty);
     expect(api.update).not.toHaveBeenCalled();
-  });
-
-  it("saves the whole page from one contextual save bar instead of per-card buttons", async () => {
-    await render();
-    // Clean page: nothing to save, so no bar and no leftover per-card actions.
-    expect(saveBar()).toBeNull();
-    expect(button("Save checkout flow")).toBeUndefined();
-    expect(button("Discard")).toBeUndefined();
-    expect(button("Save changes")).toBeUndefined();
-    expect(button("Reset")).toBeUndefined();
-
-    await click(radio("gateways_only"));
-    const bar = saveBar();
-    expect(bar).not.toBeNull();
-    expect(bar!.getAttribute("role")).toBe("status");
-    // Exactly one Save and one Discard on the page, both inside the bar.
-    const saveButton = button("Save checkout flow");
-    const discardButton = button("Discard");
-    expect(bar!.contains(saveButton)).toBe(true);
-    expect(bar!.contains(discardButton)).toBe(true);
-    expect(
-      Array.from(host.querySelectorAll("button"))
-        .filter((item) => /^(Save checkout flow|Save changes|Discard|Reset)$/.test(item.textContent?.trim() ?? "")),
-    ).toHaveLength(2);
-
-    // Discard restores the last saved values and retires the bar.
-    await click(discardButton);
-    expect(radio("all").getAttribute("data-state")).toBe("checked");
-    expect(saveBar()).toBeNull();
-    expect(api.update).not.toHaveBeenCalled();
-
-    // Save goes through the bar and submits the draft exactly once.
-    await click(radio("gateways_only"));
-    const save = deferred<CheckoutFlowSettingsPayload>();
-    api.update.mockReturnValueOnce(save.promise);
-    await click(button("Save checkout flow"));
-    expect(api.update).toHaveBeenCalledTimes(1);
-    expect(api.update).toHaveBeenCalledWith({ data: {
-      guestCheckoutEnabled: true, checkoutMode: "gateways_only", partialPaymentEnabled: false,
-      partialPaymentAmount: 150, expectedRevision: 1,
-    } });
-    await acknowledge(save, { ...base, checkoutMode: "gateways_only", revision: 2 });
-    expect(api.update).toHaveBeenCalledTimes(1);
-    expect(saveBar()).toBeNull();
   });
 });

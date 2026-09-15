@@ -39,16 +39,4 @@ describe("AppSidebar navigation performance", () => {
     expect(source).toContain("onTouchStart:");
     expect(source).toContain("data-[transitioning]:bg-");
   });
-
-  it("keeps warming the settings destinations that left the sidebar", () => {
-    const source = readFileSync(new URL("./AppSidebar.tsx", import.meta.url), "utf8");
-
-    // The settings sub-menu became a single "Settings" entry, so the warm list
-    // has to pick the settings routes up from the settings navigation instead.
-    expect(source).toContain("getVisibleSettingsNavGroups(permissions, isSuperAdmin)");
-    expect(source).toContain("filter(isSettingsRouteItem)");
-    expect(source).toContain("collectPermissionVisibleRouteHrefs(navSections)");
-    // Still code-only warming: no loader or query work is scheduled for them.
-    expect(source).not.toContain("router.preloadRoute");
-  });
 });

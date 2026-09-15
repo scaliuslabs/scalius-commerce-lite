@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { TaxConfigurationPayload } from "~/lib/api-functions/taxes";
+import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
 import { getRequiredTaxRateRoles, getTaxReadiness } from "./tax-readiness";
 
 function configuration(

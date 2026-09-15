@@ -20,7 +20,6 @@ import type { User } from "./AccountSettingsContainer";
 const routerMock = vi.hoisted(() => ({ id: "account-router" }));
 const updateProfileMock = vi.hoisted(() => vi.fn());
 const refreshAdminRouteContextMock = vi.hoisted(() => vi.fn());
-const blockerMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),
@@ -28,10 +27,7 @@ const toastMock = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => routerMock,
-  useBlocker: (options: unknown) => {
-    blockerMock(options);
-    return { proceed: vi.fn(), reset: vi.fn(), status: "idle" };
-  },
+  useBlocker: () => ({ proceed: vi.fn(), reset: vi.fn(), status: "idle" }),
 }));
 
 vi.mock("~/lib/api-functions/auth-management", () => ({
@@ -76,7 +72,6 @@ describe("ProfileHeader display-name editing", () => {
       user: { name: currentUser.name, image: currentUser.image },
     });
     refreshAdminRouteContextMock.mockReset();
-    blockerMock.mockReset();
     toastMock.error.mockReset();
     toastMock.success.mockReset();
   });
@@ -93,12 +88,10 @@ describe("ProfileHeader display-name editing", () => {
     });
   }
 
-  function saveBar() {
-    return host.querySelector<HTMLElement>('[data-testid="contextual-save-bar"]');
-  }
-
   function buttonNamed(label: string) {
-    const button = queryButtonNamed(label);
+    const button = Array.from(host.querySelectorAll("button")).find((node) =>
+      normalizeText(node.textContent).includes(label),
+    );
 
     if (!button) {
       throw new Error(`Expected button named "${label}"`);
@@ -155,58 +148,39 @@ describe("ProfileHeader display-name editing", () => {
     }
   }
 
-  it("shows the current profile in an annotated section with no save bar until it changes", () => {
+  it("opens editing with current user data and reachable save/cancel controls", () => {
     renderProfileHeader();
+
+    expect(host.querySelector("h2")?.textContent).toBe(currentUser.name);
+    expect(host.textContent).toContain(currentUser.email);
+
+    act(() => {
+      click(buttonNamed("Edit profile"));
+    });
 
     const input = displayNameInput();
+    const cancelButton = buttonNamed("Cancel");
+    const saveButton = buttonNamed("Save profile");
+
     expect(input.value).toBe(currentUser.name);
     expect(host.textContent).toContain(currentUser.email);
-    expect(host.querySelector('[data-testid="settings-section"]')).not.toBeNull();
-    expect(saveBar()).toBeNull();
-    expect(queryButtonNamed("Save profile")).toBeNull();
-
-    // The photo controls stay reachable on touch beside the media picker.
-    const mediaActions = host.querySelector<HTMLElement>("[data-profile-edit-actions]");
-    expect(mediaActions?.className).toContain("min-h-11");
+    expect(cancelButton.disabled).toBe(false);
+    expect(saveButton.disabled).toBe(true);
+    expect(saveButton.parentElement).toBe(cancelButton.parentElement);
+    expect(saveButton.closest("[data-profile-edit-actions]")).toBe(
+      cancelButton.closest("[data-profile-edit-actions]"),
+    );
     expect(
-      buttonNamed("Change photo").closest("[data-profile-edit-actions]"),
-    ).toBe(mediaActions);
+      saveButton.closest("[data-profile-edit-actions]")?.className,
+    ).toContain("min-h-11");
   });
 
-  it("reveals the contextual save bar once the draft differs from the saved profile", () => {
+  it("restores the prior display name on cancel without saving", () => {
     renderProfileHeader();
 
     act(() => {
-      setInputValue(displayNameInput(), "Temporary Name");
+      click(buttonNamed("Edit profile"));
     });
-
-    const bar = saveBar();
-    expect(bar).not.toBeNull();
-    expect(bar?.getAttribute("role")).toBe("status");
-    expect(normalizeText(bar?.textContent ?? null)).toContain("Unsaved changes");
-    expect(buttonNamed("Save profile").disabled).toBe(false);
-    expect(buttonNamed("Discard").disabled).toBe(false);
-  });
-
-  it("blocks navigation through the router blocker without the native unload prompt", () => {
-    renderProfileHeader();
-
-    act(() => {
-      setInputValue(displayNameInput(), "Temporary Name");
-    });
-
-    const options = blockerMock.mock.calls.at(-1)?.[0] as {
-      enableBeforeUnload?: boolean;
-      disabled?: boolean;
-      withResolver?: boolean;
-    };
-    expect(options.enableBeforeUnload).toBe(false);
-    expect(options.disabled).toBe(false);
-    expect(options.withResolver).toBe(true);
-  });
-
-  it("restores the prior display name on discard without saving", () => {
-    renderProfileHeader();
 
     act(() => {
       setInputValue(displayNameInput(), "Temporary Name");
@@ -216,31 +190,13 @@ describe("ProfileHeader display-name editing", () => {
     expect(buttonNamed("Save profile").disabled).toBe(false);
 
     act(() => {
-      click(buttonNamed("Discard"));
+      click(buttonNamed("Cancel"));
     });
 
-    expect(displayNameInput().value).toBe(currentUser.name);
+    expect(host.querySelector("h2")?.textContent).toBe(currentUser.name);
     expect(host.textContent).toContain(currentUser.email);
-    expect(saveBar()).toBeNull();
     expect(queryButtonNamed("Save profile")).toBeNull();
-    expect(updateProfileMock).not.toHaveBeenCalled();
-  });
-
-  it("keeps saving blocked and explains why while the name is too short", () => {
-    renderProfileHeader();
-
-    act(() => {
-      setInputValue(displayNameInput(), "A");
-    });
-
-    expect(buttonNamed("Save profile").disabled).toBe(true);
-    expect(displayNameInput().getAttribute("aria-invalid")).toBe("true");
-    const fieldError = host.querySelector('[data-testid="field-error"]');
-    expect(normalizeText(fieldError?.textContent ?? null)).toContain("at least 2 characters");
-
-    act(() => {
-      click(buttonNamed("Save profile"));
-    });
+    expect(host.querySelector('input[aria-label="Display name"]')).toBeNull();
     expect(updateProfileMock).not.toHaveBeenCalled();
   });
 
@@ -249,6 +205,10 @@ describe("ProfileHeader display-name editing", () => {
       user: { name: "Arobi Owner", image: currentUser.image },
     });
     renderProfileHeader();
+
+    act(() => {
+      click(buttonNamed("Edit profile"));
+    });
 
     act(() => {
       setInputValue(displayNameInput(), "  Arobi Owner  ");
@@ -265,9 +225,9 @@ describe("ProfileHeader display-name editing", () => {
         image: currentUser.image,
       },
     });
-    expect(displayNameInput().value).toBe("Arobi Owner");
-    expect(saveBar()).toBeNull();
+    expect(host.querySelector("h2")?.textContent).toBe("Arobi Owner");
     expect(queryButtonNamed("Save profile")).toBeNull();
+    expect(buttonNamed("Edit profile")).toBeTruthy();
     expect(toastMock.success).toHaveBeenCalledWith("Profile saved");
     expect(refreshAdminRouteContextMock).toHaveBeenCalledWith(routerMock);
   });

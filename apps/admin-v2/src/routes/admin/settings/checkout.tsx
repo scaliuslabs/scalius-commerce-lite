@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import CheckoutSettingsPage from "~/components/admin/settings/CheckoutSettingsPage";
-import { SettingsLayout } from "~/components/admin/settings/SettingsLayout";
 import {
   normalizeCheckoutSettingsSection,
   type CheckoutSettingsSection,
@@ -42,11 +41,9 @@ function CheckoutPage() {
   );
 
   return (
-    <SettingsLayout pathname="/admin/settings/checkout">
-      <CheckoutSettingsPage
-        section={search.section}
-        onSectionChange={handleSectionChange}
-      />
-    </SettingsLayout>
+    <CheckoutSettingsPage
+      section={search.section}
+      onSectionChange={handleSectionChange}
+    />
   );
 }

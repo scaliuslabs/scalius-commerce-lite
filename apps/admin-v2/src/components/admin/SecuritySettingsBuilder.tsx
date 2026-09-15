@@ -2,8 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
+  CheckCircle2,
+  Loader2,
+  LockKeyhole,
   Plus,
+  RotateCcw,
+  Save,
   Server,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -14,29 +20,21 @@ import {
   serializeMerchantCspSources,
 } from "@scalius/shared/security-csp";
 
-import {
-  ContextualSaveBar,
-  EmptyState,
-  FieldError,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-  StatusBadge,
-} from "~/components/admin/shell";
-import { Alert, AlertDescription } from "~/components/ui/alert";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Skeleton } from "~/components/ui/skeleton";
-import { usePermissions } from "~/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { getServerFnError } from "~/lib/api-helpers";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { getServerFnError } from "@/lib/api-helpers";
 import {
   getSecuritySettings,
   updateSecuritySettings,
-} from "~/lib/api-functions/settings";
-import { getInheritedSecuritySources } from "~/lib/api-functions/security-runtime";
-import { queryKeys } from "~/lib/query-keys";
+} from "@/lib/api-functions/settings";
+import { getInheritedSecuritySources } from "@/lib/api-functions/security-runtime";
+import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
 
 function sourcesEqual(left: readonly string[], right: readonly string[]): boolean {
@@ -137,12 +135,6 @@ export function SecuritySettingsBuilder() {
     setSourceError(null);
   }
 
-  function discardDraft() {
-    setMerchantSources(savedMerchantSources);
-    setSourceDraft("");
-    setSourceError(null);
-  }
-
   if (securityQuery.isLoading || !merchantSources || !savedMerchantSources) {
     if (securityQuery.isError) {
       return (
@@ -155,38 +147,20 @@ export function SecuritySettingsBuilder() {
       );
     }
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={2}
-        rowsPerSection={3}
-        label="Loading storefront security policy"
-      />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
-  const saveDisabledReason = sourceError
-    ? "Fix the highlighted fields before saving."
-    : !dirty
-      ? "Add the pending origin or clear it before saving."
-      : undefined;
-
   return (
-    <div className="max-w-5xl">
-      <ContextualSaveBar
+    <>
+      <UnsavedChangesGuard
         isDirty={dirty || hasPendingInput || saveMutation.isPending}
-        saving={saveMutation.isPending}
-        saveDisabled={!dirty || Boolean(sourceError)}
-        saveDisabledReason={saveDisabledReason}
-        canSave={canManage}
-        saveLabel="Save policy"
-        allowSamePathNavigation
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={discardDraft}
-        onSave={() => saveMutation.mutate(merchantSources)}
+        isSubmitting={false}
+        allowSamePathStateNavigation
       />
-
-      <div className="space-y-6">
+      <div className="max-w-4xl space-y-5">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -195,15 +169,21 @@ export function SecuritySettingsBuilder() {
           </Alert>
         )}
 
-        <SettingsSection
-          title="Inherited platform trust"
-          description="Read-only origins configured in Settings → System → Platform."
-          contentClassName="p-0 sm:p-0"
-        >
+        <section className="overflow-hidden rounded-lg border bg-background">
+          <div className="flex items-start gap-3 border-b px-4 py-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Inherited platform trust</h3>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Read-only origins configured in Settings → System → Platform.
+              </p>
+            </div>
+          </div>
+
           {inheritedQuery.isError ? (
-            <div className="flex flex-col gap-3 px-4 py-3 text-xs text-amber-700 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-3 px-4 py-3 text-xs text-amber-700 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>Platform origins could not be inspected. Runtime trust is unchanged.</p>
               </div>
               <Button
@@ -217,25 +197,19 @@ export function SecuritySettingsBuilder() {
               </Button>
             </div>
           ) : inheritedQuery.isLoading ? (
-            <div role="status" aria-busy="true" className="divide-y">
-              <span className="sr-only">Reading deployed origins</span>
-              {[0, 1, 2].map((row) => (
-                <div key={row} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center sm:px-6">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-3.5 w-full max-w-64" />
-                  <Skeleton className="h-5 w-20" />
-                </div>
-              ))}
+            <div className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Reading deployed origins…
             </div>
           ) : (
             <div className="divide-y">
               {inheritedQuery.data?.map((source) => (
                 <div
                   key={source.key}
-                  className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+                  className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center"
                 >
                   <div className="flex items-center gap-2 text-sm font-medium">
-                    <Server className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <Server className="h-3.5 w-3.5 text-muted-foreground" />
                     {source.label}
                   </div>
                   <div className="min-w-0">
@@ -252,25 +226,37 @@ export function SecuritySettingsBuilder() {
                       </p>
                     ) : null}
                   </div>
-                  <StatusBadge
-                    tone={source.source ? "success" : "attention"}
-                    srLabel={`${source.label} platform origin:`}
-                    className="w-fit"
+                  <Badge
+                    variant="outline"
+                    className={source.source
+                      ? "w-fit border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                      : "w-fit border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"}
                   >
+                    {source.source ? (
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                    ) : (
+                      <AlertTriangle className="mr-1 h-3 w-3" />
+                    )}
                     {source.source ? "Trusted" : "Missing"}
-                  </StatusBadge>
+                  </Badge>
                 </div>
               ))}
             </div>
           )}
-        </SettingsSection>
+        </section>
 
-        <SettingsSection
-          title="Additional storefront services"
-          description="Add an exact origin required by a payment, analytics, chat, or embedded service."
-          footer="Merchant additions currently apply to scripts, connections, frames, images, and workers."
-        >
-          <div className="space-y-2">
+        <section className="rounded-lg border bg-background p-4">
+          <div className="flex items-start gap-3">
+            <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Additional storefront services</h3>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Add an exact origin required by a payment, analytics, chat, or embedded service.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2">
             <Label htmlFor="csp-source-draft">Trusted origin</Label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -299,17 +285,16 @@ export function SecuritySettingsBuilder() {
                 disabled={!canEdit || !sourceDraft.trim()}
                 onClick={addMerchantSource}
               >
-                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Plus className="mr-2 h-4 w-4" />
                 Add origin
               </Button>
             </div>
-            {sourceError ? (
-              <FieldError id="csp-source-help">{sourceError}</FieldError>
-            ) : (
-              <InlineHelp id="csp-source-help">
-                Exact HTTPS origins stay exact. Use https://*.example.com only when every subdomain is required.
-              </InlineHelp>
-            )}
+            <p
+              id="csp-source-help"
+              className={`text-xs leading-5 ${sourceError ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {sourceError ?? "Exact HTTPS origins stay exact. Use https://*.example.com only when every subdomain is required."}
+            </p>
           </div>
 
           {merchantSources.length > 0 ? (
@@ -320,7 +305,7 @@ export function SecuritySettingsBuilder() {
             >
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
                 {merchantSources.length} trusted {merchantSources.length === 1 ? "origin" : "origins"}
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
               <div className="divide-y border-t">
                 {merchantSources.map((source) => (
@@ -335,22 +320,57 @@ export function SecuritySettingsBuilder() {
                       onClick={() => setMerchantSources((current) => current?.filter((item) => item !== source) ?? [])}
                       aria-label={`Remove ${source}`}
                     >
-                      <X className="h-4 w-4" aria-hidden="true" />
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
               </div>
             </details>
           ) : (
-            <EmptyState
-              className="mt-4"
-              compact
-              heading="No merchant-added origins"
-              body="Platform and first-class integration defaults still apply. Add an origin above when an embedded service needs one."
-            />
+            <div className="mt-4 rounded-md border">
+              <p className="px-3 py-4 text-xs leading-5 text-muted-foreground">
+                No merchant-added origins. Platform and first-class integration defaults still apply.
+              </p>
+            </div>
           )}
-        </SettingsSection>
+
+          <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
+            Merchant additions currently apply to scripts, connections, frames, images, and workers.
+          </p>
+        </section>
+
+        {dirty || hasPendingInput ? (
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 sm:min-h-9"
+              disabled={!canEdit}
+              onClick={() => {
+                setMerchantSources(savedMerchantSources);
+                setSourceDraft("");
+                setSourceError(null);
+              }}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11 sm:min-h-9 sm:min-w-36"
+              disabled={!canEdit || !dirty}
+              onClick={() => saveMutation.mutate(merchantSources)}
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save policy
+            </Button>
+          </div>
+        ) : null}
       </div>
-    </div>
+    </>
   );
 }

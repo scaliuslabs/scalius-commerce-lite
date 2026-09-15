@@ -57,15 +57,7 @@ const unconfigured: PlatformSettingsPayload = {
   mediaUrl: "",
   customerAuthCookieDomain: "",
   corsAllowedOrigins: [],
-  readiness: {
-    status: "incomplete",
-    issues: [
-      { code: "missing_api_url", message: "API URL is not configured." },
-      { code: "missing_dashboard_url", message: "Dashboard URL is not configured." },
-      { code: "missing_media_url", message: "Media URL is not configured." },
-    ],
-    missing: ["apiUrl", "dashboardUrl", "mediaUrl"],
-  },
+  readiness: { status: "incomplete", issues: [{ code: "platform.missing_origins", message: "Missing origins." }], missing: ["apiUrl", "dashboardUrl", "mediaUrl"] },
   effective: {
     storefrontUrl: "http://localhost:4322",
     apiUrl: "http://localhost:8787",
@@ -138,15 +130,14 @@ describe("PlatformSettingsBuilder", () => {
     vi.restoreAllMocks();
   });
 
-  // TanStack Query publishes results through a macrotask; flush until nothing
-  // is busy any more - the loading skeleton and the saving contextual save bar
-  // both mark themselves with aria-busy (bounded so a broken render fails fast).
+  // TanStack Query publishes results through a macrotask; flush until the
+  // loading spinner is gone (bounded so a broken render still fails fast).
   async function settle() {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      if (!host.querySelector('[aria-busy="true"]')) return;
+      if (!host.querySelector(".animate-spin")) return;
     }
   }
   async function render() {
@@ -183,9 +174,6 @@ describe("PlatformSettingsBuilder", () => {
   function readiness() {
     return host.querySelector<HTMLElement>('[data-testid="platform-readiness"]')!;
   }
-  function saveBar() {
-    return host.querySelector<HTMLElement>('[data-testid="contextual-save-bar"]');
-  }
 
   it("loads the saved origins and reports complete readiness", async () => {
     await render();
@@ -198,15 +186,7 @@ describe("PlatformSettingsBuilder", () => {
     expect(host.textContent).toContain("https://app.example.com");
     expect(readiness().getAttribute("role")).toBe("status");
     expect(readiness().textContent).toContain("Platform origins configured");
-    // Annotated sections carry the headings; cards never repeat them.
-    expect(
-      Array.from(host.querySelectorAll('[data-testid="settings-section"] h2')).map(
-        (node) => node.textContent,
-      ),
-    ).toEqual(["Public origins", "Customer sessions and CORS"]);
     expect(host.textContent).not.toContain("automatic fallback");
-    // The contextual save bar only exists once something is unsaved.
-    expect(saveBar()).toBeNull();
     expect(button("Save platform")).toBeUndefined();
   });
 
@@ -237,11 +217,6 @@ describe("PlatformSettingsBuilder", () => {
     await render();
 
     await type(input("platform-apiUrl"), "https://api2.example.com");
-    // Editing the draft raises the save bar, which announces itself politely.
-    expect(saveBar()!.getAttribute("role")).toBe("status");
-    expect(saveBar()!.getAttribute("aria-live")).toBe("polite");
-    expect(saveBar()!.textContent).toContain("Unsaved changes");
-
     await type(input("platform-cors-draft"), "https://portal.example.com");
     await click(button("Add origin")!);
     expect(host.textContent).toContain("https://portal.example.com");
@@ -257,7 +232,6 @@ describe("PlatformSettingsBuilder", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.settings.storefrontUrl() });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["settings", "security", "inherited-sources"] });
     expect(toast.success).toHaveBeenCalledWith("Platform origins saved");
-    expect(saveBar()).toBeNull();
     expect(button("Save platform")).toBeUndefined();
     expect(input("platform-apiUrl").value).toBe("https://api2.example.com");
   });
@@ -269,18 +243,12 @@ describe("PlatformSettingsBuilder", () => {
 
     const save = button("Save platform")!;
     expect(save.disabled).toBe(true);
-    expect(save.getAttribute("title")).toBe("Fix the highlighted fields before saving.");
     expect(input("platform-apiUrl").getAttribute("aria-invalid")).toBe("true");
-    const fieldError = host.querySelector("#platform-apiUrl-help")!;
-    expect(fieldError.getAttribute("role")).toBe("alert");
-    expect(fieldError.textContent).toContain("HTTPS origin");
-    await click(save);
+    expect(host.querySelector("#platform-apiUrl-help")?.textContent).toContain("HTTPS origin");
     expect(api.update).not.toHaveBeenCalled();
 
-    // Discard restores the last saved values and retires the save bar.
-    await click(button("Discard")!);
+    await click(button("Reset")!);
     expect(input("platform-apiUrl").value).toBe("https://api.example.com");
-    expect(saveBar()).toBeNull();
     expect(button("Save platform")).toBeUndefined();
   });
 
@@ -295,22 +263,6 @@ describe("PlatformSettingsBuilder", () => {
     await click(button("Add origin")!);
     expect(host.querySelector("#platform-cors-help")?.textContent).toContain("HTTPS origin");
     expect(host.querySelectorAll('[aria-label^="Remove "]')).toHaveLength(1);
-  });
-
-  it("raises the save bar for a pending origin and lets Discard clear it", async () => {
-    await render();
-
-    await type(input("platform-cors-draft"), "https://portal.example.com");
-    // The origin is not in the draft yet, so there is nothing to save.
-    expect(saveBar()).not.toBeNull();
-    expect(button("Save platform")!.disabled).toBe(true);
-    expect(button("Save platform")!.getAttribute("title")).toBe(
-      "Add the pending origin or clear it before saving.",
-    );
-
-    await click(button("Discard")!);
-    expect(input("platform-cors-draft").value).toBe("");
-    expect(saveBar()).toBeNull();
   });
 
   it("keeps the failed save draft and reports the API error", async () => {
@@ -332,18 +284,6 @@ describe("PlatformSettingsBuilder", () => {
     expect(host.textContent).toContain("cannot change them");
     expect(input("platform-apiUrl").disabled).toBe(true);
     expect(input("platform-cors-draft").disabled).toBe(true);
-  });
-
-  it("locks the save bar actions for an operator who cannot manage settings", async () => {
-    api.permission.mockReturnValue(false);
-    await render();
-
-    // A read-only operator cannot type, so drive the draft through the input
-    // setter the same way a paste would.
-    await type(input("platform-apiUrl"), "https://api2.example.com");
-    expect(button("Save platform")!.disabled).toBe(true);
-    expect(button("Discard")!.disabled).toBe(true);
-    expect(api.update).not.toHaveBeenCalled();
   });
 
   it("fails closed when the settings cannot be loaded", async () => {

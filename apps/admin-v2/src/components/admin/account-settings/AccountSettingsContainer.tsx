@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Link } from "@tanstack/react-router";
 import {
   KeyRound,
   MonitorSmartphone,
@@ -8,12 +7,6 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import {
-  PageHeader,
-  PageTabs,
-  type PageHeaderLinkProps,
-  type PageTabItem,
-} from "~/components/admin/shell";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { RolesManagement } from "../RolesManagement";
@@ -22,9 +15,17 @@ import { ChangePasswordForm } from "./ChangePasswordForm";
 import { TwoFactorSetup } from "./TwoFactorSetup";
 import { AdminUsersManager } from "./AdminUsersManager";
 import { AccountSessions } from "./AccountSessions";
-import { normalizeAccountSection, type AccountSection } from "./account-sections";
-
-const ACCOUNT_PANEL_ID = "account-settings-panel";
+import type { AccountSection } from "./account-sections";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 
 export interface User {
   id: string;
@@ -34,14 +35,6 @@ export interface User {
   role?: string | null;
   twoFactorEnabled?: boolean | null;
   twoFactorMethod?: string | null;
-}
-
-function BreadcrumbLink({ href, className, onClick, children }: PageHeaderLinkProps) {
-  return (
-    <Link to={href} className={className} onClick={onClick}>
-      {children}
-    </Link>
-  );
 }
 
 interface AccountSettingsProps {
@@ -76,17 +69,13 @@ export function AccountSettings({
     }
   }, [activeSection, onSectionChange, section]);
 
-  // Personal settings first, then the ones that administer the store. They are
-  // one tab strip, not a second left column: inside SettingsLayout the page
-  // already sits beside the settings navigation, and a third column left the
-  // administrators table about 330px wide.
-  const personalSections: readonly (PageTabItem & { value: AccountSection })[] = [
-    { value: "profile", label: "Profile", icon: UserRound },
-    { value: "security", label: "Two-factor", icon: Shield },
-    { value: "password", label: "Password", icon: KeyRound },
-    { value: "sessions", label: "Sessions", icon: MonitorSmartphone },
+  const personalSections = [
+    { value: "profile" as const, label: "Profile", icon: UserRound },
+    { value: "security" as const, label: "Two-factor", icon: Shield },
+    { value: "password" as const, label: "Password", icon: KeyRound },
+    { value: "sessions" as const, label: "Sessions", icon: MonitorSmartphone },
   ];
-  const storeSections: readonly (PageTabItem & { value: AccountSection })[] = [
+  const storeSections = [
     ...(canViewTeam
       ? [{ value: "team" as const, label: "Administrators", icon: Users }]
       : []),
@@ -94,8 +83,6 @@ export function AccountSettings({
       ? [{ value: "roles" as const, label: "Roles", icon: ShieldPlus }]
       : []),
   ];
-  const tabs = [...personalSections, ...storeSections];
-  const activeTab = tabs.find((tab) => tab.value === activeSection) ?? tabs[0];
 
   const renderSection = () => {
     if (activeSection === "profile") return <ProfileHeader user={user} />;
@@ -108,34 +95,103 @@ export function AccountSettings({
     return <TwoFactorSetup user={user} />;
   };
 
+  const renderNavigationItem = ({
+    value,
+    label,
+    icon: Icon,
+  }: (typeof personalSections)[number] | (typeof storeSections)[number]) => {
+    const active = value === activeSection;
+
+    return (
+      <button
+        key={value}
+        type="button"
+        aria-current={active ? "page" : undefined}
+        onClick={() => onSectionChange(value)}
+        className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:w-full lg:justify-start ${
+          active
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-4 pb-8">
-      <PageHeader
-        title="Account"
-        subtitle="Your identity, sign-in security, and who else can administer this store."
-        breadcrumbs={[
-          { label: "Settings", href: "/admin/settings" },
-          { label: "Account" },
-        ]}
-        linkComponent={BreadcrumbLink}
-      />
+      <div className="lg:hidden">
+        <Select
+          value={activeSection}
+          onValueChange={(value) => onSectionChange(value as AccountSection)}
+        >
+          <SelectTrigger
+            className="min-h-11 bg-card"
+            aria-label="Account settings section"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel className="text-xs text-muted-foreground">
+                Personal
+              </SelectLabel>
+              {personalSections.map(({ value, label }) => (
+                <SelectItem key={value} value={value} className="min-h-11">
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {storeSections.length > 0 ? <SelectSeparator /> : null}
+            {storeSections.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel className="text-xs text-muted-foreground">
+                  Store access
+                </SelectLabel>
+                {storeSections.map(({ value, label }) => (
+                  <SelectItem key={value} value={value} className="min-h-11">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </div>
 
-      <PageTabs
-        tabs={tabs}
-        value={activeSection}
-        onChange={(value) => onSectionChange(normalizeAccountSection(value))}
-        label="Account settings section"
-        panelId={ACCOUNT_PANEL_ID}
-      />
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
+        <nav
+          aria-label="Account settings"
+          className="hidden min-w-0 rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:block"
+        >
+          <div>
+            <div className="flex flex-col gap-1">
+              <p className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Personal
+              </p>
+              {personalSections.map(renderNavigationItem)}
+              {storeSections.length > 0 && (
+                <div
+                  className="mx-1 w-px shrink-0 bg-border lg:my-2 lg:h-px lg:w-auto"
+                  aria-hidden="true"
+                />
+              )}
+              {storeSections.length > 0 && (
+                <p className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Store access
+                </p>
+              )}
+              {storeSections.map(renderNavigationItem)}
+            </div>
+          </div>
+        </nav>
 
-      <section
-        id={ACCOUNT_PANEL_ID}
-        role="tabpanel"
-        aria-label={activeTab.label}
-        className="min-w-0"
-      >
-        {renderSection()}
-      </section>
+        <section className="min-w-0" aria-live="polite">
+          {renderSection()}
+        </section>
+      </div>
     </div>
   );
 }

@@ -3,21 +3,25 @@ import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
+  KeyRound,
+  Loader2,
+  RotateCcw,
+  Save,
   Smartphone,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
-import { isReady } from "@scalius/shared/readiness";
 import { toast } from "sonner";
 
-import {
-  ContextualSaveBar,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-  StatusBadge,
-} from "~/components/admin/shell";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
@@ -33,6 +37,7 @@ import {
   updateFirebaseSettings,
 } from "~/lib/api-functions/settings";
 import { queryKeys } from "~/lib/query-keys";
+import { isReady } from "@scalius/shared/readiness";
 
 const MASKED_VALUE = "••••••••••••";
 const PUBLIC_CONFIG_FIELDS = [
@@ -293,12 +298,9 @@ export default function FirebaseSettingsForm() {
       );
     }
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={2}
-        rowsPerSection={4}
-        label="Loading Firebase settings"
-      />
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -327,30 +329,10 @@ export default function FirebaseSettingsForm() {
     }
   }
 
-  function discardDraft() {
-    setDraft(savedDraft);
-    setRawPublicConfig("");
-    setShowRawPaste(false);
-  }
-
   return (
-    <div className="max-w-5xl">
-      <ContextualSaveBar
-        // The bar stays up through the confirming read so the navigation guard
-        // does not drop while the write is still settling.
-        isDirty={dirty || saveMutation.isPending}
-        saving={saveMutation.isPending}
-        saveDisabled={!dirty || retrying}
-        saveDisabledReason="Confirm the current settings before saving again."
-        canSave={canManage}
-        saveLabel="Save push settings"
-        allowSamePathNavigation
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={discardDraft}
-        onSave={handleSave}
-      />
-      <div className="space-y-6">
+    <>
+      <UnsavedChangesGuard isDirty={dirty || saveMutation.isPending} isSubmitting={false} />
+      <div className="max-w-5xl space-y-4 pb-24">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -383,23 +365,17 @@ export default function FirebaseSettingsForm() {
                 : !settingsCurrent || readinessQuery.isError ? "Push status unavailable"
                 : setupComplete ? "Push configured" : "Push setup incomplete"}
             </span>
-            {dirty ? <StatusBadge tone="attention">Unsaved</StatusBadge> : null}
+            {dirty ? <Badge variant="outline">Unsaved</Badge> : null}
           </div>
           <div className="flex flex-wrap gap-2 sm:ml-auto">
-            <StatusBadge
-              tone={readinessQuery.isFetching ? "neutral" : readinessQuery.isError ? "critical"
-                : providerReady ? "success" : "attention"}
-            >
+            <Badge variant="outline">
               {readinessQuery.isFetching ? "Checking server…" : readinessQuery.isError ? "Server unavailable"
                 : providerReady ? "Server configured" : "Server needs setup"}
-            </StatusBadge>
-            <StatusBadge
-              tone={checkingSettings ? "neutral" : !settingsCurrent ? "critical"
-                : savedBrowserConfigComplete ? "success" : "attention"}
-            >
+            </Badge>
+            <Badge variant="outline">
               {checkingSettings ? "Checking browser settings…" : !settingsCurrent ? "Browser status unavailable"
                 : savedBrowserConfigComplete ? "Browser configured" : "Browser needs setup"}
-            </StatusBadge>
+            </Badge>
           </div>
           {!providerReady ? (
             <div className="space-y-2 text-xs text-muted-foreground sm:basis-full">
@@ -415,14 +391,17 @@ export default function FirebaseSettingsForm() {
           ) : null}
         </div>
 
-        <SettingsSection
-          title="Server credential"
-          description="The service account the API uses to send push messages through Firebase."
-          actions={serviceAccountSaved ? (
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          ) : undefined}
-        >
-          <div className="space-y-3">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <KeyRound className="h-4 w-4" />
+              Server credential
+              {serviceAccountSaved && (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="firebase-service-account">Service account JSON</Label>
               <Textarea
@@ -432,14 +411,13 @@ export default function FirebaseSettingsForm() {
                 spellCheck={false}
                 autoComplete="off"
                 placeholder='{ "type": "service_account", "project_id": "..." }'
-                aria-describedby="firebase-service-account-help"
                 className="min-h-40 font-mono text-xs"
                 onChange={(event) => setDraft((current) => ({
                   ...current!,
                   serviceAccount: event.target.value,
                 }))}
               />
-              <InlineHelp id="firebase-service-account-help">
+              <p className="text-xs text-muted-foreground">
                 {!settingsCurrent && draft.serviceAccount === MASKED_VALUE
                   ? checkingSettings ? "Checking saved credential status…" : "Saved credential status is unavailable. Retry to confirm it."
                   : serviceAccountSaved && draft.serviceAccount === MASKED_VALUE
@@ -447,7 +425,7 @@ export default function FirebaseSettingsForm() {
                   : draft.serviceAccount
                     ? "The new credential is validated before saving."
                     : "No dashboard credential will be stored."}
-              </InlineHelp>
+              </p>
             </div>
             <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
               <a
@@ -458,15 +436,17 @@ export default function FirebaseSettingsForm() {
                 Open service accounts <ExternalLink className="ml-2 h-4 w-4" />
               </a>
             </Button>
-          </div>
-        </SettingsSection>
+          </CardContent>
+        </Card>
 
-        <SettingsSection
-          title="Browser configuration"
-          description="Values the storefront uses to register a browser for push."
-          actions={<Smartphone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
-        >
-          <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Smartphone className="h-4 w-4" />
+              Browser configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
               <Button variant="outline" asChild className="min-h-11 sm:min-h-9">
                 <a
@@ -553,9 +533,39 @@ export default function FirebaseSettingsForm() {
                 Open Cloud Messaging <ExternalLink className="ml-2 h-4 w-4" />
               </a>
             </Button>
-          </div>
-        </SettingsSection>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 border-t pt-4 sm:flex sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 min-w-0 sm:min-h-9"
+            disabled={!canEdit || !dirty}
+            onClick={() => {
+              setDraft(savedDraft);
+              setRawPublicConfig("");
+              setShowRawPaste(false);
+            }}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            className="min-h-11 min-w-0 sm:min-h-9 sm:min-w-32"
+            disabled={!canEdit || retrying || !dirty}
+            onClick={handleSave}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save changes
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

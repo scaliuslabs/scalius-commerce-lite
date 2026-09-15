@@ -18,15 +18,10 @@ describe("Firebase push workspace", () => {
 
   it("protects credentials and unsaved changes", () => {
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
-    // One contextual save bar owns saving, discarding, and the navigation
-    // guard; discarding also drops the pending paste buffer.
-    expect(source).toContain("<ContextualSaveBar");
-    expect(source).toContain("canSave={canManage}");
-    expect(source).toContain("onDiscard={discardDraft}");
+    expect(source).toContain("<UnsavedChangesGuard");
     expect(source).toContain("validateServiceAccountJson");
     expect(source).toContain("nextDraft.serviceAccount !== MASKED_VALUE");
     expect(source).toContain("setDraft(savedDraft)");
-    expect(source).not.toContain("<UnsavedChangesGuard");
   });
 
   it("keeps paste assistance and accessible mobile controls", () => {
@@ -35,9 +30,9 @@ describe("Firebase push workspace", () => {
     expect(source).toContain("htmlFor={id}");
     expect(source).toContain('className="h-11 sm:h-9"');
     expect(source).toContain("min-h-11");
-    // The save pair lives in the contextual save bar, which already stacks to
-    // full-width touch targets below `sm`.
-    expect(source).not.toContain("Save changes");
+    expect(source).toContain(
+      "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
+    );
     expect(source).not.toContain("flex-col-reverse");
   });
 });

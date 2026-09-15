@@ -1,23 +1,17 @@
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink, RotateCcw } from "lucide-react";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
   getStorefrontUrl,
   updateStorefrontUrl,
 } from "~/lib/api-functions/storefront-url";
-import {
-  ContextualSaveBar,
-  FieldError,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-} from "~/components/admin/shell";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { queryKeys } from "~/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
 import { HomepagePresentationBuilder } from "./settings/HomepagePresentationBuilder";
+import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import { useCallback, useState } from "react";
 
 interface StorefrontUrlValues {
@@ -81,19 +75,8 @@ export function StorefrontUrlBuilder({
     : !values.storefrontUrl.trim()
       ? "Enter the public store origin."
       : null;
-  // The homepage section owns its own draft and its own save. Its dirty state
-  // still keeps the page guarded so homepage work cannot be lost by navigating.
   const hasUnsavedChanges = isDirty || isSaving ||
     homepageDraftState.isDirty || homepageDraftState.isSubmitting;
-  // A failed or pending read must never be saved back as an editable default.
-  const saveBlocked = !isLoaded || !isDirty || Boolean(validationMessage);
-  const saveDisabledReason = !isLoaded
-    ? "Reload the storefront URL before saving."
-    : validationMessage
-      ? "Fix the highlighted fields before saving."
-      : !isDirty
-        ? "The homepage section below saves from its own controls."
-        : undefined;
   const handleHomepageDraftStateChange = useCallback(
     (next: { isDirty: boolean; isSubmitting: boolean }) => {
       setHomepageDraftState(next);
@@ -108,12 +91,9 @@ export function StorefrontUrlBuilder({
 
   if (isLoading) {
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={1}
-        rowsPerSection={1}
-        label="Loading storefront URL"
-      />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -129,66 +109,87 @@ export function StorefrontUrlBuilder({
   }
 
   return (
-    <div>
-      <ContextualSaveBar
+    <div className="space-y-8">
+      <UnsavedChangesGuard
         isDirty={hasUnsavedChanges}
-        saving={isSaving}
-        saveDisabled={saveBlocked}
-        saveDisabledReason={saveDisabledReason}
-        saveLabel="Save URL"
-        allowSamePathNavigation
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={reset}
-        onSave={() => void handleSubmit()}
+        isSubmitting={false}
+        allowSamePathStateNavigation
       />
-
-      <div className="space-y-8">
-        <SettingsSection
-          title="Storefront URL"
-          description="The public origin every link, preview, discovery file, and cache refresh is built from."
-        >
-          <div className="space-y-2">
-            <Label htmlFor="storefront-url">Storefront URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="storefront-url"
-                type="url"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={values.storefrontUrl}
-                onChange={(e) => setValue("storefrontUrl", e.target.value)}
-                placeholder="https://shop.example.com"
-                aria-invalid={Boolean(validationMessage)}
-                aria-describedby="storefront-url-help storefront-url-error"
-                className="min-h-11 flex-1 sm:min-h-9"
-              />
-              <Button
-                type="button"
-                className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
-                variant="outline"
-                size="icon"
-                onClick={testUrl}
-                disabled={!storefrontOrigin}
-                title="Open storefront"
-                aria-label="Open storefront"
-              >
-                <ExternalLink className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </div>
-            <FieldError id="storefront-url-error">{validationMessage}</FieldError>
-            <InlineHelp id="storefront-url-help">
-              Used for links, previews, discovery, and cache refreshes.
-            </InlineHelp>
+      <div className="max-w-3xl space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="storefront-url">Storefront URL</Label>
+          <div className="flex gap-2">
+            <Input
+              id="storefront-url"
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              value={values.storefrontUrl}
+              onChange={(e) => setValue("storefrontUrl", e.target.value)}
+              placeholder="https://shop.example.com"
+              aria-invalid={Boolean(validationMessage)}
+              aria-describedby="storefront-url-help storefront-url-error"
+              className="min-h-11 flex-1 md:min-h-9"
+            />
+            <Button
+              type="button"
+              className="h-11 w-11 md:h-10 md:w-10"
+              variant="outline"
+              size="icon"
+              onClick={testUrl}
+              disabled={!storefrontOrigin}
+              title="Open storefront"
+              aria-label="Open storefront"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
           </div>
-        </SettingsSection>
+          {validationMessage ? (
+            <p id="storefront-url-error" role="alert" className="text-xs text-destructive">
+              {validationMessage}
+            </p>
+          ) : null}
+          <p id="storefront-url-help" className="text-xs text-muted-foreground">
+            Used for links, previews, discovery, and cache refreshes.
+          </p>
+        </div>
 
-        <HomepagePresentationBuilder
-          onDraftStateChange={handleHomepageDraftStateChange}
-        />
+        {isDirty ? (
+          <div className="grid grid-cols-2 gap-2 border-t pt-4 sm:flex sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 md:min-h-10"
+              onClick={reset}
+              disabled={isSaving || !isLoaded}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSaving || !isLoaded || Boolean(validationMessage)}
+              className="min-h-11 min-w-[120px] md:min-h-10"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save URL"
+              )}
+            </Button>
+          </div>
+        ) : null}
       </div>
+
+      <HomepagePresentationBuilder
+        onDraftStateChange={handleHomepageDraftStateChange}
+      />
     </div>
   );
 }

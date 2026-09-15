@@ -439,44 +439,6 @@ describe("SeoDiscoveryStatusCard", () => {
     ]);
   });
 
-  it("tones every outcome badge by meaning while the readable label still carries it", () => {
-    renderCard();
-
-    const badges = Array.from(
-      host.querySelectorAll('[data-testid="status-badge"]'),
-    ).map((badge) => ({
-      tone: badge.getAttribute("data-tone"),
-      text: badge.textContent ?? "",
-    }));
-
-    expect(badges.length).toBeGreaterThan(0);
-    // Colour never carries the meaning on its own: each badge keeps its word.
-    expect(badges.every((badge) => badge.text.trim().length > 0)).toBe(true);
-    expect(
-      badges.some((badge) => badge.text.includes("OK") && badge.tone === "success"),
-    ).toBe(true);
-    expect(
-      badges.some((badge) => badge.text.includes("Off") && badge.tone === "neutral"),
-    ).toBe(true);
-
-    act(() => {
-      root.unmount();
-    });
-    host = document.createElement("div");
-    document.body.append(host);
-    root = createRoot(host);
-    storefrontUrlState.storefrontUrl = "/local-store";
-    renderCard();
-
-    const warningBadges = Array.from(
-      host.querySelectorAll('[data-testid="status-badge"][data-tone="warning"]'),
-    );
-    expect(warningBadges.length).toBeGreaterThan(0);
-    expect(warningBadges.every((badge) => badge.textContent?.includes("Check"))).toBe(
-      true,
-    );
-  });
-
   it("does not render broken external links for relative Store URLs", () => {
     storefrontUrlState.storefrontUrl = "/local-store";
 

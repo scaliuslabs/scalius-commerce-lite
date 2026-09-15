@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GripVertical, LayoutGrid, Trash2 } from "lucide-react";
+import { GripVertical, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,19 +9,12 @@ import {
 } from "@scalius/shared/homepage-presentation";
 import { cn } from "@scalius/shared/utils";
 import { mergeUneditedFields } from "~/hooks/use-settings-form";
-import {
-  ContextualSaveBar,
-  EmptyState,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-  StatusBadge,
-} from "~/components/admin/shell";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
+import { Badge } from "~/components/ui/badge";
 import { getCategoryFormOptions } from "~/lib/api-functions/categories";
 import {
   getHomepagePresentation,
@@ -162,12 +155,9 @@ export function HomepagePresentationBuilder({
 
   if (presentationQuery.isLoading || categoriesQuery.isLoading) {
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={2}
-        rowsPerSection={3}
-        label="Loading homepage presentation"
-      />
+      <div className="flex items-center justify-center py-14">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -186,203 +176,198 @@ export function HomepagePresentationBuilder({
   }
 
   return (
-    <div className="max-w-5xl">
-      {/*
-        The parent workspace already owns the leave-page guard through
-        `onDraftStateChange`, so this bar saves without a second blocker.
-      */}
-      <ContextualSaveBar
-        isDirty={dirty || saveMutation.isPending}
-        saving={saveMutation.isPending}
-        saveDisabled={!dirty || saveMutation.isPending || !saved}
-        saveDisabledReason="Change a homepage module before saving."
-        saveLabel="Save homepage"
-        blockNavigation={false}
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={() => saved && setConfig(cloneConfig(saved.config))}
-        onSave={() => saved && saveMutation.mutate({
-          config: cloneConfig(config),
-          expectedRevision: saved.revision,
-        })}
-      />
+    <div className="max-w-3xl space-y-4">
+      <div>
+        <h2 className="text-base font-semibold">Homepage</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Choose what buyers see after featured content.
+        </p>
+      </div>
 
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-base font-semibold">Homepage</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Choose what buyers see after featured content.
-          </p>
+      <section className="rounded-xl border bg-card">
+        <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
+          <div>
+            <Label htmlFor="homepage-category-rail" className="text-sm font-medium">
+              Category rail
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Shown after the first featured collection.
+            </p>
+          </div>
+          <Switch
+            className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
+            id="homepage-category-rail"
+            checked={config.categoryRail.enabled}
+            onCheckedChange={(enabled) => setConfig((current) => ({
+              ...current,
+              categoryRail: { ...current.categoryRail, enabled },
+            }))}
+          />
         </div>
 
-        <SettingsSection
-          title="Category rail"
-          description="Shows a scrollable row of categories after the first featured collection."
-          actions={
-            <div className="flex items-center gap-3">
-              <Label htmlFor="homepage-category-rail" className="text-sm font-normal">
-                Show the rail
-              </Label>
-              <Switch
-                className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
-                id="homepage-category-rail"
-                checked={config.categoryRail.enabled}
-                onCheckedChange={(enabled) => setConfig((current) => ({
-                  ...current,
-                  categoryRail: { ...current.categoryRail, enabled },
-                }))}
-              />
-            </div>
-          }
-        >
-          <div className={cn(
-            "space-y-3",
-            !config.categoryRail.enabled && "opacity-60",
-          )}>
-            <div className="space-y-1.5">
-              <Label htmlFor="homepage-category-title" className="text-xs">
-                Heading
-              </Label>
-              <Input
-                id="homepage-category-title"
-                value={config.categoryRail.title}
-                onChange={(event) => setConfig((current) => ({
-                  ...current,
-                  categoryRail: {
-                    ...current.categoryRail,
-                    title: event.target.value,
-                  },
-                }))}
-                disabled={!config.categoryRail.enabled}
-                maxLength={80}
-                aria-describedby="homepage-category-title-help"
-                className="min-h-11 sm:min-h-9"
-              />
-              <InlineHelp id="homepage-category-title-help">
-                Sits above the rail on the storefront.
-              </InlineHelp>
-            </div>
-
-            {selectedCategories.length > 0 ? (
-              <SortableList
-                items={selectedCategories}
-                onReorder={(items) => setConfig((current) => ({
-                  ...current,
-                  categoryRail: {
-                    ...current.categoryRail,
-                    categoryIds: items.map((item) => item.id),
-                  },
-                }))}
-                renderItem={(item, sortable) => (
-                  <div
-                    ref={sortable.ref}
-                    style={sortable.style}
-                    className={cn(
-                      "flex min-h-12 items-center gap-2 rounded-lg border bg-background px-2 md:min-h-10",
-                      sortable.isDragging && "relative z-10 shadow-md",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      aria-label={`Reorder ${item.category?.name ?? "unavailable category"}`}
-                      className="grid size-11 shrink-0 cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted md:size-8 active:cursor-grabbing"
-                      {...sortable.dragHandleProps}
-                    >
-                      <GripVertical className="size-4" />
-                    </button>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {item.category?.name ?? "Unavailable category"}
-                    </span>
-                    {item.category?.status && item.category.status !== "published" ? (
-                      <StatusBadge
-                        tone="attention"
-                        dot={false}
-                        srLabel="Category status:"
-                        className="shrink-0 capitalize"
-                      >
-                        {item.category.status}
-                      </StatusBadge>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-11 shrink-0 text-muted-foreground hover:text-destructive md:size-8"
-                      aria-label={`Remove ${item.category?.name ?? "unavailable category"}`}
-                      onClick={() => setConfig((current) => ({
-                        ...current,
-                        categoryRail: {
-                          ...current.categoryRail,
-                          categoryIds: current.categoryRail.categoryIds.filter(
-                            (id) => id !== item.id,
-                          ),
-                        },
-                      }))}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                )}
-              />
-            ) : (
-              <EmptyState
-                compact
-                icon={LayoutGrid}
-                heading="No categories in the rail"
-                body="Add the categories buyers should discover first."
-              />
-            )}
-
-            <SearchableSelect
-              value=""
-              onValueChange={(id) => setConfig((current) => ({
+        <div className={cn(
+          "space-y-3 px-4 py-4",
+          !config.categoryRail.enabled && "opacity-60",
+        )}>
+          <div className="space-y-1.5">
+            <Label htmlFor="homepage-category-title" className="text-xs">
+              Heading
+            </Label>
+            <Input
+              id="homepage-category-title"
+              value={config.categoryRail.title}
+              onChange={(event) => setConfig((current) => ({
                 ...current,
                 categoryRail: {
                   ...current.categoryRail,
-                  categoryIds: [...current.categoryRail.categoryIds, id],
+                  title: event.target.value,
                 },
               }))}
-              options={addOptions}
-              placeholder={
-                selectedCategories.length >= MAX_HOMEPAGE_CATEGORY_IDS
-                  ? "Category limit reached"
-                  : "Add category"
-              }
-              searchPlaceholder="Search categories…"
-              emptyMessage="No more categories to add."
-              disabled={
-                !config.categoryRail.enabled ||
-                selectedCategories.length >= MAX_HOMEPAGE_CATEGORY_IDS
-              }
-              ariaLabel="Add category to homepage"
-              triggerClassName="w-full"
+              disabled={!config.categoryRail.enabled}
+              maxLength={80}
+              className="min-h-11 md:min-h-9"
             />
-            <InlineHelp>
-              Drag to set the order. Draft and internal categories do not appear.
-            </InlineHelp>
           </div>
-        </SettingsSection>
 
-        <SettingsSection
-          title="Delivery and returns strip"
-          description="Repeats the delivery and return details you have already configured."
-        >
-          <div className="flex items-center justify-between gap-4">
-            <Label htmlFor="homepage-trust-strip" className="text-sm font-medium">
-              Show the strip
-            </Label>
-            <Switch
-              className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
-              id="homepage-trust-strip"
-              checked={config.trustStrip.enabled}
-              onCheckedChange={(enabled) => setConfig((current) => ({
+          {selectedCategories.length > 0 ? (
+            <SortableList
+              items={selectedCategories}
+              onReorder={(items) => setConfig((current) => ({
                 ...current,
-                trustStrip: { enabled },
+                categoryRail: {
+                  ...current.categoryRail,
+                  categoryIds: items.map((item) => item.id),
+                },
               }))}
+              renderItem={(item, sortable) => (
+                <div
+                  ref={sortable.ref}
+                  style={sortable.style}
+                  className={cn(
+                    "flex min-h-12 items-center gap-2 rounded-lg border bg-background px-2 md:min-h-10",
+                    sortable.isDragging && "relative z-10 shadow-md",
+                  )}
+                >
+                  <button
+                    type="button"
+                    aria-label={`Reorder ${item.category?.name ?? "unavailable category"}`}
+                    className="grid size-11 shrink-0 cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted md:size-8 active:cursor-grabbing"
+                    {...sortable.dragHandleProps}
+                  >
+                    <GripVertical className="size-4" />
+                  </button>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {item.category?.name ?? "Unavailable category"}
+                  </span>
+                  {item.category?.status && item.category.status !== "published" ? (
+                    <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
+                      {item.category.status}
+                    </Badge>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 shrink-0 text-muted-foreground hover:text-destructive md:size-8"
+                    aria-label={`Remove ${item.category?.name ?? "unavailable category"}`}
+                    onClick={() => setConfig((current) => ({
+                      ...current,
+                      categoryRail: {
+                        ...current.categoryRail,
+                        categoryIds: current.categoryRail.categoryIds.filter(
+                          (id) => id !== item.id,
+                        ),
+                      },
+                    }))}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              )}
             />
-          </div>
-        </SettingsSection>
-      </div>
+          ) : (
+            <div className="rounded-lg border border-dashed px-3 py-5 text-center text-sm text-muted-foreground">
+              Add the categories buyers should discover first.
+            </div>
+          )}
+
+          <SearchableSelect
+            value=""
+            onValueChange={(id) => setConfig((current) => ({
+              ...current,
+              categoryRail: {
+                ...current.categoryRail,
+                categoryIds: [...current.categoryRail.categoryIds, id],
+              },
+            }))}
+            options={addOptions}
+            placeholder={
+              selectedCategories.length >= MAX_HOMEPAGE_CATEGORY_IDS
+                ? "Category limit reached"
+                : "Add category"
+            }
+            searchPlaceholder="Search categories…"
+            emptyMessage="No more categories to add."
+            disabled={
+              !config.categoryRail.enabled ||
+              selectedCategories.length >= MAX_HOMEPAGE_CATEGORY_IDS
+            }
+            ariaLabel="Add category to homepage"
+            triggerClassName="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Drag to set the order. Draft and internal categories do not appear.
+          </p>
+        </div>
+      </section>
+
+      <section className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3">
+        <div>
+          <Label htmlFor="homepage-trust-strip" className="text-sm font-medium">
+            Delivery & returns strip
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Shows available delivery and return details.
+          </p>
+        </div>
+        <Switch
+          className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
+          id="homepage-trust-strip"
+          checked={config.trustStrip.enabled}
+          onCheckedChange={(enabled) => setConfig((current) => ({
+            ...current,
+            trustStrip: { enabled },
+          }))}
+        />
+      </section>
+
+      {dirty ? (
+        <div className="grid grid-cols-2 gap-2 border-t pt-4 sm:flex sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 md:min-h-10"
+            onClick={() => saved && setConfig(cloneConfig(saved.config))}
+            disabled={!dirty || saveMutation.isPending || !saved}
+          >
+            <RotateCcw className="size-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            onClick={() => saved && saveMutation.mutate({
+              config: cloneConfig(config),
+              expectedRevision: saved.revision,
+            })}
+            disabled={!dirty || saveMutation.isPending || !saved}
+            className="min-h-11 min-w-28 md:min-h-10"
+          >
+            {saveMutation.isPending ? (
+              <><Loader2 className="mr-2 size-4 animate-spin" /> Saving…</>
+            ) : "Save homepage"}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

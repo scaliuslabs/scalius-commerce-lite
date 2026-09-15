@@ -20,24 +20,10 @@ describe("currency settings safety boundaries", () => {
 
   it("validates the exchange rate and surfaces rejected saves", () => {
     expect(SOURCE).toContain("Number.isFinite(rate) && rate > 0");
-    // The page-level save bar owns Save/Discard; an invalid rate, an unloaded
-    // read, or a clean draft all keep Save locked.
     expect(SOURCE).toContain(
-      "const saveLocked = isSaving || !isLoaded || !isDirty || !isExchangeRateValid;",
+      "disabled={isSaving || !isLoaded || !isDirty || !isExchangeRateValid}",
     );
-    expect(SOURCE).toContain("saveDisabled={saveLocked}");
-    expect(SOURCE).toContain("<FieldError id=\"usd-exchange-rate-error\">");
     expect(SOURCE).toContain('<Alert variant="destructive" role="alert">');
-  });
-
-  it("saves through one contextual save bar instead of a per-card button row", () => {
-    expect(SOURCE).toContain("<ContextualSaveBar");
-    expect(SOURCE).toContain("isDirty={isDirty || isSaving}");
-    expect(SOURCE).toContain("allowSamePathNavigation");
-    expect(SOURCE).toContain('saveLabel="Save currency"');
-    expect(SOURCE).toContain("onSave={() => void submit()}");
-    expect(SOURCE).not.toContain("<UnsavedChangesGuard");
-    expect(SOURCE).not.toContain("animate-spin");
   });
 
   it("does not send the read-only lock state back in the settings payload", () => {

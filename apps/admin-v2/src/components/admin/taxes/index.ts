@@ -1,1 +1,1 @@
-export { TaxSettingsPage, TaxSettingsPageSkeleton } from "./TaxSettingsPage";
+export { TaxSettingsPage } from "./TaxSettingsPage";

@@ -65,7 +65,6 @@ import {
   type ThemePreviewDevice,
   type ThemeWorkspaceSection,
 } from "./theme-workspace";
-import { PageHeader, SkeletonPage, StatusBadge } from "../shell";
 import { ThemeReviewWorkspace } from "./ThemeReviewWorkspace";
 import { ThemeSystemWorkspace } from "./ThemeSystemWorkspace";
 import {
@@ -582,13 +581,13 @@ export default function ThemeSettingsPage({
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-4" aria-busy="true">
-        <PageHeader title="Storefront style" />
-        <SkeletonPage
-          showHeader={false}
-          sections={2}
-          rowsPerSection={4}
-          label="Loading the published style"
-        />
+        <header>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
+        </header>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="h-96 animate-pulse rounded-xl bg-muted" />
+          <div className="h-72 animate-pulse rounded-xl bg-muted" />
+        </div>
       </div>
     );
   }
@@ -596,10 +595,12 @@ export default function ThemeSettingsPage({
   if (loadError) {
     return (
       <div className="mx-auto max-w-6xl space-y-4">
-        <PageHeader
-          title="Storefront style"
-          subtitle="Set the visual system buyers see across the storefront."
-        />
+        <header>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Set the visual system buyers see across the storefront.
+          </p>
+        </header>
         <section
           role="alert"
           className="rounded-xl border border-destructive/30 bg-card p-5"
@@ -627,20 +628,23 @@ export default function ThemeSettingsPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-28">
-      <PageHeader
-        title="Storefront style"
-        subtitle="Set type, shape, spacing, and colors from one published system."
-      >
-        <div className="flex w-fit flex-wrap items-center gap-1.5">
-          <StatusBadge tone="info" dot={false}>
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Set type, shape, spacing, and colors from one published system.
+          </p>
+        </div>
+        <div className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="rounded-full border bg-card px-2.5 py-1">
             Published r{publishedRevision || "—"}
-          </StatusBadge>
-          <StatusBadge tone={dirty ? "attention" : "neutral"} dot={false}>
+          </span>
+          <span className="rounded-full border bg-card px-2.5 py-1">
             Draft {draftRevision > 0 ? `r${draftRevision}` : "new"}
             {dirty ? " · unsaved" : " · saved"}
-          </StatusBadge>
+          </span>
         </div>
-      </PageHeader>
+      </header>
 
       {!canManage && (
         <InlineNotice>

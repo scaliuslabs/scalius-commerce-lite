@@ -17,7 +17,6 @@ vi.mock("~/lib/api-query-options/taxes", () => ({
 }));
 vi.mock("~/components/admin/taxes", () => ({
   TaxSettingsPage: () => null,
-  TaxSettingsPageSkeleton: () => null,
 }));
 vi.mock("~/lib/route-error", () => ({
   RouteErrorComponent: () => null,
@@ -89,11 +88,8 @@ describe("taxes route authority", () => {
   });
 
   it("keeps a valid deep-linked workspace section and normalizes invalid input", () => {
-    expect(validateTaxesSearch({ section: "rates" })).toEqual({
-      section: "rates",
-    });
-    expect(validateTaxesSearch({ section: "classification" })).toEqual({
-      section: "classification",
+    expect(validateTaxesSearch({ section: "preview" })).toEqual({
+      section: "preview",
     });
     expect(validateTaxesSearch({
       section: "unknown",
@@ -101,49 +97,11 @@ describe("taxes route authority", () => {
       query: "  CLOG  ",
       page: "3",
     })).toEqual({
-      section: "rates",
+      section: "policy",
       kind: "variant",
       query: "CLOG",
       page: 3,
     });
     expect(Route.options.validateSearch).toBe(validateTaxesSearch);
-  });
-
-  it("maps retired section deep links onto the redesigned tabs", () => {
-    // `policy` became the Settings tab.
-    expect(validateTaxesSearch({ section: "policy" })).toEqual({
-      section: "settings",
-    });
-    // `preview` became a side sheet opened over the rates tab.
-    expect(validateTaxesSearch({ section: "preview" })).toEqual({
-      section: "rates",
-      preview: true,
-    });
-    // A saved classification deep link keeps its list state through the move.
-    expect(validateTaxesSearch({
-      section: "preview",
-      kind: "variant",
-      query: "CLOG",
-      page: 2,
-    })).toEqual({
-      section: "rates",
-      preview: true,
-      kind: "variant",
-      query: "CLOG",
-      page: 2,
-    });
-  });
-
-  it("carries the preview sheet in the search without inventing one", () => {
-    expect(validateTaxesSearch({ section: "classes", preview: true })).toEqual({
-      section: "classes",
-      preview: true,
-    });
-    expect(validateTaxesSearch({ section: "classes", preview: false })).toEqual({
-      section: "classes",
-    });
-    expect(validateTaxesSearch({ section: "classes" })).toEqual({
-      section: "classes",
-    });
   });
 });
