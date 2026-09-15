@@ -11,8 +11,18 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 export const publicPlatformConfigSchema = z.object({
   storefrontUrl: z.string(),
   apiUrl: z.string(),
+  /** May carry a path prefix when the dashboard is served below a host root. */
   dashboardUrl: z.string(),
   mediaUrl: z.string(),
+  /** Opt-in automation contracts. The dashboard Worker verifies handoff tokens with these. */
+  setupTokenRequired: z.boolean(),
+  identityHandoff: z.object({
+    enabled: z.boolean(),
+    issuer: z.string(),
+    audience: z.string(),
+    jwksUrl: z.string(),
+    localLoginDisabled: z.boolean(),
+  }),
 });
 
 const getPlatformRoute = createRoute({
@@ -38,6 +48,8 @@ app.openapi(getPlatformRoute, async (c) => {
     apiUrl: platform.apiUrl,
     dashboardUrl: platform.dashboardUrl,
     mediaUrl: platform.mediaUrl,
+    setupTokenRequired: platform.setupTokenRequired,
+    identityHandoff: { ...platform.identityHandoff },
   });
 });
 

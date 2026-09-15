@@ -50,6 +50,14 @@ vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
     mediaUrl: "https://cdn.example.test",
     customerAuthCookieDomain: "",
     corsAllowedOrigins: [],
+    setupTokenRequired: false,
+    identityHandoff: {
+      enabled: false,
+      issuer: "",
+      audience: "",
+      jwksUrl: "",
+      localLoginDisabled: false,
+    },
   })),
 }));
 
@@ -514,6 +522,21 @@ describe("API Worker startup boundaries", () => {
       expect(loaded.public).toBe(false);
     });
 
+    it("still answers /api/v1/meta as a probe so automation can read the schema revision", async () => {
+      const probeFetch = vi.fn((_request: Request, _env: Env, _ctx: unknown) => new Response("probe"));
+      vi.doMock("./runtime/probe-app", () => ({ default: { fetch: probeFetch } }));
+
+      const { default: ApiWorker } = await import("./worker");
+      const worker = new ApiWorker(
+        undefined as never,
+        { SCALIUS_SECRET: "too-short" } as Env,
+      ) as unknown as TestApiWorker;
+
+      const meta = await worker.fetch(new Request("https://api.example.test/api/v1/meta"));
+      expect(meta.status).toBe(200);
+      expect(await meta.text()).toBe("probe");
+    });
+
     it("still answers /api/v1/health and /api/v1/readyz so operators can see the missing secret", async () => {
       const probeFetch = vi.fn((_request: Request, _env: Env, _ctx: unknown) => new Response("probe"));
       vi.doMock("./runtime/probe-app", () => ({ default: { fetch: probeFetch } }));
@@ -571,5 +594,77 @@ describe("API Worker startup boundaries", () => {
       expect(handleQueueBatch).not.toHaveBeenCalled();
       expect(runScheduledMaintenance).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("API Worker trusted front proxy", () => {
+  afterEach(() => {
+    vi.doUnmock("./runtime/public-app");
+    vi.resetModules();
+  });
+
+  async function fetchThroughWorker(request: Request) {
+    const seen: Request[] = [];
+    vi.doMock("./runtime/public-app", () => ({
+      default: {
+        fetch: vi.fn((incoming: Request) => {
+          seen.push(incoming);
+          return new Response("public");
+        }),
+      },
+    }));
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(undefined as never, runtimeEnv()) as unknown as TestApiWorker;
+    const response = await worker.fetch(request);
+    return { response, seen };
+  }
+
+  it("rewrites the URL and client IP only for a validly signed proxy request", async () => {
+    const { deriveRuntimeSecret, RUNTIME_SECRET_PURPOSES } = await import("@scalius/shared/runtime-secrets");
+    const { signFrontProxyRequest, FRONT_PROXY_SIGNATURE_HEADER } = await import("@scalius/shared/trusted-front-proxy");
+    const secret = await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.FRONT_PROXY_SECRET);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = await signFrontProxyRequest(secret, {
+      timestamp,
+      proto: "https",
+      host: "shop.example.com",
+      pathname: "/api/v1/hero",
+      clientIp: "203.0.113.9",
+    });
+
+    // POST keeps the request out of the public cache lane so the route family sees it.
+    const signed = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+      method: "POST",
+      headers: {
+        "X-Forwarded-Host": "shop.example.com",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-For": "203.0.113.9",
+        "cf-connecting-ip": "10.0.0.1",
+        [FRONT_PROXY_SIGNATURE_HEADER]: signature,
+      },
+    }));
+    expect(signed.response.status).toBe(200);
+    expect(signed.seen[0]?.url).toBe("https://shop.example.com/api/v1/hero");
+    expect(signed.seen[0]?.headers.get("cf-connecting-ip")).toBe("203.0.113.9");
+    expect(signed.seen[0]?.headers.has(FRONT_PROXY_SIGNATURE_HEADER)).toBe(false);
+
+    const forged = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+      method: "POST",
+      headers: {
+        "X-Forwarded-Host": "evil.example.com",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-For": "203.0.113.9",
+        "cf-connecting-ip": "10.0.0.1",
+        [FRONT_PROXY_SIGNATURE_HEADER]: signature,
+      },
+    }));
+    expect(forged.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/hero");
+    expect(forged.seen[0]?.headers.get("cf-connecting-ip")).toBe("10.0.0.1");
+
+    const unsigned = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+      method: "POST",
+      headers: { "X-Forwarded-Host": "evil.example.com", "X-Forwarded-Proto": "https" },
+    }));
+    expect(unsigned.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/hero");
   });
 });

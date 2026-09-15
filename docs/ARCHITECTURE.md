@@ -83,6 +83,14 @@ no origins of their own: they read `GET /api/v1/platform` through their service
 binding and fall back to their own request origin for their own URL. Local
 development substitutes fixed localhost ports in code.
 
+Automated and managed deployments extend this boundary without widening it.
+Seven opt-in contracts — a gated first-admin setup token, external identity
+handoff, `GET /api/v1/meta`, a runtime dashboard path prefix, signed front-proxy
+headers, a Wrangler-free migration plan, and a headless demo-store export — are
+all off by default, add no `vars` and no installed secret, derive their keys
+from the same master secret, and store their flags in the same Platform settings
+document. See [AUTOMATED-DEPLOYMENTS.md](AUTOMATED-DEPLOYMENTS.md).
+
 ## Database Provider Boundary
 
 D1 remains the zero-configuration starter database. TursoDB is the portable

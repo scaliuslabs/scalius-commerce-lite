@@ -22,7 +22,46 @@ interface SignInResponse {
   twoFactorMethods?: readonly unknown[];
 }
 
-export function LoginForm() {
+export interface LoginFormSignInFacts {
+  /** Password sign-in is switched off while an identity provider owns sign-in. */
+  localLoginDisabled: boolean;
+  identityHandoffEnabled: boolean;
+}
+
+export function LoginForm({ signIn }: { signIn?: LoginFormSignInFacts }) {
+  if (signIn?.localLoginDisabled) {
+    return <IdentityProviderSignIn />;
+  }
+  return <PasswordLoginForm />;
+}
+
+/**
+ * Shown when Settings -> System -> Platform disables password sign-in. The
+ * operator's identity provider opens the dashboard through the handoff
+ * endpoint; there is nothing for the merchant to type here.
+ */
+function IdentityProviderSignIn() {
+  return (
+    <Card className="w-full border-0 bg-transparent shadow-none">
+      <CardHeader className="space-y-2 px-0 pt-0 text-center">
+        <CardTitle className="text-2xl font-semibold tracking-tight">
+          Sign in
+        </CardTitle>
+        <CardDescription>
+          Password sign-in is managed by your organization.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Open this dashboard from your organization&apos;s identity provider to
+          continue. Direct password sign-in is switched off for this deployment.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PasswordLoginForm() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

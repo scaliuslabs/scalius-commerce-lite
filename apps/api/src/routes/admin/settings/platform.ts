@@ -13,9 +13,11 @@ import {
   invalidateStorefrontUrlCache,
 } from "@scalius/core/modules/settings";
 import {
+  IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
   PLATFORM_URL_KEYS,
   PLATFORM_URL_MAX_LENGTH,
+  dashboardBasePathFromUrl,
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
@@ -25,6 +27,14 @@ import { readinessSchema } from "../../../schemas/readiness";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const identityHandoffSchema = z.object({
+  enabled: z.boolean(),
+  issuer: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH),
+  audience: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH),
+  jwksUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
+  localLoginDisabled: z.boolean(),
+});
+
 const platformSettingsSchema = z.object({
   storefrontUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
   apiUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
@@ -32,6 +42,9 @@ const platformSettingsSchema = z.object({
   mediaUrl: z.string().max(PLATFORM_URL_MAX_LENGTH),
   customerAuthCookieDomain: z.string().max(253),
   corsAllowedOrigins: z.array(z.string().max(PLATFORM_URL_MAX_LENGTH)).max(PLATFORM_CORS_ORIGINS_MAX_COUNT),
+  /** Opt-in automation contracts (issue #358). Off by default. */
+  setupTokenRequired: z.boolean(),
+  identityHandoff: identityHandoffSchema,
 });
 
 const platformSettingsResponseSchema = platformSettingsSchema.extend({
@@ -46,9 +59,13 @@ const platformSettingsResponseSchema = platformSettingsSchema.extend({
     dashboardUrl: z.string(),
     mediaUrl: z.string(),
   }),
+  /** Runtime base path ("" at a host root) derived from the stored dashboard URL. */
+  dashboardBasePath: z.string(),
 });
 
-const updatePlatformSettingsSchema = platformSettingsSchema.partial();
+const updatePlatformSettingsSchema = platformSettingsSchema
+  .partial()
+  .extend({ identityHandoff: identityHandoffSchema.partial().optional() });
 
 function respond(
   c: Context<{ Bindings: Env }>,
@@ -64,6 +81,7 @@ function respond(
       dashboardUrl: effective?.dashboardUrl ?? stored.dashboardUrl,
       mediaUrl: effective?.mediaUrl ?? stored.mediaUrl,
     },
+    dashboardBasePath: dashboardBasePathFromUrl(stored.dashboardUrl),
   });
 }
 

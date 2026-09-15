@@ -58,7 +58,12 @@
       "binding": "API",
       "service": "scalius-api"
     }
-  ]
+  ],
+  // The Vite plugin manages the assets directory; the binding lets the Worker
+  // serve build assets below a runtime dashboard base path (Platform settings).
+  "assets": {
+    "binding": "ASSETS"
+  }
   // No `vars`. Runtime configuration (storefront/API/dashboard/media URLs)
   // lives in the dashboard: Settings -> System -> Platform, read through the
   // API service binding at GET /api/v1/platform. The only installed secrets

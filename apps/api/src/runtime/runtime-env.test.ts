@@ -24,6 +24,14 @@ const PRODUCTION_CONFIG = {
   mediaUrl: "https://cdn.example.com",
   customerAuthCookieDomain: "example.com",
   corsAllowedOrigins: ["https://mobile.example.com", "https://kiosk.example.com"],
+  setupTokenRequired: false,
+  identityHandoff: {
+    enabled: false,
+    issuer: "",
+    audience: "",
+    jwksUrl: "",
+    localLoginDisabled: false,
+  },
 };
 
 /**

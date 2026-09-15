@@ -362,7 +362,7 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0060_better_auth_account_identity`. The release chain also
+The current release is `0062_identity_handoff_audit`. The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54
@@ -373,8 +373,11 @@ integer-affinity schema. Release 0056 adds the shared Agent Access authority,
 release 0057 adds encrypted, short-lived, single-use browser handoffs for MCP
 continuations, release 0058 adds immutable selected-delivery-method facts to
 orders, release 0059 separates checkout delivery phone from account identity,
-and release 0060 performs the credential-only Better Auth 1.7 issuer backfill
-while rejecting unknown or malformed legacy account identities.
+release 0060 performs the credential-only Better Auth 1.7 issuer backfill
+while rejecting unknown or malformed legacy account identities, release 0061
+adds idempotent order amendment records, and release 0062 adds the
+`admin_identity_handoff_events` audit and single-use ledger for operator
+identity handoff.
 
 Do not delete or squash historical migrations after a release. Existing D1
 installations depend on Wrangler's migration history, while existing Turso and
@@ -501,6 +504,87 @@ Drizzle config (`drizzle.config.ts`):
 - Schema: `./src/schema/index.ts`
 - Output: `./migrations`
 - Dialect: `sqlite`
+
+## Applying migrations without Wrangler (automation contract)
+
+Automated deployments may apply the canonical D1 chain through the Cloudflare
+D1 HTTP API instead of `wrangler d1 migrations apply`. The contract is the
+machine-readable plan emitted by `src/migration-plan.ts` (exported as
+`@scalius/database/migration-plan`, pure and dependency-free):
+
+```bash
+pnpm --filter @scalius/database migration-plan              # JSON on stdout
+pnpm --filter @scalius/database migration-plan --out plan.json
+```
+
+The command reads only `migrations/*.sql` (never `migrations/postgres/` or
+`migrations/meta/`), requires the numeric prefixes to be contiguous from
+`0000`, and fails when the last file is not `CURRENT_DATABASE_SCHEMA`.
+
+```jsonc
+{
+  "contract": "scalius-d1-migration-plan/v1",
+  "ledgerTable": "d1_migrations",
+  "ledgerDdl": "CREATE TABLE IF NOT EXISTS \"d1_migrations\"( ... );",
+  "ledgerListSql": "SELECT * FROM \"d1_migrations\" ORDER BY id",
+  "releaseLedgerTable": "scalius_schema_migrations",
+  "expectedSchema": { "version": 62, "name": "0062_identity_handoff_audit" },
+  "migrations": [
+    {
+      "version": 62,
+      "name": "0062_identity_handoff_audit",
+      "file": "0062_identity_handoff_audit.sql",
+      "fileSha256": "<sha256 of the raw file>",
+      "statements": ["CREATE TABLE ...", "..."],
+      "ledgerInsert": "INSERT INTO \"d1_migrations\" (name)\nvalues ('0062_identity_handoff_audit.sql');",
+      "releaseLedger": {
+        "version": 62,
+        "name": "0062_identity_handoff_audit",
+        "sourceSha256": "<sha256 of the statements without the final insert>"
+      }
+    }
+  ]
+}
+```
+
+Two ledgers exist and they have different owners:
+
+- `d1_migrations` is Wrangler's ledger. `ledgerDdl`, `ledgerListSql`, and every
+  `ledgerInsert` are byte-identical to what Wrangler 4.x runs, so an external
+  applier writes exactly the rows Wrangler would have written. The `name`
+  column holds the file name including `.sql`.
+- `scalius_schema_migrations` is the provider-neutral release ledger. It is not
+  written by the applier: every migration from 0050 onward ends with its own
+  `INSERT INTO scalius_schema_migrations ...` statement, and the plan reports
+  that row as `releaseLedger` (`null` before 0050). `/readyz` reads this table
+  and expects exactly `CURRENT_DATABASE_SCHEMA_MIGRATIONS`.
+
+Execution rules for an external applier:
+
+1. Execute `ledgerDdl` (idempotent) before anything else.
+2. Read applied names with `ledgerListSql` and pass them, in `id` order, to
+   `listPendingD1Migrations(plan, appliedNames)`. The applied names must be an
+   exact ordered prefix of `plan.migrations[].file`; an unknown name or a gap
+   means a foreign or diverged database and the deployment must stop.
+3. For each pending migration in plan order: execute `statements` in order,
+   then execute `ledgerInsert`. Prefer one D1 batch per file so the file's
+   statements and its ledger row commit together. Each entry of `statements`
+   is one complete statement that may contain inner semicolons (trigger
+   bodies); never re-split on `;`. Legacy files (0007 through 0045) include
+   `PRAGMA foreign_keys=OFF` / `ON` around Drizzle table rebuilds; execute
+   them as ordinary statements in place, exactly as Wrangler does.
+4. Never reorder, skip, or partially apply a file, and never edit statement
+   text. The plan is derived from the same bytes Wrangler would execute.
+5. After the run, `SELECT name FROM d1_migrations ORDER BY id` equals
+   `plan.migrations[].file`, and `SELECT version, name, source_sha256 FROM
+   scalius_schema_migrations ORDER BY version` equals
+   `CURRENT_DATABASE_SCHEMA_MIGRATIONS`.
+
+Because the ledger rows match Wrangler's own, a later
+`pnpm db:migrate:remote` (`wrangler d1 migrations apply`) lists every file as
+applied and reports nothing to apply. `__tests__/migration-plan.test.ts` pins
+the DDL and insert shape against the installed Wrangler bundle and replays the
+whole plan into SQLite, so a Wrangler ledger change or a broken chain fails CI.
 
 ## Dependencies
 

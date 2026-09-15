@@ -1,4 +1,5 @@
 import type { RuntimeApiApp } from "./base-app";
+import { metaRoutes } from "../routes/meta";
 import { readinessRoutes } from "../routes/readiness";
 
 export function registerProbeRoutes(app: RuntimeApiApp): void {
@@ -15,4 +16,5 @@ export function registerProbeRoutes(app: RuntimeApiApp): void {
     }),
   );
   app.route("/", readinessRoutes);
+  app.route("/meta", metaRoutes);
 }

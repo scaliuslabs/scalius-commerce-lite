@@ -43,6 +43,9 @@ export const apps = [
       "PURGE_TOKEN",
       "AGENT_TOKEN_PEPPER",
       "CUSTOMER_SESSION_HASH_KEY",
+      "ADMIN_SETUP_TOKEN",
+      "FRONT_PROXY_SECRET",
+      "IDENTITY_HANDOFF_SECRET",
       // Resolved at Worker entry from dashboard Platform settings.
       "PLATFORM_CONFIG",
       "STOREFRONT_URL",
@@ -67,6 +70,8 @@ export const apps = [
       ...OPTIONAL_DATABASE_PROVIDER_ENV,
       // Derived per request from SCALIUS_SECRET.
       "BETTER_AUTH_SECRET",
+      "IDENTITY_HANDOFF_SECRET",
+      "FRONT_PROXY_SECRET",
       // Resolved per request from GET /api/v1/platform.
       "BETTER_AUTH_URL",
       "PUBLIC_API_BASE_URL",

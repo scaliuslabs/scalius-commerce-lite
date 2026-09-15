@@ -10,9 +10,37 @@ import {
 } from "./lib/public-worker-cache";
 import { BUILD_ID } from "./config/build-id";
 import { toPublicCacheRequest } from "./lib/cache-policy";
+import {
+  RUNTIME_SECRET_PURPOSES,
+  deriveRuntimeSecret,
+  readMasterSecret,
+} from "@scalius/shared/runtime-secrets";
+import {
+  FRONT_PROXY_SIGNATURE_HEADER,
+  applyTrustedFrontProxy,
+} from "@scalius/shared/trusted-front-proxy";
+
+/**
+ * Honours a signed front proxy's forwarded host, proto, and client IP. The
+ * signing secret is derived from the master secret only when the signature
+ * header is present; an unsigned or invalid header changes nothing and the
+ * header never reaches the renderer.
+ */
+async function resolveFrontProxy(request: Request, env: Env): Promise<Request> {
+  if (!request.headers.has(FRONT_PROXY_SIGNATURE_HEADER)) return request;
+  const master = readMasterSecret(env);
+  const secret = master
+    ? await deriveRuntimeSecret(master, RUNTIME_SECRET_PURPOSES.FRONT_PROXY_SECRET)
+    : null;
+  const resolved = (await applyTrustedFrontProxy(request, secret)).request;
+  const stripped = new Request(resolved);
+  stripped.headers.delete(FRONT_PROXY_SIGNATURE_HEADER);
+  return stripped;
+}
 
 export class CachedPublicStorefront extends WorkerEntrypoint<Env> {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(incoming: Request): Promise<Response> {
+    const request = await resolveFrontProxy(incoming, this.env);
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) {
       return new Response("Request is not eligible for public caching", {
@@ -43,7 +71,8 @@ export class CachedPublicStorefront extends WorkerEntrypoint<Env> {
 }
 
 export default class StorefrontGateway extends WorkerEntrypoint<Env> {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(incoming: Request): Promise<Response> {
+    const request = await resolveFrontProxy(incoming, this.env);
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) return handle(request, this.env, this.ctx);
 

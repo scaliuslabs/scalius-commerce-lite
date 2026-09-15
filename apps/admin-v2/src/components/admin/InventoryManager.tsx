@@ -61,6 +61,7 @@ import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissi
 import type { InventoryWorkspaceSection } from "./inventory-workspace";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { Skeleton } from "@/components/ui/skeleton";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 // ---------- Types ----------
 
@@ -448,7 +449,7 @@ export function InventoryManager({
     if (movementExportBusy) return;
     setMovementExportBusy(true);
     try {
-      const response = await fetch("/api/v1/admin/inventory/movements/export", {
+      const response = await fetch(withDashboardBasePath("/api/v1/admin/inventory/movements/export"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

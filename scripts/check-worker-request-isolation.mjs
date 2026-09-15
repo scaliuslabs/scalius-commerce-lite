@@ -87,9 +87,12 @@ if (
 
 const adminServerPath = "apps/admin-v2/src/server.ts";
 const adminServerSource = readFileSync(resolve(root, adminServerPath), "utf8");
+// The context must wrap the whole request, whichever entry routes it: the
+// dashboard may be served below a runtime base path, so the wrapped callee is
+// the router, not one fixed handler call.
 if (
   !adminServerSource.includes("withPublicMediaUrl(") ||
-  !adminServerSource.includes("() => handler.fetch(request)")
+  !/withPublicMediaUrl\(\s*runtime\.env\.R2_PUBLIC_URL \?\? "",\s*\(\) =>/u.test(adminServerSource)
 ) {
   failures.push(`${adminServerPath}: admin requests must establish the async media presentation context`);
 }

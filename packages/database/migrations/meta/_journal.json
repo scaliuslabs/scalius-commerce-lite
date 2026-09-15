@@ -435,6 +435,13 @@
       "when": 1788941888268,
       "tag": "0061_regular_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1789485195790,
+      "tag": "0062_identity_handoff_audit",
+      "breakpoints": true
     }
   ]
 }

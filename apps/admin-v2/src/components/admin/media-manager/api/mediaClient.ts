@@ -19,7 +19,10 @@ import type {
   MediaFolder,
 } from "../types";
 
-const MEDIA_API = "/api/v1/admin/media";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+
+/** Same-origin proxy path, below the runtime dashboard base path. */
+const MEDIA_API = withDashboardBasePath("/api/v1/admin/media");
 
 interface ApiEnvelope<T> {
   success?: boolean;

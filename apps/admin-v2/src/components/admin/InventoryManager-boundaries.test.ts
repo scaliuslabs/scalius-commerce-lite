@@ -65,7 +65,8 @@ describe("InventoryManager boundaries", () => {
   });
 
   it("exports the active movement filters through the dedicated bounded artifact route", () => {
-    expect(source).toContain('fetch("/api/v1/admin/inventory/movements/export"');
+    // The route stays exact; the dashboard base path is applied by the shared helper.
+    expect(source).toContain('fetch(withDashboardBasePath("/api/v1/admin/inventory/movements/export")');
     expect(source).toContain('method: "POST"');
     expect(source).toContain("movementOrderId: debouncedMovementOrderId.trim()");
     expect(source).toContain("movementStartDate: movementStartDate");

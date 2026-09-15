@@ -15,13 +15,19 @@ import { settings, siteSettings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, inArray } from "drizzle-orm";
 import {
-  EMPTY_PLATFORM_CONFIG,
+  EMPTY_IDENTITY_HANDOFF_CONFIG,
+  IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
+  emptyPlatformConfig,
   normalizeCookieDomain,
   normalizeCorsOrigins,
+  normalizeDashboardUrl,
+  normalizeIdentityHandoffConfig,
+  normalizeJwksUrl,
   normalizeMediaBaseUrl,
   normalizePlatformConfig,
   normalizePlatformOriginUrl,
+  type IdentityHandoffConfig,
   type PlatformConfig,
 } from "@scalius/shared/platform-config";
 import { ValidationError } from "@scalius/core/errors";
@@ -51,6 +57,18 @@ const LEGACY_PLATFORM_SETTING_KEYS = {
 
 type PlatformKv = SettingsStoreKv;
 
+const identityHandoffSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    issuer: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
+    audience: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
+    jwksUrl: z.string().default(""),
+    localLoginDisabled: z.boolean().default(false),
+  })
+  .default({ ...EMPTY_IDENTITY_HANDOFF_CONFIG });
+
+// Documents written before the automation fields existed omit them; the
+// defaults keep those rows readable without a migration.
 const platformConfigSchema = z
   .object({
     storefrontUrl: z.string(),
@@ -59,6 +77,8 @@ const platformConfigSchema = z
     mediaUrl: z.string(),
     customerAuthCookieDomain: z.string(),
     corsAllowedOrigins: z.array(z.string()).max(PLATFORM_CORS_ORIGINS_MAX_COUNT),
+    setupTokenRequired: z.boolean().default(false),
+    identityHandoff: identityHandoffSchema,
   })
   .transform((value) => normalizePlatformConfig(value));
 
@@ -72,7 +92,7 @@ export const platformSettingsDocument = defineSettingsDocument<PlatformConfig>({
   key: PLATFORM_DOCUMENT_KEY,
   label: "platform origins",
   schema: platformConfigSchema,
-  defaults: { ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] },
+  defaults: emptyPlatformConfig(),
   cache: { key: PLATFORM_CONFIG_CACHE_KEY, ttlSeconds: PLATFORM_CONFIG_CACHE_TTL_SECONDS },
   // Origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
   invalidationGroups: ["layout", "homepage", "discovery", "checkout"],
@@ -141,6 +161,8 @@ export type PlatformSettingsPatch = Partial<{
   mediaUrl: string;
   customerAuthCookieDomain: string;
   corsAllowedOrigins: string[] | string;
+  setupTokenRequired: boolean;
+  identityHandoff: Partial<IdentityHandoffConfig>;
 }>;
 
 function requireOrigin(label: string, value: string): string {
@@ -153,6 +175,83 @@ function requireOrigin(label: string, value: string): string {
     );
   }
   return origin;
+}
+
+function requireDashboardUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const url = normalizeDashboardUrl(trimmed);
+  if (!url) {
+    throw new ValidationError(
+      "Dashboard URL must be an HTTPS origin, optionally followed by a lowercase path prefix such as /dashboard, without credentials, query, or fragment. HTTP is limited to loopback development.",
+    );
+  }
+  return url;
+}
+
+function requireClaimValue(label: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const normalized = normalizeIdentityHandoffConfig({
+    enabled: true,
+    issuer: trimmed,
+    audience: trimmed,
+  });
+  if (!normalized.issuer) {
+    throw new ValidationError(
+      `${label} must be a single value of at most ${IDENTITY_HANDOFF_CLAIM_MAX_LENGTH} characters without spaces or control characters.`,
+    );
+  }
+  return normalized.issuer;
+}
+
+/**
+ * Validates a partial identity-handoff patch against the currently stored
+ * configuration so the combined state is always consistent: enabling needs an
+ * issuer and an audience, and password sign-in can be disabled only while the
+ * handoff is enabled.
+ */
+function mergeIdentityHandoffPatch(
+  current: IdentityHandoffConfig,
+  patch: Partial<IdentityHandoffConfig>,
+): IdentityHandoffConfig {
+  const issuer = patch.issuer === undefined
+    ? current.issuer
+    : requireClaimValue("Identity handoff issuer", patch.issuer);
+  const audience = patch.audience === undefined
+    ? current.audience
+    : requireClaimValue("Identity handoff audience", patch.audience);
+  let jwksUrl = current.jwksUrl;
+  if (patch.jwksUrl !== undefined) {
+    const trimmed = patch.jwksUrl.trim();
+    jwksUrl = trimmed ? normalizeJwksUrl(trimmed) : "";
+    if (trimmed && !jwksUrl) {
+      throw new ValidationError(
+        "Identity handoff JWKS URL must be an HTTPS URL without credentials or fragment. HTTP is limited to loopback development.",
+      );
+    }
+  }
+  const enabled = patch.enabled ?? current.enabled;
+  if (enabled && (!issuer || !audience)) {
+    throw new ValidationError(
+      "Identity handoff needs an issuer and an audience before it can be enabled.",
+    );
+  }
+  const localLoginDisabled = patch.localLoginDisabled ?? current.localLoginDisabled;
+  // Disabling the handoff silently restores password sign-in; asking to
+  // disable password sign-in without a handoff would lock every admin out.
+  if (patch.localLoginDisabled === true && !enabled) {
+    throw new ValidationError(
+      "Password sign-in can only be disabled while identity handoff is enabled.",
+    );
+  }
+  return normalizeIdentityHandoffConfig({
+    enabled,
+    issuer,
+    audience,
+    jwksUrl,
+    localLoginDisabled,
+  });
 }
 
 /**
@@ -171,7 +270,17 @@ export async function savePlatformSettings(
     documentPatch.apiUrl = requireOrigin("API URL", patch.apiUrl);
   }
   if (patch.dashboardUrl !== undefined) {
-    documentPatch.dashboardUrl = requireOrigin("Dashboard URL", patch.dashboardUrl);
+    documentPatch.dashboardUrl = requireDashboardUrl(patch.dashboardUrl);
+  }
+  if (patch.setupTokenRequired !== undefined) {
+    documentPatch.setupTokenRequired = patch.setupTokenRequired === true;
+  }
+  if (patch.identityHandoff !== undefined) {
+    const current = await getPlatformSettings(db);
+    documentPatch.identityHandoff = mergeIdentityHandoffPatch(
+      current.identityHandoff,
+      patch.identityHandoff,
+    );
   }
   if (patch.mediaUrl !== undefined) {
     const trimmed = patch.mediaUrl.trim();
@@ -265,7 +374,7 @@ export async function resolvePlatformConfig(
       "[Platform] DB read failed for platform config:",
       error instanceof Error ? error.message : error,
     );
-    return { ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] };
+    return emptyPlatformConfig();
   }
 }
 

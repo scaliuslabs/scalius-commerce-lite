@@ -15,7 +15,7 @@ import {
   readMasterSecret,
 } from "@scalius/shared/runtime-secrets";
 import {
-  EMPTY_PLATFORM_CONFIG,
+  emptyPlatformConfig,
   mediaHostFromUrl,
   publicRequestOrigin,
   storefrontPurgeUrl,
@@ -43,7 +43,7 @@ export async function composeApiRuntimeEnv(
   const [secrets, stored] = await Promise.all([
     deriveRuntimeSecretsFromEnv(env),
     resolvePlatformConfig({ getDb: () => getDb(env), kv: env.CACHE }).catch(
-      (): PlatformConfig => ({ ...EMPTY_PLATFORM_CONFIG, corsAllowedOrigins: [] }),
+      (): PlatformConfig => emptyPlatformConfig(),
     ),
   ]);
 

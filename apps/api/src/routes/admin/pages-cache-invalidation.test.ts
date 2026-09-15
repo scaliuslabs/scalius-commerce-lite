@@ -60,6 +60,7 @@ function createPageBody(overrides: Record<string, unknown> = {}) {
 
 function createTestApp(
   permissions = new Set([PERMISSIONS.PAGES_PUBLISH]),
+  dashboardUrl?: string,
 ) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = { id: "db" };
@@ -67,6 +68,7 @@ function createTestApp(
     CACHE: { id: "api-cache-kv" },
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
     PURGE_TOKEN: "secret-token",
+    ...(dashboardUrl ? { PLATFORM_CONFIG: { dashboardUrl } } : {}),
   } as unknown as Env;
 
   mocks.createPage.mockResolvedValue({ id: "page_1", revision: 1 });
@@ -151,13 +153,28 @@ describe("admin page cache invalidation", () => {
     expect(mocks.createPage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ isPublished: false }),
-      { canPublish: false },
+      { canPublish: false, reservedSlugs: new Set() },
     );
     expect(mocks.updatePage).toHaveBeenCalledWith(
       expect.anything(),
       "page_1",
       expect.objectContaining({ isPublished: false }),
-      { canPublish: false },
+      { canPublish: false, reservedSlugs: new Set() },
+    );
+  });
+
+  it("reserves the dashboard's own first path segment when it shares this host", async () => {
+    const { app, env } = createTestApp(
+      new Set([PERMISSIONS.PAGES_PUBLISH]),
+      "https://shop.example.com/dashboard",
+    );
+
+    await requestJson(app, env, "", "POST", createPageBody());
+
+    expect(mocks.createPage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { canPublish: true, reservedSlugs: new Set(["dashboard"]) },
     );
   });
 });

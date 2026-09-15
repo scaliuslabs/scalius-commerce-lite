@@ -174,6 +174,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 62,
+        name: "0062_identity_handoff_audit",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -303,6 +309,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 59, name: "0059_checkout_delivery_phone_identity" },
           { version: 60, name: "0060_better_auth_account_identity" },
           { version: 61, name: "0061_regular_hex" },
+          { version: 62, name: "0062_identity_handoff_audit" },
         ],
       });
     } finally {

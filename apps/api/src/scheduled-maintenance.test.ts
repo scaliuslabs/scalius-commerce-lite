@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
     cleanupExpiredCustomerSessions: vi.fn(),
     cleanupExpiredScannerTokenClaims: vi.fn(),
+    pruneExpiredIdentityHandoffEvents: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
     reconcileStripeExternalRefundWebhooks: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
@@ -78,6 +79,7 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
 
 vi.mock("@scalius/core/auth", () => ({
   cleanupExpiredScannerTokenClaims: mocks.cleanupExpiredScannerTokenClaims,
+  pruneExpiredIdentityHandoffEvents: mocks.pruneExpiredIdentityHandoffEvents,
 }));
 
 vi.mock("@scalius/core/modules/payments", () => ({
@@ -232,6 +234,7 @@ describe("runScheduledMaintenance", () => {
       limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.pruneExpiredIdentityHandoffEvents.mockResolvedValue(0);
     mocks.reconcileDueRefundAttempts.mockResolvedValue({
       scanned: 0,
       claimed: 0,
@@ -380,6 +383,7 @@ describe("runScheduledMaintenance", () => {
       limit: SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.pruneExpiredIdentityHandoffEvents.mockResolvedValue(3);
     mocks.cleanupExpiredCustomerSessions.mockResolvedValue({
       scanned: 2,
       deleted: 2,
@@ -514,6 +518,7 @@ describe("runScheduledMaintenance", () => {
       Math.floor(now.getTime() / 1000),
       { limit: CUSTOMER_SESSION_SWEEP_LIMIT },
     );
+    expect(mocks.pruneExpiredIdentityHandoffEvents).toHaveBeenCalledWith(mocks.db);
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalledWith(
       mocks.db,
       {

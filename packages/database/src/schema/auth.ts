@@ -1,8 +1,9 @@
 // src/db/schema/auth.ts
 // Better Auth tables: user, session, account, verification, twoFactor.
 
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
 export const user = sqliteTable("user", {
@@ -200,6 +201,35 @@ export const scannerTokenClaims = sqliteTable("scanner_token_claims", {
     uniqueIndex("scanner_token_claims_consumed_session_hash_uq").on(table.consumedSessionHash),
 ]);
 
+/**
+ * Opt-in trusted identity handoff (dashboard sign-in minted by an operator's
+ * identity provider). One row per accepted or rejected token. The unique JTI
+ * hash is also the single-use guard: a replayed token cannot insert its row.
+ */
+export const adminIdentityHandoffEvents = sqliteTable("admin_identity_handoff_events", {
+    id: text("id").primaryKey(),
+    kind: text("kind", { enum: ["handoff", "revoke"] }).notNull(),
+    /** SHA-256 hex of `${kind}:${jti}`; never the raw token identifier. */
+    jtiHash: text("jti_hash").notNull(),
+    issuer: text("issuer").notNull(),
+    subject: text("subject"),
+    email: text("email").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    role: text("role"),
+    outcome: text("outcome").notNull(),
+    clientIp: text("client_ip"),
+    userAgent: text("user_agent"),
+    /** Token `exp` (unix seconds); rows are pruned only after it has passed. */
+    tokenExpiresAt: integer("token_expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("admin_identity_handoff_events_jti_uidx").on(table.jtiHash),
+    index("admin_identity_handoff_events_user_created_idx").on(table.userId, table.createdAt),
+    index("admin_identity_handoff_events_expires_idx").on(table.tokenExpiresAt),
+    check("admin_identity_handoff_events_kind_check", sql`${table.kind} IN ('handoff', 'revoke')`),
+    check("admin_identity_handoff_events_jti_hash_check", sql`length(${table.jtiHash}) = 64`),
+]);
+
 export type User = InferSelectModel<typeof user>;
 export type Session = InferSelectModel<typeof session>;
 export type Account = InferSelectModel<typeof account>;
@@ -210,3 +240,4 @@ export type AdminSetupClaim = InferSelectModel<typeof adminSetupClaims>;
 export type AdminSetupRateLimit = InferSelectModel<typeof adminSetupRateLimits>;
 export type AdminInvitation = InferSelectModel<typeof adminInvitations>;
 export type ScannerTokenClaim = InferSelectModel<typeof scannerTokenClaims>;
+export type AdminIdentityHandoffEvent = InferSelectModel<typeof adminIdentityHandoffEvents>;

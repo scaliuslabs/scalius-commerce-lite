@@ -18,6 +18,7 @@ import {
   pageRevisionClaimsSchema,
 } from "@scalius/core/modules/pages";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { NotFoundError } from "../../utils/api-error";
 import {
   successEnvelope,
@@ -146,10 +147,18 @@ const createPageRoute = createRoute({
   },
 });
 
+/** The dashboard's first path segment is never a valid CMS page slug on a shared host. */
+function reservedDashboardSlugs(env: Env): ReadonlySet<string> {
+  const platform = env.PLATFORM_CONFIG;
+  const segment = dashboardReservedSegment(platform?.dashboardUrl, platform?.storefrontUrl);
+  return new Set(segment ? [segment] : []);
+}
+
 app.openapi(createPageRoute, async (c) => {
   const db = c.get("db");
   const result = await createPage(db, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
+    reservedSlugs: reservedDashboardSlugs(c.env),
   });
   await invalidatePageCaches(c);
   return created(c, result);
@@ -370,6 +379,7 @@ app.openapi(updatePageRoute, async (c) => {
   const { id } = c.req.valid("param");
   const result = await updatePage(db, id, c.req.valid("json"), {
     canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
+    reservedSlugs: reservedDashboardSlugs(c.env),
   });
   await invalidatePageCaches(c);
   return ok(c, result);

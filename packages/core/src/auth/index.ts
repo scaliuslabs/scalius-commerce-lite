@@ -1,6 +1,24 @@
 export { createAuth, getAuth } from "./auth";
 export type { Auth } from "./auth";
 export {
+  IDENTITY_HANDOFF_ACCOUNT_PROVIDER,
+  IDENTITY_HANDOFF_MAX_TOKEN_LIFETIME_SECONDS,
+  IDENTITY_HANDOFF_OWNER_ROLE,
+  IdentityHandoffError,
+  identityHandoff,
+  mintIdentityHandoffToken,
+  performIdentityHandoff,
+  performIdentityRevocation,
+  pruneExpiredIdentityHandoffEvents,
+  verifyIdentityHandoffToken,
+} from "./identity-handoff";
+export type {
+  IdentityHandoffClaims,
+  IdentityHandoffPurpose,
+  IdentityHandoffResult,
+  IdentityRevocationResult,
+} from "./identity-handoff";
+export {
   enforceAdminSetupRateLimit,
   adminPrincipalExists,
   claimAdminSetup,
