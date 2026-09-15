@@ -93,8 +93,10 @@ turned off, so a store can never be locked out.
 | `<dashboardUrl>/api/auth/handoff?token=…` | GET | verify, upsert the admin, create a session, redirect to the dashboard |
 | `<dashboardUrl>/api/auth/handoff/revoke` | POST | revoke that user's sessions, optionally suspend the account |
 
-Both are rate limited to 10 requests per minute and return `404` while handoff
-is disabled, so a store that never enabled it does not advertise the surface.
+Both are rate limited to 10 requests per minute and answer `404` to any
+well-formed request while handoff is disabled, so a store that never enabled it
+does not advertise the surface. A `POST` with no content type is still the `415`
+every Better Auth route gives, which says nothing about this one.
 
 ### Token contract
 
