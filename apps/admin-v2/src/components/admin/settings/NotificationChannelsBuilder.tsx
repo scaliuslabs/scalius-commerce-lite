@@ -448,12 +448,9 @@ export function NotificationChannelsBuilder({
       const data = (await getNotificationChannels()) as {
         channels?: Record<string, string[]>;
         whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
-        emailConfigured?: boolean;
-        emailError?: string | null;
-        whatsappConfigured?: boolean;
-        whatsappError?: string | null;
-        smsProviderConfigured?: boolean;
-        smsProviderError?: string | null;
+        email?: Readiness;
+        whatsapp?: Readiness;
+        sms?: Readiness;
       };
       const nextChannels = buildCustomerNotificationConfig(data?.channels);
       const nextTemplate = {
@@ -464,12 +461,12 @@ export function NotificationChannelsBuilder({
           data?.whatsappTemplate?.languageCode ||
           DEFAULT_WHATSAPP_TEMPLATE.languageCode,
       };
-      setIsEmailConfigured(Boolean(data?.emailConfigured));
-      setEmailError(data?.emailError ?? null);
-      setIsWhatsAppConfigured(Boolean(data?.whatsappConfigured));
-      setWhatsAppError(data?.whatsappError ?? null);
-      setIsSmsConfigured(Boolean(data?.smsProviderConfigured));
-      setSmsProviderError(data?.smsProviderError ?? null);
+      setIsEmailConfigured(isReady(data?.email));
+      setEmailError(data?.email?.issues[0]?.message ?? null);
+      setIsWhatsAppConfigured(isReady(data?.whatsapp));
+      setWhatsAppError(data?.whatsapp?.issues[0]?.message ?? null);
+      setIsSmsConfigured(isReady(data?.sms));
+      setSmsProviderError(data?.sms?.issues[0]?.message ?? null);
       setChannels(nextChannels);
       setSavedChannels(nextChannels);
       setWhatsAppTemplate(nextTemplate);

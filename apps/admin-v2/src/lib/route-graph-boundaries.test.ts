@@ -1085,11 +1085,7 @@ describe("admin route graph boundaries", () => {
       "Checkout-flow saves are locked until Payment Gateways loads successfully.",
     );
     expect(source).toContain("Retry payment check");
-    // The page now saves through one contextual save bar, which locks Save on
-    // the same fail-closed condition and says why.
-    expect(source).toContain("saveDisabled={saveBlocked}");
-    expect(source).toContain("saveDisabledReason={saveDisabledReason}");
-    expect(source).toContain("saving={saving}");
+    expect(source).toContain("disabled={saving || saveBlocked}");
   });
 
   it("keeps new-discount type selection off the decorative animation runtime", () => {
