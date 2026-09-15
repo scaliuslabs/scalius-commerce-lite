@@ -87,8 +87,8 @@ export function CacheManager() {
             <CardTitle className="text-base">Public cache</CardTitle>
             <CardDescription>
               Cloudflare caches public API and storefront responses by domain. Merchant
-              writes durably purge the affected domains; the one-hour TTL is only a
-              safety fallback if delivery keeps failing.
+              writes durably purge the affected domains; entries otherwise stay warm
+              for up to a year, so purging by hand is rarely needed.
             </CardDescription>
           </div>
           <Button

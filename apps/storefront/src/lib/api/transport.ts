@@ -456,13 +456,15 @@ export async function withEdgeCache<T>(
   return request;
 }
 
+// One year is the longest edge residency Cloudflare honors. Native tag purges
+// own freshness: every merchant write and every stock band transition purges
+// the affected tags directly and through the durable retry sweep, so the TTL
+// is only the ceiling that lets a rarely edited store stay warm indefinitely.
+const EDGE_MAX_TTL = 365 * 86_400;
+
 export const CACHE_TTL = {
-  // Native tag purges own freshness. Every merchant write and every stock band
-  // transition purges the affected tags directly and through the durable retry
-  // sweep, so the edge TTL is only the failure backstop and can stay long
-  // enough that visitors almost never pay for a cold render.
-  AVAILABILITY: 7 * 86_400,
-  LONG: 30 * 86_400,
+  AVAILABILITY: EDGE_MAX_TTL,
+  LONG: EDGE_MAX_TTL,
   MEDIUM: 3_600,
   SHORT: 300,
 } as const;

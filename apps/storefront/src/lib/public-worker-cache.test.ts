@@ -46,7 +46,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(left).toMatchObject({
       canonicalUrl: "https://shop.example/about?campaign=sale",
-      edgeTtlSeconds: 7 * 86_400,
+      edgeTtlSeconds: 365 * 86_400,
       tags: ["pages", "products", "layout", "media"],
     });
     expect(right?.canonicalUrl).toBe(left?.canonicalUrl);
@@ -95,11 +95,11 @@ describe("public storefront Worker cache policy", () => {
     ["/search?q=fish", ["search", "products", "layout", "media"]],
     ["/blog/news", ["pages", "products", "layout", "media"]],
     ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
-  ])("keeps availability-bearing public route %s resident for one week", (path, tags) => {
+  ])("keeps availability-bearing public route %s resident for the one-year edge maximum", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(7 * 86_400);
+    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
     expect(policy?.tags).toEqual(tags);
   });
 
@@ -109,11 +109,11 @@ describe("public storefront Worker cache policy", () => {
     ["/sitemap.xml", ["discovery", "products", "categories", "collections", "pages", "layout"]],
     ["/blog/feed.xml", ["pages", "products", "discovery"]],
     ["/.well-known/ucp", ["discovery", "products", "layout"]],
-  ])("keeps mutation-purged content route %s resident for thirty days", (path, tags) => {
+  ])("keeps mutation-purged content route %s resident for the one-year edge maximum", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(30 * 86_400);
+    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
     expect(policy?.tags).toEqual(tags);
   });
 
@@ -191,7 +191,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      `public, max-age=${7 * 86_400}, must-revalidate`,
+      `public, max-age=${365 * 86_400}, must-revalidate`,
     );
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",
