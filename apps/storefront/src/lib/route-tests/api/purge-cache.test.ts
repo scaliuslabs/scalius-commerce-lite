@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deriveRuntimeSecret,
   RUNTIME_SECRET_PURPOSES,
@@ -9,6 +9,8 @@ const MASTER_SECRET = "storefront-purge-test-master-secret-0123456789abcdef";
 const mocks = vi.hoisted(() => ({
   cfEnv: { SCALIUS_SECRET: undefined as string | undefined },
   purgeGroups: vi.fn(),
+  fetch: vi.fn(),
+  waitUntil: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
@@ -26,8 +28,12 @@ function context(request: Request) {
     url: new URL(request.url),
     locals: {
       cfContext: {
+        waitUntil: mocks.waitUntil,
         exports: {
-          CachedPublicStorefront: { purgeGroups: mocks.purgeGroups },
+          CachedPublicStorefront: {
+            purgeGroups: mocks.purgeGroups,
+            fetch: mocks.fetch,
+          },
         },
       },
     },
@@ -35,9 +41,14 @@ function context(request: Request) {
 }
 
 describe("storefront native cache purge route", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.purgeGroups.mockResolvedValue(undefined);
+    mocks.fetch.mockResolvedValue(new Response("<html/>"));
     mocks.cfEnv.SCALIUS_SECRET = MASTER_SECRET;
   });
 
@@ -139,6 +150,47 @@ describe("storefront native cache purge route", () => {
       success: true,
       groups: ["products", "layout"],
     });
+  });
+
+  it("warms the homepage through the cache-enabled entrypoint after a successful purge", async () => {
+    vi.useFakeTimers();
+    const { POST } = await import("../../../pages/api/purge-cache");
+    const request = new Request("https://shop.example/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ groups: ["products"] }),
+    });
+    const response = await POST(context(request));
+    expect(response.status).toBe(200);
+    expect(mocks.waitUntil).toHaveBeenCalledTimes(1);
+    // The warm-up waits for purge propagation before rendering.
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(20_000);
+    await mocks.waitUntil.mock.calls[0]![0];
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    const warmed = mocks.fetch.mock.calls[0]![0] as Request;
+    expect(warmed.url).toBe("https://shop.example/");
+  });
+
+  it("does not warm when the purge itself fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.purgeGroups.mockRejectedValueOnce(new Error("purge unavailable"));
+    const { POST } = await import("../../../pages/api/purge-cache");
+    const request = new Request("https://shop.example/api/purge-cache", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ groups: ["products"] }),
+    });
+    await POST(context(request));
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it("reports native purge failures without mutating another cache layer", async () => {

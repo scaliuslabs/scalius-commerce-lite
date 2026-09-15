@@ -95,6 +95,22 @@
         "limit": 60,
         "period": 60
       }
+    },
+    {
+      "name": "META_EVENTS_RATE_LIMITER",
+      "namespace_id": "95462030",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    },
+    {
+      "name": "ABANDONED_CHECKOUT_RATE_LIMITER",
+      "namespace_id": "95462031",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
     }
   ],
   "r2_buckets": [

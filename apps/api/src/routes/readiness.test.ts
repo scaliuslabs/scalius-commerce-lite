@@ -130,6 +130,8 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     SEARCH_RATE_LIMITER: createRateLimiter(),
     ORDER_IP_RATE_LIMITER: createRateLimiter(),
     ORDER_PHONE_RATE_LIMITER: createRateLimiter(),
+    META_EVENTS_RATE_LIMITER: createRateLimiter(),
+    ABANDONED_CHECKOUT_RATE_LIMITER: createRateLimiter(),
     CHECKOUT_COORDINATOR: createCheckoutCoordinator(),
     // Installed secrets: the master secret plus the credential key.
     SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",
@@ -182,6 +184,8 @@ describe("API readiness route", () => {
       search_rate_limiter: { status: "ok" },
       order_ip_rate_limiter: { status: "ok" },
       order_phone_rate_limiter: { status: "ok" },
+      meta_events_rate_limiter: { status: "ok" },
+      abandoned_checkout_rate_limiter: { status: "ok" },
       runtime_config: { status: "ok", detail: "required secrets installed" },
       platform_config: { status: "ok", detail: "platform origins configured" },
     });

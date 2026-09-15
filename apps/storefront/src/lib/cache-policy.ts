@@ -42,13 +42,36 @@ export function requestHasPrivateSession(headers: Headers): boolean {
   return hasNamedCookie(cookieHeader, PRIVATE_SESSION_COOKIE_NAMES);
 }
 
-/** Mirrors the native public-cache admission boundary for request metadata. */
+/**
+ * Mirrors the native public-cache admission boundary for request metadata.
+ *
+ * Only a named private-session cookie bypasses the shared cache. Public pages
+ * never read any other cookie during SSR, and the analytics and ad-click
+ * cookies that most visitors carry (_fbp, _fbc, _ga, gclid mirrors) must not
+ * turn every later page view into an uncached render.
+ */
 export function requestBypassesPublicStorefrontCache(headers: Headers): boolean {
   return (
     Boolean(headers.get("Authorization")) ||
-    Boolean(headers.get("Cookie")) ||
-    Boolean(headers.get("X-API-Token"))
+    Boolean(headers.get("X-API-Token")) ||
+    requestHasPrivateSession(headers)
   );
+}
+
+/**
+ * Builds the request handed to the cache-enabled entrypoint. The public
+ * render never depends on tracking cookies, so they are dropped here; that
+ * keeps the cached lane byte-identical for every anonymous visitor and stops
+ * cookie-carrying requests from polluting or bypassing the shared entry.
+ */
+export function toPublicCacheRequest(request: Request, canonicalUrl: string): Request {
+  const headers = new Headers(request.headers);
+  headers.delete("Cookie");
+  return new Request(canonicalUrl, {
+    method: request.method,
+    headers,
+    redirect: request.redirect,
+  });
 }
 
 const CACHEABLE_PUBLIC_CONTENT_TYPES = [

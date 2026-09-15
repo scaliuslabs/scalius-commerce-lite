@@ -9,6 +9,7 @@ import {
   recoverCurrentStorefrontBuild,
 } from "./lib/public-worker-cache";
 import { BUILD_ID } from "./config/build-id";
+import { toPublicCacheRequest } from "./lib/cache-policy";
 
 export class CachedPublicStorefront extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
@@ -46,9 +47,7 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const policy = getPublicStorefrontCachePolicy(request);
     if (!policy) return handle(request, this.env, this.ctx);
 
-    const cacheRequest = policy.canonicalUrl === request.url
-      ? request
-      : new Request(policy.canonicalUrl, request);
+    const cacheRequest = toPublicCacheRequest(request, policy.canonicalUrl);
     const response = await this.ctx.exports.CachedPublicStorefront.fetch(
       cacheRequest,
     );

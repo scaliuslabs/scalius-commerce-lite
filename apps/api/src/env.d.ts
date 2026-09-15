@@ -190,6 +190,8 @@ interface Env {
   ORDER_IP_RATE_LIMITER: RateLimit;
   ORDER_PHONE_RATE_LIMITER: RateLimit;
   AGENT_RATE_LIMITER: RateLimit;
+  META_EVENTS_RATE_LIMITER: RateLimit;
+  ABANDONED_CHECKOUT_RATE_LIMITER: RateLimit;
   OAUTH_PROVIDER?: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
   CHECKOUT_COORDINATOR: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;

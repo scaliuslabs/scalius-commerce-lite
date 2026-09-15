@@ -7,25 +7,27 @@
  */
 export const CACHE_TTLS = {
   /**
-   * 1 hour — event purges provide freshness; this is only the bounded safety
-   * fallback if both direct delivery and the durable retry path are unavailable.
+   * 7 days — every merchant write and every buyer-visible stock band
+   * transition purges the affected tags directly and through the durable retry
+   * sweep. The TTL is only the failure backstop, so it stays long enough that
+   * public reads almost never pay for a cold origin render.
    */
-  AVAILABILITY: 3600,
+  AVAILABILITY: 7 * 86_400,
 
-  /** 1 hour — standard for content that changes occasionally (products, categories, pages, collections) */
-  STANDARD: 3600,
+  /** 30 days — mutation-purged content (categories, pages, collections, layout, navigation) */
+  STANDARD: 30 * 86_400,
 
-  /** 5 minutes — for data that changes frequently (search results, order lookups, shipping methods) */
-  SHORT: 300,
+  /** 1 day — checkout reference data purged by the "checkout" tag (shipping methods) */
+  SHORT: 86_400,
 
-  /** 10 minutes — for semi-static reference data (delivery locations) */
-  MEDIUM: 600,
+  /** 1 day — checkout reference data purged by the "checkout" tag (delivery locations) */
+  MEDIUM: 86_400,
 
-  /** 30 minutes — for attribute data that changes less often */
-  ATTRIBUTES: 1800,
+  /** 30 days — attribute definitions purged by the "attributes" tag */
+  ATTRIBUTES: 30 * 86_400,
 
-  /** 1 minute — for highly dynamic config (checkout gateway config) */
-  CHECKOUT_CONFIG: 60,
+  /** 1 hour — checkout gateway readiness; purged by the "checkout" tag on every payment or auth settings save */
+  CHECKOUT_CONFIG: 3600,
 
   /** 0 — explicitly no caching (analytics config — served fresh) */
   NONE: 0,
