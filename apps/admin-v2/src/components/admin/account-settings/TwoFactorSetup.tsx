@@ -1,17 +1,21 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { authClient } from "~/lib/auth-client";
-import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
-  InlineHelp,
-  SettingsSection,
-  StatusBadge,
-} from "~/components/admin/shell";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import {
   Loader2,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
   AlertCircle,
   Check,
   Copy,
@@ -317,24 +321,26 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         isDirty={hasSetupDraft}
         isSubmitting={isLoading}
       />
-      <SettingsSection
-        title={
-          setupMode === "change"
-            ? "Change verification method"
-            : "Enable two-factor authentication"
-        }
-        description={
-          setupMode === "change"
-            ? "Verify a replacement method before the current method changes."
-            : "Choose and verify the method used when you sign in."
-        }
-      >
-        <div className="space-y-4">
+      <Card className="max-w-3xl rounded-xl shadow-none">
+        <CardHeader className="p-4 pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" />
+            {setupMode === "change"
+                ? "Change verification method"
+                : "Enable two-factor authentication"}
+          </CardTitle>
+          <CardDescription>
+            {setupMode === "change"
+                ? "Verify a replacement method before the current method changes."
+                : "Choose and verify the method used when you sign in."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
           {step === "method" && (
@@ -561,78 +567,77 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
               </Button>
             </div>
           )}
-        </div>
-      </SettingsSection>
+        </CardContent>
+      </Card>
       </>
     );
   }
 
   return (
-    <SettingsSection
-      title="Two-factor authentication"
-      description={
-        isEnabled
-          ? "A verified second step is required when this account signs in."
-          : "Admin accounts must verify a second sign-in method."
-      }
-      actions={
-        <StatusBadge
-          tone={isEnabled ? "success" : "critical"}
-          srLabel="Two-factor status:"
-        >
-          {isEnabled ? "On" : "Setup required"}
-        </StatusBadge>
-      }
-    >
-      {isEnabled ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background">
-              {currentMethod === "totp" ? (
-                <Smartphone className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <Mail className="h-4 w-4 text-muted-foreground" />
-              )}
+    <Card className="max-w-3xl rounded-xl shadow-none">
+      <CardHeader className="p-4 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          {isEnabled ? (
+            <ShieldCheck className="h-4 w-4 text-primary" />
+          ) : (
+            <ShieldOff className="h-4 w-4 text-muted-foreground" />
+          )}
+          Two-factor authentication
+        </CardTitle>
+        <CardDescription>
+          {isEnabled
+            ? "A verified second step is required when this account signs in."
+            : "Admin accounts must verify a second sign-in method."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        {isEnabled ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background">
+                {currentMethod === "totp" ? (
+                  <Smartphone className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">
+                  {currentMethod === "totp" ? "Authenticator app" : "Email verification"}
+                </p>
+                <p className="break-words text-sm text-muted-foreground">
+                  {currentMethod === "totp"
+                    ? "Time-based codes from an authenticator app"
+                    : `Codes sent to ${user.email}`}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">On</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground">
-                {currentMethod === "totp" ? "Authenticator app" : "Email verification"}
-              </p>
-              <p className="break-words text-sm text-muted-foreground">
-                {currentMethod === "totp"
-                  ? "Time-based codes from an authenticator app"
-                  : `Codes sent to ${user.email}`}
-              </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => startSetup("change")} className="min-h-11 flex-1 sm:min-h-9">
+                Change method
+              </Button>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => startSetup("change")} className="min-h-11 flex-1 sm:min-h-9">
-              Change method
+        ) : (
+          <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-destructive/25 bg-background">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Setup required</p>
+                <p className="text-sm text-muted-foreground">
+                  Verify a method before this account is considered ready.
+                </p>
+              </div>
+            </div>
+            <Button onClick={() => startSetup("enable")} className="min-h-11 shrink-0 sm:min-h-9">
+              Set up two-factor
             </Button>
           </div>
-          <InlineHelp>
-            Changing the method asks for your password and a code from the new
-            method before the old one stops working.
-          </InlineHelp>
-        </div>
-      ) : (
-        <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-destructive/25 bg-background">
-              <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="font-medium text-foreground">Setup required</p>
-              <p className="text-sm text-muted-foreground">
-                Verify a method before this account is considered ready.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => startSetup("enable")} className="min-h-11 shrink-0 sm:min-h-9">
-            Set up two-factor
-          </Button>
-        </div>
-      )}
-    </SettingsSection>
+        )}
+      </CardContent>
+    </Card>
   );
 }

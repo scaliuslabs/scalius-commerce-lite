@@ -59,10 +59,8 @@ describe("account settings permission context", () => {
     expect(profileHeaderSource).toContain("trigger={");
     expect(profileHeaderSource).toContain("min-h-11 shrink-0");
     expect(profileHeaderSource).toContain("Save profile");
-    // Save and Discard moved into the page's contextual save bar, which stays
-    // locked while the name is invalid.
-    expect(profileHeaderSource).toContain("<ContextualSaveBar");
-    expect(profileHeaderSource).toContain("saveDisabled={Boolean(nameError)}");
+    expect(profileHeaderSource).toContain("Cancel");
+    expect(profileHeaderSource).toContain("disabled={isLoading || !hasChanges}");
     expect(profileHeaderSource).not.toContain('className="w-full"');
   });
 });

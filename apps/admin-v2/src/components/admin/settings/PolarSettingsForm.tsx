@@ -1,12 +1,11 @@
-import { InlineHelp } from "~/components/admin/shell";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Switch } from "~/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Copy, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getInheritedSecuritySources } from "~/lib/api-functions/security-runtime";
+import { getInheritedSecuritySources } from "@/lib/api-functions/security-runtime";
 import {
   type PolarData,
   PasswordInput,
@@ -54,7 +53,7 @@ function PolarWebhookEndpoint() {
         type="button"
         variant="outline"
         size="sm"
-        className="h-11 shrink-0 gap-1.5 sm:h-9"
+        className="h-8 shrink-0 gap-1.5"
         onClick={() => void copy()}
         disabled={!webhookUrl}
       >
@@ -81,17 +80,16 @@ export function PolarForm({ s, set, conf, saving, dirty, onReset, onSave, onHelp
       <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
         <div className="space-y-0.5">
           <Label htmlFor="polar-enabled" className="text-sm">Provider enabled</Label>
-          <InlineHelp id="polar-enabled-help">Allows Polar sessions after credentials are complete.</InlineHelp>
+          <p className="text-xs text-muted-foreground">Allows Polar sessions after credentials are complete.</p>
         </div>
         <Switch
           id="polar-enabled"
-          aria-describedby="polar-enabled-help"
           checked={s.enabled}
           onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
         />
       </div>
       <SandboxToggle id="polar-sandbox" checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))}
-        extra={<Button type="button" variant="ghost" size="sm" className="min-h-11 gap-1 text-xs text-muted-foreground sm:min-h-9" onClick={onHelp}>
+        extra={<Button type="button" variant="ghost" size="sm" className="h-9 gap-1 text-xs text-muted-foreground sm:h-7" onClick={onHelp}>
           <HelpCircle className="h-3.5 w-3.5" /> Setup Guide
         </Button>} />
       {!s.sandbox && s.enabled && <LiveWarning message="Live mode enabled. Real payments will be processed." />}
@@ -101,7 +99,7 @@ export function PolarForm({ s, set, conf, saving, dirty, onReset, onSave, onHelp
         </Label>
         <PasswordInput id="polar-tok" value={s.accessToken} onChange={(v) => set((p) => ({ ...p, accessToken: v }))}
           placeholder="polar_pat_..." configured={conf.token} />
-        <InlineHelp><ExtLink href="https://polar.sh/settings">polar.sh/settings</ExtLink></InlineHelp>
+        <p className="text-xs text-muted-foreground"><ExtLink href="https://polar.sh/settings">polar.sh/settings</ExtLink></p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="polar-wh" className="flex items-center gap-1.5 text-sm">
@@ -109,14 +107,14 @@ export function PolarForm({ s, set, conf, saving, dirty, onReset, onSave, onHelp
         </Label>
         <PasswordInput id="polar-wh" value={s.webhookSecret} onChange={(v) => set((p) => ({ ...p, webhookSecret: v }))}
           placeholder="polar_whs_..." configured={conf.webhook} />
-        <InlineHelp>Use this exact endpoint in Polar:</InlineHelp>
+        <p className="text-xs text-muted-foreground">Use this exact endpoint in Polar:</p>
         <PolarWebhookEndpoint />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="polar-pid" className="text-sm">Product ID</Label>
-        <Input id="polar-pid" type="text" value={s.productId} className="min-h-11 font-mono sm:min-h-9"
+        <Input id="polar-pid" type="text" value={s.productId} className="font-mono"
           onChange={(e) => set((p) => ({ ...p, productId: e.target.value }))} placeholder="prod_..." />
-        <InlineHelp>Create a generic product on Polar and paste its ID here.</InlineHelp>
+        <p className="text-xs text-muted-foreground">Create a generic product on Polar and paste its ID here.</p>
       </div>
       <SaveBtn saving={saving} dirty={dirty} onReset={onReset} label="Save Polar" />
     </form>
@@ -129,7 +127,7 @@ export function PolarSetupGuide() {
     { t: "Generate an Access Token", c: <>Go to <ExtLink href="https://polar.sh/settings">Organization Settings</ExtLink> &rarr; <strong>Access Tokens</strong> &rarr; Create a token with <code className="bg-muted px-1 rounded text-xs">checkouts:write</code> scope.</> },
     { t: "Create a Generic Product", c: <>In Polar Dashboard &rarr; <strong>Products</strong> &rarr; Create a product. Copy the <strong>Product ID</strong> from the &hellip; menu.</> },
     { t: "Configure Webhooks", c: <><PolarWebhookEndpoint /><span className="mt-2 block">Select <code className="bg-muted px-1 rounded text-xs">checkout.updated</code>, <code className="bg-muted px-1 rounded text-xs">order.paid</code>, and <code className="bg-muted px-1 rounded text-xs">order.refunded</code>.</span></> },
-    { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then turn on <strong>At checkout</strong> on the gateway row when you are ready for customers to see it.</> },
+    { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then use <strong>Offer to buyers</strong> on the gateway card when you are ready for customers to see it.</> },
   ];
   return (
     <div className="space-y-4 text-sm">
@@ -144,7 +142,7 @@ export function PolarSetupGuide() {
       ))}
       <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 mt-2">
         <p className="text-amber-800 dark:text-amber-200 text-xs">
-          <strong>Tip:</strong> Start with <strong>Sandbox mode</strong> enabled to test without charging real customers.
+          <strong>Tip:</strong> Start with <strong>Sandbox Mode</strong> enabled to test without charging real customers.
         </p>
       </div>
     </div>

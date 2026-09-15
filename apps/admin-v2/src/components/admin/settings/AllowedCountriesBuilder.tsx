@@ -1,20 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ContextualSaveBar,
-  EmptyState,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-  StatusBadge,
-} from "~/components/admin/shell";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { toast } from "sonner";
-import { ChevronDown, Globe, X, Search } from "lucide-react";
+import { ChevronDown, Loader2, RotateCcw, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   getAllowedCountries,
@@ -26,6 +25,7 @@ import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface CountryOption {
   value: Country;
@@ -172,12 +172,9 @@ export default function AllowedCountriesBuilder() {
 
   if (loading) {
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={2}
-        rowsPerSection={4}
-        label="Loading country policy"
-      />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -193,35 +190,21 @@ export default function AllowedCountriesBuilder() {
   }
 
   return (
-    <div className="max-w-5xl">
-      <ContextualSaveBar
-        isDirty={isDirty || saving}
-        saving={saving}
-        saveDisabled={saving || !hasLoaded || !isDirty}
-        saveDisabledReason="Change the policy before saving."
-        saveLabel="Save country policy"
-        allowSamePathNavigation
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={() => {
-          setSelected(savedSelected);
-          setMode(savedMode);
-        }}
-        onSave={handleSave}
-      />
-
-      <SettingsSection
-        title="Customer countries"
-        description="Limits the calling codes accepted for customer and checkout phone numbers."
-      >
-        <div className="space-y-4">
+    <div className="max-w-2xl space-y-5">
+      <UnsavedChangesGuard isDirty={isDirty || saving} isSubmitting={false} allowSamePathStateNavigation />
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Customer countries</CardTitle>
+          <CardDescription>
+            Limit calling codes accepted for customer and checkout phone numbers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label id="country-mode-label">Policy</Label>
+            <Label>Policy</Label>
             <RadioGroup
               value={mode}
               onValueChange={(v) => setMode(v as CountryMode)}
-              aria-labelledby="country-mode-label"
-              aria-describedby="country-mode-help"
               className="flex flex-col gap-2 sm:flex-row sm:gap-6"
             >
               <div className="flex min-h-11 items-center gap-2">
@@ -237,10 +220,9 @@ export default function AllowedCountriesBuilder() {
                 </Label>
               </div>
             </RadioGroup>
-            <InlineHelp id="country-mode-help">{modeDescription}</InlineHelp>
           </div>
 
-          {selected.length > 0 ? (
+          {selected.length > 0 && (
             <div className="space-y-1.5">
               <Label>
                 {mode === "include" ? "Allowed" : "Excluded"} ({selected.length})
@@ -269,19 +251,12 @@ export default function AllowedCountriesBuilder() {
                 })}
               </div>
             </div>
-          ) : (
-            <EmptyState
-              compact
-              icon={Globe}
-              heading="No countries selected"
-              body="Every country is accepted until you pick the ones this policy covers."
-            />
           )}
 
           <Button
             type="button"
             variant="outline"
-            className="min-h-11 w-full justify-between sm:min-h-9"
+            className="min-h-11 w-full justify-between md:min-h-9"
             aria-expanded={pickerOpen}
             aria-controls="country-picker"
             onClick={() => setPickerOpen((open) => !open)}
@@ -293,14 +268,14 @@ export default function AllowedCountriesBuilder() {
           {pickerOpen ? (
             <div id="country-picker" className="space-y-2 rounded-md border bg-muted/10 p-2">
               <div className="relative">
-                <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground sm:top-2.5" />
+                <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground md:top-2.5" />
                 <Input
                   id="country-search"
                   aria-label="Search countries"
                   placeholder="Search name, code, or calling code"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="min-h-11 pl-9 sm:min-h-9"
+                  className="min-h-11 pl-9 md:min-h-9"
                 />
               </div>
 
@@ -318,7 +293,7 @@ export default function AllowedCountriesBuilder() {
                           key={country.value}
                           type="button"
                           onClick={() => toggleCountry(country.value)}
-                          className={`flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 ${
+                          className={`flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 ${
                             isSelected ? "bg-muted/30" : ""
                           }`}
                         >
@@ -329,12 +304,9 @@ export default function AllowedCountriesBuilder() {
                             </span>
                           </span>
                           {isSelected && (
-                            <StatusBadge
-                              tone={mode === "include" ? "success" : "critical"}
-                              dot={false}
-                            >
+                            <Badge variant="default" className="text-xs">
                               {mode === "include" ? "Allowed" : "Excluded"}
-                            </StatusBadge>
+                            </Badge>
                           )}
                         </button>
                       );
@@ -344,8 +316,42 @@ export default function AllowedCountriesBuilder() {
               </div>
             </div>
           ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            {modeDescription}
+          </p>
+        </CardContent>
+      </Card>
+
+      {isDirty || saving ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setSelected(savedSelected);
+              setMode(savedMode);
+            }}
+            disabled={saving || !isDirty}
+            className="min-h-11 md:min-h-10"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !hasLoaded || !isDirty}
+            className="min-h-11 min-w-[140px] md:min-h-10"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save country policy
+          </Button>
         </div>
-      </SettingsSection>
+      ) : null}
     </div>
   );
 }

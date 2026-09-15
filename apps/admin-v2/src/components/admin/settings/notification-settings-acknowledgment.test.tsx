@@ -62,7 +62,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     storedFirebase = structuredClone(firebaseBase);
     api.email.mockImplementation(async () => structuredClone(storedEmail));
     api.firebase.mockImplementation(async () => structuredClone(storedFirebase));
-    api.readiness.mockResolvedValue({ push: { status: "ready", issues: [] } });
+    api.readiness.mockResolvedValue({ push: { status: "ready" as const, issues: [] } });
     api.updateEmail.mockImplementation(async ({ data }) => {
       storedEmail = { ...storedEmail, ...data, apiKey: "apiKey" in data ? data.apiKey ? mask : "" : storedEmail.apiKey };
       return { message: "Saved" };
@@ -87,14 +87,6 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
   }
   function input(id = mainId) { return host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${id}`)!; }
   function button(label: string) { return Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(node => node.textContent?.trim() === label)!; }
-  // The page saves through one contextual save bar: Discard first, Save second.
-  // Its Save label changes to "Saving" in flight, so address it by position.
-  function saveBarButtons() {
-    const bar = host.querySelector('[data-testid="contextual-save-bar"]');
-    return Array.from(bar?.querySelectorAll<HTMLButtonElement>("button") ?? []);
-  }
-  function saveButton() { return saveBarButtons()[1]!; }
-  function discardButton() { return saveBarButtons()[0]!; }
   async function click(node: HTMLElement) { await act(async () => { node.click(); }); await settle(); }
   async function type(value: string, id = mainId) {
     const node = input(id);
@@ -106,14 +98,14 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
   async function failRefreshAfterSave() {
     await render(); await type(after);
     read.mockRejectedValue(new Error("Settings read unavailable"));
-    await click(saveButton());
+    await click(button("Save changes"));
   }
 
   it("ignores a pre-acknowledgment background snapshot whose effect runs after the committed write", async () => {
     await render(); await type(after);
     const saving = deferred<{ message: string }>();
     update.mockReturnValueOnce(saving.promise);
-    await click(saveButton());
+    await click(button("Save changes"));
     const background = deferred<EmailSettingsPayload | FirebaseSettingsPayload>();
     read.mockReturnValueOnce(background.promise).mockRejectedValueOnce(new Error("Confirming read failed"));
     act(() => { void client.refetchQueries({ queryKey }); }); await settle();
@@ -127,7 +119,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     expect(mainStored()).toBe(after);
     expect(input().value).toBe(after);
     expect(host.textContent).toContain("could not be refreshed");
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(true);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
     await click(button("Retry"));
     expect(input().value).toBe(after);
     expect(host.textContent).not.toContain("could not be refreshed");
@@ -135,18 +127,18 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     else storedFirebase.publicConfig.projectId = later;
     await act(async () => { await client.refetchQueries({ queryKey }); }); await settle();
     expect(input().value).toBe(later);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(true);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
   });
 
   it("keeps the submitted values and credential clear after a committed save cannot refresh", async () => {
     await render(); await type(after); await type("", credentialId);
     const confirmingRead = deferred<EmailSettingsPayload | FirebaseSettingsPayload>();
     read.mockReturnValueOnce(confirmingRead.promise);
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(mainStored()).toBe(after);
-    expect(saveButton().disabled).toBe(true);
+    expect(button("Save changes").disabled).toBe(true);
     expect(input().disabled).toBe(true);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(false);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(true);
     await act(async () => { confirmingRead.reject(new Error("Settings read unavailable")); }); await settle();
     expect(input().value).toBe(after);
     expect(input(credentialId).value).toBe("");
@@ -154,12 +146,12 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     expect(button("Retry")).toBeDefined();
     expect(api.warning).toHaveBeenCalled();
     expect(api.error).not.toHaveBeenCalled();
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(true);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
     read.mockImplementation(async () => structuredClone(stored()));
     if (kind === "email") {
       await click(Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(node => node.textContent?.includes("Cloudflare Email"))!);
     } else await type("later-app", "firebase-appId");
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(mainStored()).toBe(after);
     const payload = update.mock.calls.at(-1)![0].data;
     expect(kind === "email" ? payload.sender : payload.publicConfig.projectId).toBe(after);
@@ -173,7 +165,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     await click(button("Retry"));
     await type(later);
     expect(input().disabled).toBe(false);
-    expect(saveButton().disabled).toBe(true);
+    expect(button("Save changes").disabled).toBe(true);
     if (kind === "email") storedEmail.provider = "cloudflare";
     else storedFirebase.publicConfig.appId = "remote-app";
     await act(async () => { retry.resolve(structuredClone(stored())); }); await settle();
@@ -181,9 +173,9 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     if (kind === "email") expect(host.querySelector('[aria-pressed="true"]')?.textContent).toContain("Cloudflare Email");
     else expect(input("firebase-appId").value).toBe("remote-app");
     expect(host.textContent).not.toContain("could not be refreshed");
-    expect(saveButton().disabled).toBe(false);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(false);
-    await click(discardButton());
+    expect(button("Save changes").disabled).toBe(false);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(true);
+    await click(button("Reset"));
     expect(input().value).toBe(after);
   });
 
@@ -194,16 +186,16 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     expect(host.textContent).toContain("could not be refreshed");
     const retry = deferred<EmailSettingsPayload | FirebaseSettingsPayload>();
     read.mockReturnValueOnce(retry.promise);
-    const retryButton = button("Retry"); const save = saveButton();
-    await act(async () => { retryButton.click(); save.click(); retryButton.click(); }); await settle();
+    const retryButton = button("Retry"); const saveButton = button("Save changes");
+    await act(async () => { retryButton.click(); saveButton.click(); retryButton.click(); }); await settle();
     expect(update).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledTimes(3);
     await act(async () => { retry.resolve(structuredClone(stored())); }); await settle();
     const savePending = deferred<{ message: string }>(); update.mockReturnValueOnce(savePending.promise);
-    await act(async () => { save.click(); save.click(); }); await settle();
+    await act(async () => { saveButton.click(); saveButton.click(); }); await settle();
     expect(update).toHaveBeenCalledTimes(2);
     expect(input().disabled).toBe(true);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(false);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(true);
     await act(async () => { savePending.reject(new Error("Rejected")); }); await settle();
   });
 
@@ -213,11 +205,11 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     const originalUpdatedAt = client.getQueryState(queryKey)!.dataUpdatedAt;
     vi.spyOn(Date, "now").mockReturnValue(originalUpdatedAt);
     await type(kind === "email" ? "new-local-test-key" : JSON.stringify({ private_key: "local-test-key", client_email: "local@example.test", project_id: "local-test" }), credentialId);
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(client.getQueryData(queryKey)).toBe(original);
     expect(client.getQueryState(queryKey)!.dataUpdatedAt).toBe(originalUpdatedAt);
     expect(input(credentialId).value).toBe(mask);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(true);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(false);
     expect(api.success).toHaveBeenCalled();
   });
 
@@ -225,14 +217,14 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     await render(); await type(after);
     const invalidate = vi.spyOn(client, "invalidateQueries");
     update.mockRejectedValueOnce(new Error("Write rejected"));
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(input().value).toBe(after);
-    expect(saveButton().disabled).toBe(false);
-    expect(api.blocker.mock.calls.at(-1)![0].disabled).toBe(false);
+    expect(button("Save changes").disabled).toBe(false);
+    expect(api.blocker.mock.calls.at(-1)![0].enableBeforeUnload).toBe(true);
     expect(read).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
     expect(api.error).toHaveBeenCalled();
-    await click(discardButton());
+    await click(button("Reset"));
     expect(input().value).toBe(kind === "email" ? emailBase.sender : firebaseBase.publicConfig.projectId);
   });
 
@@ -252,7 +244,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     const dependentKey = kind === "email" ? queryKeys.settings.auth() : queryKeys.settings.adminNotificationChannels();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     if (kind === "firebase") api.readiness.mockRejectedValue(new Error("Readiness unavailable"));
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(input().value).toBe(after);
     expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: dependentKey }));
     expect(host.textContent).not.toContain("could not be refreshed");
@@ -260,7 +252,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     if (kind === "firebase") {
       expect(host.textContent).toContain("Server unavailable");
       expect(button("Retry")).toBeDefined();
-      api.readiness.mockResolvedValue({ push: { status: "ready", issues: [] } });
+      api.readiness.mockResolvedValue({ push: { status: "ready" as const, issues: [] } });
       await click(button("Retry"));
       expect(host.textContent).toContain("Push configured");
       expect(host.textContent).not.toContain("Provider status could not be checked");
@@ -272,21 +264,21 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     await render(); await type(after);
     read.mockRejectedValue(new Error("Settings read unavailable"));
     api.readiness.mockRejectedValue(new Error("Readiness unavailable"));
-    await click(saveButton());
+    await click(button("Save changes"));
     expect(host.textContent).toContain("Push status unavailable");
     expect(host.textContent).toContain("Provider status could not be checked");
     expect(Array.from(host.querySelectorAll("button")).filter(node => node.textContent === "Retry")).toHaveLength(1);
     read.mockImplementation(async () => structuredClone(stored()));
-    const readiness = deferred<{ push: { status: string; issues: never[] } }>();
+    const readiness = deferred<{ push: { status: "ready"; issues: never[] } }>();
     api.readiness.mockReturnValueOnce(readiness.promise);
     await click(button("Retry")); await type(later);
     expect(host.textContent).toContain("Checking push status…");
-    expect(saveButton().disabled).toBe(true);
-    await act(async () => { readiness.resolve({ push: { status: "ready", issues: [] } }); }); await settle();
+    expect(button("Save changes").disabled).toBe(true);
+    await act(async () => { readiness.resolve({ push: { status: "ready" as const, issues: [] } }); }); await settle();
     expect(host.textContent).toContain("Push configured");
     expect(host.textContent).not.toContain("unavailable");
     expect(input().value).toBe(later);
-    expect(saveButton().disabled).toBe(false);
+    expect(button("Save changes").disabled).toBe(false);
   });
 
   it("allows read-only refresh recovery without enabling writes", async () => {

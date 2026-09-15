@@ -30,9 +30,6 @@ vi.mock("~/lib/api-functions/categories", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
 vi.mock("../shared/SortableList", () => ({ SortableList: () => null }));
-vi.mock("@tanstack/react-router", () => ({
-  useBlocker: () => ({ status: "idle", proceed: vi.fn(), reset: vi.fn() }),
-}));
 vi.mock("~/components/ui/searchable-select", () => ({ SearchableSelect: () => null }));
 
 import { HomepagePresentationBuilder } from "./HomepagePresentationBuilder";
@@ -168,7 +165,7 @@ describe("HomepagePresentationBuilder draft acknowledgement", () => {
     await flush();
 
     expect(heading().value).toBe("Newer unsaved");
-    act(() => button("Discard")?.click());
+    act(() => button("Reset")?.click());
     expect(heading().value).toBe("Original");
     expect(button("Save homepage")).toBeUndefined();
     expect(api.error).toHaveBeenCalledWith("Save failed");
@@ -193,7 +190,7 @@ describe("HomepagePresentationBuilder draft acknowledgement", () => {
     await flush();
 
     expect(heading().value).toBe("Original");
-    expect(button("Discard")).toBeDefined();
+    expect(button("Reset")).toBeDefined();
   });
 
   it("does not hydrate a dirty draft from a background query update", async () => {
@@ -207,7 +204,7 @@ describe("HomepagePresentationBuilder draft acknowledgement", () => {
     await flush();
 
     expect(heading().value).toBe("Newer unsaved");
-    act(() => button("Discard")?.click());
+    act(() => button("Reset")?.click());
     expect(heading().value).toBe("Background server value");
   });
 });

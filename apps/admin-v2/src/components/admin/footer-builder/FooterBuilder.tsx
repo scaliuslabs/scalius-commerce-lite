@@ -17,10 +17,6 @@ import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
-import {
-  isNavigationConfigUnreadable,
-  navigationConfigNeedsNormalizationSave,
-} from "~/components/admin/settings/navigation-readiness";
 import { Card } from "~/components/ui/card";
 
 import { BrandingSection } from "./BrandingSection";
@@ -32,6 +28,10 @@ import type {
   FooterBuilderProps,
 } from "./types";
 import { defaultFooterConfig } from "./types";
+import {
+  isNavigationConfigUnreadable,
+  navigationConfigNeedsNormalizationSave,
+} from "~/components/admin/settings/navigation-readiness";
 
 const SocialLinksSection = lazy(() =>
   import("./SocialLinksSection").then((module) => ({

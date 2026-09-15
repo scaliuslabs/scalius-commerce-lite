@@ -83,10 +83,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
       routeId: "/admin/settings/", fullPath: "/admin/settings/", pathname: "/admin/settings",
       search: { section: "countries" },
     };
-    // `useUnsavedChanges` owns `beforeunload` in an effect and arms the router
-    // blocker through `disabled`, so the guard is on exactly when it is enabled.
-    expect(guard.enableBeforeUnload).toBe(false);
-    expect(guard.disabled).toBe(!protectedState);
+    expect(guard.enableBeforeUnload).toBe(protectedState);
     expect(guard.shouldBlockFn({
       current,
       next: { routeId: "/admin/orders/", fullPath: "/admin/orders/", pathname: "/admin/orders" },
@@ -124,7 +121,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     expect(toast.success).toHaveBeenCalledWith("Country policy saved");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.settings.checkoutReadiness() });
     expect(queryClient.getQueryData(queryKeys.settings.allowedCountries())).toEqual(canonical);
-    await click(button("Discard")!);
+    await click(button("Reset")!);
     expect(countries()).toContain("Canada");
     expect(button("Save country policy")).toBeUndefined();
     expectProtected(false);
@@ -138,16 +135,14 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     await click(button("Save country policy")!);
     await click(radio("include"));
     await toggleCountry("Bangladesh");
-    // The in-flight save bar locks both actions and keeps the draft guarded.
-    expect(button("Save country policy")).toBeUndefined();
-    expect(button("Saving")?.disabled).toBe(true);
-    expect(button("Discard")?.disabled).toBe(true);
+    expect(button("Save country policy")?.disabled).toBe(true);
+    expect(button("Reset")?.disabled).toBe(true);
     expectProtected(true);
     api.blocker.mockReturnValue({ status: "blocked", proceed: api.proceed, reset: api.reset });
     await render();
     expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     expect(api.reset).not.toHaveBeenCalled();
-    await click(button("Keep editing")!);
+    await click(button("Keep Editing")!);
     expect(api.reset).toHaveBeenCalled();
     expect(api.proceed).not.toHaveBeenCalled();
     api.blocker.mockReturnValue({ status: "idle", proceed: api.proceed, reset: api.reset });
@@ -194,7 +189,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     const { write, refresh } = deferSave();
     await click(button("Save country policy")!);
     expectProtected(true);
-    await click(button("Saving")!);
+    await click(button("Save country policy")!);
     expect(api.update).toHaveBeenCalledTimes(1);
     api.blocker.mockReturnValue({ status: "blocked", proceed: api.proceed, reset: api.reset });
     await render();
@@ -225,7 +220,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     expectProtected(true);
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(invalidate).not.toHaveBeenCalled();
-    await click(button("Discard")!);
+    await click(button("Reset")!);
     expect(countries()).not.toContain("Canada");
     expect(radio("include").getAttribute("data-state")).toBe("checked");
     await click(radio("exclude"));
@@ -253,35 +248,9 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     expect(toast.error).not.toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.settings.checkoutReadiness() });
     expect(queryClient.getQueryData(queryKeys.settings.allowedCountries())).toEqual({ ...base, allowedCountriesMode: "exclude" });
-    await click(button("Discard")!);
+    await click(button("Reset")!);
     expect(countries()).not.toContain("Canada");
     expect(radio("exclude").getAttribute("data-state")).toBe("checked");
-    expectProtected(false);
-  });
-
-  it("saves from the page-level save bar and keeps it hidden while clean", async () => {
-    await render();
-    const bar = () => host.querySelector('[data-testid="contextual-save-bar"]');
-    // A clean page shows no save affordance and no per-card button row.
-    expect(bar()).toBeNull();
-    expect(button("Save country policy")).toBeUndefined();
-    expect(button("Save changes")).toBeUndefined();
-    expect(button("Reset")).toBeUndefined();
-
-    await click(radio("exclude"));
-    expect(bar()).not.toBeNull();
-    expect(button("Save country policy")?.disabled).toBe(false);
-
-    // Discard restores the acknowledged policy and retires the bar.
-    await click(button("Discard")!);
-    expect(radio("include").getAttribute("data-state")).toBe("checked");
-    expect(bar()).toBeNull();
-
-    await click(radio("exclude"));
-    api.get.mockResolvedValueOnce({ ...base, allowedCountriesMode: "exclude" });
-    await click(button("Save country policy")!);
-    expect(api.update).toHaveBeenCalledTimes(1);
-    expect(bar()).toBeNull();
     expectProtected(false);
   });
 

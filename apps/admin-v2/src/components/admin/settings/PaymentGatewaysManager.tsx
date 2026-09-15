@@ -1,39 +1,25 @@
 // src/components/admin/settings/PaymentGatewaysManager.tsx
-// Gateway index table plus a lazy-loaded credential editor per provider.
+// Accordion-based payment gateway management with lazy-loaded credentials.
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { Switch } from "~/components/ui/switch";
-import { Badge } from "~/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-    Loader2, CheckCircle2, Zap, AlertTriangle, RefreshCw,
-    ArrowUp, ArrowDown, CreditCard, MoreHorizontal, Settings2,
+    Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle, RefreshCw,
+    ArrowUp, ArrowDown,
 } from "lucide-react";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "~/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import {
-    ContextualSaveBar,
-    EmptyState,
-    IndexTable,
-    InlineHelp,
-    SettingsSection,
-    SkeletonPage,
-    StatusBadge,
-    type IndexTableColumn,
-    type StatusTone,
-} from "~/components/admin/shell";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
     type MethodKey,
@@ -63,43 +49,48 @@ import {
     stripeDraftIsDirty,
 } from "./payment-gateway-draft";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
-import { getServerFnError } from "~/lib/api-helpers";
-import { getSettingsLoadErrorMessage } from "~/hooks/use-settings-form";
-import { queryKeys } from "~/lib/query-keys";
-import { checkoutFlowSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import { getServerFnError } from "@/lib/api-helpers";
+import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
+import { queryKeys } from "@/lib/query-keys";
+import { checkoutFlowSettingsQueryOptions } from "@/lib/api-query-options/settings";
+import { currencySettingsQueryOptions } from "@/lib/api-query-options/currency";
 import {
     getPaymentMethods,
     updatePaymentMethods,
     getPaymentGatewaySettings,
     type SettingsPayload,
     updatePaymentGatewaySettings,
-} from "~/lib/api-functions/settings";
+} from "@/lib/api-functions/settings";
 
 // --- Main Component ---
 
 const ALL_METHODS: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
 
-/**
- * Buyer-visible outcome to badge tone. The label always names the state, so the
- * colour is only a second signal.
- */
-const OUTCOME_TONES: Record<PaymentMethodOutcome["state"], StatusTone> = {
-    visible: "success",
-    ready_hidden: "neutral",
-    hidden_by_flow: "attention",
-    flow_unknown: "attention",
-    provider_off: "neutral",
-    needs_setup: "warning",
-    blocked: "critical",
-};
-
 function OutcomeBadge({ outcome }: { outcome: PaymentMethodOutcome }) {
-    return (
-        <StatusBadge tone={OUTCOME_TONES[outcome.state]} srLabel="Buyer checkout:">
-            {outcome.label}
-        </StatusBadge>
-    );
+    if (outcome.state === "visible") {
+        return (
+            <Badge className="gap-1 border-0 bg-emerald-500/10 text-xs text-emerald-700 shadow-none hover:bg-emerald-500/15 dark:text-emerald-300">
+                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                {outcome.label}
+            </Badge>
+        );
+    }
+    if (outcome.state === "blocked" || outcome.state === "needs_setup") {
+        return (
+            <Badge variant={outcome.state === "blocked" ? "destructive" : "outline"} className="gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                {outcome.label}
+            </Badge>
+        );
+    }
+    if (outcome.state === "hidden_by_flow") {
+        return <Badge variant="outline" className="border-amber-500/40 text-xs text-amber-700 dark:text-amber-300">{outcome.label}</Badge>;
+    }
+    if (outcome.state === "flow_unknown") {
+        return <Badge variant="outline" className="border-amber-500/40 text-xs text-amber-700 dark:text-amber-300">{outcome.label}</Badge>;
+    }
+    return <Badge variant="secondary" className="text-xs">{outcome.label}</Badge>;
 }
 
 export default function PaymentGatewaysManager() {
@@ -144,7 +135,7 @@ export default function PaymentGatewaysManager() {
     const loadedGateways = useRef<Set<string>>(new Set());
     const [loadingGw, setLoadingGw] = useState<string | null>(null);
     const [gatewayLoadErrors, setGatewayLoadErrors] = useState<Partial<Record<MethodKey, string>>>({});
-    const [configureGateway, setConfigureGateway] = useState<MethodKey | null>(null);
+    const [expanded, setExpanded] = useState<string[]>([]);
 
     // Load only payment-methods on mount (1 API call)
     const loadMethods = useCallback(async (showInitialLoader = true, notifyOnError = true, preserveDraft = false) => {
@@ -173,7 +164,7 @@ export default function PaymentGatewaysManager() {
 
     useEffect(() => { void loadMethods(); }, [loadMethods]);
 
-    // Lazy-load gateway credentials when the configure dialog opens
+    // Lazy-load gateway credentials on accordion expand
     const loadCreds = useCallback(async (gw: MethodKey, force = false, notifyOnError = true) => {
         if (gw === "cod" || (loadedGateways.current.has(gw) && !force)) return true;
         setLoadingGw(gw);
@@ -209,9 +200,11 @@ export default function PaymentGatewaysManager() {
         finally { setLoadingGw(null); }
     }, []);
 
-    const openConfigure = (method: MethodKey) => {
-        setConfigureGateway(method);
-        if (method !== "cod" && !loadedGateways.current.has(method)) void loadCreds(method);
+    const handleAccordion = (vals: string[]) => {
+        setExpanded(vals);
+        for (const v of vals) {
+            if (v !== "cod" && !loadedGateways.current.has(v)) void loadCreds(v as MethodKey);
+        }
     };
 
     const toggleMethod = (method: MethodKey, on: boolean) => {
@@ -375,37 +368,32 @@ export default function PaymentGatewaysManager() {
         }
     }, [defaultMethod, defaultOptions]);
 
-    if (loading) {
-        return (
-            <SkeletonPage
-                showHeader={false}
-                sections={2}
-                rowsPerSection={4}
-                label="Loading payment settings"
-            />
-        );
-    }
+    if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status" aria-live="polite"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />Loading payment settings…</div>;
 
     if (!methods) {
         return (
-            <Alert className="max-w-4xl border-amber-500/30 bg-amber-500/5" role="alert">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                <AlertTitle>Payment settings could not be loaded</AlertTitle>
-                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="min-w-0">
-                        <span className="block">
-                            {methodsLoadError ?? "Reload payment settings before changing checkout visibility."}
-                        </span>
-                        <span className="mt-1 block text-xs opacity-85">
-                            Checkout visibility is locked until the saved payment-method settings load successfully.
-                        </span>
-                    </span>
-                    <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0 sm:min-h-9" onClick={() => void loadMethods()}>
+            <Card className="max-w-4xl border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-amber-950 dark:text-amber-100">
+                        <AlertTriangle className="h-4 w-4" />
+                        Payment settings could not be loaded
+                    </CardTitle>
+                    <CardDescription className="text-amber-900/80 dark:text-amber-200/80">
+                        Checkout visibility is locked until the saved payment-method settings load successfully.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    <p className="rounded-md border border-amber-200/70 bg-background/70 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:text-amber-100">
+                        {methodsLoadError ?? "Reload payment settings before changing checkout visibility."}
+                    </p>
+                </CardContent>
+                <CardFooter className="justify-end">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => void loadMethods()}>
                         <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                         Retry
                     </Button>
-                </AlertDescription>
-            </Alert>
+                </CardFooter>
+            </Card>
         );
     }
 
@@ -441,126 +429,16 @@ export default function PaymentGatewaysManager() {
     const polarDirty = loadedGateways.current.has("polar") && polarDraftIsDirty(polar, savedPolar);
     const anyGatewayDirty = stripeDirty || sslDirty || polarDirty;
     const anySavePending = savingMethods || savingStripe || savingSsl || savingPolar;
-    const dirtyGatewayLabel = stripeDirty
-        ? META.stripe.label
-        : sslDirty
-            ? META.sslcommerz.label
-            : polarDirty
-                ? META.polar.label
-                : null;
     const resetMethods = () => {
         setEnabledMethods(new Set(methods.enabledMethods));
         setMethodOrder(methods.enabledMethods);
         setDefaultMethod(methods.defaultMethod);
     };
-    const discardDraft = () => {
-        if (methodsDirty) resetMethods();
-        if (savedStripe && stripeDirty) setStripe({ ...savedStripe });
-        if (savedSsl && sslDirty) setSsl({ ...savedSsl });
-        if (savedPolar && polarDirty) setPolar({ ...savedPolar });
-    };
-    const methodSaveDisabledReason = !methodsDirty
-        ? dirtyGatewayLabel
-            ? `Save ${dirtyGatewayLabel} from its configure dialog, or discard the credential changes.`
-            : "There are no buyer payment method changes to save."
-        : !checkoutFlowSettings
-            ? "The saved checkout flow must load before buyer payment methods can be saved."
-            : !currencySettings
-                ? "The store currency must load before buyer payment methods can be saved."
-                : methodsLoadError
-                    ? "Refresh the payment status before saving."
-                    : "Select at least one setup-complete, provider-enabled method allowed by the current checkout flow.";
-    const orderedEnabledMethods = methodOrder.filter((method) => enabledMethods.has(method));
-
-    const gatewayColumns: IndexTableColumn<MethodKey>[] = [
-        {
-            id: "gateway",
-            header: "Gateway",
-            mobileLabel: "Gateway",
-            cell: (method) => {
-                const meta = META[method];
-                const outcome = getMethodOutcome(method);
-                const notice = outcome.state === "hidden_by_flow"
-                    ? getFlowHiddenReason(method) ?? outcome.description
-                    : outcome.state === "visible" || outcome.state === "ready_hidden"
-                        ? null
-                        : outcome.description;
-                return (
-                    <span className="flex min-w-0 items-start gap-3 py-1">
-                        <meta.Mark />
-                        <span className="min-w-0">
-                            <span className="block text-sm font-medium">{meta.label}</span>
-                            <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{meta.desc}</span>
-                            {notice ? (
-                                <span className="mt-1.5 flex items-start gap-1.5 text-xs leading-4 text-amber-700 dark:text-amber-300">
-                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                    <span>{notice}</span>
-                                </span>
-                            ) : null}
-                        </span>
-                    </span>
-                );
-            },
-        },
-        {
-            id: "status",
-            header: "Status",
-            mobileLabel: "Status",
-            cell: (method) => <OutcomeBadge outcome={getMethodOutcome(method)} />,
-        },
-        {
-            id: "environment",
-            header: "Mode",
-            mobileLabel: "Mode",
-            cell: (method) => (
-                <span className="text-xs text-muted-foreground">
-                    {getMethodOutcome(method).environmentLabel}
-                </span>
-            ),
-        },
-        {
-            id: "checkout",
-            header: "At checkout",
-            mobileLabel: "At checkout",
-            align: "end",
-            cell: (method) => {
-                const meta = META[method];
-                const outcome = getMethodOutcome(method);
-                const selected = enabledMethods.has(method);
-                const toggleDisabled = !selected && !outcome.canSelect;
-                return (
-                    <label htmlFor={`toggle-${method}`} className="flex min-h-11 shrink-0 cursor-pointer items-center justify-end">
-                        <Switch
-                            id={`toggle-${method}`}
-                            checked={selected}
-                            aria-label={`Show ${meta.label} at checkout`}
-                            disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
-                            onCheckedChange={(v) => toggleMethod(method, v)}
-                        />
-                    </label>
-                );
-            },
-        },
-    ];
 
     return (
         <>
-        <ContextualSaveBar
-            isDirty={methodsDirty || anyGatewayDirty}
-            saving={anySavePending}
-            saveDisabled={!methodsDirty || !canSaveMethods}
-            saveDisabledReason={methodSaveDisabledReason}
-            message={methodsDirty
-                ? "Unsaved buyer payment method changes"
-                : `Unsaved ${dirtyGatewayLabel ?? "gateway"} credentials`}
-            saveLabel="Save payment methods"
-            allowSamePathNavigation
-            // The settings section picker is sticky on narrow widths.
-            stickyClassName="sticky top-15 z-30 lg:top-0"
-            onDiscard={discardDraft}
-            onSave={() => void saveMethods()}
-        />
-        <div className="max-w-5xl space-y-6">
+        <UnsavedChangesGuard isDirty={methodsDirty || anyGatewayDirty} isSubmitting={anySavePending} />
+        <div className="max-w-4xl space-y-4">
             {!checkoutFlowSettings && (
                 <Alert className={checkoutFlowError ? "border-amber-500/30 bg-amber-500/5" : undefined}>
                     {checkoutFlowError
@@ -580,7 +458,7 @@ export default function PaymentGatewaysManager() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="min-h-11 shrink-0 sm:min-h-9"
+                                className="shrink-0"
                                 onClick={() => void refetchCheckoutFlow()}
                                 disabled={checkoutFlowFetching}
                             >
@@ -606,7 +484,7 @@ export default function PaymentGatewaysManager() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="min-h-11 shrink-0 sm:min-h-9"
+                                className="shrink-0"
                                 onClick={() => void refetchCurrencySettings()}
                                 disabled={currencySettingsFetching}
                             >
@@ -629,7 +507,7 @@ export default function PaymentGatewaysManager() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="min-h-11 shrink-0 sm:min-h-9"
+                            className="shrink-0"
                             onClick={() => void loadMethods(false, true, true)}
                         >
                             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -638,34 +516,30 @@ export default function PaymentGatewaysManager() {
                     </AlertDescription>
                 </Alert>
             )}
-
-            <SettingsSection
-                title="Buyer payment methods"
-                description="Choose which eligible methods appear at checkout, their display order, and the preselected option."
-                footer={!canSaveMethods && !methodsLoadError && checkoutFlowSettings
-                    ? "Select at least one setup-complete, provider-enabled method allowed by the current checkout flow."
-                    : undefined}
-            >
-                <div className="space-y-5">
+            <Card>
+                <CardHeader className="p-4 pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base font-semibold">Buyer payment methods</CardTitle>
+                        <Badge variant={methodsLoadError || methodsDirty ? "outline" : "secondary"} className="text-xs">
+                            {methodsLoadError ? "Refresh needed" : methodsDirty ? "Unsaved" : "Saved"}
+                        </Badge>
+                    </div>
+                    <CardDescription>
+                        Choose which eligible methods appear at checkout, their display order, and the preselected option.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5 px-4 pb-4">
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
                         <div>
                             <Label htmlFor="default-payment-method">Default buyer selection</Label>
-                            <InlineHelp id="default-payment-method-help" className="mt-1">
-                                Preselected when the payment step opens.
-                            </InlineHelp>
+                            <p className="mt-1 text-xs text-muted-foreground">Preselected when the payment step opens.</p>
                         </div>
                         <Select
                             value={defaultMethodAvailable ? defaultMethod : undefined}
                             onValueChange={(value) => setDefaultMethod(value as MethodKey)}
                             disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings || !currencySettings}
                         >
-                            <SelectTrigger
-                                id="default-payment-method"
-                                aria-describedby="default-payment-method-help"
-                                className="h-11 w-full sm:h-9"
-                            >
-                                <SelectValue placeholder="No eligible method" />
-                            </SelectTrigger>
+                            <SelectTrigger id="default-payment-method" className="h-11 w-full sm:h-9"><SelectValue placeholder="No eligible method" /></SelectTrigger>
                             <SelectContent>
                                 {defaultOptions.map((method) => (
                                     <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
@@ -677,181 +551,168 @@ export default function PaymentGatewaysManager() {
                     <div>
                         <div className="mb-2">
                             <Label>Checkout display order</Label>
-                            <InlineHelp id="checkout-display-order-help" className="mt-1">
-                                The storefront shows eligible methods from top to bottom.
-                            </InlineHelp>
+                            <p className="mt-1 text-xs text-muted-foreground">The storefront shows eligible methods from top to bottom.</p>
                         </div>
-                        {orderedEnabledMethods.length > 0 ? (
-                            <ol
-                                className="divide-y rounded-md border"
-                                aria-label="Checkout payment method display order"
-                                aria-describedby="checkout-display-order-help"
-                            >
-                                {orderedEnabledMethods.map((method, index, list) => (
-                                    <li key={method} className="flex min-h-12 items-center gap-3 px-3 py-2">
-                                        <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{index + 1}</span>
-                                        <span className="min-w-0 flex-1 text-sm font-medium">{META[method].label}</span>
-                                        {defaultMethod === method && <Badge variant="secondary" className="text-[11px]">Default</Badge>}
-                                        <div className="flex shrink-0 gap-1">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-11 w-11 sm:h-9 sm:w-9"
-                                                aria-label={`Move ${META[method].label} up`}
-                                                onClick={() => moveMethod(method, -1)}
-                                                disabled={index === 0 || savingMethods}
-                                            >
-                                                <ArrowUp className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-11 w-11 sm:h-9 sm:w-9"
-                                                aria-label={`Move ${META[method].label} down`}
-                                                onClick={() => moveMethod(method, 1)}
-                                                disabled={index === list.length - 1 || savingMethods}
-                                            >
-                                                <ArrowDown className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ol>
-                        ) : (
-                            <EmptyState
-                                compact
-                                icon={CreditCard}
-                                heading="No method is offered at checkout"
-                                body="Turn on a gateway below to place it in the buyer's payment step."
-                            />
-                        )}
+                        <ol className="divide-y rounded-md border" aria-label="Checkout payment method display order">
+                            {methodOrder.filter((method) => enabledMethods.has(method)).map((method, index, orderedMethods) => (
+                                <li key={method} className="flex min-h-12 items-center gap-3 px-3 py-2">
+                                    <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+                                    <span className="min-w-0 flex-1 text-sm font-medium">{META[method].label}</span>
+                                    {defaultMethod === method && <Badge variant="secondary" className="text-[11px]">Default</Badge>}
+                                    <div className="flex shrink-0 gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            aria-label={`Move ${META[method].label} up`}
+                                            onClick={() => moveMethod(method, -1)}
+                                            disabled={index === 0 || savingMethods}
+                                        >
+                                            <ArrowUp className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9"
+                                            aria-label={`Move ${META[method].label} down`}
+                                            onClick={() => moveMethod(method, 1)}
+                                            disabled={index === orderedMethods.length - 1 || savingMethods}
+                                        >
+                                            <ArrowDown className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
                     </div>
-                </div>
-            </SettingsSection>
+                </CardContent>
+                {!canSaveMethods && !methodsLoadError && checkoutFlowSettings && (
+                    <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>Select at least one setup-complete, provider-enabled method allowed by the current checkout flow.</span>
+                    </div>
+                )}
+                <CardFooter className="justify-between gap-2 border-t px-4 py-3">
+                    <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={resetMethods} disabled={!methodsDirty || savingMethods}>
+                        Reset
+                    </Button>
+                    <Button type="button" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void saveMethods()} disabled={savingMethods || !canSaveMethods || !methodsDirty}>
+                        {savingMethods && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                        Save payment methods
+                    </Button>
+                </CardFooter>
+            </Card>
 
-            <SettingsSection
-                title="Gateways"
-                description="Connect a provider, then decide whether buyers see it at checkout."
-                contentClassName="p-0 sm:p-0"
-            >
-                <IndexTable
-                    items={ALL_METHODS}
-                    columns={gatewayColumns}
-                    getRowId={(method) => method}
-                    label="Payment gateways"
-                    stickyHeader={false}
-                    className="space-y-0"
-                    empty={(
-                        <EmptyState
-                            bordered={false}
-                            icon={CreditCard}
-                            heading="No payment gateway is available"
-                            body="Gateways appear here once the platform exposes them to this store."
-                        />
-                    )}
-                    rowActions={(method) => method === "cod" ? null : (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-11 w-11 sm:h-9 sm:w-9"
-                                    aria-label={`${META[method].label} actions`}
-                                >
-                                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => openConfigure(method)}>
-                                    <Settings2 className="h-4 w-4" aria-hidden="true" />
-                                    Configure credentials
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                />
-            </SettingsSection>
-
-            <Dialog
-                open={configureGateway !== null}
-                onOpenChange={(open) => { if (!open) setConfigureGateway(null); }}
-            >
-                <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-                    {configureGateway && configureGateway !== "cod" ? ((method: MethodKey) => {
+            <Accordion type="multiple" value={expanded} onValueChange={handleAccordion}>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {ALL_METHODS.map((method) => {
                         const meta = META[method];
+                        const isOpen = expanded.includes(method);
+                        const selected = enabledMethods.has(method);
+                        const outcome = getMethodOutcome(method);
+                        const gatewayLoaded = method === "cod" || loadedGateways.current.has(method);
                         const gatewayLoadError = gatewayLoadErrors[method];
-                        const gatewayLoaded = loadedGateways.current.has(method);
+                        const gatewayNotice = outcome.state === "hidden_by_flow"
+                            ? getFlowHiddenReason(method) ?? outcome.description
+                            : outcome.state === "visible" || outcome.state === "ready_hidden"
+                                ? null
+                                : outcome.description;
+                        const toggleDisabled = !selected && !outcome.canSelect;
                         return (
-                            <>
-                                <DialogHeader>
-                                    <DialogTitle className="flex items-center gap-2">
-                                        <meta.Mark />
-                                        {meta.label} credentials
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                        Saved here and used for every {meta.label} payment session. Buyer visibility is controlled by the toggle on the gateway row.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                {loadingGw === method ? (
-                                    <SkeletonPage
-                                        showHeader={false}
-                                        sections={1}
-                                        rowsPerSection={4}
-                                        label={`Loading ${meta.label} setup`}
-                                        className="[&_[data-testid=skeleton-page-section]]:grid-cols-1"
-                                    />
-                                ) : gatewayLoadError ? (
-                                    <Alert variant="destructive">
-                                        <AlertTriangle className="h-4 w-4" />
-                                        <AlertTitle>Gateway settings unavailable</AlertTitle>
-                                        <AlertDescription className="space-y-3">
-                                            <p>{gatewayLoadError}</p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="min-h-11 sm:min-h-9"
-                                                onClick={() => void loadCreds(method, true)}
-                                            >
-                                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                                Retry
-                                            </Button>
-                                        </AlertDescription>
-                                    </Alert>
-                                ) : !gatewayLoaded ? (
-                                    <SkeletonPage
-                                        showHeader={false}
-                                        sections={1}
-                                        rowsPerSection={4}
-                                        label={`Loading ${meta.label} setup`}
-                                        className="[&_[data-testid=skeleton-page-section]]:grid-cols-1"
-                                    />
-                                ) : method === "stripe" ? (
-                                    <StripeForm s={stripe} set={setStripe} conf={stripeConf} saving={savingStripe} dirty={stripeDirty}
-                                        onReset={() => savedStripe && setStripe({ ...savedStripe })}
-                                        onSave={() => saveGw("stripe", stripe, setSavingStripe)} />
-                                ) : method === "sslcommerz" ? (
-                                    <SSLForm s={ssl} set={setSsl} conf={sslConf} saving={savingSsl} dirty={sslDirty}
-                                        onReset={() => savedSsl && setSsl({ ...savedSsl })}
-                                        onSave={() => saveGw("sslcommerz", ssl, setSavingSsl)} />
-                                ) : (
-                                    <PolarForm s={polar} set={setPolar} conf={polarConf} saving={savingPolar} dirty={polarDirty}
-                                        onReset={() => savedPolar && setPolar({ ...savedPolar })}
-                                        onSave={() => saveGw("polar", polar, setSavingPolar)} onHelp={() => setShowPolarHelp(true)} />
+                            <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
+                                <div className={`p-3.5 ${meta.headerBg}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            <meta.Mark />
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h3 className="text-sm font-medium">{meta.label}</h3>
+                                                    <OutcomeBadge outcome={outcome} />
+                                                </div>
+                                                <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{meta.desc}</p>
+                                                {method !== "cod" ? (
+                                                    <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                                                        {outcome.environmentLabel}
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <label htmlFor={`toggle-${method}`} className="flex min-h-11 shrink-0 cursor-pointer flex-col items-end justify-center gap-1">
+                                            <Switch
+                                                id={`toggle-${method}`}
+                                                checked={enabledMethods.has(method)}
+                                                aria-label={`Show ${meta.label} at checkout`}
+                                                disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
+                                                onCheckedChange={(v) => toggleMethod(method, v)}
+                                            />
+                                            <span className="max-w-20 text-right text-[11px] font-normal leading-3 text-muted-foreground">At checkout</span>
+                                        </label>
+                                    </div>
+                                    {gatewayNotice && (
+                                        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-background/80 px-3 py-2 text-xs text-foreground">
+                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                            <span>{gatewayNotice}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {method !== "cod" && (
+                                    <AccordionPrimitive.Header className="flex">
+                                        <AccordionPrimitive.Trigger className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 border-t border-border/50 text-xs text-muted-foreground transition-colors hover:text-foreground [&[data-state=open]>svg]:rotate-180">
+                                            {isOpen ? "Hide" : "Configure"} credentials
+                                            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
+                                        </AccordionPrimitive.Trigger>
+                                    </AccordionPrimitive.Header>
                                 )}
-                            </>
+                                {method !== "cod" && (
+                                    <AccordionContent className="px-4 pb-4">
+                                        {loadingGw === method ? (
+                                            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading {meta.label} setup…</div>
+                                        ) : gatewayLoadError ? (
+                                            <Alert variant="destructive" className="mt-3">
+                                                <AlertTriangle className="h-4 w-4" />
+                                                <AlertTitle>Gateway settings unavailable</AlertTitle>
+                                                <AlertDescription className="space-y-3">
+                                                    <p>{gatewayLoadError}</p>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => void loadCreds(method, true)}
+                                                    >
+                                                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                                        Retry
+                                                    </Button>
+                                                </AlertDescription>
+                                            </Alert>
+                                        ) : !gatewayLoaded ? (
+                                            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading {meta.label} setup…</div>
+                                        ) : method === "stripe" ? (
+                                            <StripeForm s={stripe} set={setStripe} conf={stripeConf} saving={savingStripe} dirty={stripeDirty}
+                                                onReset={() => savedStripe && setStripe({ ...savedStripe })}
+                                                onSave={() => saveGw("stripe", stripe, setSavingStripe)} />
+                                        ) : method === "sslcommerz" ? (
+                                            <SSLForm s={ssl} set={setSsl} conf={sslConf} saving={savingSsl} dirty={sslDirty}
+                                                onReset={() => savedSsl && setSsl({ ...savedSsl })}
+                                                onSave={() => saveGw("sslcommerz", ssl, setSavingSsl)} />
+                                        ) : method === "polar" ? (
+                                            <PolarForm s={polar} set={setPolar} conf={polarConf} saving={savingPolar} dirty={polarDirty}
+                                                onReset={() => savedPolar && setPolar({ ...savedPolar })}
+                                                onSave={() => saveGw("polar", polar, setSavingPolar)} onHelp={() => setShowPolarHelp(true)} />
+                                        ) : null}
+                                    </AccordionContent>
+                                )}
+                            </AccordionItem>
                         );
-                    })(configureGateway) : null}
-                </DialogContent>
-            </Dialog>
+                    })}
+                </div>
+            </Accordion>
 
             <Dialog open={showPolarHelp} onOpenChange={setShowPolarHelp}>
-                <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+                <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5 text-indigo-600" /> Polar setup guide</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5 text-indigo-600" /> Polar Setup Guide</DialogTitle>
                         <DialogDescription>Follow these steps to integrate Polar with your store.</DialogDescription>
                     </DialogHeader>
                     <PolarSetupGuide />
@@ -881,11 +742,10 @@ function StripeForm({ s, set, conf, saving, dirty, onReset, onSave }: {
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="stripe-enabled" className="text-sm">Provider enabled</Label>
-                    <InlineHelp id="stripe-enabled-help">Allows Stripe sessions after credentials are complete.</InlineHelp>
+                    <p className="text-xs text-muted-foreground">Allows Stripe sessions after credentials are complete.</p>
                 </div>
                 <Switch
                     id="stripe-enabled"
-                    aria-describedby="stripe-enabled-help"
                     checked={s.enabled}
                     onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
                 />
@@ -896,17 +756,20 @@ function StripeForm({ s, set, conf, saving, dirty, onReset, onSave }: {
                 </Label>
                 <PasswordInput id="stripe-secret" value={s.secretKey} onChange={(v) => set((p) => ({ ...p, secretKey: v }))}
                     placeholder="sk_live_... or sk_test_..." configured={conf.secret} />
-                <InlineHelp><ExtLink href="https://dashboard.stripe.com/apikeys">dashboard.stripe.com/apikeys</ExtLink></InlineHelp>
+                <p className="text-xs text-muted-foreground"><ExtLink href="https://dashboard.stripe.com/apikeys">dashboard.stripe.com/apikeys</ExtLink></p>
             </div>
             <div className="space-y-1.5">
                 <Label htmlFor="stripe-pub" className="text-sm">Publishable Key</Label>
-                <Input id="stripe-pub" type="text" value={s.publishableKey} className="min-h-11 font-mono sm:min-h-9"
+                <Input id="stripe-pub" type="text" value={s.publishableKey} className="font-mono"
                     onChange={(e) => set((p) => ({ ...p, publishableKey: e.target.value }))} placeholder="pk_live_... or pk_test_..." />
                 <div className="flex min-h-6 items-center justify-between gap-3 text-xs text-muted-foreground">
                     <span>Key environment</span>
-                    <StatusBadge tone={keyEnvironment === "mixed" ? "critical" : "neutral"} srLabel="Key environment:">
+                    <Badge
+                        variant={keyEnvironment === "mixed" ? "destructive" : "outline"}
+                        className="h-5 rounded px-1.5 text-xs font-medium"
+                    >
                         {environmentLabel}
-                    </StatusBadge>
+                    </Badge>
                 </div>
             </div>
             <div className="space-y-1.5">
@@ -915,7 +778,7 @@ function StripeForm({ s, set, conf, saving, dirty, onReset, onSave }: {
                 </Label>
                 <PasswordInput id="stripe-wh" value={s.webhookSecret} onChange={(v) => set((p) => ({ ...p, webhookSecret: v }))}
                     placeholder="whsec_..." configured={conf.webhook} />
-                <InlineHelp>Add endpoint <code className="rounded bg-muted px-1 text-xs">/api/v1/webhooks/stripe</code> in Stripe webhooks.</InlineHelp>
+                <p className="text-xs text-muted-foreground">Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/stripe</code> in Stripe webhooks.</p>
             </div>
             {keyEnvironment === "live" && s.enabled && (
                 <LiveWarning message="Live mode enabled. Real cards will be charged." />
@@ -934,11 +797,10 @@ function SSLForm({ s, set, conf, saving, dirty, onReset, onSave }: {
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="ssl-enabled" className="text-sm">Provider enabled</Label>
-                    <InlineHelp id="ssl-enabled-help">Allows SSLCommerz sessions after credentials are complete.</InlineHelp>
+                    <p className="text-xs text-muted-foreground">Allows SSLCommerz sessions after credentials are complete.</p>
                 </div>
                 <Switch
                     id="ssl-enabled"
-                    aria-describedby="ssl-enabled-help"
                     checked={s.enabled}
                     onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
                 />
@@ -947,7 +809,7 @@ function SSLForm({ s, set, conf, saving, dirty, onReset, onSave }: {
             {!s.sandbox && s.enabled && <LiveWarning message="Live mode enabled. Real payments will be processed." />}
             <div className="space-y-1.5">
                 <Label htmlFor="ssl-id" className="text-sm">Store ID</Label>
-                <Input id="ssl-id" type="text" value={s.storeId} className="min-h-11 font-mono sm:min-h-9"
+                <Input id="ssl-id" type="text" value={s.storeId} className="font-mono"
                     onChange={(e) => set((p) => ({ ...p, storeId: e.target.value }))} placeholder="your_store_id" />
             </div>
             <div className="space-y-1.5">

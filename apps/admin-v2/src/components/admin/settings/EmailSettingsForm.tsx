@@ -5,10 +5,12 @@ import {
   Cloud,
   ExternalLink,
   KeyRound,
+  Loader2,
   Mail,
+  RotateCcw,
+  Save,
 } from "lucide-react";
 import { useEffect, useRef, useState, type SetStateAction } from "react";
-import { isReady } from "@scalius/shared/readiness";
 import { toast } from "sonner";
 
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -22,19 +24,21 @@ import {
 } from "~/lib/api-functions/settings";
 import { queryKeys } from "~/lib/query-keys";
 import { getSettingsLoadErrorMessage, mergeUneditedFields } from "~/hooks/use-settings-form";
-import {
-  ContextualSaveBar,
-  FormCard,
-  InlineHelp,
-  SettingsSection,
-  SkeletonPage,
-  StatusBadge,
-} from "../shell";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { OfficialProviderMark } from "./provider-marks";
+import { isReady } from "@scalius/shared/readiness";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -174,12 +178,9 @@ export default function EmailSettingsForm() {
       );
     }
     return (
-      <SkeletonPage
-        showHeader={false}
-        sections={2}
-        rowsPerSection={3}
-        label="Loading email delivery settings"
-      />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -193,24 +194,9 @@ export default function EmailSettingsForm() {
   const runtimeConfigured = settingsCurrent && isReady(data.readiness);
 
   return (
-    <div className="max-w-5xl">
-      <ContextualSaveBar
-        // The bar stays up through the confirming read so the navigation guard
-        // does not drop while the write is still settling.
-        isDirty={dirty || saveMutation.isPending}
-        saving={saveMutation.isPending}
-        saveDisabled={!dirty || retrying}
-        saveDisabledReason="Confirm the current settings before saving again."
-        canSave={canManage}
-        saveLabel="Save email settings"
-        allowSamePathNavigation
-        // The settings section picker is sticky on narrow widths.
-        stickyClassName="sticky top-15 z-30 lg:top-0"
-        onDiscard={() => setDraft(savedDraft)}
-        onSave={handleSave}
-      />
-
-      <div className="space-y-6">
+    <>
+      <UnsavedChangesGuard isDirty={dirty || saveMutation.isPending} isSubmitting={false} allowSamePathStateNavigation />
+      <div className="max-w-2xl space-y-5">
         {!canManage && (
           <Alert>
             <AlertDescription>
@@ -232,158 +218,171 @@ export default function EmailSettingsForm() {
           </Alert>
         )}
 
-        <FormCard contentClassName="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-md border bg-background/70">
-            <OfficialProviderMark provider={provider} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold">Transactional email</h3>
-              <span
-                title={runtimeConfigured
-                  ? "Credentials and sender are configured; delivery has not been tested."
-                  : undefined}
-              >
-                <StatusBadge
-                  tone={!settingsCurrent ? "neutral" : runtimeConfigured ? "success" : "attention"}
+        <Card>
+          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center">
+            <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-md border bg-background/70">
+              <OfficialProviderMark provider={provider} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold">Transactional email</h3>
+                <Badge
+                  variant={runtimeConfigured ? "default" : "secondary"}
+                  title={runtimeConfigured
+                    ? "Credentials and sender are configured; delivery has not been tested."
+                    : undefined}
                 >
                   {!settingsCurrent ? unavailableStatus : runtimeConfigured ? "Configured" : "Setup incomplete"}
-                </StatusBadge>
-              </span>
-              {dirty && <StatusBadge tone="attention">Unsaved changes</StatusBadge>}
+                </Badge>
+                {dirty && <Badge variant="outline">Unsaved changes</Badge>}
+              </div>
+              {settingsCurrent && !runtimeConfigured ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {data.readiness?.issues[0]?.message ?? "Add a sender and an available provider."}
+                </p>
+              ) : null}
             </div>
-            {settingsCurrent && !runtimeConfigured ? (
-              <InlineHelp className="mt-1">
-                {data.readiness?.issues[0]?.message ?? "Add a sender and an available provider."}
-              </InlineHelp>
-            ) : null}
-          </div>
-        </FormCard>
+          </CardContent>
+        </Card>
 
-        <SettingsSection
-          title="Primary provider"
-          description="The other configured provider is used as a fallback."
-        >
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button
-              type="button"
-              variant={provider === "cloudflare" ? "default" : "outline"}
-              className="h-auto min-h-16 justify-start gap-3 py-3"
-              aria-pressed={provider === "cloudflare"}
-              disabled={!canEdit}
-              onClick={() => setDraft((current) => ({ ...current!, provider: "cloudflare" }))}
-            >
-              <OfficialProviderMark provider="cloudflare" />
-              <span className="flex flex-col items-start">
-                <span>Cloudflare Email</span>
-                <span className="text-xs font-normal opacity-80">
-                  {!settingsCurrent ? unavailableStatus : data.cloudflareBindingConfigured ? "Binding available" : "Binding missing"}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Primary provider</CardTitle>
+            <CardDescription>
+              The other configured provider is used as a fallback.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant={provider === "cloudflare" ? "default" : "outline"}
+                className="h-auto min-h-16 justify-start gap-3 py-3"
+                aria-pressed={provider === "cloudflare"}
+                disabled={!canEdit}
+                onClick={() => setDraft((current) => ({ ...current!, provider: "cloudflare" }))}
+              >
+                <OfficialProviderMark provider="cloudflare" />
+                <span className="flex flex-col items-start">
+                  <span>Cloudflare Email</span>
+                  <span className="text-xs font-normal opacity-80">
+                    {!settingsCurrent ? unavailableStatus : data.cloudflareBindingConfigured ? "Binding available" : "Binding missing"}
+                  </span>
                 </span>
-              </span>
-            </Button>
-            <Button
-              type="button"
-              variant={provider === "resend" ? "default" : "outline"}
-              className="h-auto min-h-16 justify-start gap-3 py-3"
-              aria-pressed={provider === "resend"}
-              disabled={!canEdit}
-              onClick={() => setDraft((current) => ({ ...current!, provider: "resend" }))}
-            >
-              <OfficialProviderMark provider="resend" />
-              <span className="flex flex-col items-start">
-                <span>Resend</span>
-                <span className="text-xs font-normal opacity-80">
-                  {!settingsCurrent ? unavailableStatus : resendKeySaved ? "API key saved" : "API key missing"}
+              </Button>
+              <Button
+                type="button"
+                variant={provider === "resend" ? "default" : "outline"}
+                className="h-auto min-h-16 justify-start gap-3 py-3"
+                aria-pressed={provider === "resend"}
+                disabled={!canEdit}
+                onClick={() => setDraft((current) => ({ ...current!, provider: "resend" }))}
+              >
+                <OfficialProviderMark provider="resend" />
+                <span className="flex flex-col items-start">
+                  <span>Resend</span>
+                  <span className="text-xs font-normal opacity-80">
+                    {!settingsCurrent ? unavailableStatus : resendKeySaved ? "API key saved" : "API key missing"}
+                  </span>
                 </span>
-              </span>
-            </Button>
-          </div>
-        </SettingsSection>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {provider === "cloudflare" && (
-          <SettingsSection
-            title="Cloudflare Email"
-            description="Sends through the Worker EMAIL binding, so no key is stored here."
-            actions={settingsCurrent && data.cloudflareBindingConfigured ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            ) : undefined}
-          >
-            <div className="flex items-center gap-2 text-sm">
-              <Cloud className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <span>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Cloud className="h-4 w-4" />
+                Cloudflare Email
+                {settingsCurrent && data.cloudflareBindingConfigured && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                )}
+              </CardTitle>
+              <CardDescription>
                 Uses the Worker <code>EMAIL</code> binding.
-              </span>
-            </div>
-            <Button variant="outline" asChild className="mt-3 min-h-11 w-full sm:w-auto">
-              <a
-                href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/email"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Cloudflare Email <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          </SettingsSection>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
+                <a
+                  href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/email"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Cloudflare Email <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {provider === "resend" && (
-          <SettingsSection
-            title="Resend API key"
-            description="Create a sending key in Resend, then save it here."
-            actions={resendKeySaved ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            ) : undefined}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="resend-api-key" className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                API key
-              </Label>
-              <Input
-                id="resend-api-key"
-                type="password"
-                autoComplete="new-password"
-                placeholder={settingsCurrent ? resendKeySaved ? MASKED_VALUE : "re_xxxxxxxxxxxx" : ""}
-                value={draft.apiKey}
-                disabled={!canEdit}
-                aria-describedby="resend-api-key-help"
-                onChange={(event) => setDraft((current) => ({
-                  ...current!,
-                  apiKey: event.target.value,
-                }))}
-                className="h-11 font-mono sm:h-9"
-              />
-              <InlineHelp id="resend-api-key-help">
-                {!settingsCurrent && draft.apiKey === MASKED_VALUE
-                  ? checkingSettings ? "Checking saved key status…" : "Saved key status is unavailable. Retry to confirm it."
-                  : hasDraftResendKey
-                  ? "A new key will replace the saved key."
-                  : resendKeySaved
-                    ? "A key is saved. Clear this field and save to remove it."
-                    : "No key is saved."}
-              </InlineHelp>
-            </div>
-            <Button variant="outline" asChild className="mt-3 min-h-11 w-full sm:w-auto">
-              <a
-                href="https://resend.com/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Manage Resend keys <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          </SettingsSection>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <KeyRound className="h-4 w-4" />
+                Resend API key
+                {resendKeySaved && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                )}
+              </CardTitle>
+              <CardDescription>
+                Create a sending key in Resend, then save it here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="resend-api-key">API key</Label>
+                <Input
+                  id="resend-api-key"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={settingsCurrent ? resendKeySaved ? MASKED_VALUE : "re_xxxxxxxxxxxx" : ""}
+                  value={draft.apiKey}
+                  disabled={!canEdit}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current!,
+                    apiKey: event.target.value,
+                  }))}
+                  className="h-11 font-mono sm:h-9"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {!settingsCurrent && draft.apiKey === MASKED_VALUE
+                    ? checkingSettings ? "Checking saved key status…" : "Saved key status is unavailable. Retry to confirm it."
+                    : hasDraftResendKey
+                    ? "A new key will replace the saved key."
+                    : resendKeySaved
+                      ? "A key is saved. Clear this field and save to remove it."
+                      : "No key is saved."}
+                </p>
+              </div>
+              <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
+                <a
+                  href="https://resend.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Manage Resend keys <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
-        <SettingsSection
-          title="Sender address"
-          description="Every transactional email is sent from this address. Verify the domain with each provider you use."
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="email-sender" className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              Email address
-            </Label>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Mail className="h-4 w-4" />
+              Sender address
+            </CardTitle>
+            <CardDescription>
+              Verify this domain with each provider you use.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            <Label htmlFor="email-sender">Email address</Label>
             <Input
               id="email-sender"
               type="email"
@@ -397,9 +396,37 @@ export default function EmailSettingsForm() {
               }))}
               className="h-11 sm:h-9"
             />
+          </CardContent>
+        </Card>
+
+        {dirty || saveMutation.isPending ? (
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 sm:min-h-9"
+            disabled={!canEdit || !dirty}
+            onClick={() => setDraft(savedDraft)}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            className="min-h-11 sm:min-h-9 sm:min-w-32"
+            disabled={!canEdit || retrying || !dirty}
+            onClick={handleSave}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save changes
+          </Button>
           </div>
-        </SettingsSection>
+        ) : null}
       </div>
-    </div>
+    </>
   );
 }

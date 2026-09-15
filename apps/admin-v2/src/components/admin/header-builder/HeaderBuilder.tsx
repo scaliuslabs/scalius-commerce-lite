@@ -24,10 +24,6 @@ import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseHeaderDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
-import {
-  isNavigationConfigUnreadable,
-  navigationConfigNeedsNormalizationSave,
-} from "~/components/admin/settings/navigation-readiness";
 import { Card } from "~/components/ui/card";
 import { normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 
@@ -41,6 +37,10 @@ import type {
   HeaderBuilderProps,
 } from "./types";
 import { defaultHeaderConfig } from "./types";
+import {
+  isNavigationConfigUnreadable,
+  navigationConfigNeedsNormalizationSave,
+} from "~/components/admin/settings/navigation-readiness";
 
 const SocialLinksSection = lazy(() =>
   import("./SocialLinksSection").then((module) => ({

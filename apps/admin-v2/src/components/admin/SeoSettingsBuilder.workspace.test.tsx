@@ -35,25 +35,8 @@ describe("SEO outcome-first workspace", () => {
       expect(builderSource).toContain(authority);
     }
     expect(builderSource).toContain("Save discovery settings");
-    // The page draft saves through exactly one contextual save bar.
-    expect(builderSource).toContain("<ContextualSaveBar");
-    expect(builderSource).toContain("isDirty={isDirty || isSaving}");
-    expect(builderSource).toContain("allowSamePathNavigation");
-    expect(builderSource.match(/<ContextualSaveBar/g)).toHaveLength(1);
-    expect(builderSource).not.toContain("<UnsavedChangesGuard");
-  });
-
-  it("builds the workspace from the shared shell furniture", () => {
-    expect(builderSource).toContain('from "~/components/admin/shell"');
-    expect(builderSource).toContain("<SettingsSection");
-    expect(builderSource).toContain("<SkeletonPage");
-    expect(builderSource).toContain("<InlineHelp");
-    expect(builderSource).toContain("<FieldError");
-    expect(outcomeSource).toContain("<StatusBadge");
-    expect(outcomeSource).toContain("<EmptyState");
-    // Content loads into skeletons, and no per-section Save/Reset row remains.
-    expect(builderSource).not.toContain("animate-spin");
-    expect(builderSource).not.toContain("Reset");
+    expect(builderSource).toContain("<UnsavedChangesGuard");
+    expect(builderSource).toContain("{isDirty ? (");
   });
 
   it("keeps the nested return-policy editor shrink-safe beside the outcome rail", () => {

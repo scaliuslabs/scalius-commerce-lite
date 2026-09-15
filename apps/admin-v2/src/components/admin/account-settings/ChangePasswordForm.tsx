@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import { changePassword } from "~/lib/api-functions/auth-management";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
-import { FieldError, InlineHelp, SettingsSection } from "~/components/admin/shell";
 
 function getPasswordStrength(password: string) {
   if (!password) return { strength: 0, label: "", tone: "bg-muted" };
@@ -38,7 +43,6 @@ export function ChangePasswordForm() {
   const isHydrated = useHydrated();
 
   const passwordStrength = getPasswordStrength(newPassword);
-  const mismatch = Boolean(confirmPassword) && newPassword !== confirmPassword;
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -78,10 +82,17 @@ export function ChangePasswordForm() {
         isDirty={Boolean(currentPassword || newPassword || confirmPassword)}
         isSubmitting={isLoading}
       />
-      <SettingsSection
-        title="Password"
-        description="Changing the password signs this account out of nothing else; two-factor authentication still applies at the next sign-in."
-      >
+    <Card className="max-w-3xl rounded-xl shadow-none">
+      <CardHeader className="p-4 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <KeyRound className="h-4 w-4" />
+          Change password
+        </CardTitle>
+        <CardDescription>
+          Use at least 12 characters. Two-factor authentication remains required.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
         <form
           method="post"
           action="/admin/settings/account"
@@ -90,13 +101,13 @@ export function ChangePasswordForm() {
           noValidate
         >
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="currentPassword">Current password</Label>
             <div className="relative">
               <Input
@@ -126,7 +137,7 @@ export function ChangePasswordForm() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="newPassword">New password</Label>
             <div className="relative">
               <Input
@@ -138,7 +149,6 @@ export function ChangePasswordForm() {
                 autoComplete="new-password"
                 disabled={!isHydrated || isLoading}
                 minLength={12}
-                aria-describedby="newPassword-help"
                 className="min-h-11 pr-11 sm:min-h-9"
               />
               <Button
@@ -156,7 +166,7 @@ export function ChangePasswordForm() {
                 )}
               </Button>
             </div>
-            {newPassword ? (
+            {newPassword && (
               <div className="space-y-1.5">
                 <div
                   className="flex gap-1"
@@ -176,18 +186,14 @@ export function ChangePasswordForm() {
                     />
                   ))}
                 </div>
-                <InlineHelp id="newPassword-help">
+                <p className="text-xs text-muted-foreground">
                   Password strength: {passwordStrength.label}
-                </InlineHelp>
+                </p>
               </div>
-            ) : (
-              <InlineHelp id="newPassword-help">
-                Use at least 12 characters. Longer passphrases beat added symbols.
-              </InlineHelp>
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm new password</Label>
             <div className="relative">
               <Input
@@ -199,8 +205,6 @@ export function ChangePasswordForm() {
                 autoComplete="new-password"
                 disabled={!isHydrated || isLoading}
                 minLength={12}
-                aria-invalid={mismatch}
-                aria-describedby="confirmPassword-help"
                 className="min-h-11 pr-11 sm:min-h-9"
               />
               <Button
@@ -218,9 +222,9 @@ export function ChangePasswordForm() {
                 )}
               </Button>
             </div>
-            <FieldError id="confirmPassword-help">
-              {mismatch ? "Passwords do not match" : null}
-            </FieldError>
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-xs text-destructive">Passwords do not match</p>
+            )}
           </div>
 
           <Button
@@ -244,7 +248,8 @@ export function ChangePasswordForm() {
             )}
           </Button>
         </form>
-      </SettingsSection>
+      </CardContent>
+    </Card>
     </>
   );
 }

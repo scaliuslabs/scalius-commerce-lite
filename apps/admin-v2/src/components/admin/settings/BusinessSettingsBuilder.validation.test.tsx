@@ -42,8 +42,8 @@ vi.mock("~/lib/api-functions/settings", () => ({
   getBusinessSettings: vi.fn(),
   updateBusinessSettings: vi.fn(),
 }));
-vi.mock("@tanstack/react-router", () => ({
-  useBlocker: () => ({ status: "idle", proceed: vi.fn(), reset: vi.fn() }),
+vi.mock("../shared/UnsavedChangesGuard", () => ({
+  UnsavedChangesGuard: () => null,
 }));
 vi.mock("../media-manager", () => ({
   MediaManager: ({ trigger }: { trigger: ReactNode }) => trigger,
@@ -77,16 +77,9 @@ describe("BusinessSettingsBuilder native email validation", () => {
     await render();
     const form = host.querySelector("form") as HTMLFormElement;
     const email = host.querySelector("#business-email") as HTMLInputElement;
-    // The native submit stays in the form so the page still posts without
-    // JavaScript; the visible Save lives in the contextual save bar.
     const save = host.querySelector('button[type="submit"]') as HTMLButtonElement;
-    const saveBar = host.querySelector('[data-testid="contextual-save-bar"]')!;
-    const barSave = [...saveBar.querySelectorAll("button")].find((node) =>
-      node.textContent?.includes("Save business"),
-    ) as HTMLButtonElement;
 
     expect(form.method).toBe("post");
-    expect(barSave).toBeTruthy();
     expect(email.name).toBe("email");
     expect(Array.from(form.querySelectorAll("button:not([type='submit'])"))
       .every((button) => (button as HTMLButtonElement).type === "button")).toBe(true);
@@ -99,13 +92,5 @@ describe("BusinessSettingsBuilder native email validation", () => {
     email.value = "support@example.test";
     await act(async () => save.click());
     expect(formState.handleSubmit).toHaveBeenCalledOnce();
-
-    // The save bar goes through the same validated path.
-    email.value = "support@";
-    await act(async () => barSave.click());
-    expect(formState.handleSubmit).toHaveBeenCalledOnce();
-    email.value = "support@example.test";
-    await act(async () => barSave.click());
-    expect(formState.handleSubmit).toHaveBeenCalledTimes(2);
   });
 });

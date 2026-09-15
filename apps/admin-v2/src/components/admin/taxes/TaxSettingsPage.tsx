@@ -1,239 +1,158 @@
-import { useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Calculator, Layers3, MapPinned, ReceiptText, SlidersHorizontal } from "lucide-react";
+import { Calculator, CheckCircle2, CircleOff, Layers3, MapPinned, ReceiptText, SlidersHorizontal } from "lucide-react";
 
-import { EditorSheet } from "~/components/admin/shell/EditorSheet";
-import { PageHeader, type PageHeaderAction } from "~/components/admin/shell/PageHeader";
-import { PageTabs, type PageTabItem } from "~/components/admin/shell/PageTabs";
-import { SkeletonPage } from "~/components/admin/shell/SkeletonPage";
-import { StatusBadge, type StatusTone } from "~/components/admin/shell/StatusBadge";
-import { usePermissions } from "~/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import type { TaxClassRecord, TaxRateRecord } from "~/lib/api-functions/taxes";
-import { taxConfigurationQueryOptions } from "~/lib/api-query-options/taxes";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { taxConfigurationQueryOptions } from "@/lib/api-query-options/taxes";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { TaxClassesPanel } from "./TaxClassesPanel";
-import { TaxClassFormSheet } from "./TaxClassFormSheet";
 import { TaxClassificationsPanel } from "./TaxClassificationsPanel";
 import { TaxPreviewPanel } from "./TaxPreviewPanel";
-import { TaxRateFormSheet } from "./TaxRateFormSheet";
 import { TaxRatesPanel } from "./TaxRatesPanel";
 import { TaxSettingsPanel } from "./TaxSettingsPanel";
-import { getTaxReadiness, type TaxReadiness } from "./tax-readiness";
+import { getTaxReadiness } from "./tax-readiness";
 import type { TaxClassificationRouteState } from "./tax-classification-route-state";
-import {
-  resolveTaxWorkspaceTarget,
-  type TaxWorkspaceRouteSection,
-  type TaxWorkspaceSection,
-} from "./tax-workspace-sections";
+import type { TaxWorkspaceSection } from "./tax-workspace-sections";
 
-const TAX_WORKSPACE_PANEL_ID = "tax-workspace-panel";
-
-const tabs: readonly (PageTabItem & { value: TaxWorkspaceSection })[] = [
-  { value: "rates", label: "Rates", icon: MapPinned },
+const tabs = [
+  { value: "policy", label: "Policy", icon: SlidersHorizontal },
   { value: "classes", label: "Classes", icon: Layers3 },
-  { value: "settings", label: "Settings", icon: SlidersHorizontal },
-  { value: "classification", label: "Classification", icon: ReceiptText },
-];
-
-/** Readiness state maps onto one badge tone; the label always carries the meaning. */
-export const READINESS_TONES: Record<TaxReadiness["state"], StatusTone> = {
-  ready: "success",
-  attention: "attention",
-  off: "neutral",
-};
+  { value: "rates", label: "Rates", icon: MapPinned },
+  { value: "classification", label: "Catalog", icon: ReceiptText },
+  { value: "preview", label: "Preview", icon: Calculator },
+] as const;
 
 interface TaxSettingsPageProps {
   section: TaxWorkspaceSection;
   onSectionChange: (section: TaxWorkspaceSection) => void;
-  previewOpen: boolean;
-  onPreviewOpenChange: (open: boolean) => void;
   classificationRouteState: TaxClassificationRouteState;
   onClassificationRouteStateChange: (state: TaxClassificationRouteState) => void;
-}
-
-/** Loading shape shown while the tax configuration resolves. */
-export function TaxSettingsPageSkeleton() {
-  return (
-    <div className="container max-w-7xl py-6">
-      <SkeletonPage sections={2} rowsPerSection={4} label="Loading taxes" />
-    </div>
-  );
 }
 
 export function TaxSettingsPage({
   section,
   onSectionChange,
-  previewOpen,
-  onPreviewOpenChange,
   classificationRouteState,
   onClassificationRouteStateChange,
 }: TaxSettingsPageProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
-  const { data: configuration } = useSuspenseQuery(taxConfigurationQueryOptions());
+  const { data: configuration } = useSuspenseQuery(
+    taxConfigurationQueryOptions(),
+  );
   const readiness = getTaxReadiness(configuration);
-
-  const [rateEditor, setRateEditor] = useState<{
-    open: boolean;
-    editing: TaxRateRecord | null;
-    initialTaxClassId?: string;
-  }>({ open: false, editing: null });
-  const [classEditor, setClassEditor] = useState<{
-    open: boolean;
-    editing: TaxClassRecord | null;
-  }>({ open: false, editing: null });
-
-  /** Sends a readiness target (a deep-link value) to the tab or sheet that owns it. */
-  function openTarget(target: TaxWorkspaceRouteSection) {
-    const resolved = resolveTaxWorkspaceTarget(target);
-    if (resolved.preview) {
-      onPreviewOpenChange(true);
-      return;
-    }
-    onSectionChange(resolved.section);
-  }
-
-  function openRateEditor(rate: TaxRateRecord | null, initialTaxClassId?: string) {
-    setRateEditor({ open: true, editing: rate, initialTaxClassId });
-  }
-
-  const activeTab = tabs.find((tab) => tab.value === section) ?? tabs[0];
-  const readinessTarget = resolveTaxWorkspaceTarget(readiness.nextTab);
   const activeRateCount = configuration.rates.filter((rate) => rate.isActive).length;
-
-  const primaryAction: PageHeaderAction | undefined = section === "rates"
-    ? {
-        id: "add-rate",
-        label: "Add tax rate",
-        onClick: () => openRateEditor(null),
-        disabled: !canManage || configuration.classes.length === 0,
-        disabledReason: configuration.classes.length === 0
-          ? "Add a tax class before adding a rate."
-          : "You do not have permission to manage taxes.",
-      }
-    : section === "classes"
-      ? {
-          id: "add-class",
-          label: "Add tax class",
-          onClick: () => setClassEditor({ open: true, editing: null }),
-          disabled: !canManage,
-          disabledReason: "You do not have permission to manage taxes.",
-        }
-      : undefined;
-
-  const secondaryActions: PageHeaderAction[] = [
-    {
-      id: "preview",
-      label: "Preview calculation",
-      icon: Calculator,
-      onClick: () => onPreviewOpenChange(true),
-    },
-  ];
-  // Readiness that points at the preview is already covered by the button above.
-  if (!readinessTarget.preview && readinessTarget.section !== section) {
-    secondaryActions.push({
-      id: "readiness-next",
-      label: readiness.nextAction,
-      onClick: () => openTarget(readiness.nextTab),
-    });
-  }
+  const ReadinessIcon = readiness.state === "ready" ? CheckCircle2 : CircleOff;
 
   return (
-    <div className="container max-w-7xl py-6">
-      <PageHeader
-        title="Taxes"
-        primaryAction={primaryAction}
-        secondaryActions={secondaryActions}
-        status={(
-          <>
-            <StatusBadge tone={READINESS_TONES[readiness.state]} srLabel="Tax status:">
-              {readiness.title}
-            </StatusBadge>
-            <span>{readiness.description}</span>
-          </>
-        )}
-      />
-
-      <div className="space-y-6">
-        <PageTabs
-          tabs={tabs}
-          value={section}
-          onChange={(value) => onSectionChange(value as TaxWorkspaceSection)}
-          label="Tax workspace section"
-          panelId={TAX_WORKSPACE_PANEL_ID}
-        />
-
-        <div
-          id={TAX_WORKSPACE_PANEL_ID}
-          role="tabpanel"
-          aria-label={activeTab.label}
-        >
-          {section === "rates" ? (
-            <TaxRatesPanel
-              configuration={configuration}
-              canManage={canManage}
-              onCreateRate={(taxClassId) => openRateEditor(null, taxClassId)}
-              onEditRate={(rate) => openRateEditor(rate)}
-              onOpenClasses={() => onSectionChange("classes")}
-              onOpenPreview={() => onPreviewOpenChange(true)}
-            />
-          ) : null}
-          {section === "classes" ? (
-            <TaxClassesPanel
-              configuration={configuration}
-              canManage={canManage}
-              onCreateClass={() => setClassEditor({ open: true, editing: null })}
-              onEditClass={(taxClass) => setClassEditor({ open: true, editing: taxClass })}
-            />
-          ) : null}
-          {section === "settings" ? (
-            <TaxSettingsPanel
-              configuration={configuration}
-              canManage={canManage}
-              onOpenTarget={openTarget}
-            />
-          ) : null}
-          {section === "classification" ? (
-            <TaxClassificationsPanel
-              configuration={configuration}
-              canManage={canManage}
-              routeState={classificationRouteState}
-              onRouteStateChange={onClassificationRouteStateChange}
-            />
-          ) : null}
+    <div className="container max-w-7xl space-y-5 py-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Taxes</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tax classes, destination rates, and checkout preview.
+          </p>
         </div>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={configuration.settings.enabled ? "default" : "secondary"}>
+              {configuration.settings.enabled ? "Live calculation enabled" : "Calculation disabled"}
+            </Badge>
+            <Badge variant="outline">
+              {configuration.classes.length} {configuration.classes.length === 1 ? "class" : "classes"}
+            </Badge>
+            <Badge variant="outline">
+              {activeRateCount} active {activeRateCount === 1 ? "rate" : "rates"}
+            </Badge>
+        </div>
+      </header>
 
-      <TaxRateFormSheet
-        open={rateEditor.open}
-        onOpenChange={(open) => setRateEditor((current) => ({ ...current, open }))}
-        configuration={configuration}
-        canManage={canManage}
-        editing={rateEditor.editing}
-        initialTaxClassId={rateEditor.initialTaxClassId}
-      />
-      <TaxClassFormSheet
-        open={classEditor.open}
-        onOpenChange={(open) => setClassEditor((current) => ({ ...current, open }))}
-        canManage={canManage}
-        editing={classEditor.editing}
-      />
+      <Card>
+        <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <ReadinessIcon className={readiness.state === "ready" ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-muted-foreground"} aria-hidden="true" />
+              <h2 className="text-sm font-semibold">{readiness.title}</h2>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{readiness.description}</p>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+              {readiness.steps.map((step) => (
+                <div key={step.id} className="min-w-0 rounded-md border bg-muted/20 px-3 py-2">
+                  <dt className="flex items-center gap-1.5 text-xs font-medium">
+                    {step.ready ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" /> : <CircleOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+                    {step.label}
+                  </dt>
+                  <dd className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{step.detail}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <Button type="button" className="min-h-11 md:min-h-10" variant={readiness.state === "ready" ? "outline" : "default"} onClick={() => onSectionChange(readiness.nextTab)}>
+            {readiness.nextAction}
+          </Button>
+        </CardContent>
+      </Card>
 
-      <EditorSheet
-        open={previewOpen}
-        onOpenChange={onPreviewOpenChange}
-        width="md"
-        title="Preview calculation"
-        description={(
-          <>
-            {configuration.classes.length} {configuration.classes.length === 1 ? "class" : "classes"}
-            {" and "}
-            {activeRateCount} active {activeRateCount === 1 ? "rate" : "rates"} are saved.
-          </>
-        )}
-      >
-        <TaxPreviewPanel configuration={configuration} />
-      </EditorSheet>
+      <Tabs value={section} onValueChange={(value) => onSectionChange(value as TaxWorkspaceSection)} className="space-y-5">
+        <div className="sm:hidden">
+          <Select
+            value={section}
+            onValueChange={(value) =>
+              onSectionChange(value as TaxWorkspaceSection)
+            }
+          >
+            <SelectTrigger
+              className="min-h-11 bg-card"
+              aria-label="Tax workspace section"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabs.map((tab) => (
+                <SelectItem
+                  key={tab.value}
+                  value={tab.value}
+                  className="min-h-11"
+                >
+                  {tab.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <TabsList className="hidden h-auto w-full justify-start gap-1 rounded-lg border bg-muted/40 p-1 sm:flex">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <TabsTrigger key={tab.value} value={tab.value} className="min-h-11 shrink-0 gap-2 rounded-md px-3 py-2.5 md:min-h-10 sm:px-4">
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+        <TabsContent value="policy"><TaxSettingsPanel configuration={configuration} canManage={canManage} /></TabsContent>
+        <TabsContent value="classes"><TaxClassesPanel configuration={configuration} canManage={canManage} /></TabsContent>
+        <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} onOpenClasses={() => onSectionChange("classes")} onOpenPreview={() => onSectionChange("preview")} /></TabsContent>
+        <TabsContent value="classification">
+          <TaxClassificationsPanel
+            configuration={configuration}
+            canManage={canManage}
+            routeState={classificationRouteState}
+            onRouteStateChange={onClassificationRouteStateChange}
+          />
+        </TabsContent>
+        <TabsContent value="preview"><TaxPreviewPanel configuration={configuration} /></TabsContent>
+      </Tabs>
     </div>
   );
 }

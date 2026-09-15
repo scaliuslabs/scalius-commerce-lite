@@ -21,10 +21,7 @@ describe("SecuritySettingsBuilder contract", () => {
     expect(source).toContain("getInheritedSecuritySources");
     expect(source).toContain("merchantSources.map");
     expect(source).toContain('source.source ? "Trusted" : "Missing"');
-    // The page draft now saves through the single contextual save bar.
-    expect(source).toContain(
-      "isDirty={dirty || hasPendingInput || saveMutation.isPending}",
-    );
+    expect(source).toContain("{dirty || hasPendingInput ? (");
     expect(source).toContain("merchantListOpen");
     expect(source).toContain('merchantSources.length === 1 ? "origin" : "origins"');
     expect(source).not.toContain("Comma-separated domains");
@@ -35,24 +32,8 @@ describe("SecuritySettingsBuilder contract", () => {
     expect(source).toContain("normalizeMerchantCspSource");
     expect(source).toContain("serializeMerchantCspSources");
     expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
-    expect(source).toContain("<ContextualSaveBar");
-    expect(source).toContain('saveLabel="Save policy"');
-    expect(source).toContain("canSave={canManage}");
+    expect(source).toContain("<UnsavedChangesGuard");
     expect(source).toContain("setMerchantSources(savedMerchantSources)");
-  });
-
-  it("uses the shared shell furniture instead of ad hoc cards, spinners, and badges", () => {
-    expect(source).toContain('from "~/components/admin/shell"');
-    expect(source).toContain("<SettingsSection");
-    expect(source).toContain("<StatusBadge");
-    expect(source).toContain("<EmptyState");
-    expect(source).toContain("<SkeletonPage");
-    expect(source).toContain("<InlineHelp");
-    expect(source).toContain("<FieldError");
-    // No spinner content state and no per-section Save/Reset row survive.
-    expect(source).not.toContain("animate-spin");
-    expect(source).not.toContain("Reset");
-    expect(source).toContain("min-h-11");
   });
 
   it("keeps exact and wildcard trust semantics explicit", () => {

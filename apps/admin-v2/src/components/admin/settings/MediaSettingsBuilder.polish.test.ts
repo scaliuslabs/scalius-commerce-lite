@@ -17,24 +17,11 @@ describe("media delivery settings", () => {
     expect(source).toContain("onToggle={(event) => setAdvancedOpen");
   });
 
-  it("protects drafts and keeps save out of the clean page", () => {
-    // The page-level save bar replaces the old guard plus per-card button row:
-    // it renders nothing while clean and blocks navigation while dirty.
-    expect(source).toContain("<ContextualSaveBar");
-    expect(source).toContain("isDirty={isDirty || isSaving}");
-    expect(source).toContain("saving={isSaving}");
-    expect(source).toContain("allowSamePathNavigation");
-    expect(source).toContain("onDiscard={reset}");
-    expect(source).toContain("onSave={handleSubmit}");
-    expect(source).toContain('saveLabel="Save changes"');
-    expect(source).toContain("saveDisabled={!isDirty || !isLoaded}");
-    expect(source).not.toContain("<UnsavedChangesGuard");
-    expect(source).not.toContain("Reset\n");
-  });
-
-  it("loads into a skeleton instead of a content spinner", () => {
-    expect(source).toContain("<SkeletonPage");
-    expect(source).not.toContain("animate-spin");
+  it("protects drafts and hides clean-state actions", () => {
+    expect(source).toContain("<UnsavedChangesGuard isDirty={isDirty || isSaving} isSubmitting={false}");
+    expect(source).toContain("{isDirty ? (");
+    expect(source).toContain("Save changes");
+    expect(source).toContain("Reset");
   });
 
   it("keeps phone controls large enough to operate", () => {
