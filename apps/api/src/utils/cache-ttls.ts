@@ -5,27 +5,32 @@
  * instead of using magic numbers. This makes the cache strategy
  * auditable and adjustable from a single location.
  */
+/**
+ * One year is the longest edge residency Cloudflare honors. Every public route
+ * below is tag-purged by the merchant write that changes it (directly, then
+ * through the durable retry sweep), so the TTL is never the freshness
+ * mechanism; it is the ceiling that lets a rarely edited store stay warm.
+ */
+const EDGE_MAX_TTL = 365 * 86_400;
+
 export const CACHE_TTLS = {
-  /**
-   * 1 hour — event purges provide freshness; this is only the bounded safety
-   * fallback if both direct delivery and the durable retry path are unavailable.
-   */
-  AVAILABILITY: 3600,
+  /** Buyer-visible price and availability; purged on writes and stock band transitions */
+  AVAILABILITY: EDGE_MAX_TTL,
 
-  /** 1 hour — standard for content that changes occasionally (products, categories, pages, collections) */
-  STANDARD: 3600,
+  /** Mutation-purged content (categories, pages, collections, layout, navigation) */
+  STANDARD: EDGE_MAX_TTL,
 
-  /** 5 minutes — for data that changes frequently (search results, order lookups, shipping methods) */
-  SHORT: 300,
+  /** Checkout reference data purged by the "checkout" tag (shipping methods) */
+  SHORT: EDGE_MAX_TTL,
 
-  /** 10 minutes — for semi-static reference data (delivery locations) */
-  MEDIUM: 600,
+  /** Checkout reference data purged by the "checkout" tag (delivery locations) */
+  MEDIUM: EDGE_MAX_TTL,
 
-  /** 30 minutes — for attribute data that changes less often */
-  ATTRIBUTES: 1800,
+  /** Attribute definitions purged by the "attributes" tag */
+  ATTRIBUTES: EDGE_MAX_TTL,
 
-  /** 1 minute — for highly dynamic config (checkout gateway config) */
-  CHECKOUT_CONFIG: 60,
+  /** Checkout gateway readiness; purged by the "checkout" tag on every payment, delivery, or auth settings save */
+  CHECKOUT_CONFIG: EDGE_MAX_TTL,
 
   /** 0 — explicitly no caching (analytics config — served fresh) */
   NONE: 0,

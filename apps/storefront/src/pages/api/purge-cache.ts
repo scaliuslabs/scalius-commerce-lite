@@ -3,6 +3,7 @@ import { env as cfEnv } from "cloudflare:workers";
 
 import { deriveRuntimeTokens, type RequestRuntimeEnv } from "@/lib/api/runtime";
 import { getPurgeTokenFromHeaders, PURGE_TOKEN_HEADER } from "@/lib/purge-auth";
+import { warmPublicStorefrontCache } from "@/lib/public-worker-cache";
 
 export const prerender = false;
 
@@ -98,6 +99,14 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
   try {
     await nativePurger.purgeGroups(groups as string[]);
+    // Re-render the homepage into the fresh cache generation in the background
+    // so the purge does not hand the next visitor a cold miss.
+    const warm = warmPublicStorefrontCache(url.origin, nativePurger);
+    if (typeof locals.cfContext.waitUntil === "function") {
+      locals.cfContext.waitUntil(warm);
+    } else {
+      void warm;
+    }
     return json({ success: true, groups }, 200);
   } catch (error: unknown) {
     console.error("Native storefront cache purge failed:", error);

@@ -10,7 +10,7 @@ describe("cache workspace presentation", () => {
     const source = readSource("./CacheManager.tsx");
     expect(source).toContain("Public cache");
     expect(source).toContain("writes durably purge the affected domains");
-    expect(source).toContain("one-hour TTL is only a");
+    expect(source).toContain("stay warm");
     expect(source).not.toContain("Failed cache work");
     expect(source).not.toContain("warm queue");
     expect(source).not.toContain("KV prefix");

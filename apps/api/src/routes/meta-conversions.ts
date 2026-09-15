@@ -6,13 +6,14 @@ import {
   sendCapiEvent,
   type SendCapiEventResult,
 } from "@scalius/core/integrations/meta/conversions-api";
-import { getClientIp, rateLimit } from "@scalius/shared/rate-limit";
+import { getClientIp } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
 import { errorResponses, successEnvelope } from "../schemas/responses";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/cache-invalidation";
+import { enforceRateLimit } from "../utils/rate-limit";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 export const META_CAPI_BROWSER_CIRCUIT_KEY =
   "meta-capi:browser-events:circuit";
@@ -103,7 +104,9 @@ function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): b
 async function readMetaCapiBrowserCircuit(kv: KVNamespace | undefined) {
   if (!kv) return null;
   try {
-    const raw = await kv.get(META_CAPI_BROWSER_CIRCUIT_KEY);
+    // Read on every browser event; the edge-cached read keeps the circuit
+    // check off the KV origin for a minute at a time.
+    const raw = await kv.get(META_CAPI_BROWSER_CIRCUIT_KEY, { cacheTtl: 60 });
     if (!raw) return null;
     return JSON.parse(raw) as {
       reason?: string;
@@ -188,17 +191,19 @@ app.openapi(postEventRoute, async (c) => {
         eventId,
       });
     }
+  }
 
-    const ip = getClientIp(c.req.raw);
-    const result = await rateLimit({
-      kv,
-      key: `meta-events:${ip}`,
-      limit: 120,
-      windowMs: 60_000,
-    });
-    if (!result.allowed) {
-      throw new RateLimitError("Too many tracking events. Please try again later.");
-    }
+  // Browser tracking fires on every page view, so this limit must not spend a
+  // KV write per event; the native binding is free and the KV counter is only
+  // the fallback for environments without it.
+  const allowed = await enforceRateLimit({
+    limiter: c.env.META_EVENTS_RATE_LIMITER,
+    kv,
+    key: `meta-events:${getClientIp(c.req.raw)}`,
+    limit: 120,
+  });
+  if (!allowed) {
+    throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 
   const db = c.get("db");

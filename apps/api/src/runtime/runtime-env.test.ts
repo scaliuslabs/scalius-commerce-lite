@@ -194,7 +194,6 @@ describe("composeApiRuntimeEnv", () => {
     expect(cache.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(PRODUCTION_CONFIG),
-      { expirationTtl: 300 },
     );
     expect(composed.PLATFORM_CONFIG).toEqual(PRODUCTION_CONFIG);
     expect(composed.STOREFRONT_URL).toBe("https://shop.example.com");

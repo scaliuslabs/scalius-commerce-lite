@@ -210,6 +210,63 @@ export function getPublicStorefrontCachePolicy(
   };
 }
 
+/** Public paths re-rendered into the native cache right after a tag purge. */
+export const PUBLIC_STOREFRONT_WARM_PATHS = ["/"] as const;
+
+/**
+ * A tag purge returns before it has propagated to every cache node, so a
+ * fetch issued immediately can still be served by the doomed entry and is
+ * then evicted a moment later. Warm after propagation has had time to land,
+ * and once more later so a slow purge still ends on a populated entry; a
+ * second pass on an already-warm entry is a cache hit and costs no render.
+ */
+export const PUBLIC_STOREFRONT_WARM_DELAYS_MS = [4_000, 12_000] as const;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Re-populates the cache-enabled entrypoint for the highest-traffic public
+ * pages after a purge so the next visitor lands on a warm entry instead of
+ * paying for the cold render. Bodies are drained so the runtime can finish
+ * storing each response. Failures are logged and never propagate: warming is
+ * an optimization, the purge itself already succeeded.
+ */
+export async function warmPublicStorefrontCache(
+  origin: string,
+  fetcher: { fetch(request: Request): Promise<Response> },
+  options: {
+    paths?: readonly string[];
+    delaysMs?: readonly number[];
+  } = {},
+): Promise<void> {
+  const paths = options.paths ?? PUBLIC_STOREFRONT_WARM_PATHS;
+  const delaysMs = options.delaysMs ?? PUBLIC_STOREFRONT_WARM_DELAYS_MS;
+  const requests = paths
+    .map((path) => new Request(new URL(path, origin).toString(), {
+      headers: { Accept: "text/html" },
+    }))
+    .filter((request) => getPublicStorefrontCachePolicy(request) !== null);
+  if (requests.length === 0) return;
+
+  let elapsedMs = 0;
+  for (const delayMs of delaysMs) {
+    if (delayMs > elapsedMs) {
+      await sleep(delayMs - elapsedMs);
+      elapsedMs = delayMs;
+    }
+    await Promise.all(requests.map(async (request) => {
+      try {
+        const response = await fetcher.fetch(request);
+        await response.arrayBuffer();
+      } catch (error: unknown) {
+        console.warn(`[Cache] Storefront warm-up failed for ${request.url}:`, error);
+      }
+    }));
+  }
+}
+
 export function normalizePublicStorefrontCacheTags(
   tags: readonly string[],
 ): string[] {
