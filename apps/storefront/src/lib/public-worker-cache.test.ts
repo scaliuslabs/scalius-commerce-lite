@@ -8,6 +8,7 @@ import {
   normalizePublicStorefrontCacheTags,
   recoverCurrentStorefrontBuild,
   responseHasStorefrontBuild,
+  warmPublicStorefrontCache,
 } from "./public-worker-cache";
 
 describe("public storefront Worker cache policy", () => {
@@ -45,7 +46,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(left).toMatchObject({
       canonicalUrl: "https://shop.example/about?campaign=sale",
-      edgeTtlSeconds: 3600,
+      edgeTtlSeconds: 365 * 86_400,
       tags: ["pages", "products", "layout", "media"],
     });
     expect(right?.canonicalUrl).toBe(left?.canonicalUrl);
@@ -63,7 +64,7 @@ describe("public storefront Worker cache policy", () => {
   it.each([
     ["checkout", "/checkout", {}],
     ["recovery", "/payment-recovery", {}],
-    ["cookie", "/about", { Cookie: "session=private" }],
+    ["cookie", "/about", { Cookie: "_fbp=fb.1.1; cs_tok=private" }],
     ["authorization", "/about", { Authorization: "Bearer private" }],
   ])("keeps $0 request off the cache lane", (_label, path, headers) => {
     const normalizedHeaders = new Map(
@@ -77,8 +78,9 @@ describe("public storefront Worker cache policy", () => {
       url: `https://shop.example${path}`,
       headers: {
         get: (name: string) => normalizedHeaders.get(name.toLowerCase()) ?? null,
+        has: (name: string) => normalizedHeaders.has(name.toLowerCase()),
       },
-    } as Request;
+    } as unknown as Request;
 
     expect(
       getPublicStorefrontCachePolicy(request),
@@ -93,11 +95,11 @@ describe("public storefront Worker cache policy", () => {
     ["/search?q=fish", ["search", "products", "layout", "media"]],
     ["/blog/news", ["pages", "products", "layout", "media"]],
     ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
-  ])("bounds availability-bearing public route %s to five seconds", (path, tags) => {
+  ])("keeps availability-bearing public route %s resident for the one-year edge maximum", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(3600);
+    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
     expect(policy?.tags).toEqual(tags);
   });
 
@@ -107,12 +109,62 @@ describe("public storefront Worker cache policy", () => {
     ["/sitemap.xml", ["discovery", "products", "categories", "collections", "pages", "layout"]],
     ["/blog/feed.xml", ["pages", "products", "discovery"]],
     ["/.well-known/ucp", ["discovery", "products", "layout"]],
-  ])("keeps mutation-purged content route %s resident for one day", (path, tags) => {
+  ])("keeps mutation-purged content route %s resident for the one-year edge maximum", (path, tags) => {
     const policy = getPublicStorefrontCachePolicy(
       new Request(`https://shop.example${path}`),
     );
-    expect(policy?.edgeTtlSeconds).toBe(86_400);
+    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
     expect(policy?.tags).toEqual(tags);
+  });
+
+  it("keeps tracking-cookie visitors on the shared cache lane", () => {
+    const policy = getPublicStorefrontCachePolicy(
+      new Request("https://shop.example/products/fish", {
+        headers: { Cookie: "_fbp=fb.1.1; _fbc=fb.1.2.abc; _ga=GA1.1; scalius_gclid=x" },
+      }),
+    );
+    expect(policy?.canonicalUrl).toBe("https://shop.example/products/fish");
+  });
+
+  it("re-renders the homepage through the cache-enabled entrypoint after a purge", async () => {
+    const fetch = vi.fn(async (request: Request) => {
+      expect(request.url).toBe("https://shop.example/");
+      expect(request.headers.has("Cookie")).toBe(false);
+      return new Response("<html/>", { headers: { "Content-Type": "text/html" } });
+    });
+    await warmPublicStorefrontCache("https://shop.example", { fetch }, { delaysMs: [0] });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("warms again after the purge propagation delays", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(async () => new Response("<html/>"));
+      const warm = warmPublicStorefrontCache("https://shop.example", { fetch });
+      expect(fetch).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      await warm;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips warm-up paths that are not public cache candidates and swallows failures", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetch = vi.fn(async () => {
+      throw new Error("render failed");
+    });
+    await warmPublicStorefrontCache(
+      "https://shop.example",
+      { fetch },
+      { paths: ["/checkout", "/"], delaysMs: [0] },
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it("keeps product variant-specific HTML off the shared cache lane", () => {
@@ -139,7 +191,7 @@ describe("public storefront Worker cache policy", () => {
 
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      "public, max-age=3600, must-revalidate",
+      `public, max-age=${365 * 86_400}, must-revalidate`,
     );
     expect(response.headers.get("Cache-Tag")).toBe(
       "pages,products,layout,media",

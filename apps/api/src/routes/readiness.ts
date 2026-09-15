@@ -319,6 +319,18 @@ app.get("/readyz", async (c) => {
       ["limit"],
       "rate limit",
     ),
+    bindingMethodsCheck(
+      "meta_events_rate_limiter",
+      env.META_EVENTS_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
+    ),
+    bindingMethodsCheck(
+      "abandoned_checkout_rate_limiter",
+      env.ABANDONED_CHECKOUT_RATE_LIMITER,
+      ["limit"],
+      "rate limit",
+    ),
     configCheck(env),
     platformCheck(env),
   ];

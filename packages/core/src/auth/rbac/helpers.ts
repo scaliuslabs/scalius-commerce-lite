@@ -14,7 +14,10 @@ import {
 import type { PermissionName, UserPermissionContext, PermissionCheckResult } from "./types";
 import { getAllPermissionNames } from "./permissions";
 
-const CACHE_TTL = 300; // 5 minutes in KV
+// Every role or assignment mutation clears the affected entries, so the TTL is
+// only a backstop; a long window keeps admin sessions from re-writing KV every
+// five minutes.
+const CACHE_TTL = 3600;
 const PERMISSION_CACHE_VERSION = getRbacSeedCacheKey();
 
 interface D1PermissionResolution {

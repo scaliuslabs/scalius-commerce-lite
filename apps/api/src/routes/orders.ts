@@ -77,7 +77,8 @@ import {
 } from "../utils/cache-invalidation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../utils/encryption-key";
-import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
+import { getClientIp } from "@scalius/shared/rate-limit";
+import { enforceRateLimit } from "../utils/rate-limit";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
   getCheckoutStatusKvKey,
@@ -165,23 +166,7 @@ function checkoutRateLimitTenant(env: Env, requestUrl: string): string {
   }
 }
 
-async function checkCheckoutRateLimit(options: {
-  limiter: RateLimit | undefined;
-  kv: KVNamespace | undefined;
-  key: string;
-  limit: number;
-}): Promise<boolean> {
-  if (options.limiter) {
-    return (await options.limiter.limit({ key: options.key })).success;
-  }
-  if (!options.kv) return true;
-  return (await rateLimit({
-    kv: options.kv,
-    key: options.key,
-    limit: options.limit,
-    windowMs: 60_000,
-  })).allowed;
-}
+const checkCheckoutRateLimit = enforceRateLimit;
 
 async function enforceCheckoutRateLimits(
   env: Env,

@@ -141,7 +141,8 @@ catalog intent prefetch globally for truly anonymous pages.
 - `StorefrontGateway` classifies public requests before cache lookup.
 - `CachedPublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
   a route-owned `Cloudflare-CDN-Cache-Control` directive. Availability-bearing
-  HTML/feed routes use one hour; mutation-purged discovery routes use one day.
+  every public route uses the one-year edge maximum. Tag purges own freshness,
+  so the TTL is only the ceiling that keeps a rarely edited store warm.
 - `StorefrontGateway` removes those two internal directives after the native
   entrypoint lookup so downstream caches cannot reinterpret them. The browser
   still receives `no-store` HTML, while `X-Cache-Status` and
@@ -183,9 +184,17 @@ validates and deduplicates at most 30 known domain groups, then awaits
 `CachedPublicStorefront.purgeGroups()`. Unknown groups are ignored by the cache
 owner. `GET` and query-string tokens are rejected. A failed purge
 is observable but never rolls back an already committed database mutation; the
-one-hour availability TTL is the failure-only correctness backstop, while the
-one-day content TTL is the final backstop for low-frequency mutation-purged routes.
-Normal successful merchant writes purge their semantic tags immediately.
+one-year edge TTL is the ceiling Cloudflare honors, not a freshness mechanism:
+every public route is purged by the write that changes it.
+Normal successful merchant writes purge their semantic tags immediately, and a
+successful purge re-renders the homepage into the new cache generation in the
+background so the next visitor does not pay for the cold miss.
+
+Only the named private-session cookies (`cs_tok`, `cs_auth`, `stp_theme_preview`)
+or an `Authorization` / `X-API-Token` header move a request onto the uncached
+lane. Analytics and ad-click cookies (`_fbp`, `_fbc`, `_ga`, click-id mirrors)
+never change a public render; the gateway strips the `Cookie` header before the
+cache-enabled entrypoint so every anonymous visitor shares one cached entry.
 
 Persistent public product, search, and feed projections are intentionally
 availability-band stable. `availabilityBand` is the buyer-visible inventory
@@ -200,8 +209,8 @@ authority.
 
 | Constant | Seconds | Purpose |
 |----------|---------|---------|
-| `CACHE_TTL.AVAILABILITY` | 3,600 | Failure-only backstop for buyer-visible price and availability; writes normally purge immediately |
-| `CACHE_TTL.LONG` | 86,400 | Edge residency for low-frequency routes whose merchant writes await semantic purges |
+| `CACHE_TTL.AVAILABILITY` | 31,536,000 (1 year, the edge maximum) | Buyer-visible price and availability; writes and stock band transitions purge immediately |
+| `CACHE_TTL.LONG` | 31,536,000 (1 year, the edge maximum) | Low-frequency routes whose merchant writes purge their semantic tags |
 
 `withEdgeCache()` is request-only deduplication. Persistent public TTL policy is
 centralized in `public-worker-cache.ts`.
