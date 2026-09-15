@@ -196,6 +196,10 @@ registration, and every full-page redirect. Requests that arrive outside the
 prefix are redirected (GET and HEAD) or refused with `DASHBOARD_BASE_PATH`; the
 health probe keeps answering at the host root.
 
+Local `vite dev` is the one place the prefix does not apply: Vite serves its own
+module URLs, which the Worker cannot route. Develop at the host root and set the
+prefix on the deployment.
+
 The storefront treats the first segment of the prefix as reserved: a CMS page
 can no longer be created or renamed to it, and a visitor who requests it is
 redirected to the dashboard before any page lookup happens. At most four

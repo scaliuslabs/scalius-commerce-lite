@@ -202,12 +202,30 @@ export function dashboardBasePathFromUrl(dashboardUrl: unknown): string {
 
 /**
  * The first path segment of the dashboard URL, or null when the dashboard is
- * served at a host root. The storefront treats it as a reserved route so a
- * CMS page can never shadow the dashboard on a shared host.
+ * served at a host root. The storefront treats it as a reserved route so a CMS
+ * page can never shadow the dashboard on a shared host.
+ *
+ * The reservation is only real when the two share an origin: a dashboard on its
+ * own hostname takes nothing away from the storefront's URL space, so passing
+ * `storefrontUrl` keeps a legitimate page slug usable there. It releases the
+ * slug only on proof — when both origins parse and differ. An unknown or
+ * unreadable storefront origin keeps the reservation, because letting a CMS
+ * page shadow the dashboard is the worse failure.
  */
-export function dashboardReservedSegment(dashboardUrl: unknown): string | null {
+export function dashboardReservedSegment(
+  dashboardUrl: unknown,
+  storefrontUrl?: unknown,
+): string | null {
   const basePath = dashboardBasePathFromUrl(dashboardUrl);
-  return basePath ? basePath.split("/")[1] ?? null : null;
+  if (!basePath) return null;
+  if (provenDifferentOrigin(dashboardUrl, storefrontUrl)) return null;
+  return basePath.split("/")[1] ?? null;
+}
+
+function provenDifferentOrigin(left: unknown, right: unknown): boolean {
+  const first = parseHttpUrl(left);
+  const second = parseHttpUrl(right);
+  return first !== null && second !== null && first.origin !== second.origin;
 }
 
 /** Prefixes a root-relative dashboard path with the runtime base path exactly once. */

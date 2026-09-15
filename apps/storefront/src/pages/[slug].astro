@@ -6,7 +6,11 @@ import Layout from "../layouts/Layout.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
-import { getRuntimeDashboardUrl, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import {
+  getRuntimeDashboardUrl,
+  getRuntimeStorefrontUrl,
+  setRuntimeImageCdnPolicy,
+} from "@/lib/api/runtime";
 import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -57,7 +61,7 @@ if (!validSlugPattern.test(slug)) {
 
 // 5. A dashboard served below a path prefix on this host reserves its first
 // segment. Send the visitor to the dashboard instead of rendering a page.
-if (slug === dashboardReservedSegment(getRuntimeDashboardUrl())) {
+if (slug === dashboardReservedSegment(getRuntimeDashboardUrl(), getRuntimeStorefrontUrl())) {
   return new Response(null, {
     status: 302,
     headers: {

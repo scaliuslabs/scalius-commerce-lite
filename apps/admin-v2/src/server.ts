@@ -115,6 +115,11 @@ function rewritePath(request: Request, pathname: string): Request {
  * server-function calls are built at the host root, so they are translated
  * here; page and API routes keep their prefixed URL because the router owns
  * the same base path.
+ *
+ * `vite dev` is the one exception: its virtual module URLs (`/@id/...`) are
+ * served by Vite itself, which this Worker cannot reach, and translating them
+ * only makes the router redirect back into the prefix. Local development runs
+ * the dashboard at the host root; the prefix is a deployment shape.
  */
 async function handleWithBasePath(request: Request, env: Env, basePath: string): Promise<Response> {
   if (!basePath) return startHandler(request);
