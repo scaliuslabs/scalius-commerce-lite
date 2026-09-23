@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
-const Toaster = lazy(() =>
-  import("./sonner").then((module) => ({ default: module.Toaster })),
-);
+const Toaster = lazy(() => import("./sonner").then((module) => ({ default: module.Toaster })));
 
 export function DeferredToaster() {
   const [mounted, setMounted] = useState(false);
@@ -15,7 +13,7 @@ export function DeferredToaster() {
 
   return (
     <Suspense fallback={null}>
-      <Toaster richColors closeButton position="top-right" />
+      <Toaster />
     </Suspense>
   );
 }

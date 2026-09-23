@@ -1,16 +1,7 @@
 import { useId, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { cn } from "@scalius/shared/utils";
-import {
-  Table as TableIcon,
-  Eraser,
-  Merge,
-  Split,
-  Rows,
-  Columns,
-  ChevronsLeftRight,
-} from "lucide-react";
+import { Table as TableIcon, Eraser, Merge, Split, Rows, Columns, ChevronsLeftRight, type LucideIcon } from "lucide-react";
 import { Button } from "../button";
 import { Input } from "../input";
 import { Label } from "../label";
@@ -21,8 +12,7 @@ import { insertRichTextTable } from "./tiptap-insertions";
 
 interface TiptapTablePopoverProps {
   editor: Editor;
-  buttonSize: string;
-  iconSize: string;
+  compact?: boolean;
   tableRows: string;
   tableCols: string;
   tableWithHeader: boolean;
@@ -32,13 +22,38 @@ interface TiptapTablePopoverProps {
   isFullscreen?: boolean;
 }
 
-const MOBILE_ACTION_CLASS =
-  "min-h-11 justify-start gap-1.5 px-2 text-[11px] sm:min-h-9";
+type TableCommand =
+  | "addColumnBefore"
+  | "addColumnAfter"
+  | "deleteColumn"
+  | "addRowBefore"
+  | "addRowAfter"
+  | "deleteRow"
+  | "deleteTable"
+  | "mergeCells"
+  | "splitCell"
+  | "toggleHeaderColumn"
+  | "toggleHeaderRow"
+  | "toggleHeaderCell";
+
+const TABLE_ACTIONS: ReadonlyArray<{ command: TableCommand; label: string; icon: LucideIcon }> = [
+  { command: "addColumnBefore", label: "Add column before", icon: ChevronsLeftRight },
+  { command: "addColumnAfter", label: "Add column after", icon: ChevronsLeftRight },
+  { command: "deleteColumn", label: "Delete column", icon: Columns },
+  { command: "addRowBefore", label: "Add row before", icon: Rows },
+  { command: "addRowAfter", label: "Add row after", icon: Rows },
+  { command: "deleteRow", label: "Delete row", icon: Rows },
+  { command: "deleteTable", label: "Delete table", icon: Eraser },
+  { command: "mergeCells", label: "Merge cells", icon: Merge },
+  { command: "splitCell", label: "Split cell", icon: Split },
+  { command: "toggleHeaderColumn", label: "Header column", icon: Columns },
+  { command: "toggleHeaderRow", label: "Header row", icon: Rows },
+  { command: "toggleHeaderCell", label: "Header cell", icon: TableIcon },
+];
 
 export function TiptapTablePopover({
   editor,
-  buttonSize,
-  iconSize,
+  compact = false,
   tableRows,
   tableCols,
   tableWithHeader,
@@ -54,40 +69,22 @@ export function TiptapTablePopover({
   const [open, setOpen] = useState(false);
   const rows = Number(tableRows);
   const cols = Number(tableCols);
-  const canInsert =
-    Number.isInteger(rows) &&
-    rows >= 1 &&
-    rows <= 20 &&
-    Number.isInteger(cols) &&
-    cols >= 1 &&
-    cols <= 10;
+  const rowsValid = Number.isInteger(rows) && rows >= 1 && rows <= 20;
+  const colsValid = Number.isInteger(cols) && cols >= 1 && cols <= 10;
   const tableState = useEditorState({
     editor,
     selector: ({ editor: currentEditor }) => ({
       isInTable: currentEditor.isActive("table"),
-      canAddColumnBefore: currentEditor.can().addColumnBefore(),
-      canAddColumnAfter: currentEditor.can().addColumnAfter(),
-      canDeleteColumn: currentEditor.can().deleteColumn(),
-      canAddRowBefore: currentEditor.can().addRowBefore(),
-      canAddRowAfter: currentEditor.can().addRowAfter(),
-      canDeleteRow: currentEditor.can().deleteRow(),
-      canDeleteTable: currentEditor.can().deleteTable(),
-      canMergeCells: currentEditor.can().mergeCells(),
-      canSplitCell: currentEditor.can().splitCell(),
-      canToggleHeaderColumn: currentEditor.can().toggleHeaderColumn(),
-      canToggleHeaderRow: currentEditor.can().toggleHeaderRow(),
-      canToggleHeaderCell: currentEditor.can().toggleHeaderCell(),
+      can: Object.fromEntries(
+        TABLE_ACTIONS.map(({ command }) => [command, currentEditor.can()[command]()]),
+      ) as Record<TableCommand, boolean>,
     }),
   });
   const isInTable = tableState.isInTable;
 
   const addTable = () => {
-    if (!canInsert) return;
-    const inserted = insertRichTextTable(editor, {
-      rows,
-      cols,
-      withHeaderRow: tableWithHeader,
-    });
+    if (!rowsValid || !colsValid) return;
+    const inserted = insertRichTextTable(editor, { rows, cols, withHeaderRow: tableWithHeader });
     if (!inserted) return;
     setOpen(false);
     requestAnimationFrame(() => {
@@ -103,217 +100,73 @@ export function TiptapTablePopover({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
+              size={compact ? "icon-sm" : "icon"}
               aria-label={isInTable ? "Edit table" : "Insert table"}
-              className={cn(buttonSize, isInTable && "bg-accent")}
+              aria-pressed={isInTable || undefined}
               onMouseDown={(event) => event.preventDefault()}
             >
-              <TableIcon className={iconSize} />
+              <TableIcon />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={5}>
-          <p className="text-xs">{isInTable ? "Edit table" : "Insert table"}</p>
-        </TooltipContent>
+        <TooltipContent side="bottom">{isInTable ? "Edit table" : "Insert table"}</TooltipContent>
       </Tooltip>
 
-      <PopoverContent
-        className={cn(
-          "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3",
-          isFullscreen && "z-[10001]",
-        )}
-      >
+      <PopoverContent className={isFullscreen ? "z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3" : "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3"}>
         {!isInTable ? (
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor={rowsId} className="text-xs">
-                  Rows
-                </Label>
+                <Label htmlFor={rowsId}>Rows</Label>
                 <Input
                   id={rowsId}
                   type="number"
                   value={tableRows}
                   onChange={(event) => onTableRowsChange(event.target.value)}
-                  aria-label="Table rows"
-                  className="h-11 text-sm sm:h-9"
                   min="1"
                   max="20"
                   inputMode="numeric"
-                  aria-invalid={Boolean(tableRows) && !(Number.isInteger(rows) && rows >= 1 && rows <= 20)}
+                  aria-invalid={Boolean(tableRows) && !rowsValid}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={columnsId} className="text-xs">
-                  Columns
-                </Label>
+                <Label htmlFor={columnsId}>Columns</Label>
                 <Input
                   id={columnsId}
                   type="number"
                   value={tableCols}
                   onChange={(event) => onTableColsChange(event.target.value)}
-                  aria-label="Table columns"
-                  className="h-11 text-sm sm:h-9"
                   min="1"
                   max="10"
                   inputMode="numeric"
-                  aria-invalid={Boolean(tableCols) && !(Number.isInteger(cols) && cols >= 1 && cols <= 10)}
+                  aria-invalid={Boolean(tableCols) && !colsValid}
                 />
               </div>
             </div>
-            <label
-              htmlFor={headerId}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-1 text-sm"
-            >
-              <Switch
-                id={headerId}
-                checked={tableWithHeader}
-                onCheckedChange={onTableWithHeaderChange}
-              />
+            <label htmlFor={headerId} className="flex min-h-11 cursor-pointer items-center gap-2 text-body sm:min-h-8">
+              <Switch id={headerId} checked={tableWithHeader} onCheckedChange={onTableWithHeaderChange} />
               Include a header row
             </label>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={addTable}
-              disabled={!canInsert}
-              className="min-h-11 w-full text-sm sm:min-h-9"
-            >
-              <TableIcon className="mr-1 h-3.5 w-3.5" /> Insert table
+            <Button type="button" onClick={addTable} disabled={!rowsValid || !colsValid} className="w-full">
+              <TableIcon /> Insert table
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Up to 20 rows and 10 columns.
-            </p>
+            <p className="text-body text-muted-foreground">Up to 20 rows and 10 columns.</p>
           </>
         ) : (
-          <>
-            <p className="text-xs font-medium text-muted-foreground">
-              Table actions
-            </p>
-            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-              <Button
+          <div className="grid gap-0.5 sm:grid-cols-2">
+            {TABLE_ACTIONS.map(({ command, label, icon: Icon }) => (
+              <button
+                key={command}
                 type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addColumnBefore().run()}
-                disabled={!tableState.canAddColumnBefore}
-                className={MOBILE_ACTION_CLASS}
+                onClick={() => editor.chain().focus()[command]().run()}
+                disabled={!tableState.can[command]}
+                className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
               >
-                <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column before
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addColumnAfter().run()}
-                disabled={!tableState.canAddColumnAfter}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <ChevronsLeftRight className="h-3.5 w-3.5 rotate-90" /> Add column after
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteColumn().run()}
-                disabled={!tableState.canDeleteColumn}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Columns className="h-3.5 w-3.5" /> Delete column
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addRowBefore().run()}
-                disabled={!tableState.canAddRowBefore}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Rows className="h-3.5 w-3.5" /> Add row before
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().addRowAfter().run()}
-                disabled={!tableState.canAddRowAfter}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Rows className="h-3.5 w-3.5" /> Add row after
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteRow().run()}
-                disabled={!tableState.canDeleteRow}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Rows className="h-3.5 w-3.5" /> Delete row
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().deleteTable().run()}
-                disabled={!tableState.canDeleteTable}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Eraser className="h-3.5 w-3.5" /> Delete table
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().mergeCells().run()}
-                disabled={!tableState.canMergeCells}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Merge className="h-3.5 w-3.5" /> Merge cells
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().splitCell().run()}
-                disabled={!tableState.canSplitCell}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Split className="h-3.5 w-3.5" /> Split cell
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().toggleHeaderColumn().run()}
-                disabled={!tableState.canToggleHeaderColumn}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Columns className="h-3.5 w-3.5" /> Header column
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().toggleHeaderRow().run()}
-                disabled={!tableState.canToggleHeaderRow}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <Rows className="h-3.5 w-3.5" /> Header row
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => editor.chain().focus().toggleHeaderCell().run()}
-                disabled={!tableState.canToggleHeaderCell}
-                className={MOBILE_ACTION_CLASS}
-              >
-                <TableIcon className="h-3.5 w-3.5" /> Header cell
-              </Button>
-            </div>
-          </>
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                {label}
+              </button>
+            ))}
+          </div>
         )}
       </PopoverContent>
     </Popover>
