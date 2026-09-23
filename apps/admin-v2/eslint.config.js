@@ -76,7 +76,7 @@ export default [
       },
     },
     // Feature screens warn until the post-integration sweep; then switch to "error".
-    rules: designSystem("warn"),
+    rules: designSystem("error"),
   },
   {
     files: ["src/components/ui/**/*.tsx"],

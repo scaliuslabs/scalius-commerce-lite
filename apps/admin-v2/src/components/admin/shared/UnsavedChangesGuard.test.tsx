@@ -44,7 +44,7 @@ describe("UnsavedChangesGuard", () => {
     vi.restoreAllMocks();
   });
 
-  it("announces Keep Editing as a cancelled guarded navigation", async () => {
+  it("announces Stay as a cancelled guarded navigation", async () => {
     const cancelled = vi.fn();
     window.addEventListener(ADMIN_NAVIGATION_CANCELLED_EVENT, cancelled);
 
@@ -55,7 +55,7 @@ describe("UnsavedChangesGuard", () => {
     });
 
     const keepEditing = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent === "Keep Editing",
+      (button) => button.textContent === "Stay",
     );
     expect(keepEditing).toBeTruthy();
 
@@ -83,7 +83,7 @@ describe("UnsavedChangesGuard", () => {
     });
 
     const discardChanges = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent === "Discard Changes",
+      (button) => button.textContent === "Leave page",
     );
     expect(discardChanges).toBeTruthy();
 
