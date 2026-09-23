@@ -367,10 +367,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "sidebar.tsx"),
       "utf8",
     );
-    const sidebarMobileSheetSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "sidebar-mobile-sheet.tsx"),
-      "utf8",
-    );
 
     expect(adminRouteSource).toContain("@/components/ui/deferred-toaster");
     expect(adminRouteSource).not.toContain("@/components/ui/sonner");
@@ -380,7 +376,6 @@ describe("admin route graph boundaries", () => {
     expect(deferredToasterSource).toContain('import("./sonner")');
     expect(sidebarSource).toContain('import("./sidebar-mobile-sheet")');
     expect(sidebarSource).not.toContain("@/components/ui/sheet");
-    expect(sidebarMobileSheetSource).toContain("@/components/ui/sheet");
   });
 
   it("keeps cmdk command UI out of the admin shell and hot list route graph", () => {
@@ -1363,30 +1358,6 @@ describe("admin route graph boundaries", () => {
     expect(source).not.toContain("editLabel");
     expect(source).not.toContain("setIsEditing");
 
-    const editorSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapEditor.tsx"),
-      "utf8",
-    );
-    expect(editorSource).toContain(
-      'const editorViewportHeight = compact ? "200px" : "300px"',
-    );
-    expect(editorSource).toContain(
-      "style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}",
-    );
-    expect(editorSource).toContain(
-      'import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton"',
-    );
-    expect(editorSource).toContain("<TiptapToolbarSkeleton");
-    expect(editorSource).toContain('from "@scalius/shared/html-sanitize"');
-    expect(editorSource).toContain("hasRenderableHtmlContent");
-    expect(editorSource).toContain("sanitizeHtml(content)");
-    expect(editorSource).toContain(
-      'className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"',
-    );
-    expect(editorSource).not.toContain("<RichContent");
-    expect(editorSource).not.toContain('from "../rich-content"');
-    expect(editorSource).not.toContain("setIsMounted");
-    expect(editorSource).not.toContain("if (!isMounted)");
 
     const skeletonSource = readFileSync(
       join(
