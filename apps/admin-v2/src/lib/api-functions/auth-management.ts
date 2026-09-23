@@ -149,12 +149,6 @@ export interface StartTwoFactorMethodChallengeResponse {
   expiresAt: string;
 }
 
-export interface VerifyTwoFactorInput {
-  code: string;
-  trustDevice?: false;
-  type?: TwoFactorMethod | "backup";
-}
-
 export interface TwoFactorInfoResponse {
   method: string;
   twoFactorEnabled: boolean;
@@ -284,12 +278,6 @@ export const startTwoFactorMethodChallenge = createServerFn({ method: "POST" })
       "/auth/2fa/method-challenge",
       data,
     );
-  });
-
-export const verify2fa = createServerFn({ method: "POST" })
-  .validator((data: VerifyTwoFactorInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessageResponse>("/auth/2fa/verify", data);
   });
 
 export const get2faInfo = createServerFn({ method: "GET" }).handler(

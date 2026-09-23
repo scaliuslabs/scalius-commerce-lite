@@ -15,7 +15,6 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
-import { POST as polarPost } from "../../../../pages/api/checkout/polar-session";
 import { POST as sslcommerzPost } from "../../../../pages/api/checkout/sslcommerz-session";
 import { POST as stripePost } from "../../../../pages/api/checkout/stripe-intent";
 import { POST as stripeReconcilePost } from "../../../../pages/api/checkout/stripe-reconcile";
@@ -44,11 +43,6 @@ describe("checkout payment-session proxies", () => {
       endpoint: "https://storefront.example.test/api/checkout/sslcommerz-session",
       post: sslcommerzPost,
     },
-    {
-      label: "Polar",
-      endpoint: "https://storefront.example.test/api/checkout/polar-session",
-      post: polarPost,
-    },
   ])("fails closed for $label when the receipt cookie is missing", async ({ endpoint, post }) => {
     const response = await post({
       request: new Request(endpoint, {
@@ -74,11 +68,6 @@ describe("checkout payment-session proxies", () => {
       label: "SSLCommerz",
       endpoint: "https://storefront.example.test/api/checkout/sslcommerz-session",
       post: sslcommerzPost,
-    },
-    {
-      label: "Polar",
-      endpoint: "https://storefront.example.test/api/checkout/polar-session",
-      post: polarPost,
     },
   ])("preserves backend 202 processing responses for $label", async ({ endpoint, post }) => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
@@ -123,7 +112,7 @@ describe("checkout payment-session proxies", () => {
     expect(json).not.toHaveProperty("gatewayUrl");
     expect(json).not.toHaveProperty("clientSecret");
     expect(mocks.apiFetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/payment\/(?:stripe\/intent|sslcommerz\/session|polar\/session)$/),
+      expect.stringMatching(/\/payment\/(?:stripe\/intent|sslcommerz\/session)$/),
       expect.objectContaining({
         method: "POST",
         cache: "no-store",

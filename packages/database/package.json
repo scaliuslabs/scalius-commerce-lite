@@ -12,7 +12,6 @@
     "./postgres-adapter": "./src/postgres-adapter.ts",
     "./postgres-checkout": "./src/postgres-checkout.ts",
     "./inventory-authority": "./src/inventory-authority.ts",
-    "./migration-control": "./src/migration-control.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
     "./migration-plan": "./src/migration-plan.ts",
     "./schema-contract": "./src/schema-contract.ts",

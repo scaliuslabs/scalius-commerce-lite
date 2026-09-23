@@ -126,7 +126,7 @@ import {
 function createEnv() {
   return {
     BUCKET: { id: "generated-media-bucket" },
-    ORDER_NOTIFICATIONS_QUEUE: {
+    JOBS_QUEUE: {
       send: vi.fn(),
     },
   } as unknown as Env;
@@ -433,7 +433,7 @@ describe("runScheduledMaintenance", () => {
     );
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     });
     expect(mocks.flushPendingMetaPurchaseOutbox).toHaveBeenCalledWith({
@@ -459,7 +459,7 @@ describe("runScheduledMaintenance", () => {
     });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
       db: mocks.db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       orderId: "order_refunded",
       notificationType: "order_refunded",
       dedupeKey: "refund-reconcile:order_refunded:rfa_1:full",
@@ -471,7 +471,7 @@ describe("runScheduledMaintenance", () => {
     });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
       db: mocks.db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       orderId: "order_processing",
       notificationType: "refund_processing",
       dedupeKey: "refund:order_processing:refund_order_processing_2:processing",
@@ -483,7 +483,7 @@ describe("runScheduledMaintenance", () => {
     });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(3, {
       db: mocks.db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       orderId: "order_failed",
       notificationType: "refund_failed",
       dedupeKey: "refund:order_failed:refund_order_failed_2:failed",
@@ -555,7 +555,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
       db: mocks.db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       orderId: "order_stripe_refunded",
       notificationType: "order_partially_refunded",
       dedupeKey: "refund-reconcile:order_stripe_refunded:rfa_stripe_external_re_1:partial",

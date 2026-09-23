@@ -169,7 +169,7 @@ describe("admin order payment recovery links", () => {
       order: recoveryOrder({ paymentStatus: PaymentStatus.UNPAID }),
       attempts: [{
         orderId: "order_1",
-        gateway: PaymentMethod.POLAR,
+        gateway: PaymentMethod.SSLCOMMERZ,
         paymentType: "full",
         amount: 120,
         status: "processing",

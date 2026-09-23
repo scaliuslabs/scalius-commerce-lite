@@ -112,7 +112,7 @@ async function enqueueReconciledRefundNotifications(
   for (const notification of notifications) {
     const result = await enqueueOrderRefundNotificationForOrder({
       db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       orderId: notification.orderId,
       notificationType: notification.notificationType,
       dedupeKey: notification.dedupeKey,
@@ -269,7 +269,7 @@ async function runScheduledMaintenanceInner(
   const notificationOutbox = await timed("notification_outbox_flush", () =>
     flushPendingOrderNotificationOutbox({
       db,
-      queue: env.ORDER_NOTIFICATIONS_QUEUE,
+      queue: env.JOBS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
     }),
   );

@@ -25,7 +25,7 @@ describe("hosted storefront continuation boundaries", () => {
   });
 
   it("keeps OTP queue payloads opaque and clears challenges on queue failure", () => {
-    expect(source).toContain("c.env.AUTH_OTP_QUEUE.send(result.queuePayload)");
+    expect(source).toContain("c.env.JOBS_QUEUE.send(result.queuePayload)");
     expect(source).toContain("deleteCustomerAuthOtpChallenge");
     expect(source).toContain("deleteOrderPaymentRecoveryChallenge");
     expect(source).not.toMatch(/console\.(?:log|error)\([^\n]*(?:body\.code|result\.session\.token|receiptToken)/);

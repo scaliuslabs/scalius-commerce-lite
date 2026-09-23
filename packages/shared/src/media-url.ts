@@ -1,8 +1,8 @@
 /**
  * Resolves any media URL to a canonical storefront-safe URL.
  *
- * Handles bare R2 object keys, already-complete URLs, local/CDN-optimized
- * paths, and dashboard-configured CDN aliases.
+ * Handles bare R2 object keys, already-complete URLs, local paths, and
+ * dashboard-configured CDN aliases.
  *
  * This is a pure function: it accepts CDN configuration as parameters rather
  * than reading app runtime state directly. Each app is responsible for loading
@@ -147,11 +147,6 @@ export function resolveMediaUrl(
     }
 
     return trimmed;
-  }
-
-  // Already a Cloudflare-optimized path
-  if (trimmed.startsWith("/cdn-cgi/")) {
-    return isSafeLocalPath(trimmed) ? trimmed : "";
   }
 
   // Local asset path (e.g. /img/no-image.webp)

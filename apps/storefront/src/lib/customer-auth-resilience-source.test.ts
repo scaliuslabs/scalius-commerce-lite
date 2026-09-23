@@ -112,7 +112,6 @@ describe("customer auth resilience source boundaries", () => {
 
   it("keeps phone restoration component-owned and preserves explicit buyer clears", () => {
     const cartSource = readStorefrontSource("src/pages/cart.astro");
-    const phoneSource = readStorefrontSource("src/components/PhoneField.tsx");
 
     expect(cartSource).toContain(
       'for (const field of [\n      "customerName",\n      "customerEmail"',
@@ -120,10 +119,6 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).toContain(
       'new CustomEvent("phone-prefill", { detail: draft.customerPhone })',
     );
-    expect(phoneSource).toContain(
-      'Object.prototype.hasOwnProperty.call(draft, "customerPhone")',
-    );
-    expect(phoneSource).toContain('return result.ok ? result.value : "";');
     expect(cartSource).toContain("const buyerEditedFields = new Set<string>();");
     expect(cartSource).toContain("!buyerEditedFields.has(field)");
     expect(cartSource).toContain('input.id === "customerPhone-input" ? "customerPhone" : input.name');
@@ -136,16 +131,6 @@ describe("customer auth resilience source boundaries", () => {
     expect(cartSource).not.toContain(
       "phoneInput.value = phoneValidation.value;",
     );
-    expect(phoneSource).toContain("name={name}");
-    expect(phoneSource).toContain('type="hidden"');
-    expect(phoneSource).toContain("data-e164-value={canonicalValue}");
-    expect(phoneSource).toContain(
-      "persistCanonicalValue(normalizePhone(nextValue));",
-    );
-    expect(phoneSource).toContain(
-      "syncCheckoutTransferSession({ customerPhone: phone });",
-    );
-    expect(phoneSource).toContain("if (buyerHasEdited.current) return;");
     expect(cartSource).toContain("input.dataset.e164Value !== undefined");
     expect(cartSource).toContain(
       "checkoutData.customerPhone = phoneValidation.value;",

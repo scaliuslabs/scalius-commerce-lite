@@ -4,17 +4,14 @@
  */
 
 export const GALLERY_CONFIG = {
-  imageTransforms: {
-    // Covers the largest rendered thumbnail without shipping a larger source
-    // into a roughly 76–96px slot.
-    preview: 120,
-    previewQuality: 62,
-    // Keep the eager mobile LCP image below the Slow-4G transfer budget while
-    // retaining enough detail for the largest single-column phone layout.
-    mobileDisplay: 420,
-    mobileQuality: 52,
-    display: 600,
-    zoom: 1400,
+  // Pre-generated rendition widths per slot (see @scalius/shared/media-variants).
+  imageWidths: {
+    // Covers a roughly 76–96px thumbnail slot at DPR 2.
+    preview: 160,
+    // The eager mobile LCP image: ~270px slot at DPR 2 stays on the 480 step.
+    mobileDisplay: 480,
+    display: 960,
+    zoom: 1600,
   },
   // Thumbnail sizes (adjust these to change thumbnail dimensions)
   thumbnails: {

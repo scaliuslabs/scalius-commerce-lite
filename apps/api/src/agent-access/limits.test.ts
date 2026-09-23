@@ -63,9 +63,9 @@ describe("agent request limits", () => {
   it("fails closed when the dedicated limiter is absent", async () => {
     await expect(checkAgentRateLimit({} as Env, "grant:test")).resolves.toBe(false);
     const limit = vi.fn().mockResolvedValue({ success: true });
-    await expect(checkAgentRateLimit({ AGENT_RATE_LIMITER: { limit } } as unknown as Env, "grant:test"))
+    await expect(checkAgentRateLimit({ RL_STANDARD: { limit } } as unknown as Env, "grant:test"))
       .resolves.toBe(true);
-    expect(limit).toHaveBeenCalledWith({ key: "grant:test" });
+    expect(limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
   });
 
   it("forces every response private and no-store", () => {

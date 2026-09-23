@@ -135,7 +135,7 @@ const oauthDefaultHandler = {
     }
 
     try {
-      const helpers = getOAuthApi(createOAuthProviderOptions(env), env);
+      const helpers = getOAuthApi(createOAuthProviderOptions(env), withOAuthKv(env));
       const parsed = await helpers.parseAuthRequest(request);
       const client = await helpers.lookupClient(parsed.clientId);
       if (!client) {
@@ -226,12 +226,41 @@ export function createOAuthProviderOptions(envForTokenExchange: Env): OAuthProvi
   };
 }
 
-export function createOAuthProvider(env: Env): OAuthProvider<Env> {
-  return new OAuthProvider<Env>(createOAuthProviderOptions(env));
+const OAUTH_KV_PREFIX = "oauth:";
+
+/**
+ * The OAuth provider library hard-codes `env.OAUTH_KV`. Hand it the store's
+ * single CACHE namespace behind a fixed key prefix; `list()` strips the prefix
+ * again because the library reads each listed `key.name` back.
+ */
+export function withOAuthKv(env: Env): Env {
+  const kv = env.CACHE;
+  const OAUTH_KV = {
+    get: (key: string, options?: unknown) => kv.get(OAUTH_KV_PREFIX + key, options as never),
+    put: (key: string, value: string, options?: Parameters<KVNamespace["put"]>[2]) =>
+      kv.put(OAUTH_KV_PREFIX + key, value, options),
+    delete: (key: string) => kv.delete(OAUTH_KV_PREFIX + key),
+    async list(options: { prefix?: string; limit?: number; cursor?: string } = {}) {
+      const page = await kv.list({ ...options, prefix: OAUTH_KV_PREFIX + (options.prefix ?? "") });
+      return {
+        ...page,
+        keys: page.keys.map((key) => ({ ...key, name: key.name.slice(OAUTH_KV_PREFIX.length) })),
+      };
+    },
+  };
+  return { ...env, OAUTH_KV };
+}
+
+export function handleOAuthRequest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  return new OAuthProvider<Env>(createOAuthProviderOptions(env)).fetch(request, withOAuthKv(env), ctx);
 }
 
 export async function purgeExpiredOAuthData(env: Env): Promise<void> {
-  await createOAuthProvider(env).purgeExpiredData(env);
+  await new OAuthProvider<Env>(createOAuthProviderOptions(env)).purgeExpiredData(withOAuthKv(env));
 }
 
 export async function completeOAuthAuthorization(
@@ -244,7 +273,7 @@ export async function completeOAuthAuthorization(
   try {
     let redirectTo: string;
     if (claimed.kind === "approved") {
-      const helpers = getOAuthApi(createOAuthProviderOptions(env), env);
+      const helpers = getOAuthApi(createOAuthProviderOptions(env), withOAuthKv(env));
       const result = await helpers.completeAuthorization({
         ...claimed.authorization,
         request: claimed.authorization.request as AuthRequest,

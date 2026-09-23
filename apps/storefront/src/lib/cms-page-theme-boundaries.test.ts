@@ -20,15 +20,11 @@ describe("CMS storefront theme boundaries", () => {
   });
 
   it("keeps embedded product thumbnails uncropped", () => {
-    expect(productShortcodeSource).toContain('width: 120, height: 120, quality: 75, format: "auto", fit: "contain"');
     expect(productShortcodeSource).toContain('className="h-full w-full object-contain"');
   });
 
-  it("offers a near-device-width featured image before larger CMS candidates", () => {
-    expect(cmsPageSource).toContain("[384, 192]");
-    expect(cmsPageSource).toContain("[768, 384]");
-    expect(cmsPageSource).toContain(
-      "quality: width <= 768 ? 72 : width === 960 ? 78 : 82",
-    );
+  it("offers every featured image rendition with a stable 2:1 crop", () => {
+    expect(cmsPageSource).toContain("mediaImageSrcSet(featuredImage.url)");
+    expect(cmsPageSource.match(/aspect-\[2\/1\]/g)).toHaveLength(2);
   });
 });

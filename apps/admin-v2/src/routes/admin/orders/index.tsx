@@ -101,7 +101,6 @@ const PAYMENT_METHOD_FILTERS = [
   "cod",
   "stripe",
   "sslcommerz",
-  "polar",
 ] as const;
 
 const FULFILLMENT_STATUS_FILTERS = [

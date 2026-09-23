@@ -96,7 +96,6 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("<UnsavedChangesGuard");
     expect(gatewaysSource).toContain("dirty={stripeDirty}");
     expect(gatewaysSource).toContain("dirty={sslDirty}");
-    expect(gatewaysSource).toContain("dirty={polarDirty}");
     expect(gatewaysSource).toContain("lg:grid-cols-2");
     expect(gatewaysSource).toContain("Loading payment settings…");
     expect(gatewayUtilsSource).toContain("Provider settings saved");

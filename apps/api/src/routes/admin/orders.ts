@@ -37,6 +37,7 @@ import {
     serviceUnavailableResponse,
 } from "../../schemas/responses";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,
@@ -100,7 +101,6 @@ const paymentMethodQuerySchema = z.enum([
     PaymentMethod.COD,
     PaymentMethod.STRIPE,
     PaymentMethod.SSLCOMMERZ,
-    PaymentMethod.POLAR,
 ]);
 
 const fulfillmentStatusQuerySchema = z.enum([
@@ -246,7 +246,6 @@ const orderPaymentSchema = z.object({
     sslcommerzTranId: z.string().nullable(),
     sslcommerzValId: z.string().nullable(),
     sslcommerzBankTranId: z.string().nullable(),
-    polarCheckoutId: z.string().nullable(),
     codCollectedBy: z.string().nullable(),
     codCollectedAt: z.union([z.string(), z.number()]).nullable(),
     codReceiptUrl: z.string().nullable(),
@@ -306,7 +305,7 @@ const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
     expiresAt: timestampSchema.nullable(),
     accessMode: z.literal("buyer_verified_receipt"),
     note: z.string(),
-    gateway: z.enum(["sslcommerz", "polar"]),
+    gateway: z.enum(["sslcommerz"]),
     paymentType: recoveryLinkPaymentTypeSchema.nullable(),
     depositAmount: z.number().nullable(),
     paymentRecovery: orderPaymentRecoverySchema,
@@ -1024,7 +1023,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
 
     await enqueueOrderNotificationsForStatus({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         orderIds: newlyShippedResults.map((result) => result.orderId),
         newStatus: "shipped",
         trackingByOrderId: Object.fromEntries(
@@ -1217,7 +1216,7 @@ app.openapi(getItemsRoute, async (c) => {
             id: orderItems.id,
             productId: orderItems.productId,
             productName: orderItems.productName,
-            productImageObjectKey: media.objectKey,
+            productImageObjectKey: publishedMediaObjectKey(),
             productImageStatus: media.status,
             variantId: orderItems.variantId,
             variantLabel: orderItems.variantLabel,
@@ -1292,7 +1291,6 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
             sslcommerzTranId: orderPayments.sslcommerzTranId,
             sslcommerzValId: orderPayments.sslcommerzValId,
             sslcommerzBankTranId: orderPayments.sslcommerzBankTranId,
-            polarCheckoutId: orderPayments.polarCheckoutId,
             codCollectedBy: orderPayments.codCollectedBy,
             codCollectedAt: orderPayments.codCollectedAt,
             codReceiptUrl: orderPayments.codReceiptUrl,
@@ -1419,7 +1417,7 @@ app.openapi(retryNotificationRoute, (async (c: AdminRouteContext<typeof retryNot
     const db = c.get("db");
     const result = await retryFailedOrderNotificationOutboxById({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         orderId,
         outboxId,
     });
@@ -1478,7 +1476,7 @@ app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendN
     const db = c.get("db");
     const result = await resendTerminalOrderNotificationOutboxById({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         orderId,
         outboxId,
         resendRequestId,

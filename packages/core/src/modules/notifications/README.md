@@ -29,7 +29,7 @@ Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp,
 The order email flow is fully connected:
 1. Admin, storefront, payment, COD, or delivery webhook code commits an order lifecycle change
 2. `updateOrderStatus()` returns a `notification` object with email/name/type
-3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `ORDER_NOTIFICATIONS_QUEUE`
+3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `JOBS_QUEUE`
 4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
 5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via enabled customer providers. Cloudflare Email is the native default, with Resend available as the external fallback.
 6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
@@ -99,7 +99,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification
 ### `order.notification`
 - Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, confirmed balance-payment queue messages, support-request submission/status routes, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
 - Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
-- Queue: `ORDER_NOTIFICATIONS_QUEUE`
+- Queue: `JOBS_QUEUE`
 - Retry: parent outbox rows with `outboxId` are marked failed with D1 `nextAttemptAt` backoff and the Queue message is acked; scheduled outbox flushing is the durable retry authority. Cloudflare auto-retry remains only for legacy messages that do not carry an `outboxId`.
 - Channel receipts: email, SMS, WhatsApp, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
 - Configuration/readiness failures are not retry work. Missing email provider setup, no active SMS provider, thrown SMS/WhatsApp setup/decrypt failures, undecryptable credentials, invalid keys/tokens, authorization failures, sender/account blockers, and bad Firebase credentials are skipped receipts with merchant-actionable admin copy. Proven bad provider setup writes a provider-health marker so future sends skip the same external provider until Email, SMS, WhatsApp, or Firebase settings are saved. Transient provider outages remain failed/retryable, but receipt attempts are capped so unknown provider failures settle as `delivery_attempt_limit_reached` instead of retrying forever; capped failures that still match credential/config/account evidence also pause the provider before settling.
@@ -117,7 +117,7 @@ Delivery notification enqueue is intentionally API-local because it depends on t
   - OTP Queue/provider logs use delivery keys and identifier hashes instead of raw email, phone, or OTP codes
   - Failed transient attempts retry using the receipt backoff schedule; busy receipts retry around the D1 `nextAttemptAt`/claim lease instead of burning fixed 30-second queue retries
   - Accepted provider responses retry the D1 receipt write briefly; if D1 still cannot persist, a short-lived KV hint stores only delivery key/channel/provider acceptance metadata so the next queue or DLQ attempt repairs the D1 receipt before provider work
-  - `auth-otp-dlq` handling never calls email/SMS/WhatsApp providers; it creates or updates the D1 receipt as `skipped` with redacted evidence, or as `accepted` when a provider-accepted recovery hint exists, then ACKs the DLQ message
+  - `jobs-dlq` handling of `auth.send_otp` never calls email/SMS/WhatsApp providers; it creates or updates the D1 receipt as `skipped` with redacted evidence, or as `accepted` when a provider-accepted recovery hint exists, then ACKs the DLQ message
   - `purpose: "order_payment_recovery"` -- Uses payment-recovery copy while preserving the same D1 delivery receipt, provider-health, idempotency, and redacted logging behavior. It must not create customer sessions or expose receipt proof.
   - `method: "email"` -- Sends OTP code via email provider. Resend receives `deliveryKey` as `Idempotency-Key`; Cloudflare Email stores the returned `messageId`.
   - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template and stores Meta message IDs when returned

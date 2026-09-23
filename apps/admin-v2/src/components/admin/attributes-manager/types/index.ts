@@ -5,28 +5,6 @@ export interface Attribute extends ProductAttribute {
   valueCount?: number;
 }
 
-export interface AttributesManagerProps {
-  showTrashed?: boolean;
-}
-
-export interface AttributeRowProps {
-  attribute: Attribute;
-  onUpdate: (
-    id: string,
-    data: Partial<Pick<Attribute, "name" | "slug" | "filterable">>,
-  ) => void;
-  onDelete: () => void;
-  onRestore: () => void;
-  onToggleSelection: () => void;
-  onPermanentDelete: () => void;
-  onViewValues: () => void;
-  onEditValues: () => void;
-  isSelected: boolean;
-  isSaving: boolean;
-  isActionLoading: boolean;
-  showTrashed: boolean;
-}
-
 export interface Pagination {
   page: number;
   limit: number;
@@ -36,12 +14,6 @@ export interface Pagination {
 
 export type SortField = "name" | "slug" | "filterable" | "updatedAt";
 export type SortOrder = "asc" | "desc";
-
-export interface AttributeFilters {
-  searchQuery: string;
-  sortField: SortField;
-  sortOrder: SortOrder;
-}
 
 export interface NewAttribute {
   name: string;
@@ -67,53 +39,6 @@ export interface AttributeValuesViewerProps {
 export interface DeleteDialogState {
   id: string;
   name: string;
-}
-
-export type BulkAction = "trash" | "delete" | "restore" | null;
-
-export interface AttributeStatisticsProps {
-  total: number;
-  filterableCount: number;
-  totalValueCount: number;
-}
-
-export interface AttributeToolbarProps {
-  searchQuery: string;
-  selectedCount: number;
-  showTrashed: boolean;
-  isActionLoading: boolean;
-  onSearchChange: (query: string) => void;
-  onBulkTrash: () => void;
-  onBulkDelete: () => void;
-  onBulkRestore: () => void;
-  onCreateClick: () => void;
-}
-
-export interface AttributeTableProps {
-  attributes: Attribute[];
-  selectedIds: Set<string>;
-  savingStates: Record<string, boolean>;
-  isActionLoading: boolean;
-  isLoading: boolean;
-  showTrashed: boolean;
-  searchQuery: string;
-  sortField: SortField;
-  sortOrder: SortOrder;
-  onSort: (field: SortField) => void;
-  onUpdate: (id: string, data: Partial<Attribute>) => void;
-  onDelete: (id: string, name: string) => void;
-  onRestore: (id: string) => void;
-  onViewValues: (id: string, name: string) => void;
-  onEditValues: (id: string, name: string) => void;
-  onToggleSelection: (id: string) => void;
-  onToggleSelectAll: () => void;
-  onCreateClick: () => void;
-}
-
-export interface AttributePaginationProps {
-  pagination: Pagination;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
 }
 
 export interface AttributeCreateDialogProps {

@@ -13,7 +13,7 @@ describe("media gallery presentation boundaries", () => {
   });
 
   it("shows uncropped bounded thumbnails and keeps tile actions touch-accessible", () => {
-    expect(card).toContain('width: 480, height: 360, fit: "contain", quality: 82');
+    expect(card).toContain("mediaImageUrl(file.url, 480)");
     expect(card).toContain('className="h-full w-full object-contain"');
     expect(card).toContain('className="absolute right-1.5 top-1.5 flex gap-1"');
     expect(card).not.toContain("opacity-0 transition-opacity");

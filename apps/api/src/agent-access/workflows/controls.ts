@@ -415,7 +415,6 @@ export const AGENT_WORKFLOW_CONTROLS = [
       "dashboard.payments.methods_update",
       "dashboard.payments.stripe_update",
       "dashboard.payments.sslcommerz_update",
-      "dashboard.payments.polar_update",
       "dashboard.shipping_methods.create",
       "dashboard.shipping_methods.update",
       "dashboard.shipping_methods.trash",
@@ -850,7 +849,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
       allOf: [
         ["invent", "fabricate", "make up", "guess", "generate"],
         ["credential", "credentials", "secret", "password", "api key"],
-        ["provider", "gateway", "sslcommerz", "stripe", "polar"],
+        ["provider", "gateway", "sslcommerz", "stripe"],
       ],
       ignoreWhenNegated: true,
     },

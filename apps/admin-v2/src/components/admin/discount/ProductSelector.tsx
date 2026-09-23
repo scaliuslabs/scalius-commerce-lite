@@ -15,8 +15,7 @@ import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
 import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 export interface DiscountProductOption {
   id: string;
@@ -298,10 +297,7 @@ export function ProductSelector({
                           />
                           {product.primaryImage ? (
                             <img
-                              src={getOptimizedImageUrl(
-                                product.primaryImage,
-                                ADMIN_IMAGE_PRESETS.productMicro,
-                              )}
+                              src={mediaImageUrl(product.primaryImage, 160)}
                               alt=""
                               className="h-6 w-6 shrink-0 rounded bg-muted object-contain object-center"
                               loading="lazy"

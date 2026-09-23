@@ -55,14 +55,14 @@ describe("ProductView catalog truth boundaries", () => {
     expect(source).toContain("{formatDateShort(product.updatedAt)}");
   });
 
-  it("renders video in the media stage without sending video URLs through image optimization", () => {
+  it("renders video in the media stage without sending video URLs through image renditions", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
     expect(source).toContain('item.kind === "image"');
     expect(source).toContain("<VideoPlayer");
-    expect(source).toContain("poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}");
+    expect(source).toContain("poster={item.posterUrl ? mediaImageUrl(item.posterUrl, 640) : undefined}");
     expect(source).toContain('src={item.url}');
     expect(source).toContain('preload="metadata"');
-    expect(source).not.toContain("getOptimizedImageUrl(item.url)}\n        aria-label");
+    expect(source).not.toContain("mediaImageUrl(item.url, 640)}\n        aria-label");
   });
 });

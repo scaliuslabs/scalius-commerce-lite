@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   createCustomerAccountPaymentSession: vi.fn(),
   createStripePaymentSession: vi.fn(),
   createSSLCommerzPaymentSession: vi.fn(),
-  createPolarPaymentSession: vi.fn(),
   claimGuestOrderToAccount: vi.fn(),
   validateReceiptToken: vi.fn(),
 }));
@@ -62,7 +61,6 @@ vi.mock("./payment/payment-session-create", () => ({
   createCustomerAccountPaymentSession: mocks.createCustomerAccountPaymentSession,
   createStripePaymentSession: mocks.createStripePaymentSession,
   createSSLCommerzPaymentSession: mocks.createSSLCommerzPaymentSession,
-  createPolarPaymentSession: mocks.createPolarPaymentSession,
   isPaymentSessionProcessingResult: (value: unknown) =>
     typeof value === "object" && value !== null && (value as { status?: unknown }).status === "processing",
   resolveCustomerPaymentSessionRecovery: mocks.resolveCustomerPaymentSessionRecovery,
@@ -398,16 +396,6 @@ describe("customer auth private cache policy", () => {
         currency: "bdt",
       },
     });
-    mocks.createPolarPaymentSession.mockResolvedValue({
-      gateway: "polar",
-      paymentType: "full",
-      amount: 1200,
-      currency: "bdt",
-      hosted: {
-        gatewayUrl: "https://polar.example.test/pay",
-        checkoutId: "polar_checkout_1",
-      },
-    });
     mocks.createCustomerAccountPaymentSession.mockResolvedValue({
       gateway: "sslcommerz",
       paymentType: "balance",
@@ -520,7 +508,7 @@ describe("customer auth private cache policy", () => {
     const app = createTestApp();
     const env = {
       CACHE: {},
-      AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+      JOBS_QUEUE: { send: vi.fn(async () => undefined) },
     } as never;
 
     const response = await app.request(
@@ -575,7 +563,7 @@ describe("customer auth private cache policy", () => {
       {
         CACHE: {},
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
-        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
     );
 
@@ -608,7 +596,7 @@ describe("customer auth private cache policy", () => {
       {
         CACHE: {},
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
-        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
     );
 
@@ -641,7 +629,7 @@ describe("customer auth private cache policy", () => {
       {
         CACHE: {},
         PUBLIC_API_BASE_URL: "http://localhost:8787",
-        AUTH_OTP_QUEUE: { send: vi.fn(async () => undefined) },
+        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
     );
 
@@ -957,7 +945,7 @@ describe("customer auth private cache policy", () => {
         method: "POST",
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({
-          gateway: "polar",
+          gateway: "stripe",
           replaceExistingAttempt: true,
         }),
       },
@@ -970,7 +958,7 @@ describe("customer auth private cache policy", () => {
       {
         orderId: "order_1",
         customerId: "customer_1",
-        gateway: "polar",
+        gateway: "stripe",
         replaceExistingAttempt: true,
       },
     );
@@ -1152,7 +1140,7 @@ describe("customer auth private cache policy", () => {
       },
       {
         CACHE: {},
-        AUTH_OTP_QUEUE: { send: queueSend },
+        JOBS_QUEUE: { send: queueSend },
       } as never,
     );
 

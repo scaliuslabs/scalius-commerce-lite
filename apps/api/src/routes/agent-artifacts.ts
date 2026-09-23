@@ -5,6 +5,7 @@ import {
   deleteAgentArtifactRecords,
   failClaimedAgentArtifact,
   getAgentArtifactForAuthorization,
+  openAgentArtifact,
   verifyAgentArtifactBytes,
 } from "../agent-access/artifacts";
 import { loadAgentAccessBackend } from "../agent-access/backend";
@@ -63,7 +64,7 @@ async function deleteDownloadedArtifact(
   artifact: { id: string; r2Key: string },
 ): Promise<void> {
   try {
-    await c.env.AGENT_ARTIFACTS.delete(artifact.r2Key);
+    await c.env.BUCKET.delete(artifact.r2Key);
     await deleteAgentArtifactRecords(c.get("db"), [artifact.id]);
   } catch {
     // The terminal consumed row remains authoritative and scheduled cleanup
@@ -176,16 +177,16 @@ app.openapi(downloadRoute, async (c) => {
   let failureClass: "r2_missing" | "r2_read_failed" | "size_mismatch" | "digest_mismatch" | null = null;
   let bytes: ArrayBuffer;
   try {
-    const object = await c.env.AGENT_ARTIFACTS.get(artifact.r2Key);
+    const object = await c.env.BUCKET.get(artifact.r2Key);
     if (!object || !("arrayBuffer" in object)) {
       failureClass = "r2_missing";
       throw new Error("Artifact object is unavailable");
     }
-    if (object.size !== artifact.sizeBytes) {
-      failureClass = "size_mismatch";
-      throw new Error("Artifact size verification failed");
-    }
-    bytes = await object.arrayBuffer();
+    const sealed = await object.arrayBuffer();
+    bytes = await openAgentArtifact(c.env, artifact.r2Key, sealed).catch(() => {
+      failureClass = "digest_mismatch";
+      throw new Error("Artifact integrity verification failed");
+    });
     const verificationFailure = await verifyAgentArtifactBytes(artifact, bytes);
     if (verificationFailure) {
       failureClass = verificationFailure;

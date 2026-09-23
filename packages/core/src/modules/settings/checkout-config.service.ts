@@ -62,9 +62,6 @@ function getGatewaySettings(
     if (gatewayId === "sslcommerz") {
         return snapshot.settings.sslcommerz ? { ...snapshot.settings.sslcommerz } : null;
     }
-    if (gatewayId === "polar") {
-        return snapshot.settings.polar ? { ...snapshot.settings.polar } : null;
-    }
     if (gatewayId === "cod") return { ...snapshot.settings.cod };
     return null;
 }

@@ -89,7 +89,7 @@ export async function reconcileStripeOrderPayment(input: {
     }, accepted: false };
   }
 
-  const queue = input.env.PAYMENT_EVENTS_QUEUE;
+  const queue = input.env.JOBS_QUEUE;
   if (!queue) {
     await markWebhookEventFailed(input.db, eventId, { error: "Queue not available" });
     throw new ServiceUnavailableError("Stripe payment verification is temporarily unavailable.");

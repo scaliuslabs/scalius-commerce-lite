@@ -1,6 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
-import { orders } from "@scalius/database/schema";
 import {
   assertHostedContinuationOrderAccess,
   bindAgentStorefrontCustomerSession,
@@ -54,7 +52,6 @@ import {
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
 import { reconcileStripeOrderPayment } from "./payment/stripe-reconciliation";
-import { reconcilePolarOrderPayment } from "./payment/polar-reconciliation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -267,7 +264,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
   }
   if (result.queuePayload) {
     try {
-      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
     } catch (error) {
       if (result.otpStorageKey && result.deliveryKey) {
         await deleteCustomerAuthOtpChallenge(c.get("db"), {
@@ -408,12 +405,11 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     c.get("db"),
     c.req.valid("param").continuationId,
   );
-  const order = await c.get("db").select({ paymentMethod: orders.paymentMethod })
-    .from(orders).where(eq(orders.id, access.orderId)).get();
-  const reconciliation = order?.paymentMethod === "polar"
-    ? await reconcilePolarOrderPayment({ db: c.get("db"), env: c.env, orderId: access.orderId })
-    : await reconcileStripeOrderPayment({ db: c.get("db"), env: c.env, orderId: access.orderId });
-  const { data, accepted } = reconciliation;
+  const { data, accepted } = await reconcileStripeOrderPayment({
+    db: c.get("db"),
+    env: c.env,
+    orderId: access.orderId,
+  });
   return accepted
     ? c.json({ success: true as const, data: {
       status: "scheduled" as const,
@@ -455,7 +451,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
   });
   if (result.queuePayload) {
     try {
-      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
     } catch (error) {
       if (result.challengeKey && result.deliveryKey) {
         await deleteOrderPaymentRecoveryChallenge(c.get("db"), {

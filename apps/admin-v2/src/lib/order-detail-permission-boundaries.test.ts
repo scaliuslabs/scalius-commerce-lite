@@ -86,7 +86,7 @@ describe("order detail permission boundaries", () => {
     expect(paymentSource).toContain("orderActions.canRefundOrders");
     expect(paymentSource).toContain("orderActions.canEditOrders");
     expect(paymentSource).toContain("useIssueOrderPaymentRecoveryLink");
-    expect(paymentSource).toContain('RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"])');
+    expect(paymentSource).toContain('RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz"])');
     expect(paymentSource).toContain("paymentRecovery?.canIssueRecoveryLink === true");
     expect(paymentSource).toContain("Copy verification link");
     expect(paymentSource).toContain("copyRecoveryUrlToClipboard(recoveryLink.url)");

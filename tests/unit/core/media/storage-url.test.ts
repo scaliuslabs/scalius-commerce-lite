@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  deleteMediaVariants,
   extractKeyFromUrl,
+  getCurrentMediaUrl,
   uploadFile,
+  validateMediaObjectKey,
+  withPublicMediaUrl,
 } from "../../../../packages/core/src/integrations/storage";
 
 const PNG_BYTES = new Uint8Array([
@@ -50,7 +54,7 @@ describe("R2 storage URL handling", () => {
     expect(result.url).toBe(`http://localhost:8787/api/v1/media/${result.key}`);
   });
 
-  it("extracts R2 keys from public, local, optimized, root-relative, and bare URLs", () => {
+  it("extracts R2 keys from public, local, root-relative, and bare URLs", () => {
     expect(
       extractKeyFromUrl("https://cloud.scalius.com/folder/product.webp"),
     ).toBe("folder/product.webp");
@@ -59,16 +63,47 @@ describe("R2 storage URL handling", () => {
         "http://localhost:8787/api/v1/media/folder/product.webp",
       ),
     ).toBe("folder/product.webp");
-    expect(
-      extractKeyFromUrl(
-        "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=400/folder/product.webp",
-      ),
-    ).toBe("folder/product.webp");
     expect(extractKeyFromUrl("/folder/product.webp")).toBe(
       "folder/product.webp",
     );
     expect(extractKeyFromUrl("folder/product.webp")).toBe(
       "folder/product.webp",
     );
+  });
+
+  it("publishes the largest rendition and accepts only well-formed rendition keys", () => {
+    expect(withPublicMediaUrl("https://media.example.com", () =>
+      getCurrentMediaUrl("media/media_abc12345.jpg", 1600),
+    )).toBe("https://media.example.com/media/media_abc12345.jpg/1600.webp");
+    expect(withPublicMediaUrl("https://media.example.com", () =>
+      getCurrentMediaUrl("media/media_abc12345.jpg", null),
+    )).toBe("https://media.example.com/media/media_abc12345.jpg");
+
+    expect(validateMediaObjectKey("media/media_abc12345.jpg/640.webp")).toBe(
+      "media/media_abc12345.jpg/640.webp",
+    );
+    expect(validateMediaObjectKey("media/folder/1600.webp")).toBe("media/folder/1600.webp");
+    for (const key of [
+      "media/media_abc12345.jpg/9999.webp",
+      "media/media_abc12345.jpg/640.png",
+      "media/../x.jpg/640.webp",
+    ]) {
+      expect(() => validateMediaObjectKey(key)).toThrow();
+    }
+    expect(() => validateMediaObjectKey("media/media_abc12345.jpg/640.webp", "image/jpeg")).toThrow();
+  });
+
+  it("deletes exactly the recorded renditions", async () => {
+    const bucket = createBucket();
+    await deleteMediaVariants("media/media_abc12345.png", null, bucket);
+    expect(bucket.delete).not.toHaveBeenCalled();
+
+    await deleteMediaVariants("media/media_abc12345.png", 500, bucket);
+    expect(bucket.delete).toHaveBeenCalledWith([
+      "media/media_abc12345.png/160.webp",
+      "media/media_abc12345.png/320.webp",
+      "media/media_abc12345.png/480.webp",
+      "media/media_abc12345.png/500.webp",
+    ]);
   });
 });

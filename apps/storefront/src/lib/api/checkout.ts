@@ -12,7 +12,7 @@ import type {
 import type { Readiness } from "@scalius/shared/readiness";
 
 export interface GatewayConfig {
-  id: "stripe" | "sslcommerz" | "polar" | "cod";
+  id: "stripe" | "sslcommerz" | "cod";
   name: string;
   publishableKey?: string;   // Stripe only
   currencies?: string[];
@@ -22,7 +22,7 @@ export interface GatewayConfig {
     min: number;
     max: number;
   };
-  /** @deprecated Transitional fallback for cached SSLCommerz/Polar config. */
+  /** @deprecated Transitional fallback for cached SSLCommerz config. */
   sandbox?: boolean;
 }
 

@@ -15,12 +15,11 @@ describe("public attribute query boundaries", () => {
 
     it("uses JSON lookup sets instead of unbounded ID bind lists", () => {
         expect(source).toContain("FROM json_each(${attributeIdsJson})");
-        expect(source).toContain("FROM json_each(${productIdsJson})");
     });
 
     it("bounds every public facet query and grouped response", () => {
         expect(source.match(/\.limit\(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT\)/g))
-            .toHaveLength(4);
+            .toHaveLength(3);
         expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_ATTRIBUTE_LIMIT = 50");
         expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_VALUE_LIMIT = 100");
         expect(source).toContain("PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT = 2_000");

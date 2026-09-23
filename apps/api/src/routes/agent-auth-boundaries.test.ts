@@ -7,7 +7,7 @@ describe("agent-auth protocol boundaries", () => {
   it("keeps every response private and applies unauthenticated auth rate limits", () => {
     expect(source).toContain('app.use("*"');
     expect(source).toContain('c.header("Cache-Control", "private, no-store")');
-    expect(source).toContain('`agent-auth:${endpoint}:${ip}`');
+    expect(source).toContain('isWithinRateLimit(c.env, "RL_STANDARD", `agent-auth:${endpoint}`, ip)');
     expect(source).toContain('enforceUnauthenticatedAuthRate(c, "device-start")');
     expect(source).toContain('enforceUnauthenticatedAuthRate(c, "device-token")');
     expect(source).toContain('enforceUnauthenticatedAuthRate(c, "device-ack")');

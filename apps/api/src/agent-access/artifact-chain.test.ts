@@ -339,11 +339,12 @@ describe("continuous MCP artifact execution and one-use download", () => {
       DB: harness.binding,
       PUBLIC_API_BASE_URL: "https://api.example.test",
       STOREFRONT_URL: "https://storefront.example.test",
+      SCALIUS_SECRET: "artifact-chain-test-master-secret-0123456789",
       AGENT_TOKEN_PEPPER: "test-pepper",
-      AGENT_RATE_LIMITER: {
+      RL_STANDARD: {
         limit: vi.fn(async () => ({ success: true })),
       },
-      AGENT_ARTIFACTS: r2.binding,
+      BUCKET: r2.binding,
     } as unknown as Env;
     const ctx = executionContext(chain.props!);
 
@@ -371,6 +372,9 @@ describe("continuous MCP artifact execution and one-use download", () => {
     });
     expect(JSON.stringify(toolResult)).not.toContain("036000291452");
     expect(r2.objects.size).toBe(1);
+    const [objectKey, object] = [...r2.objects][0]!;
+    expect(objectKey).toMatch(/^private\/agent-artifacts\//);
+    expect(new TextDecoder().decode(object.bytes)).not.toContain("036000291452");
 
     const handle = sqlite.prepare(`
       SELECT id, status, operation_id operationId, credential_id credentialId,

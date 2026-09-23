@@ -31,6 +31,10 @@ import {
   parseMediaOptimizationSettings,
   readPersistedSitePresentation,
 } from "../settings/site-settings.service";
+import {
+  CSP_ALLOWED_DOMAINS_SETTING_KEY,
+  SECURITY_SETTINGS_CATEGORY,
+} from "../settings/security-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import {
@@ -365,7 +369,7 @@ export async function getPageRenderData(db: Database, slug: string) {
 
 /**
  * Fetch and shape all layout data in a single batched D1 round-trip.
- * Returns the final { analytics, header, navigation, footer, currency, theme } object.
+ * Returns the final { analytics, header, navigation, footer, currency, theme, ..., cspAllowedDomains } object.
  */
 export async function getLayoutData(
   db: Database,
@@ -416,7 +420,7 @@ export async function getLayoutData(
       )
       .limit(1),
 
-    // 5. Media/image optimization settings
+    // 5. Media delivery host settings
     db
       .select({ value: settings.value })
       .from(settings)
@@ -463,6 +467,18 @@ export async function getLayoutData(
         ),
       )
       .limit(1),
+
+    // 10. Merchant CSP sources for the storefront response header
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(
+        and(
+          eq(settings.category, SECURITY_SETTINGS_CATEGORY),
+          eq(settings.key, CSP_ALLOWED_DOMAINS_SETTING_KEY),
+        ),
+      )
+      .limit(1),
   ]);
 
   const [
@@ -476,6 +492,7 @@ export async function getLayoutData(
     seoDiscoveryResults,
     businessResults,
     seoReturnPolicyResults,
+    cspResults,
   ] = batchResults;
   // Process Analytics
   const processedAnalytics = analyticsResults
@@ -721,5 +738,6 @@ export async function getLayoutData(
       discovery,
       returnPolicy,
     },
+    cspAllowedDomains: (cspResults as { value?: string }[])[0]?.value ?? "",
   };
 }

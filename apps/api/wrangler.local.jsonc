@@ -8,7 +8,7 @@
     "disable_nodejs_process_v2"
   ],
   "limits": {
-    "cpu_ms": 300000
+    "cpu_ms": 30000
   },
   "cache": {
     "enabled": true
@@ -47,35 +47,13 @@
     {
       "binding": "CACHE",
       "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
-    },
-    {
-      "binding": "SHARED_AUTH_CACHE",
-      "id": "9f577136c05144349f2b8013a4fc1cc5"
-    },
-    {
-      "binding": "OAUTH_KV",
-      "id": "f5b7dc70d0aa4f8d9013ca25e1d0e2ce"
     }
   ],
+  // Two native limiter namespaces. Counters are account-wide per namespace_id,
+  // so every key is scoped to this store (src/utils/rate-limit.ts).
   "ratelimits": [
     {
-      "name": "SEARCH_RATE_LIMITER",
-      "namespace_id": "95462026",
-      "simple": {
-        "limit": 60,
-        "period": 60
-      }
-    },
-    {
-      "name": "ORDER_IP_RATE_LIMITER",
-      "namespace_id": "95462027",
-      "simple": {
-        "limit": 60,
-        "period": 60
-      }
-    },
-    {
-      "name": "ORDER_PHONE_RATE_LIMITER",
+      "name": "RL_STRICT",
       "namespace_id": "95462028",
       "simple": {
         "limit": 5,
@@ -83,92 +61,43 @@
       }
     },
     {
-      "name": "AGENT_RATE_LIMITER",
-      "namespace_id": "95462029",
+      "name": "RL_STANDARD",
+      "namespace_id": "95462026",
       "simple": {
         "limit": 60,
-        "period": 60
-      }
-    },
-    {
-      "name": "META_EVENTS_RATE_LIMITER",
-      "namespace_id": "95462030",
-      "simple": {
-        "limit": 120,
-        "period": 60
-      }
-    },
-    {
-      "name": "ABANDONED_CHECKOUT_RATE_LIMITER",
-      "namespace_id": "95462031",
-      "simple": {
-        "limit": 10,
         "period": 60
       }
     }
   ],
   "r2_buckets": [
     {
+      // Public media under media/; sealed agent artifacts under
+      // private/agent-artifacts/ (block that prefix on the media hostname).
       "binding": "BUCKET",
       "bucket_name": "scalius-media"
-    },
-    {
-      "binding": "AGENT_ARTIFACTS",
-      "bucket_name": "scalius-commerce-agent-artifacts-local"
     }
   ],
+  // One jobs queue; the consumer routes each message by payload.type. The
+  // 2 s batch timeout bounds OTP latency; `jobs-dlq` archives exhausted
+  // messages into their durable D1 rows.
   "queues": {
     "producers": [
       {
-        "binding": "PAYMENT_EVENTS_QUEUE",
-        "queue": "payment-events"
-      },
-      {
-        "binding": "ORDER_NOTIFICATIONS_QUEUE",
-        "queue": "order-notifications"
-      },
-      {
-        "binding": "AUTH_OTP_QUEUE",
-        "queue": "auth-otp"
+        "binding": "JOBS_QUEUE",
+        "queue": "jobs"
       }
     ],
     "consumers": [
       {
-        "queue": "payment-events",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
-        "dead_letter_queue": "payment-events-dlq"
-      },
-      {
-        "queue": "payment-events-dlq",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_retries": 5
-      },
-      {
-        "queue": "order-notifications",
-        "max_batch_size": 20,
-        "max_batch_timeout": 3,
-        "max_retries": 3,
-        "dead_letter_queue": "order-notifications-dlq"
-      },
-      {
-        "queue": "order-notifications-dlq",
-        "max_batch_size": 5,
-        "max_batch_timeout": 5,
-        "max_retries": 5
-      },
-      {
-        "queue": "auth-otp",
+        "queue": "jobs",
         "max_batch_size": 10,
         "max_batch_timeout": 2,
         "max_retries": 5,
-        "dead_letter_queue": "auth-otp-dlq"
+        "dead_letter_queue": "jobs-dlq"
       },
       {
-        "queue": "auth-otp-dlq",
-        "max_batch_size": 3,
+        "queue": "jobs-dlq",
+        "max_batch_size": 10,
         "max_batch_timeout": 5,
         "max_retries": 5
       }

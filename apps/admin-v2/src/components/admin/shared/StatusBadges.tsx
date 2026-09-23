@@ -128,69 +128,6 @@ const FULFILLMENT_STATUS: Record<string, StatusConfig> = {
 
 // ──── Shipment Status ─────────────────────────────────────────────
 
-const SHIPMENT_STATUS: Record<string, StatusConfig> = {
-  PENDING: {
-    label: "Pending",
-    className: "bg-amber-100 text-amber-800",
-  },
-  ON_HOLD: {
-    label: "On Hold",
-    className: "bg-amber-100 text-amber-800",
-  },
-  PICKED_UP: {
-    label: "Picked Up",
-    className: "bg-blue-100 text-blue-800",
-  },
-  IN_TRANSIT: {
-    label: "In Transit",
-    className: "bg-blue-100 text-blue-800",
-  },
-  IN_REVIEW: {
-    label: "In Review",
-    className: "bg-blue-100 text-blue-800",
-  },
-  PROCESSING: {
-    label: "Processing",
-    className: "bg-blue-100 text-blue-800",
-  },
-  DELIVERED: {
-    label: "Delivered",
-    className: "bg-green-100 text-green-800",
-  },
-  COMPLETED: {
-    label: "Completed",
-    className: "bg-green-100 text-green-800",
-  },
-  FAILED: {
-    label: "Failed",
-    className: "bg-red-100 text-red-800",
-  },
-  ERROR: {
-    label: "Error",
-    className: "bg-red-100 text-red-800",
-  },
-  CANCELLED: {
-    label: "Cancelled",
-    className: "bg-gray-100 text-gray-800",
-  },
-  RETURNED: {
-    label: "Returned",
-    className: "bg-purple-100 text-purple-800",
-  },
-  RETURNED_APPROVAL_PENDING: {
-    label: "Returned",
-    className: "bg-purple-100 text-purple-800",
-  },
-  PARTIAL_DELIVERED_APPROVAL_PENDING: {
-    label: "Partially Delivered",
-    className: "bg-purple-100 text-purple-800",
-  },
-  UNKNOWN: {
-    label: "Unknown",
-    className: "bg-gray-100 text-gray-800",
-  },
-};
-
 // ──── Helpers ─────────────────────────────────────────────────────
 
 /** Format a raw status string into a human-readable label */
@@ -246,23 +183,5 @@ export function FulfillmentStatusBadge({ status }: { status: string }) {
     >
       {config.label}
     </Badge>
-  );
-}
-
-export function ShipmentStatusBadge({ status }: { status: string }) {
-  const key = status.toUpperCase();
-  const config = SHIPMENT_STATUS[key];
-  const label = config?.label ?? (formatStatusLabel(status) || "Unknown");
-  const className = config?.className ?? "bg-gray-100 text-gray-800";
-
-  return (
-    <span
-      className={cn(
-        "px-2 py-1 text-xs font-medium rounded-full",
-        className,
-      )}
-    >
-      {label}
-    </span>
   );
 }

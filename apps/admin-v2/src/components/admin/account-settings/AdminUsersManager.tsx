@@ -46,8 +46,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { UserPermissionEditor } from "../UserPermissionEditor";
 import { useAdminUsers, type AdminUser } from "./hooks/useAdminUsers";
 import { useHydrated } from "~/hooks/use-hydrated";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
   ADMIN_USER_STATUS_COPY,
   getAdminUserStatus,
@@ -558,10 +557,7 @@ function AdminUserRow({
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
             {adminUser.image ? (
               <img
-                src={getOptimizedImageUrl(
-                  adminUser.image,
-                  ADMIN_IMAGE_PRESETS.avatar,
-                )}
+                src={mediaImageUrl(adminUser.image, 160)}
                 alt={adminUser.name}
                 className="h-full w-full object-cover"
                 loading="lazy"

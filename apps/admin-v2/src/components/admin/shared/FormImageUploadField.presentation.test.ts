@@ -8,14 +8,12 @@ const source = readFileSync(
 
 describe("FormImageUploadField presentation boundary", () => {
   it("preserves the complete selected asset in the shared preview", () => {
-    expect(source).toContain('fit: "scale-down"');
     expect(source).toContain("object-contain");
     expect(source).not.toContain("object-cover");
   });
 
-  it("keeps the preview transform bounded and the remove action named", () => {
-    expect(source).toContain("width: 640");
-    expect(source).toContain("height: 480");
+  it("keeps the preview rendition bounded and the remove action named", () => {
+    expect(source).toContain("mediaImageUrl(value.url, 640)");
     expect(source).toContain("aria-label={`Remove ${value.filename}`}");
     expect(source).toContain("h-11 w-11 sm:h-8 sm:w-8");
     expect(source).toContain('triggerLabel = "Choose image"');

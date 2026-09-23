@@ -151,7 +151,7 @@ describe("SSLCommerz webhook route", () => {
       app,
       {
         CACHE: kv,
-        PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+        JOBS_QUEUE: queue as unknown as Queue,
       },
       { tran_id: "form_ord", bank_tran_id: "form_bank", value_a: "deposit" },
     );
@@ -207,7 +207,7 @@ describe("SSLCommerz webhook route", () => {
     const db = createDb();
     const app = createApp(db);
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("RETRY");
@@ -225,7 +225,7 @@ describe("SSLCommerz webhook route", () => {
     const db = createDb();
     const app = createApp(db);
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("OK");
@@ -240,7 +240,7 @@ describe("SSLCommerz webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp(createDb());
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("RETRY");
@@ -253,7 +253,7 @@ describe("SSLCommerz webhook route", () => {
     const queue = { send: vi.fn().mockRejectedValue(new Error("queue down")) };
     const app = createApp(createDb());
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("RETRY");
@@ -288,7 +288,7 @@ describe("SSLCommerz webhook route", () => {
 
     const response = await postWebhook(
       app,
-      { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue },
+      { JOBS_QUEUE: queue as unknown as Queue },
       { value_a: "full" },
     );
 
@@ -323,7 +323,7 @@ describe("SSLCommerz webhook route", () => {
       },
     }));
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
@@ -347,14 +347,14 @@ describe("SSLCommerz webhook route", () => {
     const app = createApp(createDb({
       order: {
         ...defaultOrder,
-        paymentMethod: "polar",
+        paymentMethod: "stripe",
         paymentStatus: PaymentStatus.FAILED,
         paidAmount: 0,
         balanceDue: 100.5,
       },
     }));
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("OK");
@@ -379,14 +379,14 @@ describe("SSLCommerz webhook route", () => {
     const app = createApp(createDb({
       order: {
         ...defaultOrder,
-        paymentMethod: "polar",
+        paymentMethod: "stripe",
         paymentStatus: PaymentStatus.PAID,
         paidAmount: 100.5,
         balanceDue: 0,
       },
     }));
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("OK");
@@ -396,7 +396,7 @@ describe("SSLCommerz webhook route", () => {
       "sslcommerz:ipn:ord_1:val_1",
       expect.objectContaining({
         error: "Validated SSLCommerz payment conflicts with the current order payment state",
-        currentPaymentMethod: "polar",
+        currentPaymentMethod: "stripe",
         currentPaymentStatus: PaymentStatus.PAID,
       }),
     );
@@ -417,7 +417,7 @@ describe("SSLCommerz webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp(createDb());
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
@@ -444,7 +444,7 @@ describe("SSLCommerz webhook route", () => {
       },
     }));
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("RETRY");

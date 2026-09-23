@@ -5,7 +5,7 @@ import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   sendCapiEvent: vi.fn(),
-  rateLimit: vi.fn(),
+  limiter: { limit: vi.fn(async (_input: { key: string }) => ({ success: true })) },
   getClientIp: vi.fn(() => "203.0.113.10"),
 }));
 
@@ -15,7 +15,6 @@ vi.mock("@scalius/core/integrations/meta/conversions-api", () => ({
 
 vi.mock("@scalius/shared/rate-limit", () => ({
   getClientIp: mocks.getClientIp,
-  rateLimit: mocks.rateLimit,
 }));
 
 import {
@@ -32,6 +31,7 @@ function createTestApp() {
   });
   app.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.env.RL_STANDARD ??= mocks.limiter;
     await next();
   });
   app.route("/meta", metaConversionsRoutes);
@@ -63,11 +63,7 @@ function createRequest(body: Record<string, unknown>) {
 describe("Meta conversions public event route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.rateLimit.mockResolvedValue({
-      allowed: true,
-      remaining: 119,
-      resetAt: Date.now() + 60_000,
-    });
+    mocks.limiter.limit.mockResolvedValue({ success: true });
     mocks.sendCapiEvent.mockResolvedValue({ success: true });
   });
 
@@ -87,14 +83,7 @@ describe("Meta conversions public event route", () => {
     const body = await response.json() as { data?: { eventId?: string } };
     expect(response.status).toBe(200);
     expect(body.data?.eventId).toBe("Purchase:order_1");
-    expect(mocks.rateLimit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kv: cache,
-        key: "meta-events:203.0.113.10",
-        limit: 120,
-        windowMs: 60_000,
-      }),
-    );
+    expect(mocks.limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(mocks.sendCapiEvent).toHaveBeenCalledWith(
       db,
       expect.objectContaining({
@@ -165,11 +154,7 @@ describe("Meta conversions public event route", () => {
   });
 
   it("rate limits public browser event ingestion before sending to Meta", async () => {
-    mocks.rateLimit.mockResolvedValueOnce({
-      allowed: false,
-      remaining: 0,
-      resetAt: Date.now() + 60_000,
-    });
+    mocks.limiter.limit.mockResolvedValueOnce({ success: false });
 
     const { app } = createTestApp();
     const response = await app.request(
@@ -185,7 +170,7 @@ describe("Meta conversions public event route", () => {
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
   });
 
-  it("prefers the native rate limiter and spends no KV operations on the limit", async () => {
+  it("uses the standard native limiter and spends no KV operations on the limit", async () => {
     const limiter = { limit: vi.fn(async () => ({ success: true })) };
     const cache = { get: vi.fn(async () => null), put: vi.fn() };
 
@@ -195,14 +180,13 @@ describe("Meta conversions public event route", () => {
       createRequest({ eventId: "Purchase:order_1" }),
       {
         CACHE: cache,
-        META_EVENTS_RATE_LIMITER: limiter,
+        RL_STANDARD: limiter,
         STOREFRONT_URL: "https://store.example",
       } as never,
     );
 
     expect(response.status).toBe(200);
-    expect(limiter.limit).toHaveBeenCalledWith({ key: "meta-events:203.0.113.10" });
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(cache.put).not.toHaveBeenCalled();
     expect(cache.get).toHaveBeenCalledWith(META_CAPI_BROWSER_CIRCUIT_KEY, { cacheTtl: 60 });
   });
@@ -216,7 +200,7 @@ describe("Meta conversions public event route", () => {
       createRequest({ eventId: "Purchase:order_1" }),
       {
         CACHE: { get: vi.fn(async () => null), put: vi.fn() },
-        META_EVENTS_RATE_LIMITER: limiter,
+        RL_STANDARD: limiter,
         STOREFRONT_URL: "https://store.example",
       } as never,
     );
@@ -280,7 +264,7 @@ describe("Meta conversions public event route", () => {
 
     expect(response.status).toBe(200);
     expect(body.data?.message).toContain("recently failed");
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
     expect(cache.put).not.toHaveBeenCalled();
   });

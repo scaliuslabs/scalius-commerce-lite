@@ -219,12 +219,3 @@ export async function getPublicCategoryById(db: Database, id: string) {
         .where(and(eq(categories.id, id), ...publicCategoryConditions()))
         .get();
 }
-
-/**
- * Returns the full category tree (flat list) for storefront navigation.
- * Same as getPublicCategories for now (flat schema), but named explicitly
- * for nav use so it can be extended with hierarchy later.
- */
-export async function getPublicCategoryTree(db: Database) {
-    return getPublicCategories(db);
-}

@@ -24,8 +24,10 @@ import {
     moveMediaFiles,
     moveMediaSchema,
     permanentlyDeleteMediaFile,
+    readMediaOriginal,
     reconcileExpiredMediaUploads,
     restoreMediaFile,
+    saveMediaVariants,
     trashMediaFile,
     updateFolderSchema,
     updateMediaFile,
@@ -39,7 +41,7 @@ import {
 } from "@scalius/shared/media-policy";
 import { ValidationError } from "@scalius/core/errors";
 import { invalidateMediaDependentProductCaches } from "../../utils/media-cache-invalidation";
-import { readExactMediaPart } from "./media-upload-body";
+import { readExactMediaPart, readMediaVariantsForm } from "./media-upload-body";
 import { importMediaFromUrl } from "./media-url-import";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -84,6 +86,9 @@ const listRoute = createRoute({
         mimeType: z.string().max(100).optional(),
         kind: z.enum(["image", "video"]).optional(),
         view: z.enum(["ready", "trash"]).default("ready"),
+        variants: z.enum(["missing"]).optional().openapi({
+            description: "`missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet.",
+        }),
     }) },
     responses: {
         200: { description: "Media page", content: { "application/json": { schema: successEnvelope(z.object({
@@ -134,6 +139,7 @@ app.openapi(importUrlRoute, async (c) => {
     return created(c, { file: await importMediaFromUrl({
         db: c.get("db"),
         bucket: c.env.BUCKET,
+        images: c.env.IMAGES,
         sourceUrl: input.sourceUrl,
         filename: input.filename,
         folderId: input.folderId,
@@ -218,14 +224,23 @@ const completeRoute = createRoute({
     summary: "Complete and reconcile a media upload",
     description: "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
     operationId: "dashboard.media.upload_complete",
-    request: { params: idParam },
+    request: { params: idParam, query: z.object({
+        variants: z.enum(["server", "client"]).default("server").openapi({
+            description: "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.",
+        }),
+    }) },
     responses: {
         200: { description: "Media committed", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
         ...mediaErrorResponses,
         503: serviceUnavailableResponse,
     },
 });
-app.openapi(completeRoute, async (c) => ok(c, { file: await completeMediaUpload(c.get("db"), c.req.valid("param").id, c.env.BUCKET) }));
+app.openapi(completeRoute, async (c) => ok(c, { file: await completeMediaUpload(
+    c.get("db"),
+    c.req.valid("param").id,
+    c.env.BUCKET,
+    c.req.valid("query").variants === "server" ? c.env.IMAGES : undefined,
+) }));
 
 const abortRoute = createRoute({
     method: "delete",
@@ -295,6 +310,55 @@ for (const [path, summary, operationId, action] of [
         return ok(c, { file });
     });
 }
+
+const saveVariantsRoute = createRoute({
+    method: "post",
+    path: "/{id}/variants",
+    tags: ["Admin - Media"],
+    summary: "Store pre-generated WebP renditions",
+    description: "Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w160, w320 … and the master). The widths must be exactly those the dashboard pipeline derives from `width`. Replaces earlier renditions and switches the published media URL to the largest one.",
+    operationId: "dashboard.media.variants_save",
+    request: { params: idParam, body: { required: true, content: { "multipart/form-data": { schema: z.object({
+        width: z.string(),
+        height: z.string(),
+    }).catchall(z.any().openapi({ type: "string", format: "binary" })) } } } },
+    responses: {
+        200: { description: "Renditions stored", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
+        ...mediaErrorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+app.openapi(saveVariantsRoute, async (c) => {
+    const db = c.get("db");
+    const id = c.req.valid("param").id;
+    const file = await saveMediaVariants(db, id, await readMediaVariantsForm(c.req), c.env.BUCKET);
+    await invalidateMediaDependentProductCaches(db, id, c);
+    return ok(c, { file });
+});
+
+const originalRoute = createRoute({
+    method: "get",
+    path: "/{id}/original",
+    tags: ["Admin - Media"],
+    summary: "Read the original upload bytes",
+    description: "Same-origin read of the stored original so the dashboard can generate renditions for media uploaded before them.",
+    operationId: "dashboard.media.original",
+    request: { params: idParam },
+    responses: {
+        200: { description: "Original media bytes", content: { "application/octet-stream": { schema: z.string().openapi({ format: "binary" }) } } },
+        ...mediaErrorResponses,
+    },
+});
+app.openapi(originalRoute, async (c) => {
+    const file = await readMediaOriginal(c.get("db"), c.req.valid("param").id, c.env.BUCKET);
+    return new Response(file.body, {
+        headers: {
+            "Content-Type": file.mimeType,
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    });
+});
 
 const permanentDeleteRoute = createRoute({
     method: "delete",

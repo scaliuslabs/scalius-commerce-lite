@@ -674,13 +674,7 @@ function ProductThumbnail({
       ) : null}
       {hasImage ? (
         <img
-          src={getProductImageUrl(product.imageUrl, {
-            width: 80,
-            height: 80,
-            quality: 75,
-            format: "auto",
-            fit: "contain",
-          })}
+          src={getProductImageUrl(product.imageUrl, 80)}
           alt={product.imageAlt || product.name || ""}
           width={40}
           height={40}

@@ -44,9 +44,10 @@ these origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
 Public API: `GET /api/v1/platform` (`apps/api/src/routes/platform.ts`,
 operation ID `storefront.platform.get`) returns only
 `{ storefrontUrl, apiUrl, dashboardUrl, mediaUrl }` with a 60s public
-`Cache-Control`. The storefront and dashboard Workers read this once per
-request (through their service binding in production, or plain HTTP in local
-dev) instead of carrying their own URL configuration.
+`Cache-Control`. The dashboard Worker reads this once per request (through its
+service binding in production, or plain HTTP in local dev); the storefront gets
+the same four origins in the `platform` block of `GET /api/v1/storefront/layout`,
+so neither carries its own URL configuration.
 
 ## settings.service.ts
 
@@ -149,7 +150,7 @@ interface CheckoutConfig {
 **Gateway filtering by `checkoutMode`:**
 - `all` -- show all enabled gateways
 - `gateways_only` -- hide COD
-- `guest_cod_only` -- hide online gateways (Stripe, SSLCommerz, Polar)
+- `guest_cod_only` -- hide online gateways (Stripe, SSLCommerz)
 - `partialPaymentEnabled` with a positive amount -- hide COD and require at least one usable online gateway
 
 ## CurrencyConfig Type
@@ -185,7 +186,7 @@ apps/admin-v2/src/hooks/useCurrency.ts      -- React hook that fetches config an
 Stores headerConfig (JSON), footerConfig (JSON), storefrontUrl, siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, the legacy customer-auth summary `authVerificationMethod`, guestCheckoutEnabled, checkoutMode, partialPaymentEnabled, partialPaymentAmount, and non-secret WhatsApp OTP fields such as phone-number ID and auth template name. The advanced customer auth policy lives in `settings.customer_auth/policy`; phone collection is always required, while OTP channels and email collection are configurable. `whatsapp_access_token` is legacy fallback only; new token saves go to encrypted `settings.whatsapp/access_token`, and legacy migration/cleanup requires a dedicated `migrationEncryptionKey` rather than the JWT-tolerant read key. Singleton enforced via `singletonKey` column with `onConflictDoUpdate`.
 
 ### `settings` (key-value store)
-Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `platform` (api_url, dashboard_url, media_url, customer_auth_cookie_domain, cors_allowed_origins -- see `platform-settings.service.ts` above), `stripe`, `sslcommerz`, `polar`, `payment_methods`.
+Generic key-value table with `category` + `key` + `value` columns. Categories used by this domain: `currency` (currency_code, currency_symbol, usd_exchange_rate), `phone` (allowed_countries -- JSON with `{ countries: string[], mode: "include" | "exclude" }`), `customer_auth` (advanced OTP channel and email collection policy), `theme` (storefront_colors), `security` (csp_allowed_domains), `seo` (`discovery` plus `return_policy` JSON settings), `email` (email_provider, email_sender, encrypted resend_api_key), `whatsapp` (encrypted Meta Cloud API access_token), `firebase` (encrypted service_account, public_config), `fraud-checker` (encrypted provider API credentials), `notifications` (order_channels, whatsapp_order_template_name, whatsapp_order_template_language), `notification_provider_health` (channel/provider pause markers for merchant-actionable provider setup failures), `platform` (api_url, dashboard_url, media_url, customer_auth_cookie_domain, cors_allowed_origins -- see `platform-settings.service.ts` above), `stripe`, `sslcommerz`, `payment_methods`.
 
 SMS provider readiness is structural and local: it requires an active supported provider, decryptable required credentials, provider-required non-secret fields, and no obvious placeholder values such as `dummy`, `example`, `changeme`, `your-token-here`, or all-zero/simple numeric junk. This keeps notification and OTP settings fail-closed without issuing paid SMS test sends.
 
@@ -254,12 +255,10 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | POST | `/stripe` | Save Stripe keys/provider enabled state. Rejects enabled saves until secret key, publishable key, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates checkout projections |
 | GET | `/sslcommerz` | Get SSLCommerz credentials (masks password) |
 | POST | `/sslcommerz` | Save SSLCommerz credentials/provider enabled state. Rejects enabled saves until store ID and store password are effectively present. Invalidates checkout projections |
-| GET | `/polar` | Get Polar credentials (masks token + webhook) |
-| POST | `/polar` | Save Polar credentials/provider enabled state. Rejects enabled saves until access token, product ID, and webhook secret are effectively present and not exact placeholder/demo values. Invalidates checkout projections |
 
-Payment gateway secret saves for Stripe, SSLCommerz, and Polar require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Each logical gateway save encrypts first, commits through one provider-neutral relational batch, and invalidates checkout projections only after that batch succeeds. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
+Payment gateway secret saves for Stripe and SSLCommerz require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes or checkout-cache invalidation when that secret is missing. Each logical gateway save encrypts first, commits through one provider-neutral relational batch, and invalidates checkout projections only after that batch succeeds. Runtime/readiness reads use the dedicated credential key and fail closed on missing/wrong-key ciphertext; legacy plaintext and old bare AES-GCM rows remain readable only when they do not require JWT fallback.
 
-Stripe, SSLCommerz, and Polar checkout readiness must reject obvious exact placeholder credentials before checkout exposure or provider calls. Keep the checks narrow enough to avoid blocking legitimate provider test-mode credentials merely because they use `test` prefixes.
+Stripe and SSLCommerz checkout readiness must reject obvious exact placeholder credentials before checkout exposure or provider calls. Keep the checks narrow enough to avoid blocking legitimate provider test-mode credentials merely because they use `test` prefixes.
 
 Provider readiness and storefront visibility are separate concepts. A gateway can be configured but provider-disabled, provider-enabled but hidden by checkout visibility, or selected for checkout but hidden by checkout-flow policy such as partial payment hiding COD. Keep admin copy and API responses explicit about those states instead of collapsing them into one "enabled" flag.
 
@@ -273,7 +272,7 @@ If guest checkout is disabled, checkout readiness requires the dedicated `CREDEN
 
 WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and reject obvious dummy/placeholder values before storage. Runtime provider readiness and notification-channel saves pass the dedicated credential key; missing/wrong-key encrypted rows or placeholder token/phone/template values return `accessTokenConfigured=false` / not-ready instead of treating storage presence as configured. Legacy migration and legacy-column cleanup must receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
 
-Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `SHARED_AUTH_CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
+Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
 
 ### `shipping.ts` -- Shipping methods CRUD
 Full CRUD with soft-delete, restore, permanent delete, pagination, search, sort.

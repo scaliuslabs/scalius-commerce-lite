@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import type { ProductListItem } from "~/components/admin/data-table/columns/product-columns";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { formatDateShort } from "@scalius/shared/timestamps";
 
 interface ProductMobileRowProps {
@@ -63,12 +63,7 @@ export function ProductMobileRow({
         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
           {product.primaryImage ? (
             <img
-              src={getOptimizedImageUrl(product.primaryImage, {
-                width: 96,
-                height: 96,
-                quality: 75,
-                fit: "contain",
-              })}
+              src={mediaImageUrl(product.primaryImage, 96)}
               alt=""
               className="h-full w-full object-contain object-center"
               loading="lazy"

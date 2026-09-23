@@ -21,7 +21,6 @@ import {
   getSSLCommerzBdtAmountLimitIssue,
   initSSLCommerzSession,
 } from "@scalius/core/modules/payments/sslcommerz";
-import { createPolarCheckout, findReusablePolarCheckout } from "@scalius/core/modules/payments/polar";
 import { getPaymentMethodPreferences } from "@scalius/core/modules/payments/gateway-settings";
 import {
   buildPaymentSessionAttemptIdentity,
@@ -37,7 +36,7 @@ import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
 } from "@scalius/core/modules/payments/order-currency";
-import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
 import type { PaymentSessionPolicy, PaymentSessionType } from "./payment-session-policy";
 import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from "./payment-method-allowlist";
@@ -71,7 +70,7 @@ type PaymentReturnTarget =
   | { kind: "customer_account" }
   | { kind: "agent_continuation"; continuationId: string };
 
-type PaymentGateway = "stripe" | "sslcommerz" | "polar";
+type PaymentGateway = "stripe" | "sslcommerz";
 
 export interface CreatePaymentSessionInput {
   orderId: string;
@@ -122,11 +121,6 @@ export type SSLCommerzSessionResponse = {
   sessionKey?: string;
 };
 
-export type PolarSessionResponse = {
-  gatewayUrl?: string;
-  checkoutId?: string;
-};
-
 export type PaymentSessionProcessingResponse = PaymentSessionAttemptProcessingResult;
 
 export type CreatedCustomerPaymentSession =
@@ -143,13 +137,6 @@ export type CreatedCustomerPaymentSession =
       amount: number;
       currency: string;
       hosted: SSLCommerzSessionResponse;
-    }
-  | {
-      gateway: "polar";
-      paymentType: PaymentSessionType;
-      amount: number;
-      currency: string;
-      hosted: PolarSessionResponse;
     };
 
 export function isPaymentSessionProcessingResult(
@@ -251,23 +238,12 @@ export type CustomerPaymentSessionRecoveryOrder = Pick<
   | "shipmentClaimExpiresAt"
 >;
 
-const POLAR_SUPPORTED_CURRENCIES = new Set([
-  "aed", "ars", "aud", "brl", "cad", "chf", "clp", "cny", "cop", "czk",
-  "dkk", "eur", "gbp", "hkd", "huf", "idr", "ils", "inr", "jpy", "krw",
-  "mxn", "myr", "nok", "nzd", "pen", "php", "pln", "ron", "sar", "sek",
-  "sgd", "thb", "try", "twd", "usd", "zar",
-]);
-
 const ONLINE_GATEWAY_METHODS = new Set<string>([
   PaymentMethod.STRIPE,
   PaymentMethod.SSLCOMMERZ,
-  PaymentMethod.POLAR,
 ]);
 
-async function loadCurrentCurrencyPolicySnapshot(db: Database): Promise<{
-  code: string;
-  usdExchangeRate: number | null;
-}> {
+async function loadCurrentCurrencyCode(db: Database): Promise<string> {
   const rows = await db
     .select({ key: settings.key, value: settings.value })
     .from(settings)
@@ -280,23 +256,16 @@ async function loadCurrentCurrencyPolicySnapshot(db: Database): Promise<{
       "Current store currency settings are incomplete. Save the currency settings before applying them to an order payment.",
     );
   }
-  const rawRate = values.usd_exchange_rate;
-  const parsedRate = rawRate == null ? Number.NaN : Number(rawRate);
-  return {
-    code,
-    usdExchangeRate: Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : null,
-  };
+  return code;
 }
 
 function createCurrentCurrencyReader(db: Database) {
-  let configPromise: ReturnType<typeof loadCurrentCurrencyPolicySnapshot> | undefined;
-  const get = () => {
-    configPromise ??= loadCurrentCurrencyPolicySnapshot(db);
-    return configPromise;
-  };
+  let codePromise: Promise<string> | undefined;
   return {
-    get,
-    getCode: async () => (await get()).code,
+    getCode: () => {
+      codePromise ??= loadCurrentCurrencyCode(db);
+      return codePromise;
+    },
   };
 }
 
@@ -447,8 +416,7 @@ export async function createCustomerAccountPaymentSession(
   };
 
   if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
-  if (gateway === "sslcommerz") return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
-  return createPolarPaymentSessionForOrder(c, sessionInput, order);
+  return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
 }
 
 export async function createAgentContextPaymentSession(
@@ -472,8 +440,7 @@ export async function createAgentContextPaymentSession(
     expectedCustomerId: input.customerId ?? undefined,
   };
   if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
-  if (gateway === "sslcommerz") return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
-  return createPolarPaymentSessionForOrder(c, sessionInput, order);
+  return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
 }
 
 export async function resolveCustomerPaymentSessionRecovery(
@@ -709,268 +676,6 @@ async function createSSLCommerzPaymentSessionForOrder(
     paymentType: policy.paymentType,
     amount: policy.chargeAmount,
     currency,
-    hosted: responsePayload,
-  };
-}
-
-export async function createPolarPaymentSession(
-  c: PaymentRouteContext,
-  input: CreatePaymentSessionInput,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
-  const db = c.get("db");
-  const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
-  return createPolarPaymentSessionForOrder(c, input, order);
-}
-
-async function createPolarPaymentSessionForOrder(
-  c: PaymentRouteContext,
-  input: CreatePaymentSessionInput,
-  order: PaymentSessionOrderRow,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "polar" }) | PaymentSessionProcessingResponse> {
-  const db = c.get("db");
-  assertOrderCanReachGatewayReadinessCheck(
-    order,
-    PaymentMethod.POLAR,
-    "Polar",
-  );
-  const orderCurrency = resolveAuthoritativeOrderCurrency(order);
-  const currentCurrency = createCurrentCurrencyReader(db);
-
-  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "polar");
-  const policy = await resolvePaymentSessionPolicy(db, order, {
-    paymentType: input.paymentType,
-    depositAmount: input.depositAmount,
-  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
-  const polarSettings = await loadCheckoutGatewaySettings(
-    db,
-    encryptionKey,
-    "polar",
-  );
-  let currency = orderCurrency.code.toLowerCase();
-  let paymentAmount = policy.chargeAmount;
-  const originalLocalAmount = paymentAmount;
-  const originalCurrency = currency;
-  let exchangeRate = 1;
-
-  if (!POLAR_SUPPORTED_CURRENCIES.has(currency)) {
-    const currencyConfig = await currentCurrency.get();
-    if (currencyConfig.code !== orderCurrency.code) {
-      throw new ValidationError(
-        "The configured USD exchange rate belongs to a different currency than this order. Repair the order currency or use another payment gateway.",
-      );
-    }
-    const rate = currencyConfig.usdExchangeRate;
-    if (rate == null) {
-      throw new ValidationError(
-        "This order currency is not supported by Polar and no explicit USD exchange rate is saved. Save a valid rate or use another payment gateway.",
-      );
-    }
-    console.log(`[Polar] Converting ${currency.toUpperCase()} -> USD at rate ${rate} for order ${input.orderId}`);
-    exchangeRate = rate;
-    paymentAmount = Math.round((paymentAmount / rate) * 100) / 100;
-    currency = "usd";
-  }
-
-  const decimals = getDecimalPlaces(currency);
-  const amountInCents =
-    currency === originalCurrency &&
-    decimals === orderCurrency.decimalPlaces
-      ? resolveAuthoritativeProviderMinorAmount(policy, orderCurrency)
-      : Math.round(paymentAmount * Math.pow(10, decimals));
-  if (!Number.isSafeInteger(amountInCents) || amountInCents <= 0) {
-    throw new ValidationError("Payment amount must be greater than zero");
-  }
-  const baseUrl = getTrustedApiOrigin(c.env, c.req.url);
-  const callbackParams = {
-    order_id: input.orderId,
-    ...buildCallbackParams(input.returnTarget, policy.paymentType, policy.paymentType === "deposit" ? policy.depositAmount : undefined),
-  };
-  // Keep the request identity independent from its derived return nonce. The
-  // provider-facing cancel URL receives the nonce after the stable attempt
-  // hash has been computed.
-  const successUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/success", callbackParams);
-  const identityCancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", callbackParams);
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.POLAR, "Polar", {
-    replaceExistingAttempt: input.replaceExistingAttempt,
-  });
-
-  const attemptIdentity = await buildPaymentSessionAttemptIdentity({
-    orderId: input.orderId,
-    gateway: "polar",
-    paymentType: policy.paymentType,
-    amount: paymentAmount,
-    currency,
-    ...identityProof(input.proof),
-    requestContext: {
-      amountInSmallestUnit: amountInCents,
-      originalLocalAmount,
-      originalCurrency,
-      exchangeRate,
-      successUrl,
-      cancelUrl: identityCancelUrl,
-      customerName: order.customerName,
-      customerEmail: order.customerEmail ?? null,
-      orderVersion: order.version,
-    },
-  });
-  const returnNonce = await buildHostedReturnNonce("polar", attemptIdentity.requestHash);
-  const returnCallbackParams = {
-    ...callbackParams,
-    return_nonce: returnNonce,
-  };
-  const cancelUrl = buildCallbackUrl(baseUrl, "/api/v1/payment/polar/cancel", returnCallbackParams);
-  const attemptClaim = await claimPaymentSessionAttempt<PolarSessionResponse>(db, {
-    ...attemptIdentity,
-    providerCorrelationId: returnNonce,
-  });
-  if (attemptClaim.status === "replay") {
-    return {
-      gateway: "polar",
-      paymentType: policy.paymentType,
-      amount: originalLocalAmount,
-      currency: originalCurrency,
-      hosted: attemptClaim.response,
-    };
-  }
-  if (attemptClaim.status === "processing") return attemptClaim;
-
-  const polarAttemptKey = attemptIdentity.attemptKey;
-  const polarMetadata = {
-    orderId: input.orderId,
-    paymentType: policy.paymentType,
-    originalAmount: String(originalLocalAmount),
-    originalCurrency,
-    exchangeRate: String(exchangeRate),
-  };
-
-  if (attemptClaim.attempt.attempts > 1) {
-    const recovered = await withPaymentProviderDeadline(
-      "Polar",
-      (signal, requestTimeoutMs) => findReusablePolarCheckout(polarSettings, {
-        orderId: input.orderId,
-        amount: amountInCents,
-        currency,
-        productId: polarSettings.productId,
-        paymentType: policy.paymentType,
-        customerId: order.customerId ?? undefined,
-        customerEmail: order.customerEmail ?? undefined,
-        idempotencyKey: polarAttemptKey,
-        requestTimeoutMs,
-        signal,
-      }),
-    );
-
-    if (recovered && !recovered.success) {
-      await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, recovered.error || "Failed to recover Polar checkout")
-        .catch((error: unknown) => console.error("[payments] Failed to mark Polar recovery attempt failed:", error));
-      if (isPaymentProviderTimedOut(recovered)) {
-        throw createPaymentProviderTimeoutError("Polar");
-      }
-      throw new ServiceUnavailableError(
-        "Could not safely verify whether Polar already created this checkout. Please try again shortly.",
-      );
-    }
-
-    if (recovered?.success && recovered.checkoutUrl) {
-      const responsePayload: PolarSessionResponse = {
-        gatewayUrl: recovered.checkoutUrl,
-        checkoutId: recovered.checkoutId,
-      };
-
-      await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-        providerSessionId: recovered.checkoutId,
-        response: responsePayload,
-      });
-
-      await scheduleOrderRecoveryHint(
-        c,
-        db
-          .update(orders)
-          .set({
-            paymentIntentId: recovered.checkoutId,
-            paymentMethod: PaymentMethod.POLAR,
-            updatedAt: sql`unixepoch()`,
-          })
-          .where(eq(orders.id, input.orderId)),
-        "[payments] Polar session was recovered, but local order recovery hint failed:",
-      );
-
-      return {
-        gateway: "polar",
-        paymentType: policy.paymentType,
-        amount: originalLocalAmount,
-        currency: originalCurrency,
-        hosted: responsePayload,
-      };
-    }
-  }
-
-  let result: Awaited<ReturnType<typeof createPolarCheckout>>;
-  try {
-    result = await withPaymentProviderDeadline(
-      "Polar",
-      (signal, requestTimeoutMs) => createPolarCheckout(polarSettings, {
-        orderId: input.orderId,
-        amount: amountInCents,
-        currency,
-        productId: polarSettings.productId,
-        paymentType: policy.paymentType,
-        successUrl,
-        cancelUrl,
-        customerId: order.customerId ?? undefined,
-        customerName: order.customerName,
-        customerEmail: order.customerEmail ?? undefined,
-        idempotencyKey: polarAttemptKey,
-        metadata: polarMetadata,
-        requestTimeoutMs,
-        signal,
-      })
-    );
-  } catch (error: unknown) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-      .catch((markError: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", markError));
-    throw error;
-  }
-
-  if (!result.success || !result.checkoutUrl) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create Polar checkout")
-      .catch((error: unknown) => console.error("[payments] Failed to mark Polar session attempt failed:", error));
-    if (isPaymentProviderTimedOut(result)) {
-      throw createPaymentProviderTimeoutError("Polar");
-    }
-    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create Polar checkout");
-  }
-
-  const responsePayload: PolarSessionResponse = {
-    gatewayUrl: result.checkoutUrl,
-    checkoutId: result.checkoutId,
-  };
-
-  await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-    providerSessionId: result.checkoutId,
-    response: responsePayload,
-  });
-
-  await scheduleOrderRecoveryHint(
-    c,
-    db
-      .update(orders)
-      .set({
-        paymentIntentId: result.checkoutId,
-        paymentMethod: PaymentMethod.POLAR,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(orders.id, input.orderId)),
-    "[payments] Polar session was created, but local order recovery hint failed:",
-  );
-
-  return {
-    gateway: "polar",
-    paymentType: policy.paymentType,
-    amount: originalLocalAmount,
-    currency: originalCurrency,
     hosted: responsePayload,
   };
 }
@@ -1259,13 +964,11 @@ async function ensureOrderCanUseGateway(
 function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMethod">): PaymentGateway | null {
   if (order.paymentMethod === PaymentMethod.STRIPE) return "stripe";
   if (order.paymentMethod === PaymentMethod.SSLCOMMERZ) return "sslcommerz";
-  if (order.paymentMethod === PaymentMethod.POLAR) return "polar";
   return null;
 }
 
 function gatewayLabel(gateway: PaymentGateway): string {
   if (gateway === "sslcommerz") return "SSLCommerz";
-  if (gateway === "polar") return "Polar";
   return "Stripe";
 }
 
@@ -1374,18 +1077,6 @@ function buildCallbackUrl(baseUrl: string, path: string, params: Record<string, 
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
-}
-
-async function buildHostedReturnNonce(
-  gateway: "polar",
-  requestHash: string,
-): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`hosted-payment-return:${gateway}:${requestHash}`),
-  );
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `hpr_${hex}`;
 }
 
 function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {

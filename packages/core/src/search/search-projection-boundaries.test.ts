@@ -20,7 +20,7 @@ describe("predictive search product projection", () => {
     expect(source).toContain("function buildSearchImageProjection()");
     expect(source).toContain("imageProjection: buildSearchImageProjection()");
     expect(source).toContain("const image = parseSearchImageProjection(imageProjection);");
-    expect(source).toContain("imageUrl: image ? getCurrentPublicMediaUrl(image.objectKey) : null");
+    expect(source).toContain("imageUrl: image ? getCurrentMediaUrl(image.objectKey, image.variantWidth) : null");
     expect(source).toContain("imageMediaId: image?.mediaId ?? null");
     expect(source).toContain("imageAlt: image?.altText ?? null");
     expect(source).not.toContain("const productIds = productsResult.map");

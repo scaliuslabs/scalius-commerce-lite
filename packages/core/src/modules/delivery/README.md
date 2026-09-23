@@ -7,7 +7,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel exports (delivery.service, tracking, factory, locations, types, status-mapper, provider). Excludes pathao-location-import and providers/. |
-| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Extends `ProviderLifecycle` from `@scalius/core/providers/types`. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
+| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
 | `factory.ts` | `createProvider()` -- factory that strict-reads encrypted credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Legacy plaintext rows remain readable for migration; unreadable encrypted rows fail before provider clients are built. |
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
@@ -24,7 +24,6 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
-| `getActiveDeliveryProviders` | `(db)` | Active providers only |
 | `getDeliveryProvider` | `(db, id)` | Single provider by ID |
 | `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Preserves live-test proof only when the current setup fingerprint still matches. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
@@ -50,10 +49,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `getCities` | `(db)` | All active cities, ordered by sortOrder |
 | `getZones` | `(db, cityId)` | Active zones for a city |
 | `getAreas` | `(db, zoneId)` | Active areas for a zone |
-| `searchLocations` | `(db, query, type?)` | LIKE search on name, limit 50 |
 | `createLocation` | `(db, data: LocationData)` | Creates with cuid2 ID |
 | `updateLocation` | `(db, id, data)` | Partial update |
-| `deleteLocation` | `(db, id)` | Soft-delete |
 | `getLocationById` | `(db, id)` | Single active location, parses JSON fields |
 | `getExternalLocationId` | `(db, locationId, providerType)` | Resolves provider-specific numeric ID from `externalIds` JSON |
 | `getExternalLocationIds` | `(db, { city?, zone?, area? }, providerType)` | Batch-resolves external IDs for city/zone/area |
@@ -113,7 +110,7 @@ Single format: 11 mappings including `_approval_pending` suffixes. Normalized to
 
 Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If inventory reconciliation fails after the status CAS, the shipment is marked `reconcile_required` with the carrier status needed for local repair. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries or the explicit admin repair can fix stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
 
-Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `ORDER_NOTIFICATIONS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added. All admin status-check endpoints must use the shared API shipment-status sync helper so provider polling, `lastChecked`, order/inventory reconciliation, availability cache invalidation, and notification enqueue stay in one path.
+Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `JOBS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added. All admin status-check endpoints must use the shared API shipment-status sync helper so provider polling, `lastChecked`, order/inventory reconciliation, availability cache invalidation, and notification enqueue stay in one path.
 
 Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes. Pathao shipment creation preflights required city/zone mappings before provider token work or local placeholder writes; the Pathao provider keeps its own mapping check as defense-in-depth.
 
@@ -151,7 +148,6 @@ Upsert logic: match by Pathao external ID first, then by `name+parentId`. Progre
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
 - `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `readStoredCredentialStrict`
 - `@scalius/core/modules/inventory/inventory-transitions` -- `applyInventoryForStatusChange`
-- `@scalius/core/providers/types` -- `ProviderLifecycle`, `HealthCheckResult`
 - `@scalius/shared/customer-utils` -- `formatPhoneForProvider` (used by fraud-checker provider, not delivery directly)
 - `@paralleldrive/cuid2` -- ID generation for locations
 - `nanoid` -- ID generation for shipments

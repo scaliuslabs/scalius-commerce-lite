@@ -30,15 +30,6 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
     markKind: "wordmark",
     hosted: true,
   },
-  polar: {
-    buyerLabel: "Card or digital wallet",
-    description: "Complete payment with Polar",
-    providerLabel: "Polar",
-    markSrc: "/payment-marks/polar-black.svg",
-    darkMarkSrc: "/payment-marks/polar-white.svg",
-    markKind: "icon",
-    hosted: true,
-  },
   cod: {
     buyerLabel: "Cash on delivery",
     description: "Pay when you receive your order",

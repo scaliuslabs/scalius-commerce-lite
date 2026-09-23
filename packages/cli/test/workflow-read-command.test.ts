@@ -67,7 +67,6 @@ const DAILY_RESPONSES: Record<string, unknown> = {
       gatewayStatus: {
         stripe: { configured: false, usable: false, checkoutVisible: false },
         sslcommerz: { configured: false, usable: false, checkoutVisible: false },
-        polar: { configured: false, usable: false, checkoutVisible: false },
         cod: { configured: true, usable: true, checkoutVisible: true },
       },
     },

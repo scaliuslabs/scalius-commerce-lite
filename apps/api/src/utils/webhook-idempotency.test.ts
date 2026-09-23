@@ -92,7 +92,7 @@ function createStaleQueuedWebhookSweepDb(
   let selectedIds: string[] = [];
   let updateLimit = 0;
 
-  const paymentProviders = new Set(["stripe", "sslcommerz", "polar"]);
+  const paymentProviders = new Set(["stripe", "sslcommerz"]);
   const staleQueuedRows = () => [...rows.values()]
     .filter((row) =>
       row.status === "queued" &&
@@ -300,9 +300,9 @@ describe("webhook idempotency claims", () => {
         processedAt: 900,
       },
       {
-        id: "polar:order.paid:evt_old",
-        provider: "polar",
-        eventType: "order.paid",
+        id: "sslcommerz:ipn:evt_old",
+        provider: "sslcommerz",
+        eventType: "ipn",
         orderId: "order_2",
         status: "queued",
         result: null,
@@ -346,7 +346,7 @@ describe("webhook idempotency claims", () => {
       hasMore: true,
     });
     expect(rows.get("stripe:payment_intent.succeeded:evt_old")?.status).toBe("failed");
-    expect(rows.get("polar:order.paid:evt_old")?.status).toBe("failed");
+    expect(rows.get("sslcommerz:ipn:evt_old")?.status).toBe("failed");
     expect(rows.get("sslcommerz:ipn:evt_extra")?.status).toBe("queued");
     expect(rows.get("pathao:shipment:evt_old")?.status).toBe("queued");
     expect(rows.get("stripe:payment_intent.succeeded:evt_fresh")?.status).toBe("queued");

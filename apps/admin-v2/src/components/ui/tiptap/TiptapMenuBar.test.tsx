@@ -55,10 +55,6 @@ vi.mock("~/components/admin/media-manager", async () => {
   };
 });
 
-vi.mock("@scalius/shared/image-optimizer", () => ({
-  getOptimizedImageUrl: (url: string) => `optimized:${url}`,
-}));
-
 vi.mock("./TiptapTablePopover", () => ({
   TiptapTablePopover: () => <button type="button">Table</button>,
 }));

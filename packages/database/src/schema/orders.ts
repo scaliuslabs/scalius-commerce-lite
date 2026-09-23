@@ -656,7 +656,6 @@ export const orderPayments = sqliteTable("order_payments", {
     sslcommerzTranId: text("sslcommerz_tran_id"),
     sslcommerzValId: text("sslcommerz_val_id"),
     sslcommerzBankTranId: text("sslcommerz_bank_tran_id"),
-    polarCheckoutId: text("polar_checkout_id"),
     codCollectedBy: text("cod_collected_by"),
     codCollectedAt: integer("cod_collected_at", { mode: "timestamp" }),
     codReceiptUrl: text("cod_receipt_url"),
@@ -671,10 +670,8 @@ export const orderPayments = sqliteTable("order_payments", {
     index("order_payments_order_id_idx").on(table.orderId),
     index("order_payments_stripe_pi_idx").on(table.stripePaymentIntentId),
     index("order_payments_ssl_tran_idx").on(table.sslcommerzTranId),
-    index("order_payments_polar_checkout_idx").on(table.polarCheckoutId),
     // Manual migrations also create these unique partial indexes (not expressible in Drizzle):
     // idx_order_payments_stripe_unique ON (order_id, stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL
-    // idx_order_payments_polar_unique ON (order_id, polar_checkout_id) WHERE polar_checkout_id IS NOT NULL
     // idx_order_payments_sslcommerz_val_unique ON (order_id, sslcommerz_val_id) WHERE sslcommerz_val_id IS NOT NULL
 ]);
 

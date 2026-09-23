@@ -108,7 +108,7 @@ async function rawRequest(path: string, init?: RequestInit): Promise<Response> {
   return app().request(`https://api.example.test${path}`, init, {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://shop.example.test",
-    ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() },
+    JOBS_QUEUE: { send: vi.fn() },
   } as unknown as Env);
 }
 
@@ -190,7 +190,7 @@ describe("storefront agent buyer workflow scenarios", () => {
     expect(JSON.stringify([checkout, receipt])).not.toMatch(/chk_|cst_|receiptToken|clientSecret/);
   });
 
-  it.each(["stripe", "sslcommerz", "polar"])(
+  it.each(["stripe", "sslcommerz"])(
     "accepts the reviewed %s order method before the secure payment continuation",
     async (paymentMethod) => {
       mocks.submit.mockResolvedValueOnce({

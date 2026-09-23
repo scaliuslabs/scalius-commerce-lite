@@ -73,7 +73,6 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
     stripe: "Stripe",
     sslcommerz: "SSLCommerz",
     cod: "Cash on Delivery",
-    polar: "Polar",
   };
 
   return (

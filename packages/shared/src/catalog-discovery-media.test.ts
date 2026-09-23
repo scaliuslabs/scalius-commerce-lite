@@ -31,15 +31,21 @@ describe("catalog discovery media helpers", () => {
     ).toBe("https://cdn.example.com/products/fish.jpg");
   });
 
-  it("validates transformed image URLs after optimization", () => {
+  it("validates resolved image URLs and prefers a 1200px+ rendition", () => {
     expect(
-      resolveCatalogDiscoveryImageUrl("/products/fish.jpg", "https://shop.example.com", {
-        transformImageUrl: () => "/cdn-cgi/image/width=1200/products/fish.jpg",
+      resolveCatalogDiscoveryImageUrl("media/fish.jpg", "https://shop.example.com", {
+        resolveImageUrl: (source) => `https://cdn.example.com/${source}`,
       }),
-    ).toBe("https://shop.example.com/cdn-cgi/image/width=1200/products/fish.jpg");
+    ).toBe("https://cdn.example.com/media/fish.jpg");
+    expect(
+      resolveCatalogDiscoveryImageUrl(
+        "https://cdn.example.com/media/fish.jpg/2400.webp",
+        "https://shop.example.com",
+      ),
+    ).toBe("https://cdn.example.com/media/fish.jpg/1600.webp");
     expect(
       resolveCatalogDiscoveryImageUrl("/products/fish.jpg", "https://shop.example.com", {
-        transformImageUrl: () => "",
+        resolveImageUrl: () => "",
       }),
     ).toBeNull();
   });

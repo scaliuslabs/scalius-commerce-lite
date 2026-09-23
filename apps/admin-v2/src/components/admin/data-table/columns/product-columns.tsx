@@ -1,7 +1,7 @@
 import type { ColumnDef } from "../table-config";
 import { Badge } from "~/components/ui/badge";
 import { Image as ImageIcon, Copy } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
@@ -78,12 +78,7 @@ export function getProductColumns(
           <div className="h-8 w-8 overflow-hidden rounded border bg-muted flex items-center justify-center">
             {product.primaryImage ? (
               <img
-                src={getOptimizedImageUrl(product.primaryImage, {
-                  width: 64,
-                  height: 64,
-                  quality: 75,
-                  fit: "contain",
-                })}
+                src={mediaImageUrl(product.primaryImage, 64)}
                 alt={product.name}
                 className="h-full w-full object-contain object-center"
                 loading="lazy"

@@ -16,7 +16,6 @@ Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-
 - **Nano Stores** -- Client-side state management (cart, toast)
 - **Radix UI** -- Accessible UI primitives
 - **Lucide React** -- Icons
-- **Sonner** -- Toast notifications
 
 Page colors come from `src/styles/theme-foundation.css` and the published or preview theme tokens in `Layout.astro`. Components must not override the global page canvas: imported component CSS also reaches routes that omit that component, including checkout without a footer.
 
@@ -41,7 +40,7 @@ src/
     tracking/        # Analytics tracking
   pages/             # File-based routing
     api/             # Server-side proxy routes
-      checkout/      # create-order, stripe-intent, sslcommerz-session, polar-session
+      checkout/      # create-order, stripe-intent, sslcommerz-session
       auth/          # Auth proxy routes
       customer-auth/ # Same-origin Customer OTP auth proxy
       products/      # Product data proxy
@@ -71,14 +70,14 @@ Two middleware functions run in sequence via `sequence()`:
 
 The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `runWithRequestRuntime()` (`src/lib/api/runtime.ts`) and seeded into the request runtime store:
 
-- **Platform origins**: a `GET /api/v1/platform` read to the API -- through the `BACKEND_API` service binding (target `https://api.internal/api/v1/platform`) in production, or plain HTTP to `http://localhost:8787` during `astro dev`. The API KV-caches that response for 60 seconds, so this is one bounded sub-request, not a per-render config fetch. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead falls back to the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
+- **Platform origins and merchant CSP sources**: the `platform` and `cspAllowedDomains` fields of `GET /api/v1/storefront/layout`. The middleware makes that read first (`applyPlatformOrigins`) and every page reuses the same request-scoped promise from `getLayoutData()`, so there is no separate platform or CSP sub-request. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead stays the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
 - **Derived secrets**: `API_TOKEN` and `PURGE_TOKEN` are derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical values, so nothing is installed or shared out of band.
 
 The resulting store carries:
 
 - `BACKEND_API` -- Service binding Fetcher for 0ms-latency internal API calls
 - `PUBLIC_API_URL` -- Full API URL (`${apiUrl}/api/v1`) for client-side use
-- `PUBLIC_API_BASE_URL` -- Bare API origin, for image optimization and auth redirects
+- `PUBLIC_API_BASE_URL` -- Bare API origin, for auth redirects
 - `MEDIA_URL` / `CDN_DOMAIN_URL` -- Platform media base URL and its host[:port] (also set on `window.__CDN_DOMAIN__` for client code)
 - `STOREFRONT_URL` -- This storefront's own origin (Platform setting, or the request-origin fallback above)
 - `DASHBOARD_URL` -- Admin dashboard origin
@@ -282,7 +281,6 @@ Proxy routes handle operations that require the derived `API_TOKEN` (from `SCALI
 | `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates gateway sessions through gateway-specific proxies after order commit |
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
-| `checkout/polar-session.ts` | Create Polar checkout session |
 | `purge-cache.ts` | Authenticated semantic cache-tag purge endpoint for public storefront responses |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
@@ -315,14 +313,13 @@ Gateway-based payment architecture:
 - `handlers/cod.ts` -- Cash on delivery
 - `handlers/stripe.ts` -- Stripe Elements
 - `handlers/sslcommerz.ts` -- SSLCommerz redirect
-- `handlers/polar.ts` -- Polar redirect
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, redirects stale cart snapshots back to `/cart?checkoutIssues=1`, and shows an inline recovery state when the cart-to-checkout transfer is missing or unreadable.
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
-- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available. `/order-success` reads fresh checkout config before rendering retry actions: callback-only failed/cancelled returns expose only the current hosted gateway, while durable `payment_issue` states may offer another currently visible hosted gateway such as SSLCommerz <-> Polar. The API is still the authority for whether a gateway switch is allowed.
+- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available. `/order-success` reads fresh checkout config before rendering retry actions: callback-only failed/cancelled returns expose only the current hosted gateway, while durable `payment_issue` states may offer another currently visible online gateway such as SSLCommerz <-> Stripe. The API is still the authority for whether a gateway switch is allowed.
 
 ## Account Order Payments (`src/pages/account/orders/[id].astro`)
 
-The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}` and creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`. The request can select a gateway and request replacement of an untouched attempt; the API validates those choices and derives payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz and Polar redirect to hosted checkout and return to `/account/orders/{id}` with neutral status query params. If a durable payment-session attempt is still processing, the helper surfaces retryable copy instead of treating the response as a usable session. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
+The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}` and creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`. The request can select a gateway and request replacement of an untouched attempt; the API validates those choices and derives payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz redirects to hosted checkout and return to `/account/orders/{id}` with neutral status query params. If a durable payment-session attempt is still processing, the helper surfaces retryable copy instead of treating the response as a usable session. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
 
 Account payment summaries share the receipt's COD status and visible-balance rules. Active COD balances are due on delivery and use neutral styling; closed unpaid COD orders have no current payment or collection obligation. Keep paid amounts and refund history truthful. A positive balance alone must never promise online payment: only the API's `paymentRecovery` eligibility can expose a recovery action. Each overview card has one link to its full timeline.
 
@@ -366,7 +363,6 @@ All data access goes through the API worker via the configured SDK clients, serv
 |---------|------|---------|
 | `BACKEND_API` | Service | Service binding to the API worker |
 | `ASSETS` | Fetcher | Static asset serving (required by `@astrojs/cloudflare`) |
-| `SESSION` | KV | Session storage (separate from the dashboard's `SESSION` namespace) |
 
 ## Key Files
 

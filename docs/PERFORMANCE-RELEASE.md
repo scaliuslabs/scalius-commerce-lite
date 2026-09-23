@@ -40,9 +40,9 @@ intentional compatibility lanes:
   is fixed and the same production hydration gate passes.
 
 The complete peer-dependency check and both full and production-only package
-audits pass with zero findings. Astro 7.2 can remove its SSR session runtime
-when `session: false` is safe, but the storefront deliberately keeps its
-Cloudflare KV-backed session driver because cart and customer behavior use it.
+audits pass with zero findings. The storefront sets `session: false`: nothing
+reads `Astro.session` (cart state is client-side and customer auth uses API
+cookies), so the adapter no longer adds a KV session driver or `SESSION` binding.
 The Cloudflare adapter's new build-time image-binding path and Astro's
 incremental static build mode do not replace this storefront's dynamic SSR,
 custom CDN image policy, or semantic cache invalidation. They were therefore

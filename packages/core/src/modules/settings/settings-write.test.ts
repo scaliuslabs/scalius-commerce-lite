@@ -63,7 +63,7 @@ describe("saveSettingAggregate", () => {
     const { db } = createDatabase();
 
     await expect(saveSettingAggregate(db as never, [
-      { category: "polar", key: "access_token", value: "secret", encrypted: true },
+      { category: "stripe", key: "secret_key", value: "secret", encrypted: true },
     ])).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY");
 
     expect(db.insert).not.toHaveBeenCalled();

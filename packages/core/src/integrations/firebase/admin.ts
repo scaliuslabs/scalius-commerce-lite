@@ -407,7 +407,7 @@ export class FCMMessagingService {
     // Project-only keys can reuse an old token after private-key rotation in a
     // warm Worker/colo for the full token TTL.
     const cacheKey = await getFirebaseAccessTokenCacheKey(this.serviceAccount);
-    const cache = this.env.SHARED_AUTH_CACHE as KVNamespace | undefined;
+    const cache = this.env.CACHE as KVNamespace | undefined;
     const encryptionKey = getCredentialEncryptionKey(this.env);
 
     if (cache && encryptionKey) {

@@ -11,7 +11,7 @@ import {
   type SavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "@/lib/delivery-method-presentation";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 interface OrderItemsCardProps {
   order: Order;
@@ -44,12 +44,7 @@ const OrderItemRow = ({
     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
       {item.productImage ? (
         <img
-          src={getOptimizedImageUrl(item.productImage, {
-            width: 128,
-            height: 128,
-            quality: 80,
-            fit: "contain",
-          })}
+          src={mediaImageUrl(item.productImage, 128)}
           alt={item.productName?.toString() || ""}
           className="h-full w-full object-contain object-center"
           loading="lazy"

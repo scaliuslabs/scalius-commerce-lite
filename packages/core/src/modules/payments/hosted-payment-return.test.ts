@@ -29,8 +29,6 @@ import * as schema from "@scalius/database/schema";
 import { reconcileHostedPaymentReturn } from "./hosted-payment-return";
 import { processPaymentConfirmed } from "./process-payment";
 
-const POLAR_RETURN_NONCE = `hpr_${"a".repeat(64)}`;
-
 const migrationDirectory = fileURLToPath(new URL(
   "../../../../database/migrations/",
   import.meta.url,
@@ -295,71 +293,6 @@ describe("hosted payment return reconciliation", () => {
     }
   });
 
-  it("makes a Polar cancel retryable without creating a second order or payment row", async () => {
-    const { sqlite, db } = createPaymentDatabase();
-    try {
-      await insertHostedOrder(db, {
-        paymentMethod: "polar",
-        paymentIntentId: "checkout_1",
-      });
-      await insertHostedAttempt(db, {
-        attemptKey: "payment_session:polar:attempt_1",
-        gateway: "polar",
-        providerSessionId: "checkout_1",
-        providerCorrelationId: POLAR_RETURN_NONCE,
-      });
-
-      await expect(reconcileHostedPaymentReturn(db, {
-        orderId: "order_1",
-        gateway: "polar",
-        paymentType: "full",
-        result: "cancelled",
-        providerCorrelationId: POLAR_RETURN_NONCE,
-      })).resolves.toBe("retry_ready");
-
-      expect(sqlite.prepare("SELECT count(*) AS count FROM orders").get()).toMatchObject({ count: 1 });
-      expect(sqlite.prepare("SELECT count(*) AS count FROM order_payments").get()).toMatchObject({ count: 0 });
-      expect(sqlite.prepare("SELECT payment_status, payment_intent_id, version FROM orders WHERE id = ?").get("order_1"))
-        .toMatchObject({
-          payment_status: PaymentStatus.FAILED,
-          payment_intent_id: "checkout_1",
-          version: 4,
-        });
-      expect(sqlite.prepare("SELECT status FROM payment_session_attempts WHERE id = ?").get("psa_1"))
-        .toMatchObject({ status: "failed" });
-    } finally {
-      sqlite.close();
-    }
-  });
-
-  it("ignores a Polar cancel nonce that does not match the stored attempt", async () => {
-    const { sqlite, db } = createPaymentDatabase();
-    try {
-      await insertHostedOrder(db, { paymentMethod: "polar" });
-      await insertHostedAttempt(db, {
-        attemptKey: "payment_session:polar:attempt_1",
-        gateway: "polar",
-        providerSessionId: "checkout_1",
-        providerCorrelationId: POLAR_RETURN_NONCE,
-      });
-
-      await expect(reconcileHostedPaymentReturn(db, {
-        orderId: "order_1",
-        gateway: "polar",
-        paymentType: "full",
-        result: "cancelled",
-        providerCorrelationId: `hpr_${"b".repeat(64)}`,
-      })).resolves.toBe("ignored");
-
-      expect(sqlite.prepare("SELECT payment_status, version FROM orders WHERE id = ?").get("order_1"))
-        .toMatchObject({ payment_status: PaymentStatus.UNPAID, version: 3 });
-      expect(sqlite.prepare("SELECT status FROM payment_session_attempts WHERE id = ?").get("psa_1"))
-        .toMatchObject({ status: "created" });
-    } finally {
-      sqlite.close();
-    }
-  });
-
   it("terminalizes a failed balance attempt without erasing the paid deposit", async () => {
     const { sqlite, db } = createPaymentDatabase();
     try {
@@ -466,21 +399,6 @@ describe("hosted payment return reconciliation", () => {
         metadata: { currency: "BDT" },
       },
     },
-    {
-      gateway: "polar" as const,
-      paymentMethod: "polar",
-      attemptKey: "payment_session:polar:attempt_1",
-      providerSessionId: "checkout_1",
-      providerCorrelationId: POLAR_RETURN_NONCE,
-      confirmation: {
-        orderId: "order_1",
-        paymentGateway: "polar" as const,
-        paymentType: "full" as const,
-        polarCheckoutId: "checkout_1",
-        amount: 100,
-        metadata: { currency: "BDT" },
-      },
-    },
   ])("lets a late $gateway success promote the same failed/cancelled order", async ({
     gateway,
     paymentMethod,
@@ -505,7 +423,7 @@ describe("hosted payment return reconciliation", () => {
         orderId: "order_1",
         gateway,
         paymentType: "full",
-        result: gateway === "polar" ? "cancelled" : "failed",
+        result: "failed",
         providerCorrelationId,
       });
 
@@ -530,7 +448,7 @@ describe("hosted payment return reconciliation", () => {
         orderId: "order_1",
         gateway,
         paymentType: "full",
-        result: gateway === "polar" ? "cancelled" : "failed",
+        result: "failed",
         providerCorrelationId,
       })).resolves.toBe("retry_suppressed");
     } finally {
@@ -541,30 +459,25 @@ describe("hosted payment return reconciliation", () => {
   it("suppresses a cancel while a provider success payment row is already in flight", async () => {
     const { sqlite, db } = createPaymentDatabase();
     try {
-      await insertHostedOrder(db, { paymentMethod: "polar" });
-      await insertHostedAttempt(db, {
-        attemptKey: "payment_session:polar:attempt_1",
-        gateway: "polar",
-        providerSessionId: "checkout_1",
-        providerCorrelationId: POLAR_RETURN_NONCE,
-      });
+      await insertHostedOrder(db);
+      await insertHostedAttempt(db);
       await db.insert(orderPayments).values({
         id: "pay_pending",
         orderId: "order_1",
         amount: 100,
         currency: "BDT",
-        paymentMethod: "polar",
+        paymentMethod: "sslcommerz",
         paymentType: "full",
         status: PaymentRecordStatus.PENDING,
-        polarCheckoutId: "checkout_1",
+        sslcommerzTranId: "order_1_full_ABC12345",
       });
 
       await expect(reconcileHostedPaymentReturn(db, {
         orderId: "order_1",
-        gateway: "polar",
+        gateway: "sslcommerz",
         paymentType: "full",
         result: "cancelled",
-        providerCorrelationId: POLAR_RETURN_NONCE,
+        providerCorrelationId: "order_1_full_ABC12345",
       })).resolves.toBe("retry_suppressed");
       expect(sqlite.prepare("SELECT payment_status, version FROM orders WHERE id = ?").get("order_1"))
         .toMatchObject({ payment_status: PaymentStatus.UNPAID, version: 3 });

@@ -70,9 +70,9 @@ scripts/        Dev setup, dev server wrapper, deploy pipeline, checks
 | Database | Drizzle ORM on Cloudflare D1 (default), TursoDB, or PostgreSQL/Neon |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix |
 | Auth | Better Auth (email/password, optional TOTP + email OTP 2FA) |
-| Storage | R2 for media, Cloudflare Image Resizing |
+| Storage | R2 for media and pre-generated WebP renditions |
 | Async | Cloudflare Queues (payments, notifications, OTP + DLQs), 15-minute cron |
-| Payments | Stripe, SSLCommerz, Polar, Cash on Delivery |
+| Payments | Stripe, SSLCommerz, Cash on Delivery |
 | Delivery | Pathao, Steadfast (webhook tracking) |
 | Notifications | Email (Cloudflare Email, Resend fallback), SMS (4 providers), WhatsApp, FCM push |
 | Deploy | Wrangler |
@@ -94,14 +94,14 @@ flowchart TB
     PLAT -. "origins read per request" .-> AD
 
     API --> DB[("DB (D1) — or TursoDB / PostgreSQL")]
-    API --> KV[("KV — CACHE<br/>SHARED_AUTH_CACHE · OAUTH_KV")]
-    API --> R2[("R2 — BUCKET media<br/>AGENT_ARTIFACTS")]
+    API --> KV[("KV — CACHE")]
+    API --> R2[("R2 — BUCKET<br/>media + private agent artifacts")]
     API --> CHECKOUTDO["Durable Object<br/>CHECKOUT_COORDINATOR"]
-    API --> Q["Queues — payment-events ·<br/>order-notifications · auth-otp + DLQs"]
+    API --> Q["Queue — jobs + jobs-dlq"]
     Q -->|"queue consumer"| API
     CRON["Cron — every 15 min"] --> API
 
-    API -.->|"webhooks"| EXT["Stripe · SSLCommerz · Polar<br/>Pathao · Steadfast"]
+    API -.->|"webhooks"| EXT["Stripe · SSLCommerz<br/>Pathao · Steadfast"]
     API -.->|"notifications"| NOTIF["Email · SMS · WhatsApp · FCM"]
 ```
 
@@ -110,7 +110,8 @@ derived from `SCALIUS_SECRET` at Worker entry. The dashboard and storefront hold
 no database, provider, or URL configuration of their own: they call the API
 through a Cloudflare Service Binding in production (over HTTP to
 `http://localhost:8787` in local development) and read the deployment's public
-origins from `GET /api/v1/platform`.
+origins from the API: the dashboard from `GET /api/v1/platform`, the storefront
+from the `platform` block of the layout payload it already loads.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, the
 order lifecycle, and invariants.
@@ -119,7 +120,7 @@ order lifecycle, and invariants.
 
 **Catalog** — products with merchant-defined variant axes, SKUs, barcodes, images, attributes; categories; manual and dynamic collections; inventory with compare-and-swap stock versioning, reservations, and low-stock alerts; provider-aware search (FTS5 with a Bengali tokenizer on D1, bounded indexed fallback elsewhere).
 
-**Sales** — 11-status order state machine with validated transitions; Stripe, SSLCommerz, Polar, and Cash on Delivery; atomic payment commits with four idempotency layers; refunds and returns; discounts and promotions; abandoned checkout tracking; customer accounts with OTP sign-in and order history.
+**Sales** — 11-status order state machine with validated transitions; Stripe, SSLCommerz, and Cash on Delivery; atomic payment commits with four idempotency layers; refunds and returns; discounts and promotions; abandoned checkout tracking; customer accounts with OTP sign-in and order history.
 
 **Content** — header/footer and navigation builders, CMS pages and blog articles with a Tiptap editor, hero sliders, theme tokens.
 
@@ -284,8 +285,9 @@ The last three belong to the opt-in automation contracts in
 for a hand-installed store.
 
 The API serves the four origins publicly at `GET /api/v1/platform`
-(`Cache-Control: public, max-age=60`); the storefront and dashboard Workers read
-that endpoint per request. `GET /api/v1/readyz` reports a required
+(`Cache-Control: public, max-age=60`); the dashboard Worker reads that endpoint
+per request, and the storefront receives the same origins inside
+`GET /api/v1/storefront/layout`. `GET /api/v1/readyz` reports a required
 `platform_config` check listing any missing origin.
 
 Names such as `env.STOREFRONT_URL`, `env.PUBLIC_API_BASE_URL`,
@@ -300,7 +302,7 @@ composed from these settings at Worker entry
 | Integration | Location |
 |-------------|----------|
 | Email (Cloudflare Email / Resend) | Settings → Email |
-| Stripe / SSLCommerz / Polar | Settings → Checkout → Payment gateways |
+| Stripe / SSLCommerz | Settings → Checkout → Payment gateways |
 | Pathao / Steadfast | Settings → Delivery providers |
 | SMS, WhatsApp, Firebase (FCM) | Settings → Notifications |
 | Analytics and tracking scripts | Analytics |
@@ -331,10 +333,10 @@ in your own account and replace the checked-in names and IDs:
 | Resource | Where | Binding |
 |----------|-------|---------|
 | D1 database | API, dashboard | `DB` |
-| KV namespaces | API: `CACHE`, `SHARED_AUTH_CACHE`, `OAUTH_KV`<br/>Dashboard: `CACHE`, `SESSION`, `SHARED_AUTH_CACHE`<br/>Storefront: `SESSION` | (the dashboard and storefront `SESSION` namespaces are separate) |
-| R2 buckets | API: media + agent artifacts<br/>Dashboard: media | `BUCKET`, `AGENT_ARTIFACTS` |
-| Queues | `payment-events`, `order-notifications`, `auth-otp` and one DLQ each | producers + consumers on the API |
-| Rate limiters | API: search, order IP, order phone, agent | 4 namespace IDs |
+| KV namespace | API, dashboard (one namespace; OAuth keys use the `oauth:` prefix) | `CACHE` |
+| R2 bucket | API (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | `BUCKET` |
+| Queues | `jobs` and its DLQ `jobs-dlq` | producer `JOBS_QUEUE` + both consumers on the API |
+| Rate limiters | API: strict 5/60 s, standard 60/60 s (keys are store-scoped) | `RL_STRICT`, `RL_STANDARD` |
 | Email routing | API, dashboard | `send_email` binding `EMAIL` |
 | Service bindings | Dashboard → API, storefront → API | `API`, `BACKEND_API` |
 
@@ -342,7 +344,11 @@ The `CHECKOUT_COORDINATOR` Durable Object is created by the deploy migration.
 All three Workers set `workers_dev: false`, so each needs a custom domain. The
 storefront's is declared in `apps/storefront/wrangler.jsonc` (`routes`); point a
 custom domain at the API and dashboard Workers in the Cloudflare dashboard, and
-attach a public custom domain to the media R2 bucket.
+attach a public custom domain to the media R2 bucket. Add a WAF custom rule on
+that media hostname that blocks paths starting with `/private/` (agent
+artifacts are also AES-GCM sealed at rest, so this is defence in depth), and an
+R2 lifecycle rule that deletes `private/agent-artifacts/` objects after one day
+as a backstop for the cron cleanup.
 
 `pnpm check:env` fails on any Wrangler `vars` entry — keep the configs to
 bindings only.

@@ -1,3 +1,5 @@
+import { isWithinRateLimit } from "../utils/rate-limit";
+
 export const AGENT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 export const AGENT_MAX_RESULT_BYTES = 64 * 1024;
 export const AGENT_MAX_BATCH_STEPS = 20;
@@ -90,10 +92,8 @@ export async function checkAgentRateLimit(
   env: Env,
   key: string,
 ): Promise<boolean> {
-  const limiter = env.AGENT_RATE_LIMITER;
-  if (!limiter) return false;
-  const result = await limiter.limit({ key });
-  return result.success;
+  if (!env.RL_STANDARD) return false;
+  return isWithinRateLimit(env, "RL_STANDARD", "agent", key);
 }
 
 export function getAgentClientIp(request: Request): string {

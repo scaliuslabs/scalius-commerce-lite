@@ -4,7 +4,7 @@ import type { Database } from "@scalius/database/client";
 
 export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
-export const PAYMENT_WEBHOOK_PROVIDERS = ["stripe", "sslcommerz", "polar"] as const;
+export const PAYMENT_WEBHOOK_PROVIDERS = ["stripe", "sslcommerz"] as const;
 
 export interface StaleQueuedWebhookSweepResult {
   scanned: number;

@@ -1854,7 +1854,6 @@ const CREDENTIAL_DOMAIN_ALIASES = new Map([
   ["facebook", "meta"],
   ["mailgun", "mailgun"],
   ["meta", "meta"],
-  ["polar", "polar"],
   ["sms", "sms"],
   ["smtp", "smtp"],
   ["sslcommerz", "sslcommerz"],

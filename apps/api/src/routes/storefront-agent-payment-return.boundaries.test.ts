@@ -8,7 +8,6 @@ function source(relative: string): string {
 
 const paymentSession = source("./payment/payment-session-create.ts");
 const sslcommerz = source("./payment/sslcommerz-routes.ts");
-const polar = source("./payment/polar-routes.ts");
 
 describe("agent hosted payment return boundary", () => {
   it("binds payment-session idempotency to context authority and a continuation callback", () => {
@@ -18,10 +17,8 @@ describe("agent hosted payment return boundary", () => {
   });
 
   it("returns hosted gateways only to a strict opaque continuation page", () => {
-    for (const callbackSource of [sslcommerz, polar]) {
-      expect(callbackSource).toContain('/^acn_[A-Za-z0-9_-]{20}$/');
-      expect(callbackSource).toContain("buildStorefrontAgentContinuationUrl");
-      expect(callbackSource).toContain("/checkout/continue/${encodeURIComponent(continuationId)}");
-    }
+    expect(sslcommerz).toContain('/^acn_[A-Za-z0-9_-]{20}$/');
+    expect(sslcommerz).toContain("buildStorefrontAgentContinuationUrl");
+    expect(sslcommerz).toContain("/checkout/continue/${encodeURIComponent(continuationId)}");
   });
 });

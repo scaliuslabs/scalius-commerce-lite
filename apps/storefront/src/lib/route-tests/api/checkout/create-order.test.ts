@@ -267,11 +267,11 @@ describe("checkout create-order proxy Origin guard", () => {
       orderId: "order_1",
       receiptToken: "receipt_1",
       totalAmount: 125,
-      paymentMethod: "polar",
+      paymentMethod: "sslcommerz",
     });
     mocks.apiFetch.mockResolvedValueOnce({
       ok: false,
-      json: async () => ({ error: "Polar unavailable" }),
+      json: async () => ({ error: "SSLCommerz unavailable" }),
     });
 
     const response = await POST({
@@ -280,7 +280,7 @@ describe("checkout create-order proxy Origin guard", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           checkoutRequestId: "checkout_req_123456",
-          paymentMethod: "polar",
+          paymentMethod: "sslcommerz",
           initialPaymentSession: true,
         }),
       }),
@@ -298,7 +298,7 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(json.success).toBe(true);
     expect(json.data?.id).toBe("order_1");
     expect(json.data?.initialPaymentSession).toBeUndefined();
-    expect(json.data?.initialPaymentSessionError).toBe("Polar unavailable");
+    expect(json.data?.initialPaymentSessionError).toBe("SSLCommerz unavailable");
   });
 
   it("keeps the committed order response when initial payment session creation is already processing", async () => {

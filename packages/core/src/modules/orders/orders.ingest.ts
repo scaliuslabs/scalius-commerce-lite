@@ -64,7 +64,7 @@ type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 export interface StorefrontOrderCommitRuntime {
-    ORDER_NOTIFICATIONS_QUEUE?: OrderNotificationQueue;
+    JOBS_QUEUE?: OrderNotificationQueue;
     STOREFRONT_URL?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
 }
@@ -1058,7 +1058,7 @@ export async function runStorefrontOrderPostCommitSideEffects(
     try {
         const notificationResult = await recordAndEnqueueOrderNotification({
             db,
-            queue: env?.ORDER_NOTIFICATIONS_QUEUE,
+            queue: env?.JOBS_QUEUE,
             notification: {
                 dedupeKey: buildOrderCreatedNotificationDedupeKey(payload.orderData.id),
                 orderId: payload.orderData.id,

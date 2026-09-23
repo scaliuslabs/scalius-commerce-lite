@@ -1,12 +1,11 @@
 import { getSSLCommerzBdtAmountLimitIssue } from "../payments/sslcommerz";
 
 export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
-export type CheckoutPaymentMethodId = "stripe" | "sslcommerz" | "polar" | "cod";
+export type CheckoutPaymentMethodId = "stripe" | "sslcommerz" | "cod";
 
 const ONLINE_PAYMENT_METHODS = new Set<CheckoutPaymentMethodId>([
     "stripe",
     "sslcommerz",
-    "polar",
 ]);
 
 export function isOnlinePaymentMethod(method: string): method is Exclude<CheckoutPaymentMethodId, "cod"> {

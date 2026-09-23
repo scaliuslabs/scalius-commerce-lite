@@ -147,12 +147,6 @@ const PUBLIC_API_ROUTE_POLICIES: readonly PublicApiRoutePolicy[] = [
     edgeTtlSeconds: CACHE_TTLS.STANDARD,
     tags: ["layout", "media"],
   },
-  {
-    path: "/api/v1/storefront/csp",
-    exact: true,
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["layout"],
-  },
 ] as const;
 
 const PUBLIC_API_CACHE_TAGS = new Set(

@@ -27,6 +27,7 @@ import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { publishedMediaObjectKey } from "../media/media.presentation";
 import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
@@ -95,7 +96,7 @@ export function buildCustomerOrderItemDetailProjection() {
         price: orderItems.price,
         productName: orderItems.productName,
         productSlug: products.slug,
-        productImageObjectKey: media.objectKey,
+        productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
         variantLabel: orderItems.variantLabel,
         unitPrice: sql<number>`${orderItems.price}`.as("unitPrice"),
@@ -905,7 +906,7 @@ export async function getCustomerOrders(
                     price: orderItems.price,
                     productName: orderItems.productName,
                     productSlug: products.slug,
-                    productImageObjectKey: media.objectKey,
+                    productImageObjectKey: publishedMediaObjectKey(),
                     productImageStatus: media.status,
                     variantLabel: orderItems.variantLabel,
                 })

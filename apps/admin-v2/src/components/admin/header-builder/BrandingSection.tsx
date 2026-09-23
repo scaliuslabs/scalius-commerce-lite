@@ -13,8 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { MediaManager } from "../media-manager";
 import { Trash2, AlertCircle, Upload } from "lucide-react";
 import type { LogoConfig, FaviconConfig, MediaFile } from "./types";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
   HEADER_LOGO_WIDTH_DEFAULT,
   HEADER_LOGO_WIDTH_MAX,
@@ -75,10 +74,7 @@ export function BrandingSection({
               {logo.src ? (
                 <div className="relative group border border-border rounded-md p-2 bg-muted/30 w-full aspect-2/1 flex items-center justify-center">
                   <img
-                    src={getOptimizedImageUrl(
-                      logo.src,
-                      ADMIN_IMAGE_PRESETS.brandLogo,
-                    )}
+                    src={mediaImageUrl(logo.src, 320)}
                     alt={logo.alt || "Logo preview"}
                     className="max-h-full max-w-full object-contain"
                     style={{ maxWidth: logoPreviewWidth }}
@@ -195,10 +191,7 @@ export function BrandingSection({
                   {[16, 32].map((size) => (
                     <img
                       key={size}
-                      src={getOptimizedImageUrl(
-                        favicon.src,
-                        ADMIN_IMAGE_PRESETS.favicon,
-                      )}
+                      src={mediaImageUrl(favicon.src, 160)}
                       alt={size === 32 ? favicon.alt || "Browser icon preview" : ""}
                       aria-hidden={size === 16 ? "true" : undefined}
                       style={{ width: size, height: size }}

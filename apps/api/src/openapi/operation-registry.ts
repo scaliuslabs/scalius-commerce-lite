@@ -586,6 +586,10 @@ export const OPERATIONS = {
   },
   "dashboard.media.list": {},
   "dashboard.media.move": { revision: "required" },
+  "dashboard.media.original": {
+    exposure: "excluded",
+    reason: "Binary original read for the dashboard's browser rendition pipeline; agents use the public media URL.",
+  },
   "dashboard.media.permanently_delete": {
     risk: "destructive",
     revision: "required",
@@ -611,6 +615,10 @@ export const OPERATIONS = {
   "dashboard.media.upload_reconcile": {
     exposure: "excluded",
     reason: "Internal expired-upload maintenance is not a merchant capability.",
+  },
+  "dashboard.media.variants_save": {
+    exposure: "excluded",
+    reason: "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion.",
   },
 
   "dashboard.meta_conversions.get": { limits: { response: 16_384 } },
@@ -857,11 +865,6 @@ export const OPERATIONS = {
 
   "dashboard.payments.methods_get": {},
   "dashboard.payments.methods_update": {},
-  "dashboard.payments.polar_get": {},
-  "dashboard.payments.polar_update": {
-    risk: "security",
-    batch: "forbidden",
-  },
   "dashboard.payments.sslcommerz_get": {},
   "dashboard.payments.sslcommerz_update": {
     risk: "security",
@@ -1529,15 +1532,6 @@ export const OPERATIONS = {
       "Storefront render-helper duplicate; use storefront.pages.get_by_slug as the canonical page-content authority.",
   },
 
-  "storefront.payment_polar_session.session": {
-    exposure: "excluded",
-    risk: "financial",
-    openWorld: true,
-    sensitive: true,
-    reason:
-      "Requires raw receipt proof and returns hosted Polar checkout material; use the secure storefront payment continuation.",
-  },
-
   "storefront.payment_recovery.begin": {
     exposure: "continuation",
     risk: "security",
@@ -1628,13 +1622,6 @@ export const OPERATIONS = {
   "storefront.seo.get": { limits: { request: 16_384, response: 32_768 } },
 
   "storefront.shipping_methods.list": { limits: { request: 16_384, response: 32_768 } },
-
-  "storefront.storefront_csp.get_csp": {
-    exposure: "excluded",
-    principals: ["internal"],
-    reason:
-      "Storefront CSP-domain configuration is consumed by response middleware to build browser security headers, not as a semantic storefront read.",
-  },
 
   // ---------------------------------------------------------------------------
   // system surface

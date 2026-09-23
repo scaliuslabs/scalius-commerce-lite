@@ -29,11 +29,10 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { cn } from "@scalius/shared/utils";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import type { SocialLink } from "./builder-types";
 import type { MediaFile } from "@/components/admin/media-manager/types";
 import { getSortableStyle } from "./sortable-style";
-import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
 
 interface SocialLinksSectionProps {
   social: SocialLink[];
@@ -106,10 +105,7 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
           <div className="relative group">
             <div className="h-9 w-9 rounded border bg-muted/30 flex items-center justify-center overflow-hidden">
               <img
-                src={getOptimizedImageUrl(
-                  link.iconUrl,
-                  ADMIN_IMAGE_PRESETS.microIcon,
-                )}
+                src={mediaImageUrl(link.iconUrl, 160)}
                 alt={link.label || "Icon"}
                 className="h-5 w-5 object-contain"
               />

@@ -9,7 +9,6 @@ import * as schema from "@scalius/database/schema";
 const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
-  getPolarSettings: vi.fn(),
   createPaymentProvider: vi.fn(),
   providerCreateRefund: vi.fn(),
   getCurrencyConfig: vi.fn(),
@@ -21,7 +20,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./gateway-settings", () => ({
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-  getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("./factory", () => ({
@@ -99,7 +97,6 @@ function createRefundDatabase() {
       sslcommerz_tran_id TEXT,
       sslcommerz_val_id TEXT,
       sslcommerz_bank_tran_id TEXT,
-      polar_checkout_id TEXT,
       cod_collected_by TEXT,
       cod_collected_at INTEGER,
       cod_receipt_url TEXT,

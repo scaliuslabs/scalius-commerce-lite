@@ -213,9 +213,6 @@ interface Env {
   // Resource bindings
   DB?: D1Database;
   CACHE: KVNamespace;
-  SESSION: KVNamespace;
-  BUCKET: R2Bucket;
-  SHARED_AUTH_CACHE: KVNamespace;
   EMAIL?: CloudflareSendEmailBinding;
 
   // Service bindings

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
   setRuntimeImageCdnPolicy: vi.fn(),
-  getOptimizedImageUrl: vi.fn((url: string) => url),
+  resolveMediaUrl: vi.fn((url: string) => url),
 }));
 
 vi.mock("@/lib/api/products", () => ({
@@ -25,8 +25,8 @@ vi.mock("@/lib/api/runtime", () => ({
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));
 
-vi.mock("@/lib/image-optimizer", () => ({
-  getOptimizedImageUrl: mocks.getOptimizedImageUrl,
+vi.mock("@/lib/media-url", () => ({
+  resolveMediaUrl: mocks.resolveMediaUrl,
 }));
 
 import { GET } from "../../../pages/api/facebook-feed.xml";
@@ -114,8 +114,8 @@ describe("Facebook product feed route", () => {
     mocks.getLayoutData.mockReset();
     mocks.getSeoSettings.mockReset();
     mocks.setRuntimeImageCdnPolicy.mockReset();
-    mocks.getOptimizedImageUrl.mockReset();
-    mocks.getOptimizedImageUrl.mockImplementation((url: string) => url);
+    mocks.resolveMediaUrl.mockReset();
+    mocks.resolveMediaUrl.mockImplementation((url: string) => url);
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
@@ -1467,10 +1467,8 @@ describe("Facebook product feed route", () => {
     expect(body.match(/<item>/g)).toHaveLength(1);
   });
 
-  it("emits absolute image links when the image optimizer returns a relative URL", async () => {
-    mocks.getOptimizedImageUrl.mockReturnValueOnce(
-      "/cdn-cgi/image/width=1200/products/valid.jpg",
-    );
+  it("emits absolute image links when the media resolver returns a relative URL", async () => {
+    mocks.resolveMediaUrl.mockReturnValueOnce("/products/valid.jpg");
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [
         {
@@ -1493,12 +1491,37 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain(
-      "<g:image_link>https://storefront.example.test/cdn-cgi/image/width=1200/products/valid.jpg</g:image_link>",
+      "<g:image_link>https://storefront.example.test/products/valid.jpg</g:image_link>",
     );
   });
 
-  it("skips products whose optimized image URL is not an http URL", async () => {
-    mocks.getOptimizedImageUrl.mockReturnValueOnce(
+  it("links a pre-generated rendition of at least 1200px instead of the master", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "prod_rendition",
+          slug: "rendition",
+          name: "Rendition",
+          description: "Optimized image",
+          price: 1200,
+          discountedPrice: 1200,
+          isActive: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/media/media_valid123.jpg/2400.webp",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const body = await (await GET(context())).text();
+
+    expect(body).toContain(
+      "<g:image_link>https://cdn.example.test/media/media_valid123.jpg/1600.webp</g:image_link>",
+    );
+  });
+
+  it("skips products whose resolved image URL is not an http URL", async () => {
+    mocks.resolveMediaUrl.mockReturnValueOnce(
       "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
     );
     mocks.getFeedProducts.mockResolvedValueOnce({

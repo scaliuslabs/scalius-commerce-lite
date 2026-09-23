@@ -1,6 +1,5 @@
 import { createAdminApiFunction as createServerFn } from "../admin-api-function";
 import type {
-  DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponse,
   GetApiV1AdminOrdersByIdCodResponse,
   GetApiV1AdminOrdersByIdFormDataResponse,
   GetApiV1AdminOrdersByIdItemsResponse,
@@ -39,7 +38,7 @@ import type {
   PostApiV1AdminOrdersBulkShipData,
   PostApiV1AdminOrdersBulkShipResponse,
 } from "@scalius/api-client/types";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api";
+import { apiGet, apiPost, apiPut } from "../api";
 import type {
   PaginationPayload,
   ProductListItemDto,
@@ -90,7 +89,6 @@ export interface OrdersQueryInput extends Omit<OrderListQuery, "archived"> {
 }
 
 export type OrdersListPayload = ApiData<GetApiV1AdminOrdersResponse>;
-export type OrderListItemDto = OrdersListPayload["orders"][number];
 export type OrderDetailDto = ApiData<GetApiV1AdminOrdersByIdResponse>;
 export type OrderFormDataPayload =
   ApiData<GetApiV1AdminOrdersByIdFormDataResponse>;
@@ -275,12 +273,6 @@ export type RefreshedShipmentPayload =
   ApiData<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse>;
 export type ReconcileShipmentPayload =
   ApiData<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse>;
-export type DeleteShipmentInput = {
-  orderId: string;
-  shipmentId: string;
-};
-export type DeleteShipmentPayload =
-  ApiData<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponse>;
 export type ReconcileShipmentInput = {
   orderId: string;
   shipmentId: string;
@@ -642,13 +634,5 @@ export const resolveUnknownShipment = createServerFn({ method: "POST" })
     return apiPost<UnknownShipmentResolutionPayload>(
       `/orders/${orderId}/shipments/${shipmentId}/resolve-unknown`,
       body,
-    );
-  });
-
-export const deleteShipment = createServerFn({ method: "POST" })
-  .validator((data: DeleteShipmentInput) => data)
-  .handler(async ({ data }) => {
-    return apiDelete<DeleteShipmentPayload>(
-      `/orders/${data.orderId}/shipments/${data.shipmentId}`,
     );
   });

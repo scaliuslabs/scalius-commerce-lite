@@ -42,7 +42,7 @@ order-success.astro               orders/queue/scheduled           purchase-outb
 `packages/core/src/integrations/meta/purchase-outbox.ts` owns durable Purchase CAPI delivery:
 - Event id is always `Purchase:{orderId}`, matching the browser Pixel `eventID` for Meta deduplication.
 - COD/final-at-create storefront orders are recorded from `runStorefrontOrderPostCommitSideEffects()`.
-- Stripe, SSLCommerz, and Polar online purchases are recorded only after `processPaymentConfirmed()` succeeds in the payment queue.
+- Stripe and SSLCommerz online purchases are recorded only after `processPaymentConfirmed()` succeeds in the payment queue.
 - The D1 table `meta_capi_purchase_outbox` stores `orderId`, `eventId`, status, attempts, leases, retry timing, and terminal send/skip timestamps. It does not store buyer PII payload snapshots.
 - Each send attempt rebuilds the event from committed `orders` and `order_items`, adding purchase-only matching fields from order phone, email, name, city, country, and customer id. `sendCapiEvent()` hashes PII before Meta receives it.
 - Scheduled maintenance calls `flushPendingMetaPurchaseOutbox()` with a small limit so missed/failed attempts are retried without requiring a new Cloudflare Queue binding.

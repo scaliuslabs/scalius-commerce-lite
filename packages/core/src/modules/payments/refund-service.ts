@@ -17,7 +17,6 @@ import { createPaymentProvider } from "./factory";
 import {
     getStripeSettings,
     getSSLCommerzSettings,
-    getPolarSettings,
 } from "./gateway-settings";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
@@ -33,10 +32,7 @@ import {
     roundOrderMoney,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import {
-    resolvePolarRefundProviderMoney,
-    resolveStripeRefundProviderMoney,
-} from "./refund-provider-money";
+import { resolveStripeRefundProviderMoney } from "./refund-provider-money";
 import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
@@ -60,7 +56,7 @@ export interface RefundRequest {
     amount?: number;
     reason: string;
     /** Override gateway detection (useful for multi-gateway orders) */
-    gateway?: "stripe" | "sslcommerz" | "polar" | "cod";
+    gateway?: "stripe" | "sslcommerz" | "cod";
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
 }
@@ -189,7 +185,7 @@ function getRefundAttemptKey(allocation: Pick<RefundAllocation, "idempotencyKey"
 }
 
 function normalizePaymentGateway(value: string): PaymentGateway {
-    if (value === "stripe" || value === "sslcommerz" || value === "polar" || value === "cod") {
+    if (value === "stripe" || value === "sslcommerz" || value === "cod") {
         return value;
     }
     throw new ValidationError(`Unsupported payment gateway: ${value}`);
@@ -943,7 +939,7 @@ async function markRefundAllocationsProviderUnknown(
 /** Extract the correct gateway-specific transaction ID from a payment record. */
 function getTransactionId(
     gateway: PaymentGateway,
-    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null },
+    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null },
 ): string {
     switch (gateway) {
         case "stripe": {
@@ -953,10 +949,6 @@ function getTransactionId(
         case "sslcommerz": {
             if (!payment.sslcommerzBankTranId) throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
             return payment.sslcommerzBankTranId;
-        }
-        case "polar": {
-            if (!payment.polarCheckoutId) throw new ValidationError("No Polar order ID found on payment record");
-            return payment.polarCheckoutId;
         }
         case "cod":
             throw new ValidationError("COD refunds do not have a provider transaction ID");
@@ -991,14 +983,6 @@ async function resolveProvider(
             if (!settings) throw new ServiceUnavailableError("SSLCommerz is not configured");
             return createPaymentProvider({ type: "sslcommerz", settings });
         }
-        case "polar": {
-            const settings = await getPolarSettings(
-                db,
-                encryptionKey,
-            );
-            if (!settings) throw new ServiceUnavailableError("Polar is not configured");
-            return createPaymentProvider({ type: "polar", settings });
-        }
         case "cod":
             throw new ValidationError("COD refunds must be recorded as confirmed manual settlements");
         default:
@@ -1015,7 +999,7 @@ async function resolveProvider(
  * Returns the gateway-assigned refund ID.
  *
  * Amount conventions per gateway (matching RefundParams contract):
- *   - Stripe & Polar: smallest currency unit (cents/paisa)
+ *   - Stripe: smallest currency unit (cents/paisa)
  *   - SSLCommerz: major units (the provider passes through to SSLCommerz API)
  *   - COD: no provider dispatch; the caller has already confirmed external repayment
  */
@@ -1023,7 +1007,7 @@ async function dispatchRefund(
     db: Database,
     kv: KVNamespace | undefined,
     gateway: PaymentGateway,
-    payment: { amount: number; stripeChargeId?: string | null; sslcommerzBankTranId?: string | null; polarCheckoutId?: string | null; metadata?: string | null },
+    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null },
     refundAmount: number,
     currency: OrderCurrencySnapshot,
     params: RefundRequest,
@@ -1038,22 +1022,12 @@ async function dispatchRefund(
 
     // Determine the correct amount for each gateway's convention:
     // Stripe: smallest currency unit, always explicit for allocation safety
-    // Polar: smallest currency unit, always requires explicit positive amount
     // SSLCommerz/COD: major units, always required
     let providerAmount: number | undefined;
     if (gateway === "stripe") {
         providerAmount = resolveStripeRefundProviderMoney(
             refundAmount,
             currency,
-        ).amountMinor;
-    } else if (gateway === "polar") {
-        providerAmount = resolvePolarRefundProviderMoney(
-            refundAmount,
-            currency,
-            {
-                amount: payment.amount,
-                metadata: payment.metadata,
-            },
         ).amountMinor;
     } else {
         // SSLCommerz always receives the explicit amount in major units.
