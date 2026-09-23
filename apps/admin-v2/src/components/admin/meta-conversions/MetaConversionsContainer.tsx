@@ -1,10 +1,10 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Activity } from "lucide-react";
-import {
-  MetaConversionsSettingsForm,
-  type MetaConversionsSettings,
-} from "./MetaConversionsSettingsForm";
-import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
+import { MetaConversionsSettingsForm } from "./MetaConversionsSettingsForm";
+import type {
+  MetaConversionsSettings,
+  MetaPixelParityDiagnostics,
+} from "~/lib/api-query-options/settings";
 import { MetaConversionsLogs } from "./MetaConversionsLogs";
 import type { MetaConversionsWorkspaceSection } from "./meta-conversions-workspace";
 

@@ -12,11 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  updateTaxClassification,
-  type TaxClassificationItem,
-  type TaxClassificationKind,
-  type TaxConfigurationPayload,
-} from "@/lib/api-functions/taxes";
+  putApiV1AdminTaxesClassificationsByKindById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type {
+  TaxClassificationItem,
+  TaxClassificationKind,
+  TaxConfigurationPayload,
+} from "@/lib/api-query-options/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { taxClassificationsQueryOptions } from "@/lib/api-query-options/taxes";
 import { queryKeys } from "@/lib/query-keys";
@@ -51,13 +54,14 @@ export function TaxClassificationsPanel({
   const updateMutation = useMutation({
     mutationFn: (input: { item: TaxClassificationItem; taxClassId: string | null }) => {
       setSavingId(input.item.id);
-      return updateTaxClassification({ data: {
-        kind: input.item.kind,
-        id: input.item.id,
-        taxClassId: input.taxClassId,
-        expectedVersion: input.item.version,
-        expectedAggregateRevision: input.item.aggregateRevision,
-      } });
+      return apiData(putApiV1AdminTaxesClassificationsByKindById({
+        path: { kind: input.item.kind, id: input.item.id },
+        body: {
+          taxClassId: input.taxClassId,
+          expectedVersion: input.item.version,
+          expectedAggregateRevision: input.item.aggregateRevision,
+        },
+      }));
     },
     onSuccess: async () => {
       toast.success("Tax classification updated");

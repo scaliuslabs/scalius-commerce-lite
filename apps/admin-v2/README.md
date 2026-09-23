@@ -53,7 +53,7 @@ request:
 ## Data flow
 
 ```
-typed domain server functions (src/lib/api-functions/)
+generated SDK call (@scalius/api-client/sdk) unwrapped once by apiData() (src/lib/api.ts)
   → queryOptions wrappers (src/lib/api-query-options/)
     → ensureQueryData in the route loader (prefetch)
       → useSuspenseQuery in the component
@@ -66,6 +66,16 @@ lookups, 30min for settings, 1hr for setup status. The QueryClient default is
 `ADMIN_QUERY_STALE_TIME_MS` (10s) in `src/lib/admin-query-client.ts`. Counts of
 server functions, query wrappers, and mutation hooks change often — scan with
 `rg` rather than copying numbers.
+
+**Transport**: `src/lib/api.ts` points the generated SDK client at one
+isomorphic fetch. In the browser it calls same-origin `<base>/api/v1/admin/*`
+with `credentials: "same-origin"` (production: the admin proxy route; `vite dev`:
+the Vite proxy to `:8787`). During SSR it goes through `fetchAdminApiFromServer()`
+in `src/lib/api.server.ts`, which forwards the cookie/authorization headers,
+propagates `Set-Cookie`, and applies the read timeout. Both paths return the raw
+`{ success, data }` envelope, which `apiData()` unwraps; request/response types
+come from `@scalius/api-client/types`. Endpoints outside `/api/v1/admin`
+(setup, firebase config) are real server functions in `src/lib/api-server-fns.ts`.
 
 **Stale-while-revalidate**: detail queries use `staleTime: 0` in queryOptions and
 `staleTime: Infinity` in route loaders, so navigation serves cache and refetches
@@ -193,10 +203,11 @@ token is written.
 | `src/lib/admin-route-context.ts` | Stale-while-revalidate auth/RBAC shell context |
 | `src/lib/auth.fns.ts` | Auth/setup guards and admin RBAC context server functions |
 | `src/middleware/rbac.server.ts` | Server-only RBAC loading with auto-seed |
-| `src/lib/api-functions/` | Typed domain server-function slices |
+| `src/lib/api.ts` | SDK client transport + `apiData()` envelope unwrapping |
+| `src/lib/api-server-fns.ts` | Server functions for non-admin endpoints (setup, firebase config, admin users) |
 | `src/lib/api-query-options/` | Domain queryOptions with per-domain staleTime |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
-| `src/lib/api.server.ts` | HTTP transport (service binding / fetch) |
+| `src/lib/api.server.ts` | SSR transport (cookie forwarding, Set-Cookie, read timeout) |
 | `src/lib/admin-api-timeout.ts` | Read-only API timeout helper |
 | `src/lib/query-keys.ts` | Centralized query key factory |
 | `src/lib/list-helpers.tsx` | Shared list search schemas and selectors |

@@ -16,8 +16,7 @@ const mocks = vi.hoisted(() => ({
   lookupByBarcodeOrSku: vi.fn(),
   acknowledgeLowStockAlert: vi.fn(),
   findStockMutationAvailabilityTransitions: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
-  invalidateCatalogCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/inventory", async () => {
@@ -63,11 +62,10 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("../../utils/cache-invalidation", () => ({
+vi.mock("../../utils/cache-generation", () => ({
   findStockMutationAvailabilityTransitions:
     mocks.findStockMutationAvailabilityTransitions,
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
-  invalidateCatalogCaches: mocks.invalidateCatalogCaches,
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { adminInventoryRoutes } from "./inventory";
@@ -77,8 +75,6 @@ function createTestApp() {
   const db = { id: "db" };
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
   mocks.adjustInventory.mockResolvedValue({
@@ -109,7 +105,6 @@ function createTestApp() {
   });
   mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
   mocks.findStockMutationAvailabilityTransitions.mockResolvedValue(["var_1"]);
-  mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
   mocks.getInventoryLabelVariants.mockResolvedValue({
     variants: [],
     missingVariantIds: [],
@@ -175,7 +170,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getInventoryLabelVariants).toHaveBeenCalledWith(db, variantIds);
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("documents the buyer-effective price used by barcode label artwork", () => {
@@ -393,12 +388,7 @@ describe("admin inventory cache invalidation", () => {
       db,
       [expect.objectContaining({ variantId: "var_1" })],
     );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      db,
-      { variantIds: ["var_1"] },
-      expect.objectContaining({ env }),
-    );
-    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
   });
 
   it("keeps caches hot when a regular-stock write stays in the same availability band", async () => {
@@ -413,7 +403,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.findStockMutationAvailabilityTransitions).toHaveBeenCalledOnce();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("keeps preorder caches hot when capacity stays available", async () => {
@@ -435,7 +425,7 @@ describe("admin inventory cache invalidation", () => {
         pool: "preorderStock",
       })],
     );
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("does not invalidate caches when the stock write fails", async () => {
@@ -449,8 +439,8 @@ describe("admin inventory cache invalidation", () => {
     });
 
     expect(response.status).toBe(404);
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
-    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -464,7 +454,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(coreCall()).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -478,7 +468,7 @@ describe("admin inventory cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(coreCall()).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([

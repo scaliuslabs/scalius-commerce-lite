@@ -5052,93 +5052,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.cache.groups_list",
-    "method": "GET",
-    "pathTemplate": "/api/v1/cache/groups",
-    "summary": "List public cache domains",
-    "tags": [
-      "Cache"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 16384,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.cache.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "groups": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "object",
-                "properties": {
-                  "label": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "label",
-                  "description"
-                ]
-              }
-            },
-            "pathMapping": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "required": [
-            "groups",
-            "pathMapping"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
     "operationId": "dashboard.cache.purge_all",
     "method": "POST",
     "pathTemplate": "/api/v1/cache/clear",
-    "summary": "Purge every public cache domain",
+    "summary": "Refresh the storefront",
+    "description": "Starts a new public cache generation. Saves already do this; use it only after changing data outside the dashboard.",
     "tags": [
       "Cache"
     ],
@@ -5183,94 +5101,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "message"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.cache.purge_groups",
-    "method": "POST",
-    "pathTemplate": "/api/v1/cache/clear-group",
-    "summary": "Purge selected public cache domains",
-    "tags": [
-      "Cache"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "write",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "sequential",
-    "transport": "json",
-    "maxResponseBytes": 8192,
-    "maxRequestBytes": 16384,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.cache.manage"
-    },
-    "inputSchema": {
-      "requestBody": {
-        "required": true,
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "properties": {
-                "groups": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "minItems": 1
-                }
-              },
-              "required": [
-                "groups"
-              ]
-            }
-          }
-        }
-      }
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "message": {
-              "type": "string"
-            },
-            "groups": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "message",
-            "groups"
           ]
         }
       },
@@ -41620,7 +41450,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       },
                       "stock": {
                         "type": "integer",
-                        "minimum": 0
+                        "minimum": 0,
+                        "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
+                      },
+                      "expectedStockVersion": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The SKU stockVersion the new quantity was based on. Required with stock."
                       },
                       "trackInventory": {
                         "type": "boolean"
@@ -41675,7 +41511,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "imageId",
                       "sku",
                       "price",
-                      "stock",
                       "trackInventory",
                       "weight",
                       "barcode",
@@ -42474,7 +42309,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "stock": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "New on-hand quantity. Omit to keep the current quantity."
                 },
                 "trackInventory": {
                   "type": "boolean"
@@ -42515,6 +42351,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true,
                   "minimum": 0
                 },
+                "expectedStockVersion": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "The SKU stockVersion the new quantity was based on. Required with stock."
+                },
                 "expectedAggregateRevision": {
                   "type": "integer",
                   "minimum": 1
@@ -42526,7 +42367,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "weight",
                 "sku",
                 "price",
-                "stock",
                 "expectedAggregateRevision"
               ]
             }
@@ -43183,7 +43023,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           },
                           "stock": {
                             "type": "integer",
-                            "minimum": 0
+                            "minimum": 0,
+                            "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
+                          },
+                          "expectedStockVersion": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "The SKU stockVersion the new quantity was based on. Required with stock."
                           },
                           "trackInventory": {
                             "type": "boolean"
@@ -43238,7 +43084,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "imageId",
                           "sku",
                           "price",
-                          "stock",
                           "trackInventory",
                           "weight",
                           "barcode",
@@ -43256,6 +43101,30 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "options",
                     "variants"
                   ]
+                },
+                "defaultSku": {
+                  "type": "object",
+                  "properties": {
+                    "sku": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 100,
+                      "description": "Omit to use the generated SIMPLE-<productId> SKU."
+                    },
+                    "trackInventory": {
+                      "type": "boolean"
+                    },
+                    "stock": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Initial on-hand quantity; must be 0 when inventory is not tracked."
+                    }
+                  },
+                  "required": [
+                    "trackInventory",
+                    "stock"
+                  ],
+                  "description": "Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."
                 }
               },
               "required": [
@@ -70571,6 +70440,33 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "cspAllowedDomains": {
               "type": "string"
+            },
+            "storefrontCopy": {
+              "type": "object",
+              "properties": {
+                "languageCode": {
+                  "type": "string"
+                },
+                "addToCartText": {
+                  "type": "string"
+                },
+                "buyNowText": {
+                  "type": "string"
+                },
+                "selectOptionsText": {
+                  "type": "string"
+                },
+                "unavailableText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "languageCode",
+                "addToCartText",
+                "buyNowText",
+                "selectOptionsText",
+                "unavailableText"
+              ]
             }
           },
           "required": [
@@ -70585,7 +70481,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "business",
             "seo",
             "platform",
-            "cspAllowedDomains"
+            "cspAllowedDomains",
+            "storefrontCopy"
           ]
         }
       },
@@ -79477,34 +79374,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       ]
     },
     {
-      "id": "dashboard.cache-purge-selected",
-      "surface": "dashboard",
-      "kind": "write",
-      "title": "Purge selected cache groups",
-      "summary": "List valid cache groups and purge only the selected product and feed groups.",
-      "examples": [
-        "List cache domains and purge only product and feed caches, not every public cache."
-      ],
-      "tags": [
-        "cache",
-        "products",
-        "feeds",
-        "operations"
-      ],
-      "operationIds": [
-        "dashboard.cache.groups_list",
-        "dashboard.cache.purge_groups"
-      ],
-      "requiresFacts": false,
-      "requiresConfirmation": true,
-      "requiresVerification": true,
-      "rules": [
-        "Resolve valid cache group names before mutation.",
-        "Select only the requested product and feed groups; never expand to purge-all.",
-        "Confirm the selected purge and verify the bounded operation result."
-      ]
-    },
-    {
       "id": "dashboard.campaign-content-supported-setup",
       "surface": "dashboard",
       "kind": "mixed",
@@ -83577,27 +83446,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.cache.groups_list",
-        "surface": "dashboard",
-        "mode": "curated",
-        "workflowIds": [
-          "dashboard.cache-purge-selected"
-        ]
-      },
-      {
         "operationId": "dashboard.cache.purge_all",
         "surface": "dashboard",
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.cache.purge_all"
-        ]
-      },
-      {
-        "operationId": "dashboard.cache.purge_groups",
-        "surface": "dashboard",
-        "mode": "curated",
-        "workflowIds": [
-          "dashboard.cache-purge-selected"
         ]
       },
       {

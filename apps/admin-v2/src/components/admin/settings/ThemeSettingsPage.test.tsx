@@ -31,14 +31,15 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     }),
   };
 });
-vi.mock("~/lib/api-functions/settings", () => ({
-  getThemeWorkspace: getThemeWorkspaceMock,
-  saveThemeDraft: saveThemeDraftMock,
-  publishThemeDraft: publishThemeDraftMock,
-  getThemeVersions: getThemeVersionsMock,
-  rebaseThemeDraft: rebaseThemeDraftMock,
-  rollbackTheme: rollbackThemeMock,
-  createThemePreviewSession: createThemePreviewSessionMock,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsThemeWorkspace: getThemeWorkspaceMock,
+  postApiV1AdminSettingsThemeDraft: saveThemeDraftMock,
+  postApiV1AdminSettingsThemePublish: publishThemeDraftMock,
+  getApiV1AdminSettingsThemeVersions: getThemeVersionsMock,
+  postApiV1AdminSettingsThemeDraftRebase: rebaseThemeDraftMock,
+  postApiV1AdminSettingsThemeRollback: rollbackThemeMock,
+  postApiV1AdminSettingsThemePreviewSession: createThemePreviewSessionMock,
 }));
 
 vi.mock("~/lib/admin-api-error", () => ({
@@ -206,14 +207,14 @@ describe("ThemeSettingsPage read authority", () => {
     await flush();
 
     expect(saveThemeDraftMock).toHaveBeenCalledWith({
-      data: {
+      body: {
         theme: publishedTheme,
         expectedDraftRevision: 7,
         basePublishedRevision: 4,
       },
     });
     expect(publishThemeDraftMock).toHaveBeenCalledWith({
-      data: {
+      body: {
         expectedPublishedRevision: 4,
         expectedDraftRevision: 8,
       },

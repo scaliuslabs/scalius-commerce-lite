@@ -1,9 +1,9 @@
 // src/components/admin/attributes-manager/types/index.ts
-import type { ProductAttribute } from "~/types/api-responses";
+import type {
+  AttributeDto as ProductAttribute,
+} from "~/lib/api-query-options/attributes";
 
-export interface Attribute extends ProductAttribute {
-  valueCount?: number;
-}
+export type Attribute = ProductAttribute;
 
 export interface Pagination {
   page: number;

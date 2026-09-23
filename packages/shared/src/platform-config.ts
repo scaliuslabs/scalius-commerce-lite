@@ -387,11 +387,6 @@ export function publicRequestOrigin(requestUrl: string | null | undefined): stri
   }
 }
 
-export function storefrontPurgeUrl(storefrontUrl: string): string {
-  const origin = normalizePlatformOriginUrl(storefrontUrl);
-  return origin ? `${origin}/api/purge-cache` : "";
-}
-
 const PLATFORM_URL_LABELS: Record<PlatformUrlKey, string> = {
   storefrontUrl: "Storefront URL",
   apiUrl: "API URL",

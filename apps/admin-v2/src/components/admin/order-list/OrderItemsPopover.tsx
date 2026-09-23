@@ -4,7 +4,7 @@ import { Badge } from "../../ui/badge";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrency } from "@/hooks/use-currency";
-import { getOrderItems } from "@/lib/api-functions/orders";
+import { getOrderItems } from "@/lib/api-query-options/orders";
 
 type PopoverOrderItem = {
   id: string;
@@ -38,7 +38,7 @@ export function OrderItemsPopover({
 
     setIsLoading(true);
     try {
-      const data = await getOrderItems({ data: { orderId } });
+      const data = await getOrderItems(orderId);
       setItems(data);
     } catch (error) {
       console.error("Failed to fetch order items:", error);

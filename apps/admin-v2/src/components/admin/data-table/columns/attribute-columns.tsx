@@ -6,11 +6,11 @@ import { Filter, Edit3 } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { InlineEditCell } from "../InlineEditCell";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
-import type { ProductAttribute } from "~/types/api-responses";
+import type {
+  AttributeDto as ProductAttribute,
+} from "~/lib/api-query-options/attributes";
 
-export interface AttributeItem extends ProductAttribute {
-  valueCount?: number;
-}
+export type AttributeItem = ProductAttribute;
 
 interface AttributeColumnOptions {
   showTrashed: boolean;

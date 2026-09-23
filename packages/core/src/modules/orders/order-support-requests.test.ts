@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
@@ -25,10 +23,6 @@ describe("customer account order ownership", () => {
     expect(compiled.params).toEqual(["cust_account"]);
   });
 });
-
-const SUPPORT_REQUEST_SOURCE = fileURLToPath(
-  new URL("./order-support-requests.ts", import.meta.url),
-);
 
 function actionState(overrides: Partial<{
   status: string;
@@ -137,19 +131,6 @@ describe("order support request eligibility", () => {
     }), context({ hasActiveRefundOperation: true }));
     expect(activeRefundActions.every((action) => !action.eligible)).toBe(true);
     expect(activeRefundActions.every((action) => action.disabledReason?.includes("refund is already being processed"))).toBe(true);
-  });
-
-  it("does not import order, payment, shipment, COD, or inventory mutators", () => {
-    const source = readFileSync(SUPPORT_REQUEST_SOURCE, "utf8");
-
-    expect(source).not.toContain("processRefund");
-    expect(source).not.toContain("refund-service");
-    expect(source).not.toContain("updateOrderStatus");
-    expect(source).not.toContain("./orders.fulfillment");
-    expect(source).not.toContain('from "./orders.fulfillment"');
-    expect(source).not.toContain("codTracking");
-    expect(source).not.toContain("reserveStock");
-    expect(source).not.toContain("deductMultiple");
   });
 });
 

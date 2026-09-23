@@ -16,7 +16,6 @@ import {
   validateAppliedSchemaMigrations,
 } from "../src/schema-upgrade";
 import {
-  compileCanonicalPostgresSchema,
   compileSqliteDdlForPostgres,
 } from "../scripts/postgres-schema";
 import {
@@ -186,6 +185,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 6,
       },
+      {
+        version: 64,
+        name: "0064_cache_generation",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -217,25 +222,6 @@ describe("provider-neutral schema upgrades", () => {
     )).toBe(
       `CHECK(position('#' in coalesce("item"."query", '')) = 0)`,
     );
-  });
-
-  it("converges upgraded PostgreSQL cache counters with the fresh bigint schema", async () => {
-    const postgres = splitSchemaMigrationStatements(readFileSync(
-      join(migrationsDirectory, "postgres/0055_cache_invalidation_postgres_bigint.sql"),
-      "utf8",
-    ));
-    expect(postgres[0]).toContain('ALTER COLUMN "requested_generation" TYPE bigint');
-    expect(postgres[0]).toContain('ALTER COLUMN "applied_generation" TYPE bigint');
-    expect(postgres[0]).toContain('ALTER COLUMN "attempt_count" TYPE bigint');
-
-    const freshSchema = await compileCanonicalPostgresSchema();
-    const cacheTable = freshSchema.preDataSql.slice(
-      freshSchema.preDataSql.indexOf('CREATE TABLE "cache_invalidation_state"'),
-      freshSchema.preDataSql.indexOf('CREATE TABLE "categories"'),
-    );
-    expect(cacheTable).toContain('"requested_generation" bigint');
-    expect(cacheTable).toContain('"applied_generation" bigint');
-    expect(cacheTable).toContain('"attempt_count" bigint');
   });
 
   it.each([
@@ -317,6 +303,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 61, name: "0061_regular_hex" },
           { version: 62, name: "0062_identity_handoff_audit" },
           { version: 63, name: "0063_media_variants_drop_polar" },
+          { version: 64, name: "0064_cache_generation" },
         ],
       });
     } finally {

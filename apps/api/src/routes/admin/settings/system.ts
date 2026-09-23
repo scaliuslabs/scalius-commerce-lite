@@ -57,10 +57,7 @@ import {
     getCheckoutReadiness,
     getCustomerSignInReadiness,
 } from "@scalius/core/modules/settings/checkout-readiness";
-import {
-    getOptionalExecutionContext,
-    invalidateApiAndScheduleStorefrontGroups,
-} from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration, getOptionalExecutionContext } from "../../../utils/cache-generation";
 import {
     buildClearNotificationProviderBlocksStatement,
 } from "@scalius/core/modules/notifications/notification-provider-health";
@@ -84,7 +81,6 @@ import { isReady, type Readiness } from "@scalius/shared/readiness";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
-const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const MERCHANT_CSP_INPUT_MAX_LENGTH = 65_536;
 const MERCHANT_CSP_ORIGIN_MAX_LENGTH = 512;
 const MERCHANT_CSP_SOURCE_MAX_COUNT = 100;
@@ -174,35 +170,35 @@ export function getInheritedSecuritySources(
             "Storefront",
             "storefront",
             env.STOREFRONT_URL,
-            "The storefront trusts its own origin by default. Set it as the Storefront URL in Settings -> System -> Platform.",
+            "Add the Storefront URL in Settings → Platform.",
         ),
         inheritedSecuritySource(
             "api",
             "Commerce API",
             "api",
             env.PUBLIC_API_BASE_URL,
-            "Buyer requests can connect to this exact API origin. Set it as the API URL in Settings -> System -> Platform.",
+            "Add the API URL in Settings → Platform.",
         ),
         inheritedSecuritySource(
             "dashboard",
             "Admin dashboard",
             "dashboard",
             env.BETTER_AUTH_URL,
-            "Admin sessions and credentialed API requests recognize this exact origin. Set it as the Dashboard URL in Settings -> System -> Platform.",
+            "Add the Dashboard URL in Settings → Platform.",
         ),
         inheritedSecuritySource(
             "cdn",
             "Canonical media CDN",
             "media",
             env.CDN_DOMAIN_URL,
-            "Storefront images can load from this exact media host. It is derived from the Media URL in Settings -> System -> Platform.",
+            "Add the Media URL in Settings → Platform.",
         ),
         inheritedSecuritySource(
             "r2",
             "Public media storage",
             "media",
             env.R2_PUBLIC_URL,
-            "Existing public media can load from this exact media origin. Set it as the Media URL in Settings -> System -> Platform.",
+            "Add the Media URL in Settings → Platform.",
         ),
     ];
 }
@@ -367,7 +363,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     });
 
     await invalidateSiteSettingsCache(c.env.CACHE);
-    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, saved);
 });
 
@@ -631,7 +627,7 @@ app.openapi(saveAuthRoute, async (c) => {
         }
 
         await invalidateSiteSettingsCache(c.env.CACHE);
-        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return ok(c, { message: "Auth settings saved successfully" });
 });
 
@@ -741,10 +737,7 @@ app.openapi(saveSecurityRoute, async (c) => {
                     void cacheWrite;
                 }
             }
-            await invalidateApiAndScheduleStorefrontGroups(
-                securitySettingsDocument.invalidationGroups,
-                c,
-            );
+            await bumpCacheGeneration(c);
         }
 
         return ok(c, { message: "Security settings saved successfully" });
@@ -907,10 +900,7 @@ app.openapi(saveEmailRoute, async (c) => {
             ]);
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
-            await invalidateApiAndScheduleStorefrontGroups(
-                emailSettingsDocument.invalidationGroups,
-                c,
-            );
+            await bumpCacheGeneration(c);
         }
         return ok(c, { message: "Email settings saved successfully" });
 });

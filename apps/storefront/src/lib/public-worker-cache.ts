@@ -2,8 +2,21 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
 } from "@scalius/shared/storefront-cache-path";
-import { CACHE_TTL } from "@/lib/api/transport";
-import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
+import {
+  CACHE_GENERATION_HEADER,
+  PUBLIC_CACHE_MAX_AGE_SECONDS,
+} from "@scalius/shared/cache-generation";
+import {
+  requestBypassesPublicStorefrontCache,
+  toPublicCacheRequest,
+} from "@/lib/cache-policy";
+import { applyBrowserCachePolicyForPublicResponse } from "@/lib/public-discovery-cache";
+
+// Anonymous public pages are cached per data center in the Cache API under
+// a key made of the build, the store's cache generation, and the canonical
+// URL. A buyer-visible write replaces the generation, a deploy replaces the
+// build, and old entries age out; nothing is ever purged.
+
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
@@ -29,23 +42,8 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
   "ucp",
 ]);
 
-const PUBLIC_STOREFRONT_CACHE_TAGS = new Set([
-  "categories",
-  "collections",
-  "discovery",
-  "homepage",
-  "layout",
-  "media",
-  "pages",
-  "product-schema",
-  "products",
-  "search",
-]);
-
 export interface PublicStorefrontCachePolicy {
   canonicalUrl: string;
-  edgeTtlSeconds: number;
-  tags: readonly string[];
 }
 
 const PUBLIC_PRECONNECT_REL = "rel=preconnect";
@@ -88,15 +86,6 @@ export function applyPublicStorefrontPreconnectHint(
   response.headers.append("Link", candidate);
 }
 
-interface PublicStorefrontRoutePolicy {
-  edgeTtlSeconds: number;
-  tags: readonly string[];
-}
-
-function hasPrivateRequestSignals(request: Request): boolean {
-  return requestBypassesPublicStorefrontCache(request.headers);
-}
-
 function isCmsPagePath(pathname: string): boolean {
   const segments = pathname.split("/").filter(Boolean);
   return (
@@ -106,71 +95,26 @@ function isCmsPagePath(pathname: string): boolean {
   );
 }
 
-function availabilityPolicy(tags: readonly string[]): PublicStorefrontRoutePolicy {
-  return { edgeTtlSeconds: CACHE_TTL.AVAILABILITY, tags };
-}
-
-function contentPolicy(tags: readonly string[]): PublicStorefrontRoutePolicy {
-  return { edgeTtlSeconds: CACHE_TTL.LONG, tags };
-}
-
-function resolvePublicPathPolicy(
-  pathname: string,
-): PublicStorefrontRoutePolicy | null {
-  if (pathname === "/") {
-    return availabilityPolicy(["homepage", "layout", "media", "products"]);
-  }
-  if (/^\/products\/[^/]+\/?$/.test(pathname)) {
-    return availabilityPolicy(["products", "product-schema", "layout", "media"]);
-  }
-  if (/^\/categories\/[^/]+\/?$/.test(pathname)) {
-    return availabilityPolicy(["categories", "products", "layout", "media"]);
-  }
-  if (/^\/collections\/[^/]+\/?$/.test(pathname)) {
-    return availabilityPolicy(["collections", "products", "layout", "media"]);
-  }
-  if (/^\/search\/?$/.test(pathname)) {
-    return availabilityPolicy(["search", "products", "layout", "media"]);
-  }
-  if (pathname === "/blog/feed.xml") {
-    return contentPolicy(["pages", "products", "discovery"]);
-  }
-  if (/^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) {
-    return availabilityPolicy(["pages", "products", "layout", "media"]);
-  }
-  if (pathname === "/llms.txt") {
-    return contentPolicy(["discovery"]);
-  }
-  if (
+/** Anonymous pages and discovery files; everything else is never cached. */
+function isPublicCachePath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    /^\/(?:products|categories|collections)\/[^/]+\/?$/.test(pathname) ||
+    /^\/search\/?$/.test(pathname) ||
+    /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
+    pathname === "/blog/feed.xml" ||
+    pathname === "/llms.txt" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     pathname === "/sitemap.xsl" ||
-    /^\/sitemap-.*\.xml$/.test(pathname)
-  ) {
-    return contentPolicy([
-      "discovery",
-      "products",
-      "categories",
-      "collections",
-      "pages",
-      "layout",
-    ]);
-  }
-  if (
+    /^\/sitemap-.*\.xml$/.test(pathname) ||
     pathname === "/api/product-feed.xml" ||
-    pathname === "/api/facebook-feed.xml"
-  ) {
-    return availabilityPolicy(["discovery", "products", "layout", "media"]);
-  }
-  if (pathname === "/.well-known/ucp") {
-    return contentPolicy(["discovery", "products", "layout"]);
-  }
-  // CMS content can embed product shortcodes, so a low-frequency merchant
-  // product edit purges this bounded lane without per-page dependency scans.
-  if (isCmsPagePath(pathname)) {
-    return availabilityPolicy(["pages", "products", "layout", "media"]);
-  }
-  return null;
+    pathname === "/api/facebook-feed.xml" ||
+    pathname === "/.well-known/ucp" ||
+    // CMS pages can embed product shortcodes; the store-wide generation
+    // already covers that dependency.
+    isCmsPagePath(pathname)
+  );
 }
 
 function hasBoundedPublicQuery(url: URL): boolean {
@@ -189,160 +133,100 @@ export function getPublicStorefrontCachePolicy(
   request: Request,
 ): PublicStorefrontCachePolicy | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
-  if (hasPrivateRequestSignals(request)) return null;
+  if (requestBypassesPublicStorefrontCache(request.headers)) return null;
 
   const url = new URL(request.url);
   if (!hasBoundedPublicQuery(url)) return null;
   if (hasStorefrontProductVariantSelectionParams(url)) return null;
-  const routePolicy = resolvePublicPathPolicy(url.pathname);
-  if (!routePolicy) return null;
+  if (!isPublicCachePath(url.pathname)) return null;
   const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
-  const requestCachePath = `${normalizedPathname}${url.search}`;
-  const canonicalCachePath = canonicalizeStorefrontHtmlCachePath(requestCachePath);
+  const canonicalCachePath = canonicalizeStorefrontHtmlCachePath(
+    `${normalizedPathname}${url.search}`,
+  );
   if (!canonicalCachePath) return null;
 
-  return {
-    // Pass a canonical same-host Request to the cache-enabled entrypoint.
-    // Wrangler isolates the native cache by Worker version.
-    canonicalUrl: new URL(canonicalCachePath, url.origin).toString(),
-    edgeTtlSeconds: routePolicy.edgeTtlSeconds,
-    tags: routePolicy.tags,
-  };
+  return { canonicalUrl: new URL(canonicalCachePath, url.origin).toString() };
 }
 
-/** Public paths re-rendered into the native cache right after a tag purge. */
-export const PUBLIC_STOREFRONT_WARM_PATHS = ["/"] as const;
-
-/**
- * A tag purge returns before it has propagated to every cache node, so a
- * fetch issued immediately can still be served by the doomed entry and is
- * then evicted a moment later. Warm after propagation has had time to land,
- * and once more later so a slow purge still ends on a populated entry; a
- * second pass on an already-warm entry is a cache hit and costs no render.
- */
-export const PUBLIC_STOREFRONT_WARM_DELAYS_MS = [4_000, 12_000] as const;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Cache API key: build and generation first, then the canonical URL. */
+export function publicStorefrontCacheKey(
+  canonicalUrl: string,
+  buildId: string,
+  generation: string,
+): string {
+  const url = new URL(canonicalUrl);
+  return `${url.origin}/__cache/${encodeURIComponent(buildId)}/${generation}${url.pathname}${url.search}`;
 }
 
-/**
- * Re-populates the cache-enabled entrypoint for the highest-traffic public
- * pages after a purge so the next visitor lands on a warm entry instead of
- * paying for the cold render. Bodies are drained so the runtime can finish
- * storing each response. Failures are logged and never propagate: warming is
- * an optimization, the purge itself already succeeded.
- */
-export async function warmPublicStorefrontCache(
-  origin: string,
-  fetcher: { fetch(request: Request): Promise<Response> },
-  options: {
-    paths?: readonly string[];
-    delaysMs?: readonly number[];
-  } = {},
-): Promise<void> {
-  const paths = options.paths ?? PUBLIC_STOREFRONT_WARM_PATHS;
-  const delaysMs = options.delaysMs ?? PUBLIC_STOREFRONT_WARM_DELAYS_MS;
-  const requests = paths
-    .map((path) => new Request(new URL(path, origin).toString(), {
-      headers: { Accept: "text/html" },
-    }))
-    .filter((request) => getPublicStorefrontCachePolicy(request) !== null);
-  if (requests.length === 0) return;
-
-  let elapsedMs = 0;
-  for (const delayMs of delaysMs) {
-    if (delayMs > elapsedMs) {
-      await sleep(delayMs - elapsedMs);
-      elapsedMs = delayMs;
-    }
-    await Promise.all(requests.map(async (request) => {
-      try {
-        const response = await fetcher.fetch(request);
-        await response.arrayBuffer();
-      } catch (error: unknown) {
-        console.warn(`[Cache] Storefront warm-up failed for ${request.url}:`, error);
-      }
-    }));
-  }
+/** Only the gateway sets the generation a render pins its API reads to. */
+function withGenerationHeader(request: Request, generation: string | null): Request {
+  if (!generation && !request.headers.has(CACHE_GENERATION_HEADER)) return request;
+  const next = new Request(request);
+  if (generation) next.headers.set(CACHE_GENERATION_HEADER, generation);
+  else next.headers.delete(CACHE_GENERATION_HEADER);
+  return next;
 }
 
-export function normalizePublicStorefrontCacheTags(
-  tags: readonly string[],
-): string[] {
-  return [
-    ...new Set(
-      tags.filter((tag) => PUBLIC_STOREFRONT_CACHE_TAGS.has(tag)),
-    ),
-  ];
-}
-
-export function responseHasStorefrontBuild(
-  response: Response,
-  expectedBuildId: string,
-): boolean {
-  return response.headers.get("X-Storefront-Build") === expectedBuildId;
-}
-
-export async function recoverCurrentStorefrontBuild({
-  response,
-  expectedBuildId,
-  purge,
-  refetch,
-  renderDirect,
-}: {
-  response: Response;
-  expectedBuildId: string;
-  purge: () => Promise<void>;
-  refetch: () => Promise<Response>;
-  renderDirect: () => Promise<Response>;
-}): Promise<Response> {
-  if (responseHasStorefrontBuild(response, expectedBuildId)) return response;
-
-  await purge();
-  const retried = await refetch();
-  return responseHasStorefrontBuild(retried, expectedBuildId)
-    ? retried
-    : renderDirect();
-}
-
-export function decoratePublicStorefrontResponse(
-  response: Response,
-  policy: PublicStorefrontCachePolicy,
-): Response {
-  const cacheStatus = response.headers.get("X-Cache-Status") ?? "";
-  const passedPublicResponseGate = /^(?:HIT|MISS|NATIVE)(?:;|$)/.test(cacheStatus);
-  const isNoStore = response.headers.get("Cache-Control")?.includes("no-store");
-  if (!response.ok || (isNoStore && !passedPublicResponseGate)) {
-    return response;
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set(
-    "Cloudflare-CDN-Cache-Control",
-    `public, max-age=${policy.edgeTtlSeconds}, must-revalidate`,
+function isStorableResponse(response: Response): boolean {
+  return (
+    response.status === 200 &&
+    response.headers.get("X-Cache-Status") === "MISS" &&
+    !response.headers.has("Set-Cookie")
   );
-  headers.set("Cache-Tag", policy.tags.join(","));
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+}
+
+function toStoredResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`);
+  headers.delete("Pragma");
+  headers.delete("Expires");
+  return new Response(response.body, { status: response.status, headers });
+}
+
+function fromStoredResponse(stored: Response, request: Request, pathname: string): Response {
+  const response = new Response(request.method === "HEAD" ? null : stored.body, stored);
+  applyBrowserCachePolicyForPublicResponse(response, pathname);
+  response.headers.set("X-Cache-Status", "HIT");
+  return response;
+}
+
+export interface PublicStorefrontCacheContext {
+  /** `caches.default` in production. */
+  cache: Pick<Cache, "match" | "put">;
+  /** The store's cache generation, or `null` to serve uncached. */
+  readGeneration(): Promise<string | null>;
+  buildId: string;
+  render(request: Request): Promise<Response>;
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 /**
- * The cache-enabled entrypoint consumes the edge TTL and tags before returning
- * to the public gateway. Keep those implementation directives internal so no
- * downstream cache can reinterpret them; the public response still exposes
- * X-Cache-Status and Cloudflare's native HIT/MISS evidence.
+ * Serves one storefront request. Private requests (checkout, cart, account,
+ * a named session cookie, variant selections) always render. Public requests
+ * render the canonical, cookie-less URL pinned to the page's generation, and
+ * a successful anonymous render is stored for the next visitor.
  */
-export function exposePublicStorefrontResponse(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.delete("Cloudflare-CDN-Cache-Control");
-  headers.delete("Cache-Tag");
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+export async function servePublicStorefrontRequest(
+  request: Request,
+  context: PublicStorefrontCacheContext,
+): Promise<Response> {
+  const policy = getPublicStorefrontCachePolicy(request);
+  const generation = policy ? await context.readGeneration() : null;
+  if (!policy || !generation) {
+    return context.render(withGenerationHeader(request, null));
+  }
+
+  const key = publicStorefrontCacheKey(policy.canonicalUrl, context.buildId, generation);
+  const pathname = new URL(policy.canonicalUrl).pathname;
+  const stored = await context.cache.match(key);
+  if (stored) return fromStoredResponse(stored, request, pathname);
+
+  const response = await context.render(withGenerationHeader(
+    toPublicCacheRequest(request, policy.canonicalUrl),
+    generation,
+  ));
+  if (request.method === "GET" && isStorableResponse(response)) {
+    context.waitUntil(context.cache.put(key, toStoredResponse(response.clone())));
+  }
+  return response;
 }

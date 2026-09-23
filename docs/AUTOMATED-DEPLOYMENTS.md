@@ -44,7 +44,7 @@ printf %s "$SCALIUS_SECRET" | pnpm secret:derive --purpose admin-setup --stdin
 The tool reads the master secret from an interactive hidden prompt, from
 standard input, or from the environment with `--from-env`. It never accepts it
 as an argument, because arguments are visible to every process on the host, and
-it refuses to derive the session, JWT, service-token, purge-token, agent-pepper,
+it refuses to derive the session, JWT, service-token, agent-pepper,
 and customer-session keys: those are needed only inside a Worker, and printing
 one would move a live credential into shell history.
 

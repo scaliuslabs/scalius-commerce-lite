@@ -29,14 +29,14 @@ const validateCollectionSearch = createListSearchValidator(
   { sort: "sortOrder", order: "asc" },
 );
 
-function mapParams(deps: ReturnType<typeof validateCollectionSearch>) {
+function mapParams(deps: ReturnType<typeof validateCollectionSearch>): Parameters<typeof collectionsQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? ("true" as const) : undefined,
   };
 }
 

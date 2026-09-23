@@ -11,8 +11,10 @@ import type {
 } from "./general-settings-sections";
 
 const api = vi.hoisted(() => ({ getCountries: vi.fn(), updateCountries: vi.fn(), blocker: vi.fn() }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getAllowedCountries: api.getCountries, updateAllowedCountries: api.updateCountries,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsAllowedCountries: api.getCountries,
+  putApiV1AdminSettingsAllowedCountries: api.updateCountries,
 }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: api.blocker }));
 

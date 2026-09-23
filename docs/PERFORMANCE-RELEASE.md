@@ -102,7 +102,7 @@ Remaining PageSpeed diagnostics have no direct score weight. They can still matt
 - Network dependency tree: small application modules and the RUM branch; no missing origin preconnect.
 - LCP phase breakdown and third-party attribution.
 
-The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a mobile-only response branch. It reproduced in [run `sc6enabcnz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/sc6enabcnz?form_factor=mobile), while ten deliberately cold unique requests split between mobile and Googlebot user agents all returned the same valid absolute-sitemap body with 200 responses in 158-428 ms. The immediate PageSpeed repeat `4ng4chsvag` reported SEO 100. The route remains merchant-controlled and semantic-purgeable; no unpurgeable zone Cache Rule or inaccurate fallback policy was added to suppress an external audit timeout. Deployment warming covers robots, all sitemap children, both feeds, homepage, and search, and the gateway attempts one semantic purge-and-refetch when a cached response carries the wrong build stamp.
+The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a mobile-only response branch. It reproduced in [run `sc6enabcnz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/sc6enabcnz?form_factor=mobile), while ten deliberately cold unique requests split between mobile and Googlebot user agents all returned the same valid absolute-sitemap body with 200 responses in 158-428 ms. The immediate PageSpeed repeat `4ng4chsvag` reported SEO 100. The route remains merchant-controlled and generation-keyed; no unpurgeable zone Cache Rule or inaccurate fallback policy was added to suppress an external audit timeout. Deployment warming covers robots, all sitemap children, both feeds, homepage, and search, and storefront cache keys include the build ID, so a cached response never carries a superseded build.
 
 ## Storefront changes retained
 
@@ -114,7 +114,7 @@ The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a 
 - Give product phones a build-generated first-viewport Tailwind sheet while loading the immutable complete shared sheet without blocking first paint; keep the complete sheet render-blocking at desktop widths and in a `noscript` fallback. The focused visual comparison found no first-viewport geometry or computed-style differences, and the live product retained zero CLS.
 - Parse the mobile product hero before the desktop thumbnail rail and explicitly place both desktop grid cells, moving hero discovery 14,077 HTML bytes earlier without changing mobile or desktop geometry.
 - Do not create desktop navigation resize observers, animation frames, or the one-second reveal timeout on phones. Hidden header social images retain no `src` until their matching desktop surface or the mobile drawer becomes visible.
-- Replace Astro's immediate Partytown bootstrap with a hashed post-load bootstrap. Forwarding stubs remain available from parse time, an early buyer interaction starts the sandbox immediately, and the normal path starts after load plus two frames with a four-second ceiling. The current `@qwik.dev/partytown` package also fixes the previously broken Facebook queue stubs without putting provider work on the first-paint path.
+- Replace Astro's immediate Partytown bootstrap with a hashed post-load bootstrap. The bootstrap is rendered only on pages where an enabled analytics script runs in Partytown and forwards only those providers' globals; its stubs are available from parse time, an early buyer interaction starts the sandbox immediately, and the normal path starts after load plus two frames with a four-second ceiling. The current `@qwik.dev/partytown` package also fixes the previously broken Facebook queue stubs without putting provider work on the first-paint path.
 - Keep best-effort Meta browser-event dispatch console-silent on page teardown. The API-side circuit breaker owns actionable provider diagnostics; an aborted optional beacon is not a broken buyer interaction and must not fail Lighthouse Best Practices.
 - Reserve the empty-cart result height before its client controller resolves, removing the prior 0.12 cart CLS and raising its live mobile PageSpeed result from 94 to 99.
 - Add 384/768-pixel CMS image candidates with bounded mobile quality so the prior 14 KiB image-delivery diagnostic disappears without changing CMS-page CLS.
@@ -140,15 +140,14 @@ lifetime remains an unscored diagnostic. A production `no-transform` trial
 removed automatic injection but also disabled Brotli, produced 138 KiB of
 missing-compression opportunity, and fell to 94-95; it remains rejected.
 
-The storefront uses Workers Caching, not the zone CDN cache. It already receives
-Cloudflare's generic tiering and can be invalidated only by the owning cached
-entrypoint's `ctx.cache.purge({ tags })`. Zone Cache Everything, Edge TTL,
-custom cache keys, Smart Tiered topology, Cache Reserve, and dashboard/zone
-purges cannot safely improve or invalidate that SSR lane. Keep the uncached
-gateway, allowlisted cached entrypoint, `cross_version_cache: false`, browser
-`no-store`, and semantic tag purges. Do not enable Cache Reserve: it is metered,
-does not cover Workers-Cached HTML or transformed images, and provides no
-credible PageSpeed benefit here.
+The storefront gateway caches anonymous public pages in the Cache API
+(`caches.default`) under keys that include the build ID and the store's cache
+generation; the API caches public JSON in its `PublicApi` Workers Cache
+entrypoint under the same generation. A buyer-visible write replaces the
+generation, so nothing is purged (see `apps/storefront/README.md`). Zone Cache
+Everything, Edge TTL, custom cache keys, Cache Reserve, and dashboard/zone
+purges do not apply to that SSR lane. Do not enable Cache Reserve: it is
+metered and provides no credible PageSpeed benefit here.
 
 Current production build `src-51656c78805f6590` emits exactly one stable anonymous
 HTML response hint:
@@ -175,18 +174,15 @@ causality or meet the 20-run multi-colo retention threshold. The invariant
 preconnect remains safe and free while that evidence accumulates; it is not
 presented as the missing route to mobile 100.
 
-The durable invalidation ledger was also read live through Wrangler: all 12
-semantic groups had equal requested/applied generations, zero attempts, and no
-last error. The same audit found and closed a quantity-freshness defect before
+The same audit found and closed a quantity-freshness defect before
 any broader caching was considered. Persistent public product, search, and feed
 projections now expose an explicit `availabilityBand` and replace exact stock and
 reservation counts with stable compatibility sentinels. A 10-to-9 change inside
-the same band is therefore byte-stable and needs no purge; transitions between
-untracked, in-stock, low-stock, and out-of-stock still advance the existing
-semantic invalidation ledger. UCP no longer advertises the sentinel as an exact
+the same band is therefore byte-stable and leaves the cache generation alone;
+transitions between untracked, in-stock, low-stock, and out-of-stock replace it. UCP no longer advertises the sentinel as an exact
 quantity, and cart/checkout remain the live authority for requested quantity.
-Scheduled CMS publication boundaries and post-purge warming still need dedicated
-work. None of the zone settings above were allowed to mask or lengthen those
+Scheduled CMS publication boundaries have no write to bump the generation; the
+one-day edge lifetime bounds them. None of the zone settings above were allowed to mask or lengthen those
 application-owned gaps.
 
 ## Dashboard evidence and changes

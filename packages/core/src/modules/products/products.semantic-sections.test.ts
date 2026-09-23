@@ -1,12 +1,6 @@
-import {
-    DatabaseSync,
-    type SQLInputValue,
-    type SQLOutputValue,
-    type StatementSync,
-} from "node:sqlite";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
     PRODUCT_SEMANTIC_RESULT_MAX_BYTES,
@@ -16,157 +10,43 @@ import {
     updateProductSemanticSection,
 } from "./products.semantic-sections";
 
-type SqliteD1Result = {
-    results: Record<string, SQLOutputValue>[];
-    success: true;
-    meta: Record<string, never>;
-};
-
-type SqliteD1Statement = D1PreparedStatement & { execute(): SqliteD1Result };
-
-function sqliteRows(statement: StatementSync, values: SQLInputValue[]) {
-    return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function sqliteD1Statement(
-    sqlite: DatabaseSync,
-    query: string,
-    values: SQLInputValue[],
-    statements: string[],
-): SqliteD1Statement {
-    const execute = (): SqliteD1Result => {
-        statements.push(query);
-        const prepared = sqlite.prepare(query);
-        return { results: sqliteRows(prepared, values), success: true, meta: {} };
-    };
-    return {
-        bind: (...nextValues: unknown[]) => sqliteD1Statement(
-            sqlite,
-            query,
-            nextValues as SQLInputValue[],
-            statements,
-        ),
-        run: async () => execute(),
-        all: async () => execute(),
-        raw: async () => {
-            statements.push(query);
-            const prepared = sqlite.prepare(query);
-            prepared.setReturnArrays(true);
-            return prepared.all(...values) as unknown as SQLOutputValue[][];
-        },
-        first: async (column?: string) => {
-            const row = execute().results[0];
-            return column ? row?.[column] ?? null : row ?? null;
-        },
-        execute,
-    } as unknown as SqliteD1Statement;
-}
-
-function createDatabase(sqlite: DatabaseSync, statements: string[]): Database {
-    const binding = {
-        prepare: (query: string) => sqliteD1Statement(sqlite, query, [], statements),
-        async batch(batchStatements: SqliteD1Statement[]) {
-            sqlite.exec("BEGIN");
-            try {
-                const results = batchStatements.map((statement) => statement.execute());
-                sqlite.exec("COMMIT");
-                return results;
-            } catch (error) {
-                sqlite.exec("ROLLBACK");
-                throw error;
-            }
-        },
-    } as unknown as D1Database;
-    return drizzle(binding, { schema }) as unknown as Database;
-}
-
-function createSchema(sqlite: DatabaseSync) {
-    sqlite.exec(`
-        CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT NOT NULL, deleted_at INTEGER);
-        CREATE TABLE products (
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, price REAL NOT NULL,
-            category_id TEXT, slug TEXT NOT NULL, meta_title TEXT, meta_description TEXT,
-            canonical_path TEXT, no_index INTEGER NOT NULL, exclude_from_sitemap INTEGER NOT NULL,
-            exclude_from_product_feed INTEGER NOT NULL, product_condition TEXT,
-            aggregate_revision INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-            deleted_at INTEGER, is_active INTEGER NOT NULL, discount_percentage REAL,
-            discount_type TEXT, discount_amount REAL, free_delivery INTEGER NOT NULL,
-            tax_class_id TEXT, tax_classification_version INTEGER NOT NULL
-        );
-        CREATE TABLE media (id TEXT PRIMARY KEY, status TEXT NOT NULL);
-        CREATE TABLE product_media (
-            id TEXT PRIMARY KEY, product_id TEXT NOT NULL, media_id TEXT NOT NULL, alt_text TEXT,
-            is_primary INTEGER NOT NULL, sort_order INTEGER NOT NULL, created_at INTEGER, updated_at INTEGER
-        );
-        CREATE TABLE product_attributes (id TEXT PRIMARY KEY, deleted_at INTEGER);
-        CREATE TABLE product_attribute_values (
-            id TEXT PRIMARY KEY, product_id TEXT NOT NULL, attribute_id TEXT NOT NULL,
-            value TEXT NOT NULL, created_at INTEGER
-        );
-        CREATE TABLE product_rich_content (
-            id TEXT PRIMARY KEY, product_id TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL,
-            sort_order INTEGER NOT NULL, created_at INTEGER, updated_at INTEGER
-        );
-        CREATE TABLE product_option_definitions (
-            id TEXT PRIMARY KEY, product_id TEXT NOT NULL, name TEXT NOT NULL, normalized_name TEXT NOT NULL,
-            position INTEGER NOT NULL, standard_mapping TEXT NOT NULL, created_at INTEGER,
-            updated_at INTEGER, deleted_at INTEGER
-        );
-        CREATE TABLE product_option_values (
-            id TEXT PRIMARY KEY, option_definition_id TEXT NOT NULL, value TEXT NOT NULL,
-            normalized_value TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER,
-            updated_at INTEGER, deleted_at INTEGER
-        );
-        CREATE TABLE product_variants (
-            id TEXT PRIMARY KEY, product_id TEXT NOT NULL, option_combination_key TEXT, image_id TEXT,
-            weight REAL, sku TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL,
-            reserved_stock INTEGER NOT NULL, preorder_stock INTEGER NOT NULL, is_default INTEGER NOT NULL,
-            track_inventory INTEGER NOT NULL, version INTEGER NOT NULL, stock_version INTEGER NOT NULL,
-            low_stock_threshold INTEGER, allow_preorder INTEGER NOT NULL, preorder_date TEXT,
-            preorder_message TEXT, allow_backorder INTEGER NOT NULL, backorder_limit INTEGER NOT NULL,
-            tax_class_id TEXT, tax_classification_version INTEGER NOT NULL, discount_percentage REAL,
-            discount_type TEXT, discount_amount REAL, barcode TEXT, barcode_type TEXT,
-            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER
-        );
-        CREATE TABLE product_variant_option_values (
-            variant_id TEXT NOT NULL, option_definition_id TEXT NOT NULL, option_value_id TEXT NOT NULL
-        );
-    `);
-}
-
 function seedMaximumProduct(sqlite: DatabaseSync) {
-    sqlite.prepare(`INSERT INTO categories(id, name) VALUES (?, ?)`).run("cat_semantic", "Semantic");
-    sqlite.prepare(`INSERT INTO products VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-    )`).run(
+    sqlite.prepare(`INSERT INTO categories(id, name, slug) VALUES (?, ?, ?)`).run("cat_semantic", "Semantic", "semantic");
+    sqlite.prepare(`INSERT INTO products (
+        id, name, description, price, category_id, slug, meta_title, meta_description,
+        canonical_path, product_condition, aggregate_revision, created_at, updated_at,
+        discount_percentage, discount_type, discount_amount
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
         "prod_semantic", "Bounded product", "d".repeat(100_000), 125,
         "cat_semantic", "bounded-product", "m".repeat(30_000), "e".repeat(40_000),
-        "/products/bounded-product", 0, 0, 0, "new", 7, 1_700_000_000,
-        1_700_000_001, null, 1, 10, "percentage", 0, 0, null, 1,
+        "/products/bounded-product", "new", 7, 1_700_000_000, 1_700_000_001, 10, "percentage", 0,
     );
-    sqlite.prepare(`INSERT INTO product_rich_content VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-        "prc_semantic", "prod_semantic", "t".repeat(100_000), "c".repeat(100_000), 0, 1, 1,
+    sqlite.prepare(`INSERT INTO product_rich_content (id, product_id, title, content, sort_order) VALUES (?, ?, ?, ?, ?)`).run(
+        "prc_semantic", "prod_semantic", "t".repeat(100_000), "c".repeat(100_000), 0,
     );
-    sqlite.prepare(`INSERT INTO media(id, status) VALUES (?, ?), (?, ?)`).run(
-        "media_semantic_primary", "ready", "media_semantic_secondary", "trashed",
+    sqlite.prepare(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
+        (?, 'primary.webp', 'image', 'media/primary.webp', 1, 'image/webp', 'ready'),
+        (?, 'secondary.webp', 'image', 'media/secondary.webp', 1, 'image/webp', 'ready')`).run(
+        "media_semantic_primary", "media_semantic_secondary",
     );
-    sqlite.prepare(`INSERT INTO product_media VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        "pmed_semantic_primary", "prod_semantic", "media_semantic_primary", "Primary", 1, 0, 1, 1,
-        "pmed_semantic_secondary", "prod_semantic", "media_semantic_secondary", "Secondary", 0, 1, 1, 1,
+    sqlite.prepare(`INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order) VALUES
+        (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`).run(
+        "pmed_semantic_primary", "prod_semantic", "media_semantic_primary", "Primary", 1, 0,
+        "pmed_semantic_secondary", "prod_semantic", "media_semantic_secondary", "Secondary", 0, 1,
     );
-    sqlite.prepare(`INSERT INTO product_option_definitions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        "popt_size", "prod_semantic", "Size", "size", 0, "size", 1, 1, null,
-    );
-    const valueInsert = sqlite.prepare(`INSERT INTO product_option_values VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-    const variantInsert = sqlite.prepare(`INSERT INTO product_variants VALUES (
-        ?, ?, ?, NULL, NULL, ?, 125, ?, 0, 0, 0, 1, 1, 1, NULL, 0, NULL, NULL,
-        0, 0, NULL, 1, 0, 'percentage', 0, NULL, NULL, ?, ?, NULL
-    )`);
-    const selectionInsert = sqlite.prepare(`INSERT INTO product_variant_option_values VALUES (?, ?, ?)`);
+    sqlite.prepare(`UPDATE media SET status = 'trashed', trashed_at = 1 WHERE id = ?`).run("media_semantic_secondary");
+    sqlite.prepare(`INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping)
+        VALUES (?, ?, ?, ?, ?, ?)`).run("popt_size", "prod_semantic", "Size", "size", 0, "size");
+    const valueInsert = sqlite.prepare(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position)
+        VALUES (?, 'popt_size', ?, ?, ?)`);
+    const variantInsert = sqlite.prepare(`INSERT INTO product_variants (
+        id, product_id, option_combination_key, sku, price, stock, discount_type, discount_percentage, created_at, updated_at
+    ) VALUES (?, 'prod_semantic', ?, ?, 125, ?, 'percentage', 0, ?, ?)`);
+    const selectionInsert = sqlite.prepare(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, 'popt_size', ?)`);
     for (let index = 0; index < 150; index += 1) {
-        valueInsert.run(`pval_${index}`, "popt_size", `Size ${index}`, `size ${index}`, index, 1, 1, null);
-        variantInsert.run(`var_${index}`, "prod_semantic", `pval_${index}`, `SEMANTIC-${index}`, index, 100 + index, 100 + index);
-        selectionInsert.run(`var_${index}`, "popt_size", `pval_${index}`);
+        valueInsert.run(`pval_${index}`, `Size ${index}`, `size ${index}`, index);
+        variantInsert.run(`var_${index}`, `pval_${index}`, `SEMANTIC-${index}`, index, 100 + index, 100 + index);
+        selectionInsert.run(`var_${index}`, `pval_${index}`);
     }
 }
 
@@ -182,11 +62,9 @@ describe("product semantic sections", () => {
     let db: Database;
 
     beforeEach(() => {
-        sqlite = new DatabaseSync(":memory:");
         statements = [];
-        createSchema(sqlite);
+        ({ sqlite, db } = createSqliteD1Database({ onQuery: (statement) => statements.push(statement) }));
         seedMaximumProduct(sqlite);
-        db = createDatabase(sqlite, statements);
     });
 
     afterEach(() => sqlite.close());

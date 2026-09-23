@@ -66,6 +66,28 @@ describe("admin order mutation OpenAPI responses", () => {
         expectResponses(spec, "/api/v1/admin/orders/{id}/invoice/print", "get", [
             "200", "400", "401", "403", "404", "409", "503",
         ]);
+        expect(spec.paths?.["/api/v1/admin/orders/{id}/invoice"]).toHaveProperty("get");
+        expect(spec.paths?.["/api/v1/admin/orders/{id}/invoice"]).toHaveProperty("post");
+    });
+
+    it("keeps list, recovery-queue, and payment-attempt views free of provider claim secrets", () => {
+        const spec = buildAdminOrdersSpec();
+        const schemaOf = (path: string) => JSON.stringify(
+            (spec.paths?.[path]?.get?.responses?.["200"] as { content?: unknown } | undefined)?.content,
+        );
+        for (const path of ["/api/v1/admin/orders", "/api/v1/admin/orders/payment-recovery"]) {
+            const list = schemaOf(path);
+            expect(list).toContain("activeRefundOperation");
+            expect(list).toContain("shipmentRecovery");
+            for (const secret of ["refundAttempts", "providerRefundId", "lastError", "shipmentClaimId", "attemptKey"]) {
+                expect(list, `${path} leaks ${secret}`).not.toContain(`"${secret}"`);
+            }
+        }
+        const payments = schemaOf("/api/v1/admin/orders/{id}/payments");
+        expect(payments).toContain("paymentSessionAttempts");
+        for (const secret of ["attemptKey", "requestHash", "responsePayload", "claimId"]) {
+            expect(payments, `payments leaks ${secret}`).not.toContain(`"${secret}"`);
+        }
     });
 
     it("accepts every concurrently active order-list filter on recovery export", () => {
@@ -225,6 +247,11 @@ describe("admin order mutation OpenAPI responses", () => {
             "404",
             "409",
             "503",
+        ]);
+        // Fulfillment aggregate state is owned by shipment workflows, never a manual override.
+        expect(spec.paths?.["/api/v1/admin/orders/{id}/fulfillment-status"]).toBeUndefined();
+        expectResponses(spec, "/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile", "post", [
+            "200", "400", "401", "403", "404", "409", "503",
         ]);
         expectResponses(spec, "/api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh", "post", [
             "200",

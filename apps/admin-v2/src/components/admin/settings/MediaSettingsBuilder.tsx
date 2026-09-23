@@ -11,11 +11,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { getMediaSettings, updateMediaSettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
+import {
+  getApiV1AdminSettingsMedia,
+  postApiV1AdminSettingsMedia,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 interface MediaSettingsValues {
   canonicalCdnUrl: string;
@@ -45,7 +49,7 @@ function fromLines(value: string): string[] {
 }
 
 const fetchMedia = async (): Promise<MediaSettingsValues> => {
-  const data = (await getMediaSettings()) as Record<string, unknown>;
+  const data = (await apiData(getApiV1AdminSettingsMedia())) as Record<string, unknown>;
   return {
     canonicalCdnUrl: (data.canonicalCdnUrl as string) || "",
     canonicalHostAliasesText: toLines(data.canonicalHostAliases),
@@ -53,12 +57,12 @@ const fetchMedia = async (): Promise<MediaSettingsValues> => {
 };
 
 const saveMedia = async (values: MediaSettingsValues) => {
-  await updateMediaSettings({
-    data: {
+  await apiData(postApiV1AdminSettingsMedia({
+    body: {
       canonicalCdnUrl: values.canonicalCdnUrl.trim(),
       canonicalHostAliases: fromLines(values.canonicalHostAliasesText),
     },
-  });
+  }));
 };
 
 export default function MediaSettingsBuilder() {

@@ -1,6 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
@@ -46,68 +46,6 @@ const STORED_AUTOMATION_DEFAULTS = {
   identityHandoff: AUTOMATION_DEFAULTS.identityHandoff,
 };
 
-function createSchema(sqlite: DatabaseSync): void {
-  sqlite.exec(`
-    CREATE TABLE settings (
-      id TEXT PRIMARY KEY NOT NULL,
-      key TEXT NOT NULL,
-      value TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'string',
-      category TEXT NOT NULL DEFAULT 'general',
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      expires_at INTEGER,
-      UNIQUE(key, category)
-    );
-    CREATE TABLE site_settings (
-      id TEXT PRIMARY KEY NOT NULL,
-      singleton_key TEXT NOT NULL DEFAULT 'default' UNIQUE,
-      logo TEXT,
-      favicon TEXT,
-      site_name TEXT NOT NULL,
-      site_description TEXT,
-      header_config TEXT NOT NULL,
-      header_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (header_config_revision >= 1),
-      footer_config TEXT NOT NULL,
-      footer_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (footer_config_revision >= 1),
-      social_links TEXT,
-      contact_info TEXT,
-      site_title TEXT,
-      homepage_title TEXT,
-      homepage_meta_description TEXT,
-      homepage_config TEXT NOT NULL DEFAULT '{}',
-      homepage_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (homepage_config_revision >= 1),
-      robots_txt TEXT,
-      storefront_url TEXT DEFAULT '/',
-      auth_verification_method TEXT NOT NULL DEFAULT 'email',
-      guest_checkout_enabled INTEGER NOT NULL DEFAULT 1,
-      checkout_mode TEXT NOT NULL DEFAULT 'all',
-      partial_payment_enabled INTEGER NOT NULL DEFAULT 0,
-      partial_payment_amount REAL NOT NULL DEFAULT 0,
-      checkout_flow_revision INTEGER NOT NULL DEFAULT 1,
-      whatsapp_access_token TEXT,
-      whatsapp_phone_number_id TEXT,
-      whatsapp_template_name TEXT DEFAULT 'auth_otp',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `);
-}
-
-function createDatabase(sqlite: DatabaseSync): Database {
-  return drizzle(async (query, params, method) => {
-    const statement = sqlite.prepare(query);
-    statement.setReturnArrays(true);
-    if (method === "run") {
-      statement.run(...params);
-      return { rows: [] };
-    }
-    if (method === "get") {
-      return { rows: statement.get(...params) as unknown as unknown[] };
-    }
-    return { rows: statement.all(...params) as unknown as unknown[][] };
-  }) as unknown as Database;
-}
-
 function createKv(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
   return {
@@ -134,9 +72,7 @@ describe("platform settings storage", () => {
   let db: Database;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    createSchema(sqlite);
-    db = createDatabase(sqlite);
+    ({ sqlite, db } = createSqliteD1Database());
   });
 
   afterEach(() => {
@@ -517,9 +453,7 @@ describe("resolvePlatformConfig", () => {
   let db: Database;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    createSchema(sqlite);
-    db = createDatabase(sqlite);
+    ({ sqlite, db } = createSqliteD1Database());
   });
 
   afterEach(() => {

@@ -17,11 +17,8 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getEmailSettings,
   type EmailSettingsPayload,
-  type SettingsPayload,
-  updateEmailSettings,
-} from "~/lib/api-functions/settings";
+} from "~/lib/api-query-options/settings";
 import { queryKeys } from "~/lib/query-keys";
 import { getSettingsLoadErrorMessage, mergeUneditedFields } from "~/hooks/use-settings-form";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -39,6 +36,11 @@ import { Label } from "~/components/ui/label";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { OfficialProviderMark } from "./provider-marks";
 import { isReady } from "@scalius/shared/readiness";
+import {
+  getApiV1AdminSettingsEmail,
+  postApiV1AdminSettingsEmail,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "~/lib/api";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -80,7 +82,7 @@ export default function EmailSettingsForm() {
     refetch,
   } = useQuery({
     queryKey: queryKeys.settings.email(),
-    queryFn: getEmailSettings,
+    queryFn: () => apiData(getApiV1AdminSettingsEmail()),
   });
   const dataUpdateCount = queryClient.getQueryState(queryKeys.settings.email())?.dataUpdateCount ?? 0;
   const [{ draft, savedDraft }, setEditor] = useState<{ draft: EmailDraft | null; savedDraft: EmailDraft | null }>({
@@ -110,14 +112,14 @@ export default function EmailSettingsForm() {
 
   const saveMutation = useMutation({
     mutationFn: async (nextDraft: EmailDraft) => {
-      const payload: SettingsPayload = {
+      const payload: ApiBody<typeof postApiV1AdminSettingsEmail> = {
         provider: nextDraft.provider,
         sender: nextDraft.sender,
       };
       if (nextDraft.apiKey !== MASKED_VALUE) {
         payload.apiKey = nextDraft.apiKey;
       }
-      return updateEmailSettings({ data: payload });
+      return apiData(postApiV1AdminSettingsEmail({ body: payload }));
     },
     onSuccess: async (_response, saved) => {
       // Ignore pre-acknowledgment reads even if their React effect is still queued.

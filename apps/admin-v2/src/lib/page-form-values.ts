@@ -1,4 +1,4 @@
-import type { PageDto } from "~/lib/api-functions/pages";
+import type { PageDto } from "~/lib/api-query-options/pages";
 import type { PageFormValues } from "~/lib/form-schemas";
 import { getPagePublicationMode } from "~/lib/page-publication";
 import { unixToDate } from "@scalius/shared/timestamps";

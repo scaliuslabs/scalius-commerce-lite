@@ -1,4 +1,9 @@
 import { useState } from "react";
+import type {
+  getApiV1AdminSettingsSslcommerz,
+  getApiV1AdminSettingsStripe,
+} from "@scalius/api-client/sdk";
+import type { ApiResult } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,8 +34,8 @@ export interface PaymentMethodsData {
   activeMethods?: MethodKey[]; activeDefaultMethod?: MethodKey;
   gatewayStatus: Record<MethodKey, GatewayStatus>;
 }
-export interface StripeData { secretKey: string; publishableKey: string; webhookSecret: string; enabled: boolean; }
-export interface SSLCommerzData { storeId: string; storePassword: string; sandbox: boolean; enabled: boolean; }
+export type StripeData = ApiResult<typeof getApiV1AdminSettingsStripe>;
+export type SSLCommerzData = ApiResult<typeof getApiV1AdminSettingsSslcommerz>;
 export type MethodKey = "stripe" | "sslcommerz" | "cod";
 
 // --- Provider marks ---

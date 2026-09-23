@@ -1,21 +1,23 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeletePages,
-  bulkPublishPages,
-  bulkRestorePages,
-  bulkUnpublishPages,
-  deletePage,
-  permanentDeletePage,
-  restorePage,
-  type PageRevisionClaim,
-} from "../api-functions/pages";
+  deleteApiV1AdminPagesById,
+  deleteApiV1AdminPagesByIdPermanent,
+  postApiV1AdminPagesBulkDelete,
+  postApiV1AdminPagesBulkPublish,
+  postApiV1AdminPagesBulkRestore,
+  postApiV1AdminPagesBulkUnpublish,
+  postApiV1AdminPagesByIdRestore,
+} from "@scalius/api-client/sdk";
+import { apiData } from "../api";
+import type { PageRevisionClaim } from "../api-query-options/pages";
 import { getServerFnError, queryKeys } from "./shared";
 
 export function useDeletePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: PageRevisionClaim) => deletePage({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: PageRevisionClaim) =>
+      apiData(deleteApiV1AdminPagesById({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
@@ -29,8 +31,8 @@ export function useDeletePage(entityName = "Page") {
 export function usePermanentDeletePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: PageRevisionClaim) =>
-      permanentDeletePage({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: PageRevisionClaim) =>
+      apiData(deleteApiV1AdminPagesByIdPermanent({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
@@ -44,7 +46,8 @@ export function usePermanentDeletePage(entityName = "Page") {
 export function useRestorePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: PageRevisionClaim) => restorePage({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: PageRevisionClaim) =>
+      apiData(postApiV1AdminPagesByIdRestore({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.invalidateQueries({
@@ -60,8 +63,8 @@ export function useRestorePage(entityName = "Page") {
 export function useBulkDeletePages(entityPlural = "pages") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { pages: PageRevisionClaim[]; permanent?: boolean }) =>
-      bulkDeletePages({ data }),
+    mutationFn: (body: { pages: PageRevisionClaim[]; permanent?: boolean }) =>
+      apiData(postApiV1AdminPagesBulkDelete({ body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(
@@ -79,7 +82,7 @@ export function useBulkRestorePages(entityPlural = "pages") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (pages: PageRevisionClaim[]) =>
-      bulkRestorePages({ data: { pages } }),
+      apiData(postApiV1AdminPagesBulkRestore({ body: { pages } })),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(`${pages.length} ${entityPlural} restored`);
@@ -96,7 +99,7 @@ export function useBulkPublishPages(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (pages: PageRevisionClaim[]) =>
-      bulkPublishPages({ data: { pages } }),
+      apiData(postApiV1AdminPagesBulkPublish({ body: { pages } })),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(
@@ -115,7 +118,7 @@ export function useBulkUnpublishPages(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (pages: PageRevisionClaim[]) =>
-      bulkUnpublishPages({ data: { pages } }),
+      apiData(postApiV1AdminPagesBulkUnpublish({ body: { pages } })),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   bulkPublishPages: vi.fn(),
   bulkUnpublishPages: vi.fn(),
   restorePages: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/pages", async () => {
@@ -35,9 +35,9 @@ vi.mock("@scalius/core/modules/pages", async () => {
   };
 });
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups:
-    mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../utils/cache-generation", () => ({
+  bumpCacheGeneration:
+    mocks.bumpCacheGeneration,
 }));
 
 import { adminPageRoutes } from "./pages";
@@ -66,8 +66,6 @@ function createTestApp(
   const db = { id: "db" };
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
     ...(dashboardUrl ? { PLATFORM_CONFIG: { dashboardUrl } } : {}),
   } as unknown as Env;
 
@@ -78,7 +76,7 @@ function createTestApp(
   mocks.bulkPublishPages.mockResolvedValue(undefined);
   mocks.bulkUnpublishPages.mockResolvedValue(undefined);
   mocks.restorePages.mockResolvedValue(undefined);
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -134,9 +132,7 @@ describe("admin page cache invalidation", () => {
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["pages"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 

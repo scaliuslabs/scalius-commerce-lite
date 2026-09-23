@@ -9,7 +9,7 @@ export type BuyerAvailabilityBand = (typeof BUYER_AVAILABILITY_BANDS)[number];
 
 // Buyer quantity inputs are bounded to this value throughout the storefront.
 // Public cached projections use it as a non-authoritative in-stock sentinel so
-// exact inventory does not become stale between availability-band purges.
+// exact inventory does not become stale between availability-band bumps.
 export const PUBLIC_BUYER_QUANTITY_CEILING = 99;
 
 export interface BuyerAvailabilityInput {

@@ -47,7 +47,7 @@ function validateAnalyticsSearch(search: Record<string, unknown>) {
   };
 }
 
-function mapParams(search: ReturnType<typeof validateAnalyticsSearch>) {
+function mapParams(search: ReturnType<typeof validateAnalyticsSearch>): Parameters<typeof analyticsScriptsQueryOptions>[0] {
   return {
     page: search.page,
     limit: search.limit,
@@ -56,7 +56,7 @@ function mapParams(search: ReturnType<typeof validateAnalyticsSearch>) {
     status: search.trashed ? undefined : search.status,
     sort: search.sort,
     order: search.order,
-    showTrashed: search.trashed,
+    trashed: search.trashed ? ("true" as const) : undefined,
   };
 }
 

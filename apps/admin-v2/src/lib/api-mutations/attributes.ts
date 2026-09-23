@@ -1,19 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteAttributes,
-  deleteAttribute,
-  deleteAttributePermanent,
-  restoreAttribute,
-  updateAttribute,
-  type UpdateAttributeInput,
-} from "../api-functions/attributes";
+  deleteApiV1AdminAttributesById,
+  deleteApiV1AdminAttributesByIdPermanent,
+  postApiV1AdminAttributesBulkDelete,
+  postApiV1AdminAttributesByIdRestore,
+  putApiV1AdminAttributesById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import { getServerFnError, queryKeys } from "./shared";
+
+type UpdateAttributeInput = { id: string } & ApiBody<typeof putApiV1AdminAttributesById>;
 
 export function useUpdateAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateAttributeInput) => updateAttribute({ data }),
+    mutationFn: ({ id, ...body }: UpdateAttributeInput) =>
+      apiData(putApiV1AdminAttributesById({ path: { id }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({
@@ -29,7 +32,7 @@ export function useUpdateAttribute() {
 export function useDeleteAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteAttribute({ data: { id } }),
+    mutationFn: (id: string) => apiData(deleteApiV1AdminAttributesById({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({
@@ -46,7 +49,8 @@ export function useDeleteAttribute() {
 export function usePermanentDeleteAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteAttributePermanent({ data: { id } }),
+    mutationFn: (id: string) =>
+      apiData(deleteApiV1AdminAttributesByIdPermanent({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({
@@ -65,7 +69,7 @@ export function usePermanentDeleteAttribute() {
 export function useRestoreAttribute() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreAttribute({ data: { id } }),
+    mutationFn: (id: string) => apiData(postApiV1AdminAttributesByIdRestore({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({
@@ -84,8 +88,8 @@ export function useRestoreAttribute() {
 export function useBulkDeleteAttributes() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
-      bulkDeleteAttributes({ data }),
+    mutationFn: (body: { ids: string[]; permanent?: boolean }) =>
+      apiData(postApiV1AdminAttributesBulkDelete({ body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
       queryClient.invalidateQueries({

@@ -566,30 +566,6 @@ describe("admin route graph boundaries", () => {
     ).toBe(true);
   });
 
-  it("keeps the global cache invalidation action behind cache manage permission", () => {
-    const adminHeaderSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
-      "utf8",
-    );
-    const cacheNukeButtonSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "CacheNukeButton.tsx"),
-      "utf8",
-    );
-
-    expect(ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE).toBe(
-      PERMISSIONS.SETTINGS_CACHE_MANAGE,
-    );
-    expect(adminHeaderSource).toContain("useHasPermission");
-    expect(adminHeaderSource).toContain(
-      "ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE",
-    );
-    expect(adminHeaderSource).toContain("canManageCache ? (");
-    expect(cacheNukeButtonSource).toContain(
-      "Invalidate API cache and purge storefront edge cache",
-    );
-    expect(cacheNukeButtonSource).not.toContain("Clear all cache");
-  });
-
   it("keeps customer form writes invalidating dashboard aggregates", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "CustomerForm.tsx"),
@@ -1149,10 +1125,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "lib", "admin-query-client.ts"),
       "utf8",
     );
-    const cacheQuerySource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "cache.ts"),
-      "utf8",
-    );
     const orderDetailSource = readFileSync(
       join(
         ADMIN_SRC_ROOT,
@@ -1217,7 +1189,6 @@ describe("admin route graph boundaries", () => {
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");
     expect(queryClientSource).toContain("ADMIN_QUERY_RETRY = false");
-    expect(cacheQuerySource).not.toContain("refetchOnReconnect: true");
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
@@ -1232,9 +1203,6 @@ describe("admin route graph boundaries", () => {
     expect(orderListSource).not.toContain("refreshIntervalRef");
     expect(adminHeaderSource).toContain("requestIdleCallback");
     expect(adminHeaderSource).toContain("lazy(()");
-    expect(adminHeaderSource).not.toMatch(
-      /import\s+\{\s*CacheNukeButton\s*\}\s+from/,
-    );
     expect(adminHeaderSource).not.toMatch(
       /import\s+\{\s*NotificationDropdown\s*\}\s+from/,
     );
@@ -1352,14 +1320,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "hooks", "use-currency.ts"),
       "utf8",
     );
-    const currencyQueryOptionsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "currency.ts"),
-      "utf8",
-    );
-    const dashboardHomeQueryOptionsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "dashboard-home.ts"),
-      "utf8",
-    );
     const dashboardStatsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "DashboardStats.tsx"),
       "utf8",
@@ -1404,27 +1364,15 @@ describe("admin route graph boundaries", () => {
     expect(currencyHookSource).not.toContain(
       "~/lib/api-query-options/settings",
     );
-    expect(currencyQueryOptionsSource).toContain("../api-functions/currency");
-    expect(currencyQueryOptionsSource).not.toContain("getPaymentMethods");
-    expect(currencyQueryOptionsSource).not.toContain("getMetaConversionsLogs");
-    expect(currencyQueryOptionsSource).not.toContain("getAuthSettings");
-    expect(dashboardHomeQueryOptionsSource).toContain(
-      "../api-functions/dashboard-home",
-    );
-    expect(dashboardHomeQueryOptionsSource).not.toContain("getDashboardData");
   });
 
   it("keeps secondary admin tool routes from blocking first paint on data reads", () => {
-    const cacheSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "settings", "cache.tsx"),
-      "utf8",
-    );
     const inventorySource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "inventory", "index.tsx"),
       "utf8",
     );
 
-    for (const source of [cacheSource, inventorySource]) {
+    for (const source of [inventorySource]) {
       const loaderSource = source.slice(
         source.indexOf("loader:"),
         source.indexOf("head:"),
@@ -1535,15 +1483,6 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    const querySource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "lib",
-        "api-query-options",
-        "abandoned-checkouts.ts",
-      ),
-      "utf8",
-    );
 
     expect(source).toContain("AbandonedCheckoutsManager");
     expect(source).toContain("validateSearch: validateAbandonedCheckoutSearch");
@@ -1556,8 +1495,6 @@ describe("admin route graph boundaries", () => {
     expect(managerSource).not.toContain('useState("")');
     expect(managerSource).toContain("No records have been assumed.");
     expect(managerSource).toContain("getCanonicalPageForPagination");
-    expect(querySource).toContain("getAbandonedCheckouts({ data: params })");
-    expect(querySource).not.toContain("fetch(");
   });
 
   it("keeps new-order creation independent from catalog size", () => {

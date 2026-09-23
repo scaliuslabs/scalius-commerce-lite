@@ -1,38 +1,23 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import type { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ORDER_CSV_ARTIFACT_MAX_BYTES } from "@scalius/core/modules/orders/order-csv-export";
 import { adminOrdersRoutes } from "./orders";
-
-type Query = { sql: string; params: unknown[]; method: string };
 
 describe("order CSV export pagination", () => {
     let sqlite: DatabaseSync;
     let app: OpenAPIHono<{ Bindings: Env }>;
+    let maxBoundParameters = 0;
     const ids = Array.from({ length: 250 }, (_, index) => `export_${String(index + 1).padStart(3, "0")}`);
 
     beforeAll(() => {
-        sqlite = new DatabaseSync(":memory:");
-        const migrations = new URL("../../../../../packages/database/migrations/", import.meta.url);
-        for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-            sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-        }
-        const execute = ({ sql, params, method }: Query) => {
-            const statement = sqlite.prepare(sql);
-            statement.setReturnArrays(true);
-            return { rows: method === "get"
-                ? statement.get(...params as SQLInputValue[]) as unknown as unknown[]
-                : statement.all(...params as SQLInputValue[]) as unknown as unknown[][] };
-        };
-        const db = drizzle(
-            async (sql, params, method) => execute({ sql, params, method }),
-            async (batch) => batch.map(execute),
-            { schema },
-        ) as unknown as Database;
+        const { sqlite: migrated, db } = createSqliteD1Database({
+            onQuery: (_query, values) => {
+                maxBoundParameters = Math.max(maxBoundParameters, values.length);
+            },
+        });
+        sqlite = migrated;
         const insert = sqlite.prepare(`INSERT INTO orders (
             id, customer_name, customer_phone, shipping_address, city, zone,
             total_amount, shipping_charge, payment_method, status, payment_status,
@@ -87,6 +72,33 @@ describe("order CSV export pagination", () => {
         expect(response.headers.get("X-Export-Row-Count")).toBe(String(rows.length));
         return { response, ids: rows.map((row) => /^"([^"]+)"/.exec(row)?.[1]) };
     }
+
+    it("resolves static order routes ahead of the dynamic order id and bounds catalog search", async () => {
+        for (const path of ["/catalog-products?limit=20", "/payment-recovery"]) {
+            expect((await app.request(`/api/v1/admin/orders${path}`)).status, path).toBe(200);
+        }
+        expect((await app.request("/api/v1/admin/orders/catalog-products?limit=21")).status).toBe(400);
+    });
+
+    it("hydrates a 120-line order form within the D1 bound-parameter limit", async () => {
+        const product = sqlite.prepare("INSERT INTO products (id, name, price, slug) VALUES (?, ?, 1, ?)");
+        const variant = sqlite.prepare("INSERT INTO product_variants (id, product_id, sku, price, is_default) VALUES (?, ?, ?, 1, 1)");
+        const item = sqlite.prepare(
+            "INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, price) VALUES (?, 'export_001', ?, ?, 1, 1)",
+        );
+        for (let index = 0; index < 120; index += 1) {
+            product.run(`product_${index}`, `Product ${index}`, `product-${index}`);
+            variant.run(`variant_${index}`, `product_${index}`, `SKU-${index}`);
+            item.run(`line_${index}`, `product_${index}`, `variant_${index}`);
+        }
+        maxBoundParameters = 0;
+        const response = await app.request("/api/v1/admin/orders/export_001/form-data");
+        const body = await response.json() as { data: { productsWithVariants: Array<{ variants: unknown[] }> } };
+        expect(response.status).toBe(200);
+        expect(body.data.productsWithVariants).toHaveLength(120);
+        expect(body.data.productsWithVariants.every((entry) => entry.variants.length === 1)).toBe(true);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
 
     for (const path of ["/export", "/payment-recovery/export"]) {
         describe(path, () => {

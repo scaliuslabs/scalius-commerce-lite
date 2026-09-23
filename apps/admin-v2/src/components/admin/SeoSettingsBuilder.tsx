@@ -44,15 +44,18 @@ import {
   type SeoDiscoverySettingsWithReturnPolicy,
 } from "@/lib/seo-discovery-status";
 import {
-  getBusinessSettings,
-  getSeoSettings,
-  updateSeoSettings,
   type UpdateSeoSettingsInput,
-} from "@/lib/api-functions/settings";
+} from "@/lib/api-query-options/settings";
 import { generalSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import {
+  getApiV1AdminSettingsBusiness,
+  getApiV1AdminSettingsSeo,
+  postApiV1AdminSettingsSeo,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 interface SeoConfig {
   siteTitle: string;
@@ -123,7 +126,7 @@ function isInvalidReturnPolicyUrl(value: string): boolean {
 }
 
 const fetchSeo = async (): Promise<SeoConfig> => {
-  const data = await getSeoSettings();
+  const data = await apiData(getApiV1AdminSettingsSeo());
   const dataWithReturnPolicy = data as SeoSettingsPayloadWithReturnPolicy;
   return {
     siteTitle: data.siteTitle || defaultConfig.siteTitle,
@@ -149,9 +152,9 @@ const saveSeo = async (values: SeoConfig) => {
     discovery,
     returnPolicy,
   };
-  await updateSeoSettings({
-    data: payload,
-  });
+  await apiData(postApiV1AdminSettingsSeo({
+    body: payload,
+  }));
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -170,7 +173,7 @@ function readHeaderLogoReady(settings: unknown): boolean | null {
 export function SeoSettingsBuilder() {
   const businessSettingsQuery = useQuery({
     queryKey: queryKeys.settings.business(),
-    queryFn: async () => getBusinessSettings(),
+    queryFn: async () => apiData(getApiV1AdminSettingsBusiness()),
     staleTime: 1000 * 60 * 5,
   });
   const generalSettingsQuery = useQuery(generalSettingsQueryOptions());

@@ -1,10 +1,7 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { media } from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -20,47 +17,6 @@ import {
   getGeneralSettings,
   saveHeaderConfig,
 } from "../settings/site-settings.service";
-
-function createDatabase() {
-  const sqlite = new DatabaseSync(":memory:");
-  const migrationDirectory = resolve(
-    fileURLToPath(new URL("../../../../database/migrations", import.meta.url)),
-  );
-  for (const name of readdirSync(migrationDirectory).filter((entry) => /^\d{4}_.+\.sql$/u.test(entry)).sort()) {
-    sqlite.exec(readFileSync(resolve(migrationDirectory, name), "utf8"));
-  }
-
-  const execute = (query: string, params: unknown[], method: string) => {
-    const statement = sqlite.prepare(query);
-    statement.setReturnArrays(true);
-    const sqlParams = params as SQLInputValue[];
-    if (method === "get") {
-      return {
-        rows: statement.get(...sqlParams) as unknown as unknown[],
-      };
-    }
-    if (method === "run") {
-      statement.run(...sqlParams);
-      return { rows: [] as unknown[][] };
-    }
-    return { rows: statement.all(...sqlParams) as unknown as unknown[][] };
-  };
-  const db = drizzle(
-    async (query, params, method) => execute(query, params, method),
-    async (queries) => {
-      sqlite.exec("BEGIN");
-      try {
-        const results = queries.map((query) => execute(query.sql, query.params, query.method));
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  ) as unknown as Database;
-  return { db, sqlite };
-}
 
 function createBucket() {
   const objects = new Set<string>();
@@ -95,7 +51,7 @@ describe("saved media reference deletion guards", () => {
   let sqlite: DatabaseSync;
 
   beforeEach(() => {
-    ({ db, sqlite } = createDatabase());
+    ({ db, sqlite } = createSqliteD1Database());
   });
 
   afterEach(() => sqlite.close());
@@ -225,7 +181,7 @@ describe("pre-generated media renditions", () => {
   let sqlite: DatabaseSync;
 
   beforeEach(() => {
-    ({ db, sqlite } = createDatabase());
+    ({ db, sqlite } = createSqliteD1Database());
   });
 
   afterEach(() => sqlite.close());

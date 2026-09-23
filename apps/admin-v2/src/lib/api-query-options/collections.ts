@@ -1,22 +1,32 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
-  getCollection,
-  getCollectionCategoryOptions,
-  getCollectionFormOptions,
-  getCollectionProductOptions,
-  getCollections,
-  getCollectionsByIds,
-  type CollectionsByIdsPayload,
-  type CollectionCategoryOptionsPayload,
-  type CollectionFormOptionsPayload,
-  type CollectionsQueryInput,
-  type CollectionProductOptionsInput,
-} from "../api-functions/collections";
+  getApiV1AdminCollections,
+  getApiV1AdminCollectionsById,
+  getApiV1AdminCollectionsByIds,
+  getApiV1AdminCollectionsCategoryOptions,
+  getApiV1AdminCollectionsFormOptions,
+  getApiV1AdminCollectionsProductOptions,
+  type postApiV1AdminCollections,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiQuery, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 import { normalizeCollectionProductOptionsPayload } from "../collection-product-options";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
+
+export type CollectionSummaryDto = ApiResult<typeof getApiV1AdminCollections>["collections"][number];
+export type CollectionDto = ApiResult<typeof getApiV1AdminCollectionsById>;
+export type CollectionPresentation = CollectionDto["presentation"];
+export type CreateCollectionInput = ApiBody<typeof postApiV1AdminCollections>;
+export type CollectionsByIdsPayload = ApiResult<typeof getApiV1AdminCollectionsByIds>;
+export type CollectionFormOptionsPayload = ApiResult<typeof getApiV1AdminCollectionsFormOptions>;
+export type CollectionCategoryOptionsPayload =
+  ApiResult<typeof getApiV1AdminCollectionsCategoryOptions>;
+export type CollectionProductOptionsPayload =
+  ApiResult<typeof getApiV1AdminCollectionsProductOptions>;
+export type CollectionProductOptionDto = CollectionProductOptionsPayload["products"][number];
+
 const EMPTY_COLLECTIONS_BY_IDS: CollectionsByIdsPayload = { collections: [] };
 const EMPTY_COLLECTION_FORM_OPTIONS: CollectionFormOptionsPayload = {
   categories: [],
@@ -30,35 +40,10 @@ function normalizeLookupIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
-function normalizeCollectionsByIdsPayload(payload: unknown): CollectionsByIdsPayload {
-  const collections = (payload as Partial<CollectionsByIdsPayload> | null | undefined)
-    ?.collections;
-  return { collections: Array.isArray(collections) ? collections : [] };
-}
-
-function normalizeCollectionFormOptionsPayload(
-  payload: unknown,
-): CollectionFormOptionsPayload {
-  const options = payload as Partial<CollectionFormOptionsPayload> | null | undefined;
-  return {
-    categories: Array.isArray(options?.categories) ? options.categories : [],
-    products: Array.isArray(options?.products) ? options.products : [],
-  };
-}
-
-function normalizeCollectionCategoryOptionsPayload(
-  payload: unknown,
-): CollectionCategoryOptionsPayload {
-  const categories = (
-    payload as Partial<CollectionCategoryOptionsPayload> | null | undefined
-  )?.categories;
-  return { categories: Array.isArray(categories) ? categories : [] };
-}
-
-export const collectionsQueryOptions = (params: CollectionsQueryInput) =>
+export const collectionsQueryOptions = (query: ApiQuery<typeof getApiV1AdminCollections>) =>
   queryOptions({
-    queryKey: queryKeys.collections.list(params),
-    queryFn: () => getCollections({ data: params }),
+    queryKey: queryKeys.collections.list(query),
+    queryFn: () => apiData(getApiV1AdminCollections({ query })),
     staleTime: MODERATE_STALE_TIME_MS,
   });
 
@@ -79,13 +64,9 @@ export const collectionPickerOptionsQueryOptions = ({
       limit,
     }),
     queryFn: ({ pageParam }) =>
-      getCollections({
-        data: {
-          page: pageParam,
-          limit,
-          search: search || undefined,
-        },
-      }),
+      apiData(getApiV1AdminCollections({
+        query: { page: pageParam, limit, search: search || undefined },
+      })),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.pagination.page < lastPage.pagination.totalPages
@@ -102,9 +83,7 @@ export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
     queryFn: () =>
       normalizedIds.length === 0
         ? Promise.resolve(EMPTY_COLLECTIONS_BY_IDS)
-        : getCollectionsByIds({ data: { ids: normalizedIds } }).then(
-            normalizeCollectionsByIdsPayload,
-          ),
+        : apiData(getApiV1AdminCollectionsByIds({ query: { ids: normalizedIds.join(",") } })),
     placeholderData: EMPTY_COLLECTIONS_BY_IDS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
@@ -113,15 +92,14 @@ export const collectionsByIdsQueryOptions = (ids: readonly string[]) => {
 export const collectionQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.collections.detail(id),
-    queryFn: () => getCollection({ data: { id } }),
+    queryFn: () => apiData(getApiV1AdminCollectionsById({ path: { id } })),
     staleTime: 0,
   });
 
 export const collectionFormOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.collections.formOptions(),
-    queryFn: () =>
-      getCollectionFormOptions().then(normalizeCollectionFormOptionsPayload),
+    queryFn: () => apiData(getApiV1AdminCollectionsFormOptions()),
     placeholderData: EMPTY_COLLECTION_FORM_OPTIONS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
@@ -129,17 +107,17 @@ export const collectionFormOptionsQueryOptions = () =>
 export const collectionCategoryOptionsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.collections.categoryOptions(),
-    queryFn: () =>
-      getCollectionCategoryOptions().then(
-        normalizeCollectionCategoryOptionsPayload,
-      ),
+    queryFn: () => apiData(getApiV1AdminCollectionsCategoryOptions()),
     placeholderData: EMPTY_COLLECTION_CATEGORY_OPTIONS,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
-export const collectionProductOptionsQueryOptions = (
-  input: Omit<CollectionProductOptionsInput, "page">,
-) => {
+export const collectionProductOptionsQueryOptions = (input: {
+  limit?: number;
+  search?: string;
+  categoryIds?: string[];
+  selectedProductIds?: string[];
+}) => {
   const categoryIds = normalizeLookupIds(input.categoryIds ?? []).slice(0, 90);
   const selectedProductIds = normalizeLookupIds(input.selectedProductIds ?? [])
     .slice(0, 90)
@@ -155,15 +133,17 @@ export const collectionProductOptionsQueryOptions = (
       limit,
     }),
     queryFn: ({ pageParam }) =>
-      getCollectionProductOptions({
-        data: {
+      apiData(getApiV1AdminCollectionsProductOptions({
+        query: {
           page: pageParam,
           limit,
-          search,
-          categoryIds,
-          selectedProductIds,
+          search: search || undefined,
+          categoryIds: categoryIds.length > 0 ? categoryIds.join(",") : undefined,
+          selectedProductIds: selectedProductIds.length > 0
+            ? selectedProductIds.join(",")
+            : undefined,
         },
-      }).then((payload) =>
+      })).then((payload) =>
         normalizeCollectionProductOptionsPayload(payload, {
           page: pageParam,
           limit,

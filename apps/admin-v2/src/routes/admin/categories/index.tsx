@@ -6,7 +6,10 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { Button } from "~/components/ui/button";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
-import { categoriesQueryOptions } from "~/lib/api-query-options/categories";
+import {
+  categoriesQueryOptions,
+  type CategoryRevisionClaim,
+} from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
   useDeleteCategory,
@@ -22,7 +25,6 @@ import {
   getCategoryColumns,
   type CategoryListItem,
 } from "~/components/admin/data-table/columns/category-columns";
-import type { CategoryRevisionClaim } from "~/lib/api-functions/categories";
 
 const CategoryDeleteDialog = lazy(() =>
   import("./-CategoryDeleteDialog").then((module) => ({
@@ -35,14 +37,14 @@ const validateCategorySearch = createListSearchValidator(
   { sort: "updatedAt" },
 );
 
-function mapParams(deps: ReturnType<typeof validateCategorySearch>) {
+function mapParams(deps: ReturnType<typeof validateCategorySearch>): Parameters<typeof categoriesQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? ("true" as const) : undefined,
   };
 }
 

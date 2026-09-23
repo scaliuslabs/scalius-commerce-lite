@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { get2faInfo } from "@/lib/api-functions/auth-management";
+import { getApiV1AdminAuth2FaInfo } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import {
   chooseInitialTwoFactorMethod,
   clearPendingTwoFactorMethods,
@@ -96,7 +97,7 @@ export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
 
     async function fetchTwoFactorInfo() {
       try {
-        const data = await get2faInfo();
+        const data = await apiData(getApiV1AdminAuth2FaInfo());
         if (data.method) {
           const preferredMethod = getPreferredMethod(data.method);
           setMethod(preferredMethod);

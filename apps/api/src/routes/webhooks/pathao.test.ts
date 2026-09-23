@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -30,8 +30,8 @@ vi.mock("@scalius/core/modules/delivery/tracking", () => ({
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+vi.mock("../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import type { PromotionAggregate } from "~/lib/api-functions/promotions";
+import type { PromotionAggregate } from "~/lib/api-query-options/promotions";
 
 export type PromotionStatusFilter = "draft" | "active" | "paused" | "archived";
 

@@ -7,11 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getNavigationResources = vi.hoisted(() => vi.fn());
 
-vi.mock("~/lib/api-functions/navigation-authority", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("~/lib/api-functions/navigation-authority")
-  >()),
-  getNavigationResourcesAuthority: getNavigationResources,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminNavigationResources: getNavigationResources,
 }));
 
 import { NavigationResourcePicker } from "./NavigationResourcePicker";
@@ -95,9 +93,9 @@ describe("NavigationResourcePicker", () => {
       )?.className,
     ).toContain("h-11");
     expect(getNavigationResources).toHaveBeenCalledWith({
-      data: {
+      query: {
         type: "product",
-        query: "",
+        q: "",
         limit: 20,
         selectedId: "prod_unavailable",
       },
@@ -106,7 +104,7 @@ describe("NavigationResourcePicker", () => {
 
   it("loads resources beyond the first page and selects them", async () => {
     getNavigationResources.mockImplementation(
-      ({ data }: { data: { cursor?: string } }) => Promise.resolve(
+      ({ query: data }: { query: { cursor?: string } }) => Promise.resolve(
         data.cursor
           ? {
               items: [{
@@ -168,9 +166,9 @@ describe("NavigationResourcePicker", () => {
       expect(document.body.textContent).toContain("Product 021");
     });
     expect(getNavigationResources).toHaveBeenLastCalledWith({
-      data: {
+      query: {
         type: "product",
-        query: "",
+        q: "",
         limit: 20,
         cursor: "page-two",
       },

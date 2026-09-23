@@ -15,8 +15,13 @@ import {
   themeSettings,
   categories,
   shippingMethods,
+  checkoutLanguages,
 } from "@scalius/database/schema";
-import { eq, isNull, and, sql } from "drizzle-orm";
+import { eq, isNull, and, or, sql } from "drizzle-orm";
+import {
+  checkoutLanguageBaseCode,
+  resolveCheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -479,6 +484,22 @@ export async function getLayoutData(
         ),
       )
       .limit(1),
+
+    // 11. Active (else default) checkout language for storefront buyer copy
+    db
+      .select({
+        code: checkoutLanguages.code,
+        languageData: checkoutLanguages.languageData,
+        isActive: checkoutLanguages.isActive,
+      })
+      .from(checkoutLanguages)
+      .where(
+        and(
+          or(eq(checkoutLanguages.isActive, true), eq(checkoutLanguages.isDefault, true)),
+          isNull(checkoutLanguages.deletedAt),
+        ),
+      )
+      .limit(2),
   ]);
 
   const [
@@ -493,6 +514,7 @@ export async function getLayoutData(
     businessResults,
     seoReturnPolicyResults,
     cspResults,
+    checkoutLanguageResults,
   ] = batchResults;
   // Process Analytics
   const processedAnalytics = analyticsResults
@@ -739,5 +761,25 @@ export async function getLayoutData(
       returnPolicy,
     },
     cspAllowedDomains: (cspResults as { value?: string }[])[0]?.value ?? "",
+    storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
+  };
+}
+
+/**
+ * Product-page call-to-action copy from the same active checkout language
+ * (English preset when none exists), so Bangla stores translate the buttons.
+ */
+function resolveStorefrontCopy(
+  rows: { code: string; languageData: string; isActive: boolean }[],
+) {
+  const row = rows.find((candidate) => candidate.isActive) ?? rows[0];
+  const code = row?.code ?? "en";
+  const copy = resolveCheckoutLanguageData(code, row?.languageData);
+  return {
+    languageCode: checkoutLanguageBaseCode(code),
+    addToCartText: copy.addToCartText,
+    buyNowText: copy.buyNowText,
+    selectOptionsText: copy.selectOptionsText,
+    unavailableText: copy.unavailableText,
   };
 }

@@ -20,10 +20,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { getServerFnError } from "@/lib/api-helpers";
-import { updateCustomerRequestPolicySettings } from "@/lib/api-functions/settings";
 import { customerRequestPolicyQueryOptions } from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
+import {
+  putApiV1AdminSettingsCustomerRequests,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 const ACTION_SWITCHES: Array<{
   key: "cancellationEnabled" | "returnEnabled" | "refundEnabled";
@@ -94,7 +97,7 @@ export default function CustomerRequestSettings() {
 
   const saveMutation = useMutation({
     mutationFn: (nextPolicy: CustomerRequestPolicy) => (
-      updateCustomerRequestPolicySettings({ data: nextPolicy })
+      apiData(putApiV1AdminSettingsCustomerRequests({ body: nextPolicy }))
     ),
     onSuccess: (payload) => {
       setPolicy(payload.policy);

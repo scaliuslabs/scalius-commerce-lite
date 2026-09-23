@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   listAttributes: vi.fn(),
   listAttributeAgentSummaries: vi.fn(),
   createAttribute: vi.fn(),
@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
   deleteAttributeValue: vi.fn(),
 }));
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/attributes/attributes.service", () => ({
@@ -47,12 +47,10 @@ function createTestApp() {
   const db = { id: "db" };
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createAttribute.mockResolvedValue({
     attribute: {
       id: "attr_1",
@@ -131,9 +129,7 @@ describe("admin attribute cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["attributes", "products"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -151,9 +147,7 @@ describe("admin attribute cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["attributes", "products"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 

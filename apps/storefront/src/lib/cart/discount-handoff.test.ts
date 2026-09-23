@@ -6,11 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@scalius/shared/checkout-language";
 import {
+  cartHasFreeDeliveryItem,
   cartStore,
   createCartItemKey,
   getEffectiveCartShippingFee,
   type CartStore,
 } from "../../store/cart";
+import { enhanceShippingMethods } from "../checkout/shipping-methods";
+import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
 import {
   checkoutPhoneResult,
   initCheckoutPhoneField,
@@ -30,7 +33,6 @@ import { initCartFunctionality, isDiscountValidationPending } from "./client";
 import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 
 const apiMocks = vi.hoisted(() => ({
-  getActiveCheckoutLanguage: vi.fn(),
   saveAbandonedCheckout: vi.fn(),
   validateDiscount: vi.fn(),
 }));
@@ -39,10 +41,9 @@ const taxQuoteMocks = vi.hoisted(() => ({
   fetchAuthoritativeTaxQuote: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
-  getActiveCheckoutLanguage: apiMocks.getActiveCheckoutLanguage,
-  saveAbandonedCheckout: apiMocks.saveAbandonedCheckout,
-  validateDiscount: apiMocks.validateDiscount,
+vi.mock("./browser-api", () => ({
+  saveAbandonedCheckoutFromBrowser: apiMocks.saveAbandonedCheckout,
+  validateDiscountFromBrowser: apiMocks.validateDiscount,
 }));
 
 vi.mock("../checkout/tax-quote-client", () => ({
@@ -140,6 +141,7 @@ function renderCartDom(): void {
       <div id="cartValidationMessage" class="hidden"></div><div id="cartItems"></div>
     </div>`;
   window.__CHECKOUT_CONFIG__ = { allowedCountries: [], allowedCountriesMode: "include" } as never;
+  window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA };
 }
 
 function taxQuote(): CheckoutTaxQuote {
@@ -181,6 +183,11 @@ async function startCartPage(): Promise<void> {
     readCheckoutFormDraft,
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
+    cartHasFreeDeliveryItem,
+    cartStore,
+    enhanceShippingMethods,
+    enhanceLocationSelects,
+    fetchLocationOptions,
     getEffectiveCartShippingFee,
     checkoutPhoneResult,
     initCheckoutPhoneField,
@@ -189,7 +196,6 @@ async function startCartPage(): Promise<void> {
     getShippingAddressError,
     MIN_SHIPPING_ADDRESS_LENGTH,
     formatCheckoutLanguageText,
-    ENGLISH_CHECKOUT_LANGUAGE_DATA,
     hideCheckoutLoadingOverlay: vi.fn(),
     showCheckoutLoadingOverlay: vi.fn(),
   };
@@ -225,7 +231,6 @@ describe("cart discount checkout handoff", () => {
     localStorage.setItem("cart", JSON.stringify(CART_STATE));
     cartStore.set(CART_STATE);
     renderCartDom();
-    apiMocks.getActiveCheckoutLanguage.mockResolvedValue(null);
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Response(JSON.stringify({
       success: true,
       data: { valid: true, issues: [], items: [{ index: 0, cartKey: CART_LINE_KEY, productId: "prod_1", variantId: "var_1", quantity: 1, unitPrice: 100, productName: "Rice", variantLabel: null, freeDelivery: false, inventoryTracked: false, availableQuantity: null }], subtotal: 100, hasFreeDeliveryProduct: false },

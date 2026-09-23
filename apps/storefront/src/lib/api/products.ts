@@ -113,7 +113,7 @@ export async function getProductBySlugResult(
 
 /**
  * Fetches the complete data needed for a product detail page.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param slug The URL-friendly slug of the product.
  * @param _requiresAuth - Unused (preserved for signature compat).
  * @returns A promise that resolves to the product page data or null if not found.
@@ -128,7 +128,7 @@ export async function getProductBySlug(
 
 /**
  * Fetches all variants for a given product ID.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param productId The unique identifier of the product.
  * @returns A promise that resolves to an array of product variants or null on failure.
  */

@@ -1,6 +1,6 @@
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 
-import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import type { Readiness as NavigationConfigSectionReadiness } from "@scalius/shared/readiness";
 import { isNavigationConfigUnreadable } from "./navigation-readiness";
 
 interface NavigationConfigReadinessNoticeProps {

@@ -1,11 +1,7 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { Buffer } from "node:buffer";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import type { AgentOAuthProps, AgentPrincipal } from "../types";
 
@@ -64,86 +60,6 @@ vi.mock("../dispatch", async (importOriginal) => {
 import { AGENT_OPERATIONS } from "../../generated/agent-operations.gen";
 import { createAgentMcpServer } from "./server";
 
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): D1Statement {
-  const execute = (): D1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...next) => d1Statement(sqlite, query, next),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function harness() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    CREATE TABLE agent_grants (
-      id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner_user_id TEXT,
-      resource TEXT NOT NULL, authority_revision INTEGER NOT NULL,
-      status TEXT NOT NULL, expires_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_browser_handoffs (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, credential_id TEXT,
-      owner_user_id TEXT NOT NULL, resource TEXT NOT NULL,
-      operation_id TEXT NOT NULL, authority_revision INTEGER NOT NULL,
-      encrypted_action TEXT NOT NULL, status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL, consumed_at INTEGER,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-  `);
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: D1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  return { sqlite, binding };
-}
-
 const grantId = "agr_0123456789abcdefghij";
 const ownerUserId = "owner-browser-handoff";
 
@@ -192,14 +108,15 @@ describe("MCP secure browser handoff chain", () => {
       audience: ["https://api.example.test/api/v1/mcp/dashboard"],
     };
 
-    const test = harness();
+    const test = createSqliteD1Database();
     sqlite = test.sqlite;
     const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(ownerUserId);
     sqlite.prepare(`
-      INSERT INTO agent_grants
-        (id, kind, owner_user_id, resource, authority_revision, status, expires_at)
-      VALUES (?, 'oauth', ?, 'dashboard', 1, 'active', ?)
-    `).run(grantId, ownerUserId, now + 3_600);
+      INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, oauth_client_id, oauth_redirect_uris_json,
+        preset, risk_ceiling, authority_revision, status, expires_at, created_at, updated_at)
+      VALUES (?, 'oauth', ?, 'dashboard', 'Agent', 'client-1', '[]', 'full', 'security', 1, 'active', ?, ?, ?)
+    `).run(grantId, ownerUserId, now + 3_600, now - 60, now - 60);
     const env = {
       DB: test.binding,
       BETTER_AUTH_URL: "https://dashboard.example.test",

@@ -134,7 +134,10 @@ import {
     listOrderPaymentSessionAttempts,
 } from "../payments/payment-session-attempts";
 import { PAYMENT_BLOCKED_ORDER_STATUSES } from "../payments/payable-order";
-import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
+import {
+    resolveActiveDeliveryLocationNames,
+    type ResolvedDeliveryLocationNames,
+} from "./delivery-location-validation";
 import { listOrderSupportRequests } from "./order-support-requests";
 import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
 import {
@@ -244,31 +247,36 @@ export function buildAdminOrderFullEditReadiness(
     return { allowed: true, reason: null };
 }
 
+// Drizzle renders `${orders.id}` unqualified in a single-table select, and an
+// unqualified `id` inside these EXISTS subqueries binds to the subquery table's
+// own id column. Qualify the outer order explicitly.
+const OUTER_ORDER_ID = sql.raw('"orders"."id"');
+
 function adminOrderFullEditEvidenceSelection() {
     return {
         hasTaxSnapshot: sql<number>`EXISTS (
             SELECT 1 FROM ${orderTaxSnapshots}
-            WHERE ${orderTaxSnapshots.orderId} = ${orders.id}
+            WHERE ${orderTaxSnapshots.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasPaymentHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderPayments}
-            WHERE ${orderPayments.orderId} = ${orders.id}
+            WHERE ${orderPayments.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasShipmentHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${deliveryShipments}
-            WHERE ${deliveryShipments.orderId} = ${orders.id}
+            WHERE ${deliveryShipments.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasRefundHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${refundAttempts}
-            WHERE ${refundAttempts.orderId} = ${orders.id}
+            WHERE ${refundAttempts.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasReturnHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderReturns}
-            WHERE ${orderReturns.orderId} = ${orders.id}
+            WHERE ${orderReturns.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasInvoiceHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderInvoices}
-            WHERE ${orderInvoices.orderId} = ${orders.id}
+            WHERE ${orderInvoices.orderId} = ${OUTER_ORDER_ID}
         )`,
     };
 }
@@ -1150,9 +1158,13 @@ function buildGuardedCustomerInsert(
     orderId: string,
     customerId: string,
     data: UpdateOrderData,
-    totalAmount: number,
+    locationNames: ResolvedDeliveryLocationNames,
     expectedOrderVersion: number,
 ): SQLiteBatchItem {
+    // INSERT ... SELECT binds every customers column positionally in schema
+    // order: identity/contact/location, six account timestamps, total_orders,
+    // total_spent (paid amounts only; recomputed after commit), last_order_at,
+    // created_at, updated_at, deleted_at.
     return db.insert(customers).select(sql`
         SELECT
             ${customerId},
@@ -1163,13 +1175,17 @@ function buildGuardedCustomerInsert(
             ${data.city},
             ${data.zone},
             ${data.area},
+            ${locationNames.cityName},
+            ${locationNames.zoneName},
+            ${locationNames.areaName},
+            NULL,
             NULL,
             NULL,
             NULL,
             NULL,
             NULL,
             1,
-            ${totalAmount},
+            0,
             unixepoch(),
             unixepoch(),
             unixepoch(),
@@ -3544,7 +3560,7 @@ export async function updateOrder(
                 id,
                 newCustomerId,
                 data,
-                totalAmount,
+                { cityName, zoneName, areaName },
                 expectedVersion,
             ));
         }

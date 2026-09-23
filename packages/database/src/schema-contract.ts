@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 63,
-  name: "0063_media_variants_drop_polar",
+  version: 64,
+  name: "0064_cache_generation",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -93,8 +93,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "c514c87ba34755f276246babc6d94a012a39a9e839919c5114539d41378c4cf7",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 63,
+    name: "0063_media_variants_drop_polar",
     sourceSha256: "c5b1317a03ab33940205e39cbd6217552e5322aef9291beea5fdad18ca93211e",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "ee5ed733611d28c5b676b0e5e48d9eb3e0b9d1ed813b329814aaa0906bcca823",
   },
 ] as const;
 

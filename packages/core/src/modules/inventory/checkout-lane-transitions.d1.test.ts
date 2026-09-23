@@ -1,13 +1,5 @@
-import {
-    DatabaseSync,
-    type SQLInputValue,
-    type SQLOutputValue,
-    type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
-import { drizzle } from "drizzle-orm/d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
@@ -18,96 +10,12 @@ import {
     type PortableSqlStatement,
     type PreparedCheckoutCommit,
 } from "@scalius/database/checkout-commit";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database, sqliteTransaction } from "@scalius/database/testing/sqlite-d1";
 
 import {
     applyInventoryForStatusChange,
     applyInventoryForStatusChangeWithImpact,
 } from "./inventory-transitions";
-
-const migrationDirectory = fileURLToPath(new URL(
-    "../../../../database/migrations/",
-    import.meta.url,
-));
-
-function createProviderSchemaDatabase(): DatabaseSync {
-    const sqlite = new DatabaseSync(":memory:");
-    for (const name of readdirSync(migrationDirectory)
-        .filter((candidate) => /^\d{4}_.+\.sql$/.test(candidate))
-        .sort()) {
-        const migration = readFileSync(`${migrationDirectory}/${name}`, "utf8");
-        sqlite.exec(compileSqliteMigrationForProvider(migration, "d1"));
-    }
-    return sqlite;
-}
-
-interface SqliteD1Result {
-    results: Record<string, SQLOutputValue>[];
-    success: true;
-    meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-    bind(...values: SQLInputValue[]): SqliteD1Statement;
-    run(): Promise<SqliteD1Result>;
-    all(): Promise<SqliteD1Result>;
-    raw(): Promise<SQLOutputValue[][]>;
-    first(column?: string): Promise<unknown>;
-    execute(): SqliteD1Result;
-}
-
-function rows(
-    statement: StatementSync,
-    values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-    return statement.all(...values);
-}
-
-function d1Statement(
-    sqlite: DatabaseSync,
-    query: string,
-    values: SQLInputValue[] = [],
-): SqliteD1Statement {
-    const execute = (): SqliteD1Result => ({
-        results: rows(sqlite.prepare(query), values),
-        success: true,
-        meta: {},
-    });
-    return {
-        bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-        run: async () => execute(),
-        all: async () => execute(),
-        raw: async () => {
-            const statement = sqlite.prepare(query);
-            statement.setReturnArrays(true);
-            return statement.all(...values) as unknown as SQLOutputValue[][];
-        },
-        first: async (column) => {
-            const row = rows(sqlite.prepare(query), values)[0];
-            return column ? row?.[column] ?? null : row ?? null;
-        },
-        execute,
-    };
-}
-
-function drizzleDatabase(sqlite: DatabaseSync): Database {
-    const binding = {
-        prepare: (query: string) => d1Statement(sqlite, query),
-        async batch(statements: SqliteD1Statement[]) {
-            sqlite.exec("BEGIN IMMEDIATE");
-            try {
-                const results = statements.map((statement) => statement.execute());
-                sqlite.exec("COMMIT");
-                return results;
-            } catch (error) {
-                sqlite.exec("ROLLBACK");
-                throw error;
-            }
-        },
-    };
-    return drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
-}
 
 function executeRun(sqlite: DatabaseSync, statement: PortableSqlStatement): void {
     sqlite.prepare(statement.sql).run(...statement.args as SQLInputValue[]);
@@ -212,18 +120,13 @@ function commitCheckout(sqlite: DatabaseSync, orderId: string): void {
         [checkoutCommit(orderId, Number(authority.revision))],
         `batch_${orderId}`,
     );
-    sqlite.exec("BEGIN IMMEDIATE");
-    try {
+    sqliteTransaction(sqlite, () => {
         sqlite.prepare(statements[0]!.sql).all(...statements[0]!.args as SQLInputValue[]);
         executeRun(sqlite, statements[1]!);
         executeRun(sqlite, statements[2]!);
         sqlite.prepare(statements[3]!.sql).all(...statements[3]!.args as SQLInputValue[]);
         executeRun(sqlite, statements[4]!);
-        sqlite.exec("COMMIT");
-    } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-    }
+    });
 }
 
 describe("coordinated checkout lane lifecycle on D1 SQL", () => {
@@ -231,7 +134,7 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
     let db: Database;
 
     beforeEach(async () => {
-        sqlite = createProviderSchemaDatabase();
+        ({ sqlite, db } = createSqliteD1Database());
         sqlite.exec(`
             PRAGMA foreign_keys = ON;
             INSERT INTO products (id, name, price, slug, is_active)
@@ -244,7 +147,6 @@ describe("coordinated checkout lane lifecycle on D1 SQL", () => {
                 1, 1, 1
             );
         `);
-        db = drizzleDatabase(sqlite);
     });
 
     afterEach(() => sqlite.close());

@@ -1,6 +1,6 @@
 // src/lib/api/tracking.ts
 
-import { apiFetch } from "./transport";
+import { browserApiUrl } from "./browser-url";
 
 /**
  * Defines the payload structure for sending a server-side event
@@ -61,20 +61,18 @@ export interface MetaCapiEventPayload {
  */
 export async function sendMetaCapiEvent(payload: MetaCapiEventPayload): Promise<void> {
   try {
-    await apiFetch(
-      "/meta/events",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-        cache: "no-store",
-        keepalive: true,
+    const response = await fetch(browserApiUrl("/meta/events"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      { retries: 0, timeout: 2500, auth: false, logTerminalFailure: false },
-    );
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      keepalive: true,
+      signal: AbortSignal.timeout(2500),
+    });
+    await response.body?.cancel();
   } catch {
     // Buyer telemetry is best-effort. The API circuit breaker owns provider
     // diagnostics; page teardown or a blocked beacon must stay console-silent.

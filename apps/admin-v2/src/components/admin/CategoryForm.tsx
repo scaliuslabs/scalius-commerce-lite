@@ -43,14 +43,11 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import {
-  createCategory,
-  updateCategory,
-  type CategoryImageInput,
-  type CategoryPublishReadiness,
-  type CreateCategoryInput,
-  type CategoryCreateResult,
-  type CategoryMutationResult,
-} from "@/lib/api-functions/categories";
+  postApiV1AdminCategories,
+  putApiV1AdminCategoriesById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
+import type { CategoryDetail } from "@/lib/api-query-options/categories";
 import {
   categoryFormSchema,
   type CategoryFormInput,
@@ -64,8 +61,10 @@ import { readCategoryRevisionConflict } from "@/lib/admin-api-error";
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
   isEdit?: boolean;
-  publishReadiness?: CategoryPublishReadiness;
+  publishReadiness?: CategoryDetail["publishReadiness"];
 }
+
+type CategoryInput = ApiBody<typeof postApiV1AdminCategories>;
 
 function serializeDate(value: Date | string | undefined): string | undefined {
   return value instanceof Date ? value.toISOString() : value;
@@ -73,16 +72,18 @@ function serializeDate(value: Date | string | undefined): string | undefined {
 
 function serializeCategoryImage(
   image: CategoryFormValues["image"],
-): CategoryImageInput | null {
+): CategoryInput["image"] {
   if (!image) return null;
   return {
-    ...image,
+    id: image.id,
+    url: image.url,
+    filename: image.filename,
+    size: image.size,
     createdAt: serializeDate(image.createdAt) ?? new Date().toISOString(),
-    updatedAt: serializeDate(image.updatedAt),
   };
 }
 
-function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
+function toCategoryInput(values: CategoryFormValues): CategoryInput {
   return {
     name: values.name,
     description: values.description,
@@ -148,16 +149,16 @@ export function CategoryForm({
     entityName: "Category",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createCategory({ data: toCategoryInput(data) }),
+    createFn: (data) => apiData(postApiV1AdminCategories({ body: toCategoryInput(data) })),
     updateFn: (data) =>
-      updateCategory({
-        data: {
-          id: data.id,
+      apiData(putApiV1AdminCategoriesById({
+        path: { id: data.id },
+        body: {
           expectedRevision: requireCategoryRevision(data),
           status: data.status,
           ...toCategoryInput(data),
         },
-      }),
+      })),
     invalidateKeys: [
       queryKeys.categories.list(),
       queryKeys.categories.formOptions(),
@@ -167,8 +168,8 @@ export function CategoryForm({
     ],
     navigateTo: "/admin/categories",
     onSuccess: (result) => {
-      const mutation = result as CategoryMutationResult &
-        Partial<CategoryCreateResult>;
+      const mutation = result as ApiResult<typeof putApiV1AdminCategoriesById> &
+        Partial<ApiResult<typeof postApiV1AdminCategories>>;
       const id = mutation.id || defaultValues?.id;
       form.reset({
         ...form.getValues(),

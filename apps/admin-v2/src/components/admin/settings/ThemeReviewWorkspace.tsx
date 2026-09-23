@@ -11,7 +11,7 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import type { ThemeVersionPayload } from "~/lib/api-functions/settings";
+import type { ThemeVersionPayload } from "~/lib/api-query-options/settings";
 import { formatAdminTimestamp } from "~/lib/admin-time";
 import {
   AlertDialog,
@@ -374,7 +374,8 @@ function describeVersion(version: ThemeVersionPayload): string {
   return "Published";
 }
 
-function formatVersionDate(value: string | number): string {
+function formatVersionDate(value: unknown): string {
+  if (typeof value !== "string" && typeof value !== "number") return "Date unavailable";
   const numeric = typeof value === "number" && value < 10_000_000_000
     ? value * 1000
     : value;

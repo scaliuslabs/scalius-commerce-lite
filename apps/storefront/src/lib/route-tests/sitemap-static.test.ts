@@ -31,6 +31,7 @@ describe("static sitemap route", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("https://storefront.example.test/");
     expect(body).toContain("https://storefront.example.test/search");
+    expect(body).not.toContain("/cart");
   });
 
   it("returns empty XML when sitemap generation is disabled", async () => {

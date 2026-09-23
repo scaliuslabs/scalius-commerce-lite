@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
-  normalizeStorefrontHtmlCachePaths,
 } from "./storefront-cache-path";
 
 describe("storefront HTML cache path canonicalization", () => {
@@ -76,26 +75,10 @@ describe("storefront HTML cache path canonicalization", () => {
     );
   });
 
-  it("dedupes after canonicalization before applying the path cap", () => {
-    const paths = [
-      ...Array.from({ length: 25 }, (_, index) => `/products/fish?size=${index}`),
-      "/products/phone",
-    ];
-
-    expect(normalizeStorefrontHtmlCachePaths(paths, 2)).toEqual([
-      "/products/fish",
-      "/products/phone",
-    ]);
-  });
-
   it("rejects absolute, protocol-relative, and empty paths", () => {
-    expect(
-      normalizeStorefrontHtmlCachePaths([
-        "",
-        "https://evil.example/products/fish",
-        "//evil.example/products/fish",
-        "/products/fish",
-      ], 20),
-    ).toEqual(["/products/fish"]);
+    expect(canonicalizeStorefrontHtmlCachePath("")).toBeNull();
+    expect(canonicalizeStorefrontHtmlCachePath("https://evil.example/products/fish")).toBeNull();
+    expect(canonicalizeStorefrontHtmlCachePath("//evil.example/products/fish")).toBeNull();
+    expect(canonicalizeStorefrontHtmlCachePath("/products/fish")).toBe("/products/fish");
   });
 });

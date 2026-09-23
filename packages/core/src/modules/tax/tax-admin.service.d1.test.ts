@@ -1,66 +1,10 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
-import * as schema from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/d1";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ConflictError } from "@scalius/core/errors";
 import { deleteTaxRate, updateTaxRate } from "./tax-admin.service";
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function resultRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: resultRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = resultRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
 
 describe("tax lifecycle D1 atomicity", () => {
   let sqlite: DatabaseSync | null = null;
@@ -71,63 +15,9 @@ describe("tax lifecycle D1 atomicity", () => {
   });
 
   function createDatabase() {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE tax_classes (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        is_exempt INTEGER NOT NULL DEFAULT 0,
-        version INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-      CREATE TABLE tax_settings (
-        id TEXT PRIMARY KEY,
-        enabled INTEGER NOT NULL DEFAULT 0,
-        prices_include_tax INTEGER NOT NULL DEFAULT 0,
-        tax_shipping INTEGER NOT NULL DEFAULT 0,
-        default_tax_class_id TEXT,
-        shipping_tax_class_id TEXT,
-        display_label TEXT NOT NULL DEFAULT 'Tax',
-        version INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE tax_rates (
-        id TEXT PRIMARY KEY,
-        tax_class_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        rate_bps INTEGER NOT NULL,
-        jurisdiction_type TEXT NOT NULL,
-        jurisdiction_id TEXT,
-        jurisdiction_label TEXT,
-        priority INTEGER NOT NULL DEFAULT 0,
-        is_compound INTEGER NOT NULL DEFAULT 0,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        version INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-    `);
-
-    const client = {
-      prepare: (query: string) => createD1Statement(sqlite!, query),
-      batch: async (statements: SqliteD1Statement[]) => {
-        sqlite!.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite!.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite!.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    return drizzle(client as unknown as D1Database, { schema });
+    const harness = createSqliteD1Database();
+    sqlite = harness.sqlite;
+    return harness.db;
   }
 
   function seedEnabledTax(rateIds: string[]) {

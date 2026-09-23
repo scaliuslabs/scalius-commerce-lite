@@ -49,9 +49,10 @@ vi.mock("../utils", () => ({
   formatFormValuesForSubmission: (values: unknown) => values,
 }));
 
-vi.mock("~/lib/api-functions/products", () => ({
-  createProduct: (input: unknown) => mocks.serverMutation(input),
-  updateProduct: (input: unknown) => mocks.serverMutation(input),
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  postApiV1AdminProducts: (input: unknown) => mocks.serverMutation(input),
+  putApiV1AdminProductsById: (input: unknown) => mocks.serverMutation(input),
 }));
 
 vi.mock("~/lib/api-helpers", () => ({
@@ -168,7 +169,8 @@ describe("useProductSubmit", () => {
     ).resolves.toBe(true);
 
     expect(mocks.serverMutation).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      path: { id: "prod_one" },
+      body: expect.objectContaining({
         id: "prod_one",
         expectedAggregateRevision: 4,
       }),
@@ -182,7 +184,8 @@ describe("useProductSubmit", () => {
       requireResult(result).handleSubmit(productValues()),
     ).resolves.toBe(true);
     expect(mocks.serverMutation).toHaveBeenLastCalledWith({
-      data: expect.objectContaining({ expectedAggregateRevision: 5 }),
+      path: { id: "prod_one" },
+      body: expect.objectContaining({ expectedAggregateRevision: 5 }),
     });
     expect(mocks.onAggregateRevisionChange).toHaveBeenLastCalledWith(6);
   });
@@ -261,7 +264,8 @@ describe("useProductSubmit", () => {
     });
 
     expect(mocks.serverMutation).toHaveBeenLastCalledWith({
-      data: expect.objectContaining({
+      path: { id: "prod_one" },
+      body: expect.objectContaining({
         id: "prod_one",
         expectedAggregateRevision: 4,
         acknowledgedSkuImageRemovalIds: ["pmed_assigned_1"],

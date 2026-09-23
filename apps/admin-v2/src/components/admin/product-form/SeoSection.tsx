@@ -1,7 +1,7 @@
 // src/components/admin/product-form/SeoSection.tsx
 import { memo, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import {
   Braces,
   Globe2,
@@ -123,17 +123,16 @@ export const SeoSection = memo(function SeoSection({
   const discovery =
     cachedSeoSettings?.discovery ?? DEFAULT_SEO_DISCOVERY_SETTINGS;
   const policySource = cachedSeoSettings?.discovery ? "current" : "default";
-  const productId = form.watch("id");
-  const productName = form.watch("name");
-  const slug = form.watch("slug");
-  const metaTitle = form.watch("metaTitle");
-  const metaDescription = form.watch("metaDescription");
-  const isActive = form.watch("isActive");
-  const media = form.watch("media");
-  const noIndex = form.watch("noIndex");
-  const excludeFromSitemap = form.watch("excludeFromSitemap");
-  const excludeFromProductFeed = form.watch("excludeFromProductFeed");
-  const canonicalPath = form.watch("canonicalPath");
+  const [
+    productId, productName, slug, metaTitle, metaDescription, isActive, media,
+    noIndex, excludeFromSitemap, excludeFromProductFeed, canonicalPath,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "id", "name", "slug", "metaTitle", "metaDescription", "isActive", "media",
+      "noIndex", "excludeFromSitemap", "excludeFromProductFeed", "canonicalPath",
+    ],
+  });
 
   const diagnostics = useMemo(
     () =>

@@ -39,9 +39,6 @@ describe("manual fulfillment boundaries", () => {
     const statusIndicatorSource = readRepoFile(
       "apps/admin-v2/src/components/admin/ShipmentStatusIndicator.tsx",
     );
-    const apiFunctionsSource = readRepoFile(
-      "apps/admin-v2/src/lib/api-functions/orders.ts",
-    );
     const apiMutationsSource = readRepoFile(
       "apps/admin-v2/src/lib/api-mutations/orders.ts",
     );
@@ -65,7 +62,6 @@ describe("manual fulfillment boundaries", () => {
     expect(statusIndicatorSource).toContain("refreshDisabledReason");
     expect(statusIndicatorSource).toContain("showLastChecked");
     expect(shipmentCardSource).toContain("showLastChecked={hasRefreshableProvider}");
-    expect(apiFunctionsSource).toContain("`/orders/${orderId}/fulfill`");
     expect(apiMutationsSource).toContain("useCreateFulfillmentShipment");
   });
 });

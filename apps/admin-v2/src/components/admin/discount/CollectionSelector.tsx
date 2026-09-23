@@ -13,7 +13,8 @@ import { Button } from "../../ui/button";
 import { Check, ChevronsUpDown, Folder, Loader2, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
-import { getCollectionsByIds } from "~/lib/api-functions/collections";
+import { getApiV1AdminCollectionsByIds } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { useDebounce } from "~/hooks/use-debounce";
 import { collectionPickerOptionsQueryOptions } from "~/lib/api-query-options/collections";
 
@@ -90,7 +91,9 @@ export function CollectionSelector({
 
     const resolveNames = async () => {
       try {
-        const data = await getCollectionsByIds({ data: { ids: unresolvedIds } });
+        const data = await apiData(getApiV1AdminCollectionsByIds({
+          query: { ids: unresolvedIds.join(",") },
+        }));
         const allCollections = data.collections || [];
         const collectionMap = new Map(
           allCollections.map((c) => [c.id, c]),

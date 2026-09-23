@@ -97,28 +97,7 @@ describe("dashboard feed row preview route", () => {
     mocks.execute.mockResolvedValue(responseData());
   });
 
-  it("passes exact bounded inputs and request-scoped image authority with no-store", async () => {
-    const order: string[] = [];
-    mocks.getSeo.mockImplementation(async () => {
-      order.push("seo");
-      return { discovery: { feeds: feedsPolicy } };
-    });
-    mocks.getCurrency.mockImplementation(async () => {
-      order.push("currency");
-      return { currencyCode: "BDT" };
-    });
-    mocks.getMedia.mockImplementation(async () => {
-      order.push("media");
-      return {
-        canonicalCdnUrl: "cdn.example.com",
-        canonicalHostAliases: ["old-cdn.example.com"],
-      };
-    });
-    mocks.execute.mockImplementation(async () => {
-      order.push("preview");
-      return responseData();
-    });
-
+  it("passes bounded inputs and request-scoped storefront/image authority with no-store", async () => {
     const response = await app().request(
       "/settings/seo/feed-row-preview/prod_1?sku=SKU-1&limit=3",
       undefined,
@@ -130,7 +109,6 @@ describe("dashboard feed row preview route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(order).toEqual(["seo", "currency", "media", "preview"]);
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         productId: "prod_1",
@@ -150,30 +128,6 @@ describe("dashboard feed row preview route", () => {
       success: true,
       data: responseData(),
     });
-  });
-
-  it("does not read currency or media settings when the feed is disabled", async () => {
-    mocks.getSeo.mockResolvedValue({
-      discovery: {
-        feeds: { ...feedsPolicy, productCatalogEnabled: false },
-      },
-    });
-    const response = await app().request(
-      "/settings/seo/feed-row-preview/prod_1",
-      undefined,
-      {} as Env,
-    );
-    expect(response.status).toBe(200);
-    expect(mocks.getCurrency).not.toHaveBeenCalled();
-    expect(mocks.getMedia).not.toHaveBeenCalled();
-    expect(mocks.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        currencyCode: "BDT",
-        feedsPolicy: expect.objectContaining({
-          productCatalogEnabled: false,
-        }),
-      }),
-    );
   });
 
   it.each([

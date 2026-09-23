@@ -6,7 +6,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
-import { createProduct, updateProduct } from "~/lib/api-functions/products";
+import {
+  postApiV1AdminProducts,
+  putApiV1AdminProductsById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   readProductMediaSkuReferenceConflict,
@@ -14,7 +18,7 @@ import {
   type ProductMediaSkuReferenceConflict,
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
-import type { ProductOptionMatrixInput } from "~/lib/api-functions/products";
+import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
 import { queryKeys } from "~/lib/query-keys";
 
 interface UseProductSubmitOptions {
@@ -28,7 +32,7 @@ interface UseProductSubmitOptions {
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   onSuccess?: () => void;
-  optionMatrixDraft?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null;
+  createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
 }
 
@@ -59,7 +63,7 @@ export function useProductSubmit({
   onOpenRevisionConflict,
   onProductSaved,
   onSuccess,
-  optionMatrixDraft,
+  createComposition,
   optionMatrixIssue = null,
 }: UseProductSubmitOptions): UseProductSubmitReturn {
   const navigate = useNavigate();
@@ -78,21 +82,22 @@ export function useProductSubmit({
         if (!aggregateRevision) {
           throw new Error("Product revision is required for update");
         }
-        return updateProduct({
-          data: {
+        return apiData(putApiV1AdminProductsById({
+          path: { id: entityId },
+          body: {
             ...formattedValues,
             id: entityId,
             expectedAggregateRevision: aggregateRevision,
             ...(acknowledgedSkuImageRemovalIds ? { acknowledgedSkuImageRemovalIds } : {}),
           },
-        });
+        }));
       }
-      return createProduct({
-        data: {
+      return apiData(postApiV1AdminProducts({
+        body: {
           ...formattedValues,
-          ...(optionMatrixDraft ? { optionMatrix: optionMatrixDraft } : {}),
+          ...createComposition,
         },
-      });
+      }));
     },
     onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);

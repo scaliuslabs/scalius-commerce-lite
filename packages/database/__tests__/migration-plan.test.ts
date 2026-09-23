@@ -143,6 +143,24 @@ describe("D1 migration plan builder", () => {
     expect(compared).toBeGreaterThanOrEqual(CURRENT_DATABASE_SCHEMA_MIGRATIONS.length);
   });
 
+  it("keeps trigger guards remote-D1 safe: WHEN-clause guards and one-statement bodies", () => {
+    // Remote D1 rejects trigger bodies that embed `SELECT CASE WHEN`. The one
+    // multi-statement body below shipped in the baseline before this rule.
+    const baselineExceptions = new Set(["discount_usage_one_per_customer_guard"]);
+    const violations = readCanonicalFiles().flatMap((file) =>
+      splitD1MigrationStatements(file.sql)
+        .map((statement) => statement.replace(/^(?:\s*--[^\n]*\n)*/, ""))
+        .filter((statement) => /^CREATE\s+TRIGGER\b/i.test(statement))
+        .flatMap((statement) => {
+          const name = /TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)/i.exec(statement)![1]!;
+          const body = statement.slice(statement.search(/\bBEGIN\b/i) + 5).replace(/\bEND\s*;?\s*$/i, "");
+          const safe = !/SELECT\s+CASE\s+WHEN/i.test(body) && body.split(";").length === 2;
+          return safe || baselineExceptions.has(name) ? [] : [`${file.name}: ${name}`];
+        }));
+
+    expect(violations).toEqual([]);
+  });
+
   it("requires release-ledger migrations to end with their exact ledger row", async () => {
     const baseline = syntheticChain(FIRST_RELEASE_LEDGER_VERSION);
     const body = ["CREATE TABLE release_t (id INTEGER PRIMARY KEY);"];

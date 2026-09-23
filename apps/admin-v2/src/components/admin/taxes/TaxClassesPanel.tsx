@@ -22,12 +22,15 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  createTaxClass,
-  deleteTaxClass,
-  updateTaxClass,
-  type TaxClassRecord,
-  type TaxConfigurationPayload,
-} from "@/lib/api-functions/taxes";
+  deleteApiV1AdminTaxesClassesById,
+  postApiV1AdminTaxesClasses,
+  putApiV1AdminTaxesClassesById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type {
+  TaxClassRecord,
+  TaxConfigurationPayload,
+} from "@/lib/api-query-options/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -79,12 +82,11 @@ export function TaxClassesPanel({
         isExempt: draft.isExempt,
       };
       return editing
-        ? updateTaxClass({ data: {
-            id: editing.id,
-            expectedVersion: editing.version,
-            update,
-          } })
-        : createTaxClass({ data: update });
+        ? apiData(putApiV1AdminTaxesClassesById({
+            path: { id: editing.id },
+            body: { ...update, expectedVersion: editing.version },
+          }))
+        : apiData(postApiV1AdminTaxesClasses({ body: update }));
     },
     onSuccess: async () => {
       toast.success(editing ? "Tax class updated" : "Tax class created");
@@ -95,10 +97,10 @@ export function TaxClassesPanel({
     onError: (error) => toast.error(getServerFnError(error, "Tax class could not be saved.")),
   });
   const deleteMutation = useMutation({
-    mutationFn: (taxClass: TaxClassRecord) => deleteTaxClass({ data: {
-      id: taxClass.id,
-      expectedVersion: taxClass.version,
-    } }),
+    mutationFn: (taxClass: TaxClassRecord) => apiData(deleteApiV1AdminTaxesClassesById({
+      path: { id: taxClass.id },
+      query: { expectedVersion: taxClass.version },
+    })),
     onSuccess: async () => {
       toast.success("Tax class deleted");
       setDeleting(null);

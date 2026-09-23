@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
     restoreMediaFile: vi.fn(),
     saveMediaVariants: vi.fn(),
     completeMediaUpload: vi.fn(),
-    invalidateMediaDependentProductCaches: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/media", async () => {
@@ -26,8 +26,8 @@ vi.mock("@scalius/core/modules/media", async () => {
     };
 });
 
-vi.mock("../../utils/media-cache-invalidation", () => ({
-    invalidateMediaDependentProductCaches: mocks.invalidateMediaDependentProductCaches,
+vi.mock("../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { adminMediaRoutes } from "./media";
@@ -61,8 +61,6 @@ function createTestApp() {
     const db = { id: "db" };
     const env = {
         CACHE: { id: "api-cache-kv" },
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
     } as unknown as Env;
 
     mocks.updateMediaFile.mockResolvedValue(presentedMedia);
@@ -74,7 +72,7 @@ function createTestApp() {
     mocks.restoreMediaFile.mockResolvedValue(presentedMedia);
     mocks.saveMediaVariants.mockResolvedValue({ ...presentedMedia, variantWidth: 800 });
     mocks.completeMediaUpload.mockResolvedValue(presentedMedia);
-    mocks.invalidateMediaDependentProductCaches.mockResolvedValue(undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -130,19 +128,15 @@ describe("admin media cache invalidation", () => {
             coreCall: () => mocks.restoreMediaFile,
         },
     ])("invalidates dependent products after $label commits", async ({ path, method, body, coreCall }) => {
-        const { app, db, env } = createTestApp();
+        const { app, env } = createTestApp();
 
         const response = await mutate(app, env, path, method, body);
 
         expect(response.status).toBe(200);
         expect(coreCall()).toHaveBeenCalled();
-        expect(mocks.invalidateMediaDependentProductCaches).toHaveBeenCalledWith(
-            db,
-            "media_123",
-            expect.objectContaining({ env }),
-        );
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
         expect(coreCall().mock.invocationCallOrder[0]).toBeLessThan(
-            mocks.invalidateMediaDependentProductCaches.mock.invocationCallOrder[0]!,
+            mocks.bumpCacheGeneration.mock.invocationCallOrder[0]!,
         );
     });
 
@@ -156,7 +150,7 @@ describe("admin media cache invalidation", () => {
         });
 
         expect(response.status).toBe(500);
-        expect(mocks.invalidateMediaDependentProductCaches).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
 
     it("stores browser renditions from the multipart form and invalidates dependent products", async () => {
@@ -180,11 +174,7 @@ describe("admin media cache invalidation", () => {
         expect({ width: input.width, height: input.height, widths: [...input.files.keys()] })
             .toEqual({ width: 800, height: 600, widths: [160, 800] });
         expect(input.files.get(800).byteLength).toBe(2);
-        expect(mocks.invalidateMediaDependentProductCaches).toHaveBeenCalledWith(
-            db,
-            "media_123",
-            expect.objectContaining({ env }),
-        );
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
     });
 
     it("renders renditions on the server unless the dashboard uploads its own", async () => {

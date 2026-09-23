@@ -43,9 +43,13 @@ const toastMock = vi.hoisted(() => ({
 
 const permissionMock = vi.hoisted(() => ({ canCreate: true, canEdit: true }));
 
-vi.mock("~/lib/api-functions/collections", () => collectionApi);
-
-vi.mock("~/lib/api-functions/products", () => productApi);
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  postApiV1AdminCollections: collectionApi.createCollection,
+  putApiV1AdminCollectionsById: collectionApi.updateCollection,
+  getApiV1AdminCollectionsProductOptions: collectionApi.getCollectionProductOptions,
+  getApiV1AdminProducts: productApi.getProducts,
+}));
 
 vi.mock("sonner", () => ({
   toast: toastMock,
@@ -290,10 +294,12 @@ describe("CollectionForm", () => {
       expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
     });
 
-    const payload = collectionApi.updateCollection.mock.calls[0]?.[0]?.data;
+    expect(collectionApi.updateCollection.mock.calls[0]?.[0]?.path).toEqual({
+      id: "col_late_labels",
+    });
+    const payload = collectionApi.updateCollection.mock.calls[0]?.[0]?.body;
     expect(payload).toEqual(
       expect.objectContaining({
-        id: "col_late_labels",
         expectedVersion: 7,
         config: expect.objectContaining({
           categoryIds: ["cat_curated"],
@@ -480,7 +486,7 @@ describe("CollectionForm", () => {
       expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
     });
     expect(
-      collectionApi.updateCollection.mock.calls[0]?.[0]?.data.config.productIds,
+      collectionApi.updateCollection.mock.calls[0]?.[0]?.body.config.productIds,
     ).toEqual([
       "prod_primary",
       "prod_secondary",

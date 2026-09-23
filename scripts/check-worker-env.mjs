@@ -65,7 +65,6 @@ export const apps = [
       "BETTER_AUTH_SECRET",
       "JWT_SECRET",
       "API_TOKEN",
-      "PURGE_TOKEN",
       "AGENT_TOKEN_PEPPER",
       "CUSTOMER_SESSION_HASH_KEY",
       "ADMIN_SETUP_TOKEN",
@@ -78,7 +77,6 @@ export const apps = [
       "BETTER_AUTH_URL",
       "R2_PUBLIC_URL",
       "CDN_DOMAIN_URL",
-      "PURGE_URL",
       "CUSTOMER_AUTH_COOKIE_DOMAIN",
       "CORS_ALLOWED_ORIGINS",
       // Local development only (apps/api/wrangler.local.jsonc vars).

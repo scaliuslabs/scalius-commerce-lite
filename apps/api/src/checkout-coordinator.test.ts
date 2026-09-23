@@ -1,12 +1,4 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync, SQLInputValue, SQLOutputValue } from "node:sqlite";
 
 import type {
   CheckoutCommitCommand,
@@ -18,8 +10,11 @@ import {
   type CheckoutSqlTransport,
 } from "@scalius/database/checkout-transport";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import {
+  createMigratedSqlite,
+  createSqliteD1Binding,
+  createSqliteD1Database,
+} from "@scalius/database/testing/sqlite-d1";
 import type { MetaPurchaseQueueMessage } from "@scalius/core/integrations/meta/purchase-outbox";
 import type { OrderNotificationQueueMessage } from "@scalius/core/modules/notifications";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,64 +34,14 @@ import {
 } from "./checkout-coordinator";
 
 type JsonObject = Record<string, unknown>;
-type SQLiteInput = string | number | bigint | null | Uint8Array;
 type CheckoutSideEffectQueueMessage =
   | OrderNotificationQueueMessage
   | MetaPurchaseQueueMessage;
 
 const INTENT_QUOTE_FINGERPRINT = "taxq_UgQA7XI9P6ehT6OIpL1bxu";
 
-const migrationDirectory = fileURLToPath(new URL(
-  "../../../packages/database/migrations/",
-  import.meta.url,
-));
-
-function createCheckoutDatabase(): DatabaseSync {
-  const database = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory)
-    .filter((candidate) => /^\d{4}_.+\.sql$/.test(candidate))
-    .sort()) {
-    database.exec(compileSqliteMigrationForProvider(
-      readFileSync(`${migrationDirectory}/${name}`, "utf8"),
-      "d1",
-    ));
-  }
-  return database;
-}
-
-function sqliteTransport(
-  database: DatabaseSync,
-): CheckoutSqlTransport {
-  return {
-    provider: "d1",
-    async all<T>(statement: PortableSqlStatement) {
-      return database.prepare(statement.sql).all(
-        ...(statement.args as SQLiteInput[]),
-      ) as T[];
-    },
-    async get<T>(statement: PortableSqlStatement) {
-      return (database.prepare(statement.sql).get(
-        ...(statement.args as SQLiteInput[]),
-      ) ?? null) as T | null;
-    },
-    async atomic(statements: readonly PortableSqlStatement[]) {
-      database.exec("BEGIN IMMEDIATE");
-      try {
-        for (const statement of statements) {
-          if (/\bSELECT CASE WHEN\b/i.test(statement.sql)) {
-            database.prepare(statement.sql).all(...(statement.args as SQLiteInput[]));
-          } else {
-            database.prepare(statement.sql).run(...(statement.args as SQLiteInput[]));
-          }
-        }
-        database.exec("COMMIT");
-      } catch (error) {
-        database.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    close() {},
-  };
+function sqliteTransport(database: DatabaseSync): CheckoutSqlTransport {
+  return createCheckoutSqlTransport({ DB: createSqliteD1Binding(database) });
 }
 
 interface StatefulTursoHarness {
@@ -195,74 +140,8 @@ function statefulTursoTransport(database: DatabaseSync): StatefulTursoHarness {
   };
 }
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function sqliteRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function sqliteD1Statement(
-  database: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: sqliteRows(database.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => sqliteD1Statement(database, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = database.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqliteRows(database.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function sqliteD1Binding(database: DatabaseSync): D1Database {
-  return {
-    prepare: (query: string) => sqliteD1Statement(database, query),
-    async batch(statements: SqliteD1Statement[]) {
-      database.exec("BEGIN");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        database.exec("COMMIT");
-        return results;
-      } catch (error) {
-        database.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-}
-
 function drizzleDatabase(database: DatabaseSync): Database {
-  return drizzle(sqliteD1Binding(database), { schema }) as unknown as Database;
+  return createSqliteD1Database({ sqlite: database }).db;
 }
 
 function order(id: string, inventoryAction = "reserved"): CheckoutCommittedOrderRow {
@@ -610,7 +489,7 @@ describe("production checkout coordinator engine", () => {
   let database: DatabaseSync;
 
   beforeEach(async () => {
-    database = createCheckoutDatabase();
+    database = createMigratedSqlite();
     database.exec(`
       PRAGMA foreign_keys = ON;
       INSERT INTO products (id, name, price, slug, is_active)
@@ -656,7 +535,7 @@ describe("production checkout coordinator engine", () => {
       throw new Error("The D1 commit endpoint must not make a nested coordinator call.");
     }).namespace;
     const coordinator = new CheckoutCoordinator(state, {
-      DB: sqliteD1Binding(database),
+      DB: createSqliteD1Binding(database),
       CHECKOUT_COORDINATOR: namespace,
     } as unknown as Env);
     const input = command("order_commit_endpoint");
@@ -710,7 +589,7 @@ describe("production checkout coordinator engine", () => {
       },
     } as unknown as DurableObjectNamespace;
     const env = {
-      DB: sqliteD1Binding(database),
+      DB: createSqliteD1Binding(database),
       CHECKOUT_COORDINATOR: namespace,
     } as unknown as Env;
 

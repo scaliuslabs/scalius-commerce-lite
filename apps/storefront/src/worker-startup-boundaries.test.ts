@@ -7,30 +7,39 @@ vi.mock("@astrojs/cloudflare/handler", () => ({ handle }));
 vi.mock("cloudflare:workers", () => ({
   WorkerEntrypoint: class {},
 }));
+vi.mock("./config/build-id", () => ({ BUILD_ID: "test-build" }));
 
-describe("storefront Worker cache runtime", () => {
-  it("skips cache purges only when the runtime exposes no cache", async () => {
-    const { CachedPublicStorefront } = await import("./worker");
-    const withoutCache = Object.assign(new CachedPublicStorefront(), {
-      ctx: {} as ExecutionContext,
-    });
+const cacheStore = new Map<string, Response>();
+vi.stubGlobal("caches", {
+  default: {
+    match: async (key: string) => cacheStore.get(key)?.clone(),
+    put: async (key: string, response: Response) => void cacheStore.set(key, response),
+  },
+});
 
-    await expect(withoutCache.purgeGroups(["products"])).resolves.toBeUndefined();
-
-    const purge = vi.fn().mockResolvedValue({
-      success: false,
-      errors: [{ code: 1001, message: "failed" }],
-    });
-    const withCache = Object.assign(new CachedPublicStorefront(), {
-      ctx: { cache: { purge } } as unknown as ExecutionContext,
-    });
-
-    await expect(withCache.purgeGroups(["products"])).rejects.toThrow(
-      "Public storefront cache purge failed (1001)",
+describe("storefront Worker gateway cache", () => {
+  it("serves a stored public page under the KV generation without rendering", async () => {
+    cacheStore.set(
+      "https://shop.example/__cache/test-build/gen7/products/fish",
+      new Response("cached page", { headers: { "Content-Type": "text/html" } }),
     );
-    expect(purge).toHaveBeenCalledWith({ tags: ["products"] });
+    const kvGet = vi.fn(async () => "gen7");
+    const { default: StorefrontGateway } = await import("./worker");
+    const worker = Object.assign(new StorefrontGateway(), {
+      env: { CACHE: { get: kvGet } } as unknown as Env,
+      ctx: { waitUntil: vi.fn() } as unknown as ExecutionContext,
+    });
+    handle.mockClear();
+
+    const response = await worker.fetch(new Request("https://shop.example/products/fish?utm_source=fb"));
+
+    expect(await response.text()).toBe("cached page");
+    expect(response.headers.get("X-Cache-Status")).toBe("HIT");
+    expect(kvGet).toHaveBeenCalledWith("cache:generation", { cacheTtl: 30 });
+    expect(handle).not.toHaveBeenCalled();
   });
 });
+
 
 describe("storefront Worker trusted front proxy", () => {
   const MASTER_SECRET = "storefront-test-master-secret-with-enough-length-0123456789";

@@ -35,7 +35,7 @@ src/
     cart/            # Cart utility functions
     checkout/        # Checkout page logic + gateway handlers
     canonical-query.ts # Canonical public query-string handling
-    public-worker-cache.ts # Native cache eligibility, tags, and route TTLs
+    public-worker-cache.ts # Public cache eligibility and generation-keyed Cache API lane
     middleware-helper/ # CSP handler
     tracking/        # Analytics tracking
   pages/             # File-based routing
@@ -71,7 +71,8 @@ Two middleware functions run in sequence via `sequence()`:
 The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `runWithRequestRuntime()` (`src/lib/api/runtime.ts`) and seeded into the request runtime store:
 
 - **Platform origins and merchant CSP sources**: the `platform` and `cspAllowedDomains` fields of `GET /api/v1/storefront/layout`. The middleware makes that read first (`applyPlatformOrigins`) and every page reuses the same request-scoped promise from `getLayoutData()`, so there is no separate platform or CSP sub-request. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead stays the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
-- **Derived secrets**: `API_TOKEN` and `PURGE_TOKEN` are derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical values, so nothing is installed or shared out of band.
+- **Derived secret**: `API_TOKEN` is derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical value, so nothing is installed or shared out of band.
+- **Cache generation**: on public renders the gateway passes the store's cache generation in `X-Scalius-Cache-Generation`; API reads made during that render send it on, so the page and its API data use one generation.
 
 The resulting store carries:
 
@@ -81,33 +82,21 @@ The resulting store carries:
 - `MEDIA_URL` / `CDN_DOMAIN_URL` -- Platform media base URL and its host[:port] (also set on `window.__CDN_DOMAIN__` for client code)
 - `STOREFRONT_URL` -- This storefront's own origin (Platform setting, or the request-origin fallback above)
 - `DASHBOARD_URL` -- Admin dashboard origin
-- `API_TOKEN` / `PURGE_TOKEN` -- Derived per-request secrets (see above)
+- `API_TOKEN` -- Derived per-request secret (see above)
+- `CACHE_GENERATION` -- Public cache generation of this render, if any
 
 ### 2. Response Policy Middleware (`responsePolicyMiddleware`)
 
-The default Worker entrypoint is an uncached safety gateway. It delegates only
-allowlisted anonymous `GET`/`HEAD` requests to the native `CachedPublicStorefront`
-entrypoint. The public entrypoint owns bounded route TTLs and semantic tags.
-Browser HTML is `no-store`; discovery XML/text is public but must revalidate.
-Requests with authorization, cookies, variant-selection
-parameters, cart, checkout, account, recovery, or other buyer state stay
-private and never reach the shared cache.
+The Worker entrypoint (`src/worker.ts`) is the only gateway. Allowlisted
+anonymous `GET`/`HEAD` requests are served from the Cache API; everything else
+renders directly. Browser HTML is `no-store`; discovery XML/text is public but
+must revalidate. Requests with authorization, a named private cookie,
+variant-selection parameters, cart, checkout, account, recovery, or other
+buyer state stay private and never reach the shared cache.
 
 The gateway maps tracking-decorated, default-valued, and permuted query forms
-to a canonical same-host internal Request. This prevents equivalent-query cache
-amplification without an Enterprise-only custom cache-key dependency. Workers
-Caching keys by entrypoint, Worker version, path/query, and service-call props;
-it does not include the hostname. This deployment therefore exposes exactly one
-custom domain and disables `workers.dev` plus preview URLs. Add an explicit
-tenant/host partition before ever routing another hostname to this Worker. Keep
-`cross_version_cache` disabled so a new deployment cannot serve older HTML.
-
-The gateway also verifies the cached inner response's `X-Storefront-Build`
-stamp. A mismatch triggers one bounded semantic-tag purge and retry so a stale
-cross-build response cannot keep pointing at superseded assets. Deployment
-verification allows up to 90 seconds for custom-domain propagation, then warms
-robots, sitemap children, catalog feeds, homepage, search, and bounded dynamic
-catalog paths before reporting success.
+to one canonical same-host URL, strips the `Cookie` header, and renders that
+canonical request, so every anonymous visitor shares one entry per page.
 
 Astro prefetch remains enabled for anonymous public discovery, but
 `src/lib/prefetch-policy.ts` is the shared deny boundary for private/no-store
@@ -137,33 +126,33 @@ catalog intent prefetch globally for truly anonymous pages.
 
 ## Caching Architecture
 
-- `StorefrontGateway` classifies public requests before cache lookup.
-- `CachedPublicStorefront` renders eligible responses and attaches `Cache-Tag` plus
-  a route-owned `Cloudflare-CDN-Cache-Control` directive. Availability-bearing
-  every public route uses the one-year edge maximum. Tag purges own freshness,
-  so the TTL is only the ceiling that keeps a rarely edited store warm.
-- `StorefrontGateway` removes those two internal directives after the native
-  entrypoint lookup so downstream caches cannot reinterpret them. The browser
-  still receives `no-store` HTML, while `X-Cache-Status` and
-  `CF-Cache-Status` expose the native-cache result.
-- The API calls authenticated `POST /api/purge-cache` with bounded domain groups
-  after a merchant write. That endpoint awaits the owning entrypoint's native
-  tag purge; there is no KV version, prefix scan, warm queue, or abandoned key.
+- The store has one **cache generation**: an opaque random token stored in the
+  database and mirrored to the `CACHE` KV namespace (shared with the API
+  Worker, read with a 30 s edge cache). Every buyer-visible write replaces it.
+- `servePublicStorefrontRequest()` (`src/lib/public-worker-cache.ts`) keys
+  `caches.default` by host, build ID, generation, and canonical path/query.
+  A write or a deploy therefore makes old entries unreachable; nothing is
+  purged, and old entries age out (edge lifetime 1 day).
+- A miss renders the canonical request pinned to the generation and stores the
+  response only when the middleware marked it `X-Cache-Status: MISS` (a
+  successful anonymous public response without `Set-Cookie`). Hits return
+  `X-Cache-Status: HIT` with the browser cache headers restored.
+- If the generation cannot be read, the request renders uncached.
+- Freshness: a write reaches every page within KV propagation (typically well
+  under 60 s). A lost KV mirror write is repaired by the next pass of the same
+  write or by the 15-minute scheduled sync.
 - `withEdgeCache()` only shares an in-flight Promise between identical reads in
-  the same isolate. It removes the Promise immediately after settlement and is
-  not a persistent cache layer.
+  one request. It is not a persistent cache layer.
+- Workers Cache (`cache.enabled`) is intentionally off for this Worker: it
+  bills every page hit twice and every static asset request. The Cache API is
+  per data center, which fits stores whose buyers sit in a few regions.
 
 ### Cache Key Admission
 
 - `src/lib/canonical-query.ts` owns canonical query handling for API read keys.
 - `@scalius/shared/storefront-cache-path` owns rendered public-path canonicalization.
-- The native cache owns the canonical path/query and Worker-version key, but not
-  the hostname. Equivalent safe query forms share that key; product
-  variant-selection parameters bypass public caching entirely. The one-domain
-  deployment boundary above is part of the cache-isolation contract.
-- Do not pass `cf.cacheKey` to the native entrypoint. It is unnecessary for
-  this one-host deployment and is an Enterprise-only zone-CDN feature that does
-  not configure Workers Caching.
+- Equivalent safe query forms share one key; product variant-selection
+  parameters bypass public caching entirely.
 
 ### Early Hints
 
@@ -171,48 +160,26 @@ Anonymous public HTML includes only a deployment-stable CDN `preconnect` in its
 HTTP `Link` header. Cloudflare may cache that header separately and emit it as a
 `103 Early Hints` response before the Worker runs. Never add merchant hero,
 product, query-specific, private, or build-version asset URLs to that header:
-the separate URI-only hints cache is not part of semantic `ctx.cache.purge()`
-and a stale preload can waste constrained mobile bandwidth. The stable
+the separate URI-only hints cache does not follow the cache generation, and a
+stale preload can waste constrained mobile bandwidth. The stable
 preconnect transfers no asset bytes and does not alter commerce freshness.
 
-### Cache Invalidation
-
-When the API triggers `/api/purge-cache` with `Authorization: Bearer <purge
-token>` (the same value both sides derive from `SCALIUS_SECRET`), the storefront
-validates and deduplicates at most 30 known domain groups, then awaits
-`CachedPublicStorefront.purgeGroups()`. Unknown groups are ignored by the cache
-owner. `GET` and query-string tokens are rejected. A failed purge
-is observable but never rolls back an already committed database mutation; the
-one-year edge TTL is the ceiling Cloudflare honors, not a freshness mechanism:
-every public route is purged by the write that changes it.
-Normal successful merchant writes purge their semantic tags immediately, and a
-successful purge re-renders the homepage into the new cache generation in the
-background so the next visitor does not pay for the cold miss.
+### Cache Freshness
 
 Only the named private-session cookies (`cs_tok`, `cs_auth`, `stp_theme_preview`)
 or an `Authorization` / `X-API-Token` header move a request onto the uncached
 lane. Analytics and ad-click cookies (`_fbp`, `_fbc`, `_ga`, click-id mirrors)
-never change a public render; the gateway strips the `Cookie` header before the
-cache-enabled entrypoint so every anonymous visitor shares one cached entry.
+never change a public render; the gateway strips the `Cookie` header before
+rendering so every anonymous visitor shares one cached entry.
 
 Persistent public product, search, and feed projections are intentionally
 availability-band stable. `availabilityBand` is the buyer-visible inventory
 truth; the retained `stock` and `reservedStock` fields are compatibility
-sentinels, not exact quantities. Same-band mutations therefore do not need a
-purge, while band transitions still purge the relevant API and rendered cache
-groups. Never render or advertise those sentinels as exact inventory. Cart and
+sentinels, not exact quantities. Same-band mutations therefore leave the cache
+generation alone, while band transitions replace it. Never render or advertise those sentinels as exact inventory. Cart and
 checkout must validate the requested quantity against the live database-backed
 authority.
 
-### Cache TTL Constants
-
-| Constant | Seconds | Purpose |
-|----------|---------|---------|
-| `CACHE_TTL.AVAILABILITY` | 31,536,000 (1 year, the edge maximum) | Buyer-visible price and availability; writes and stock band transitions purge immediately |
-| `CACHE_TTL.LONG` | 31,536,000 (1 year, the edge maximum) | Low-frequency routes whose merchant writes purge their semantic tags |
-
-`withEdgeCache()` is request-only deduplication. Persistent public TTL policy is
-centralized in `public-worker-cache.ts`.
 
 ## Page Data Loading
 
@@ -281,7 +248,6 @@ Proxy routes handle operations that require the derived `API_TOKEN` (from `SCALI
 | `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates gateway sessions through gateway-specific proxies after order commit |
 | `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
 | `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
-| `purge-cache.ts` | Authenticated semantic cache-tag purge endpoint for public storefront responses |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
@@ -370,9 +336,9 @@ All data access goes through the API worker via the configured SDK clients, serv
 |------|---------|
 | `wrangler.jsonc` | Source Cloudflare binding/route config consumed by the Astro adapter (no `vars`) |
 | `dist/server/wrangler.json` | Generated deploy config produced by `astro build`; deploy this file, not the source config |
-| `src/worker.ts` | Uncached gateway and native cached public entrypoint |
+| `src/worker.ts` | Gateway: reads the cache generation and serves the public cache lane |
 | `src/middleware.ts` | Public/private response policy and API context |
-| `src/lib/public-worker-cache.ts` | Public eligibility, canonical keys, tags, and TTL |
+| `src/lib/public-worker-cache.ts` | Public eligibility, canonical keys, and the generation-keyed Cache API lane |
 | `src/lib/canonical-query.ts` | Canonical API query strings |
 | `src/lib/api/runtime.ts` | Per-request runtime: derived tokens, platform origins, ALS getters |
 | `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |

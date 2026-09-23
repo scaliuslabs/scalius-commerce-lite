@@ -1,62 +1,16 @@
-import { DatabaseSync, type SQLInputValue, type SQLOutputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { safeBatch, type Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { ConflictError } from "../../errors";
 import { createAtomicCheckoutAttempt } from "./checkout-attempts";
-import { commitStorefrontOrderPayload } from "./orders.ingest";
+import { commitStorefrontOrderPayload, type StorefrontOrderCheckoutCommit } from "./orders.ingest";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
 import { calculateDiscountAmount, isDiscountValid } from "../discounts/discounts.eligibility";
 import { createDiscount, deleteDiscount, permanentlyDeleteDiscount, restoreDiscounts, setDiscountActiveStatus, updateDiscount } from "../discounts/discounts.service";
 import { createDiscountSchema, updateDiscountSchema } from "../discounts/discounts.validation";
 import { prepareStockReservationBatch } from "../inventory";
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  query: string;
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: sqlite.prepare(query).all(...values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    query,
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
 
 function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommitPayload {
   return {
@@ -178,11 +132,15 @@ describe("storefront checkout authority at the atomic commit", () => {
   let databaseNow: number;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
+    beforeWriteBatch = undefined;
+    ({ sqlite, db } = createSqliteD1Database({
+      async beforeBatch(_sqlite, statements) {
+        if (!statements.some((statement) => statement.query.startsWith('insert into "orders"'))) return;
+        const beforeWrite = beforeWriteBatch;
+        beforeWriteBatch = undefined;
+        await beforeWrite?.();
+      },
+    }));
     databaseNow = Math.floor(Date.now() / 1000);
     sqlite.function("unixepoch", () => databaseNow);
     sqlite.exec(`
@@ -194,27 +152,6 @@ describe("storefront checkout authority at the atomic commit", () => {
       INSERT INTO shipping_methods (id, name, fee, is_active)
       VALUES ('shipping_standard', 'Standard delivery', 60, 1);
     `);
-    beforeWriteBatch = undefined;
-    const binding = {
-      prepare: (query: string) => createD1Statement(sqlite, query),
-      async batch(statements: SqliteD1Statement[]) {
-        if (statements.some((statement) => statement.query.startsWith('insert into "orders"'))) {
-          const beforeWrite = beforeWriteBatch;
-          beforeWriteBatch = undefined;
-          await beforeWrite?.();
-        }
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
   });
 
   afterEach(() => sqlite.close());
@@ -411,5 +348,94 @@ describe("storefront checkout authority at the atomic commit", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM orders").get()?.count).toBe(1);
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM inventory_movements").get()?.count).toBe(1);
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+  });
+
+  describe("agent storefront context binding", () => {
+    const GRANT = "agr_storefront0123456789";
+    const CONTEXT = "asc_context0123456789abc";
+    const CART = '[{"variantId":"variant_1","quantity":2}]';
+
+    beforeEach(() => {
+      sqlite.exec(`
+        INSERT INTO user (id, name, email) VALUES ('owner_1', 'Owner', 'owner@example.com');
+        INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json,
+          risk_ceiling, status, expires_at)
+        VALUES
+          ('${GRANT}', 'pat', 'owner_1', 'storefront', 'Buyer agent', 'full', '[]', 'read', 'active', ${databaseNow + 172_800}),
+          ('agr_otherowner0123456789', 'pat', 'owner_1', 'storefront', 'Other agent', 'full', '[]', 'read', 'active', ${databaseNow + 172_800});
+        INSERT INTO agent_storefront_contexts (id, grant_id, revision, cart_json, discount_code, expires_at)
+        VALUES ('${CONTEXT}', '${GRANT}', 3, '${CART}', 'SAVE10', ${databaseNow + 3_600});
+      `);
+    });
+
+    type AgentContext = NonNullable<StorefrontOrderCheckoutCommit["agentContext"]>;
+
+    function agentCheckout(overrides: Partial<AgentContext> = {}) {
+      const { payload, commit } = checkout();
+      const agentContext: AgentContext = {
+        contextId: CONTEXT,
+        grantId: GRANT,
+        expectedRevision: 3,
+        expiresAt: new Date((databaseNow + 3_600) * 1000),
+        ...overrides,
+      };
+      return { payload, commit: { ...commit, agentContext } };
+    }
+
+    const context = () => sqlite.prepare(
+      "SELECT revision, cart_json, discount_code FROM agent_storefront_contexts",
+    ).get();
+    const grants = () => sqlite.prepare(
+      "SELECT context_id, order_id, authority_kind, expires_at FROM agent_storefront_order_grants",
+    ).all();
+
+    it("commits the order with a created-order grant and clears the context cart and discount", async () => {
+      const { payload, commit } = agentCheckout({
+        continuation: {
+          id: "acn_payment0123456789abc",
+          kind: "payment",
+          expiresAt: new Date((databaseNow + 1_800) * 1000),
+          bootstrapCodeHash: "c".repeat(64),
+        },
+      });
+
+      await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+
+      expect(context()).toEqual({ revision: 4, cart_json: "[]", discount_code: null });
+      expect(grants()).toEqual([{
+        context_id: CONTEXT, order_id: payload.orderData.id, authority_kind: "created", expires_at: databaseNow + 3_600,
+      }]);
+      expect(sqlite.prepare("SELECT order_id, kind, status FROM agent_storefront_continuations").all())
+        .toEqual([{ order_id: payload.orderData.id, kind: "payment", status: "pending" }]);
+      expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+    });
+
+    const CONTEXT_CONFLICT = /storefront context changed, closed, or expired before the order was committed/;
+
+    it.each([
+      ["a stale context revision", { expectedRevision: 2 }, undefined],
+      ["another grant's context", { grantId: "agr_otherowner0123456789" }, undefined],
+      ["a context that expires before commit", {}, () => { databaseNow += 3_600; }],
+      ["a context closed before commit", {}, () => {
+        sqlite.exec("UPDATE agent_storefront_contexts SET status = 'closed', closed_at = unixepoch()");
+      }],
+      ["a context edited before commit", {}, () => {
+        sqlite.exec("UPDATE agent_storefront_contexts SET revision = 4, cart_json = '[]'");
+      }],
+    ] as const)("refuses %s as a context conflict without checkout writes", async (_label, overrides, race) => {
+      const { payload, commit } = agentCheckout(overrides);
+      let contextBeforeCommit: unknown;
+      beforeWriteBatch = () => {
+        race?.();
+        contextBeforeCommit = context();
+      };
+
+      const failure = commitStorefrontOrderPayload(db, payload, commit);
+      await expect(failure).rejects.toBeInstanceOf(ConflictError);
+      await expect(failure).rejects.toThrow(CONTEXT_CONFLICT);
+      expectNoCheckoutWrites();
+      expect(context()).toEqual(contextBeforeCommit);
+      expect(grants()).toEqual([]);
+    });
   });
 });

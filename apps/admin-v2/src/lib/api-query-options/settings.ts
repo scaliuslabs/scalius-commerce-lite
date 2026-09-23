@@ -9,23 +9,43 @@ import {
   type SeoDiscoverySettingsWithReturnPolicy,
 } from "../seo-discovery-status";
 import {
-  type CheckoutReadinessPayload,
-  getCheckoutFlowSettings,
-  getCheckoutReadiness,
-  getCustomerRequestPolicySettings,
-  getGeneralSettings,
-  getMetaConversionsSettings,
-  getPaymentMethods,
-  getSeoSettings,
-} from "../api-functions/settings";
-import { extractApiError, unwrapEnvelope } from "../api-helpers";
+  getApiV1AdminSettingsAllowedCountries,
+  getApiV1AdminSettingsCheckoutFlow,
+  getApiV1AdminSettingsCheckoutReadiness,
+  getApiV1AdminSettingsCustomerRequests,
+  getApiV1AdminSettingsEmail,
+  getApiV1AdminSettingsFirebase,
+  getApiV1AdminSettingsGeneral,
+  getApiV1AdminSettingsMetaConversions,
+  getApiV1AdminSettingsPaymentMethods,
+  getApiV1AdminSettingsSeo,
+  getApiV1AdminSettingsThemeVersions,
+  getApiV1AdminSettingsThemeWorkspace,
+  postApiV1AdminSettingsSeo,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
-import { withDashboardBasePath } from "../dashboard-base-path";
 export { currencySettingsQueryOptions } from "./currency";
 export { storefrontUrlQueryOptions } from "./storefront-url";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
+
+export type GeneralSettingsPayload = ApiResult<typeof getApiV1AdminSettingsGeneral>;
+export type CheckoutFlowSettingsPayload = ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>;
+export type CheckoutMode = CheckoutFlowSettingsPayload["checkoutMode"];
+export type CheckoutReadinessPayload = ApiResult<typeof getApiV1AdminSettingsCheckoutReadiness>;
+export type PaymentMethodsPayload = ApiResult<typeof getApiV1AdminSettingsPaymentMethods>;
+export type AllowedCountriesPayload = ApiResult<typeof getApiV1AdminSettingsAllowedCountries>;
+export type EmailSettingsPayload = ApiResult<typeof getApiV1AdminSettingsEmail>;
+export type FirebaseSettingsPayload = ApiResult<typeof getApiV1AdminSettingsFirebase>;
+export type ThemeWorkspacePayload = ApiResult<typeof getApiV1AdminSettingsThemeWorkspace>;
+export type ThemeDraftPayload = ThemeWorkspacePayload["draft"];
+export type ThemeVersionPayload = ApiResult<typeof getApiV1AdminSettingsThemeVersions>["versions"][number];
+export type UpdateSeoSettingsInput = ApiBody<typeof postApiV1AdminSettingsSeo>;
+export type MetaConversionsSettingsResponse = ApiResult<typeof getApiV1AdminSettingsMetaConversions>;
+export type MetaConversionsSettings = NonNullable<MetaConversionsSettingsResponse["settings"]>;
+export type MetaPixelParityDiagnostics = MetaConversionsSettingsResponse["pixelParity"];
 
 export interface SeoSettingsQueryPayload {
   siteTitle: string;
@@ -73,8 +93,7 @@ function normalizeSeoDiscoveryForQuery(
 }
 
 async function getSeoSettingsForQuery(): Promise<SeoSettingsQueryPayload> {
-  const data = await getSeoSettings();
-  const rawData = data as SeoSettingsQueryRawPayload;
+  const data = await apiData(getApiV1AdminSettingsSeo());
   return {
     siteTitle: data.siteTitle || DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.siteTitle,
     homepageTitle:
@@ -86,60 +105,28 @@ async function getSeoSettingsForQuery(): Promise<SeoSettingsQueryPayload> {
       typeof data.robotsTxt === "string"
         ? data.robotsTxt
         : DEFAULT_SEO_SETTINGS_QUERY_PAYLOAD.robotsTxt,
-    discovery: normalizeSeoDiscoveryForQuery(rawData),
+    discovery: normalizeSeoDiscoveryForQuery(data),
   };
-}
-
-async function getCheckoutReadinessForQuery(): Promise<CheckoutReadinessPayload> {
-  if (typeof window === "undefined") {
-    return getCheckoutReadiness();
-  }
-
-  const response = await fetch(withDashboardBasePath("/api/v1/admin/settings/checkout-readiness"), {
-    credentials: "include",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  let body: unknown = null;
-  try {
-    body = await response.json();
-  } catch {
-    // The status code below is still more useful than hiding the transport failure.
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      extractApiError(
-        body,
-        `Dashboard could not check checkout readiness (${response.status}).`,
-      ),
-    );
-  }
-
-  return unwrapEnvelope<CheckoutReadinessPayload>(body);
 }
 
 export const generalSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.general(),
-    queryFn: () => getGeneralSettings(),
+    queryFn: () => apiData(getApiV1AdminSettingsGeneral()),
     staleTime: CONFIG_STALE_TIME_MS,
   });
 
 export const checkoutFlowSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutFlow(),
-    queryFn: () => getCheckoutFlowSettings(),
+    queryFn: () => apiData(getApiV1AdminSettingsCheckoutFlow()),
     staleTime: CONFIG_STALE_TIME_MS,
   });
 
 export const checkoutReadinessQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutReadiness(),
-    queryFn: () => getCheckoutReadinessForQuery(),
+    queryFn: () => apiData(getApiV1AdminSettingsCheckoutReadiness()),
     staleTime: MODERATE_STALE_TIME_MS,
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
@@ -149,7 +136,7 @@ export const checkoutReadinessQueryOptions = () =>
 export const customerRequestPolicyQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.customerRequests(),
-    queryFn: () => getCustomerRequestPolicySettings(),
+    queryFn: () => apiData(getApiV1AdminSettingsCustomerRequests()),
     staleTime: MODERATE_STALE_TIME_MS,
   });
 
@@ -163,7 +150,7 @@ export const seoSettingsQueryOptions = () =>
 export const metaConversionsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.metaConversions(),
-    queryFn: () => getMetaConversionsSettings(),
+    queryFn: () => apiData(getApiV1AdminSettingsMetaConversions()),
     staleTime: MODERATE_STALE_TIME_MS,
     refetchOnMount: "always",
   });
@@ -171,6 +158,6 @@ export const metaConversionsSettingsQueryOptions = () =>
 export const paymentMethodsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.paymentMethods(),
-    queryFn: () => getPaymentMethods(),
+    queryFn: () => apiData(getApiV1AdminSettingsPaymentMethods()),
     staleTime: CONFIG_STALE_TIME_MS,
   });

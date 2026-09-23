@@ -9,8 +9,9 @@ import type { CustomerFormValues } from "~/lib/form-schemas";
 
 const getDeliveryLocations = vi.hoisted(() => vi.fn());
 
-vi.mock("~/lib/api-functions/delivery", () => ({
-  getDeliveryLocations,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsDeliveryLocations: getDeliveryLocations,
 }));
 
 import { LocationSelector } from "./LocationSelector";
@@ -55,8 +56,8 @@ describe("LocationSelector", () => {
     document.body.append(host);
     root = createRoot(host);
     getDeliveryLocations.mockImplementation(
-      ({ data }: { data: { type: keyof typeof locations } }) =>
-        Promise.resolve({ locations: locations[data.type] }),
+      ({ query }: { query: { type: keyof typeof locations } }) =>
+        Promise.resolve({ locations: locations[query.type] }),
     );
   });
 
@@ -74,7 +75,7 @@ describe("LocationSelector", () => {
     });
 
     expect(
-      getDeliveryLocations.mock.calls.map(([request]) => request.data),
+      getDeliveryLocations.mock.calls.map(([request]) => request.query),
     ).toEqual([
       { type: "city" },
       { type: "zone", parentId: "city_1" },

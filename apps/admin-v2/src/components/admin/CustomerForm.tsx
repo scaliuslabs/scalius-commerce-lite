@@ -20,12 +20,10 @@ import { Textarea } from "../ui/textarea";
 import { LocationSelector } from "./LocationSelector";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import {
-  createCustomer,
-  updateCustomer,
-  type CreateCustomerInput,
-  type CreateCustomerPayload,
-  type UpdateCustomerInput,
-} from "@/lib/api-functions/customers";
+  postApiV1AdminCustomers,
+  putApiV1AdminCustomersById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
@@ -38,7 +36,9 @@ interface CustomerFormProps {
   isEdit?: boolean;
 }
 
-function toCreateCustomerInput(values: CustomerFormValues): CreateCustomerInput {
+function toCreateCustomerInput(
+  values: CustomerFormValues,
+): ApiBody<typeof postApiV1AdminCustomers> {
   return {
     name: values.name,
     email: values.email,
@@ -47,15 +47,6 @@ function toCreateCustomerInput(values: CustomerFormValues): CreateCustomerInput 
     city: values.city,
     zone: values.zone,
     area: values.area,
-  };
-}
-
-function toUpdateCustomerInput(
-  values: CustomerFormValues & { id: string },
-): UpdateCustomerInput {
-  return {
-    id: values.id,
-    ...toCreateCustomerInput(values),
   };
 }
 
@@ -91,13 +82,13 @@ export function CustomerForm({
     entityName: "Customer",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createCustomer({ data: toCreateCustomerInput(data) }),
+    createFn: (data) => apiData(postApiV1AdminCustomers({ body: toCreateCustomerInput(data) })),
     updateFn: (data) => {
       if (!data.id) throw new Error("Customer ID is required for updates");
-      const updateData = { ...data, id: data.id };
-      return updateCustomer({
-        data: toUpdateCustomerInput(updateData),
-      });
+      return apiData(putApiV1AdminCustomersById({
+        path: { id: data.id },
+        body: toCreateCustomerInput(data),
+      }));
     },
     invalidateKeys: [
       queryKeys.customers.list(),
@@ -106,7 +97,7 @@ export function CustomerForm({
     ],
     navigateTo: "/admin/customers",
     onSuccess: (result) => {
-      const id = (result as Partial<CreateCustomerPayload>).id || defaultValues?.id;
+      const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id || defaultValues?.id;
       form.reset({
         ...form.getValues(),
         ...(id ? { id } : {}),

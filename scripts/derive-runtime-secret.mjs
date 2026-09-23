@@ -11,7 +11,7 @@
  * here, so the two can never drift.
  *
  * Only the three automation purposes can be derived. The session, JWT,
- * service-token, purge-token, agent-pepper, and customer-session keys are
+ * service-token, agent-pepper, and customer-session keys are
  * needed exclusively inside a Worker; printing them to a terminal would move a
  * live credential into shell history and scrollback for no operational gain.
  *

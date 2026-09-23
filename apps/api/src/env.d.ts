@@ -115,19 +115,6 @@ interface CloudflareSendEmailBinding {
   }): Promise<{ messageId: string }>;
 }
 
-interface WorkersCachePurgeResult {
-  success: boolean;
-  errors: Array<{ code: number; message: string }>;
-}
-
-interface WorkersCacheContext {
-  purge(
-    options:
-      | { purgeEverything: true }
-      | { tags?: string[]; pathPrefixes?: string[] },
-  ): Promise<WorkersCachePurgeResult>;
-}
-
 interface WorkerEntrypointFetchOptions<Props = unknown> {
   props?: Props;
   cf?: { cacheControl?: string; cacheKey?: string };
@@ -141,9 +128,7 @@ interface WorkerEntrypointFetcher<Props = unknown> {
 }
 
 interface WorkerExports {
-  PublicApi: WorkerEntrypointFetcher & {
-    purgeGroups(groups: string[]): Promise<void>;
-  };
+  PublicApi: WorkerEntrypointFetcher;
   [name: string]: WorkerEntrypointFetcher | undefined;
 }
 
@@ -152,7 +137,6 @@ interface ExecutionContext<Props = unknown> {
   passThroughOnException(): void;
   readonly props: Props;
   readonly exports: WorkerExports;
-  readonly cache?: WorkersCacheContext;
 }
 
 // Cloudflare Queue binding types
@@ -214,7 +198,6 @@ interface Env {
   BETTER_AUTH_SECRET: string;
   JWT_SECRET?: string;
   API_TOKEN?: string;
-  PURGE_TOKEN?: string;
   AGENT_TOKEN_PEPPER?: string;
   CUSTOMER_SESSION_HASH_KEY?: string;
   ADMIN_SETUP_TOKEN?: string;
@@ -229,7 +212,6 @@ interface Env {
   BETTER_AUTH_URL?: string;
   R2_PUBLIC_URL?: string;
   CDN_DOMAIN_URL?: string;
-  PURGE_URL?: string;
   CUSTOMER_AUTH_COOKIE_DOMAIN?: string;
   CORS_ALLOWED_ORIGINS?: string;
 

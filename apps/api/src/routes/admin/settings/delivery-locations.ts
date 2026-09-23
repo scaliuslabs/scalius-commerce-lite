@@ -15,9 +15,8 @@ import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encry
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CHECKOUT_BREAKING_LOCATION_MESSAGE =
     "This change would make checkout unavailable. Keep at least one active city with an active zone.";
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
@@ -277,7 +276,7 @@ app.openapi(createLocationRoute, (async (c) => {
             data.isActive,
         );
         const newLocation = await createLocation(db, data);
-        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return created(c, { location: newLocation });
     } catch (error: unknown) {
         rethrowDeliveryLocationIdentityConflict(error);
@@ -310,7 +309,7 @@ app.openapi(deleteAllRoute, async (c) => {
     const db = c.get("db");
     await assertAllDeliveryLocationsCanBeRemovedFromCheckout(db);
     await db.delete(deliveryLocations);
-    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, { message: "All delivery locations have been permanently deleted." });
 });
 
@@ -344,7 +343,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
 
-        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
         console.error("Error bulk deleting delivery locations:", error);
@@ -446,7 +445,7 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
-        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return ok(c, updatedLocation);
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
@@ -523,7 +522,7 @@ app.openapi(deleteLocationRoute, async (c) => {
             .update(deliveryLocations)
             .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
             .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
-        await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return ok(c, {});
     } catch (error: unknown) {
         console.error("Error deleting location:", error);
@@ -621,7 +620,7 @@ app.openapi(processPathaoImportRoute, async (c) => {
     }
 
     const result = await processPathaoImportChunk(db, kv, creds);
-    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 

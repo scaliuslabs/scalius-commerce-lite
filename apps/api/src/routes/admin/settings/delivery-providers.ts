@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
@@ -29,7 +29,6 @@ const SENSITIVE_CREDENTIAL_KEYS = [
     "secretKey",
     "webhookSecret",
 ] as const;
-const DELIVERY_PROVIDER_CACHE_GROUPS = ["checkout"] as const;
 const DELIVERY_PROVIDER_PAGE_LIMIT = 10;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AppRouteContext<R extends RouteConfig> = Parameters<AppRouteHandler<R>>[0];
@@ -416,7 +415,7 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
     if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
     const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
 
-    await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return created(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof createProviderRoute>);
 
@@ -490,7 +489,7 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
         if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
         const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
-        await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+        await bumpCacheGeneration(c);
         return created(c, maskedResponse);
     }
 
@@ -523,7 +522,7 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
     if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
     const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
 
-    await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof updateProviderRoute>);
 
@@ -642,7 +641,7 @@ app.openapi(testExistingRoute, async (c) => {
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
     const result = await testDeliveryProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>));
-    await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, safeProviderTestResult(result));
 });
 
@@ -667,7 +666,7 @@ app.openapi(deleteProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
-    await invalidateApiAndScheduleStorefrontGroups(DELIVERY_PROVIDER_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, {});
 });
 

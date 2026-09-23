@@ -6,8 +6,10 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import type { AnalyticsScriptReadiness } from "~/types/api-responses";
 import type { ProviderMarkId } from "~/components/admin/settings/provider-marks";
+
+type AnalyticsScriptReadiness =
+  "ready" | "blocked" | "draft" | "ready_to_activate" | "trashed";
 
 export const ANALYTICS_PROVIDER_LABELS: Record<string, string> = {
   google_analytics: "Google Analytics 4",
@@ -70,7 +72,8 @@ const READINESS_PRESENTATION: Record<
 };
 
 export function analyticsReadinessPresentation(
-  readiness: AnalyticsScriptReadiness,
+  readiness: string,
 ): AnalyticsReadinessPresentation {
-  return READINESS_PRESENTATION[readiness];
+  // The list contract types `readiness` as a plain string.
+  return READINESS_PRESENTATION[readiness as AnalyticsScriptReadiness];
 }

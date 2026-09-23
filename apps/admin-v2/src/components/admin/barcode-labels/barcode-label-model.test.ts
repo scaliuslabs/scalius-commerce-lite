@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
+import type { InventoryLabelVariant } from "~/lib/api-query-options/inventory";
 import {
   buildLabelCopies,
   buildLabelDataCsv,

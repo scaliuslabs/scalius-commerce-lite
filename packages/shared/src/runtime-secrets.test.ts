@@ -100,7 +100,6 @@ describe("deriveRuntimeSecrets", () => {
       "BETTER_AUTH_SECRET",
       "JWT_SECRET",
       "API_TOKEN",
-      "PURGE_TOKEN",
       "AGENT_TOKEN_PEPPER",
       "CUSTOMER_SESSION_HASH_KEY",
       "ADMIN_SETUP_TOKEN",

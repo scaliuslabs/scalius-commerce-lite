@@ -3,7 +3,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { AccountSettings } from "~/components/admin/account-settings";
 import { accountSecurityQueryOptions } from "~/lib/api-query-options/auth-management";
-import type { AccountSecurity } from "~/types/api-responses";
+import type {
+  AccountSecurity,
+} from "~/lib/api-query-options/auth-management";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { normalizeAccountSection } from "~/components/admin/account-settings/account-sections";
 import type { AccountSection } from "~/components/admin/account-settings/account-sections";

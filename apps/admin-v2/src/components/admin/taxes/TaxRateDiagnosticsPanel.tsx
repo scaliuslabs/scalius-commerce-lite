@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, CircleOff, Scale } from "lucid
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
+import type { TaxConfigurationPayload } from "@/lib/api-query-options/taxes";
 import {
   getTaxRateDiagnostics,
   type TaxClassCoverageDiagnostic,

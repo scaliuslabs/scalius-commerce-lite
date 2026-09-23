@@ -613,14 +613,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // =============================================
   // Settings API (SENSITIVE)
   // =============================================
-  "/api/v1/cache/groups": {
-    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
-  },
   "/api/v1/cache/clear": {
-    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
-    DELETE: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
-  },
-  "/api/v1/cache/clear-group": {
     POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
   },
   "/api/v1/admin/settings/currency": {
@@ -919,17 +912,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/fraud-checker/*/test": {
     POST: { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
-  },
-  "/api/settings/cache/stats": {
-    GET: { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
-  },
-  "/api/settings/cache/clear": {
-    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
-    DELETE: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
-  },
-  "/api/settings/cache/clear-*": {
-    POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
-    DELETE: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
   },
 
   // Admin Settings

@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { cn } from "@scalius/shared/utils";
-import type {
-  AnalyticsProviderBrowserStatus,
-  AnalyticsProviderHealthResponse,
-  AnalyticsProviderServerStatus,
-} from "~/types/api-responses";
+import type { AnalyticsProviderHealthResponse } from "~/lib/api-query-options/analytics";
+
+type AnalyticsProviderHealthItem = AnalyticsProviderHealthResponse["providers"][number];
+type AnalyticsProviderBrowserStatus = AnalyticsProviderHealthItem["browser"]["status"];
+type AnalyticsProviderServerStatus = AnalyticsProviderHealthItem["serverSide"]["status"];
 import {
   OfficialProviderMark,
   type ProviderMarkId,

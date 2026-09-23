@@ -26,9 +26,11 @@ import {
   getRuntimeApiToken,
   getRuntimeApiUrl,
   getRuntimeBackendApi,
+  getRuntimeCacheGeneration,
   getRuntimeInflightReads,
   type StorefrontRuntime,
 } from "./runtime";
+import { CACHE_GENERATION_HEADER } from "@scalius/shared/cache-generation";
 import { createClient, createConfig } from "@scalius/api-client/factory";
 import type { Client } from "@scalius/api-client/factory";
 import {
@@ -314,6 +316,12 @@ export async function apiFetch(
       isSafeReadMethod(method) &&
       !hasSensitiveRequestHeaders(headers) &&
       isPublicApiReadUrl(url);
+    // A cached page and the API reads it is built from share one generation,
+    // even while the KV mirror of a newer generation is still propagating.
+    const cacheGeneration = getRuntimeCacheGeneration();
+    if (cacheGeneration && canFallbackToHttp) {
+      headers.set(CACHE_GENERATION_HEADER, cacheGeneration);
+    }
     if (requiresAuth) {
       const token = await getJwtToken();
       if (token) {
@@ -431,7 +439,7 @@ export async function apiFetch(
 
 /**
  * Deduplicate identical backend reads within one SSR request. Persistent public
- * caching belongs to the native Worker entrypoints; in-flight I/O must never be
+ * caching is keyed by the store cache generation; in-flight I/O must never be
  * retained at module scope because Workers can serve concurrent requests from
  * the same isolate.
  */
@@ -456,17 +464,13 @@ export async function withEdgeCache<T>(
   return request;
 }
 
-// One year is the longest edge residency Cloudflare honors. Native tag purges
-// own freshness: every merchant write and every stock band transition purges
-// the affected tags directly and through the durable retry sweep, so the TTL
-// is only the ceiling that lets a rarely edited store stay warm indefinitely.
-const EDGE_MAX_TTL = 365 * 86_400;
-
+// Accepted by `withEdgeCache` call sites but unused: persistent freshness comes
+// from the store's cache generation (@scalius/shared/cache-generation).
 export const CACHE_TTL = {
-  AVAILABILITY: EDGE_MAX_TTL,
-  LONG: EDGE_MAX_TTL,
-  MEDIUM: 3_600,
-  SHORT: 300,
+  AVAILABILITY: 0,
+  LONG: 0,
+  MEDIUM: 0,
+  SHORT: 0,
 } as const;
 
 // ---------------------------------------------------------------------------

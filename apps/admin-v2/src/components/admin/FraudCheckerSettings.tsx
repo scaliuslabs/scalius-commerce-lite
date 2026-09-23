@@ -4,12 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  type FraudCheckerProviderPayload,
-  createFraudCheckerProvider,
-  updateFraudCheckerProvider,
-  deleteFraudCheckerProvider,
-  testFraudCheckerProvider,
-} from "~/lib/api-functions/fraud-checker";
+  deleteApiV1AdminFraudCheckerById,
+  postApiV1AdminFraudChecker,
+  postApiV1AdminFraudCheckerByIdTest,
+  putApiV1AdminFraudChecker,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
+import type { FraudCheckerProvider as FraudCheckerProviderPayload } from "~/lib/api-query-options/fraud-checker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,10 +251,10 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     try {
       let saved: FraudProvider;
       if (isCreating) {
-        saved = await createFraudCheckerProvider({ data: values });
+        saved = await apiData(postApiV1AdminFraudChecker({ body: values }));
         setProviders((prev) => [...prev, saved]);
       } else if (selectedProvider) {
-        saved = await updateFraudCheckerProvider({ data: { ...values, id: selectedProvider.id } });
+        saved = await apiData(putApiV1AdminFraudChecker({ body: { ...values, id: selectedProvider.id } }));
         setProviders((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       } else {
         return;
@@ -279,7 +280,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteFraudCheckerProvider({ data: { id: deleteTarget.id } });
+      await apiData(deleteApiV1AdminFraudCheckerById({ path: { id: deleteTarget.id } }));
       setProviders((prev) => prev.filter((p) => p.id !== deleteTarget.id));
       if (selectedProvider?.id === deleteTarget.id) {
         setSelectedProvider(null);
@@ -297,7 +298,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     if (!selectedProvider) return;
     setIsTesting(true);
     try {
-      const result = await testFraudCheckerProvider({ data: { id: selectedProvider.id } });
+      const result = await apiData(postApiV1AdminFraudCheckerByIdTest({ path: { id: selectedProvider.id } }));
       setTestStates((current) => ({
         ...current,
         [selectedProvider.id]: {

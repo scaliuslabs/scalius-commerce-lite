@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getPublicCategorySection } from "./categories.storefront";
@@ -15,44 +15,14 @@ describe("bounded storefront category sections", () => {
   });
 
   function database(): Database {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL,
-        description TEXT,
-        content TEXT,
-        image_url TEXT,
-        meta_title TEXT,
-        meta_description TEXT,
-        canonical_path TEXT,
-        no_index INTEGER NOT NULL DEFAULT 0,
-        exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL,
-        revision INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-    `);
-    const statement = sqlite.prepare(`
+    const harness = createSqliteD1Database();
+    sqlite = harness.sqlite;
+    sqlite.prepare(`
       INSERT INTO categories (
         id, name, slug, description, content, status, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, 'published', 10, 20)
-    `);
-    statement.run("cat_long", "Long category", "long-category", "D".repeat(100_000), "C".repeat(100_000));
-
-    return drizzle(async (query, params, method) => {
-      const prepared = sqlite!.prepare(query);
-      prepared.setReturnArrays(true);
-      if (method === "run") {
-        prepared.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") return { rows: prepared.get(...params) as unknown as unknown[] };
-      return { rows: prepared.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    `).run("cat_long", "Long category", "long-category", "D".repeat(100_000), "C".repeat(100_000));
+    return harness.db;
   }
 
   it("reports rich-text lengths without loading the aggregate", async () => {

@@ -56,20 +56,22 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getServerFnError } from "@/lib/api-helpers";
 import { refreshAdminRouteContext } from "@/lib/admin-route-context";
 import {
-  createRbacRole,
-  deleteRbacRole,
+  deleteApiV1AdminRbacRolesById,
+  postApiV1AdminRbacRoles,
+  putApiV1AdminRbacRolesById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "@/lib/api";
+import {
   getRbacPermissions,
   getRbacRoles,
-  updateRbacRole,
-  type CreateRbacRoleInput,
   type RbacPermissionMetadata,
   type RbacRole,
-  type UpdateRbacRoleInput,
-} from "@/lib/api-functions/rbac";
+} from "@/lib/api-query-options/rbac";
 
 type Role = RbacRole;
 type PermissionMetadata = RbacPermissionMetadata;
-type RoleUpdateInput = UpdateRbacRoleInput["update"];
+type CreateRbacRoleInput = ApiBody<typeof postApiV1AdminRbacRoles>;
+type RoleUpdateInput = ApiBody<typeof putApiV1AdminRbacRolesById>;
 
 interface GroupedPermissions {
   [category: string]: PermissionMetadata[];
@@ -115,7 +117,7 @@ export function RolesManagement() {
 
   const handleCreateRole = async (roleData: CreateRbacRoleInput) => {
     try {
-      const data = await createRbacRole({ data: roleData });
+      const data = await apiData(postApiV1AdminRbacRoles({ body: roleData }));
       setRoles((currentRoles) => [...currentRoles, data.role]);
       await refreshPermissions();
       toast.success("Role created successfully");
@@ -132,7 +134,7 @@ export function RolesManagement() {
     updates: RoleUpdateInput,
   ) => {
     try {
-      const data = await updateRbacRole({ data: { roleId, update: updates } });
+      const data = await apiData(putApiV1AdminRbacRolesById({ path: { id: roleId }, body: updates }));
       setRoles((currentRoles) =>
         currentRoles.map((role) => (role.id === roleId ? data.role : role)),
       );
@@ -148,7 +150,7 @@ export function RolesManagement() {
 
   const handleDeleteRole = async (roleId: string) => {
     try {
-      await deleteRbacRole({ data: { roleId } });
+      await apiData(deleteApiV1AdminRbacRolesById({ path: { id: roleId } }));
       setRoles((currentRoles) =>
         currentRoles.filter((role) => role.id !== roleId),
       );

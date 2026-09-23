@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { SetupForm } from "~/components/auth/SetupForm";
-import { getSetupStatus } from "~/lib/api-functions/auth-management";
+import { getSetupStatus } from "~/lib/api-server-fns";
 import { checkAdminExists } from "~/lib/auth.fns";
 
 export const Route = createFileRoute("/auth/setup")({

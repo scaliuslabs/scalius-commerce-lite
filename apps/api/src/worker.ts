@@ -20,10 +20,16 @@ import {
   applyTrustedFrontProxy,
 } from "@scalius/shared/trusted-front-proxy";
 import {
+  CACHE_GENERATION_HEADER,
+  normalizeCacheGeneration,
+} from "@scalius/shared/cache-generation";
+import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
-  normalizePublicApiCacheTags,
+  withCacheGeneration,
+  withoutCacheGeneration,
 } from "./public-cache-policy";
+import { readCacheGeneration } from "./utils/cache-generation";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
@@ -63,7 +69,7 @@ async function resolveFrontProxy(request: Request, env: Env): Promise<Request> {
 }
 
 /**
- * Without the master secret no session, token, or purge auth can be verified.
+ * Without the master secret no session or token auth can be verified.
  * Fail closed for everything except the health and readiness probes, which
  * report the missing secret so operators can see it.
  */
@@ -92,11 +98,15 @@ async function fetchApiApp(
   });
 }
 
+/**
+ * Workers Cache entrypoint for anonymous public reads. The request URL carries
+ * the cache generation, so the cache key changes on every buyer-visible write;
+ * the generation is removed before the application sees the request.
+ */
 export class PublicApi extends WorkerEntrypoint<Env> {
   async fetch(incoming: Request): Promise<Response> {
-    const request = await resolveFrontProxy(incoming, this.env);
-    const policy = getPublicApiCachePolicy(request);
-    if (!policy) {
+    const request = withoutCacheGeneration(await resolveFrontProxy(incoming, this.env));
+    if (!getPublicApiCachePolicy(request)) {
       return new Response("Request is not eligible for public caching", {
         status: 400,
         headers: { "Cache-Control": "private, no-store" },
@@ -106,21 +116,7 @@ export class PublicApi extends WorkerEntrypoint<Env> {
     if (!hasMasterSecret(this.env)) return missingMasterSecretResponse(request);
     const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
     const response = await fetchApiApp(request, env, this.ctx);
-    return decoratePublicApiResponse(response, policy);
-  }
-
-  async purgeGroups(groups: string[]): Promise<void> {
-    const tags = normalizePublicApiCacheTags(groups);
-    if (tags.length === 0) return;
-
-    const cache = this.ctx.cache;
-    if (!cache) return;
-
-    const result = await cache.purge({ tags });
-    if (!result.success) {
-      const codes = result.errors.map((error) => error.code).join(",");
-      throw new Error(`Public API cache purge failed (${codes || "unknown"})`);
-    }
+    return decoratePublicApiResponse(response);
   }
 }
 
@@ -158,17 +154,25 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
 
     const cachePolicy = getPublicApiCachePolicy(request);
     if (cachePolicy) {
-      const cacheRequest = cachePolicy.canonicalUrl === request.url
-        ? request
-        : new Request(cachePolicy.canonicalUrl, request);
-      return this.ctx.exports.PublicApi.fetch(cacheRequest);
+      // A storefront render pins its API reads to its own page generation.
+      // Generations are unguessable, so a caller-supplied value can only
+      // select an entry that already exists or render a fresh one.
+      const generation =
+        normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
+        ?? await readCacheGeneration(this.env, this.ctx);
+      if (generation) {
+        return this.ctx.exports.PublicApi.fetch(new Request(
+          withCacheGeneration(cachePolicy.canonicalUrl, generation),
+          request,
+        ));
+      }
     }
 
     const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
     return fetchApiApp(request, env, this.ctx);
   }
 
-  // Queues: payment events, OTP, notifications, storefront cache purge
+  // Queues: payment events, OTP, notifications
   async queue(batch: MessageBatch<Record<string, unknown>>) {
     if (isDatabaseMigrationFrozen(this.env) || !hasMasterSecret(this.env)) {
       batch.retryAll({

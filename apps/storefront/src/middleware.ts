@@ -99,7 +99,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       ) {
         applyPublicStorefrontPreconnectHint(response, getCdnBase());
       }
-      response.headers.set("X-Cache-Status", "NATIVE");
+      response.headers.set("X-Cache-Status", "MISS");
     } else if (!response.headers.has("Cache-Control")) {
       setPrivateResponse(response, "BYPASS");
     }

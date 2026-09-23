@@ -1,16 +1,21 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import {
-  createMediaFolder,
-  deleteMediaFolder,
-  moveMediaFiles,
-  permanentlyDeleteMedia,
-  renameMediaFolder,
-  restoreMedia,
-  trashMedia,
-  updateMedia,
-  type MediaFileDto,
-  type MediaFolderDto,
-} from "~/lib/api-functions/media";
+  deleteApiV1AdminMediaByIdPermanent,
+  deleteApiV1AdminMediaFoldersById,
+  deleteApiV1AdminMediaUploadsById,
+  getApiV1AdminMedia,
+  getApiV1AdminMediaFolders,
+  getApiV1AdminMediaUploadsById,
+  patchApiV1AdminMediaById,
+  postApiV1AdminMediaByIdRestore,
+  postApiV1AdminMediaByIdTrash,
+  postApiV1AdminMediaFolders,
+  postApiV1AdminMediaMove,
+  postApiV1AdminMediaUploads,
+  postApiV1AdminMediaUploadsByIdComplete,
+  putApiV1AdminMediaFoldersById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import type {
   CursorPagination,
   MediaApiResponse,
@@ -31,20 +36,9 @@ interface ApiEnvelope<T> {
   error?: string | { message?: string };
 }
 
-export interface MediaUploadSession {
-  id: string;
-  mediaId: string;
-  filename: string;
-  kind: "image" | "video";
-  mimeType: string;
-  size: number;
-  expectedParts: number;
-  partSize: number;
-  state: string;
-  version: number;
-  expiresAt: string | number;
-  uploadedParts?: Array<{ partNumber: number; size: number }>;
-}
+export type MediaFileDto = ApiResult<typeof getApiV1AdminMedia>["files"][number];
+type MediaFolderDto = ApiResult<typeof getApiV1AdminMediaFolders>["folders"][number];
+export type MediaUploadSession = ApiResult<typeof getApiV1AdminMediaUploadsById>["session"];
 
 function date(value: string | number | Date | null | undefined): Date {
   return unixToDate(value) ?? new Date(0);
@@ -87,28 +81,8 @@ function toFolder(folder: MediaFolderDto): MediaFolder {
   };
 }
 
-function mediaReadUrl(path: string, params: Record<string, string | undefined>): string {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) query.set(key, value);
-  }
-  const serialized = query.toString();
-  return `${MEDIA_API}${path}${serialized ? `?${serialized}` : ""}`;
-}
-
-async function readDirect<T>(path: string, params: Record<string, string | undefined>): Promise<T> {
-  const response = await fetch(mediaReadUrl(path, params), {
-    method: "GET",
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      "Cache-Control": "no-cache",
-    },
-  });
-  return parseDirectResponse<T>(response);
-}
-
+// Binary uploads (parts, renditions, originals) stay on raw fetch: the SDK
+// transport sends JSON text bodies only.
 async function parseDirectResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
   let body: ApiEnvelope<T>;
@@ -131,19 +105,16 @@ export class MediaApiClient {
     limit: number,
     filters: Partial<MediaFilterOptions>,
   ): Promise<MediaApiResponse> {
-    const data = await readDirect<{
-      files: MediaFileDto[];
-      pagination: CursorPagination;
-    }>("", {
+    const data = await apiData(getApiV1AdminMedia({ query: {
       cursor,
-      limit: String(limit),
+      limit,
       search: filters.search?.trim() || undefined,
       folderId: filters.folderId === undefined ? undefined : filters.folderId ?? "root",
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
       kind: filters.kind,
       view: filters.view,
-    });
+    } }));
     return { files: data.files.map(toMediaFile), pagination: data.pagination };
   }
 
@@ -151,10 +122,7 @@ export class MediaApiClient {
     const folders: MediaFolder[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 20; page += 1) {
-      const data = await readDirect<{
-        folders: MediaFolderDto[];
-        pagination: CursorPagination;
-      }>("/folders", { cursor, limit: "100" });
+      const data = await apiData(getApiV1AdminMediaFolders({ query: { cursor, limit: 100 } }));
       folders.push(...data.folders.map(toFolder));
       if (!data.pagination.hasMore || !data.pagination.nextCursor) break;
       if (page === 19) {
@@ -166,61 +134,73 @@ export class MediaApiClient {
   }
 
   static async createFolder(name: string): Promise<MediaFolder> {
-    const data = await createMediaFolder({ data: { name } });
+    const data = await apiData(postApiV1AdminMediaFolders({ body: { name } }));
     return toFolder(data.folder);
   }
 
   static async renameFolder(folder: MediaFolder, name: string): Promise<MediaFolder> {
-    const data = await renameMediaFolder({ data: { folderId: folder.id, name, expectedVersion: folder.version } });
+    const data = await apiData(putApiV1AdminMediaFoldersById({
+      path: { id: folder.id },
+      body: { name, expectedVersion: folder.version },
+    }));
     return toFolder(data.folder);
   }
 
   static async deleteFolder(folder: MediaFolder): Promise<void> {
-    await deleteMediaFolder({ data: { folderId: folder.id, expectedVersion: folder.version } });
+    await apiData(deleteApiV1AdminMediaFoldersById({
+      path: { id: folder.id },
+      query: { expectedVersion: folder.version },
+    }));
   }
 
-  static async updateFile(file: LibraryMediaFile, updates: { filename?: string; altText?: string | null; caption?: string | null; width?: number | null; height?: number | null; durationMs?: number | null; posterMediaId?: string | null; folderId?: string | null }): Promise<LibraryMediaFile> {
-    const data = await updateMedia({ data: { fileId: file.id, update: { expectedVersion: file.version, ...updates } } });
+  static async updateFile(
+    file: LibraryMediaFile,
+    updates: Omit<ApiBody<typeof patchApiV1AdminMediaById>, "expectedVersion">,
+  ): Promise<LibraryMediaFile> {
+    const data = await apiData(patchApiV1AdminMediaById({
+      path: { id: file.id },
+      body: { expectedVersion: file.version, ...updates },
+    }));
     return toMediaFile(data.file);
   }
 
   static async trashFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
-    const data = await trashMedia({ data: { fileId: file.id, expectedVersion: file.version } });
+    const data = await apiData(postApiV1AdminMediaByIdTrash({
+      path: { id: file.id },
+      body: { expectedVersion: file.version },
+    }));
     return toMediaFile(data.file);
   }
 
   static async restoreFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
-    const data = await restoreMedia({ data: { fileId: file.id, expectedVersion: file.version } });
+    const data = await apiData(postApiV1AdminMediaByIdRestore({
+      path: { id: file.id },
+      body: { expectedVersion: file.version },
+    }));
     return toMediaFile(data.file);
   }
 
   static async permanentlyDeleteFile(file: LibraryMediaFile): Promise<void> {
-    await permanentlyDeleteMedia({ data: { fileId: file.id, expectedVersion: file.version } });
+    await apiData(deleteApiV1AdminMediaByIdPermanent({
+      path: { id: file.id },
+      query: { expectedVersion: file.version },
+    }));
   }
 
   static async moveFiles(files: LibraryMediaFile[], folderId: string | null): Promise<number> {
-    const data = await moveMediaFiles({ data: {
+    const data = await apiData(postApiV1AdminMediaMove({ body: {
       items: files.map((file) => ({ id: file.id, expectedVersion: file.version })),
       folderId,
-    } });
+    } }));
     return data.movedCount;
   }
 
-  static async initiateUpload(input: { filename: string; mimeType: string; size: number; folderId: string | null }): Promise<MediaUploadSession> {
-    const response = await fetch(`${MEDIA_API}/uploads`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    return (await parseDirectResponse<{ session: MediaUploadSession }>(response)).session;
+  static async initiateUpload(input: ApiBody<typeof postApiV1AdminMediaUploads>): Promise<MediaUploadSession> {
+    return (await apiData(postApiV1AdminMediaUploads({ body: input }))).session;
   }
 
   static async getUpload(sessionId: string): Promise<MediaUploadSession> {
-    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}`, {
-      credentials: "same-origin",
-    });
-    return (await parseDirectResponse<{ session: MediaUploadSession }>(response)).session;
+    return (await apiData(getApiV1AdminMediaUploadsById({ path: { id: sessionId } }))).session;
   }
 
   static async uploadPart(sessionId: string, partNumber: number, blob: Blob, signal?: AbortSignal): Promise<void> {
@@ -236,11 +216,10 @@ export class MediaApiClient {
 
   /** `client`: this browser uploads the renditions itself; `server`: the API generates them. */
   static async completeUpload(sessionId: string, variants: "client" | "server"): Promise<LibraryMediaFile> {
-    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}/complete?variants=${variants}`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    const data = await parseDirectResponse<{ file: MediaFileDto }>(response);
+    const data = await apiData(postApiV1AdminMediaUploadsByIdComplete({
+      path: { id: sessionId },
+      query: { variants },
+    }));
     return toMediaFile(data.file);
   }
 
@@ -269,19 +248,14 @@ export class MediaApiClient {
 
   /** First page of images that still lack renditions (oldest first). */
   static async fetchFilesMissingVariants(cursor: string | undefined, limit: number): Promise<MediaApiResponse> {
-    const data = await readDirect<{
-      files: MediaFileDto[];
-      pagination: CursorPagination;
-    }>("", { cursor, limit: String(limit), variants: "missing", sortOrder: "asc" });
+    const data = await apiData(getApiV1AdminMedia({
+      query: { cursor, limit, variants: "missing", sortOrder: "asc" },
+    }));
     return { files: data.files.map(toMediaFile), pagination: data.pagination };
   }
 
   static async abortUpload(sessionId: string): Promise<void> {
-    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    await parseDirectResponse(response);
+    await apiData(deleteApiV1AdminMediaUploadsById({ path: { id: sessionId } }));
   }
 }
 

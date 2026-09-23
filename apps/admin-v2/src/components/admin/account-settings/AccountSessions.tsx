@@ -38,12 +38,15 @@ import {
 import { Skeleton } from "~/components/ui/skeleton";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  revokeAccountSession,
-  revokeOtherAccountSessions,
+  deleteApiV1AdminAuthSessions,
+  deleteApiV1AdminAuthSessionsByCommandId,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
+import {
+  accountSessionsQueryOptions,
   type AccountSession,
   type AccountSessionsResponse,
-} from "~/lib/api-functions/auth-management";
-import { accountSessionsQueryOptions } from "~/lib/api-query-options/auth-management";
+} from "~/lib/api-query-options/auth-management";
 import { queryKeys } from "~/lib/query-keys";
 import { formatAdminDate } from "~/lib/admin-time";
 
@@ -195,7 +198,7 @@ export function AccountSessions() {
 
   const revokeOne = useMutation({
     mutationFn: (commandId: string) =>
-      revokeAccountSession({ data: { commandId } }),
+      apiData(deleteApiV1AdminAuthSessionsByCommandId({ path: { commandId } })),
     onSuccess: async (_result, commandId) => {
       queryClient.setQueryData<AccountSessionsResponse>(
         queryKeys.auth.sessions(),
@@ -223,7 +226,7 @@ export function AccountSessions() {
   });
 
   const revokeOthers = useMutation({
-    mutationFn: () => revokeOtherAccountSessions(),
+    mutationFn: () => apiData(deleteApiV1AdminAuthSessions()),
     onSuccess: async (result) => {
       queryClient.setQueryData<AccountSessionsResponse>(
         queryKeys.auth.sessions(),

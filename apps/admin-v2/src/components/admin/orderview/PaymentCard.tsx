@@ -57,7 +57,8 @@ import {
   useRefundOrder,
   useUpdateOrderCod,
 } from "~/lib/api-mutations/orders";
-import type { UpdateOrderCodInput } from "~/lib/api-functions/orders";
+import type { postApiV1AdminOrdersByIdCod } from "@scalius/api-client/sdk";
+import type { ApiBody } from "~/lib/api";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 import { useHydrated } from "~/hooks/use-hydrated";
@@ -70,7 +71,7 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
 
 type CodFailureReason = Extract<
-  UpdateOrderCodInput,
+  ApiBody<typeof postApiV1AdminOrdersByIdCod>,
   { action: "failed" }
 >["reason"];
 
@@ -502,7 +503,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
       }
     }
 
-    let body: UpdateOrderCodInput;
+    let body: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdCod>;
     if (codAction === "collected") {
       body = {
         orderId: order.id,

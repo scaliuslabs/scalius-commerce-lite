@@ -1,6 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createHeroSlider,
@@ -14,33 +14,7 @@ describe("hero slider revision authority", () => {
   let db: Database;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE hero_sliders (
-        id TEXT PRIMARY KEY NOT NULL,
-        type TEXT NOT NULL,
-        images TEXT NOT NULL,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-      CREATE UNIQUE INDEX hero_sliders_active_type_unique
-        ON hero_sliders (type) WHERE deleted_at IS NULL;
-    `);
-    db = drizzle(async (query, params, method) => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      if (method === "run") {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") {
-        return { rows: statement.get(...params) as unknown as unknown[] };
-      }
-      return { rows: statement.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    ({ sqlite, db } = createSqliteD1Database());
   });
 
   afterEach(() => sqlite.close());

@@ -76,6 +76,9 @@ function contextView(revision = 1) {
   };
 }
 
+let principalResource: "storefront" | "dashboard" = "storefront";
+const principalExpiresAt = new Date("2026-08-14T00:00:00.000Z");
+
 function app() {
   const testApp = new OpenAPIHono<{ Bindings: Env }>();
   testApp.onError((error, c) => {
@@ -91,12 +94,12 @@ function app() {
       grantKind: "pat",
       ownerUserId: "user_test",
       isSuperAdmin: true,
-      resource: "storefront",
+      resource: principalResource,
       preset: "full",
       permissions: new Set(),
       riskCeiling: "financial",
       authorityRevision: 1,
-      expiresAt: new Date("2026-08-14T00:00:00.000Z"),
+      expiresAt: principalExpiresAt,
     });
     await next();
   });
@@ -135,6 +138,7 @@ function checkoutBody(idempotencyKey?: string): Record<string, unknown> {
 describe("storefront agent buyer workflow scenarios", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    principalResource = "storefront";
     mocks.createContext.mockResolvedValue(contextView());
     mocks.mutateCart.mockResolvedValue({ context: contextView(2), valid: true, issues: [], items: [], subtotal: 25, hasFreeDeliveryProduct: false });
     mocks.quote.mockResolvedValue({ valid: true, contextRevision: 2, totalAmount: 30 });
@@ -165,6 +169,21 @@ describe("storefront agent buyer workflow scenarios", () => {
     mocks.support.mockResolvedValue({ request: { id: "osr_1", type: "return", label: "Return", status: "pending" } });
     mocks.refreshPayment.mockResolvedValue(undefined);
     mocks.enqueueSupport.mockResolvedValue(undefined);
+  });
+
+  it("binds contexts to the storefront grant, rejects dashboard grants, and never caches", async () => {
+    const created = await rawRequest("/storefront/agent-contexts", { method: "POST" });
+    expect(created.status).toBe(201);
+    expect(created.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.createContext).toHaveBeenCalledWith(expect.anything(), "agr_test", {
+      maximumExpiresAt: principalExpiresAt,
+    });
+
+    principalResource = "dashboard";
+    const dashboard = await rawRequest("/storefront/agent-contexts", { method: "POST" });
+    expect(dashboard.status).toBe(403);
+    expect(dashboard.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.createContext).toHaveBeenCalledTimes(1);
   });
 
   it("moves cart authority through quote and COD commit to a safe receipt", async () => {

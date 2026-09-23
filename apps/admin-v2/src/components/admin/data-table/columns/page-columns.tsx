@@ -7,8 +7,10 @@ import {
   createDateColumn,
   createActionsColumn,
 } from "./column-factories";
-import type { Page } from "~/types/api-responses";
-import type { PageRevisionClaim } from "~/lib/api-functions/pages";
+import type {
+  PageListItem as Page,
+} from "~/lib/api-query-options/pages";
+import type { PageRevisionClaim } from "~/lib/api-query-options/pages";
 import { PagePublicationBadge } from "~/components/admin/pages/PagePublicationBadge";
 import { getPagePublicationMode, isPageLive } from "~/lib/page-publication";
 import { formatDate } from "@scalius/shared/timestamps";

@@ -73,9 +73,7 @@ const composedEnv = expect.objectContaining({
   SCALIUS_SECRET: MASTER_SECRET,
   JWT_SECRET: expect.any(String),
   API_TOKEN: expect.any(String),
-  PURGE_TOKEN: expect.any(String),
   STOREFRONT_URL: "https://storefront.example.test",
-  PURGE_URL: "https://storefront.example.test/api/purge-cache",
 });
 
 describe("API Worker startup boundaries", () => {
@@ -131,28 +129,60 @@ describe("API Worker startup boundaries", () => {
     });
   });
 
-  it("skips public cache purges only when the runtime exposes no cache", async () => {
-    const { PublicApi } = await import("./worker");
-    const withoutCache = new PublicApi(
-      undefined as never,
+  it("keys public reads by the store cache generation through the PublicApi entrypoint", async () => {
+    const loaded: Record<RuntimeAppName, boolean> = {
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    };
+    mockRuntimeApps(loaded);
+    const cachedFetch = vi.fn(async (_request: Request) => new Response("cached"));
+    const kvGet = vi.fn(async () => "a1b2c3d4e5f60718");
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      {
+        waitUntil: vi.fn(),
+        exports: { PublicApi: { fetch: cachedFetch } },
+      } as unknown as ExecutionContext,
+      runtimeEnv({ CACHE: { get: kvGet } as unknown as KVNamespace }),
+    ) as unknown as TestApiWorker;
+
+    await worker.fetch(new Request("https://api.example.test/api/v1/products?page=2&limit=10"));
+    // A storefront render pins its sub-requests to the page's generation.
+    await worker.fetch(new Request("https://api.example.test/api/v1/products", {
+      headers: { "X-Scalius-Cache-Generation": "feedc0de" },
+    }));
+
+    expect(kvGet).toHaveBeenCalledWith("cache:generation", { cacheTtl: 30 });
+    expect(cachedFetch.mock.calls.map(([request]) => request.url)).toEqual([
+      "https://api.example.test/api/v1/products?limit=10&page=2&__cg=a1b2c3d4e5f60718",
+      "https://api.example.test/api/v1/products?__cg=feedc0de",
+    ]);
+    expect(loaded.public).toBe(false);
+  });
+
+  it("serves public reads uncached when no cache generation is available", async () => {
+    const loaded: Record<RuntimeAppName, boolean> = {
+      probe: false,
+      public: false,
+      admin: false,
+      system: false,
+      docs: false,
+    };
+    mockRuntimeApps(loaded);
+    const cachedFetch = vi.fn();
+    const { default: ApiWorker } = await import("./worker");
+    const worker = new ApiWorker(
+      { waitUntil: vi.fn(), exports: { PublicApi: { fetch: cachedFetch } } } as unknown as ExecutionContext,
       runtimeEnv(),
-    );
+    ) as unknown as TestApiWorker;
 
-    await expect(withoutCache.purgeGroups(["products"])).resolves.toBeUndefined();
+    const response = await worker.fetch(new Request("https://api.example.test/api/v1/products"));
 
-    const purge = vi.fn().mockResolvedValue({
-      success: false,
-      errors: [{ code: 1001, message: "failed" }],
-    });
-    const withCache = new PublicApi(
-      { cache: { purge } } as unknown as ExecutionContext,
-      undefined as never,
-    );
-
-    await expect(withCache.purgeGroups(["products"])).rejects.toThrow(
-      "Public API cache purge failed (1001)",
-    );
-    expect(purge).toHaveBeenCalledWith({ tags: ["products"] });
+    expect(await response.text()).toBe("public");
+    expect(cachedFetch).not.toHaveBeenCalled();
   });
 
   it.each([

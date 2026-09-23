@@ -25,7 +25,7 @@ const validVariant = {
 describe("variant price input boundaries", () => {
     it.each([
         ["create", (price: number) => createVariantSchema.safeParse({ ...validVariant, price, expectedAggregateRevision: 1 })],
-        ["update", (price: number) => updateVariantSchema.safeParse({ ...validVariant, price, expectedAggregateRevision: 1 })],
+        ["update", (price: number) => updateVariantSchema.safeParse({ ...validVariant, price, expectedStockVersion: 1, expectedAggregateRevision: 1 })],
         ["option matrix", (price: number) => productOptionMatrixSchema.safeParse({
             options: [{
                 id: "option_size",

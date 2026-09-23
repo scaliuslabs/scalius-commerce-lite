@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import type { MetaConversionsSettings, FormData } from "../MetaConversionsSettingsForm";
+import type { FormData } from "../MetaConversionsSettingsForm";
 import type {
+  MetaConversionsSettings,
   MetaConversionsSettingsResponse,
   MetaPixelParityDiagnostics,
-} from "~/types/api-responses";
-import {
-  getMetaConversionsSettings,
-  updateMetaConversionsSettings,
-} from "~/lib/api-functions/settings";
+} from "~/lib/api-query-options/settings";
 import { getServerFnError } from "@/lib/api-helpers";
 import {
   getMetaConversionsEnableIssue,
   getMetaConversionsSettingsIssue,
 } from "./readiness";
+import {
+  getApiV1AdminSettingsMetaConversions,
+  postApiV1AdminSettingsMetaConversions,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 const DEFAULT_FORM_DATA: FormData = {
   pixelId: "",
@@ -80,7 +82,7 @@ export function useMetaConversionsSettings(
   const fetchSettings = useCallback(async () => {
     setIsSettingsLoading(true);
     try {
-      const data = await getMetaConversionsSettings() as unknown as MetaConversionsSettingsResponse;
+      const data = await apiData(getApiV1AdminSettingsMetaConversions());
       applySettingsResponse(data);
     } catch {
       toast.error("Failed to load settings");
@@ -118,12 +120,12 @@ export function useMetaConversionsSettings(
 
     setIsSettingsLoading(true);
     try {
-      const savedSettings = await updateMetaConversionsSettings({ data: formData });
+      const savedSettings = await apiData(postApiV1AdminSettingsMetaConversions({ body: formData }));
       setSettings(savedSettings);
       setFormData(formDataFromSettings(savedSettings));
       setHasUnsavedChanges(false);
       try {
-        const refreshed = await getMetaConversionsSettings() as unknown as MetaConversionsSettingsResponse;
+        const refreshed = await apiData(getApiV1AdminSettingsMetaConversions());
         applySettingsResponse(refreshed);
       } catch {
         toast.warning("Settings saved, but the Pixel match check could not refresh.");

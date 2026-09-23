@@ -87,7 +87,10 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
     c.header("X-Frame-Options", "DENY");
-    c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Default only: routes such as agent continuations set a stricter policy.
+    if (!c.res.headers.has("Referrer-Policy")) {
+      c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    }
     c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     if (!c.req.url.includes("localhost")) {
       c.header(

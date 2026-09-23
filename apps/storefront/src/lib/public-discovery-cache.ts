@@ -1,5 +1,5 @@
 const HTML_BROWSER_CACHE_CONTROL = "no-cache, no-store, must-revalidate";
-// The native Worker entrypoint owns edge storage and tag purging. Browser
+// The gateway owns edge storage (keyed by cache generation). Browser
 // copies must revalidate so crawlers never outlive the bounded edge policy.
 const DISCOVERY_BROWSER_CACHE_CONTROL =
   "public, max-age=0, no-cache, must-revalidate";

@@ -6,12 +6,12 @@ import { Plus, Trash2, Tag } from "lucide-react";
 import {
   createListSearchValidator,
   createDataSelector,
-  normalizeOptionalSearchString,
+  normalizeOptionalEnumSearchParam,
   type ListSearchParams,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
+import { DISCOUNT_TYPES, discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { useCurrency } from "~/hooks/use-currency";
 import {
@@ -48,24 +48,24 @@ type DiscountSort =
   | "updatedAt";
 
 type SearchParams = ListSearchParams<DiscountSort> & {
-  type?: string;
+  type?: (typeof DISCOUNT_TYPES)[number];
 };
 
 function validateDiscountSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
   return {
     ...baseSearchValidator(search),
-    type: normalizeOptionalSearchString(search.type),
+    type: normalizeOptionalEnumSearchParam(search.type, DISCOUNT_TYPES),
   };
 }
 
-function mapParams(deps: SearchParams) {
+function mapParams(deps: SearchParams): Parameters<typeof discountsQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? "true" : undefined,
     type: deps.type,
   };
 }

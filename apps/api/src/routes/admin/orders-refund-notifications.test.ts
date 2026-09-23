@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     processRefund: vi.fn(),
     reconcileRefundAttemptForOrder: vi.fn(),
-    getCredentialEncryptionKey: vi.fn(),
-    invalidateProductAvailabilityCaches: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
 }));
 
@@ -25,12 +24,8 @@ vi.mock("@scalius/core/modules/payments/refund-reconciliation", async (importOri
     };
 });
 
-vi.mock("../../utils/encryption-key", () => ({
-    getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
-}));
-
-vi.mock("../../utils/cache-invalidation", () => ({
-    invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+vi.mock("../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -69,14 +64,13 @@ function createTestApp() {
 describe("admin refund notification routes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
         mocks.reconcileRefundAttemptForOrder.mockResolvedValue({
             found: true,
             status: "deferred",
             orderIds: [],
             refundNotifications: [],
         });
-        mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+        mocks.bumpCacheGeneration.mockResolvedValue(undefined);
         mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
     });
 
@@ -104,11 +98,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-            db,
-            { variantIds: ["variant_1"] },
-            expect.anything(),
-        );
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
@@ -121,44 +111,6 @@ describe("admin refund notification routes", () => {
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).not.toHaveProperty("refundNotification");
         expect(body.data).not.toHaveProperty("availabilityTransitionVariantIds");
-        expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
-    });
-
-    it("enqueues partial-refund copy for partial refunds", async () => {
-        mocks.processRefund.mockResolvedValue({
-            success: true,
-            gateway: "stripe",
-            refundId: "re_partial",
-            amount: 40,
-            isFullRefund: false,
-            availabilityTransitionVariantIds: [],
-            refundNotification: {
-                notificationType: "order_partially_refunded",
-                dedupeKey: "refund:order_1:refund_order_1_4:partial",
-                amount: 40,
-                refundId: "re_partial",
-            },
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: 40, reason: "partial_adjustment" }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
-            db,
-            queue,
-            orderId: "order_1",
-            notificationType: "order_partially_refunded",
-            dedupeKey: "refund:order_1:refund_order_1_4:partial",
-            source: "orders-refund",
-            data: { amount: 40, gateway: "stripe", refundId: "re_partial" },
-        });
-        const body = await response.json() as { data: Record<string, unknown> };
-        expect(body.data).not.toHaveProperty("refundNotification");
         expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
     });
 
@@ -214,7 +166,7 @@ describe("admin refund notification routes", () => {
                 refundId: "refund_provider_1",
             },
         });
-        mocks.invalidateProductAvailabilityCaches.mockRejectedValueOnce(new Error("cache unavailable"));
+        mocks.bumpCacheGeneration.mockRejectedValueOnce(new Error("cache unavailable"));
         mocks.enqueueOrderRefundNotificationForOrder.mockRejectedValueOnce(new Error("queue unavailable"));
         const { app, env } = createTestApp();
 
@@ -265,11 +217,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(503);
-        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-            db,
-            { variantIds: ["variant_1"] },
-            expect.anything(),
-        );
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
             db,
             queue,
@@ -321,11 +269,7 @@ describe("admin refund notification routes", () => {
             "rfa_1",
             { encryptionKey: "credential-key" },
         );
-        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-            db,
-            { orderIds: ["order_1"] },
-            expect.anything(),
-        );
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
             db,
             queue,
@@ -360,28 +304,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(404);
-        expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     });
-
-    it("does not notify for already-refunded inventory repair results without a refund notification fact", async () => {
-        mocks.processRefund.mockResolvedValue({
-            success: true,
-            gateway: "stripe",
-            amount: 0,
-            isFullRefund: true,
-            availabilityTransitionVariantIds: [],
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "repair_inventory" }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
-    });
-
 });

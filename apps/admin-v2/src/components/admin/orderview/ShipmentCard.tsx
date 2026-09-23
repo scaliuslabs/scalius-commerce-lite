@@ -111,7 +111,8 @@ const CreateShipmentForm = ({
     }
     shipmentMutation.mutate({
       orderId: order.id,
-      shipment: { providerId: selectedProviderId, options: {} },
+      providerId: selectedProviderId,
+      options: {},
     });
   };
 

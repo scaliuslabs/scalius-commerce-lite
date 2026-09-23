@@ -11,33 +11,18 @@ import { Label } from "~/components/ui/label";
 import { ImageIcon, Loader2, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { queryKeys } from "~/lib/query-keys";
-import {
-  getBusinessSettings,
-  type SettingsPayload,
-  updateBusinessSettings,
-} from "~/lib/api-functions/settings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { MediaManager } from "../media-manager";
+import {
+  getApiV1AdminSettingsBusiness,
+  postApiV1AdminSettingsBusiness,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiResult } from "~/lib/api";
 
-interface BusinessSettings {
-  companyName: string;
-  legalName: string;
-  taxId: string;
-  phone: string;
-  email: string;
-  addressLine1: string;
-  addressLine2: string;
-  city: string;
-  stateRegion: string;
-  postalCode: string;
-  country: string;
-  invoicePrefix: string;
-  invoiceLogoUrl: string;
-  invoiceFooterText: string;
-}
+type BusinessSettings = ApiResult<typeof getApiV1AdminSettingsBusiness>;
 
 const defaultValues: BusinessSettings = {
   companyName: "",
@@ -71,8 +56,8 @@ export default function BusinessSettingsBuilder() {
     refetch,
   } = useSettingsForm<BusinessSettings>({
     queryKey: queryKeys.settings.business(),
-    fetchFn: () => getBusinessSettings() as Promise<Partial<BusinessSettings>>,
-    saveFn: (v) => updateBusinessSettings({ data: v as unknown as SettingsPayload }),
+    fetchFn: () => apiData(getApiV1AdminSettingsBusiness()),
+    saveFn: (v) => apiData(postApiV1AdminSettingsBusiness({ body: v })),
     defaultValues,
     successMessage: "Business settings saved",
     errorMessage: "Failed to save business settings.",
