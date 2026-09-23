@@ -3,6 +3,7 @@ import { cn } from "@scalius/shared/utils";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 import { RichContent } from "../rich-content";
 import { Button } from "../button";
+import { Skeleton } from "../skeleton";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 
 let tiptapEditorModulePromise: Promise<{
@@ -60,7 +61,7 @@ function EditorLoadingShell({
       aria-busy={failed ? undefined : "true"}
       aria-label={failed ? undefined : `Loading ${ariaLabel}`}
       className={cn(
-        "w-full min-w-0 overflow-hidden rounded-md border bg-background transition-colors",
+        "w-full min-w-0 overflow-hidden rounded-xl border border-input bg-card",
         getDeferredEditorMinHeightClass(Boolean(compact)),
         className,
       )}
@@ -70,14 +71,8 @@ function EditorLoadingShell({
           role="alert"
           className="flex min-h-[inherit] flex-col items-center justify-center gap-3 p-4 text-center"
         >
-          <p className="text-sm text-muted-foreground">Editor couldn&apos;t load.</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11 sm:min-h-9"
-            onClick={onRetry}
-          >
+          <p className="text-body text-muted-foreground">Editor couldn&apos;t load.</p>
+          <Button type="button" variant="outline" onClick={onRetry}>
             Retry
           </Button>
         </div>
@@ -86,8 +81,8 @@ function EditorLoadingShell({
           <TiptapToolbarSkeleton compact={Boolean(compact)} />
           <div className={cn("overflow-y-auto border-t", getDeferredEditorViewportClass(Boolean(compact)))}>
             <div className="p-4">
-              <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-              <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-muted" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="mt-3 h-4 w-1/2" />
             </div>
           </div>
         </>
@@ -188,15 +183,15 @@ export function DeferredTiptapEditor({
           aria-busy="true"
           aria-label={`Loading ${ariaLabel}`}
           className={cn(
-            "w-full min-w-0 overflow-hidden rounded-md border bg-background transition-colors",
+            "w-full min-w-0 overflow-hidden rounded-xl border border-input bg-card",
             className,
           )}
         >
           <TiptapToolbarSkeleton compact={compact} />
-          <div className={cn("cursor-text overflow-y-auto border-t text-sm", getDeferredEditorViewportClass(compact))}>
+          <div className={cn("cursor-text overflow-y-auto border-t text-body", getDeferredEditorViewportClass(compact))}>
             <div
               className={cn(
-                "min-h-[200px] max-w-none p-4 leading-6",
+                "min-h-[200px] max-w-none p-4",
                 hasContent ? "text-foreground" : "text-muted-foreground",
               )}
             >

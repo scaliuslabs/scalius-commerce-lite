@@ -1,5 +1,4 @@
 import type { MouseEventHandler, ReactNode } from "react";
-import { cn } from "@scalius/shared/utils";
 import { Button } from "../button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
 
@@ -8,39 +7,29 @@ interface ToolbarButtonProps {
   isActive?: boolean;
   disabled?: boolean;
   tooltip: string;
-  buttonSize: string;
+  compact?: boolean;
   children: ReactNode;
 }
 
-export function ToolbarButton({
-  onClick,
-  isActive,
-  disabled,
-  tooltip,
-  buttonSize,
-  children,
-}: ToolbarButtonProps) {
+export function ToolbarButton({ onClick, isActive, disabled, tooltip, compact = false, children }: ToolbarButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size={compact ? "icon-sm" : "icon"}
           onClick={onClick}
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           disabled={disabled}
           aria-label={tooltip}
           aria-pressed={isActive || undefined}
-          className={cn(buttonSize, isActive && "bg-accent")}
         >
           {children}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={5}>
-        <p className="text-xs">{tooltip}</p>
-      </TooltipContent>
+      <TooltipContent side="bottom">{tooltip}</TooltipContent>
     </Tooltip>
   );
 }

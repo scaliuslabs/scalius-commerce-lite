@@ -1,14 +1,8 @@
 import * as React from "react";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-
-const SIDEBAR_WIDTH_MOBILE = "16rem";
+import { cn } from "@scalius/shared/utils";
+import { overlayClassName } from "./dialog";
 
 interface SidebarMobileSheetProps {
   open: boolean;
@@ -17,33 +11,24 @@ interface SidebarMobileSheetProps {
   children: React.ReactNode;
 }
 
-export function SidebarMobileSheet({
-  open,
-  onOpenChange,
-  side = "left",
-  children,
-}: SidebarMobileSheetProps) {
+export function SidebarMobileSheet({ open, onOpenChange, side = "left", children }: SidebarMobileSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        data-sidebar="sidebar"
-        data-mobile="true"
-        className="border-sidebar-border bg-sidebar p-0 text-sidebar-foreground shadow-xl [&>button]:hidden"
-        style={
-          {
-            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            width: "min(var(--sidebar-width), calc(100vw - 2rem))",
-            maxWidth: "calc(100vw - 2rem)",
-          } as React.CSSProperties
-        }
-        side={side}
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>Sidebar</SheetTitle>
-          <SheetDescription>Navigation sidebar</SheetDescription>
-        </SheetHeader>
-        <div className="flex h-full w-full flex-col">{children}</div>
-      </SheetContent>
-    </Sheet>
+    <SheetPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <SheetPrimitive.Portal>
+        <SheetPrimitive.Overlay className={overlayClassName} />
+        <SheetPrimitive.Content
+          data-sidebar="sidebar"
+          data-mobile="true"
+          className={cn(
+            "fixed inset-y-0 z-50 flex w-60 max-w-[calc(100vw-2rem)] flex-col bg-sidebar text-sidebar-foreground shadow-modal focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible",
+            side === "left" ? "left-0" : "right-0",
+          )}
+        >
+          <SheetPrimitive.Title className="sr-only">Sidebar</SheetPrimitive.Title>
+          <SheetPrimitive.Description className="sr-only">Navigation sidebar</SheetPrimitive.Description>
+          {children}
+        </SheetPrimitive.Content>
+      </SheetPrimitive.Portal>
+    </SheetPrimitive.Root>
   );
 }

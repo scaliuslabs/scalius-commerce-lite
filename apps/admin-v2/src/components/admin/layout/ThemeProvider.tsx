@@ -1,61 +1,71 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
-type Theme = "light" | "dark";
+/**
+ * Light/dark theme. index.html applies the `dark` class before first paint:
+ * the merchant's saved choice (localStorage "theme"), otherwise the system
+ * preference. This module keeps that class and React in step.
+ */
+export type Theme = "light" | "dark";
 
-interface ThemeContextValue {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
-}
+const STORAGE_KEY = "theme";
+const listeners = new Set<() => void>();
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const initial = stored || "light";
-    setThemeState(initial);
-    applyTheme(initial);
-  }, []);
-
-  const setTheme = useCallback((newTheme: Theme) => {
-    setThemeState(newTheme);
-    applyTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }, [theme, setTheme]);
-
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
-
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
-  return ctx;
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
+function savedTheme(): Theme | null {
+  try {
+    const value = localStorage.getItem(STORAGE_KEY);
+    return value === "dark" || value === "light" ? value : null;
+  } catch {
+    return null;
   }
-  root.style.colorScheme = theme;
+}
+
+function systemTheme(): Theme {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function currentTheme(): Theme {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function applyTheme(theme: Theme): void {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  for (const listener of listeners) listener();
+}
+
+export function setTheme(theme: Theme): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // Private mode: the choice lasts for this page only.
+  }
+  applyTheme(theme);
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void; toggleTheme: () => void } {
+  const theme = useSyncExternalStore(subscribe, currentTheme, () => "light" as Theme);
+  return { theme, setTheme, toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark") };
+}
+
+/** Follows the system theme until the merchant picks one, and syncs other tabs. */
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const sync = () => applyTheme(savedTheme() ?? systemTheme());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) sync();
+    };
+    media.addEventListener("change", sync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      media.removeEventListener("change", sync);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  return children;
 }

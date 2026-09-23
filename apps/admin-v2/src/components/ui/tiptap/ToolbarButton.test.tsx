@@ -34,7 +34,7 @@ describe("ToolbarButton", () => {
         <ToolbarButton
           onClick={onClick}
           tooltip="Media Library"
-          buttonSize="h-7 w-7"
+          compact
         >
           <span>Open</span>
         </ToolbarButton>,

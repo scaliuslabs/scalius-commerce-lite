@@ -1,4 +1,5 @@
 import { formatDate } from "@scalius/shared/timestamps";
+import { cn } from "@scalius/shared/utils";
 
 interface ShipmentMetadataDisplayProps {
   metadata: Record<string, unknown> | string | null;
@@ -43,21 +44,14 @@ const HIDDEN_FIELDS = new Set([
  * Component to display shipment metadata in a clean, structured way.
  * Hides raw webhook payloads and internal fields, shows only useful info.
  */
-export function ShipmentMetadataDisplay({
-  metadata,
-  className = "",
-}: ShipmentMetadataDisplayProps) {
+export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadataDisplayProps) {
   let parsed = metadata;
 
   if (typeof metadata === "string") {
     try {
       parsed = JSON.parse(metadata);
     } catch {
-      return (
-        <p className={`text-xs text-muted-foreground ${className}`}>
-          Unable to parse metadata
-        </p>
-      );
+      return <p className={cn("text-body text-muted-foreground", className)}>Unable to parse metadata</p>;
     }
   }
 
@@ -93,22 +87,20 @@ export function ShipmentMetadataDisplay({
   const lastWebhookAt = parsed.lastWebhookAt as string | number | undefined;
 
   return (
-    <div className={`text-sm space-y-1 ${className}`}>
+    <dl className={cn("space-y-1 text-body", className)}>
       {unique.map(({ label, value }) => (
         <div key={label} className="flex justify-between gap-4">
-          <span className="text-muted-foreground text-xs">{label}</span>
-          <span className="text-xs font-medium text-right">{value}</span>
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="text-right font-medium">{value}</dd>
         </div>
       ))}
       {lastWebhookAt && (
-        <div className="flex justify-between gap-4 pt-1 border-t">
-          <span className="text-muted-foreground text-xs">Last Update</span>
-          <span className="text-xs text-muted-foreground">
-            {formatDate(lastWebhookAt)}
-          </span>
+        <div className="flex justify-between gap-4 border-t pt-1">
+          <dt className="text-muted-foreground">Last update</dt>
+          <dd className="text-muted-foreground">{formatDate(lastWebhookAt)}</dd>
         </div>
       )}
-    </div>
+    </dl>
   );
 }
 

@@ -3,3 +3,6 @@
 
 /assets/immutable/*.css
   Cache-Control: public, max-age=31536000, immutable
+
+/assets/immutable/*.woff2
+  Cache-Control: public, max-age=31536000, immutable

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, useRef } from "react";
+import { useEffect, useId, useMemo, useState, useRef, type CSSProperties } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
 import {
@@ -160,7 +160,7 @@ export function TiptapEditor({
     editorProps: {
       attributes: {
         class:
-          "max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm",
+          "min-h-52 max-w-none p-4 text-body focus-visible:outline-none",
         role: "textbox",
         "aria-label": ariaLabel,
         "aria-multiline": "true",
@@ -203,35 +203,28 @@ export function TiptapEditor({
       aria-modal={isFullscreen ? true : undefined}
       aria-labelledby={isFullscreen ? fullscreenTitleId : undefined}
       className={cn(
-        "flex min-w-0 w-full flex-col bg-background transition-colors",
-        isFullscreen
-          ? "fixed inset-0 z-[9999] h-dvh w-full"
-          : "border rounded-md",
+        "flex w-full min-w-0 flex-col bg-card",
+        isFullscreen ? "fixed inset-0 z-[9999] h-dvh" : "overflow-hidden rounded-xl border border-input",
         !isFullscreen && className,
       )}
     >
       {/* Fullscreen header */}
       {isFullscreen && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4">
-          <span
-            id={fullscreenTitleId}
-            className="text-sm font-medium text-muted-foreground"
-          >
+          <span id={fullscreenTitleId} className="text-heading-sm">
             Edit content
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> to exit
+            <span className="hidden text-body text-muted-foreground sm:inline">
+              Press <kbd>Esc</kbd> to exit
             </span>
             <Button
               type="button"
               variant="outline"
-              size="sm"
               aria-label="Exit fullscreen"
               onClick={() => setIsFullscreen(false)}
-              className="min-h-11 gap-1.5 sm:min-h-9"
             >
-              <Minimize2 className="h-3.5 w-3.5" />
+              <Minimize2 />
               Exit fullscreen
             </Button>
           </div>
@@ -264,11 +257,8 @@ export function TiptapEditor({
       {/* Editor content -- always mounted, never unmounts */}
       <div
         ref={editorAreaRef}
-        className={cn(
-          "overflow-y-auto border-t",
-          isFullscreen ? "flex-1 bg-muted/30" : "",
-        )}
-        style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}
+        className={cn("overflow-y-auto border-t", isFullscreen ? "flex-1 bg-background" : "h-(--editor-height)")}
+        style={{ "--editor-height": editorViewportHeight } as CSSProperties}
         onClick={() => {
           // Click-to-focus: when user clicks the editing area background, focus the editor
           if (isFullscreen && editorInstance && !editorInstance.isFocused) {
@@ -278,18 +268,18 @@ export function TiptapEditor({
       >
         <div className={cn(
           isFullscreen
-            ? "mx-auto min-h-full w-full max-w-4xl bg-background px-3 py-4 shadow-sm sm:border-x sm:border-border/40 sm:px-8 sm:py-6"
+            ? "mx-auto min-h-full w-full max-w-4xl bg-card px-3 py-4 shadow-card sm:px-8 sm:py-6"
             : ""
         )}>
           {editorInstance ? (
             <EditorContent editor={editorInstance} className="max-w-none" />
           ) : hasInitialContent ? (
             <div
-              className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"
+              className="ProseMirror min-h-52 max-w-none p-4 text-body"
               dangerouslySetInnerHTML={{ __html: sanitizedInitialContent }}
             />
           ) : (
-            <div className="ProseMirror max-w-none p-4 min-h-[200px] text-sm">
+            <div className="ProseMirror min-h-52 max-w-none p-4 text-body">
               <p className="is-editor-empty" data-placeholder={placeholder}>
                 <br />
               </p>
@@ -297,14 +287,6 @@ export function TiptapEditor({
           )}
         </div>
       </div>
-      {/* CSS to ensure layout elements like sticky headers/sidebars are pushed below the fullscreen editor */}
-      <style suppressHydrationWarning>{`
-        body.editor-fullscreen-active header,
-        body.editor-fullscreen-active aside,
-        body.editor-fullscreen-active nav {
-          z-index: 0 !important;
-        }
-      `}</style>
     </div>
   );
 

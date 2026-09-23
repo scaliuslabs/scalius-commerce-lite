@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "../button";
-import { Input } from "../input";
+import { fieldClassName, Input } from "../input";
 import { Label } from "../label";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import {
@@ -159,22 +159,19 @@ export function ResizableImageView({
       <div
         ref={containerRef}
         data-drag-handle
-        className={cn("relative inline-block group", alignmentClass)}
-        style={{ width: widthStyle, maxWidth: "100%" }}
+        className={cn("group relative inline-block max-w-full", widthStyle && "w-(--image-width)", alignmentClass)}
+        style={{ "--image-width": widthStyle } as CSSProperties}
       >
         {imageError ? (
           <div
             className={cn(
-              "flex flex-col items-center justify-center gap-2 rounded-md bg-muted/50 border border-dashed border-border text-muted-foreground p-4",
-              selected && "ring-2 ring-primary ring-offset-2",
+              "flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-4 text-muted-foreground",
+              widthStyle ? "w-full" : "w-50",
+              selected && "ring-2 ring-ring ring-offset-2",
             )}
-            style={{
-              width: widthStyle ? "100%" : "200px",
-              minHeight: "80px",
-            }}
           >
-            <ImageOff className="h-6 w-6" />
-            <span className="text-xs text-center truncate max-w-full">Image failed to load</span>
+            <ImageOff className="size-6" />
+            <span className="max-w-full truncate text-center text-body">Image failed to load</span>
           </div>
         ) : (
           <img
@@ -182,13 +179,10 @@ export function ResizableImageView({
             src={previewSrc || src}
             alt={alt || ""}
             className={cn(
-              "block h-auto rounded-md",
-              selected && "ring-2 ring-primary ring-offset-2",
+              "block h-auto max-w-full rounded-lg",
+              widthStyle && "w-full",
+              selected && "ring-2 ring-ring ring-offset-2",
             )}
-            style={{
-              width: widthStyle ? "100%" : undefined,
-              maxWidth: "100%",
-            }}
             draggable={false}
             onError={() => setImageError(true)}
           />
@@ -215,7 +209,7 @@ export function ResizableImageView({
       <div className="leading-normal">
         {controlsVisible && !resizing && (
           <div
-            className="mt-2 inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm"
+            className="mt-2 inline-flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl bg-popover p-1 shadow-popover"
             data-image-controls
           >
             <div className="flex items-center" role="group" aria-label="Image alignment">
@@ -225,11 +219,11 @@ export function ResizableImageView({
               aria-label="Align image left"
               title="Align image left"
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded-lg hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "left" && "bg-accent",
               )}
             >
-              <AlignLeft className="h-3.5 w-3.5" />
+              <AlignLeft className="size-4" />
             </button>
             <button
               type="button"
@@ -237,11 +231,11 @@ export function ResizableImageView({
               aria-label="Center image"
               title="Center image"
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded-lg hover:bg-accent sm:h-8 sm:w-8",
                 (textAlign === "center" || !textAlign) && "bg-accent",
               )}
             >
-              <AlignCenter className="h-3.5 w-3.5" />
+              <AlignCenter className="size-4" />
             </button>
             <button
               type="button"
@@ -249,11 +243,11 @@ export function ResizableImageView({
               aria-label="Align image right"
               title="Align image right"
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded-lg hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "right" && "bg-accent",
               )}
             >
-              <AlignRight className="h-3.5 w-3.5" />
+              <AlignRight className="size-4" />
             </button>
             </div>
             {editingCustomSize ? (
@@ -262,8 +256,7 @@ export function ResizableImageView({
                 role="group"
                 aria-label="Custom image width"
               >
-                <div className="relative">
-                  <Input
+                <Input
                     type="number"
                     inputMode="numeric"
                     min={20}
@@ -281,38 +274,33 @@ export function ResizableImageView({
                       }
                     }}
                     aria-label="Custom image width percentage"
-                    className="h-11 w-20 pr-7 text-xs sm:h-8"
+                    className="w-20"
                     autoFocus
                   />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    %
-                  </span>
-                </div>
+                <span className="text-body text-muted-foreground">%</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11 sm:h-8 sm:w-8"
                   aria-label="Apply custom image width"
                   onClick={applyCustomSize}
                 >
-                  <Check className="h-3.5 w-3.5" />
+                  <Check className="size-4" />
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11 sm:h-8 sm:w-8"
                   aria-label="Cancel custom image width"
                   onClick={() => setEditingCustomSize(false)}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="size-4" />
                 </Button>
               </div>
             ) : (
               <select
                 aria-label="Image size"
-                className="h-11 min-w-28 rounded-md border border-input bg-background px-2 text-xs shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-8"
+                className={cn(fieldClassName, "h-11 w-auto min-w-28 sm:h-8")}
                 value={sizeValue}
                 onFocus={() => setSizeFocused(true)}
                 onBlur={() => setSizeFocused(false)}
@@ -343,14 +331,14 @@ export function ResizableImageView({
                   type="button"
                   aria-label="Edit image alternative text"
                   title="Edit image alternative text"
-                  className="flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-accent sm:h-8 sm:w-8"
                 >
-                  <PencilLine className="h-3.5 w-3.5" />
+                  <PencilLine className="size-4" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor={altInputId} className="text-xs">
+                  <Label htmlFor={altInputId}>
                     Alternative text
                   </Label>
                   <Input
@@ -359,7 +347,6 @@ export function ResizableImageView({
                     maxLength={512}
                     onChange={(event) => setAltDraft(event.target.value)}
                     placeholder="Describe the image"
-                    className="min-h-11 sm:min-h-9"
                     onKeyDown={(event) => {
                       if (event.key !== "Enter") return;
                       event.preventDefault();
@@ -367,14 +354,13 @@ export function ResizableImageView({
                       setDetailsOpen(false);
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-body text-muted-foreground">
                     Leave empty only when the image is decorative.
                   </p>
                 </div>
                 <Button
                   type="button"
-                  size="sm"
-                  className="min-h-11 w-full sm:min-h-9"
+                  className="w-full"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     updateAttributes({ alt: altDraft.trim() });
@@ -391,9 +377,9 @@ export function ResizableImageView({
               onClick={deleteNode}
               aria-label="Remove image"
               title="Remove image"
-              className="flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:w-8"
+              className="flex h-11 w-11 items-center justify-center rounded hover:bg-critical-surface hover:text-destructive sm:h-8 sm:w-8"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="size-4" />
             </button>
           </div>
         )}

@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/noto-sans-bengali/wght.css";
 import "~/styles/global.css";
 import { getRouter } from "./router";
 
