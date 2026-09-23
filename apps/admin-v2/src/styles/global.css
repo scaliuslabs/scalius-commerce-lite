@@ -446,15 +446,31 @@ html:lang(bn) {
   border-bottom-left-radius: 4px;
 }
 
-/* Start at the parent's 20px icon (rows are 44px on phones, 28px from sm). */
+/* Start at the parent's 20px icon (rows are 44px on phones, 28px from md). */
 [data-sidebar="menu-sub"] > li:first-child::before {
   top: -0.75rem;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   [data-sidebar="menu-sub"] > li:first-child::before {
     top: -0.25rem;
   }
+}
+
+/*
+ * Polaris nav icons are filled at rest and outlined on the current/open
+ * section. Lucide has only outline glyphs, so the resting icon gets a heavier
+ * stroke and a quarter-tone body, and the open one the plain thin outline.
+ */
+[data-sidebar="menu-button"] > svg {
+  fill: currentColor;
+  fill-opacity: 0.25;
+  stroke-width: 2.25;
+}
+
+[data-sidebar="menu-button"][data-open="true"] > svg {
+  fill: none;
+  stroke-width: 1.5;
 }
 
 /* The rich-text editor's fullscreen mode covers the app shell and stacks dialogs above itself. */

@@ -81,7 +81,7 @@ function CustomersPage() {
     {
       accessorKey: "totalOrders",
       header: sortHeader(t("orders")),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", numeric: true },
       cell: ({ row }) => {
         const count = row.original.totalOrders;
         return <span className="text-muted-foreground">{count === 1 ? t("orderCountOne") : t("orderCount", { count })}</span>;
@@ -90,11 +90,10 @@ function CustomersPage() {
     {
       accessorKey: "totalSpent",
       header: sortHeader(t("spent")),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", numeric: true },
       cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.totalSpent)}</span>,
     },
     { accessorKey: "lastOrderAt", header: sortHeader(t("lastOrder")), cell: ({ row }) => <DateText value={row.original.lastOrderAt} /> },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, fmt, search.trashed]);
 
   return (
@@ -103,11 +102,13 @@ function CustomersPage() {
       actions={hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
       search={search}
       query={listQuery(search)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
       dataKey="customers"
       columns={columns}
       invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
       empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
       rowTo={openTo}
+      rowLabel={(row) => row.name || t("unnamed")}
       canSelectRow={search.trashed ? deletable : undefined}
       lifecycle={{
         canTrash: canDelete,

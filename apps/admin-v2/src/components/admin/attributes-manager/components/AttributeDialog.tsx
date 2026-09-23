@@ -113,7 +113,7 @@ export function AttributeDialog({ attribute, onClose }: AttributeDialogProps) {
                 {t("addValue")}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">{t("presetValuesHint")}</p>
+            <p className="text-body text-muted-foreground">{t("presetValuesHint")}</p>
             {options.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {options.map((option) => (
@@ -135,7 +135,7 @@ export function AttributeDialog({ attribute, onClose }: AttributeDialogProps) {
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div>
               <Label htmlFor="attribute-filterable">{t("filterableYes")}</Label>
-              <p className="text-sm text-muted-foreground">{t("filterableHint")}</p>
+              <p className="text-body text-muted-foreground">{t("filterableHint")}</p>
             </div>
             <Switch id="attribute-filterable" checked={filterable} onCheckedChange={setFilterable} />
           </div>

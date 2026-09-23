@@ -184,7 +184,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No city selected
                 </SelectItem>
@@ -248,7 +248,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No zone selected
                 </SelectItem>
@@ -308,7 +308,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No area selected
                 </SelectItem>

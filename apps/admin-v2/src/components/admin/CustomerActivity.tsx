@@ -40,7 +40,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
   if (orders.isError) {
     return (
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 text-sm">
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           {t("loadFailed")}
           <Button variant="outline" size="sm" onClick={() => void orders.refetch()}>{tr("retry")}</Button>
         </CardHeader>
@@ -58,7 +58,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
         <CardHeader>
           <CardTitle>{t("recentOrders")}</CardTitle>
           {first ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {first.customer.totalOrders === 1 ? t("orderCountOne") : t("orderCount", { count: first.customer.totalOrders })}
               {" · "}
               {t("spent")}: {fmt(first.customer.totalSpent)}
@@ -67,7 +67,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
         </CardHeader>
         <CardContent className="p-0">
           {orders.isPending ? null : orderRows.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">{t("noOrders")}</p>
+            <p className="px-4 pb-4 text-body text-muted-foreground">{t("noOrders")}</p>
           ) : (
             <ul className="divide-y border-t">
               {orderRows.map((order) => (
@@ -75,7 +75,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                   <Link
                     to="/admin/orders/$orderId"
                     params={{ orderId: order.id }}
-                    className="flex min-h-11 items-center gap-3 px-6 py-2 text-sm hover:bg-muted"
+                    className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium">#{order.id.slice(0, 8)}</span>
@@ -103,10 +103,10 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
           <CardTitle>{t("history")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {history.isSuccess && changes.length === 0 ? <p className="text-sm text-muted-foreground">{t("noHistory")}</p> : null}
+          {history.isSuccess && changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noHistory")}</p> : null}
           <ol className="space-y-3">
             {changes.map((change) => (
-              <li key={change.id} className="text-sm">
+              <li key={change.id} className="text-body">
                 <p>
                   <span className="font-medium">
                     {t(change.changeType === "created" ? "changeCreated" : change.changeType === "deleted" ? "changeDeleted" : "changeUpdated")}

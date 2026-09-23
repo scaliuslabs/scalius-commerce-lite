@@ -18,7 +18,7 @@ import { collectionsQueryOptions, type CollectionSummaryDto } from "~/lib/api-qu
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { ResourceListPage, ResourceRowLink, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { translate, useMessages } from "~/i18n";
@@ -60,9 +60,11 @@ function CollectionsPage() {
     (action: { kind: "activate" | "deactivate"; ids: string[] } | { kind: "reorder"; items: Array<{ id: string; sortOrder: number; expectedVersion: number }> }) =>
       action.kind === "reorder"
         ? apiData(postApiV1AdminCollectionsReorder({ body: { items: action.items } }))
-        : action.kind === "activate"
-          ? apiData(postApiV1AdminCollectionsBulkActivate({ body: { ids: action.ids } }))
-          : apiData(postApiV1AdminCollectionsBulkDeactivate({ body: { ids: action.ids } })),
+        : inChunks(action.ids, (ids) =>
+            action.kind === "activate"
+              ? apiData(postApiV1AdminCollectionsBulkActivate({ body: { ids } }))
+              : apiData(postApiV1AdminCollectionsBulkDeactivate({ body: { ids } })),
+          ),
     INVALIDATE,
   );
   const editTo = (row: CollectionSummaryDto) => (can.canEdit ? `/admin/collections/${row.id}/edit` : undefined);
@@ -111,11 +113,13 @@ function CollectionsPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
       query={listQuery(search)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
       dataKey="collections"
       columns={columns}
       invalidate={INVALIDATE}
       empty={{ icon: Layers3, title: t("collectionsEmptyTitle"), description: t("collectionsEmptyBody") }}
       rowTo={editTo}
+      rowLabel={(row) => row.name}
       sortable={reorderable}
       onReorder={(from, to, rows) => {
         const next = [...rows];

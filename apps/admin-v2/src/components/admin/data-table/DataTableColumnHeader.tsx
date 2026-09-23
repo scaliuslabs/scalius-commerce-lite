@@ -9,7 +9,6 @@ import {
 } from "react";
 import type { Column, TableRowData } from "./table-config";
 import { cn } from "@scalius/shared/utils";
-import { Button } from "@/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { DataTableColumnHeaderMenuProps } from "./DataTableColumnHeaderMenu";
 
@@ -69,12 +68,14 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
   }
 
   const sorted = column.getIsSorted();
+  const numeric = Boolean(column.columnDef.meta?.numeric);
 
+  // Polaris IndexTable heading: the same caption type as a plain heading,
+  // with the sort arrow beside it; the whole label is the button.
   const trigger = (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="-ml-3 h-8 data-[state=open]:bg-accent"
+    <button
+      type="button"
+      className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 text-left outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
       data-state={open ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={open}
@@ -83,17 +84,17 @@ function DataTableColumnHeaderInner<TData extends TableRowData, TValue>({
     >
       <span>{title}</span>
       {sorted === "desc" ? (
-        <ArrowDown className="ml-2 h-4 w-4" />
+        <ArrowDown className="size-3.5" aria-hidden />
       ) : sorted === "asc" ? (
-        <ArrowUp className="ml-2 h-4 w-4" />
+        <ArrowUp className="size-3.5" aria-hidden />
       ) : (
-        <ArrowUpDown className="ml-2 h-4 w-4" />
+        <ArrowUpDown className="size-3.5 opacity-60" aria-hidden />
       )}
-    </Button>
+    </button>
   );
 
   return (
-    <div className={cn("flex items-center space-x-2", className)}>
+    <div className={cn("flex items-center", numeric && "justify-end", className)}>
       {isMenuRequested ? (
         <Suspense fallback={trigger}>
           <LazyDataTableColumnHeaderMenu

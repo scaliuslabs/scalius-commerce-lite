@@ -1,120 +1,158 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { FileText, FolderTree, Inbox, Tag, UserRound } from "lucide-react";
+import { ArrowRight, Clock, FileText, FolderTree, Inbox, Settings, Tag, UserRound } from "lucide-react";
 import { getApiV1AdminSearch } from "@scalius/api-client/sdk";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import type { VisibleNavItem } from "./AdminNav";
+import { GO_SHORTCUTS, SETTINGS_DESTINATIONS, type VisibleNavItem } from "./AdminNav";
 
 export interface GlobalSearchProps {
   nav: VisibleNavItem[];
   canOpen: (path: string) => boolean;
 }
 
-/** The ⌘K search dialog: dashboard pages, catalogue matches and list searches. */
+interface Entry {
+  id: string;
+  label: string;
+  to: string;
+  search?: Record<string, string>;
+  icon: ComponentType<{ className?: string }>;
+  hint?: string;
+  /** Extra words that also match (settings pages). */
+  keywords?: string;
+}
+
+/** Shopify caps admin search at 7 results. */
+const MAX_RESULTS = 7;
+const RECENT_KEY = "scalius.search.recent";
+const SHORTCUT_BY_PATH = Object.fromEntries(Object.entries(GO_SHORTCUTS).map(([key, to]) => [to, `G ${key.toUpperCase()}`]));
+
+function readRecent(): Array<Pick<Entry, "id" | "label" | "to" | "search">> {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(value) ? value.slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(entry: Entry) {
+  try {
+    // Record ids, names and paths only; search terms never go to storage.
+    if (entry.search) return;
+    const next = [{ id: entry.id, label: entry.label, to: entry.to }, ...readRecent().filter((item) => item.id !== entry.id)].slice(0, 5);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked: search still works, only without recents.
+  }
+}
+
+/**
+ * The ⌘K dialog: recent places, dashboard pages and settings (with G-key
+ * hints), matching orders/customers, and catalogue records. Always mounted
+ * and driven by `open`.
+ */
 export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
   const t = useMessages(shellMessages);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const term = query.trim();
+  const needle = term.toLowerCase();
 
   const { data } = useQuery({
     queryKey: ["global-search", term],
-    queryFn: () => apiData(getApiV1AdminSearch({ query: { q: term, limit: 5 } })),
+    queryFn: () => apiData(getApiV1AdminSearch({ query: { q: term, limit: MAX_RESULTS } })),
     enabled: open && term.length >= 2,
     placeholderData: keepPreviousData,
     retry: false,
     staleTime: 30_000,
   });
 
-  const destinations = useMemo(() => {
-    const links = nav.flatMap((item) => [
-      { key: item.key, to: item.to },
-      ...item.children.filter((child) => child.to !== item.to),
+  const places = useMemo<Entry[]>(() => {
+    const pages = nav.flatMap((item): Entry[] => [
+      { id: `nav:${item.to}`, label: t(item.key), to: item.to, icon: ArrowRight, hint: SHORTCUT_BY_PATH[item.to] },
+      ...item.children
+        .filter((child) => child.to !== item.to)
+        .map((child) => ({ id: `nav:${child.to}`, label: t(child.key), to: child.to, icon: ArrowRight })),
     ]);
-    const needle = term.toLowerCase();
-    return links.filter((link) => !needle || t(link.key).toLowerCase().includes(needle));
-  }, [nav, t, term]);
+    const settings = SETTINGS_DESTINATIONS.filter((item) => canOpen(item.to)).map((item): Entry => ({
+      id: `set:${item.to}`,
+      label: t(item.key),
+      to: item.to,
+      icon: Settings,
+      keywords: item.keywords,
+    }));
+    // With no query, offer the sections themselves (their G-key hints teach the shortcuts).
+    if (!needle) return pages.filter((entry) => nav.some((item) => item.to === entry.to));
+    return [...pages, ...settings].filter(
+      (entry) => entry.label.toLowerCase().includes(needle) || Boolean(entry.keywords?.toLowerCase().includes(needle)),
+    );
+  }, [canOpen, nav, needle, t]);
 
-  const go = (to: string, search?: Record<string, string>) => {
+  const records = useMemo<Entry[]>(() => {
+    if (term.length < 2) return [];
+    const results = data;
+    return [
+      ...(canOpen("/admin/orders") ? [{ id: "q:orders", label: t("ordersMatching", { q: term }), to: "/admin/orders", search: { search: term }, icon: Inbox }] : []),
+      ...(canOpen("/admin/customers") ? [{ id: "q:customers", label: t("customersMatching", { q: term }), to: "/admin/customers", search: { search: term }, icon: UserRound }] : []),
+      ...(results?.products ?? []).map((item) => ({ id: `p:${item.id}`, label: item.name, to: `/admin/products/${item.id}/edit`, icon: Tag })),
+      ...(results?.categories ?? []).map((item) => ({ id: `c:${item.id}`, label: item.name, to: `/admin/categories/${item.id}/edit`, icon: FolderTree })),
+      ...(results?.pages ?? []).map((item) => ({ id: `g:${item.id}`, label: item.title, to: `/admin/pages/${item.id}/edit`, icon: FileText })),
+    ];
+  }, [canOpen, data, t, term]);
+
+  const recent = useMemo<Entry[]>(
+    () => (open && !term ? readRecent().map((item) => ({ ...item, icon: Clock })) : []),
+    [open, term],
+  );
+
+  // A page whose name starts with the query wins ("coll" → Collections);
+  // then matching records; then other pages. Seven results in total.
+  const named = places.filter((entry) => needle && entry.label.toLowerCase().startsWith(needle));
+  const matches = [...named, ...records, ...places.filter((entry) => !named.includes(entry))].slice(0, term ? MAX_RESULTS : undefined);
+  const recordMatches = matches.filter((entry) => records.includes(entry));
+  const placeMatches = matches.filter((entry) => !records.includes(entry));
+
+  const go = (entry: Entry) => {
+    remember(entry);
     setOpen(false);
     setQuery("");
-    void navigate({ to, search: search as never });
+    void navigate({ to: entry.to, search: entry.search as never });
   };
 
-  const results = term.length >= 2 ? data : undefined;
+  const renderItem = (entry: Entry) => (
+    <CommandItem key={entry.id} value={entry.id} onSelect={() => go(entry)}>
+      <entry.icon aria-hidden />
+      <span className="flex-1 truncate">{entry.label}</span>
+      {entry.hint ? <kbd className="text-caption text-muted-foreground">{entry.hint}</kbd> : null}
+    </CommandItem>
+  );
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
+      {/* Drops from the top bar like Shopify's search (top of the screen on
+          phones, where the keyboard takes the bottom), same 12px radius. */}
+      <DialogContent
+        aria-describedby={undefined}
+        showCloseButton={false}
+        className="gap-0 overflow-hidden p-0 max-sm:bottom-auto max-sm:pb-0 max-sm:top-0 max-sm:rounded-b-2xl max-sm:rounded-t-none sm:top-2.5 sm:max-w-160 sm:translate-y-0 sm:rounded-xl"
+      >
         <DialogTitle className="sr-only">{t("search")}</DialogTitle>
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} loop>
           <CommandInput value={query} onValueChange={setQuery} placeholder={t("searchPlaceholder")} />
           <CommandList className="max-h-96">
             <CommandEmpty>{t("searchNothing")}</CommandEmpty>
-            {term.length >= 2 ? (
-              <CommandGroup>
-                {canOpen("/admin/orders") ? (
-                  <CommandItem value="orders-search" onSelect={() => go("/admin/orders", { search: term })}>
-                    <Inbox /> {t("ordersMatching", { q: term })}
-                  </CommandItem>
-                ) : null}
-                {canOpen("/admin/customers") ? (
-                  <CommandItem value="customers-search" onSelect={() => go("/admin/customers", { search: term })}>
-                    <UserRound /> {t("customersMatching", { q: term })}
-                  </CommandItem>
-                ) : null}
-              </CommandGroup>
-            ) : null}
-            {results?.products.length ? (
-              <CommandGroup heading={t("products")}>
-                {results.products.map((product) => (
-                  <CommandItem key={product.id} value={`p-${product.id}`} onSelect={() => go(`/admin/products/${product.id}/edit`)}>
-                    <Tag /> <span className="truncate">{product.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {results?.categories.length ? (
-              <CommandGroup heading={t("categories")}>
-                {results.categories.map((category) => (
-                  <CommandItem key={category.id} value={`c-${category.id}`} onSelect={() => go(`/admin/categories/${category.id}/edit`)}>
-                    <FolderTree /> <span className="truncate">{category.name}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {results?.pages.length ? (
-              <CommandGroup heading={t("pages")}>
-                {results.pages.map((page) => (
-                  <CommandItem key={page.id} value={`g-${page.id}`} onSelect={() => go(`/admin/pages/${page.id}/edit`)}>
-                    <FileText /> <span className="truncate">{page.title}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            {destinations.length ? (
-              <CommandGroup heading={t("goTo")}>
-                {destinations.map((link) => (
-                  <CommandItem key={link.to} value={`nav-${link.to}`} onSelect={() => go(link.to)}>
-                    {t(link.key)}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
+            {recent.length ? <CommandGroup heading={t("recent")}>{recent.map(renderItem)}</CommandGroup> : null}
+            {named.length ? null : recordMatches.length ? <CommandGroup heading={t("search")}>{recordMatches.map(renderItem)}</CommandGroup> : null}
+            {placeMatches.length ? <CommandGroup heading={t("goTo")}>{placeMatches.map(renderItem)}</CommandGroup> : null}
+            {named.length && recordMatches.length ? <CommandGroup heading={t("search")}>{recordMatches.map(renderItem)}</CommandGroup> : null}
           </CommandList>
         </Command>
+        <p className="hidden border-t px-3 py-2 text-caption text-muted-foreground sm:block">{t("searchHint")}</p>
       </DialogContent>
     </Dialog>
   );

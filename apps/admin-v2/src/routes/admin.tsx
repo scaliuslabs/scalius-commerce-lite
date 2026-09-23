@@ -58,15 +58,18 @@ function AdminLayout() {
   return (
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
       <AdminSessionSync />
-      <SidebarProvider className="h-svh flex-col overflow-hidden">
+      {/* The near-black frame: the top bar sits on it, and the light sheet
+          (sidebar + page) is tucked under it with a 12px top-left corner. */}
+      <SidebarProvider className="h-svh overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col bg-topbar">
         <AdminNavigationProgress />
         <AdminHeader user={user} nav={nav} canOpen={canOpen} showMenu={!inSettings} />
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-tl-xl bg-background">
           {inSettings ? null : <AppSidebar nav={nav} showSettings={canOpen(SETTINGS_ITEM.to)} />}
           <main
             id="admin-main-scroll"
             data-scroll-restoration-id="admin-main-scroll"
-            className="min-w-0 flex-1 overflow-y-auto bg-muted/40 px-3 py-4 sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
+            className="min-w-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
           >
             <div className="mx-auto max-w-7xl">
               <Outlet />
@@ -74,7 +77,8 @@ function AdminLayout() {
           </main>
         </div>
         {/* Portal target for form action bars — sits outside the scroll area. */}
-        <div id="form-action-bar-slot" />
+        <div id="form-action-bar-slot" className="bg-background" />
+        </div>
       </SidebarProvider>
       <DeferredToaster />
     </PermissionProvider>

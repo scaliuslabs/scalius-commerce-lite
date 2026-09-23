@@ -25,14 +25,12 @@ export function DataTablePagination<TData extends TableRowData>({
   const total = table.getRowCount();
   if (total === 0) return null;
 
-  const selected = table.getSelectedRowModel().rows.length;
   const start = pageIndex * pageSize + 1;
   const end = Math.min((pageIndex + 1) * pageSize, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-body text-muted-foreground">
       <div className="flex items-center gap-2">
-        {selected > 0 ? <span className="font-medium text-foreground">{t("selected", { count: selected })}</span> : null}
         <span>{t("showing", { start, end, total })}</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

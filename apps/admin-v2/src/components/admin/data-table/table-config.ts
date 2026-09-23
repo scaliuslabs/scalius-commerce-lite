@@ -26,6 +26,8 @@ import {
  */
 export interface ServerColumnMeta {
   mobile?: "primary" | "secondary" | "status";
+  /** Money, counts and quantities: right-aligned with tabular figures. */
+  numeric?: boolean;
 }
 
 /**

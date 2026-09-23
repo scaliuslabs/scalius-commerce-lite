@@ -37,7 +37,7 @@ function DataTableBodyRowInner<TData extends TableRowData>({
     >
       {includeDragColumn && <TableCell className="w-[40px] px-2" />}
       {cells.map((cell) => (
-        <TableCell key={cell.id}>
+        <TableCell key={cell.id} className={cell.column.columnDef.meta?.numeric ? "text-right" : undefined}>
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </TableCell>
       ))}

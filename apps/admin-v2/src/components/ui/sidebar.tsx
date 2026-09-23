@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
+import { ChevronRight } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
@@ -114,7 +115,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & {
 Sidebar.displayName = "Sidebar";
 
 const SidebarFooter = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(({ className, ...props }, ref) => (
-  <div ref={ref} data-sidebar="footer" className={cn("flex flex-col gap-2 p-2", className)} {...props} />
+  <div ref={ref} data-sidebar="footer" className={cn("flex flex-col px-2.5 py-3", className)} {...props} />
 ));
 SidebarFooter.displayName = "SidebarFooter";
 
@@ -133,6 +134,32 @@ const SidebarGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"
 ));
 SidebarGroup.displayName = "SidebarGroup";
 
+/**
+ * Shopify's small group label ("Sales channels ›"): 24px, sentence case, a
+ * chevron that turns when the group is open; it toggles the group's items.
+ */
+const SidebarGroupLabel = React.forwardRef<
+  HTMLButtonElement,
+  Omit<React.ComponentProps<"button">, "onToggle"> & { open: boolean; onOpenChange: (open: boolean) => void }
+>(({ open, onOpenChange, className, children, ...props }, ref) => (
+  <button
+    ref={ref}
+    type="button"
+    data-sidebar="group-label"
+    aria-expanded={open}
+    onClick={() => onOpenChange(!open)}
+    className={cn(
+      "flex h-6 w-full items-center gap-1 rounded-lg px-2 text-left text-body text-muted-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring [&>svg]:size-3.5 [&>svg]:shrink-0 aria-expanded:[&>svg]:rotate-90",
+      className,
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight aria-hidden />
+  </button>
+));
+SidebarGroupLabel.displayName = "SidebarGroupLabel";
+
 const SidebarMenu = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(({ className, ...props }, ref) => (
   <ul ref={ref} data-sidebar="menu" className={cn("flex w-full min-w-0 flex-col gap-0.5", className)} {...props} />
 ));
@@ -146,20 +173,28 @@ SidebarMenuItem.displayName = "SidebarMenuItem";
 /**
  * Shopify nav row: 28px (44px on phones), 8px radius, instant hover fill, the
  * current page on a near-white pill with no weight change, 2px focus ring.
+ * Icons are "filled" at rest and switch to the outline glyph on the current or
+ * open section (global.css, keyed on data-active / data-open).
  */
 const menuButtonClassName =
-  "flex h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg pl-2 pr-1 text-left text-body text-sidebar-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground sm:h-7 [&>span:last-child]:truncate [&>svg]:size-5 [&>svg]:shrink-0";
+  "flex h-11 w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg pl-2 pr-1 text-left text-body text-sidebar-foreground outline-none hover:bg-sidebar-hover focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground md:h-7 [&>span:last-child]:truncate [&>svg]:size-5 [&>svg]:shrink-0";
 
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
-  React.ComponentProps<"button"> & { asChild?: boolean; isActive?: boolean }
->(({ asChild = false, isActive = false, className, ...props }, ref) => {
+  React.ComponentProps<"button"> & {
+    asChild?: boolean;
+    isActive?: boolean;
+    /** The section is open (it or one of its sub-items is the current page). */
+    isOpen?: boolean;
+  }
+>(({ asChild = false, isActive = false, isOpen = false, className, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
       ref={ref}
       data-sidebar="menu-button"
       data-active={isActive}
+      data-open={isOpen || isActive}
       className={cn(menuButtonClassName, className)}
       {...props}
     />
@@ -198,6 +233,7 @@ export {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
