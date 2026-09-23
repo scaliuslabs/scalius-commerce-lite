@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,26 +9,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Loader2 } from "lucide-react";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Names the object, as a question: "Delete “Cotton panjabi”?" */
   title: string;
+  /** Leads with the consequence. */
   description: string;
-  /** Text for the confirm button. Default: "Confirm" */
   confirmLabel?: string;
-  /** Text for the cancel button. Default: "Cancel" */
   cancelLabel?: string;
-  /** Variant affects confirm button styling. Default: "destructive" */
+  /** Destructive by default: most confirmations guard something that can't be undone. */
   variant?: "destructive" | "default";
-  /** Whether the action is in progress (disables buttons, shows spinner) */
+  /** While the action runs both buttons are disabled and the confirm button shows a spinner. */
   isLoading?: boolean;
-  /** Loading text shown on the confirm button while isLoading is true. Defaults to "Processing..." */
   loadingLabel?: string;
-  /** Called when user confirms */
   onConfirm: () => void;
-  /** Additional className for AlertDialogContent */
   className?: string;
 }
 
@@ -36,14 +35,16 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   variant = "destructive",
   isLoading = false,
-  loadingLabel = "Processing...",
+  loadingLabel,
   onConfirm,
   className,
 }: ConfirmDialogProps) {
+  const t = useMessages(resourceMessages);
+  const confirm = confirmLabel ?? t("confirm");
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className={className}>
@@ -52,93 +53,13 @@ export function ConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isLoading}>
-            {cancelLabel}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            variant={variant}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {loadingLabel}
-              </>
-            ) : (
-              confirmLabel
-            )}
+          <AlertDialogCancel disabled={isLoading}>{cancelLabel ?? t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm} variant={variant} disabled={isLoading}>
+            {isLoading ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
+            {isLoading ? (loadingLabel ?? confirm) : confirm}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Convenience presets
-// ---------------------------------------------------------------------------
-
-interface PermanentDeleteConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Name shown in the dialog, e.g. "product", "variant" */
-  entityName: string;
-  isLoading?: boolean;
-  onConfirm: () => void;
-}
-
-/** Permanent delete confirmation -- cannot be undone. */
-export function PermanentDeleteConfirmDialog({
-  open,
-  onOpenChange,
-  entityName,
-  isLoading,
-  onConfirm,
-}: PermanentDeleteConfirmDialogProps) {
-  return (
-    <ConfirmDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={`Delete ${entityName} permanently?`}
-      description={`This action cannot be undone. This will permanently delete the ${entityName.toLowerCase()} from your database.`}
-      confirmLabel="Yes, delete permanently"
-      loadingLabel="Deleting..."
-      variant="destructive"
-      isLoading={isLoading}
-      onConfirm={onConfirm}
-    />
-  );
-}
-
-interface RestoreConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Name shown in the dialog, e.g. "language", "product" */
-  entityName: string;
-  isLoading?: boolean;
-  onConfirm: () => void;
-}
-
-/** Restore confirmation -- non-destructive action. */
-export function RestoreConfirmDialog({
-  open,
-  onOpenChange,
-  entityName,
-  isLoading,
-  onConfirm,
-}: RestoreConfirmDialogProps) {
-  return (
-    <ConfirmDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={`Restore ${entityName}?`}
-      description={`Are you sure you want to restore the ${entityName.toLowerCase()}?`}
-      confirmLabel="Restore"
-      loadingLabel="Restoring..."
-      variant="default"
-      isLoading={isLoading}
-      onConfirm={onConfirm}
-    />
   );
 }

@@ -1,237 +1,150 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
+import { useRef, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { postApiV1Setup } from "@scalius/api-client/sdk";
 import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
+import { authClient } from "@/lib/auth-client";
 import { apiData } from "@/lib/api";
 import { storePendingTwoFactorMethods } from "@/lib/two-factor-pending";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Loader2, Mail, Lock, User, AlertCircle, KeyRound } from "lucide-react";
-import { useHydrated } from "@/hooks/use-hydrated";
+import { useMessages } from "~/i18n";
+import { authMessages, type AuthMessageKey } from "~/i18n/auth";
+import { authFailureMessage, emailError, newPasswordError, type AuthMessage } from "./auth-error";
+import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
 
-interface SignInResponse {
-  error?: { message?: string } | null;
-  twoFactorRedirect?: boolean;
-  twoFactorMethods?: readonly unknown[];
-}
+type FieldName = "name" | "email" | "password" | "confirmPassword" | "setupKey";
 
+/** The first administrator of a new store. Optionally gated by a setup key from the operator. */
 export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?: boolean }) {
+  const t = useMessages(authMessages);
   const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [setupToken, setSetupToken] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [values, setValues] = useState<Record<FieldName, string>>({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    setupKey: "",
+  });
+  const [errors, setErrors] = useState<Partial<Record<FieldName, AuthMessageKey | null>>>({});
+  const [failure, setFailure] = useState<AuthMessage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const isHydrated = useHydrated();
 
-  const handleCreateAccount = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setError(null);
+  function focusField(name: FieldName) {
+    formRef.current?.querySelector<HTMLInputElement>(`#setup-${name}`)?.focus();
+  }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 12) {
-      setError("Password must be at least 12 characters");
-      return;
-    }
-
-    if (setupTokenRequired && !setupToken.trim()) {
-      setError("This deployment requires the setup token from your operator.");
-      return;
-    }
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isLoading) return;
+    const next: Partial<Record<FieldName, AuthMessageKey | null>> = {
+      name: values.name.trim() ? null : "nameRequired",
+      email: emailError(values.email),
+      password: newPasswordError(values.password),
+      confirmPassword: values.confirmPassword === values.password ? null : "passwordsDontMatch",
+      setupKey: setupTokenRequired && !values.setupKey.trim() ? "setupKeyRequired" : null,
+    };
+    setErrors(next);
+    setFailure(null);
+    const firstInvalid = (Object.keys(next) as FieldName[]).find((name) => next[name]);
+    if (firstInvalid) return focusField(firstInvalid);
 
     setIsLoading(true);
-
+    const email = values.email.trim();
     try {
-      try {
-        // The setup token travels as a header, never in the body or URL.
-        await apiData(postApiV1Setup({
-          body: { name, email, password },
-          headers: setupTokenRequired
-            ? { [ADMIN_SETUP_TOKEN_HEADER]: setupToken.trim() }
-            : undefined,
-        }));
-      } catch (setupError: unknown) {
-        setError(setupError instanceof Error ? setupError.message : "Failed to create account");
-        setIsLoading(false);
-        return;
+      // The setup key travels as a header, never in the body or the URL.
+      await apiData(
+        postApiV1Setup({
+          body: { name: values.name.trim(), email, password: values.password },
+          headers: setupTokenRequired ? { [ADMIN_SETUP_TOKEN_HEADER]: values.setupKey.trim() } : undefined,
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (/setup token/i.test(message)) {
+        setErrors({ setupKey: "setupKeyInvalid" });
+        focusField("setupKey");
+      } else {
+        setFailure(
+          authFailureMessage(error, ({ status }) =>
+            status === 403 ? "adminExists" : status === 409 ? "setupBusy" : null,
+          ),
+        );
       }
+      setIsLoading(false);
+      return;
+    }
 
-      const signInResult = (await authClient.signIn.email({
-        email,
-        password,
-      })) as SignInResponse;
-
-      if (signInResult.error) {
-        // If sign-in fails, redirect to login page
-        console.error("Sign in after setup failed:", signInResult.error);
-        await navigate({ to: "/auth/login" });
-        return;
-      }
-
-      if (signInResult.twoFactorRedirect) {
-        storePendingTwoFactorMethods(signInResult.twoFactorMethods);
+    // The account exists now; if signing in fails, the sign-in page takes over.
+    try {
+      const { data, error } = await authClient.signIn.email({ email, password: values.password });
+      const result = data as { twoFactorRedirect?: boolean; twoFactorMethods?: readonly unknown[] } | null;
+      if (!error && result?.twoFactorRedirect) {
+        storePendingTwoFactorMethods(result.twoFactorMethods);
         await navigate({ to: "/auth/two-factor" });
         return;
       }
-
-      await navigate({ to: "/admin" });
-      return;
-    } catch (err: unknown) {
-      console.error("Setup error:", err);
-      setError("An unexpected error occurred. Please try again.");
-      setIsLoading(false);
+      await navigate({ to: error ? "/auth/login" : "/admin" });
+    } catch {
+      await navigate({ to: "/auth/login" });
     }
-  };
+  }
+
+  function field(name: FieldName) {
+    const message = errors[name] ? t(errors[name]) : null;
+    return {
+      message,
+      input: {
+        id: `setup-${name}`,
+        value: values[name],
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+          const value = event.target.value;
+          setValues((current) => ({ ...current, [name]: value }));
+          if (errors[name]) setErrors((current) => ({ ...current, [name]: null }));
+        },
+        ...describedBy(`setup-${name}`, message, name === "password" ? t("passwordHint") : name === "setupKey" ? t("setupKeyHint") : undefined),
+      },
+    };
+  }
+
+  const name = field("name");
+  const email = field("email");
+  const password = field("password");
+  const confirm = field("confirmPassword");
+  const setupKey = field("setupKey");
 
   return (
-    <Card className="w-full shadow-lg border-border/50 bg-card/95 backdrop-blur-sm">
-      <CardHeader className="space-y-1 text-center">
-        <CardTitle className="text-2xl font-bold tracking-tight">
-          Welcome to Scalius Commerce
-        </CardTitle>
-        <CardDescription>
-          Create your admin account to get started
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          method="post"
-          action="/auth/setup"
-          onSubmit={handleCreateAccount}
-          className="space-y-4"
-          noValidate
-        >
-          {error && (
-            <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="name"
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="pl-10"
-                required
-                disabled={!isHydrated || isLoading}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="admin@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
-                required
-                disabled={!isHydrated || isLoading}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create a strong password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10"
-                required
-                disabled={!isHydrated || isLoading}
-                minLength={12}
-              />
-            </div>
-          </div>
-
-          {setupTokenRequired ? (
-            <div className="space-y-2">
-              <Label htmlFor="setupToken">Setup token</Label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="setupToken"
-                  type="password"
-                  placeholder="Paste the setup token from your operator"
-                  value={setupToken}
-                  onChange={(e) => setSetupToken(e.target.value)}
-                  className="pl-10"
-                  autoComplete="off"
-                  required
-                  disabled={!isHydrated || isLoading}
-                />
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                This deployment gates first-admin setup. The token is sent once as a header and never stored.
-              </p>
-            </div>
+    <div className="flex flex-col gap-6">
+      <AuthHeader title={t("setupTitle")} description={t("setupDescription")} />
+      <form ref={formRef} method="post" action="/auth/setup" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <AuthAlert message={failure}>
+          {failure?.key === "adminExists" ? (
+            <Link to="/auth/login" className={linkClassName}>
+              {t("signIn")}
+            </Link>
           ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="pl-10"
-                required
-                disabled={!isHydrated || isLoading}
-                minLength={12}
-              />
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={!isHydrated || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating account...
-              </>
-            ) : (
-              "Create Admin Account"
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        </AuthAlert>
+        <Field id="setup-name" label={t("name")} error={name.message}>
+          <Input {...name.input} autoComplete="name" autoFocus />
+        </Field>
+        <Field id="setup-email" label={t("email")} error={email.message}>
+          <Input {...email.input} type="email" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} />
+        </Field>
+        <Field id="setup-password" label={t("password")} error={password.message} hint={t("passwordHint")}>
+          <PasswordInput {...password.input} autoComplete="new-password" />
+        </Field>
+        <Field id="setup-confirmPassword" label={t("confirmPassword")} error={confirm.message}>
+          <PasswordInput {...confirm.input} autoComplete="new-password" />
+        </Field>
+        {setupTokenRequired ? (
+          <Field id="setup-setupKey" label={t("setupKey")} error={setupKey.message} hint={t("setupKeyHint")}>
+            <PasswordInput {...setupKey.input} autoComplete="off" />
+          </Field>
+        ) : null}
+        <Button type="submit" className="w-full" loading={isLoading}>
+          {t("createAccount")}
+        </Button>
+      </form>
+    </div>
   );
 }

@@ -1,22 +1,8 @@
-// src/components/auth/TwoFactorForm.tsx
-// Two-factor verification form for login - supports TOTP, Email OTP, and backup codes
-// Auto-detects user's preferred 2FA method
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Loader2, AlertCircle, KeyRound, Mail, Smartphone, Shield, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { getApiV1AdminAuth2FaInfo } from "@scalius/api-client/sdk";
+import { authClient } from "@/lib/auth-client";
 import { apiData } from "@/lib/api";
 import {
   chooseInitialTwoFactorMethod,
@@ -25,344 +11,250 @@ import {
   readPendingTwoFactorMethods,
   type VerifyTwoFactorMethod,
 } from "@/lib/two-factor-pending";
-import { useHydrated } from "@/hooks/use-hydrated";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useMessages } from "~/i18n";
+import { authMessages, type AuthMessageKey } from "~/i18n/auth";
+import { authFailureMessage, type AuthFailure, type AuthMessage } from "./auth-error";
+import {
+  AuthAlert,
+  AuthHeader,
+  CodeInput,
+  Field,
+  SignOutButton,
+  describedBy,
+  linkClassName,
+  useResendCooldown,
+} from "./auth-ui";
 
-interface TwoFactorFormProps {
-  defaultMethod?: "totp" | "email";
+const METHOD_LINKS: Record<VerifyTwoFactorMethod, AuthMessageKey> = {
+  totp: "useAuthenticator",
+  email: "useEmail",
+  backup: "useBackup",
+};
+
+function codeFailure({ code, status }: AuthFailure, method: VerifyTwoFactorMethod): AuthMessageKey | null {
+  if (code === "INVALID_TWO_FACTOR_COOKIE") return "signInExpired";
+  if (code === "OTP_HAS_EXPIRED") return "codeExpired";
+  if (code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE") return "codeTooManyAttempts";
+  if (code.startsWith("INVALID") || status === 400 || status === 401) {
+    return method === "backup" ? "backupInvalid" : "codeInvalid";
+  }
+  return null;
 }
 
-export function TwoFactorForm({ defaultMethod }: TwoFactorFormProps) {
+/**
+ * The second sign-in step. Offers the methods the account has (from the
+ * sign-in response, or the account's preference) plus backup codes. Email
+ * codes are sent on arrival; a new one can be requested after 30 seconds.
+ */
+export function TwoFactorForm() {
+  const t = useMessages(authMessages);
   const navigate = useNavigate();
-  const [initialPendingMethods] = useState(() => readPendingTwoFactorMethods());
+  const busy = useRef(false);
+  const backupRef = useRef<HTMLInputElement>(null);
+  const [pendingMethods] = useState(readPendingTwoFactorMethods);
   const [method, setMethod] = useState<VerifyTwoFactorMethod>(() =>
-    chooseInitialTwoFactorMethod({
-      defaultMethod,
-      pendingMethods: initialPendingMethods,
-    }),
+    chooseInitialTwoFactorMethod({ pendingMethods }),
   );
+  const [ready, setReady] = useState(pendingMethods.length > 0);
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<AuthMessageKey | null>(null);
+  const [failure, setFailure] = useState<AuthMessage | null>(null);
+  const [notice, setNotice] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(
-    !defaultMethod && initialPendingMethods.length === 0,
-  );
-  const [userEmail, setUserEmail] = useState<string>("");
-  const isHydrated = useHydrated();
-  const autoEmailOtpSentRef = useRef(false);
+  const { seconds: resendIn, start: startCooldown, reset: resetCooldown } = useResendCooldown();
+  const autoSent = useRef(false);
 
-  const sendEmailOtp = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await authClient.twoFactor.sendOtp();
-      if (result?.error) {
-        setError(result.error.message || "Failed to send verification code");
-        return;
-      }
-      setEmailSent(true);
-      toast.success("Verification code sent to your email");
-    } catch {
-      setError("Failed to send verification code");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const autoSendEmailOtp = useCallback(() => {
-    if (autoEmailOtpSentRef.current) return;
-    autoEmailOtpSentRef.current = true;
-    void sendEmailOtp();
-  }, [sendEmailOtp]);
-
-  // Fetch user's preferred 2FA method on mount if not provided
-  useEffect(() => {
-    if (defaultMethod) {
-      if (defaultMethod === "email") {
-        autoSendEmailOtp();
-      }
-      return;
-    }
-
-    const pendingMethods = initialPendingMethods;
-    if (pendingMethods.length > 0) {
-      const pendingMethod = chooseInitialTwoFactorMethod({ pendingMethods });
-      setMethod(pendingMethod);
-      setIsInitializing(false);
-      if (pendingMethod === "email") {
-        autoSendEmailOtp();
-      }
-      return;
-    }
-
-    async function fetchTwoFactorInfo() {
+  const sendEmailCode = useCallback(
+    async (announce: boolean) => {
+      setFailure(null);
+      setNotice(false);
+      startCooldown();
+      const failed = (error: unknown) => {
+        setFailure(authFailureMessage(error, (failure) => codeFailure(failure, "email") ?? "sendFailed"));
+        resetCooldown();
+      };
       try {
-        const data = await apiData(getApiV1AdminAuth2FaInfo());
-        if (data.method) {
-          const preferredMethod = getPreferredMethod(data.method);
-          setMethod(preferredMethod);
-          setUserEmail(data.email || "");
-          if (preferredMethod === "email") {
-            autoSendEmailOtp();
-          }
-        }
-      } catch {
-        // Leave the manual email button available if the authenticated lookup is unavailable.
-      } finally {
-        setIsInitializing(false);
+        const { error } = await authClient.twoFactor.sendOtp();
+        if (error) return failed(error);
+        setNotice(announce);
+      } catch (error) {
+        failed(error);
       }
-    }
+    },
+    [startCooldown, resetCooldown],
+  );
 
-    void fetchTwoFactorInfo();
-  }, [autoSendEmailOtp, defaultMethod, initialPendingMethods]);
+  useEffect(() => {
+    if (ready) return;
+    // Arrived without the sign-in response (a reload): ask the account which method it prefers.
+    let active = true;
+    apiData(getApiV1AdminAuth2FaInfo())
+      .then((info) => {
+        if (!active) return;
+        if (info.method) setMethod(getPreferredMethod(info.method));
+        setEmail(info.email || "");
+      })
+      .catch(() => {
+        // The default method still works; the account lookup is only a preference.
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ready]);
 
-  const handleVerify = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsLoading(true);
+  useEffect(() => {
+    if (!ready || method !== "email" || autoSent.current) return;
+    autoSent.current = true;
+    void sendEmailCode(false);
+  }, [ready, method, sendEmailCode]);
 
-    try {
-      const verifyResult = method === "backup"
-        ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice: false })
-        : method === "email"
-          ? await authClient.twoFactor.verifyOtp({ code, trustDevice: false })
-          : await authClient.twoFactor.verifyTotp({ code, trustDevice: false });
-
-      if (verifyResult.error) {
-        setError(verifyResult.error.message || "Invalid verification code");
-        setIsLoading(false);
-        return;
-      }
-
-      clearPendingTwoFactorMethods();
-
-      await navigate({ to: "/admin" });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
-      setIsLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    clearPendingTwoFactorMethods();
-    await authClient.signOut();
-    await navigate({ to: "/auth/login" });
-  };
-
-  const switchMethod = (newMethod: VerifyTwoFactorMethod) => {
-    setMethod(newMethod);
+  function switchMethod(next: VerifyTwoFactorMethod) {
+    setMethod(next);
     setCode("");
-    setError(null);
-    setEmailSent(false);
-  };
+    setFieldError(null);
+    setFailure(null);
+    setNotice(false);
+  }
 
-  // Loading state while fetching 2FA info
-  if (isInitializing) {
+  // The sixth digit submits before React re-renders, so the code arrives as an argument.
+  async function verify(entered: string) {
+    if (busy.current) return;
+    const typed = entered.trim();
+    const missing = method === "backup" ? (typed ? null : "backupRequired") : typed.length === 6 ? null : "codeIncomplete";
+    setFieldError(missing);
+    setFailure(null);
+    setNotice(false);
+    if (missing) return;
+
+    busy.current = true;
+    setIsLoading(true);
+    const failed = (error: unknown) => {
+      setFailure(authFailureMessage(error, (failure) => codeFailure(failure, method)));
+      setCode("");
+      busy.current = false;
+      setIsLoading(false);
+      (method === "backup" ? backupRef.current : document.getElementById("code"))?.focus();
+    };
+    try {
+      // Trusted devices stay off: every sign-in asks for the second step.
+      const body = { code: typed, trustDevice: false };
+      const { error } =
+        method === "backup"
+          ? await authClient.twoFactor.verifyBackupCode(body)
+          : method === "email"
+            ? await authClient.twoFactor.verifyOtp(body)
+            : await authClient.twoFactor.verifyTotp(body);
+      if (error) return failed(error);
+      clearPendingTwoFactorMethods();
+      await navigate({ to: "/admin", replace: true });
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void verify(code);
+  }
+
+  const title = t("twoFactorTitle");
+  if (!ready) {
     return (
-      <Card className="w-full border-0 shadow-none bg-transparent">
-        <CardContent className="py-16">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-              <Shield className="h-8 w-8 text-muted-foreground animate-pulse" />
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Preparing verification...</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={title} />
+        <div role="status" aria-label={t("codeLabel")} className="flex justify-center py-6">
+          <Loader2 aria-hidden="true" className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
     );
   }
 
+  const description =
+    method === "totp"
+      ? t("totpDescription")
+      : method === "backup"
+        ? t("backupDescription")
+        : email
+          ? t("emailDescription", { email })
+          : t("emailDescriptionGeneric");
+  const codeMessage = fieldError ? t(fieldError) : null;
+  // Only the methods this account has, plus backup codes, which every account gets.
+  const available: VerifyTwoFactorMethod[] = pendingMethods.length > 0 ? [...pendingMethods, "backup"] : ["totp", "email", "backup"];
+
   return (
-    <Card className="w-full border-0 shadow-none bg-transparent">
-      <CardHeader className="space-y-4 text-center px-0 pt-0">
-        <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-          {method === "email" ? (
-            <Mail className="h-8 w-8 text-foreground" />
-          ) : method === "backup" ? (
-            <KeyRound className="h-8 w-8 text-foreground" />
-          ) : (
-            <Smartphone className="h-8 w-8 text-foreground" />
-          )}
-        </div>
-        <div className="space-y-2">
-          <CardTitle className="text-2xl font-semibold tracking-tight">
-            {method === "email"
-              ? "Check your email"
-              : method === "backup"
-                ? "Enter backup code"
-                : "Enter verification code"}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {method === "email"
-              ? emailSent
-                ? `We sent a code to ${userEmail || "your email"}`
-                : "We'll send a verification code to your email"
-              : method === "backup"
-                ? "Enter one of your saved backup codes"
-                : "Enter the 6-digit code from your authenticator app"}
-          </CardDescription>
-        </div>
-      </CardHeader>
-
-      <CardContent className="px-0 pb-0">
-        <form
-          method="post"
-          action="/auth/two-factor"
-          onSubmit={handleVerify}
-          className="space-y-6"
-          noValidate
-        >
-          {error && (
-            <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {method === "email" && !emailSent ? (
-            <Button
-              type="button"
-              onClick={sendEmailOtp}
-              className="w-full h-11"
-              disabled={!isHydrated || isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                "Send verification code"
-              )}
-            </Button>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="code" className="sr-only">
-                  {method === "backup" ? "Backup Code" : "Verification Code"}
-                </Label>
-                <Input
-                  id="code"
-                  type="text"
-                  inputMode={method === "backup" ? "text" : "numeric"}
-                  placeholder={method === "backup" ? "Enter backup code" : "000000"}
-                  value={code}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (method === "backup") {
-                      setCode(val);
-                    } else {
-                      setCode(val.replace(/\D/g, ""));
-                    }
-                  }}
-                  className={
-                    method === "backup"
-                      ? "text-center text-base tracking-widest font-mono h-14"
-                      : "text-center text-2xl tracking-[0.5em] font-mono h-14"
-                  }
-                  maxLength={method === "backup" ? 12 : 6}
-                  required
-                  disabled={!isHydrated || isLoading}
-                  autoFocus
-                  autoComplete={method === "backup" ? "off" : "one-time-code"}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-11"
-                disabled={
-                  !isHydrated ||
-                  isLoading ||
-                  (method !== "backup" && code.length !== 6)
-                }
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Verify"
-                )}
-              </Button>
-
-              {method === "email" && (
-                <button
-                  type="button"
-                  onClick={sendEmailOtp}
-                  disabled={!isHydrated || isLoading}
-                  className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Didn't receive the code? <span className="underline">Resend</span>
-                </button>
-              )}
-            </>
-          )}
-
-          <div className="pt-4 border-t">
-            <p className="text-xs text-muted-foreground text-center mb-4">
-              Or use a different method
-            </p>
-            <div className="flex gap-2">
-              {method !== "totp" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => switchMethod("totp")}
-                  disabled={!isHydrated || isLoading}
-                  className="flex-1 h-10"
-                  size="sm"
-                >
-                  <Smartphone className="h-4 w-4 mr-2" />
-                  Authenticator
-                </Button>
-              )}
-              {method !== "email" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => switchMethod("email")}
-                  disabled={!isHydrated || isLoading}
-                  className="flex-1 h-10"
-                  size="sm"
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Email
-                </Button>
-              )}
-              {method !== "backup" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => switchMethod("backup")}
-                  disabled={!isHydrated || isLoading}
-                  className="flex-1 h-10"
-                  size="sm"
-                >
-                  <KeyRound className="h-4 w-4 mr-2" />
-                  Backup
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={!isHydrated || isLoading}
-              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to sign in
+    <div className="flex flex-col gap-6">
+      <AuthHeader title={title} description={description} />
+      <form method="post" action="/auth/two-factor" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <AuthAlert message={failure}>
+          {failure?.key === "signInExpired" ? <SignOutButton label="backToSignIn" /> : null}
+        </AuthAlert>
+        {method === "backup" ? (
+          <Field id="backup-code" label={t("backupCodeLabel")} error={codeMessage}>
+            <Input
+              ref={backupRef}
+              id="backup-code"
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value);
+                setFieldError(null);
+              }}
+              {...describedBy("backup-code", codeMessage)}
+            />
+          </Field>
+        ) : (
+          <Field id="code" label={t("codeLabel")} error={codeMessage}>
+            <CodeInput
+              key={method}
+              id="code"
+              value={code}
+              autoFocus
+              invalid={Boolean(codeMessage)}
+              describedById={codeMessage ? "code-message" : undefined}
+              onChange={(next) => {
+                setCode(next);
+                setFieldError(null);
+              }}
+              onComplete={(full) => void verify(full)}
+            />
+          </Field>
+        )}
+        {method === "email" ? (
+          <p className="text-body text-muted-foreground" aria-live="polite">
+            {notice ? `${t("codeSent")} ` : null}
+            {resendIn > 0 ? (
+              t("resendIn", { count: resendIn })
+            ) : (
+              <button type="button" className={linkClassName} onClick={() => void sendEmailCode(true)}>
+                {t("resendCode")}
+              </button>
+            )}
+          </p>
+        ) : null}
+        <Button type="submit" className="w-full" loading={isLoading}>
+          {t("verify")}
+        </Button>
+      </form>
+      <div className="flex flex-col items-start gap-2 border-t pt-4">
+        {available
+          .filter((option) => option !== method)
+          .map((option) => (
+            <button key={option} type="button" className={linkClassName} onClick={() => switchMethod(option)}>
+              {t(METHOD_LINKS[option])}
             </button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+          ))}
+        <SignOutButton label="useAnotherAccount" />
+      </div>
+    </div>
   );
 }

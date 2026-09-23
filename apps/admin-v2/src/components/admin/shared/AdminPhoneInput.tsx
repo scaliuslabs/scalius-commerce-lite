@@ -15,6 +15,8 @@ import {
   getApiV1AdminSettingsAllowedCountries,
 } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
+import { useMessages } from "~/i18n";
+import { appMessages } from "~/i18n/app";
 
 type NativePhoneInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
@@ -41,6 +43,7 @@ export const AdminPhoneInput = React.forwardRef<
   },
   ref,
 ) {
+  const t = useMessages(appMessages);
   const policyQuery = useQuery({
     queryKey: queryKeys.settings.allowedCountries(),
     queryFn: () => apiData(getApiV1AdminSettingsAllowedCountries()),
@@ -67,14 +70,13 @@ export const AdminPhoneInput = React.forwardRef<
     return (
       <div
         role="status"
-        aria-label="Loading country policy"
         className={cn(
-          "flex h-11 w-full items-center gap-2 rounded-md border border-input px-3 text-sm text-muted-foreground sm:h-9",
+          "flex h-11 w-full items-center gap-2 rounded-lg border border-input px-3 text-body text-muted-foreground sm:h-9",
           className,
         )}
       >
         <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Loading…
+        {t("loading")}
       </div>
     );
   }
@@ -84,16 +86,12 @@ export const AdminPhoneInput = React.forwardRef<
       <Button
         type="button"
         variant="outline"
-        className={cn("h-11 w-full justify-start gap-2 sm:h-9", className)}
+        className={cn("w-full justify-start", className)}
         onClick={() => void policyQuery.refetch()}
-        disabled={policyQuery.isFetching}
+        loading={policyQuery.isFetching}
       >
-        {policyQuery.isFetching ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        ) : (
-          <RefreshCw className="size-4" aria-hidden="true" />
-        )}
-        Retry country policy
+        <RefreshCw aria-hidden="true" />
+        {t("phoneCountriesFailed")}
       </Button>
     );
   }
@@ -116,7 +114,7 @@ export const AdminPhoneInput = React.forwardRef<
       disabled={disabled}
       autoComplete="tel"
       className={cn(
-        "flex h-11 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm sm:h-9 [&_.PhoneInputCountry]:h-full [&_.PhoneInputCountrySelect]:h-full [&_.PhoneInputInput]:h-full",
+        "flex h-11 w-full rounded-lg border border-input bg-card px-3 text-body-lg sm:h-9 sm:text-body [&_.PhoneInputCountry]:h-full [&_.PhoneInputCountrySelect]:h-full [&_.PhoneInputInput]:h-full",
         className,
       )}
     />

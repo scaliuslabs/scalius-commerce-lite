@@ -1,26 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorForm } from "~/components/auth/TwoFactorForm";
+import { translate } from "~/i18n";
+import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/two-factor")({
   beforeLoad: async () => {
+    // Without a session, Better Auth's pending-2FA cookie carries the sign-in.
     const { session } = await readDashboardSession();
-
-    if (session?.user) {
-      // 2FA not enabled or already verified -> go to admin
-      if (!session.user.twoFactorEnabled || session.twoFactorVerified) {
-        throw redirect({ to: "/admin" });
-      }
-      // User has session but needs 2FA verification -> show form
+    if (session && (!session.user.twoFactorEnabled || session.twoFactorVerified)) {
+      throw redirect({ to: "/admin" });
     }
-    // No session: allow access (Better Auth uses cookies for pending 2FA state)
   },
-  head: () => ({
-    meta: [{ title: "Two-Factor Authentication - Scalius Admin" }],
-  }),
-  component: TwoFactorPage,
+  head: () => ({ meta: [{ title: `${translate(authMessages, "twoFactorTitle")} · Scalius` }] }),
+  component: TwoFactorForm,
 });
-
-function TwoFactorPage() {
-  return <TwoFactorForm />;
-}

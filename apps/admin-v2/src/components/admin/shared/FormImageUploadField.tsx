@@ -87,7 +87,7 @@ export function FormImageUploadField({
           )}
         >
           <ImageIcon className="h-8 w-8 mb-2 opacity-40" />
-          <span className="text-xs">{placeholder}</span>
+          <span className="text-body">{placeholder}</span>
         </div>
       )}
       <MediaManager
