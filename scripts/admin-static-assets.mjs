@@ -7,6 +7,8 @@ export const ADMIN_IMMUTABLE_CACHE_CONTROL =
 export const ADMIN_IMMUTABLE_HEADER_PATTERNS = [
   "/assets/immutable/*.js",
   "/assets/immutable/*.css",
+  // Self-hosted fonts are emitted with content hashes like the scripts.
+  "/assets/immutable/*.woff2",
 ];
 export const ADMIN_HASHED_SCRIPT_OR_STYLE_PATTERN =
   /^assets\/immutable\/(?:.+\/)?[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/;
