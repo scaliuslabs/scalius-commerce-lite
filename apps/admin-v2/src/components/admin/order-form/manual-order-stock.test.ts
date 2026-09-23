@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OrderItem, Product } from "./types";
+import { orderFormMessages } from "~/i18n/order-form";
 import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
@@ -49,14 +50,14 @@ describe("manual-order stock guidance", () => {
     )).toBeNull();
   });
 
-  it("keeps guidance explicit without silently changing the requested quantity", () => {
-    expect(remainingStockMessage(30)).toBe("30 available for this order.");
+  it("picks the matching guidance without changing the requested quantity", () => {
+    const en = orderFormMessages.en;
+    expect(remainingStockMessage(30)).toBe(en.available.replace("{count}", "30"));
     expect(remainingStockMessage(18, 12)).toBe(
-      "18 more available for this order (12 already staged).",
+      en.availableMore.replace("{count}", "18").replace("{staged}", "12"),
     );
-    expect(remainingStockMessage(0)).toContain("cannot be added");
-    expect(exceededStockMessage(1)).toBe(
-      "Only 1 unit is available for this order.",
-    );
+    expect(remainingStockMessage(0)).toBe(en.outOfStock);
+    expect(exceededStockMessage(0)).toBe(en.outOfStock);
+    expect(exceededStockMessage(1)).toBe(en.onlyAvailable.replace("{count}", "1"));
   });
 });

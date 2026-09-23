@@ -42705,6 +42705,10 @@ export type GetApiV1AdminProductsData = {
          */
         trashed?: 'true' | 'false';
         /**
+         * Active (on sale) or draft products only
+         */
+        status?: 'active' | 'draft';
+        /**
          * Compact lists omit rich descriptions
          */
         view?: 'full' | 'compact';

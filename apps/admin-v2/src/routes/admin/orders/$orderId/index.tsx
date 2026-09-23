@@ -3,6 +3,10 @@ import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { OrderView } from "~/components/admin/OrderView";
 import { Button } from "~/components/ui/button";
+import { translate, useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderMessages } from "~/i18n/orders";
+import { resourceMessages } from "~/i18n/resource";
 import type {
   DeliveryProviderRecord,
 } from "~/lib/api-query-options/delivery";
@@ -155,7 +159,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
     await prefetchOrderDetailQueries(queryClient, params.orderId);
   },
   head: ({ params }) => ({
-    meta: [{ title: `Order #${params.orderId} | Scalius Admin` }],
+    meta: [{ title: `${translate(orderMessages, "order", { id: params.orderId })} | Scalius` }],
   }),
   errorComponent: OrderDetailErrorComponent,
   component: OrderViewPage,
@@ -221,31 +225,19 @@ function OrderViewPage() {
   return <OrderView order={fullOrder} />;
 }
 
-function OrderDetailErrorComponent({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   return (
-    <section className="mx-auto max-w-xl rounded-lg border bg-card p-6 shadow-sm">
-      <h1 className="text-lg font-semibold">Order could not be loaded</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {error.message || "The order detail service did not return a usable response."}
-      </p>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={reset}
-        >
-          Try again
-        </Button>
-        <Button asChild type="button" size="sm" variant="outline">
-          <Link to="/admin/orders">
-            Back to orders
-          </Link>
+    <section className="mx-auto max-w-xl space-y-4 rounded-lg border bg-card p-6">
+      <div className="space-y-1">
+        <h1 className="text-heading-lg font-semibold">{t("loadFailed")}</h1>
+        {error.message ? <p className="text-body text-muted-foreground">{error.message}</p> : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={reset}>{r("retry")}</Button>
+        <Button asChild variant="outline">
+          <Link to="/admin/orders">{t("backToOrders")}</Link>
         </Button>
       </div>
     </section>

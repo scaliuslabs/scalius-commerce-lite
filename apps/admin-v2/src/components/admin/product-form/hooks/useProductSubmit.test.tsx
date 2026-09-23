@@ -229,9 +229,7 @@ describe("useProductSubmit", () => {
       requireResult(result).handleSubmit(productValues()),
     ).resolves.toBe(false);
     expect(mocks.onRevisionConflict).not.toHaveBeenCalled();
-    expect(mocks.toastError).toHaveBeenCalledWith("Error", {
-      description: "API unavailable",
-    });
+    expect(mocks.toastError).toHaveBeenCalledWith("API unavailable");
   });
 
   it("requires explicit SKU fallback acknowledgement before removing assigned media", async () => {

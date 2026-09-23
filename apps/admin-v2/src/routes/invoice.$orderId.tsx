@@ -1,36 +1,45 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
-import {
-  getApiV1AdminOrdersByIdInvoice,
-  postApiV1AdminOrdersByIdInvoice,
-} from "@scalius/api-client/sdk";
+/* eslint-disable shadcn/no-inline-styles, shadcn/no-unknown-classes -- the invoice is a
+   white paper document (screen and print) that must not follow the dashboard theme, so it
+   carries its own print stylesheet and class names. */
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
+import { Button } from "~/components/ui/button";
+import { InvoiceActions } from "~/components/admin/InvoiceActions";
+import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
+import { resourceMessages } from "~/i18n/resource";
 import { apiData, type ApiResult } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
-import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import {
   formatSavedMinorAmount,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
+import { formatLocationParts } from "~/lib/location-presentation";
+import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 
-type InvoiceData = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
-type OrderItem = InvoiceData["order"]["items"][number];
+type InvoiceDocument = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
 
 export const Route = createFileRoute("/invoice/$orderId")({
   // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
   beforeLoad: async () => {
     await getAdminRouteContext();
   },
-  loader: async ({ params }) => {
-    return apiData(getApiV1AdminOrdersByIdInvoice({ path: { id: params.orderId } }));
-  },
+  loader: ({ params }): Promise<InvoiceDocument> =>
+    apiData(getApiV1AdminOrdersByIdInvoice({ path: { id: params.orderId } })),
   head: ({ loaderData }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: `${loaderData?.status === "issued" ? `Invoice ${loaderData.invoiceNumber}` : "Draft invoice"} | Scalius` },
+      {
+        title: loaderData?.status === "issued"
+          ? `${translate(orderDetailMessages, "invoice.title")} ${loaderData.invoiceNumber}`
+          : translate(orderDetailMessages, "invoice.draft"),
+      },
     ],
   }),
   errorComponent: InvoiceError,
@@ -38,316 +47,181 @@ export const Route = createFileRoute("/invoice/$orderId")({
 });
 
 function InvoicePage() {
-  const initialDocument = Route.useLoaderData();
-  const [document, setDocument] = useState(initialDocument);
+  const t = useMessages(orderDetailMessages);
+  const o = useMessages(orderMessages);
+  const [document, setDocument] = useState<InvoiceDocument>(Route.useLoaderData());
   const { order, businessInfo } = document;
-  const invoiceNumber = document.invoiceNumber ?? "Draft";
   const isIssued = document.status === "issued";
 
-  if (!order) {
-    return <div>Invoice not found</div>;
-  }
+  if (!order) return <p className="p-6 text-body">{t("invoice.notFound")}</p>;
 
+  const saved = resolveSavedOrderMoneySummary(order);
+  const money = (major: number) => formatNumber(major, { maximumFractionDigits: 2 });
+  const minor = (amount: number) => formatSavedMinorAmount(amount, saved!);
+  const delivery = resolveDeliveryMethodPresentation(order, saved);
   const discount = order.discountAmount ?? 0;
-  const subtotal = order.totalAmount - order.shippingCharge + discount;
-  const grandTotal = order.totalAmount;
-  const savedSummary = resolveSavedOrderMoneySummary(order);
-  const delivery = resolveDeliveryMethodPresentation(order, savedSummary, "Shipping");
-
-  const invoiceDate = toInvoiceDate(document.issuedAt ?? order.createdAt);
-  const formattedDate = invoiceDate.toLocaleDateString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
-    timeZone: "Asia/Dhaka",
-  });
-
-  const addressParts = [
-    order.shippingAddress,
-    order.areaName,
-    order.zoneName,
-    order.cityName,
+  const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
+  const businessName = businessInfo.companyName || businessInfo.legalName;
+  const businessLines = [
+    businessInfo.companyName && businessInfo.legalName ? businessInfo.legalName : null,
+    businessInfo.addressLine1,
+    businessInfo.addressLine2,
+    [businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", "),
+    businessInfo.country,
+    businessInfo.phone,
+    businessInfo.email,
+    businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
-  const customerAddress = addressParts.join(", ");
+  const totals: Array<[string, string, string?]> = saved
+    ? [
+        [t("summary.subtotal"), minor(saved.subtotalMinor)],
+        [delivery.label, minor(saved.shippingMinor), delivery.details],
+        [t("summary.discount"), `${saved.discountMinor > 0 ? "−" : ""}${minor(saved.discountMinor)}`],
+        [saved.pricesIncludeTax ? t("summary.taxIncluded", { label: saved.taxLabel }) : saved.taxLabel, minor(saved.taxMinor)],
+      ]
+    : [
+        [t("summary.subtotal"), money(order.totalAmount - order.shippingCharge + discount)],
+        [delivery.label, money(order.shippingCharge), delivery.details],
+        ...(discount > 0 ? [[t("summary.discount"), `−${money(discount)}`] as [string, string]] : []),
+      ];
 
   return (
-    <div style={{ background: "#f9fafb", minHeight: "100vh" }}>
-      <style dangerouslySetInnerHTML={{ __html: invoiceStyles }} />
-      {isIssued ? (
-        <InvoiceActions orderId={order.id} invoiceNumber={invoiceNumber} />
-      ) : (
-        <InvoiceDraftActions
-          orderId={order.id}
-          expectedOrderVersion={document.orderVersion}
-          onIssued={setDocument}
-        />
-      )}
-
-      <div className="invoice-wrapper">
-        <div id="invoice-document" className="invoice-document">
-          {/* Business Header */}
-          <div className="invoice-header">
-            <div className="business-info">
-              <h1>{businessInfo.companyName || businessInfo.legalName || "Business identity not configured"}</h1>
-              {businessInfo.companyName && businessInfo.legalName && <div className="legal-name">{businessInfo.legalName}</div>}
-              <div className="details">
-                {businessInfo.addressLine1 && <div>{businessInfo.addressLine1}</div>}
-                {businessInfo.addressLine2 && <div>{businessInfo.addressLine2}</div>}
-                {(businessInfo.city || businessInfo.stateRegion || businessInfo.postalCode) && (
-                  <div>{[businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", ")}</div>
-                )}
-                {businessInfo.country && <div>{businessInfo.country}</div>}
-                {businessInfo.phone && <div>Phone: {businessInfo.phone}</div>}
-                {businessInfo.email && <div>Email: {businessInfo.email}</div>}
-                {businessInfo.taxId && <div>TIN/BIN: {businessInfo.taxId}</div>}
-              </div>
-            </div>
-            {businessInfo.invoiceLogoUrl && (
-              <div className="business-logo">
-                <img
-                  src={mediaImageUrl(businessInfo.invoiceLogoUrl, 480)}
-                  alt={businessInfo.companyName || businessInfo.legalName || "Business logo"}
-                />
-              </div>
-            )}
+    <div className="invoice-page">
+      <style dangerouslySetInnerHTML={{ __html: INVOICE_CSS }} />
+      <InvoiceActions
+        orderId={order.id}
+        issued={isIssued}
+        expectedOrderVersion={document.orderVersion}
+        onIssued={setDocument}
+      />
+      <article className="invoice">
+        <header className="invoice-header">
+          <div>
+            <h1>{businessName || t("invoice.businessMissing")}</h1>
+            {businessLines.map((line) => <p key={line}>{line}</p>)}
           </div>
+          {businessInfo.invoiceLogoUrl ? (
+            <img src={mediaImageUrl(businessInfo.invoiceLogoUrl, 480)} alt={businessName || ""} />
+          ) : null}
+        </header>
 
-          {/* Invoice Metadata */}
-          <div className="invoice-meta">
-            <div className="meta-block">
-              <h3>Invoice</h3>
-              <p><span className="value">{invoiceNumber}</span></p>
-              {!isIssued && <p className="draft-label">Not issued · no number allocated</p>}
-              <p>Date: {formattedDate}</p>
-              <p>Order: #{order.id}</p>
-              <p>Payment: {order.paymentMethod?.toUpperCase()} ({order.paymentStatus})</p>
-            </div>
-            <div className="meta-block">
-              <h3>Bill To</h3>
-              <p className="value">{order.customerName}</p>
-              <p>{order.customerPhone}</p>
-              {order.customerEmail && <p>{order.customerEmail}</p>}
-              <p>{customerAddress}</p>
-            </div>
+        <section className="invoice-meta">
+          <div>
+            <h2>{isIssued ? t("invoice.title") : t("invoice.draft")}</h2>
+            <p className="strong">{document.invoiceNumber ?? t("invoice.notIssued")}</p>
+            {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
+            <p>{o("order", { id: order.id })}</p>
+            <p>
+              {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
+              {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus)}` : ""}
+            </p>
           </div>
+          <div>
+            <h2>{t("invoice.billTo")}</h2>
+            <p className="strong">{order.customerName}</p>
+            <p>{order.customerPhone}</p>
+            {order.customerEmail ? <p>{order.customerEmail}</p> : null}
+            <p>{formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName)}</p>
+          </div>
+        </section>
 
-          {/* Line Items */}
-          <table className="items-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(order.items || []).map((item: OrderItem, index: number) => {
-                const variant = item.variantLabel;
-                const savedLine = resolveSavedOrderLineMoney(item, savedSummary);
-                const unitPrice = savedLine && savedSummary
-                  ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedSummary)
-                  : item.price.toLocaleString();
-                const lineTotal = savedLine && savedSummary
-                  ? formatSavedMinorAmount(savedLine.totalMinor, savedSummary)
-                  : (item.price * item.quantity).toLocaleString();
-                return (
-                  <tr key={item.id || `item-${index}`}>
-                    <td>{index + 1}</td>
-                    <td>
-                      {item.productName || "Unknown Product"}
-                      {variant && <div className="variant">{variant}</div>}
-                      {savedLine && savedSummary && savedLine.discountMinor > 0 && (
-                        <div className="line-money-note">Item discount: −{formatSavedMinorAmount(savedLine.discountMinor, savedSummary)}</div>
-                      )}
-                      {savedLine && savedSummary && savedLine.taxMinor > 0 && (
-                        <div className="line-money-note">
-                          {savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " included" : " added"}: {formatSavedMinorAmount(savedLine.taxMinor, savedSummary)}
-                        </div>
-                      )}
-                    </td>
-                    <td>{item.quantity}</td>
-                    <td>{unitPrice}</td>
-                    <td>{lineTotal}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <table>
+          <thead>
+            <tr>
+              <th>{t("invoice.item")}</th>
+              <th>{t("invoice.qty")}</th>
+              <th>{t("invoice.price")}</th>
+              <th>{t("summary.total")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.items.map((item) => {
+              const line = resolveSavedOrderLineMoney(item, saved);
+              return (
+                <tr key={item.id}>
+                  <td>
+                    {item.productName || t("items.unnamed")}
+                    {item.variantLabel ? <small>{item.variantLabel}</small> : null}
+                    {line && line.discountMinor > 0 ? <small>{t("items.lineDiscount", { amount: minor(line.discountMinor) })}</small> : null}
+                    {line && line.taxMinor > 0 ? <small>{saved!.taxLabel}: {minor(line.taxMinor)}</small> : null}
+                  </td>
+                  <td>{formatNumber(item.quantity)}</td>
+                  <td>{line ? minor(line.unitPriceMinor) : money(item.price)}</td>
+                  <td>{line ? minor(line.totalMinor) : money(item.price * item.quantity)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
 
-          {/* Totals */}
-          <div className="invoice-totals">
-            <div className="totals-table">
-              {savedSummary ? (
-                <>
-                  <div className="row"><span>Subtotal</span><span>{formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)}</span></div>
-                  <div className="row">
-                    <span>
-                      {delivery.label}
-                      {delivery.details && <small className="delivery-details">{delivery.details}</small>}
-                    </span>
-                    <span>{formatSavedMinorAmount(savedSummary.shippingMinor, savedSummary)}</span>
-                  </div>
-                  <div className="row discount"><span>Discount</span><span>{savedSummary.discountMinor > 0 ? "−" : ""}{formatSavedMinorAmount(savedSummary.discountMinor, savedSummary)}</span></div>
-                  <div className="row"><span>{savedSummary.taxLabel}{savedSummary.pricesIncludeTax ? " (included)" : ""}</span><span>{formatSavedMinorAmount(savedSummary.taxMinor, savedSummary)}</span></div>
-                  <div className="row grand-total"><span>Grand Total</span><span>{formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)}</span></div>
-                  <p className="saved-money-note">
-                    Amounts saved in {savedSummary.currencyCode} when this order was placed.
-                    {savedSummary.pricesIncludeTax && ` ${savedSummary.taxLabel} is already included in the prices above.`}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="row"><span>Subtotal</span><span>{subtotal.toLocaleString()}</span></div>
-                  <div className="row">
-                    <span>
-                      {delivery.label}
-                      {delivery.details && <small className="delivery-details">{delivery.details}</small>}
-                    </span>
-                    <span>{order.shippingCharge.toLocaleString()}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div className="row discount"><span>Discount</span><span>-{discount.toLocaleString()}</span></div>
-                  )}
-                  <div className="row grand-total"><span>Grand Total</span><span>{grandTotal.toLocaleString()}</span></div>
-                </>
-              )}
+        <dl className="invoice-totals">
+          {totals.map(([label, value, detail]) => (
+            <div key={label}>
+              <dt>{label}{detail ? <small>{detail}</small> : null}</dt>
+              <dd>{value}</dd>
             </div>
+          ))}
+          <div className="grand">
+            <dt>{t("summary.total")}</dt>
+            <dd>{saved ? minor(saved.totalMinor) : money(order.totalAmount)}</dd>
           </div>
+        </dl>
 
-          {/* Footer */}
-          <div className="invoice-footer">
-            {businessInfo.invoiceFooterText && <p>{businessInfo.invoiceFooterText}</p>}
-            <p>This is a computer-generated invoice and does not require a signature.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-let invoiceOperationFallback = 0;
-
-function createInvoiceOperationKey(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return `invoice:${globalThis.crypto.randomUUID()}`;
-  }
-  invoiceOperationFallback += 1;
-  return `invoice:${Date.now().toString(36)}:${invoiceOperationFallback.toString(36)}:${Math.random().toString(36).slice(2)}`;
-}
-
-function toInvoiceDate(value: string | number): Date {
-  if (typeof value === "number") {
-    return new Date(value < 1_000_000_000_000 ? value * 1000 : value);
-  }
-  return new Date(value);
-}
-
-function InvoiceDraftActions({
-  orderId,
-  expectedOrderVersion,
-  onIssued,
-}: {
-  orderId: string;
-  expectedOrderVersion: number;
-  onIssued: (document: InvoiceData) => void;
-}) {
-  const operationKey = useRef<string | null>(null);
-  const [issuing, setIssuing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const issue = async () => {
-    if (issuing) return;
-    operationKey.current ??= createInvoiceOperationKey();
-    setIssuing(true);
-    setError(null);
-    try {
-      const document = await apiData(postApiV1AdminOrdersByIdInvoice({
-        path: { id: orderId },
-        body: {
-          operationKey: operationKey.current,
-          expectedOrderVersion,
-        },
-      }));
-      operationKey.current = null;
-      onIssued(document);
-    } catch (issueError) {
-      setError(issueError instanceof Error ? issueError.message : "Invoice could not be issued.");
-    } finally {
-      setIssuing(false);
-    }
-  };
-
-  return (
-    <div className="invoice-draft-bar print:hidden">
-      <div className="invoice-draft-bar-inner">
-        <div>
-          <strong>Draft invoice</strong>
-          <span>No number has been allocated. Issue it only when the order facts are final.</span>
-          {error && <span className="invoice-issue-error" role="alert">{error}</span>}
-        </div>
-        <button type="button" onClick={issue} disabled={issuing}>
-          {issuing ? "Issuing…" : "Issue invoice"}
-        </button>
-      </div>
+        <footer>
+          {businessInfo.invoiceFooterText ? <p>{businessInfo.invoiceFooterText}</p> : null}
+          <p>{t("invoice.noSignature")}</p>
+        </footer>
+      </article>
     </div>
   );
 }
 
 function InvoiceError({ error, reset }: { error: Error; reset: () => void }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   return (
-    <main className="invoice-error-state">
-      <h1>Invoice could not be loaded</h1>
-      <p>{error.message || "The invoice service did not return a usable response."}</p>
-      <div>
-        <button type="button" onClick={reset}>Try again</button>
-        <a href="/admin/orders">Back to orders</a>
+    <main className="mx-auto max-w-xl space-y-4 p-6">
+      <h1 className="text-heading-lg font-semibold">{t("invoice.loadFailed")}</h1>
+      {error.message ? <p className="text-body text-muted-foreground">{error.message}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={reset}>{r("retry")}</Button>
+        <Button variant="outline" asChild>
+          <Link to="/admin/orders">{t("backToOrders")}</Link>
+        </Button>
       </div>
     </main>
   );
 }
 
-const invoiceStyles = `
-/* Reset — isolate the invoice page from any inherited oklch/Tailwind variables */
-.invoice-wrapper *, .invoice-wrapper *::before, .invoice-wrapper *::after { color: inherit; }
-.invoice-wrapper { max-width: 210mm; margin: 60px auto 40px; padding: 0 16px; color: #374151; font-family: system-ui, -apple-system, sans-serif; }
-.invoice-document { background: white; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 4px; }
-.invoice-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
-.business-info h1 { font-size: 24px; font-weight: 700; color: #111827; }
-.business-info .legal-name { font-size: 13px; color: #6b7280; margin-top: 2px; }
-.business-info .details { font-size: 13px; color: #4b5563; margin-top: 8px; line-height: 1.6; }
-.business-logo img { max-height: 60px; max-width: 180px; object-fit: contain; }
-.invoice-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
-.meta-block h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; font-weight: 600; margin-bottom: 8px; }
-.meta-block p { font-size: 14px; color: #374151; line-height: 1.5; }
-.meta-block .value { font-weight: 600; }
-.meta-block .draft-label { color: #b45309; font-size: 12px; font-weight: 600; }
-.items-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-.items-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 600; padding: 8px 12px; border-bottom: 2px solid #e5e7eb; }
-.items-table th:last-child, .items-table td:last-child { text-align: right; }
-.items-table th:nth-child(4), .items-table td:nth-child(4) { text-align: right; }
-.items-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #374151; }
-.items-table .variant { font-size: 12px; color: #6b7280; }
-.items-table .line-money-note { margin-top: 2px; font-size: 11px; color: #6b7280; }
-.invoice-totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
-.totals-table { width: 280px; }
-.totals-table .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
-.totals-table .delivery-details { display: block; max-width: 190px; margin-top: 2px; color: #6b7280; font-size: 11px; line-height: 1.4; }
-.totals-table .row.discount { color: #059669; }
-.totals-table .row.grand-total { border-top: 2px solid #1f2937; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; color: #111827; }
-.saved-money-note { margin-top: 8px; font-size: 11px; line-height: 1.45; color: #6b7280; }
-.invoice-footer { border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; font-size: 12px; color: #9ca3af; line-height: 1.6; }
-.invoice-draft-bar { position: fixed; inset: 0 0 auto; z-index: 50; border-bottom: 1px solid #fde68a; background: #fffbeb; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
-.invoice-draft-bar-inner { max-width: 210mm; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #78350f; }
-.invoice-draft-bar-inner > div { min-width: 0; display: grid; gap: 2px; font-size: 13px; }
-.invoice-draft-bar-inner strong { font-size: 14px; }
-.invoice-draft-bar-inner button, .invoice-error-state button, .invoice-error-state a { border: 1px solid #92400e; border-radius: 6px; padding: 7px 12px; background: #92400e; color: white; font: 500 14px system-ui, sans-serif; cursor: pointer; text-decoration: none; white-space: nowrap; }
-.invoice-draft-bar-inner button:disabled { cursor: wait; opacity: .6; }
-.invoice-issue-error { color: #b91c1c; }
-.invoice-error-state { max-width: 560px; margin: 15vh auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; background: white; color: #111827; font-family: system-ui, sans-serif; }
-.invoice-error-state h1 { margin: 0; font-size: 20px; }
-.invoice-error-state p { margin: 8px 0 20px; color: #6b7280; }
-.invoice-error-state > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.invoice-error-state a { border-color: #d1d5db; background: white; color: #374151; }
-@media (max-width: 640px) { .invoice-draft-bar-inner { align-items: flex-start; flex-direction: column; } .invoice-draft-bar-inner button { width: 100%; } .invoice-wrapper { margin-top: 118px; } }
-@media print { .print-hidden, .print\\:hidden { display: none !important; } body { background: white !important; } .invoice-wrapper { margin: 0; padding: 0; max-width: 100%; } .invoice-document { box-shadow: none; border-radius: 0; padding: 10mm 12mm; } @page { size: A4; margin: 10mm 12mm; } }
+/* Print document styles: a white A4 sheet on screen and on paper. */
+const INVOICE_CSS = `
+.invoice-page { min-height: 100vh; background: #f4f4f5; color: #18181b; }
+.invoice { max-width: 210mm; margin: 24px auto; padding: 40px; background: #fff; font-size: 14px; line-height: 1.5; }
+.invoice h1 { font-size: 22px; font-weight: 600; }
+.invoice h2 { font-size: 13px; font-weight: 600; color: #71717a; margin-bottom: 4px; }
+.invoice p, .invoice small { color: #52525b; }
+.invoice .strong { color: #18181b; font-weight: 600; }
+.invoice small { display: block; font-size: 12px; }
+.invoice-header { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 20px; border-bottom: 2px solid #e4e4e7; }
+.invoice-header img { max-height: 60px; max-width: 180px; object-fit: contain; }
+.invoice-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
+.invoice table { width: 100%; border-collapse: collapse; }
+.invoice th { text-align: left; font-size: 12px; font-weight: 600; color: #71717a; padding: 8px; border-bottom: 2px solid #e4e4e7; }
+.invoice td { padding: 10px 8px; border-bottom: 1px solid #f4f4f5; vertical-align: top; }
+.invoice th:not(:first-child), .invoice td:not(:first-child) { text-align: right; white-space: nowrap; }
+.invoice-totals { margin: 16px 0 32px auto; max-width: 300px; }
+.invoice-totals div { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; }
+.invoice-totals .grand { border-top: 2px solid #18181b; margin-top: 8px; padding-top: 10px; font-size: 16px; font-weight: 600; }
+.invoice footer { border-top: 1px solid #e4e4e7; padding-top: 12px; text-align: center; font-size: 12px; }
+@media (max-width: 640px) {
+  .invoice { margin: 0; padding: 16px; }
+  .invoice-header { flex-direction: column-reverse; }
+  .invoice-meta { grid-template-columns: 1fr; gap: 16px; }
+  .invoice th, .invoice td { padding: 8px 4px; }
+}
+@page { size: A4; margin: 12mm; }
+@media print {
+  .invoice-page { background: #fff; }
+  .invoice { margin: 0; padding: 0; max-width: none; }
+}
 `;

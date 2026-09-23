@@ -1,141 +1,23 @@
-import type { Product } from "~/components/admin/order-form/types";
-import type {
-  ProductVariant,
-} from "~/lib/api-query-options/products";
+import type { OrderFormMode } from "~/components/admin/order-form/types";
 
-export interface EditOrderFormProduct {
-  id: string;
-  name: string;
-  price: number;
-  discountPercentage: number | null;
-  variants: ProductVariant[];
+interface Readiness {
+  allowed: boolean;
+  reason: string | null;
 }
 
-export interface EditOrderFormRouteData {
-  productsWithVariants: EditOrderFormProduct[];
-  defaultValues: Record<string, unknown>;
-  fullEditReadiness: {
-    allowed: boolean;
-    reason: string | null;
-  };
-  amendmentReadiness: {
-    allowed: boolean;
-    reason: string | null;
-  };
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${label} response was unavailable or unusable.`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function isEditOrderFormProduct(value: unknown): value is EditOrderFormProduct {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    typeof row.id === "string" &&
-    row.id.length > 0 &&
-    typeof row.name === "string" &&
-    typeof row.price === "number" &&
-    Number.isFinite(row.price) &&
-    Array.isArray(row.variants)
-  );
-}
-
-function normalizeEditOrderFormProduct(
-  value: EditOrderFormProduct,
-): EditOrderFormProduct {
+/**
+ * One "Edit order" screen for two server workflows that never overlap: the full
+ * editor (orders without a tax snapshot) and the quote-backed amendment (manual
+ * COD orders with one). Anything else is locked with the server's reason.
+ */
+export function orderEditMode(data: {
+  fullEditReadiness: Readiness;
+  amendmentReadiness: Readiness;
+}): { mode: Exclude<OrderFormMode, "create"> } | { mode: "locked"; reason: string | null } {
+  if (data.fullEditReadiness.allowed) return { mode: "edit" };
+  if (data.amendmentReadiness.allowed) return { mode: "amend" };
   return {
-    ...value,
-    variants: value.variants.map((variant) => {
-      if (!variant || typeof variant !== "object" || Array.isArray(variant)) {
-        throw new Error("Order form response included an unusable SKU row.");
-      }
-      const selectedOptions = (variant as ProductVariant & {
-        selectedOptions?: unknown;
-      }).selectedOptions;
-      if (selectedOptions !== undefined && !Array.isArray(selectedOptions)) {
-        throw new Error("Order form response included unusable SKU options.");
-      }
-      return {
-        ...variant,
-        // Rolling deploys and cached responses may predate the required
-        // form-data contract. A missing collection means the SKU has no
-        // customer-facing axes (for example a default/simple SKU), not that
-        // the required catalog or order-item dependency can be invented.
-        selectedOptions: selectedOptions ?? [],
-      };
-    }),
-  };
-}
-
-export function buildNewOrderFormRouteData(): {
-  productsWithVariants: Product[];
-} {
-  return {
-    // Product discovery is a bounded, server-backed query owned by the item
-    // picker. The route only carries exact pre-existing lines on edit forms.
-    productsWithVariants: [],
-  };
-}
-
-export function assertOrderFormLocationLookup(payload: unknown): void {
-  const data = requireRecord(payload, "Delivery location");
-  if (!Array.isArray(data.locations)) {
-    throw new Error("Delivery location response did not include a location list.");
-  }
-}
-
-export function buildEditOrderFormRouteData(payload: unknown): EditOrderFormRouteData {
-  const data = requireRecord(payload, "Order form");
-  if (!Array.isArray(data.productsWithVariants)) {
-    throw new Error("Order form response did not include the product catalog.");
-  }
-  if (!data.productsWithVariants.every(isEditOrderFormProduct)) {
-    throw new Error("Order form response included an unusable product row.");
-  }
-  const defaultValues = requireRecord(data.defaultValues, "Order form defaults");
-  if (!Array.isArray(defaultValues.items)) {
-    throw new Error("Order form defaults did not include order items.");
-  }
-  const fullEditReadiness = requireRecord(
-    data.fullEditReadiness,
-    "Order edit readiness",
-  );
-  const amendmentReadiness = data.amendmentReadiness === undefined
-    ? {
-        allowed: false,
-        reason: "Order amendment readiness is unavailable. Refresh after the API update completes.",
-      }
-    : requireRecord(data.amendmentReadiness, "Order amendment readiness");
-  if (
-    typeof fullEditReadiness.allowed !== "boolean"
-    || (fullEditReadiness.reason !== null
-      && typeof fullEditReadiness.reason !== "string")
-  ) {
-    throw new Error("Order edit readiness response was unusable.");
-  }
-  if (
-    typeof amendmentReadiness.allowed !== "boolean"
-    || (amendmentReadiness.reason !== null
-      && typeof amendmentReadiness.reason !== "string")
-  ) {
-    throw new Error("Order amendment readiness response was unusable.");
-  }
-  return {
-    productsWithVariants: data.productsWithVariants.map(
-      normalizeEditOrderFormProduct,
-    ),
-    defaultValues,
-    fullEditReadiness: {
-      allowed: fullEditReadiness.allowed,
-      reason: fullEditReadiness.reason as string | null,
-    },
-    amendmentReadiness: {
-      allowed: amendmentReadiness.allowed,
-      reason: amendmentReadiness.reason as string | null,
-    },
+    mode: "locked",
+    reason: data.fullEditReadiness.reason ?? data.amendmentReadiness.reason,
   };
 }

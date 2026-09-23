@@ -156188,6 +156188,20 @@
             "schema": {
               "type": "string",
               "enum": [
+                "active",
+                "draft"
+              ],
+              "description": "Active (on sale) or draft products only"
+            },
+            "required": false,
+            "description": "Active (on sale) or draft products only",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "full",
                 "compact"
               ],

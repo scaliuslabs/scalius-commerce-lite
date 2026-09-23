@@ -22,14 +22,21 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { AdminApiResponseError, isAdminApiNotFoundError } from "@/lib/admin-api-error";
-import { formatAdminTime } from "@/lib/admin-time";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { Label } from "~/components/ui/label";
+import { Switch } from "~/components/ui/switch";
+import { cn } from "@scalius/shared/utils";
+import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
+import { scannerMessages } from "~/i18n/scanner";
 
 export type ScannerMode = "quick-receive" | "quick-deduct" | "manual";
+
+const MODES: readonly ScannerMode[] = ["quick-receive", "quick-deduct", "manual"];
+const MODE_LABEL = { "quick-receive": "modeReceive", "quick-deduct": "modeDeduct", manual: "modeManual" } as const;
+
+/** Copy used inside callbacks (reads the current dashboard language). */
+const tr = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) =>
+  translate(scannerMessages, key, vars);
 
 export interface ScannedProduct {
   productName: string;
@@ -65,10 +72,6 @@ export interface ScanResult {
 interface ScannerAppProps {
   token: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// Audio feedback
-// ---------------------------------------------------------------------------
 
 function playBeep(type: "success" | "error" | "scan") {
   try {
@@ -116,10 +119,6 @@ function playBeep(type: "success" | "error" | "scan") {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 let idCounter = 0;
 function nextId(): string {
   return `scan-${Date.now()}-${++idCounter}`;
@@ -146,15 +145,12 @@ const adjustStock = (body: {
   reason: string;
 }) => withOneRetry(() => apiData(postApiV1AdminInventoryStockAdjust({ body })));
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function ScannerApp({ token }: ScannerAppProps) {
+  const t = useMessages(scannerMessages);
   // ---- Auth ----
   const [authState, setAuthState] = useState<"verifying" | "error" | "ready">("verifying");
   const [authError, setAuthError] = useState("");
-  const [adminName, setAdminName] = useState("Admin");
+  const [adminName, setAdminName] = useState("");
   const sessionStart = useRef(Date.now());
   const undoOperationKeysRef = useRef(new Map<string, string>());
   const verificationRequestRef = useRef<{
@@ -179,7 +175,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         promise: fetch(withDashboardBasePath("/api/scanner-token"), verificationRequest)
           .then((res) => {
             if (!res.ok) {
-              throw new Error("Invalid or expired scanner session");
+              throw new Error(tr("accessInvalid"));
             }
             // This Worker route answers `{ success, valid, adminName }` unwrapped.
             return res.json() as Promise<Record<string, string>>;
@@ -191,7 +187,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
     void verificationRequestRef.current.promise
       .then((data) => {
         if (!active) return;
-        setAdminName(data.adminName || "Admin");
+        setAdminName(data.adminName ?? "");
         setAuthState("ready");
       })
       .catch((err: unknown) => {
@@ -200,7 +196,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         setAuthError(
           err instanceof Error
             ? err.message
-            : "Scanner verification failed. Ask an admin to generate a new QR code.",
+            : tr("accessInvalid"),
         );
       });
 
@@ -312,7 +308,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
       showFlash({
         type: "success",
-        action: `${quantity > 0 ? "+" : ""}${quantity} ${isAdd ? "Added" : "Deducted"}`,
+        action: tr(isAdd ? "added" : "removed", { count: Math.abs(quantity) }),
         productName: product.productName,
         oldStock,
         newStock,
@@ -332,7 +328,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         setHistory((prev) =>
           prev.map((r) =>
             r.id === result.id
-              ? { ...r, action: "error" as const, reason: "Network error" }
+              ? { ...r, action: "error" as const, reason: tr("notSaved") }
               : r,
           ),
         );
@@ -364,7 +360,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
             quantity: 0,
             oldStock: 0,
             newStock: 0,
-            reason: "Barcode not found",
+            reason: tr("barcodeNotFound"),
           };
           setLastResult(errorResult);
           setHistory((prev) => [errorResult, ...prev].slice(0, 50));
@@ -400,7 +396,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
           quantity: 0,
           oldStock: 0,
           newStock: 0,
-          reason: err instanceof Error ? err.message : "Lookup failed",
+          reason: err instanceof Error ? err.message : tr("lookupFailed"),
         };
         setLastResult(errorResult);
         setHistory((prev) => [errorResult, ...prev].slice(0, 50));
@@ -456,8 +452,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
         showFlash({
           type: "success",
           action: isAbsolute
-            ? `Set to ${newStock}`
-            : `${adjustment > 0 ? "+" : ""}${adjustment} ${adjustment > 0 ? "Added" : "Deducted"}`,
+            ? tr("setTo", { count: newStock })
+            : tr(adjustment > 0 ? "added" : "removed", { count: Math.abs(adjustment) }),
           productName: product.productName,
           oldStock,
           newStock,
@@ -518,7 +514,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
             historyItem.id === item.id
               ? {
                   ...historyItem,
-                  undoError: "Undo did not complete. Retry to safely recover the result.",
+                  undoError: tr("undoFailed"),
                 }
               : historyItem,
           ),
@@ -548,10 +544,10 @@ export function ScannerApp({ token }: ScannerAppProps) {
   // ---- Auth gates ----
   if (authState === "verifying") {
     return (
-      <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white">
+      <div className="flex h-dvh items-center justify-center bg-background text-foreground">
         <div className="text-center">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-          <p className="text-sm text-zinc-400">Verifying scanner session...</p>
+          <div className="mx-auto mb-4 size-8 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+          <p className="text-body text-muted-foreground">{t("verifying")}</p>
         </div>
       </div>
     );
@@ -559,22 +555,19 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
   if (authState === "error") {
     return (
-      <div className="flex h-dvh items-center justify-center bg-zinc-950 text-white p-6">
-        <div className="text-center max-w-sm">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
-            <X className="h-8 w-8 text-red-400" />
+      <div className="flex h-dvh items-center justify-center bg-background p-6 text-foreground">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-destructive/10">
+            <X className="size-8 text-destructive" />
           </div>
-          <h1 className="text-lg font-semibold mb-2">Access Required</h1>
-          <p className="text-sm text-zinc-400 mb-6">{authError}</p>
-          <p className="text-xs text-zinc-500">
-            Ask an admin to generate a new scanner QR code from Settings.
-          </p>
+          <h1 className="mb-2 text-heading-md font-semibold">{t("accessTitle")}</h1>
+          <p className="mb-6 text-body text-muted-foreground">{authError}</p>
+          <p className="text-body text-muted-foreground">{t("accessHelp")}</p>
         </div>
       </div>
     );
   }
 
-  // ---- History view ----
   if (historyOpen) {
     return (
       <ScanHistory
@@ -586,230 +579,147 @@ export function ScannerApp({ token }: ScannerAppProps) {
     );
   }
 
-  const MODE_PILLS: { key: ScannerMode; label: string }[] = [
-    { key: "quick-receive", label: "Quick Receive" },
-    { key: "quick-deduct", label: "Quick Deduct" },
-    { key: "manual", label: "Manual" },
-  ];
-
   return (
-    <div className="flex h-dvh flex-col bg-zinc-950 text-white select-none">
-      {/* ---- Flash overlay ---- */}
-      {flash && <ScanFlash flash={flash} />}
+    <div className="flex h-dvh select-none flex-col bg-background text-foreground">
+      {flash ? <ScanFlash flash={flash} /> : null}
 
-      {/* ---- Header ---- */}
-      <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 py-2 border-b border-zinc-800">
+      <div className="flex shrink-0 items-center justify-between border-b bg-card px-3 py-2">
         <button
           type="button"
           onClick={() => setMenuOpen(!menuOpen)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg active:bg-zinc-800"
-          aria-label="Menu"
+          className="flex size-11 items-center justify-center rounded-lg active:bg-accent"
+          aria-label={t("menu")}
         >
-          <Menu className="h-5 w-5 text-zinc-300" />
+          <Menu className="size-5" />
         </button>
-
-        <span className="text-sm font-bold tracking-wide text-zinc-200">
-          SCALIUS SCANNER
-        </span>
-
+        <span className="text-body font-semibold">{t("appTitle")}</span>
         <button
           type="button"
           onClick={() => setHistoryOpen(true)}
-          className="relative flex h-10 w-10 items-center justify-center rounded-lg active:bg-zinc-800"
-          aria-label="History"
+          className="relative flex size-11 items-center justify-center rounded-lg active:bg-accent"
+          aria-label={t("history")}
         >
-          <ClipboardList className="h-5 w-5 text-zinc-300" />
-          {history.length > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
-              {history.length > 9 ? "9+" : history.length}
+          <ClipboardList className="size-5" />
+          {history.length > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-body font-medium text-primary-foreground">
+              {history.length > 9 ? "9+" : formatNumber(history.length)}
             </span>
-          )}
+          ) : null}
         </button>
       </div>
 
-      {/* ---- Mode selector ---- */}
-      <div className="flex shrink-0 gap-1.5 bg-zinc-900/80 px-3 py-2">
-        {MODE_PILLS.map(({ key, label }) => (
+      <div className="flex shrink-0 gap-2 bg-card px-3 py-2">
+        {MODES.map((key) => (
           <button
             key={key}
             type="button"
+            aria-pressed={mode === key}
             onClick={() => handleModeSwitch(key)}
-            className={`flex h-9 flex-1 items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
-              mode === key
-                ? key === "quick-deduct"
-                  ? "bg-orange-600 text-white"
-                  : key === "manual"
-                    ? "bg-blue-600 text-white"
-                    : "bg-emerald-600 text-white"
-                : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
-            }`}
+            className={cn(
+              "flex h-11 flex-1 items-center justify-center rounded-lg text-body font-semibold",
+              mode === key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground active:bg-accent",
+            )}
           >
-            {label}
+            {t(MODE_LABEL[key])}
           </button>
         ))}
       </div>
 
-      {/* ---- Camera viewfinder ---- */}
-      <div className="relative flex-1 min-h-0">
-        <BarcodeScanner
-          onScan={handleScan}
-          isActive={isCameraActive}
-          showTorchButton
-        />
-
-        {/* Dim overlay when camera paused in manual mode */}
-        {cameraPaused && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <p className="text-sm text-zinc-400">Camera paused</p>
-          </div>
-        )}
+      <div className="relative min-h-0 flex-1">
+        <BarcodeScanner onScan={handleScan} isActive={isCameraActive} showTorchButton />
       </div>
 
-      {/* ---- Last scan bar ---- */}
       <LastScanBar result={lastResult} mode={mode} />
 
-      {/* ---- Manual mode bottom sheet ---- */}
-      {manualProduct && (
+      {manualProduct ? (
         <ManualSheet
           product={manualProduct}
           onSubmit={handleManualSubmit}
           onCancel={handleManualCancel}
           onHaptic={haptic}
         />
-      )}
+      ) : null}
 
-      {/* ---- Hamburger menu ---- */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-40 flex"
-          onClick={() => setMenuOpen(false)}
-        >
+      {menuOpen ? (
+        <div className="fixed inset-0 z-40 flex" onClick={() => setMenuOpen(false)}>
           <div
-            className="w-72 bg-zinc-900 border-r border-zinc-800 h-full flex flex-col shadow-2xl"
+            className="flex h-full w-72 flex-col border-r bg-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <span className="text-sm font-bold text-zinc-200">Settings</span>
+            <div className="flex items-center justify-between border-b p-4">
+              <span className="text-body font-semibold">{t("settings")}</span>
               <button
                 type="button"
                 onClick={() => setMenuOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg active:bg-zinc-800"
+                aria-label={t("close")}
+                className="flex size-11 items-center justify-center rounded-lg active:bg-accent"
               >
-                <X className="h-4 w-4 text-zinc-400" />
+                <X className="size-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              {/* Current mode */}
+            <div className="flex-1 space-y-6 overflow-y-auto p-4">
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">
-                  Current Mode
-                </div>
-                <div className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                  mode === "quick-receive"
-                    ? "bg-emerald-600/20 text-emerald-400"
-                    : mode === "quick-deduct"
-                      ? "bg-orange-600/20 text-orange-400"
-                      : "bg-blue-600/20 text-blue-400"
-                }`}>
-                  {mode === "quick-receive" ? "Quick Receive" : mode === "quick-deduct" ? "Quick Deduct" : "Manual"}
-                </div>
+                <p className="mb-2 text-body text-muted-foreground">{t("mode")}</p>
+                <p className="text-body font-semibold">{t(MODE_LABEL[mode])}</p>
               </div>
 
-              {/* Default quantity */}
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">
-                  Default Quantity (Quick modes)
-                </div>
+                <p className="mb-2 text-body text-muted-foreground">{t("quantityPerScan")}</p>
                 <div className="flex gap-2">
-                  {[1, 5, 10].map((q) => (
+                  {[1, 5, 10].map((quantity) => (
                     <button
-                      key={q}
+                      key={quantity}
                       type="button"
-                      onClick={() => setDefaultQuantity(q)}
-                      className={`flex h-10 w-14 items-center justify-center rounded-lg text-sm font-bold ${
-                        defaultQuantity === q
-                          ? "bg-emerald-600 text-white"
-                          : "bg-zinc-800 text-zinc-400 active:bg-zinc-700"
-                      }`}
+                      aria-pressed={defaultQuantity === quantity}
+                      onClick={() => setDefaultQuantity(quantity)}
+                      className={cn(
+                        "flex h-11 w-14 items-center justify-center rounded-lg text-body font-semibold",
+                        defaultQuantity === quantity
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground active:bg-accent",
+                      )}
                     >
-                      {q}
+                      {formatNumber(quantity)}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Sound toggle */}
-              <button
-                type="button"
-                onClick={() => setSoundEnabled(!soundEnabled)}
-                className="flex w-full items-center justify-between rounded-lg bg-zinc-800 px-4 py-3 active:bg-zinc-700"
-              >
-                <div className="flex items-center gap-3">
-                  {soundEnabled ? (
-                    <Volume2 className="h-4 w-4 text-zinc-400" />
-                  ) : (
-                    <VolumeOff className="h-4 w-4 text-zinc-500" />
-                  )}
-                  <span className="text-sm text-zinc-300">Sound</span>
-                </div>
-                <div
-                  className={`h-6 w-10 rounded-full p-0.5 transition-colors ${
-                    soundEnabled ? "bg-emerald-600" : "bg-zinc-700"
-                  }`}
-                >
-                  <div
-                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                      soundEnabled ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </div>
-              </button>
-
-              {/* Haptics toggle */}
-              <button
-                type="button"
-                onClick={() => setHapticsEnabled(!hapticsEnabled)}
-                className="flex w-full items-center justify-between rounded-lg bg-zinc-800 px-4 py-3 active:bg-zinc-700"
-              >
-                <div className="flex items-center gap-3">
-                  <Smartphone className="h-4 w-4 text-zinc-400" />
-                  <span className="text-sm text-zinc-300">Haptics</span>
-                </div>
-                <div
-                  className={`h-6 w-10 rounded-full p-0.5 transition-colors ${
-                    hapticsEnabled ? "bg-emerald-600" : "bg-zinc-700"
-                  }`}
-                >
-                  <div
-                    className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                      hapticsEnabled ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </div>
-              </button>
+              <div className="flex items-center justify-between rounded-lg bg-muted px-4 py-3">
+                <Label htmlFor="scanner-sound" className="flex items-center">
+                  {soundEnabled ? <Volume2 className="mr-3 size-4" /> : <VolumeOff className="mr-3 size-4" />}
+                  {t("sound")}
+                </Label>
+                <Switch id="scanner-sound" checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-muted px-4 py-3">
+                <Label htmlFor="scanner-vibration" className="flex items-center">
+                  <Smartphone className="mr-3 size-4" />
+                  {t("vibration")}
+                </Label>
+                <Switch id="scanner-vibration" checked={hapticsEnabled} onCheckedChange={setHapticsEnabled} />
+              </div>
             </div>
 
-            {/* Footer */}
-            <div className="border-t border-zinc-800 p-4 space-y-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <User className="h-3.5 w-3.5" />
-                <span>{adminName}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-zinc-600">
-                <Clock className="h-3.5 w-3.5" />
+            <div className="space-y-2 border-t p-4 text-body text-muted-foreground">
+              {adminName ? (
+                <div className="flex items-center gap-2">
+                  <User className="size-4" />
+                  <span>{adminName}</span>
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <Clock className="size-4" />
                 <span>
-                  Session started{" "}
-                  {formatAdminTime(sessionStart.current) ?? "Unknown time"}
+                  {t("startedAt", { time: formatDateTime(new Date(sessionStart.current), { timeStyle: "short" }) })}
                 </span>
               </div>
             </div>
           </div>
-
-          {/* Click-away backdrop */}
           <div className="flex-1" />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

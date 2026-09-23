@@ -19,11 +19,15 @@ function setup() {
 const ids = (result: Awaited<ReturnType<typeof listProducts>>) => result.products.map((product) => product.id);
 
 describe("admin order catalog product search", () => {
-  it("can require active products without changing the general catalog default", async () => {
+  it("filters by active or draft status without changing the general catalog default", async () => {
     const { db } = setup();
 
     expect(ids(await listProducts(db, { search: "PAUSEDSKU" }))).toEqual(["p_inactive"]);
-    expect(ids(await listProducts(db, { search: "PAUSEDSKU", activeOnly: true }))).toEqual([]);
+    expect(ids(await listProducts(db, { search: "PAUSEDSKU", status: "active" }))).toEqual([]);
+    expect(ids(await listProducts(db, { status: "active" }))).toEqual(["p_live"]);
+    expect(ids(await listProducts(db, { status: "draft" }))).toEqual(["p_inactive"]);
+    const draftPage = await listProducts(db, { status: "draft" });
+    expect(draftPage.pagination.total).toBe(1);
   });
 
   it("does not surface a product because a retired SKU still matches text or barcode search", async () => {

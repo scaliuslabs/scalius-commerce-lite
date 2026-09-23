@@ -1,3 +1,5 @@
+import { formatNumber } from "~/i18n";
+
 export interface SavedOrderMoneyFields {
   currencyCode?: string | null;
   currencyDecimalPlaces?: number | null;
@@ -135,12 +137,22 @@ export function formatSavedMinorAmount(
   summary: Pick<SavedOrderMoneySummary, "currencyCode" | "decimalPlaces">,
 ): string {
   const amount = amountMinor / 10 ** summary.decimalPlaces;
-  const formatted = new Intl.NumberFormat("en-US", {
+  const formatted = formatNumber(Math.abs(amount), {
     minimumFractionDigits: summary.decimalPlaces,
     maximumFractionDigits: summary.decimalPlaces,
-    useGrouping: true,
-  }).format(amount);
-  return `${summary.currencyCode} ${formatted}`;
+  });
+  return `${amount < 0 ? "-" : ""}${currencySymbol(summary.currencyCode)}${formatted}`;
+}
+
+/** "৳" for BDT, "$" for USD; the code itself when Intl has no symbol. */
+function currencySymbol(code: string): string {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? code;
+  } catch {
+    return code;
+  }
 }
 
 export function formatSavedMajorAmount(

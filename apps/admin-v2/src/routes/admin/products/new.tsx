@@ -8,6 +8,8 @@ import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/pro
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import type { ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -43,7 +45,7 @@ export const Route = createFileRoute("/admin/products/new")({
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
   },
-  head: () => ({ meta: [{ title: "New Product | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: `${translate(productMessages, "addProduct")} | Scalius Admin` }] }),
   errorComponent: RouteErrorComponent,
   component: NewProductPage,
 });
@@ -54,31 +56,35 @@ function NewProductPage() {
   const [createComposition, setCreateComposition] = useState<ProductCreateComposition | null>(null);
   const [optionMatrixIssue, setOptionMatrixIssue] = useState<string | null>(null);
   const [optionMatrixDirty, setOptionMatrixDirty] = useState(false);
+  const [generation, setGeneration] = useState(0);
 
   return (
-    <div className="container max-w-6xl py-4 pb-8">
-      <ProductForm
-        categories={allCategories}
-        defaultValues={defaultValues}
-        isEdit={false}
-        createComposition={createComposition}
-        optionMatrixIssue={optionMatrixIssue}
-        optionMatrixDirty={optionMatrixDirty}
-        optionManager={({ skuImages, productName, productPrice, requestSave, productSaving }) => (
-          <Suspense fallback={<LoadingFallback height="h-48" />}>
-            <OptionMatrixEditor
-              productName={productName}
-              productPrice={productPrice}
-              images={skuImages}
-              onDraftChange={setCreateComposition}
-              onDraftIssueChange={setOptionMatrixIssue}
-              onDirtyChange={setOptionMatrixDirty}
-              onSaveRequest={requestSave}
-              productSaving={productSaving}
-            />
-          </Suspense>
-        )}
-      />
-    </div>
+    <ProductForm
+      key={generation}
+      categories={allCategories}
+      defaultValues={defaultValues}
+      isEdit={false}
+      createComposition={createComposition}
+      optionMatrixIssue={optionMatrixIssue}
+      optionMatrixDirty={optionMatrixDirty}
+      onDiscard={() => {
+        setGeneration((value) => value + 1);
+        setCreateComposition(null);
+        setOptionMatrixIssue(null);
+        setOptionMatrixDirty(false);
+      }}
+      optionManager={({ skuImages, productName, productPrice }) => (
+        <Suspense fallback={<LoadingFallback height="h-48" />}>
+          <OptionMatrixEditor
+            productName={productName}
+            productPrice={productPrice}
+            images={skuImages}
+            onDraftChange={setCreateComposition}
+            onDraftIssueChange={setOptionMatrixIssue}
+            onDirtyChange={setOptionMatrixDirty}
+          />
+        </Suspense>
+      )}
+    />
   );
 }

@@ -7,10 +7,8 @@ import {
   ChevronDown,
   ChevronRight,
   ImageIcon,
-  Info,
   Plus,
   Printer,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
@@ -31,10 +28,12 @@ import {
   putApiV1AdminProductsByIdVariantsByVariantId,
 } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
-import type { ProductOptionMatrixInput } from "@/lib/api-query-options/products";
 import { getServerFnError } from "@/lib/api-helpers";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
 import { queryKeys } from "@/lib/query-keys";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import type {
   ProductSkuImageChoice,
   ProductOptionDefinition,
@@ -54,6 +53,8 @@ import {
   matrixSaveVariants,
   missingOptionCombinations,
   normalized,
+  followProductDefaults,
+  withGuessedOptionType,
   optionTopologySignature,
   type DraftOption,
   type DraftVariant,
@@ -80,8 +81,6 @@ type OptionMatrixEditorProps = {
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
-  onSaveRequest: () => void;
-  productSaving: boolean;
 };
 
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
@@ -99,9 +98,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   onDirtyChange,
   onSavingChange,
   onRevisionConflict,
-  onSaveRequest,
-  productSaving,
 }, ref) {
+  const t = useMessages(productMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
   const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => ({
@@ -190,6 +188,22 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setCombinationsPending(false);
     setDirty(true);
   }, [combinationCount, excludedCombinationKeys, options, productName, productPrice, requiredStockAllocation, savedTopology, validShape, variants]);
+
+  // Variants follow the options as soon as every option has a name and a value.
+  // Existing rows are matched by option values and keep their data; rows that
+  // drop out are retired on save, never deleted.
+  React.useEffect(() => {
+    if (combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS) applyOptions();
+  }, [applyOptions, combinationCount, combinationsPending, validShape]);
+
+  // Unsaved variants follow the title and price until the merchant edits them.
+  const productDefaults = React.useRef({ name: productName, price: productPrice });
+  React.useEffect(() => {
+    const previous = productDefaults.current;
+    if (previous.name === productName && previous.price === productPrice) return;
+    productDefaults.current = { name: productName, price: productPrice };
+    setVariants((current) => followProductDefaults(options, current, previous, { name: productName, price: productPrice }));
+  }, [options, productName, productPrice]);
 
   const updateVariant = React.useCallback((id: string, patch: Partial<DraftVariant>) => {
     setVariants((current) => current.map((variant) => variant.id === id ? { ...variant, ...patch } : variant));
@@ -304,7 +318,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           queryKey: queryKeys.products.variants(productId!),
         }),
       ]);
-      toast.success(simpleMode ? "Inventory saved" : "Options and SKUs saved");
+      toast.success(t(simpleMode ? "inventorySaved" : "variantsSaved"));
       onSaved?.();
     },
     onError: (error) => {
@@ -313,7 +327,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         onRevisionConflict?.(conflict);
         return;
       }
-      toast.error(getServerFnError(error, "Could not save the option matrix"));
+      toast.error(getServerFnError(error, t("saveFailed")));
     },
   });
 
@@ -328,9 +342,9 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
       {simpleMode ? (
-        <div className="space-y-3 rounded-lg border p-3">
-          <h3 className="text-sm font-semibold">Inventory</h3>
-          <label className="flex min-h-11 items-center gap-2 text-sm md:min-h-0">
+        <div className="space-y-3">
+          <h3 className="text-body font-medium">{t("inventory")}</h3>
+          <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
               onCheckedChange={(checked) => {
@@ -338,14 +352,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 setDirty(true);
               }}
             />
-            Track quantity
+            {t("trackQuantity")}
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             {simpleSku.trackInventory ? (
-              <label className="space-y-1 text-xs text-muted-foreground">
-                Quantity
+              <label className="space-y-1 text-body text-muted-foreground">
+                {t("quantity")}
                 <InventoryQuantityInput
-                  ariaLabel="Quantity"
+                  ariaLabel={t("quantity")}
                   value={simpleSku.stock}
                   committed={simpleCommitted}
                   onChange={(stock) => {
@@ -356,45 +370,25 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 />
               </label>
             ) : null}
-            <label className="space-y-1 text-xs text-muted-foreground">
-              SKU
+            <label className="space-y-1 text-body text-muted-foreground">
+              {t("sku")}
               <Input
                 value={simpleSku.sku}
-                placeholder={productId ? undefined : "Generated automatically"}
+                placeholder={productId ? undefined : t("skuAuto")}
                 onChange={(event) => {
                   setSimpleSku((current) => ({ ...current, sku: event.target.value }));
                   setDirty(true);
                 }}
-                className="h-11 text-sm md:h-8"
               />
             </label>
           </div>
-          {draftIssue ? <p className="text-xs text-destructive" role="alert">{draftIssue}</p> : null}
+          {draftIssue ? <p className="text-body text-destructive" role="alert">{draftIssue}</p> : null}
         </div>
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">Options and SKUs</h3>
-            {dirty && !simpleMode ? <Badge variant="outline" className="h-5 text-xs">Unsaved</Badge> : null}
-          </div>
-        </div>
-        {productId && !simpleMode ? (
-          <Button
-            type="button"
-            size="sm"
-            className="h-11 text-xs md:h-8"
-            disabled={!dirty || Boolean(matrixIssue) || mutation.isPending || productSaving}
-            onClick={onSaveRequest}
-          >
-            {mutation.isPending || productSaving ? "Saving…" : "Save options"}
-          </Button>
-        ) : null}
-      </div>
 
-      <div className="rounded-lg border bg-muted/10 p-1.5">
+      <div>
         {options.length ? (
-          <div className="divide-y overflow-hidden rounded-md border bg-background">
+          <div className="divide-y border-b">
             {options.map((option, optionIndex) => (
               <OptionRow
                 key={option.id}
@@ -408,19 +402,19 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                   [next[optionIndex], next[target]] = [next[target]!, next[optionIndex]!];
                   stageOptions(next);
                 }}
-                onChange={(next) => stageOptions(options.map((item) => item.id === option.id ? next : item))}
+                onChange={(next) => stageOptions(options.map((item) =>
+                  item.id === option.id ? withGuessedOptionType(item, next, options) : item))}
                 onRemove={() => stageOptions(options.filter((item) => item.id !== option.id))}
               />
             ))}
           </div>
         ) : null}
-        <div className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-3 text-body">
           {options.length < MAX_AXES ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-11 px-2 text-sm text-muted-foreground md:h-7 md:px-1.5"
               onClick={() => stageOptions([...options, {
                 id: draftId("option"),
                 name: "",
@@ -428,42 +422,25 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 values: [],
               }])}
             >
-              <Plus className="mr-1 h-3.5 w-3.5" /> Add option
+              <Plus className="mr-1 h-3.5 w-3.5" /> {t(options.length ? "addAnotherOption" : "addOptions")}
             </Button>
           ) : null}
-          {options.length ? <span aria-hidden="true" className="h-4 w-px bg-border" /> : null}
-          {options.length ? options.map((option, index) => (
-            <React.Fragment key={option.id}>
-              {index ? <span className="text-muted-foreground">×</span> : null}
-              <span className="whitespace-nowrap text-muted-foreground">
-                <span className="font-medium text-foreground">{option.values.length}</span>{" "}
-                {option.name.trim() || `Option ${index + 1}`}
-              </span>
-            </React.Fragment>
-          )) : <span className="text-muted-foreground">Size, Color, or another choice.</span>}
+          {/* Limits are shown before the merchant reaches them, never only at save. */}
           {options.length ? (
-            <>
-              <span className="text-muted-foreground">=</span>
-              <strong className={cn(combinationCount > MAX_COMBINATIONS && "text-destructive")}>
-                {combinationCount} possible
-              </strong>
-              {!combinationsPending && missingCombinations.length > 0 ? (
-                <span className="text-muted-foreground">· {variants.length} active</span>
-              ) : null}
-              <span className="text-muted-foreground">/ {MAX_COMBINATIONS} max</span>
-              {combinationsPending ? <Badge variant="outline" className="h-5 border-amber-300 bg-amber-50 px-1.5 text-xs text-amber-800">Changes pending</Badge> : null}
-            </>
-          ) : null}
-          {combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS ? (
-            <Button type="button" size="sm" className="ml-auto h-11 px-2.5 text-xs md:h-7" onClick={applyOptions}>
-              Update combinations
-            </Button>
+            <span className="text-muted-foreground tabular-nums">
+              <span className={cn(combinationCount > MAX_COMBINATIONS && "text-destructive")}>
+                {t("combinationSummary", { count: combinationCount, max: MAX_COMBINATIONS })}
+              </span>
+              {" · "}
+              {t("optionSummary", { count: options.length, max: MAX_AXES })}
+            </span>
           ) : null}
         </div>
       </div>
 
-      {matrixIssue && options.length > 0 ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+      {/* Problems show once the merchant has entered a value; saving explains them too. */}
+      {matrixIssue && options.some((option) => option.values.length > 0) ? (
+        <p className="text-body text-destructive" role="alert">
           {matrixIssue}
         </p>
       ) : null}
@@ -483,9 +460,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           printingDisabled={!productId || dirty}
         />
       ) : options.length > 0 && !combinationsPending ? (
-        <div className="rounded-md border border-dashed px-3 py-5 text-center text-xs text-muted-foreground">
-          Add a value to every option to generate the SKU matrix.
-        </div>
+        <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>
       ) : null}
     </section>
   );
@@ -502,12 +477,14 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
   onChange: (option: DraftOption) => void;
   onRemove: () => void;
 }) {
+  const t = useMessages(productMessages);
   const [valueInput, setValueInput] = React.useState("");
+  const optionLabel = option.name.trim() || t("optionNumber", { number: index + 1 });
   const addValues = () => {
-    const existing = new Set(option.values.map((value) => value.value.trim().toLocaleLowerCase("en-US")));
+    const existing = new Set(option.values.map((value) => normalized(value.value)));
     const nextValues = valueInput.split(/[,\n]/).map((value) => value.trim()).filter(Boolean)
       .flatMap((value) => {
-        const identity = value.toLocaleLowerCase("en-US");
+        const identity = normalized(value);
         if (existing.has(identity)) return [];
         existing.add(identity);
         return [{ id: draftId("value"), value }];
@@ -518,46 +495,50 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
   };
 
   return (
-    <div className="grid gap-1.5 p-1.5 sm:grid-cols-[260px_minmax(0,1fr)_82px] sm:items-center">
-      <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-1">
+    <div className="grid gap-2 py-3 sm:grid-cols-12 sm:items-start">
+      <div className="grid grid-cols-3 gap-2 sm:col-span-5">
         <Input
           value={option.name}
           onChange={(event) => onChange({ ...option, name: event.target.value })}
-          placeholder={`Option ${index + 1} name`}
-          aria-label={`Option ${index + 1} name`}
-          className="h-11 text-sm md:h-8"
+          placeholder={t("optionNamePlaceholder")}
+          aria-label={t("optionName", { number: index + 1 })}
+          className="col-span-2"
         />
         <Select
           value={option.standardMapping}
           onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
         >
-          <SelectTrigger aria-label={`Catalog mapping for ${option.name || `option ${index + 1}`}`} className="h-11 px-2 text-xs text-muted-foreground md:h-8">
+          <SelectTrigger aria-label={t("optionType", { name: optionLabel })} className="min-w-28">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">No feed mapping</SelectItem>
-            <SelectItem value="size">Maps to size</SelectItem>
-            <SelectItem value="color">Maps to color</SelectItem>
-            <SelectItem value="material">Maps to material</SelectItem>
-            <SelectItem value="pattern">Maps to pattern</SelectItem>
+            <SelectItem value="none">{t("optionTypeOther")}</SelectItem>
+            <SelectItem value="size">{t("optionTypeSize")}</SelectItem>
+            <SelectItem value="color">{t("optionTypeColor")}</SelectItem>
+            <SelectItem value="material">{t("optionTypeMaterial")}</SelectItem>
+            <SelectItem value="pattern">{t("optionTypePattern")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      <div className="flex min-h-11 min-w-0 flex-wrap content-center gap-1 rounded-md border px-1.5 py-0.5 md:min-h-8">
-        {option.values.map((value) => (
-          <span key={value.id} className="inline-flex h-11 items-center gap-1 rounded bg-muted pl-2 text-xs md:h-6 md:px-1.5">
-            {value.value}
-            <button
-              type="button"
-              aria-label={`Remove ${value.value}`}
-              onClick={() => onChange({ ...option, values: option.values.filter((item) => item.id !== value.id) })}
-              className="flex h-11 w-11 items-center justify-center rounded hover:bg-muted-foreground/10 md:h-auto md:w-auto"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <input
+      <div className="min-w-0 space-y-2 sm:col-span-5">
+        {option.values.length ? (
+          <div className="flex flex-wrap gap-1">
+            {option.values.map((value) => (
+              <Badge key={value.id} variant="secondary">
+                {value.value}
+                <button
+                  type="button"
+                  aria-label={t("removeValue", { value: value.value })}
+                  onClick={() => onChange({ ...option, values: option.values.filter((item) => item.id !== value.id) })}
+                  className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        <Input
           data-option-value-composer
           value={valueInput}
           onChange={(event) => setValueInput(event.target.value)}
@@ -568,20 +549,19 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
               addValues();
             }
           }}
-          placeholder={option.values.length ? "Add value" : "Type values, press Enter"}
-          className="h-11 min-w-[130px] flex-1 bg-transparent px-1 text-sm outline-none md:h-6"
-          aria-label={`Add ${option.name || `option ${index + 1}`} value`}
+          placeholder={t(option.values.length ? "addValue" : "addValuesHint")}
+          aria-label={t("addValueFor", { name: optionLabel })}
         />
       </div>
-      <div className="flex items-center justify-end gap-0.5">
-        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-6" disabled={!canMoveUp} onClick={() => onMove(-1)}>
-          <ArrowUp className="h-3.5 w-3.5" /><span className="sr-only">Move option up</span>
+      <div className="flex items-center justify-end gap-0.5 sm:col-span-2">
+        <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
+          <ArrowUp className="h-4 w-4" /><span className="sr-only">{t("moveOptionUp")}</span>
         </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-6" disabled={!canMoveDown} onClick={() => onMove(1)}>
-          <ArrowDown className="h-3.5 w-3.5" /><span className="sr-only">Move option down</span>
+        <Button type="button" variant="ghost" size="icon" disabled={!canMoveDown} onClick={() => onMove(1)}>
+          <ArrowDown className="h-4 w-4" /><span className="sr-only">{t("moveOptionDown")}</span>
         </Button>
-        <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive md:h-8 md:w-7" onClick={onRemove}>
-          <Trash2 className="h-3.5 w-3.5" /><span className="sr-only">Remove option</span>
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+          <Trash2 className="h-4 w-4" /><span className="sr-only">{t("removeOption")}</span>
         </Button>
       </div>
     </div>
@@ -602,7 +582,10 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
   committedByVariantId: ReadonlyMap<string, number>;
   printingDisabled: boolean;
 }) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
+  const nameOf = (variant: DraftVariant) => variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ");
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
@@ -647,40 +630,34 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
     setBulkImageId(undefined);
   };
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/25 px-3 py-2">
-        <div>
-          <span className="text-xs font-medium">SKU matrix</span>
-          <span className="ml-2 text-xs text-muted-foreground">{variants.length} active</span>
-        </div>
+    <div className="border-t">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b py-2">
+        <span className="text-body font-medium">{t("variantCount", { count: variants.length })}</span>
         <div className="flex items-center gap-1.5">
           {missingCombinations.length > 0 ? (
             <Popover>
               <PopoverTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-8">
-                  {missingCombinations.length} omitted
+                <Button type="button" variant="outline" size="sm">
+                  {t("notForSaleCount", { count: missingCombinations.length })}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 p-2">
                 <div className="flex items-center justify-between gap-2 border-b px-1 pb-2">
-                  <div>
-                    <p className="text-xs font-medium">Omitted combinations</p>
-                    <p className="text-xs text-muted-foreground">Not offered for sale. Saved omissions reactivate prior SKU inventory; edit it after restore.</p>
-                  </div>
-                  <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs md:h-7" onClick={onRestoreAll}>Restore all</Button>
+                  <p className="text-body text-muted-foreground">{t("notForSaleHint")}</p>
+                  <Button type="button" variant="ghost" size="sm" onClick={onRestoreAll}>{t("turnAllOn")}</Button>
                 </div>
                 <div className="max-h-56 overflow-y-auto pt-1">
                   {missingCombinations.map((valueIds) => {
-                    const label = valueIds.map((id) => valueLabel.get(id) ?? "Unknown value").join(" / ");
+                    const label = valueIds.map((id) => valueLabel.get(id) ?? "?").join(" / ");
                     return (
                       <button
                         key={combinationKey(valueIds)}
                         type="button"
                         onClick={() => onRestoreCombination(valueIds)}
-                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-left text-body hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
                       >
                         <span className="truncate">{label}</span>
-                        <span className="shrink-0 text-muted-foreground">Restore</span>
+                        <span className="shrink-0 text-muted-foreground">{t("turnOn")}</span>
                       </button>
                     );
                   })}
@@ -689,82 +666,78 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
             </Popover>
           ) : null}
           <label className="relative">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find option or SKU" aria-label="Find option or SKU" className="h-11 w-44 pl-7 text-xs md:h-8" />
+            <span className="sr-only">{t("findVariant")}</span>
+            <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("findVariant")} className="w-44" />
           </label>
         </div>
       </div>
       {selected.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-primary/5 px-3 py-1.5 text-xs">
-          <strong>{selected.size} selected</strong>
-          <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder="Price" aria-label="Bulk price" className="h-11 w-24 bg-background text-xs md:h-7" />
-          <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder="Stock" aria-label="Bulk stock" className="h-11 w-24 bg-background text-xs md:h-7" />
+        <div className="flex flex-wrap items-center gap-2 border-b bg-muted px-2 py-2 text-body">
+          <strong>{r("selected", { count: selected.size })}</strong>
+          <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder={t("price")} aria-label={t("price")} className="w-24" />
+          <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder={t("quantity")} aria-label={t("quantity")} className="w-24" />
           <VariantImagePicker
             value={bulkImageId}
             images={images}
-            label="Choose image for selected SKUs"
+            label={t("photoForSelected")}
             allowNoChange
             onChange={setBulkImageId}
           />
           <Button
             type="button"
             size="sm"
-            className="h-11 px-2 text-xs md:h-7"
             disabled={bulkPrice === "" && bulkStock === "" && bulkImageId === undefined}
             onClick={applyBulk}
           >
-            Apply
+            {t("apply")}
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-11 px-2 text-xs text-destructive md:h-7"
             disabled={selected.size >= variants.length}
-            title={selected.size >= variants.length ? "At least one sellable combination is required" : "Omit selected combinations from this product"}
+            title={selected.size >= variants.length ? t("keepOneVariant") : undefined}
             onClick={() => {
               onRemove(selected);
               setSelected(new Set());
             }}
           >
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> Omit selected
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("stopSelling")}
           </Button>
           {selectedPersistedIds.length > 0 ? (
             printingDisabled ? (
-              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled title="Save product changes before printing labels">
-                <Printer className="mr-1 h-3.5 w-3.5" /> Save before printing
+              <Button type="button" variant="outline" size="sm" disabled>
+                <Printer className="mr-1 h-3.5 w-3.5" /> {t("saveBeforePrinting")}
               </Button>
             ) : (
-              <Button asChild variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7">
+              <Button asChild variant="outline" size="sm">
                 <Link to="/admin/inventory/labels" search={{ variants: selectedPersistedIds.join(",") }}>
-                  <Printer className="mr-1 h-3.5 w-3.5" /> Print labels
+                  <Printer className="mr-1 h-3.5 w-3.5" /> {t("printLabels")}
                 </Link>
               </Button>
             )
           ) : null}
-          <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs md:h-7" onClick={() => setSelected(new Set())}>Clear selection</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>{t("clearSelection")}</Button>
         </div>
       ) : null}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[1040px] table-fixed text-xs">
-          <thead className="border-b bg-muted/10 text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="hidden md:block">
+        <table className="w-full table-fixed text-body">
+          <thead className="border-b text-left text-muted-foreground">
             <tr>
-              <th className="w-9 p-2 text-center">
-                <input type="checkbox" checked={allVisibleSelected} onChange={(event) => {
+              <th className="w-10 p-2 text-center">
+                <Checkbox checked={allVisibleSelected} onCheckedChange={(checked) => {
                   setSelected((current) => {
                     const next = new Set(current);
-                    visibleVariants.forEach((variant) => event.target.checked ? next.add(variant.id) : next.delete(variant.id));
+                    visibleVariants.forEach((variant) => checked === true ? next.add(variant.id) : next.delete(variant.id));
                     return next;
                   });
-                }} aria-label="Select visible SKUs" className="h-3.5 w-3.5" />
+                }} aria-label={r("selectAll")} />
               </th>
-              <th className="w-[20%] p-2 text-left">Combination</th>
-              <th className="w-14 p-2 text-left">Image</th>
-              <th className="w-[20%] p-2 text-left">SKU</th>
-              <th className="w-[11%] p-2 text-left">Price</th>
-              <th className="w-[11%] p-2 text-left">On hand</th>
-              <th className="w-[23%] p-2 text-left">Discount</th>
-              <th className="w-20 p-2"><span className="sr-only">Actions</span></th>
+              <th className="w-14 p-2"><span className="sr-only">{t("photo")}</span></th>
+              <th className="p-2 font-medium">{t("variant")}</th>
+              <th className="w-28 p-2 text-right font-medium">{t("price")}</th>
+              <th className="w-28 p-2 text-right font-medium">{t("quantity")}</th>
+              <th className="w-24 p-2"><span className="sr-only">{r("actions")}</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -772,33 +745,35 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               const expanded = expandedId === variant.id;
               return (
                 <React.Fragment key={variant.id}>
-                  <tr className="align-middle hover:bg-muted/15">
-                    <td className="p-1.5 text-center">
-                      <input type="checkbox" checked={selected.has(variant.id)} onChange={(event) => toggleSelected(variant.id, event.target.checked)} aria-label={`Select ${variant.sku}`} className="h-3.5 w-3.5" />
+                  <tr className="align-top">
+                    <td className="p-2 text-center">
+                      <Checkbox checked={selected.has(variant.id)} onCheckedChange={(checked) => toggleSelected(variant.id, checked === true)} aria-label={r("select", { name: nameOf(variant) })} />
                     </td>
-                    <td className="p-2 font-medium">
-                      <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex w-full items-center gap-1.5 text-left" aria-expanded={expanded}>
-                        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                        <span className="truncate">{variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}</span>
+                    <td className="p-2"><VariantImagePicker value={variant.imageId} images={images} label={t("photoFor", { name: nameOf(variant) })} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} /></td>
+                    <td className="p-2">
+                      <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex min-h-10 w-full items-center gap-1.5 rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={expanded}>
+                        {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                        <span className="min-w-0">
+                          <span className="block truncate">{nameOf(variant)}</span>
+                          <span className="block truncate font-mono font-normal text-muted-foreground">{variant.sku}</span>
+                        </span>
                       </button>
                     </td>
-                    <td className="p-1.5"><VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} /></td>
-                    <td className="p-1.5"><CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></td>
-                    <td className="p-1.5"><NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel="Price" /></td>
-                    <td className="p-1.5">
+                    <td className="p-2"><NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel={t("priceFor", { name: nameOf(variant) })} /></td>
+                    <td className="p-2">
                       <InventoryQuantityInput
+                        ariaLabel={t("quantityFor", { name: nameOf(variant) })}
                         value={variant.stock}
                         committed={committedByVariantId.get(variant.id) ?? 0}
                         onChange={(stock) => onChange(variant.id, { stock })}
                       />
                     </td>
-                    <td className="p-1.5"><DiscountInput variant={variant} onChange={(patch) => onChange(variant.id, patch)} /></td>
-                    <td className="p-1.5 text-center">
-                      <div className="flex items-center justify-center gap-0.5">
+                    <td className="p-2">
+                      <div className="flex items-center justify-end">
                       {variant.id.startsWith("var_") && !printingDisabled ? (
-                        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Print barcode label">
-                          <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
-                            <Printer className="h-3.5 w-3.5" />
+                        <Button asChild variant="ghost" size="icon">
+                          <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={t("printLabelFor", { name: nameOf(variant) })}>
+                            <Printer className="h-4 w-4" />
                           </Link>
                         </Button>
                       ) : null}
@@ -806,22 +781,21 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         disabled={variants.length === 1}
-                        title={variants.length === 1 ? "At least one sellable combination is required" : "Omit this combination"}
-                        aria-label={`Omit ${variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}`}
+                        title={variants.length === 1 ? t("keepOneVariant") : undefined}
+                        aria-label={t("stopSellingVariant", { name: nameOf(variant) })}
                         onClick={() => onRemove(new Set([variant.id]))}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                       </div>
                     </td>
                   </tr>
                   {expanded ? (
-                    <tr className="bg-muted/10">
+                    <tr>
                       <td />
-                      <td colSpan={7} className="p-2.5">
-                        <AdvancedSkuFields variant={variant} onChange={(patch) => onChange(variant.id, patch)} />
+                      <td colSpan={5} className="px-2 pb-4">
+                        <AdvancedSkuFields variant={variant} name={nameOf(variant)} onChange={(patch) => onChange(variant.id, patch)} />
                       </td>
                     </tr>
                   ) : null}
@@ -833,82 +807,77 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
       </div>
       <div className="divide-y md:hidden">
         {visibleVariants.map((variant) => (
-          <div key={variant.id} className="space-y-2 p-3">
-            <div className="grid grid-cols-[44px_44px_minmax(0,1fr)_44px] items-center gap-2 min-[360px]:grid-cols-[44px_44px_minmax(0,1fr)_44px_96px]">
-              <label className="flex h-11 w-11 shrink-0 items-center justify-center">
-                <input type="checkbox" checked={selected.has(variant.id)} onChange={(event) => toggleSelected(variant.id, event.target.checked)} aria-label={`Select ${variant.sku}`} className="h-4 w-4" />
+          <div key={variant.id} className="space-y-2 py-3">
+            <div className="flex items-center gap-2">
+              <label className="flex h-11 w-8 shrink-0 items-center justify-center">
+                <Checkbox checked={selected.has(variant.id)} onCheckedChange={(checked) => toggleSelected(variant.id, checked === true)} aria-label={r("select", { name: nameOf(variant) })} />
               </label>
-              <VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} />
-              <strong className="min-w-0 flex-1 truncate text-xs">{variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}</strong>
-              <button
+              <VariantImagePicker value={variant.imageId} images={images} label={t("photoFor", { name: nameOf(variant) })} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} />
+              <strong className="min-w-0 flex-1 truncate text-body">{nameOf(variant)}</strong>
+              <Button
                 type="button"
-                aria-label={`${expandedId === variant.id ? "Hide" : "Show"} additional fields for ${variant.sku}`}
+                variant="ghost"
+                size="icon"
+                aria-label={t("moreFieldsFor", { name: nameOf(variant) })}
                 aria-expanded={expandedId === variant.id}
                 onClick={() => onExpandedChange(expandedId === variant.id ? null : variant.id)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded hover:bg-muted"
               >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", expandedId !== variant.id && "-rotate-90")} />
-              </button>
-              <div className="col-span-4 flex justify-end gap-2 min-[360px]:col-span-1">
+                <ChevronDown className={cn("h-4 w-4", expandedId !== variant.id && "-rotate-90")} />
+              </Button>
+              <div className="flex shrink-0 justify-end gap-1">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11 text-muted-foreground hover:text-destructive md:h-8 md:w-8"
                   disabled={variants.length === 1}
-                  title={variants.length === 1 ? "At least one sellable combination is required" : "Omit this combination"}
-                  aria-label={`Omit ${variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}`}
+                  title={variants.length === 1 ? t("keepOneVariant") : undefined}
+                  aria-label={t("stopSellingVariant", { name: nameOf(variant) })}
                   onClick={() => onRemove(new Set([variant.id]))}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
                 {variant.id.startsWith("var_") && !printingDisabled ? (
-                  <Button asChild variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground md:h-8 md:w-8" title="Print barcode label">
-                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
-                      <Printer className="h-3.5 w-3.5" />
+                  <Button asChild variant="ghost" size="icon">
+                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={t("printLabelFor", { name: nameOf(variant) })}>
+                      <Printer className="h-4 w-4" />
                     </Link>
                   </Button>
                 ) : null}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <label className="space-y-1 text-xs text-muted-foreground">SKU<CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></label>
-              <label className="space-y-1 text-xs text-muted-foreground">Price<NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel="Price" /></label>
-              <label className="space-y-1 text-xs text-muted-foreground">On hand<InventoryQuantityInput value={variant.stock} committed={committedByVariantId.get(variant.id) ?? 0} onChange={(stock) => onChange(variant.id, { stock })} /></label>
-              <label className="space-y-1 text-xs text-muted-foreground">Discount<DiscountInput variant={variant} onChange={(patch) => onChange(variant.id, patch)} /></label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1 text-body text-muted-foreground">{t("price")}<NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel={t("priceFor", { name: nameOf(variant) })} /></label>
+              <label className="space-y-1 text-body text-muted-foreground">{t("quantity")}<InventoryQuantityInput ariaLabel={t("quantityFor", { name: nameOf(variant) })} value={variant.stock} committed={committedByVariantId.get(variant.id) ?? 0} onChange={(stock) => onChange(variant.id, { stock })} /></label>
             </div>
-            {expandedId === variant.id ? <AdvancedSkuFields variant={variant} onChange={(patch) => onChange(variant.id, patch)} /> : null}
+            {expandedId === variant.id ? <AdvancedSkuFields variant={variant} name={nameOf(variant)} onChange={(patch) => onChange(variant.id, patch)} /> : null}
           </div>
         ))}
       </div>
-      {filteredVariants.length === 0 ? <div className="px-3 py-6 text-center text-xs text-muted-foreground">No SKUs match this search.</div> : null}
-      <div className="flex items-center justify-between border-t bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
-        <span>
-          {filteredVariants.length
-            ? `Showing ${safePage * pageSize + 1}–${Math.min((safePage + 1) * pageSize, filteredVariants.length)} of ${filteredVariants.length}`
-            : "Showing 0"}
-          {filteredVariants.length !== variants.length ? ` · ${variants.length} total` : ""}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span className="hidden sm:inline">Zero stock is valid and appears sold out</span>
-          {pageCount > 1 ? (
-            <>
-              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</Button>
-              <span>{safePage + 1}/{pageCount}</span>
-              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs md:h-7" disabled={safePage >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>Next</Button>
-            </>
-          ) : null}
+      {filteredVariants.length === 0 ? <div className="px-3 py-6 text-center text-body text-muted-foreground">{r("noResults")}</div> : null}
+      {pageCount > 1 ? (
+        <div className="flex items-center justify-between border-t py-2 text-body text-muted-foreground">
+          <span>
+            {r("showing", {
+              start: safePage * pageSize + 1,
+              end: Math.min((safePage + 1) * pageSize, filteredVariants.length),
+              total: filteredVariants.length,
+            })}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button type="button" variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>{r("previous")}</Button>
+            <Button type="button" variant="outline" size="sm" disabled={safePage >= pageCount - 1} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>{r("next")}</Button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
 
 function CompactInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
-  return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} className="h-11 px-2 text-sm md:h-8" />;
+  return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} />;
 }
 
-function NumberInput({ value, onChange, ariaLabel, integer = false, className }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean; className?: string }) {
+function NumberInput({ value, onChange, ariaLabel, integer = false }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean }) {
   const [draft, setDraft] = React.useState(String(value));
   React.useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
@@ -921,64 +890,49 @@ function NumberInput({ value, onChange, ariaLabel, integer = false, className }:
     setDraft(String(next));
     onChange(next);
   };
-  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-11 px-2 text-sm md:h-8", className)} />;
+  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} />;
 }
 
-function InventoryQuantityInput({ value, committed, onChange, ariaLabel = "On-hand stock" }: {
+function InventoryQuantityInput({ value, committed, onChange, ariaLabel }: {
   value: number;
   committed: number;
   onChange: (value: number) => void;
   ariaLabel?: string;
 }) {
+  const t = useMessages(productMessages);
   const available = Math.max(0, value - committed);
   return (
-    <div className="relative">
-      <NumberInput
-        value={value}
-        integer
-        onChange={onChange}
-        ariaLabel={ariaLabel}
-        className={committed > 0 ? "pr-12 md:pr-8" : undefined}
-      />
+    <div className="space-y-1">
+      <NumberInput value={value} integer onChange={onChange} ariaLabel={ariaLabel ?? t("quantity")} />
       {committed > 0 ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:right-1 md:top-1 md:h-6 md:w-6"
-              aria-label={`${available} available to sell; ${committed} committed from ${value} on hand`}
-            >
-              <Info className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-64">
-            <p className="font-medium">{available} available to sell</p>
-            <p className="opacity-80">{value} on hand − {committed} committed to open orders</p>
-          </TooltipContent>
-        </Tooltip>
+        <p className="text-right text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value, committed })}>
+          {t("availableToSell", { count: available })}
+        </p>
       ) : null}
     </div>
   );
 }
 
-function VariantImagePicker({ value, images, onChange, label = "Choose SKU image", allowNoChange = false }: {
+// Variant photo = an exact product image, or null to use the product's main photo.
+function VariantImagePicker({ value, images, onChange, label, allowNoChange = false }: {
   value: string | null | undefined;
   images: ProductSkuImageChoice[];
   onChange: (value: string | null | undefined) => void;
   label?: string;
   allowNoChange?: boolean;
 }) {
+  const t = useMessages(productMessages);
   const selected = images.find((image) => image.id === value);
-  const usesPrimaryFallback = value === null;
-  const triggerLabel = value === undefined
-    ? `${label}. No image change staged`
-    : usesPrimaryFallback
-      ? `${label}. Using automatic product image`
-      : `${label}. Using ${selected?.altText ?? "an exact product image"}${selected?.status === "trashed" ? ", in trash" : ""}`;
+  const state = value === undefined
+    ? t("photoNoChange")
+    : value === null
+      ? t("mainPhoto")
+      : `${selected?.altText || t("photo")}${selected?.status === "trashed" ? ` (${t("mediaInTrash")})` : ""}`;
+  const triggerLabel = `${label ?? t("variantPhoto")}: ${state}`;
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded border bg-background md:h-8 md:w-10" aria-label={triggerLabel}>
+        <Button type="button" variant="outline" size="icon" className="overflow-hidden" aria-label={triggerLabel}>
           {selected
             ? <img
                 src={mediaImageUrl(selected.url, 80)}
@@ -986,42 +940,28 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
                 className="h-full w-full object-contain object-center"
               />
             : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
-          {usesPrimaryFallback ? (
-            <span
-              aria-hidden="true"
-              title="Automatic product image"
-              className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none text-muted-foreground"
-            >
-              F
-            </span>
-          ) : null}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
         {allowNoChange ? (
           <button
             type="button"
             onClick={() => onChange(undefined)}
-            className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === undefined && "bg-muted")}
+            className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-body hover:bg-muted", value === undefined && "bg-muted")}
           >
             <span className="flex h-9 w-9 items-center justify-center rounded border"><ImageIcon className="h-4 w-4" /></span>
-            No image change
+            {t("photoNoChange")}
           </button>
         ) : null}
         <button
           type="button"
           onClick={() => onChange(null)}
-          aria-label="Use the automatic product image"
-          className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}
+          className={cn("mb-1 flex min-h-11 w-full items-center gap-2 rounded p-1.5 text-left text-body hover:bg-muted", value === null && "bg-muted")}
         >
-          <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded border">
+          <span className="flex h-9 w-9 items-center justify-center rounded border">
             <ImageIcon className="h-4 w-4" />
-            <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none">F</span>
           </span>
-          <span>
-            <span className="block">Automatic product image</span>
-            <span className="block text-xs text-muted-foreground">Uses the best product image available</span>
-          </span>
+          {t("mainPhoto")}
         </button>
         <div className="grid max-h-56 grid-cols-4 gap-1 overflow-y-auto">
           {images.map((image, index) => {
@@ -1032,35 +972,34 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
                 type="button"
                 disabled={unavailable}
                 onClick={() => onChange(image.id)}
-                aria-label={`${unavailable ? "Unavailable: " : "Use "}${image.altText || `product image ${index + 1}`} as the exact SKU image${image.status === "trashed" ? ", in trash" : ""}`}
+                aria-label={`${image.altText || t("photoNumber", { number: index + 1 })}${image.status === "trashed" ? ` (${t("mediaInTrash")})` : ""}`}
                 className={cn(
                   "relative aspect-square overflow-hidden rounded border-2",
                   value === image.id ? "border-primary" : "border-transparent",
                   unavailable && "cursor-not-allowed opacity-45",
                 )}
-                title={image.status === "trashed" ? "In trash · existing assignments remain" : image.altText || "Product image"}
+                title={image.status === "trashed" ? t("mediaInTrash") : image.altText || undefined}
               >
                 <img
                   src={mediaImageUrl(image.url, 96)}
                   alt=""
                   className="h-full w-full object-contain object-center"
                 />
-                {image.status === "trashed" ? <span className="absolute inset-x-0 bottom-0 bg-amber-950/80 py-0.5 text-xs text-white">Trash</span> : null}
+                {image.status === "trashed" ? <span className="absolute inset-x-0 bottom-0 truncate bg-foreground py-0.5 text-body text-background">{t("mediaInTrash")}</span> : null}
               </button>
             );
           })}
         </div>
         {images.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-muted-foreground">
-            Add product media first. SKUs without an exact image use the automatic product image.
-          </p>
+          <p className="px-1 py-2 text-body text-muted-foreground">{t("addPhotosFirst")}</p>
         ) : null}
       </PopoverContent>
     </Popover>
   );
 }
 
-function DiscountInput({ variant, onChange }: { variant: DraftVariant; onChange: (patch: Partial<DraftVariant>) => void }) {
+function DiscountInput({ variant, name, onChange }: { variant: DraftVariant; name: string; onChange: (patch: Partial<DraftVariant>) => void }) {
+  const t = useMessages(productMessages);
   const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
     amount > 0 ? variant.discountType : "none",
@@ -1080,13 +1019,13 @@ function DiscountInput({ variant, onChange }: { variant: DraftVariant; onChange:
           }
         }}
       >
-        <SelectTrigger aria-label={`Discount type for ${variant.sku}`} className="h-11 min-w-[104px] flex-1 px-2 text-xs md:h-8">
+        <SelectTrigger aria-label={t("discountTypeFor", { name })} className="min-w-24 flex-1">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">None</SelectItem>
-          <SelectItem value="percentage">Percentage</SelectItem>
-          <SelectItem value="flat">Fixed amount</SelectItem>
+          <SelectItem value="none">{t("noDiscount")}</SelectItem>
+          <SelectItem value="percentage">{t("discountPercentage")}</SelectItem>
+          <SelectItem value="flat">{t("discountFixed")}</SelectItem>
         </SelectContent>
       </Select>
       {mode !== "none" ? (
@@ -1095,68 +1034,69 @@ function DiscountInput({ variant, onChange }: { variant: DraftVariant; onChange:
           min={0}
           max={mode === "percentage" ? 100 : undefined}
           value={amount}
-          aria-label={`${mode === "percentage" ? "Percentage" : "Fixed amount"} discount for ${variant.sku}`}
+          aria-label={t("discountValueFor", { name })}
           onChange={(event) => onChange(mode === "flat"
             ? { discountAmount: Math.max(0, event.target.valueAsNumber || 0) }
             : { discountPercentage: Math.min(100, Math.max(0, event.target.valueAsNumber || 0)) })}
-          className="h-11 w-20 px-2 text-sm md:h-8"
+          className="w-20"
         />
       ) : null}
     </div>
   );
 }
 
-function AdvancedSkuFields({ variant, onChange }: { variant: DraftVariant; onChange: (patch: Partial<DraftVariant>) => void }) {
+function AdvancedSkuFields({ variant, name, onChange }: { variant: DraftVariant; name: string; onChange: (patch: Partial<DraftVariant>) => void }) {
+  const t = useMessages(productMessages);
   const isUnsavedSku = variant.id.startsWith("draft_");
   return (
-    <div className="grid gap-2 sm:grid-cols-[140px_1fr_130px_auto] sm:items-end">
-      <label className="space-y-1 text-xs text-muted-foreground">
-        Barcode type
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="space-y-1 text-body text-muted-foreground">
+        {t("sku")}
+        <CompactInput value={variant.sku} onChange={(sku) => onChange({ sku })} ariaLabel={t("skuFor", { name })} />
+      </label>
+      <label className="space-y-1 text-body text-muted-foreground">
+        {t("discount")}
+        <DiscountInput variant={variant} name={name} onChange={onChange} />
+      </label>
+      <label className="space-y-1 text-body text-muted-foreground">
+        {t("barcodeType")}
         <Select value={variant.barcodeType ?? "none"} onValueChange={(value) => onChange({ barcodeType: value === "none" ? null : value as DraftVariant["barcodeType"], barcode: value === "none" ? null : variant.barcode })}>
-          <SelectTrigger className="h-11 text-xs md:h-8"><SelectValue /></SelectTrigger>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">{isUnsavedSku ? "Automatic" : "No barcode"}</SelectItem>
+            <SelectItem value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</SelectItem>
             <SelectItem value="ean13">EAN-13</SelectItem>
             <SelectItem value="upc">UPC</SelectItem>
             <SelectItem value="isbn">ISBN</SelectItem>
             <SelectItem value="gtin">GTIN</SelectItem>
-            <SelectItem value="code128">Internal Code 128</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
+            <SelectItem value="code128">Code 128</SelectItem>
+            <SelectItem value="custom">{t("barcodeCustom")}</SelectItem>
           </SelectContent>
         </Select>
       </label>
-      <label className="space-y-1 text-xs text-muted-foreground">
-        Barcode value
+      <label className="space-y-1 text-body text-muted-foreground">
+        {t("barcode")}
         <Input
           value={variant.barcode ?? ""}
           disabled={!variant.barcodeType}
-          placeholder={!variant.barcodeType
-            ? isUnsavedSku ? "Generated automatically on save" : "No barcode"
-            : "Enter barcode"}
-          aria-label={`Barcode for ${variant.sku}`}
+          placeholder={!variant.barcodeType ? t(isUnsavedSku ? "barcodeAutoHint" : "noBarcode") : undefined}
+          aria-label={t("barcodeFor", { name })}
           onChange={(event) => onChange({ barcode: event.target.value || null })}
-          className="h-11 text-sm disabled:opacity-100 md:h-8"
         />
-        {!variant.barcodeType && isUnsavedSku ? (
-          <span className="block text-xs text-muted-foreground">A unique internal Code 128 barcode will be generated automatically on save.</span>
-        ) : null}
       </label>
-      <label className="space-y-1 text-xs text-muted-foreground">
-        Weight (g)
+      <label className="space-y-1 text-body text-muted-foreground">
+        {t("weightGrams")}
         <Input
           type="number"
           min={0}
           inputMode="numeric"
           value={variant.weight ?? ""}
-          aria-label={`Weight in grams for ${variant.sku}`}
-          placeholder="e.g. 500"
+          aria-label={t("weightFor", { name })}
           onChange={(event) => onChange({ weight: event.target.value === "" ? null : Math.max(0, event.target.valueAsNumber || 0) })}
-          className="h-11 text-sm md:h-8"
         />
       </label>
-      <label className="flex min-h-11 items-center gap-2 text-xs md:min-h-8">
-        <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']" />
-        Track stock
+      <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
+        <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
+        {t("trackQuantity")}
       </label>
     </div>
   );

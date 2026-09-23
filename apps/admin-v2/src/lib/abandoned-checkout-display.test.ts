@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildAbandonedCheckoutListPresentation,
   formatAbandonedCheckoutId,
-  formatAbandonedCheckoutItemCount,
-  formatAbandonedCheckoutRecordCount,
   parseAbandonedCheckoutDisplay,
 } from "./abandoned-checkout-display";
 
@@ -12,17 +9,7 @@ describe("abandoned checkout identifiers", () => {
     expect(formatAbandonedCheckoutId("chk_1234")).toBe("chk_1234");
     expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpbW")).toBe("S5I82lT…IUpbW");
     expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpcX")).toBe("S5I82lT…IUpcX");
-    expect(formatAbandonedCheckoutId("  ")).toBe("Unknown");
-  });
-});
-
-describe("abandoned checkout count copy", () => {
-  it("uses natural singular and plural labels", () => {
-    expect(formatAbandonedCheckoutItemCount(0)).toBe("0 items");
-    expect(formatAbandonedCheckoutItemCount(1)).toBe("1 item");
-    expect(formatAbandonedCheckoutItemCount(4)).toBe("4 items");
-    expect(formatAbandonedCheckoutRecordCount(1)).toBe("1 checkout record");
-    expect(formatAbandonedCheckoutRecordCount(2)).toBe("2 checkout records");
+    expect(formatAbandonedCheckoutId("  ")).toBe("—");
   });
 });
 
@@ -56,7 +43,7 @@ describe("abandoned checkout display parsing", () => {
 
     expect(display).toMatchObject({
       kind: "cart",
-      stage: "Info Captured",
+      stage: "infoCaptured",
       total: 1200,
       customerInfo: {
         name: "Buyer",
@@ -111,7 +98,7 @@ describe("abandoned checkout display parsing", () => {
 
     expect(display).toMatchObject({
       kind: "stale_hosted_payment_order",
-      stage: "Archived hosted payment",
+      stage: "paymentNotFinished",
       orderId: "order_1",
       paymentMethod: "sslcommerz",
       paymentStatus: "failed",
@@ -137,7 +124,7 @@ describe("abandoned checkout display parsing", () => {
 
     expect(display).toMatchObject({
       kind: "unknown",
-      stage: "Unreadable",
+      stage: "unreadable",
       total: 0,
       customerInfo: {
         phone: "+8801711111111",
@@ -160,7 +147,7 @@ describe("abandoned checkout display parsing", () => {
     });
 
     expect(display.customerInfo.phone).toBeNull();
-    expect(display.stage).toBe("Cart Started");
+    expect(display.stage).toBe("cartStarted");
     expect(display.paymentMethod).toBeNull();
     expect(display.paymentStatus).toBeNull();
   });
@@ -174,53 +161,7 @@ describe("abandoned checkout display parsing", () => {
     });
 
     expect(display.customerInfo.phone).toBe("+8801712345678");
-    expect(display.stage).toBe("Info Captured");
-  });
-
-  it("labels cart values and hosted-payment order totals without conflating them", () => {
-    const cartPresentation = buildAbandonedCheckoutListPresentation({
-      kind: "cart",
-      stage: "Cart Started",
-      variant: "secondary",
-      items: [{ id: "item_1", name: "Shoe", quantity: 1, price: 500 }],
-      customerInfo: {},
-      total: 500,
-      orderId: null,
-      paymentMethod: null,
-      paymentStatus: null,
-      paidAmount: null,
-      balanceDue: null,
-    });
-    const hostedPresentation = buildAbandonedCheckoutListPresentation({
-      kind: "stale_hosted_payment_order",
-      stage: "Archived hosted payment",
-      variant: "outline",
-      items: [],
-      customerInfo: {},
-      total: 3499,
-      orderId: "order_1",
-      paymentMethod: "sslcommerz",
-      paymentStatus: "failed",
-      paidAmount: 0,
-      balanceDue: 3499,
-    });
-
-    expect(cartPresentation).toEqual({
-      checkoutType: "Cart session",
-      cartContents: "1 item",
-      amountLabel: "Cart value",
-      amount: 500,
-      paymentProvider: null,
-      paymentStatus: null,
-    });
-    expect(hostedPresentation).toEqual({
-      checkoutType: "Hosted payment recovery",
-      cartContents: "Not retained",
-      amountLabel: "Order total",
-      amount: 3499,
-      paymentProvider: "SSLCOMMERZ",
-      paymentStatus: "Failed",
-    });
+    expect(display.stage).toBe("infoCaptured");
   });
 
   it("does not expose an invalid stored phone when checkout data is unreadable", () => {

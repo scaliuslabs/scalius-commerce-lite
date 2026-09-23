@@ -20,6 +20,8 @@ import {
 } from "~/lib/admin-api-error";
 import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
 import { queryKeys } from "~/lib/query-keys";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
@@ -135,19 +137,13 @@ export function useProductSubmit({
             ]
           : []),
       ]);
-      toast.success("Success", {
-        description: isEdit
-          ? "Product updated successfully."
-          : "Product created successfully.",
-      });
+      toast.success(translate(productMessages, isEdit ? "productSaved" : "productAdded"));
 
       if (onSuccess) {
         onSuccess();
       } else if (!isEdit) {
         if (!savedProductId) {
-          toast.error("Error", {
-            description: "Product was created but no product ID was returned.",
-          });
+          toast.error(translate(productMessages, "addedWithoutId"));
           return;
         }
         void navigate({
@@ -170,19 +166,14 @@ export function useProductSubmit({
         setMediaRemovalConflict(mediaConflict);
         return;
       }
-      const errorMessage = getServerFnError(error, "Failed to save product");
+      const errorMessage = getServerFnError(error, translate(productMessages, "saveFailed"));
       if (errorMessage.includes("slug already exists")) {
-        form.setError("slug", {
-          type: "manual",
-          message:
-            "This slug is already in use. Please choose a different one.",
-        });
-        setAlertMessage(
-          "This slug is already in use. Please choose a different one.",
-        );
+        const slugTaken = translate(productMessages, "slugTaken");
+        form.setError("slug", { type: "manual", message: slugTaken });
+        setAlertMessage(slugTaken);
         setShowAlert(true);
       } else {
-        toast.error("Error", { description: errorMessage });
+        toast.error(errorMessage);
       }
     },
   });

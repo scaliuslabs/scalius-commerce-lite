@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -10,6 +11,9 @@ import {
   getAdminOrderCancellationBlockedReason,
   getAdminOrderStatusTransitions,
 } from "@/lib/admin-order-status-policy";
+import { useMessages } from "~/i18n";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { orderListMessages } from "~/i18n/order-list";
 
 export interface OrderStatusSelectorMenuProps {
   status: string;
@@ -32,41 +36,33 @@ export function OrderStatusSelectorMenu({
   onStatusUpdate,
   trigger,
 }: OrderStatusSelectorMenuProps) {
+  const t = useMessages(orderListMessages);
+  const to = useMessages(orderMessages);
   const paymentState = { paymentStatus, paidAmount };
   const transitions = getAdminOrderStatusTransitions(status, paymentState);
-  const cancellationBlockedReason = getAdminOrderCancellationBlockedReason(
-    status,
-    paymentState,
-  );
+  const cancelNeedsRefund = getAdminOrderCancellationBlockedReason(status, paymentState) !== null;
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>{t("changeStatus")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={status}
-          onValueChange={(newStatus) => onStatusUpdate(orderId, newStatus)}
+          onValueChange={(next) => onStatusUpdate(orderId, next)}
         >
-          {transitions.map((s) => (
-            <DropdownMenuRadioItem
-              key={s}
-              value={s}
-              className="cursor-pointer text-sm hover:bg-[var(--muted)]"
-            >
-              {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+          {transitions.map((next) => (
+            <DropdownMenuRadioItem key={next} value={next}>
+              {orderStatusLabel(to, next)}
             </DropdownMenuRadioItem>
           ))}
-          {transitions.length === 0 && (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No transitions available (terminal state)
-            </div>
-          )}
-          {cancellationBlockedReason && (
-            <div className="border-t border-border px-2 py-2 text-xs text-muted-foreground">
-              {cancellationBlockedReason}
-            </div>
-          )}
         </DropdownMenuRadioGroup>
+        {transitions.length === 0 ? (
+          <p className="px-2 py-1.5 text-body text-muted-foreground">{t("noTransitions")}</p>
+        ) : null}
+        {cancelNeedsRefund ? (
+          <p className="border-t px-2 py-2 text-body text-muted-foreground">{t("cancelNeedsRefund")}</p>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

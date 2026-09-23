@@ -2,21 +2,26 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Form } from "@/components/ui/form";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 import { StatusCard } from "./StatusCard";
 import type { ProductFormValues } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Harness() {
-  const form = useForm<ProductFormValues>({
-    defaultValues: { isActive: false, freeDelivery: false, productCondition: "new" } as ProductFormValues,
+let form: UseFormReturn<ProductFormValues> | null = null;
+
+function Harness({ isActive, storefrontUrl }: { isActive: boolean; storefrontUrl?: string }) {
+  const hookForm = useForm<ProductFormValues>({
+    defaultValues: { isActive, freeDelivery: false, productCondition: "new" } as ProductFormValues,
   });
+  form = hookForm;
   return (
-    <Form {...form}>
-      <StatusCard form={form} />
+    <Form {...hookForm}>
+      <StatusCard form={hookForm} storefrontUrl={storefrontUrl} />
     </Form>
   );
 }
@@ -36,15 +41,32 @@ describe("StatusCard", () => {
     host.remove();
   });
 
-  it("updates the status badge when Published is toggled", async () => {
-    await act(async () => root.render(<Harness />));
-    expect(host.textContent).toContain("Draft");
+  const statusTrigger = () =>
+    host.querySelector(`[aria-label="${translate(productMessages, "status")}"]`);
 
-    const publishedSwitch = host.querySelector<HTMLButtonElement>('button[role="switch"]');
-    await act(async () => publishedSwitch?.click());
+  it("shows Active or Draft for the saved isActive value", async () => {
+    await act(async () => root.render(<Harness isActive={false} />));
+    expect(statusTrigger()?.textContent).toBe(translate(productMessages, "statusDraft"));
 
-    expect(publishedSwitch?.getAttribute("aria-checked")).toBe("true");
-    expect(host.textContent).toContain("Active");
-    expect(host.textContent).not.toContain("Draft");
+    await act(async () => root.render(<Harness key="active" isActive />));
+    expect(statusTrigger()?.textContent).toBe(translate(productMessages, "statusActive"));
+  });
+
+  it("switches free delivery on", async () => {
+    await act(async () => root.render(<Harness isActive={false} />));
+
+    const freeDelivery = host.querySelector<HTMLButtonElement>('button[role="switch"]');
+    await act(async () => freeDelivery?.click());
+
+    expect(freeDelivery?.getAttribute("aria-checked")).toBe("true");
+    expect(form?.getValues("freeDelivery")).toBe(true);
+  });
+
+  it("links to the storefront only for saved products", async () => {
+    await act(async () => root.render(<Harness isActive />));
+    expect(host.querySelector("a")).toBeNull();
+
+    await act(async () => root.render(<Harness isActive storefrontUrl="https://shop.example/products/mug" />));
+    expect(host.querySelector("a")?.getAttribute("href")).toBe("https://shop.example/products/mug");
   });
 });

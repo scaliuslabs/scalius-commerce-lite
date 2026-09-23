@@ -76,11 +76,6 @@ export function getOutstandingReceiptQuantity(line: OrderReturnLineDto): number 
   return Math.max(0, line.approvedQuantity - line.receivedQuantity);
 }
 
-export function returnStatusLabel(status: OrderReturnStatus): string {
-  if (status === "receiving") return "Partially received";
-  return status[0]!.toUpperCase() + status.slice(1);
-}
-
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {

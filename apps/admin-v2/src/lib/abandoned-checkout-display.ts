@@ -28,9 +28,17 @@ export interface AbandonedCheckoutCustomerInfo {
 
 export type AbandonedCheckoutStageVariant = "secondary" | "outline" | "default";
 
+/** Catalog key suffix for how far the customer got (see `stage.*` in i18n/order-list). */
+export type AbandonedCheckoutStage =
+  | "infoCaptured"
+  | "cartStarted"
+  | "sessionCreated"
+  | "paymentNotFinished"
+  | "unreadable";
+
 export interface ParsedAbandonedCheckoutDisplay {
   kind: "cart" | "stale_hosted_payment_order" | "unknown";
-  stage: string;
+  stage: AbandonedCheckoutStage;
   variant: AbandonedCheckoutStageVariant;
   items: AbandonedCheckoutCartItem[];
   customerInfo: AbandonedCheckoutCustomerInfo;
@@ -42,67 +50,13 @@ export interface ParsedAbandonedCheckoutDisplay {
   balanceDue: number | null;
 }
 
-export interface AbandonedCheckoutListPresentation {
-  checkoutType: string;
-  cartContents: string;
-  amountLabel: "Cart value" | "Order total" | "Amount";
-  amount: number | null;
-  paymentProvider: string | null;
-  paymentStatus: string | null;
-}
-
 export function formatAbandonedCheckoutId(value: string | null | undefined): string {
   const normalized = value?.trim() ?? "";
-  if (!normalized) return "Unknown";
+  if (!normalized) return "—";
 
   const compact = normalized.replace(/^chk_session_/i, "") || normalized;
   if (compact.length <= 16) return compact;
   return `${compact.slice(0, 7)}…${compact.slice(-5)}`;
-}
-
-export function formatAbandonedCheckoutItemCount(count: number): string {
-  return `${count} ${count === 1 ? "item" : "items"}`;
-}
-
-export function formatAbandonedCheckoutRecordCount(count: number): string {
-  return `${count} checkout ${count === 1 ? "record" : "records"}`;
-}
-
-export function buildAbandonedCheckoutListPresentation(
-  display: ParsedAbandonedCheckoutDisplay,
-): AbandonedCheckoutListPresentation {
-  if (display.kind === "cart") {
-    return {
-      checkoutType: "Cart session",
-      cartContents: formatAbandonedCheckoutItemCount(display.items.length),
-      amountLabel: "Cart value",
-      amount: display.total,
-      paymentProvider: null,
-      paymentStatus: null,
-    };
-  }
-
-  if (display.kind === "stale_hosted_payment_order") {
-    return {
-      checkoutType: "Hosted payment recovery",
-      cartContents: "Not retained",
-      amountLabel: "Order total",
-      amount: display.total,
-      paymentProvider: display.paymentMethod?.toUpperCase() ?? null,
-      paymentStatus: display.paymentStatus
-        ? `${display.paymentStatus.charAt(0).toUpperCase()}${display.paymentStatus.slice(1)}`
-        : null,
-    };
-  }
-
-  return {
-    checkoutType: "Unknown record",
-    cartContents: "Unavailable",
-    amountLabel: "Amount",
-    amount: null,
-    paymentProvider: null,
-    paymentStatus: null,
-  };
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -194,10 +148,10 @@ function parseCartShape(data: Record<string, unknown>): ParsedAbandonedCheckoutD
   return {
     kind: "cart",
     stage: hasCustomerInfo
-      ? "Info Captured"
+      ? "infoCaptured"
       : items.length > 0
-        ? "Cart Started"
-        : "Session Created",
+        ? "cartStarted"
+        : "sessionCreated",
     variant: hasCustomerInfo ? "default" : items.length > 0 ? "secondary" : "outline",
     items,
     customerInfo,
@@ -238,7 +192,7 @@ function parseArchivedHostedOrder(data: Record<string, unknown>): ParsedAbandone
 
   return {
     kind: "stale_hosted_payment_order",
-    stage: "Archived hosted payment",
+    stage: "paymentNotFinished",
     variant: "outline",
     items: [],
     customerInfo,
@@ -284,13 +238,13 @@ export function parseAbandonedCheckoutDisplay(
           : cartDisplay.variant,
       stage:
         phone || Object.values(cartDisplay.customerInfo).some(Boolean)
-          ? "Info Captured"
+          ? "infoCaptured"
           : cartDisplay.stage,
     };
   } catch {
     return {
       kind: "unknown",
-      stage: "Unreadable",
+      stage: "unreadable",
       variant: "outline",
       items: [],
       customerInfo: {

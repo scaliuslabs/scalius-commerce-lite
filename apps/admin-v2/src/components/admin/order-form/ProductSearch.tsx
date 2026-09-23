@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandGroup,
@@ -12,11 +8,14 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Loader2, Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
+import { useMessages } from "@/i18n";
+import { orderFormMessages } from "@/i18n/order-form";
+import { resourceMessages } from "@/i18n/resource";
+import { discountedUnitPrice } from "./order-item-presentation";
 
 interface ProductSearchProps {
   searchTerm: string;
@@ -31,11 +30,12 @@ interface ProductSearchProps {
   isLoadMoreError: boolean;
   retry: () => void;
   selectedProduct: Product | null;
+  isLoadingVariants: boolean;
   selectProduct: (product: Product) => void;
   clearProductSelection: () => void;
-  calculateDiscountedPrice: (product: Product, variantId: string | null) => string;
 }
 
+/** Product picker: server-backed catalog search with "load more". */
 export function ProductSearch({
   searchTerm,
   setSearchTerm,
@@ -49,189 +49,149 @@ export function ProductSearch({
   isLoadMoreError,
   retry,
   selectedProduct,
+  isLoadingVariants,
   selectProduct,
   clearProductSelection,
-  calculateDiscountedPrice,
 }: ProductSearchProps) {
   const { refs } = useOrderForm();
-  const { symbol } = useCurrency();
-  const [productSearchOpen, setProductSearchOpen] = React.useState(false);
+  const { fmt } = useCurrency();
+  const t = useMessages(orderFormMessages);
+  const r = useMessages(resourceMessages);
+  const [open, setOpen] = React.useState(false);
 
   return (
-    <div className="flex gap-2 items-end">
-      <div className="flex-1">
-        <label htmlFor="product-search-button" className="mb-2 block font-medium text-sm">
-          Add product
-        </label>
-        <Popover
-          open={productSearchOpen}
-          onOpenChange={setProductSearchOpen}
-        >
-          <PopoverTrigger asChild>
-            <Button
-              id="product-search-button"
-              ref={refs.productSearchButtonRef}
-              variant="outline"
-              role="combobox"
-              aria-expanded={productSearchOpen}
-              className="w-full justify-between"
+    <div className="flex items-center gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id="product-search-button"
+            ref={refs.productSearchButtonRef}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label={t("addProduct")}
+            className="min-w-0 flex-1 justify-between"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "ArrowDown") {
+                e.preventDefault();
+                setOpen(true);
+              }
+            }}
+          >
+            <span className="truncate">
+              {selectedProduct ? selectedProduct.name : t("searchProducts")}
+            </span>
+            {isLoadingVariants ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-label={t("loadingVariants")} />
+            ) : (
+              <Search className="h-4 w-4 shrink-0 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 sm:w-96" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder={t("searchProducts")}
+              value={searchTerm}
+              onValueChange={setSearchTerm}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setProductSearchOpen(true);
+                if (e.key === "Escape") {
+                  setOpen(false);
+                  refs.productSearchButtonRef.current?.focus();
                 }
               }}
-            >
-              {selectedProduct ? (
-                <div className="flex items-center gap-2 truncate">
-                  <span className="truncate">{selectedProduct.name}</span>
-                  {selectedProduct.discountPercentage ? (
-                    <Badge variant="secondary" className="text-xs">
-                      {selectedProduct.discountPercentage}% OFF
-                    </Badge>
-                  ) : null}
+            />
+            <CommandList>
+              {isLoading ? (
+                <p className="flex items-center justify-center gap-2 py-8 text-body text-muted-foreground" role="status">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t("searching")}
+                </p>
+              ) : isError ? (
+                <div className="space-y-3 px-4 py-6 text-center">
+                  <p className="text-body text-muted-foreground">{t("productsFailed")}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={retry}>
+                    {r("retry")}
+                  </Button>
                 </div>
+              ) : displayedProducts.length === 0 ? (
+                <p className="px-4 py-8 text-center text-body text-muted-foreground">
+                  {t("noProducts")}
+                </p>
               ) : (
-                "Search product, SKU, or barcode..."
-              )}
-              <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="p-0 w-[calc(100vw-2rem)] sm:w-[500px] md:w-[600px]"
-            align="start"
-            sideOffset={4}
-          >
-            <Command shouldFilter={false}>
-              <CommandInput
-                placeholder="Search product, SKU, or barcode..."
-                className="h-10 border-none focus:ring-0"
-                value={searchTerm}
-                onValueChange={setSearchTerm}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setProductSearchOpen(false);
-                    refs.productSearchButtonRef.current?.focus();
-                  }
-                }}
-              />
-              <CommandList className="max-h-[400px] overflow-auto">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-8" role="status">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    <span className="text-sm text-muted-foreground">
-                      Searching catalog...
-                    </span>
-                  </div>
-                ) : isError ? (
-                  <div className="space-y-3 px-4 py-7 text-center">
-                    <AlertCircle className="mx-auto h-4 w-4 text-destructive" />
-                    <p className="text-sm text-muted-foreground">
-                      The product catalog could not be loaded.
-                    </p>
-                    <Button type="button" variant="outline" size="sm" onClick={retry}>
-                      Retry
-                    </Button>
-                  </div>
-                ) : displayedProducts.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    No active products match this search.
-                  </div>
-                ) : (
-                  <CommandGroup heading="Products">
-                    {displayedProducts.map((product) => (
-                    <CommandItem
-                      key={product.id}
-                      value={product.name} // Use name for Command's internal filtering
-                      onSelect={() => {
-                        selectProduct(product);
-                        setSearchTerm("");
-                        setProductSearchOpen(false);
-                      }}
-                      className="flex justify-between py-3 px-4 cursor-pointer hover:bg-accent"
-                    >
-                      <div className="flex-1 overflow-hidden">
-                        <div className="font-medium truncate">{product.name}</div>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          {product.discountPercentage ? (
-                            <>
-                              <span className="line-through text-xs text-muted-foreground">
-                                {symbol}{product.price.toLocaleString()}
-                              </span>
-                              <span className="text-xs text-green-600 font-medium">
-                                {symbol}
-                                {parseFloat(
-                                  calculateDiscountedPrice(product, null)
-                                ).toLocaleString()}
-                              </span>
-                              <Badge variant="secondary" className="text-xs h-5">
-                                {product.discountPercentage}% OFF
-                              </Badge>
-                            </>
-                          ) : (
-                            <span className="text-xs">
-                              {symbol}{product.price.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center ml-2">
-                        {(product.variantCount ?? product.variants.length) > 0 ? (
-                          <Badge variant="outline">
-                            {product.variantCount ?? product.variants.length}{" "}
-                            {(product.variantCount ?? product.variants.length) === 1 ? "variant" : "variants"}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">No variants</Badge>
-                        )}
-                      </div>
-                    </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-                {!isLoading && !isError && hasMore ? (
-                    <div className="p-3 flex justify-center border-t">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          loadMoreProducts();
+                <CommandGroup>
+                  {displayedProducts.map((product) => {
+                    const price = discountedUnitPrice(product, null);
+                    const variantCount = product.variantCount ?? product.variants.length;
+                    return (
+                      <CommandItem
+                        key={product.id}
+                        value={product.id}
+                        onSelect={() => {
+                          selectProduct(product);
+                          setSearchTerm("");
+                          setOpen(false);
                         }}
-                        className="w-full"
-                        disabled={isLoadingMore}
+                        className="flex items-start justify-between"
                       >
-                        {isLoadingMore ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : isLoadMoreError ? (
-                          "Retry loading more"
-                        ) : (
-                          `Load more (${displayedProducts.length} of ${totalProducts})`
-                        )}
-                      </Button>
-                    </div>
-                  ) : null}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{product.name}</p>
+                          <p className="text-body text-muted-foreground">
+                            {price < product.price ? (
+                              <>
+                                <s>{fmt(product.price)}</s> {fmt(price)}
+                              </>
+                            ) : fmt(product.price)}
+                          </p>
+                        </div>
+                        {variantCount > 1 ? (
+                          <span className="shrink-0 text-body text-muted-foreground">
+                            {t("variantCount", { count: variantCount })}
+                          </span>
+                        ) : null}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+              {!isLoading && !isError && hasMore ? (
+                <div className="border-t p-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    disabled={isLoadingMore}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      loadMoreProducts();
+                    }}
+                  >
+                    {isLoadingMore
+                      ? t("loading")
+                      : isLoadMoreError
+                        ? r("retry")
+                        : t("loadMore", { shown: displayedProducts.length, total: totalProducts })}
+                  </Button>
+                </div>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
 
-      {selectedProduct && (
+      {selectedProduct ? (
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           onClick={clearProductSelection}
-          className="shrink-0"
-          aria-label="Clear selected product"
+          aria-label={t("clearProduct")}
         >
           <X className="h-4 w-4" />
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
