@@ -6,60 +6,34 @@ import {
   PRODUCT_IMAGE_FALLBACK,
 } from "../../../apps/storefront/src/lib/product-media";
 
+const master = "https://cloud.scalius.com/media/media_fish1234.jpg/1600.webp";
+
 describe("storefront product media helpers", () => {
   it("uses the canonical product placeholder when no image is present", () => {
-    expect(getProductImageUrl(null)).toBe(PRODUCT_IMAGE_FALLBACK);
-    expect(getProductImageUrl("   ")).toBe(PRODUCT_IMAGE_FALLBACK);
+    expect(getProductImageUrl(null, 480)).toBe(PRODUCT_IMAGE_FALLBACK);
+    expect(getProductImageUrl("   ", 480)).toBe(PRODUCT_IMAGE_FALLBACK);
     expect(hasProductImage("   ")).toBe(false);
+    expect(getProductImageSrcSet(null)).toBeUndefined();
   });
 
-  it("does not route SVG placeholders through image resizing", () => {
-    expect(getProductImageUrl("/placeholder-product.svg")).toBe(
-      PRODUCT_IMAGE_FALLBACK,
-    );
-    expect(getProductImageUrl("https://cdn.example.com/product.svg?version=1")).toBe(
+  it("serves images without renditions untouched", () => {
+    for (const url of [
       "https://cdn.example.com/product.svg?version=1",
-    );
+      "https://cloud.scalius.com/media/media_fish1234.jpg",
+    ]) {
+      expect(getProductImageUrl(url, 480)).toBe(url);
+      expect(getProductImageSrcSet(url)).toBeUndefined();
+    }
   });
 
-  it("omits responsive candidates when the source is missing or vector-only", () => {
-    const variants = [
-      { descriptor: "400w", width: 400, height: 400, fit: "contain" as const },
-      { descriptor: "600w", width: 600, height: 600, fit: "contain" as const },
-    ];
-
-    expect(getProductImageSrcSet(null, variants)).toBe("");
-    expect(getProductImageSrcSet(PRODUCT_IMAGE_FALLBACK, variants)).toBe("");
-  });
-
-  it("rebuilds responsive candidates from pre-optimized product image URLs", () => {
-    const srcset = getProductImageSrcSet(
-      "https://cloud.scalius.com/cdn-cgi/image/onerror=redirect,width=1200,height=1200,quality=85,format=auto,fit=contain,sharpen=1/products/fish.webp",
-      [
-        {
-          descriptor: "400w",
-          width: 400,
-          height: 400,
-          quality: 80,
-          format: "auto",
-          fit: "contain",
-        },
-        {
-          descriptor: "600w",
-          width: 600,
-          height: 600,
-          quality: 85,
-          format: "auto",
-          fit: "contain",
-        },
-      ],
+  it("picks the rendition for a slot and offers every rendition to srcset", () => {
+    expect(getProductImageUrl(master, 96)).toBe(
+      "https://cloud.scalius.com/media/media_fish1234.jpg/160.webp",
     );
-
-    expect(srcset.match(/\/cdn-cgi\/image\//g)).toHaveLength(2);
-    expect(srcset).toContain("width=400");
-    expect(srcset).toContain("width=600");
-    expect(srcset).not.toContain("width=1200");
-    expect(srcset).toContain("/products/fish.webp 400w");
-    expect(srcset).toContain("/products/fish.webp 600w");
+    expect(getProductImageUrl(master, 600)).toBe(
+      "https://cloud.scalius.com/media/media_fish1234.jpg/640.webp",
+    );
+    expect(getProductImageSrcSet(master)?.split(", ").map((entry) => entry.split(" ")[1]))
+      .toEqual(["160w", "320w", "480w", "640w", "960w", "1600w"]);
   });
 });

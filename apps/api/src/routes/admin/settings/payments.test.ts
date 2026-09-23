@@ -50,22 +50,6 @@ const mocks = vi.hoisted(() => {
     ]);
     const isSslPlaceholder = (value: unknown) =>
         typeof value === "string" && sslPlaceholders.has(value.trim().toLowerCase());
-    const polarPlaceholders = new Set([
-        "dummy",
-        "placeholder",
-        "example",
-        "demo",
-        "test",
-        "polar_access_token",
-        "polar_product_id",
-        "polar_webhook_secret",
-        "your_polar_token",
-        "your_polar_access_token",
-        "your_polar_product_id",
-        "your_polar_webhook_secret",
-    ]);
-    const isPolarPlaceholder = (value: unknown) =>
-        typeof value === "string" && polarPlaceholders.has(value.trim().toLowerCase());
 
     return {
         getCredentialEncryptionKey: vi.fn(),
@@ -187,61 +171,6 @@ const mocks = vi.hoisted(() => {
         )),
         getSSLCommerzSettings: vi.fn(),
         isSSLCommerzPlaceholderCredential: vi.fn(isSslPlaceholder),
-        getPolarCheckoutReadiness: vi.fn((settings: {
-            enabled?: boolean;
-            accessToken?: string;
-            productId?: string;
-            webhookSecret?: string;
-        } | null | undefined) => {
-            const missingFields = [
-                !settings?.accessToken?.trim() ? "accessToken" : null,
-                !settings?.productId?.trim() ? "productId" : null,
-                !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
-            ].filter((field): field is string => Boolean(field));
-            const credentialErrors = [
-                isPolarPlaceholder(settings?.accessToken)
-                    ? "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account."
-                    : null,
-                isPolarPlaceholder(settings?.productId)
-                    ? "Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account."
-                    : null,
-                isPolarPlaceholder(settings?.webhookSecret)
-                    ? "Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account."
-                    : null,
-            ].filter((error): error is string => Boolean(error));
-            const labels: Record<string, string> = {
-                accessToken: "access token",
-                productId: "product ID",
-                webhookSecret: "webhook secret",
-            };
-            const enabled = settings?.enabled === true;
-            return {
-                configured: missingFields.length === 0 && credentialErrors.length === 0,
-                enabled,
-                usable: enabled && missingFields.length === 0 && credentialErrors.length === 0,
-                missingFields,
-                credentialErrors,
-                blockedReason: credentialErrors[0] ?? (missingFields.length > 0
-                    ? `Polar needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
-                    : undefined),
-            };
-        }),
-        isPolarCheckoutUsable: vi.fn((settings: {
-            enabled?: boolean;
-            accessToken?: string;
-            productId?: string;
-            webhookSecret?: string;
-        } | null | undefined) => (
-            settings?.enabled === true &&
-            Boolean(settings.accessToken?.trim()) &&
-            Boolean(settings.productId?.trim()) &&
-            Boolean(settings.webhookSecret?.trim()) &&
-            !isPolarPlaceholder(settings.accessToken) &&
-            !isPolarPlaceholder(settings.productId) &&
-            !isPolarPlaceholder(settings.webhookSecret)
-        )),
-        getPolarSettings: vi.fn(),
-        isPolarPlaceholderCredential: vi.fn(isPolarPlaceholder),
     };
 });
 
@@ -275,10 +204,6 @@ vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
     isSSLCommerzCheckoutUsable: mocks.isSSLCommerzCheckoutUsable,
     getSSLCommerzSettings: mocks.getSSLCommerzSettings,
     isSSLCommerzPlaceholderCredential: mocks.isSSLCommerzPlaceholderCredential,
-    getPolarCheckoutReadiness: mocks.getPolarCheckoutReadiness,
-    isPolarCheckoutUsable: mocks.isPolarCheckoutUsable,
-    isPolarPlaceholderCredential: mocks.isPolarPlaceholderCredential,
-    getPolarSettings: mocks.getPolarSettings,
 }));
 
 import { paymentSettingsRoutes } from "./payments";
@@ -330,14 +255,12 @@ function createTestApp(
     mocks.getActivePaymentMethods.mockResolvedValue({ enabledMethods: ["cod"], defaultMethod: "cod" });
     mocks.getStripeSettings.mockResolvedValue(null);
     mocks.getSSLCommerzSettings.mockResolvedValue(null);
-    mocks.getPolarSettings.mockResolvedValue(null);
     mocks.getPaymentGatewaySettingsSnapshot.mockImplementation(async (database, encryptionKey) => ({
         preferences: await mocks.getPaymentMethodPreferences(database),
         activePaymentMethods: await mocks.getActivePaymentMethods(database, encryptionKey),
         settings: {
             stripe: await mocks.getStripeSettings(database, encryptionKey),
             sslcommerz: await mocks.getSSLCommerzSettings(database, encryptionKey),
-            polar: await mocks.getPolarSettings(database, encryptionKey),
             cod: { enabled: true },
         },
     }));
@@ -385,22 +308,18 @@ describe("payment settings cache invalidation", () => {
             { key: "publishable_key", value: "pk_live_public_identifier" },
             { key: "store_id", value: "ssl_store_identifier" },
             { key: "store_password", value: "ssl_private_credential" },
-            { key: "access_token", value: "polar_private_credential" },
-            { key: "product_id", value: "polar_product_identifier" },
             { key: "webhook_secret", value: "provider_private_webhook" },
             { key: "sandbox", value: "false" },
             { key: "enabled", value: "true" },
         ]);
 
-        const [stripeResponse, sslResponse, polarResponse] = await Promise.all([
+        const [stripeResponse, sslResponse] = await Promise.all([
             getJson(app, env, "/stripe"),
             getJson(app, env, "/sslcommerz"),
-            getJson(app, env, "/polar"),
         ]);
 
         expect(stripeResponse.status).toBe(200);
         expect(sslResponse.status).toBe(200);
-        expect(polarResponse.status).toBe(200);
         await expect(stripeResponse.json()).resolves.toMatchObject({
             data: {
                 secretKey: "••••••••••••",
@@ -412,13 +331,6 @@ describe("payment settings cache invalidation", () => {
             data: {
                 storeId: "ssl_store_identifier",
                 storePassword: "••••••••••••",
-            },
-        });
-        await expect(polarResponse.json()).resolves.toMatchObject({
-            data: {
-                accessToken: "••••••••••••",
-                productId: "polar_product_identifier",
-                webhookSecret: "••••••••••••",
             },
         });
     });
@@ -1048,116 +960,9 @@ describe("payment settings cache invalidation", () => {
         );
     });
 
-    it("invalidates API and storefront checkout caches after Polar saves", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "access_token", value: "encrypted-token" },
-            { key: "webhook_secret", value: "encrypted-webhook" },
-        ]);
-
-        const response = await postJson(app, env, "/polar", {
-            productId: "product-id",
-            sandbox: true,
-            enabled: true,
-        });
-
-        expect(response.status).toBe(200);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["checkout"],
-            expect.objectContaining({ env }),
-        );
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling Polar when the effective webhook secret is missing", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "access_token", value: "encrypted-token" },
-            { key: "product_id", value: "product-id" },
-        ]);
-
-        const response = await postJson(app, env, "/polar", {
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: expect.stringContaining("webhook secret"),
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling Polar with submitted placeholder credentials", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/polar", {
-            accessToken: "polar_access_token",
-            productId: "polar_product_live",
-            webhookSecret: "polar_webhook_live",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
-            },
-        });
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling Polar when a masked stored credential is a placeholder", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "access_token", value: "your_polar_token" },
-            { key: "product_id", value: "polar_product_live" },
-            { key: "webhook_secret", value: "polar_webhook_live" },
-            { key: "enabled", value: "false" },
-        ]);
-
-        const response = await postJson(app, env, "/polar", {
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("requires the credential encryption key before saving Polar secrets", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/polar", {
-            accessToken: "polar_token",
-            webhookSecret: "polar_webhook",
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            [
-                { category: "polar", key: "access_token", value: "polar_token", encrypted: true },
-                { category: "polar", key: "webhook_secret", value: "polar_webhook", encrypted: true },
-            ],
-            "credential-key",
-        );
-    });
-
     it.each([
         ["/stripe", { secretKey: "sk_live_missing_key" }],
         ["/sslcommerz", { storePassword: "ssl_secret_missing_key" }],
-        ["/polar", { accessToken: "polar_token_missing_key" }],
     ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {
         const { app, env } = createTestApp();
         mocks.requireEncryptionKey.mockImplementationOnce(() => {

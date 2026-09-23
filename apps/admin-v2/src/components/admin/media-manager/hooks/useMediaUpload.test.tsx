@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   completeUpload: vi.fn(),
   abortUpload: vi.fn(),
   updateFile: vi.fn(),
+  saveVariants: vi.fn(),
 }));
 
 const metadata = vi.hoisted(() => ({
@@ -23,6 +24,11 @@ const metadata = vi.hoisted(() => ({
 
 vi.mock("../api", () => ({ MediaApiClient: api }));
 vi.mock("../utils/intrinsic-metadata", () => metadata);
+const encoder = vi.hoisted(() => ({
+  canEncodeMediaVariants: (mimeType: string) => mimeType !== "image/gif" && mimeType.startsWith("image/"),
+  encodeMediaVariants: vi.fn(),
+}));
+vi.mock("../utils/media-variants", () => encoder);
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 type HookValue = ReturnType<typeof useMediaUpload>;
@@ -56,6 +62,7 @@ describe("useMediaUpload initiation races", () => {
     Object.values(api).forEach((mock) => mock.mockReset());
     api.abortUpload.mockResolvedValue(undefined);
     metadata.readIntrinsicMediaMetadata.mockReset().mockResolvedValue(null);
+    encoder.encodeMediaVariants.mockReset().mockResolvedValue(null);
     act(() => root.render(<Harness />));
   });
 
@@ -147,6 +154,8 @@ describe("useMediaUpload initiation races", () => {
     await act(async () => { await latest.uploadFiles([video]); });
     await flush();
 
+    expect(api.completeUpload).toHaveBeenCalledWith("upload_session_3", "server");
+    expect(encoder.encodeMediaVariants).not.toHaveBeenCalled();
     expect(api.updateFile).toHaveBeenCalledWith(completed, {
       width: 1920,
       height: 1080,
@@ -158,5 +167,47 @@ describe("useMediaUpload initiation races", () => {
       warning: null,
       result: { width: 1920, height: 1080, durationMs: 23_567, version: 2 },
     });
+  });
+
+  function imageSession(id: string) {
+    return {
+      id, mediaId: `media_${id}`, filename: "photo.jpg", kind: "image", mimeType: "image/jpeg", size: 16,
+      expectedParts: 1, partSize: 5 * 1024 * 1024, state: "initiated", version: 1,
+      expiresAt: Date.now() + 60_000, uploadedParts: [],
+    };
+  }
+
+  it("uploads browser-generated renditions instead of asking the server to render them", async () => {
+    const variants = { width: 1200, height: 900, files: new Map([[160, new Blob(["x"], { type: "image/webp" })]]) };
+    encoder.encodeMediaVariants.mockResolvedValue(variants);
+    api.initiateUpload.mockResolvedValue(imageSession("upload_session_5"));
+    api.uploadPart.mockResolvedValue(undefined);
+    api.completeUpload.mockResolvedValue({ id: "media_5", version: 1 });
+    api.saveVariants.mockResolvedValue({ id: "media_5", version: 2, width: 1200, height: 900 });
+
+    const image = new File([new Uint8Array(16)], "photo.jpg", { type: "image/jpeg" });
+    await act(async () => { await latest.uploadFiles([image]); });
+    await flush();
+
+    expect(api.completeUpload).toHaveBeenCalledWith("upload_session_5", "client");
+    expect(api.saveVariants).toHaveBeenCalledWith("media_5", variants);
+    expect(api.updateFile).not.toHaveBeenCalled();
+    expect(latest.queue[0]).toMatchObject({ status: "complete", warning: null, result: { version: 2 } });
+  });
+
+  it("lets the server render when this browser cannot encode WebP", async () => {
+    metadata.readIntrinsicMediaMetadata.mockResolvedValue({ width: 800, height: 600 });
+    api.initiateUpload.mockResolvedValue(imageSession("upload_session_6"));
+    api.uploadPart.mockResolvedValue(undefined);
+    api.completeUpload.mockResolvedValue({ id: "media_6", version: 1, width: null, height: null });
+    api.updateFile.mockImplementation(async (file, updates) => ({ ...file, ...updates, version: 2 }));
+
+    const image = new File([new Uint8Array(16)], "photo.jpg", { type: "image/jpeg" });
+    await act(async () => { await latest.uploadFiles([image]); });
+    await flush();
+
+    expect(api.completeUpload).toHaveBeenCalledWith("upload_session_6", "server");
+    expect(api.saveVariants).not.toHaveBeenCalled();
+    expect(latest.queue[0]).toMatchObject({ status: "complete", result: { width: 800, height: 600 } });
   });
 });

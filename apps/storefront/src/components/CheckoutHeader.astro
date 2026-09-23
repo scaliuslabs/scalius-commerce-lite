@@ -1,6 +1,6 @@
 ---
 import type { LayoutData } from "@/lib/api";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
@@ -28,11 +28,7 @@ const merchantName =
       {
         logo.src ? (
           <img
-            src={getOptimizedImageUrl(logo.src, {
-              width: 240,
-              height: 96,
-              fit: "scale-down",
-            })}
+            src={mediaImageUrl(logo.src, 320)}
             alt={logo.alt || merchantName}
             width="120"
             height="48"

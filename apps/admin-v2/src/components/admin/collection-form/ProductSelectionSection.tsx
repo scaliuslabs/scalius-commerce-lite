@@ -19,8 +19,7 @@ import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { SearchableSelect } from "../../ui/searchable-select";
 import { ChevronDown, ChevronUp, ImageIcon, Layers, Package, Trash2 } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import type {
   CollectionFormInput,
   CollectionFormValues,
@@ -173,7 +172,7 @@ export const ProductSelectionSection = React.memo(
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted sm:h-8 sm:w-8">
                             {product.primaryImage ? (
                               <img
-                                src={getOptimizedImageUrl(product.primaryImage, ADMIN_IMAGE_PRESETS.productMicro)}
+                                src={mediaImageUrl(product.primaryImage, 160)}
                                 alt=""
                                 className="h-full w-full object-contain object-center"
                                 loading="lazy"

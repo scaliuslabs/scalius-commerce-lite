@@ -230,12 +230,7 @@ app.openapi(
       : { currencyCode: "BDT" };
     const media = seo.discovery.feeds.productCatalogEnabled
       ? await getMediaOptimizationSettings(db)
-      : {
-          enabled: true,
-          canonicalCdnUrl: "",
-          allowedImageHosts: [],
-          canonicalHostAliases: [],
-        };
+      : { canonicalCdnUrl: "", canonicalHostAliases: [] };
 
     const result = await executeProductFeedRowPreview({
       db,

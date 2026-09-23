@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   processPaymentFailed: vi.fn(),
   processExistingMetaPurchaseOutboxForOrder: vi.fn(),
   releaseOrderInventory: vi.fn(),
-  processPolarWebhookRefund: vi.fn(),
   sendOrderNotificationEmail: vi.fn(),
   sendOrderNotification: vi.fn(),
   sendEmail: vi.fn(),
@@ -53,10 +52,6 @@ vi.mock("@scalius/core/modules/payments/process-payment", () => ({
 
 vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   processExistingMetaPurchaseOutboxForOrder: mocks.processExistingMetaPurchaseOutboxForOrder,
-}));
-
-vi.mock("@scalius/core/modules/payments/polar", () => ({
-  processPolarWebhookRefund: mocks.processPolarWebhookRefund,
 }));
 
 vi.mock("@scalius/core/modules/notifications/notifications.service", () => ({
@@ -159,7 +154,7 @@ function createMessage<T>(body: T, attempts = 1): Message<T> {
 
 function createBatch<T>(
   messages: Array<Message<T>>,
-  queue = "payment-events-queue",
+  queue = "jobs",
 ): MessageBatch<T> {
   return {
     queue,
@@ -353,18 +348,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
         amount: 1200,
         currency: "BDT",
       }),
-      createMessage({
-        type: "payment.polar.confirmed",
-        orderId: "order-polar",
-        checkoutId: "checkout_123",
-        amount: 999,
-        currency: "usd",
-      }),
     ];
 
     await handleQueueBatch(createBatch(messages), {} as Env);
 
-    expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(3);
+    expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(2);
     for (const message of messages) {
       expect(message.ack).not.toHaveBeenCalled();
       expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
@@ -431,7 +419,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.stringContaining("event=queue_batch_completed"),
     );
     expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("queue=payment-events-queue, messages=4, acked=3, retried=1"),
+      expect.stringContaining("queue=jobs, messages=4, acked=3, retried=1"),
     );
   });
 
@@ -448,7 +436,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
 
     await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+      JOBS_QUEUE: notificationQueue,
     } as unknown as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -533,7 +521,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
 
     await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+      JOBS_QUEUE: notificationQueue,
     } as unknown as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -574,7 +562,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
 
     await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+      JOBS_QUEUE: notificationQueue,
     } as unknown as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -598,145 +586,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
         retryOnQueueFailure: true,
       }),
     );
-  });
-
-  it("enqueues Polar balance-paid notifications using the original local amount", async () => {
-    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
-    const notificationQueue = { send: vi.fn(async () => undefined) };
-
-    const message = createMessage({
-      type: "payment.polar.confirmed",
-      orderId: "order-polar-balance",
-      checkoutId: "polar_checkout_1",
-      amount: 840,
-      currency: "usd",
-      paymentType: "balance",
-      metadata: { originalAmount: "1000", exchangeRate: "0.0084" },
-    });
-
-    await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
-    } as unknown as Env);
-
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(mocks.processPaymentConfirmed).toHaveBeenCalledWith(
-      { id: "db" },
-      expect.objectContaining({
-        orderId: "order-polar-balance",
-        paymentGateway: "polar",
-        paymentType: "balance",
-        amount: 1000,
-      }),
-    );
-    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
-    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queue: notificationQueue,
-        orderId: "order-polar-balance",
-        source: "payment-polar-balance-paid",
-        amount: 1000,
-        gateway: "polar",
-        retryOnQueueFailure: true,
-      }),
-    );
-  });
-
-  it("enqueues Polar refund notifications only after the webhook refund processor succeeds", async () => {
-    mocks.processPolarWebhookRefund.mockResolvedValue({
-      success: true,
-      notification: {
-        notificationType: "order_refunded",
-        dedupeKey: "polar-refund:order-polar:full",
-        data: {
-          gateway: "polar",
-          polarStatus: "refunded",
-          amountRefunded: 10_000,
-          totalAmount: 10_000,
-          currency: "usd",
-          localRefundAmount: 100,
-        },
-      },
-    });
-    const notificationQueue = { send: vi.fn(async () => undefined) };
-
-    const message = createMessage({
-      type: "payment.polar.refunded",
-      webhookEventId: "polar:order.refunded:evt_refund",
-      orderId: "order-polar",
-      polarCheckoutId: "checkout_polar",
-      amountRefunded: 10_000,
-      totalAmount: 10_000,
-      currency: "usd",
-      polarStatus: "refunded",
-    });
-
-    await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
-    } as unknown as Env);
-
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(mocks.processPolarWebhookRefund).toHaveBeenCalledWith(
-      { id: "db" },
-      {
-        orderId: "order-polar",
-        polarCheckoutId: "checkout_polar",
-        amountRefunded: 10_000,
-        totalAmount: 10_000,
-        currency: "usd",
-        polarStatus: "refunded",
-      },
-    );
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
-      db: { id: "db" },
-      queue: notificationQueue,
-      orderId: "order-polar",
-      notificationType: "order_refunded",
-      dedupeKey: "polar-refund:order-polar:full",
-      source: "payment-polar-refunded",
-      data: {
-        gateway: "polar",
-        polarStatus: "refunded",
-        amountRefunded: 10_000,
-        totalAmount: 10_000,
-        currency: "usd",
-        localRefundAmount: 100,
-      },
-    });
-    expect(mocks.markWebhookEventProcessed).toHaveBeenCalledWith(
-      { id: "db" },
-      "polar:order.refunded:evt_refund",
-      expect.objectContaining({
-        queueType: "payment.polar.refunded",
-        orderId: "order-polar",
-        gateway: "polar",
-        outcome: "refunded",
-      }),
-    );
-  });
-
-  it("does not enqueue Polar refund notifications when local refund processing fails", async () => {
-    mocks.processPolarWebhookRefund.mockResolvedValue({
-      success: false,
-      error: "Order was modified concurrently while applying Polar refund; retry required",
-    });
-
-    const message = createMessage({
-      type: "payment.polar.refunded",
-      webhookEventId: "polar:order.refunded:evt_retry",
-      orderId: "order-polar",
-      polarCheckoutId: "checkout_polar",
-      amountRefunded: 10_000,
-      totalAmount: 10_000,
-      currency: "usd",
-      polarStatus: "refunded",
-    });
-
-    await handleQueueBatch(createBatch([message]), {} as Env);
-
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-    expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
-    expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
   it("keeps Stripe refund webhooks audit-only until scheduled reconciliation imports them", async () => {
@@ -797,7 +646,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
 
     await handleQueueBatch(createBatch([message]), {
-      ORDER_NOTIFICATIONS_QUEUE: notificationQueue,
+      JOBS_QUEUE: notificationQueue,
     } as unknown as Env);
 
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -884,7 +733,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       paymentIntentId: "pi_terminal",
       amount: 12345,
       currency: "usd",
-    }, 4);
+    }, 6);
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
@@ -897,8 +746,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
         queueMessageId: message.id,
         queueType: "payment.stripe.confirmed",
         orderId: "order-stripe",
-        terminalDeliveryAttempt: 4,
-        maxRetries: 3,
+        terminalDeliveryAttempt: 6,
+        maxRetries: 5,
         error: "stripe payment confirmation failed for order order-stripe: D1 batch failed",
       }),
     );
@@ -916,7 +765,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       metadata: { paymentType: "deposit", ignored: "not persisted" },
     }, 5);
 
-    await handleQueueBatch(createBatch([message], "payment-events-dlq") as never, {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
 
     expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
@@ -945,6 +794,41 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.retry).not.toHaveBeenCalled();
   });
 
+  it("archives each type in one mixed jobs-dlq batch into its own durable row", async () => {
+    const payment = createMessage({
+      type: "payment.stripe.confirmed",
+      webhookEventId: "stripe:payment_intent.succeeded:evt_mixed",
+      orderId: "order-mixed",
+      paymentIntentId: "pi_mixed",
+      amount: 100,
+      currency: "usd",
+    }, 6);
+    const notification = createMessage({
+      type: "order.notification",
+      outboxId: "outbox_mixed",
+      orderId: "order-mixed",
+      customerName: "Mixed Customer",
+      notificationType: "order_created",
+    }, 6);
+    const unknown = createMessage({ type: "meta.purchase", orderId: "order-mixed" }, 6);
+
+    await handleQueueBatch(
+      createBatch([payment, notification, unknown] as Array<Message<Record<string, unknown>>>, "jobs-dlq") as never,
+      {} as Env,
+    );
+
+    expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledTimes(1);
+    expect(mocks.markOrderNotificationOutboxDeadLettered).toHaveBeenCalledWith(
+      expect.objectContaining({ outboxId: "outbox_mixed" }),
+    );
+    expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
+    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    for (const message of [payment, notification, unknown]) {
+      expect(message.ack).toHaveBeenCalledTimes(1);
+      expect(message.retry).not.toHaveBeenCalled();
+    }
+  });
+
   it("retries payment DLQ messages when evidence persistence fails", async () => {
     mocks.recordPaymentWebhookDlqEvidence.mockRejectedValueOnce(new Error("D1 unavailable"));
     const message = createMessage({
@@ -959,7 +843,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       paymentType: "full",
     }, 5);
 
-    await handleQueueBatch(createBatch([message], "payment-events-dlq") as never, {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
 
     expect(mocks.processPaymentConfirmed).not.toHaveBeenCalled();
     expect(mocks.recordPaymentWebhookDlqEvidence).toHaveBeenCalledTimes(1);
@@ -1006,7 +890,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       }, 5),
     );
 
-    const run = handleQueueBatch(createBatch(messages, "payment-events-dlq") as never, {} as Env);
+    const run = handleQueueBatch(createBatch(messages, "jobs-dlq") as never, {} as Env);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(started).toEqual(["order-dlq-1", "order-dlq-2"]);
@@ -1032,7 +916,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.stringContaining("event=queue_batch_completed"),
     );
     expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("queue=payment-events-dlq, messages=3, acked=2, retried=1"),
+      expect.stringContaining("queue=jobs-dlq, messages=3, acked=2, retried=1"),
     );
   });
 
@@ -1100,31 +984,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
     );
     expect(message.ack).not.toHaveBeenCalled();
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-  });
-
-  it("ignores stale order-ingest-shaped messages on non-order queues", async () => {
-    mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
-    const payment = createMessage({
-      type: "payment.stripe.confirmed",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_123",
-      amount: 12345,
-      currency: "usd",
-    });
-    const staleOrderIngest = createMessage({
-      type: "order.ingest",
-      orderData: { id: "order_stray" },
-      items: [],
-    } as unknown as PaymentQueueMessage);
-
-    await handleQueueBatch(
-      createBatch([payment, staleOrderIngest] as Array<Message<Record<string, unknown>>>) as never,
-      {} as Env,
-    );
-
-    expect(mocks.processPaymentConfirmed).toHaveBeenCalledTimes(1);
-    expect(payment.ack).toHaveBeenCalledTimes(1);
-    expect(staleOrderIngest.ack).toHaveBeenCalledTimes(1);
   });
 
   it("dispatches order notifications without requiring customer email and passes encryption key", async () => {
@@ -1287,7 +1146,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       notificationType: "order_created",
     }, 4);
 
-    await handleQueueBatch(createBatch([message], "order-notifications-dlq") as never, {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
 
     expect(mocks.markOrderNotificationOutboxDeadLettered).toHaveBeenCalledWith({
       db: { id: "db" },
@@ -1307,7 +1166,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       notificationType: "order_cancelled",
     }, 4);
 
-    await handleQueueBatch(createBatch([message], "order-notifications-dlq") as never, {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
 
     expect(mocks.markOrderNotificationOutboxDeadLettered).not.toHaveBeenCalled();
     expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
@@ -1705,7 +1564,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Private Buyer",
     } as const);
 
-    await handleQueueBatch(createBatch([message], "auth-otp"), {
+    await handleQueueBatch(createBatch([message], "jobs"), {
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as Env);
 
@@ -1920,7 +1779,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Buyer",
     } as const);
 
-    await handleQueueBatch(createBatch([message], "auth-otp"), {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs"), {} as Env);
 
     expect(mocks.sendEmail).not.toHaveBeenCalled();
     expect(message.ack).not.toHaveBeenCalled();
@@ -1945,7 +1804,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Private Buyer",
     } as const);
 
-    await handleQueueBatch(createBatch([message], "auth-otp"), { CACHE: cache } as unknown as Env);
+    await handleQueueBatch(createBatch([message], "jobs"), { CACHE: cache } as unknown as Env);
 
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledTimes(3);
@@ -1994,7 +1853,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Private Buyer",
     } as const);
 
-    await handleQueueBatch(createBatch([message], "auth-otp"), { CACHE: cache } as unknown as Env);
+    await handleQueueBatch(createBatch([message], "jobs"), { CACHE: cache } as unknown as Env);
 
     expect(mocks.sendEmail).not.toHaveBeenCalled();
     expect(mocks.markAuthOtpDeliveryReceiptAcceptedByDeliveryKey).toHaveBeenCalledWith(
@@ -2031,7 +1890,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Buyer",
     } as const, 6);
 
-    await handleQueueBatch(createBatch([message], "auth-otp-dlq"), {} as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq"), {} as Env);
 
     expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
@@ -2087,7 +1946,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       name: "Buyer",
     } as const, 6);
 
-    await handleQueueBatch(createBatch([message], "auth-otp-dlq"), { CACHE: cache } as unknown as Env);
+    await handleQueueBatch(createBatch([message], "jobs-dlq"), { CACHE: cache } as unknown as Env);
 
     expect(mocks.getWhatsAppCloudApiSettings).not.toHaveBeenCalled();
     expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();

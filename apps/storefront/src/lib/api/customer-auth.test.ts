@@ -56,23 +56,23 @@ describe("customer auth API helpers", () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       success: true,
       data: {
-        gateway: "polar",
+        gateway: "sslcommerz",
         paymentType: "full",
         amount: 900,
         currency: "BDT",
-        hosted: { gatewayUrl: "https://polar.example.test/pay" },
+        hosted: { gatewayUrl: "https://ssl.example.test/pay" },
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(createCustomerOrderPaymentSession("order_1", {
-      gateway: "polar",
+      gateway: "sslcommerz",
       replaceExistingAttempt: true,
-    })).resolves.toMatchObject({ success: true, session: { gateway: "polar" } });
+    })).resolves.toMatchObject({ success: true, session: { gateway: "sslcommerz" } });
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual({
-      gateway: "polar",
+      gateway: "sslcommerz",
       replaceExistingAttempt: true,
     });
     expect(String(init.body)).not.toMatch(/receipt|token/i);

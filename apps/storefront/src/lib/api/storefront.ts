@@ -4,6 +4,7 @@
 
 import { getConfiguredSdkClient } from "./transport";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
+import { getRuntime } from "./runtime";
 import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
@@ -98,9 +99,7 @@ export interface LayoutData {
   currency?: CurrencyData;
   theme?: StorefrontThemeSettings;
   media?: {
-    enabled?: boolean;
     canonicalCdnUrl?: string;
-    allowedImageHosts?: string[];
     canonicalHostAliases?: string[];
   };
   metaCapi?: {
@@ -111,6 +110,15 @@ export interface LayoutData {
     discovery?: SeoDiscoverySettings;
     returnPolicy?: StorefrontReturnPolicySettings | null;
   };
+  /** Public origins of this deployment (Settings -> System -> Platform). */
+  platform?: {
+    storefrontUrl?: string;
+    apiUrl?: string;
+    dashboardUrl?: string;
+    mediaUrl?: string;
+  };
+  /** Merchant CSP sources (Settings -> Security), comma-separated. */
+  cspAllowedDomains?: string;
 }
 
 export interface ThemePreviewData {
@@ -151,32 +159,30 @@ export async function getHomepageData(): Promise<HomepageData | null> {
   );
 }
 
+async function fetchLayoutData(): Promise<LayoutData | null> {
+  try {
+    const { data } = await getApiV1StorefrontLayout({
+      client: getConfiguredSdkClient(),
+    });
+    return unwrapEnvelope<LayoutData>(data);
+  } catch (error: unknown) {
+    console.error("Error fetching layout data:", error);
+    return null;
+  }
+}
+
 /**
- * Fetches all layout data in a single consolidated request.
- * Reduces 4 API calls to 1.
- * Used on ALL pages (not just homepage).
- * Wrapped with EdgeCache ( TTL) - invalidated via purge-cache.
- *
- * IMPORTANT: Cache key includes BUILD_ID to ensure fresh data after deployments.
+ * Fetches all layout data in a single consolidated request. The middleware
+ * makes this read first (it also carries the platform origins and CSP
+ * sources), and every later call in the same request reuses that one promise.
  *
  * @returns A promise resolving to LayoutData or null on failure.
  */
-export async function getLayoutData(): Promise<LayoutData | null> {
-  return withEdgeCache(
-    `storefront_layout_${BUILD_ID}`,
-    async () => {
-      try {
-        const { data } = await getApiV1StorefrontLayout({
-          client: getConfiguredSdkClient(),
-        });
-        return unwrapEnvelope<LayoutData>(data);
-      } catch (error: unknown) {
-        console.error("Error fetching layout data:", error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
+export function getLayoutData(): Promise<LayoutData | null> {
+  const runtime = getRuntime();
+  if (!runtime) return fetchLayoutData();
+  runtime.layout ??= fetchLayoutData();
+  return runtime.layout;
 }
 
 export async function resolveThemePreview(

@@ -2,8 +2,14 @@ import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
 import { addPrices } from "./price-utils";
 
-// Re-export for consumers that need direct validation (e.g. customer-auth)
-export { isValidPhoneNumber } from "libphonenumber-js";
+// Re-exported for browser code that lazy-loads full validation (customer auth,
+// the checkout phone country picker) without its own libphonenumber dependency.
+export {
+  getCountries,
+  getCountryCallingCode,
+  isValidPhoneNumber,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
 
 export type PhoneCountryPolicyMode = "include" | "exclude";
 
@@ -122,8 +128,10 @@ export function formatPhoneForProvider(e164: string): string {
   return e164.replace(/^\+/, "");
 }
 
-// Phone number validation schema — validates and transforms to E.164
-export const phoneNumberSchema = z
+// Phone number validation schema — validates and transforms to E.164.
+// Pure-annotated so browser bundles that only need the phone helpers above
+// tree-shake Zod away instead of shipping it.
+export const phoneNumberSchema = /* @__PURE__ */ z
   .string()
   .min(7, "Phone number too short")
   .max(16, "Phone number too long")

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     provider: "log" as const,
   })),
   twoFactor: vi.fn((options: unknown) => ({ id: "two-factor", options })),
+  identityHandoff: vi.fn((options: unknown) => ({ id: "identity-handoff", options })),
 }));
 
 vi.mock("better-auth", () => ({
@@ -36,6 +37,11 @@ vi.mock("better-auth/plugins", () => ({
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
   safeBatch: mocks.safeBatch,
+}));
+
+vi.mock("./identity-handoff", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./identity-handoff")>(),
+  identityHandoff: mocks.identityHandoff,
 }));
 
 vi.mock("../integrations/email", () => ({
@@ -539,5 +545,14 @@ describe("createAuth", () => {
       "https://dashboard.example.com",
       "https://shop.example.com",
     ]);
+  });
+
+  it("hands identity handoff the CACHE namespace that admin-auth reads permissions from", () => {
+    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+    createAuth({ BETTER_AUTH_SECRET: "test-secret", CACHE: cache } as never);
+
+    expect(mocks.identityHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionCache: cache }),
+    );
   });
 });

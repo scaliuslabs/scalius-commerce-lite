@@ -529,6 +529,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/*/permanent": {
     DELETE: { permission: PERMISSIONS.MEDIA_DELETE },
   },
+  "/api/v1/admin/media/*/variants": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/*/original": {
+    GET: { permission: PERMISSIONS.MEDIA_VIEW },
+  },
   "/api/v1/admin/media/folders": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
@@ -716,10 +722,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/sslcommerz": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/v1/admin/settings/polar": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },

@@ -71,7 +71,7 @@ describe("general settings draft boundaries", () => {
     const source = readSource("BusinessSettingsBuilder.tsx");
 
     expect(source).toContain("normalizePublicMediaUrl");
-    expect(source).toContain("ADMIN_IMAGE_PRESETS.invoiceLogo");
+    expect(source).toContain("mediaImageUrl(invoiceLogoUrl, 480)");
     expect(source).toContain("object-contain");
     expect(source).toContain("invoiceLogoInvalid");
     expect(source).toContain('<MediaManager');

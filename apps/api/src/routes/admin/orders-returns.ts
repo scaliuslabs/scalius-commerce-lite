@@ -232,7 +232,7 @@ async function postReceiptSideEffects(
     if (result.wholeOrderReturned) {
         await enqueueOrderNotificationsForStatus({
             db: c.get("db"),
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderIds: [result.orderId],
             newStatus: "returned",
             dedupeKeyByOrderId: { [result.orderId]: `return:${result.returnId}:fully-received` },

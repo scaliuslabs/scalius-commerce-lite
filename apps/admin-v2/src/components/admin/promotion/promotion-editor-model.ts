@@ -569,13 +569,6 @@ export function summarizePromotionDraft(
     .map((target) => describeEditorEffect(target, draft.effects[target], currencySymbol));
 }
 
-export function promotionStatusLabel(status: PromotionAggregate["status"]): string {
-  if (status === "active") return "Active";
-  if (status === "paused") return "Paused";
-  if (status === "archived") return "Archived";
-  return "Draft";
-}
-
 export function filterPromotions(
   promotions: PromotionAggregate[],
   search: string,

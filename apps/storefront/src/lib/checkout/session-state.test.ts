@@ -140,7 +140,7 @@ describe("checkout session state", () => {
   });
 
   it("writes cart-to-checkout transfer state only when storage persists both keys", () => {
-    writeCheckoutPaymentSelection("polar");
+    writeCheckoutPaymentSelection("stripe");
     const result = writeCheckoutTransferSession(
       {
         customerName: "Buyer",
@@ -152,7 +152,7 @@ describe("checkout session state", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionStorage.getItem("scalius_checkout_data")).toContain("Buyer");
     expect(sessionStorage.getItem("scalius_checkout_gateways")).toBe('[{"id":"cod"}]');
-    expect(readCheckoutPaymentSelection()).toBe("polar");
+    expect(readCheckoutPaymentSelection()).toBe("stripe");
   });
 
   it("keeps only bounded checkout form fields for Back and Forward navigation", () => {
@@ -405,15 +405,15 @@ describe("checkout session state", () => {
     )).toBe(true);
 
     expect(writeHostedPaymentRecoverySession(
-      "/order-success?orderId=order_1&payment=polar",
+      "/order-success?orderId=order_1&payment=stripe",
       undefined,
-      "polar",
+      "stripe",
     )).toBe(true);
 
     const recovery = readHostedPaymentRecoverySession();
     expect(recovery).toMatchObject({
       orderId: "order_1",
-      gateway: "polar",
+      gateway: "stripe",
       checkoutId: "checkout_1",
     });
     expect(recovery?.cartFingerprint).toBe(fingerprintCheckoutCart(checkoutData.cartItems));
@@ -424,8 +424,8 @@ describe("checkout session state", () => {
     localStorage.setItem(
       "scalius_hosted_payment_recovery",
       JSON.stringify({
-        href: "/order-success?orderId=order_1&payment=polar",
-        gateway: "polar",
+        href: "/order-success?orderId=order_1&payment=sslcommerz",
+        gateway: "sslcommerz",
         orderId: "order_1",
         checkoutId: null,
         cartFingerprint: null,

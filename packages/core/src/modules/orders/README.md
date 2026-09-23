@@ -117,7 +117,7 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 5. On CAS success, or when retry sees the requested status already persisted, applies inventory side effects via `applyInventoryForStatusChange()`
 6. Persists/reconfirms the resulting `inventoryAction`; if inventory throws before `inventoryAction` changes, `rollbackOrderStatusIfInventoryUnchanged()` reverts the visible status behind the claimed version/status/action guard
 7. Returns `StatusUpdateResult` with optional notification payload and transition dedupe key
-8. API route records the notification in `order_notification_outbox`, then relays it to `ORDER_NOTIFICATIONS_QUEUE` when available
+8. API route records the notification in `order_notification_outbox`, then relays it to `JOBS_QUEUE` when available
 
 **Notification Status Mapping** (`NOTIFICATION_STATUSES` in `orders.fulfillment.ts`):
 
@@ -190,7 +190,7 @@ or submit browser-authored order money/content as provider options.
 
 ### Stale Hosted-Payment Cleanup
 
-`archiveStaleIncompleteOrders()` is the only scheduled path that may move an existing stale checkout order. It handles hosted-payment methods only (`stripe`, `sslcommerz`, `polar`), requires `status = incomplete`, `paymentStatus` of `unpaid` or `failed`, `paidAmount <= 0`, no soft delete, no active shipment claim, no pending/succeeded `order_payments`, and no live `payment_session_attempts` processing lease. Each order must win a guarded cancelled claim before inventory is released through `applyInventoryForStatusChange(db, orderId, "cancelled")`; release failure rolls the claim back to `incomplete`.
+`archiveStaleIncompleteOrders()` is the only scheduled path that may move an existing stale checkout order. It handles hosted-payment methods only (`stripe`, `sslcommerz`), requires `status = incomplete`, `paymentStatus` of `unpaid` or `failed`, `paidAmount <= 0`, no soft delete, no active shipment claim, no pending/succeeded `order_payments`, and no live `payment_session_attempts` processing lease. Each order must win a guarded cancelled claim before inventory is released through `applyInventoryForStatusChange(db, orderId, "cancelled")`; release failure rolls the claim back to `incomplete`.
 
 After release succeeds, the final archive soft-deletes the order, marks inventory restored, conditionally cancels a pending payment plan only when the order finalization actually won, and writes the `abandoned_checkouts` snapshot after finalization. The API scheduled worker runs it with a 60-minute grace period and a batch limit of 25, then invalidates product availability caches for archived order ids.
 
@@ -200,11 +200,11 @@ Storefront order creation is not queue-backed. Checkout commits the order synchr
 
 | Queue | Message Type | Handler |
 |-------|-------------|---------|
-| `ORDER_NOTIFICATIONS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
+| `JOBS_QUEUE` | `order.notification` | Outbox-backed `sendOrderNotificationEmail()` + `sendOrderNotification()` (FCM push) via `queue-consumer.ts` |
 
 The `order.notification` handler in `queue-consumer.ts` claims `order_notification_outbox` rows by `outboxId`, sends email/SMS/WhatsApp through `sendOrderNotificationEmail()` with `db` for channel preference checking, optionally sends FCM push notifications through `sendOrderNotification()`, then marks the row `sent` only if enabled receipt targets are accepted or skipped. Retryable customer-channel or admin-push failures mark the parent row failed with D1 `nextAttemptAt` backoff and ack the Queue message, so scheduled outbox flushing owns durable retries. Legacy messages without an `outboxId` still use Cloudflare Queue retry. Merchant-actionable provider failures such as invalid SMS credentials, missing Meta WhatsApp credentials, or missing recipients become skipped receipts instead of hot retry loops.
 
-Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, `payment.polar.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module. Confirmed `paymentType = "balance"` messages enqueue `payment_balance_paid` instead of replaying `order_created`, so customers receive a distinct remaining-payment receipt.
+Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.confirmed`, etc.) are handled in `queue-consumer.ts` and call `processPaymentConfirmed()` / `processPaymentFailed()` from the payments module. Confirmed `paymentType = "balance"` messages enqueue `payment_balance_paid` instead of replaying `order_created`, so customers receive a distinct remaining-payment receipt.
 
 ## Concurrency Control
 
@@ -230,7 +230,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
 | GET | `/:id/payments` | direct query | Order payments + payment plan |
-| POST | `/:id/payment-recovery-link` | `previewOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz/Polar buyer verification URL without provider calls or receipt proof minting |
+| POST | `/:id/payment-recovery-link` | `previewOrderPaymentRecoveryLink()` | Issue an RBAC-gated SSLCommerz buyer verification URL without provider calls or receipt proof minting |
 | GET | `/:id/cod` | direct query | COD tracking record |
 | POST | `/:id/cod` | `processCodAction()` | COD collected/failed/returned |
 | GET | `/:id/fulfill` | `getOrderShipments()` | Fulfillment shipments |
@@ -255,7 +255,7 @@ Bulk provider shipment creation uses a durable order-level shipment claim (`orde
 
 Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/archive/refresh/bulk archive/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
 
-Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz and Polar because those are the receipt-page retry gateways, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
+Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz because it is the hosted receipt-page retry gateway, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
 
 Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link based. `/api/v1/orders/payment-recovery/send-otp` creates an order-owned `order_payment_recovery_challenges` row with hashed contact/code state and reuses the existing `auth.send_otp` queue with `purpose: "order_payment_recovery"`. New queue payloads carry only `challengeKey` and `deliveryKey`; the API queue consumer derives the OTP at send time, so raw OTP codes do not enter Cloudflare Queues. `/api/v1/orders/payment-recovery/verify-otp` is service-JWT protected for the storefront server proxy; successful OTP proof rechecks eligibility, consumes the challenge, records an `order_receipts` hash with `source = "guest_payment_recovery"`, and returns raw proof only to the trusted storefront proxy so it can set the existing per-order HttpOnly receipt cookie. Public/browser responses must stay no-store and must not expose receipt tokens, token hashes, raw contacts, OTP codes, provider payloads, or receipt PII.
 

@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/database/client", () => ({ getDb: mocks.getDb }));
-vi.mock("./artifacts", () => ({
+vi.mock("./artifacts", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./artifacts")>(),
   createAgentArtifact: mocks.create,
   sha256Hex: mocks.sha256,
   expireAgentArtifactHandles: mocks.expire,
@@ -20,6 +21,7 @@ vi.mock("./artifacts", () => ({
   deleteAgentArtifactRecords: mocks.deleteRecords,
 }));
 
+import { openAgentArtifact } from "./artifacts";
 import {
   AgentArtifactDeliveryError,
   parseArtifactFilename,
@@ -81,14 +83,15 @@ function artifactOperation(
 }
 
 function artifactEnv(options: { createFails?: boolean; storageFails?: boolean } = {}) {
-  const stored: ArrayBuffer[] = [];
+  const stored: Array<{ key: string; value: ArrayBuffer }> = [];
   const deleted: string[] = [];
   const env = {
     PUBLIC_API_BASE_URL: "https://api.example.test",
-    AGENT_ARTIFACTS: {
-      put: vi.fn(async (_key: string, value: ArrayBuffer) => {
+    SCALIUS_SECRET: "artifact-test-master-secret-0123456789abcdef",
+    BUCKET: {
+      put: vi.fn(async (key: string, value: Uint8Array) => {
         if (options.storageFails) throw new Error("R2 unavailable");
-        stored.push(value.slice(0));
+        stored.push({ key, value: value.slice(0).buffer });
         return {};
       }),
       delete: vi.fn(async (key: string) => { deleted.push(key); }),
@@ -142,7 +145,7 @@ describe("manifest-driven artifact delivery", () => {
       }
     });
     await purgeExpiredAgentArtifacts({
-      AGENT_ARTIFACTS: { delete: deleteObject },
+      BUCKET: { delete: deleteObject },
     } as unknown as Env);
 
     expect(mocks.expire).toHaveBeenCalledTimes(1);
@@ -163,7 +166,7 @@ describe("manifest-driven artifact delivery", () => {
     expect(parseArtifactFilename(header, disposition)).toBe(filename);
   });
 
-  it("streams bytes into dedicated R2, persists only metadata, and returns an audience-child link", async () => {
+  it("seals bytes under the private bucket prefix, persists only metadata, and returns an audience-child link", async () => {
     const { env, stored } = artifactEnv();
     const result = await stageAgentArtifact(
       artifactOperation(),
@@ -176,11 +179,19 @@ describe("manifest-driven artifact delivery", () => {
       principal,
       env,
     );
-    expect(new TextDecoder().decode(stored[0])).toContain("ord_1");
-    expect(env.AGENT_ARTIFACTS.put).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(ArrayBuffer),
-    );
+    const [object] = stored;
+    expect(object?.key).toMatch(new RegExp(`^private/agent-artifacts/${principal.grantId}/`));
+    // The media bucket is publicly served by key, so the object must be ciphertext
+    // that only opens for this store's secret and this exact key.
+    expect(new TextDecoder().decode(object!.value)).not.toContain("ord_1");
+    expect(new TextDecoder().decode(await openAgentArtifact(env, object!.key, object!.value)))
+      .toBe("order_id,total\nord_1,10\n");
+    await expect(openAgentArtifact(env, `${object!.key}x`, object!.value)).rejects.toThrow();
+    await expect(openAgentArtifact(
+      { ...env, SCALIUS_SECRET: "another-store-master-secret-0123456789abcdef" } as Env,
+      object!.key,
+      object!.value,
+    )).rejects.toThrow();
     expect(mocks.create).toHaveBeenCalledWith(
       { marker: "db" },
       expect.objectContaining({
@@ -216,10 +227,10 @@ describe("manifest-driven artifact delivery", () => {
       status: 502,
     });
     expect(deleted).toHaveLength(1);
-    expect(deleted[0]).toContain(`agent-artifacts/${principal.grantId}/`);
+    expect(deleted[0]).toContain(`private/agent-artifacts/${principal.grantId}/`);
   });
 
-  it("classifies dedicated R2 failures without exposing provider details", async () => {
+  it("classifies R2 failures without exposing provider details", async () => {
     const { env, deleted } = artifactEnv({ storageFails: true });
     const failure = stageAgentArtifact(
       artifactOperation(),

@@ -332,7 +332,7 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toMatch(
       /resolveCatalogDiscoveryImageUrl\(\s*candidate,\s*storefrontUrl,/,
     );
-    expect(source).toContain("getOptimizedImageUrl(imageUrl");
+    expect(source).toContain("resolveImageUrl: resolveMediaUrl");
     expect(source).toContain("image: schemaImageUrls");
     expect(source).toContain("getVariantSchemaImages(variant)");
     expect(source).toContain('item.kind === "image" ? item.url : item.posterUrl');

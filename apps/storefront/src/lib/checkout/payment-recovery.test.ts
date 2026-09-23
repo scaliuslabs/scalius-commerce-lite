@@ -13,10 +13,10 @@ describe("hosted payment recovery URL", () => {
   it("carries a failure result only after local session creation failed", () => {
     expect(buildPaymentRecoveryUrl({
       orderId: "order_1",
-      gateway: "polar",
+      gateway: "sslcommerz",
       paymentType: "deposit",
       depositAmount: 500,
       result: "failed",
-    })).toBe("/order-success?orderId=order_1&payment=polar&result=failed&paymentType=deposit&depositAmount=500");
+    })).toBe("/order-success?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=500");
   });
 });

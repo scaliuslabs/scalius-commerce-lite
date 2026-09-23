@@ -1622,6 +1622,12 @@ export class CheckoutIntentCoordinatorEngine {
           this.onInternalError,
         )
       ));
+      // A refused intent never reaches the commit engine, so its stale authority
+      // read would otherwise survive until the TTL even after the merchant fixes
+      // the setting that caused the refusal.
+      if (prepared.some((candidate) => !candidate.ok)) {
+        this.authorityCache.delete(cacheKey);
+      }
       const committable = prepared.filter((candidate) => candidate.ok);
       const commitResults = await this.commitEngine.submitBatch(
         committable.map((candidate) => candidate.command),
@@ -1692,7 +1698,7 @@ export class CheckoutCoordinator {
     this.engine = new CheckoutCoordinatorEngine(
       transport,
       this.waitUntil,
-      env.ORDER_NOTIFICATIONS_QUEUE as unknown as CheckoutSideEffectQueue,
+      env.JOBS_QUEUE as unknown as CheckoutSideEffectQueue,
     );
     this.intentEngine = new CheckoutIntentCoordinatorEngine(
       getDb(env),

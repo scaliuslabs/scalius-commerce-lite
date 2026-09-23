@@ -203,7 +203,7 @@ const checkoutSubmitSchema = z.object({
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500),
   notes: z.string().trim().max(500).nullable(),
-  paymentMethod: z.enum(["cod", "stripe", "sslcommerz", "polar"]).openapi({
+  paymentMethod: z.enum(["cod", "stripe", "sslcommerz"]).openapi({
     description: "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.",
   }),
 }).strict();
@@ -899,7 +899,7 @@ app.openapi(createSupportRequestRoute, async (c) => {
   );
   await enqueueOrderSupportRequestNotificationForOrder({
     db: c.get("db"),
-    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: c.env.JOBS_QUEUE,
     orderId: params.orderId,
     requestId: result.request.id,
     notificationType: "support_request_submitted",

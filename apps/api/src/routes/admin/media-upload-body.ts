@@ -56,3 +56,22 @@ export async function readExactMediaPart(
 
     return buffer;
 }
+
+/**
+ * Reads the dashboard's rendition form: intrinsic `width`/`height` plus one
+ * WebP file per rendition width named `w<width>`. The route's form validator
+ * has already parsed the body; `formData()` returns that cached parse.
+ */
+export async function readMediaVariantsForm(request: { formData(): Promise<FormData> }) {
+    const form = await request.formData();
+    const files = new Map<number, ArrayBuffer>();
+    for (const [name, value] of form.entries()) {
+        const width = /^w([1-9]\d{0,3})$/u.exec(name)?.[1];
+        if (width && typeof value !== "string") files.set(Number(width), await value.arrayBuffer());
+    }
+    return {
+        width: Number(form.get("width")),
+        height: Number(form.get("height")),
+        files,
+    };
+}

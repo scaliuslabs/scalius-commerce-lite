@@ -142,6 +142,7 @@ import {
     assertOrderItemsHaveNoReturnHistory,
 } from "./order-returns";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { publishedMediaObjectKey } from "../media/media.presentation";
 import { retryTransientD1 } from "../../utils/transient-d1";
 import {
     buildAdminOrderCreateAttemptCommit,
@@ -725,9 +726,7 @@ export async function quoteManualOrder(
 ): Promise<ManualOrderQuote> {
     return (await prepareManualOrderQuote(db, data)).quote;
 }
-export type BuyerRecoveryPaymentMethod =
-    | typeof PaymentMethod.SSLCOMMERZ
-    | typeof PaymentMethod.POLAR;
+export type BuyerRecoveryPaymentMethod = typeof PaymentMethod.SSLCOMMERZ;
 export type RecoveryLinkPaymentType = "full" | "deposit" | "balance";
 
 export interface OrderPaymentRecoveryLink {
@@ -760,12 +759,10 @@ interface AdminOrderSkuIssue {
 const HOSTED_PAYMENT_METHODS = [
     PaymentMethod.STRIPE,
     PaymentMethod.SSLCOMMERZ,
-    PaymentMethod.POLAR,
 ] as const;
 
 const BUYER_RECOVERY_PAYMENT_METHODS = [
     PaymentMethod.SSLCOMMERZ,
-    PaymentMethod.POLAR,
 ] as const;
 
 const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
@@ -1920,7 +1917,7 @@ export async function previewOrderPaymentRecoveryLink(
 }
 
 /**
- * Issues a fresh private receipt proof for an unpaid SSLCommerz/Polar order
+ * Issues a fresh private receipt proof for an unpaid SSLCommerz order
  * whose hosted payment flow can still be recovered from the receipt page.
  */
 export async function createOrderPaymentRecoveryLink(
@@ -2026,7 +2023,7 @@ async function getOrderDetailsOnce(
                 quantity: orderItems.quantity,
                 price: orderItems.price,
                 productName: orderItems.productName,
-                productImageObjectKey: media.objectKey,
+                productImageObjectKey: publishedMediaObjectKey(),
                 productImageStatus: media.status,
                 variantLabel: orderItems.variantLabel,
                 fulfillmentStatus: orderItems.fulfillmentStatus,

@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { MediaManager, type MediaFile } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import type { ProductFormValues, ProductMediaItem } from "./types";
 
 const EMPTY_PRODUCT_MEDIA: ProductMediaItem[] = [];
@@ -217,12 +217,7 @@ function ProductMediaTile({
       <div className="relative aspect-square overflow-hidden bg-muted/30">
         {previewUrl ? (
           <img
-            src={getOptimizedImageUrl(previewUrl, {
-              width: 320,
-              height: 320,
-              quality: 80,
-              fit: "contain",
-            })}
+            src={mediaImageUrl(previewUrl, 320)}
             alt=""
             className="h-full w-full object-contain object-center"
             loading="lazy"

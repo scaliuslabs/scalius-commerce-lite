@@ -24,6 +24,7 @@ function createTestApp() {
   });
   app.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.env = { RL_STANDARD: { limit: async () => ({ success: true }) } } as unknown as Env;
     await next();
   });
   app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);

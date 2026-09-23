@@ -181,25 +181,20 @@ interface Message<T = unknown> {
 interface Env {
   // Service / resource bindings
   DB?: D1Database;
+  // The only KV namespace. Other users share it by key prefix (OAuth: `oauth:`).
   CACHE: KVNamespace;
-  OAUTH_KV: KVNamespace;
+  // Public media plus sealed agent artifacts under `private/agent-artifacts/`.
   BUCKET: R2Bucket;
-  AGENT_ARTIFACTS: R2Bucket;
-  SHARED_AUTH_CACHE: KVNamespace;
-  SEARCH_RATE_LIMITER: RateLimit;
-  ORDER_IP_RATE_LIMITER: RateLimit;
-  ORDER_PHONE_RATE_LIMITER: RateLimit;
-  AGENT_RATE_LIMITER: RateLimit;
-  META_EVENTS_RATE_LIMITER: RateLimit;
-  ABANDONED_CHECKOUT_RATE_LIMITER: RateLimit;
-  OAUTH_PROVIDER?: import("@cloudflare/workers-oauth-provider").OAuthHelpers;
+  // Store-scoped keys (src/utils/rate-limit.ts): strict 5/60s, standard 60/60s.
+  RL_STRICT: RateLimit;
+  RL_STANDARD: RateLimit;
   CHECKOUT_COORDINATOR: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;
+  /** One-time WebP renditions for non-dashboard uploads (agents, CLI, URL import). */
+  IMAGES?: ImagesBinding;
 
-  // Cloudflare Queue bindings
-  PAYMENT_EVENTS_QUEUE: Queue;
-  ORDER_NOTIFICATIONS_QUEUE: Queue;
-  AUTH_OTP_QUEUE: Queue;
+  // Producer for the single `jobs` queue (DLQ `jobs-dlq`); routed by payload.type.
+  JOBS_QUEUE: Queue;
 
   // Installed secrets (`wrangler secret put`). Exactly two per deployment.
   SCALIUS_SECRET?: string;

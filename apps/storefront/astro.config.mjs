@@ -49,6 +49,9 @@ export default defineConfig({
 
   output: "server",
   compressHTML: true,
+  // Nothing uses Astro.session. Without this the Cloudflare adapter enables a
+  // KV session driver and adds a `SESSION` KV binding to the built Worker.
+  session: false,
 
   integrations: [
     react(),
@@ -76,10 +79,8 @@ export default defineConfig({
       noExternal: [
         /^@radix-ui\/.*/,
         "lucide-react",
-        "sonner",
         "@nanostores/react",
         "nanostores",
-        "embla-carousel-react",
         "class-variance-authority",
         "clsx",
         "tailwind-merge",

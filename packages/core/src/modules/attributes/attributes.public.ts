@@ -223,51 +223,6 @@ export async function getPublicAttributesByCategory(
 }
 
 /**
- * Returns filterable attributes scoped to a set of product IDs.
- * Used for search results filtering.
- */
-export async function getPublicAttributesByProductIds(
-    db: Database,
-    productIds: string[],
-): Promise<{ filters: PublicAttributeFilter[] }> {
-    if (productIds.length === 0) return { filters: [] };
-
-    const productIdsJson = JSON.stringify([...new Set(productIds)]);
-    const attrs = await db
-        .selectDistinct({
-            attributeId: productAttributeValues.attributeId,
-            attributeName: productAttributes.name,
-            attributeSlug: productAttributes.slug,
-            value: productAttributeValues.value,
-        })
-        .from(productAttributeValues)
-        .innerJoin(
-            productAttributes,
-            and(
-                eq(productAttributeValues.attributeId, productAttributes.id),
-                eq(productAttributes.filterable, true),
-                isNull(productAttributes.deletedAt),
-            ),
-        )
-        .innerJoin(
-            products,
-            and(
-                eq(productAttributeValues.productId, products.id),
-                eq(products.isActive, true),
-                isNull(products.deletedAt),
-                publicProductHasBuyerResolvableSku(),
-            ),
-        )
-        .where(sql`${productAttributeValues.productId} IN (
-            SELECT CAST(value AS TEXT) FROM json_each(${productIdsJson})
-        )`)
-        .orderBy(productAttributeValues.attributeId, productAttributeValues.value)
-        .limit(PUBLIC_ATTRIBUTE_FACET_ROW_LIMIT);
-
-    return { filters: groupAttributeValues(attrs) };
-}
-
-/**
  * Returns facets from the exact buyer-visible product set matched by search.
  * This deliberately keeps the FTS predicate in the attribute query: expanding
  * from matching category IDs would advertise values that produce zero results.

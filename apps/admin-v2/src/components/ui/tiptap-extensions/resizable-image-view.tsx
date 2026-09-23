@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
   AlignLeft,
   AlignCenter,
@@ -43,12 +43,7 @@ export function ResizableImageView({
   const widthRef = useRef<number | null>(null);
   const fieldId = useId();
   const altInputId = `${fieldId}-image-alt`;
-  const previewSrc = getOptimizedImageUrl(src, {
-    width: 1200,
-    height: null,
-    quality: 85,
-    fit: "scale-down",
-  });
+  const previewSrc = mediaImageUrl(src, 1200);
 
   // Reset display width when the attribute changes externally
   useEffect(() => {

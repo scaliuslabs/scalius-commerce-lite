@@ -84,7 +84,7 @@ export async function checkAndSyncShipmentStatus(options: {
 
   const notificationResult = await enqueueOrderStatusChangeNotification({
     db,
-    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: c.env.JOBS_QUEUE,
     statusChange: orderStatusChange,
     trackingId:
       updatedShipment.trackingId ??

@@ -355,16 +355,7 @@ const layoutData = await getLayoutData();
 
     // Item details layout (shown when expanded)
     const itemDetails = order.items.map((item) => {
-      const imageUrl = getProductImageUrl(
-        item.productImage,
-        {
-          width: 96,
-          height: 96,
-          quality: 80,
-          format: "auto",
-          fit: "contain",
-        },
-      );
+      const imageUrl = getProductImageUrl(item.productImage, 96);
 
       return `<div class="flex items-start gap-4 py-3">
         <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 shrink-0 rounded-md border border-border bg-card object-contain object-center" loading="lazy" />

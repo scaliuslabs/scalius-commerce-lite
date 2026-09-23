@@ -40,6 +40,7 @@ function createSchema(sqlite: DatabaseSync): void {
             caption TEXT,
             width INTEGER,
             height INTEGER,
+            variant_width INTEGER,
             duration_ms INTEGER,
             status TEXT NOT NULL
         );

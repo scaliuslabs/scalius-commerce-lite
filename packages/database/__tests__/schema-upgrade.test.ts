@@ -180,6 +180,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 63,
+        name: "0063_media_variants_drop_polar",
+        sqliteStatements: 5,
+        postgresStatements: 6,
+      },
     ]);
   });
 
@@ -310,6 +316,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 60, name: "0060_better_auth_account_identity" },
           { version: 61, name: "0061_regular_hex" },
           { version: 62, name: "0062_identity_handoff_audit" },
+          { version: 63, name: "0063_media_variants_drop_polar" },
         ],
       });
     } finally {

@@ -12,6 +12,7 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import {
   updateCustomerProfile,
   type CustomerSession,
@@ -629,7 +630,7 @@ export async function getAgentStorefrontReceipt(
       quantity: orderItems.quantity,
       price: orderItems.price,
       productName: orderItems.productName,
-      productImageObjectKey: media.objectKey,
+      productImageObjectKey: publishedMediaObjectKey(),
       productImageStatus: media.status,
       variantLabel: orderItems.variantLabel,
       unitPriceMinor: orderItems.unitPriceMinor,

@@ -4,6 +4,7 @@ import { getClientIp } from "@scalius/shared/rate-limit";
 
 import { ok } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
+import { isWithinRateLimit } from "../utils/rate-limit";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
   normalizePublicFtsSearchQuery,
@@ -150,9 +151,7 @@ app.openapi(searchRoute, async (c) => {
   // Predictive queries are high-cardinality and short-lived, making remote KV
   // slower than the indexed D1 read on a cold location. Cloudflare's native
   // limiter keeps abuse protection on-machine without adding a network round trip.
-  const ip = getClientIp(c.req.raw);
-  const rateLimitResult = await c.env.SEARCH_RATE_LIMITER.limit({ key: `search:${ip}` });
-  if (!rateLimitResult.success) {
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "search", getClientIp(c.req.raw)))) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }
 

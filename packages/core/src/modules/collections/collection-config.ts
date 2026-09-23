@@ -118,11 +118,6 @@ export function normalizeCollectionConfig(value: unknown): NormalizedCollectionC
     };
 }
 
-/** Public collection-page visibility and homepage placement are independent. */
-export function shouldShowCollectionOnHomepage(value: unknown): boolean {
-    return normalizeCollectionConfig(value).showOnHomepage;
-}
-
 export function publicCollectionConfig(value: unknown): PublicCollectionConfig {
     const config = normalizeCollectionConfig(value);
     return {

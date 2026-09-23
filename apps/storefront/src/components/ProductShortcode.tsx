@@ -115,7 +115,7 @@ export default function ProductShortcode({ productData }: { productData: Product
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <div>
           <div className="aspect-square overflow-hidden rounded-lg border border-border bg-muted/40">
-            <img src={getProductImageUrl(currentImage, { width: 600, height: 600, quality: 85, format: "auto", fit: "contain" })} alt={product.name} className="h-full w-full object-contain" loading="lazy" />
+            <img src={getProductImageUrl(currentImage, 600)} alt={product.name} className="h-full w-full object-contain" loading="lazy" />
           </div>
           {images.filter((image) => hasProductImage(image.url)).length > 1 ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
@@ -124,7 +124,7 @@ export default function ProductShortcode({ productData }: { productData: Product
                   setCurrentImage(image.url);
                   setCurrentImageMediaId(image.mediaId);
                 }} className={cn("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-muted/30 sm:h-20 sm:w-20", currentImage === image.url ? "border-primary" : "border-border")}>
-                  <img src={getProductImageUrl(image.url, { width: 120, height: 120, quality: 75, format: "auto", fit: "contain" })} alt={image.alt || product.name} className="h-full w-full object-contain" />
+                  <img src={getProductImageUrl(image.url, 120)} alt={image.alt || product.name} className="h-full w-full object-contain" />
                 </button>
               ))}
             </div>

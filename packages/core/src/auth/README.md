@@ -46,8 +46,6 @@ Customer Auth Flow (storefront):
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
 | `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
 | `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent database batches. API middleware schedules reconciliation outside the request critical path and uses a versioned six-hour Cloudflare KV marker; it never shares database I/O across Worker requests. |
-| `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
-| `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
 ### Database Schema
 
@@ -200,7 +198,7 @@ Completely separate from Better Auth. OTP verification uses short-lived D1 chall
 ### Flow
 
 1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings/customer-auth policy, validates delivery transport before mutating challenge state, rate limits by trusted client IP through D1 `customer_auth_otp_rate_limits`, generates a 6-digit OTP, stores only opaque HMAC lookup material, a code HMAC, masks, and encrypted pinned sign-up contacts in `customer_auth_otp_challenges`, and returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
-2. `/send-otp` sends the payload to `AUTH_OTP_QUEUE`; if queue handoff fails, it deletes the exact D1 OTP challenge by `otpKey` + `deliveryKey` and returns retryable `503`
+2. `/send-otp` sends the payload to `JOBS_QUEUE`; if queue handoff fails, it deletes the exact D1 OTP challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue delivery claims `auth_otp_delivery_receipts`, skips terminal/expired attempts, and records provider refs/status for email, SMS, or WhatsApp delivery
 4. `verifyOtp()` -- normalizes identifier to E.164, atomically consumes correct D1 OTP challenges or increments wrong-code attempts, creates/finds customer in DB, creates a D1 session row with only the token HMAC, returns `CustomerSession` with the raw token for the `cs_tok` cookie plus the canonical customer profile projection
 5. `getCustomerBySession()` -- hashes the cookie token, reads `customer_sessions`, joins the live `customers` row, rejects expired/revoked/deleted-customer sessions, and returns address/location/profile-completion fields for storefront hydration

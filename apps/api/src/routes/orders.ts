@@ -25,6 +25,7 @@ import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { getCustomerVisibleBalanceDue } from "@scalius/core/modules/customers/customers.service";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
 import {
@@ -78,7 +79,7 @@ import {
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../utils/encryption-key";
 import { getClientIp } from "@scalius/shared/rate-limit";
-import { enforceRateLimit } from "../utils/rate-limit";
+import { isWithinRateLimit } from "../utils/rate-limit";
 import {
   RECEIPT_TOKEN_TTL_SECONDS,
   getCheckoutStatusKvKey,
@@ -143,60 +144,14 @@ function createCheckoutDiagnostics(env: Env): {
   };
 }
 
-async function checkoutRateLimitKey(
-  scope: "ip" | "phone",
-  tenant: string,
-  subject: string,
-): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`${scope}\0${tenant}\0${subject}`),
-  );
-  const hash = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("");
-  return `checkout:${scope}:${hash}`;
-}
-
-function checkoutRateLimitTenant(env: Env, requestUrl: string): string {
-  try {
-    return new URL(env.PUBLIC_API_BASE_URL ?? requestUrl).hostname.toLowerCase();
-  } catch {
-    return new URL(requestUrl).hostname.toLowerCase();
-  }
-}
-
-const checkCheckoutRateLimit = enforceRateLimit;
-
 async function enforceCheckoutRateLimits(
   env: Env,
   request: Request,
   customerPhone: string,
 ): Promise<void> {
-  const kv = env.CACHE as KVNamespace | undefined;
-  const ipLimiter = env.ORDER_IP_RATE_LIMITER;
-  const phoneLimiter = env.ORDER_PHONE_RATE_LIMITER;
-  if (!kv && !ipLimiter && !phoneLimiter) return;
-
-  const tenant = checkoutRateLimitTenant(env, request.url);
-  const ip = getClientIp(request);
-  const [ipKey, phoneKey] = await Promise.all([
-    checkoutRateLimitKey("ip", tenant, ip),
-    checkoutRateLimitKey("phone", tenant, customerPhone),
-  ]);
   const [ipAllowed, phoneAllowed] = await Promise.all([
-    checkCheckoutRateLimit({
-      limiter: ipLimiter,
-      kv,
-      key: ipKey,
-      limit: 60,
-    }),
-    checkCheckoutRateLimit({
-      limiter: phoneLimiter,
-      kv,
-      key: phoneKey,
-      limit: 5,
-    }),
+    isWithinRateLimit(env, "RL_STANDARD", "checkout-ip", getClientIp(request)),
+    isWithinRateLimit(env, "RL_STRICT", "checkout-phone", customerPhone),
   ]);
   if (!ipAllowed || !phoneAllowed) {
     throw new RateLimitError("Too many order requests. Please try again later.");
@@ -795,7 +750,7 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
 
   if (result.queuePayload) {
     try {
-      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
     } catch (error) {
       if (result.challengeKey && result.deliveryKey) {
         await deleteOrderPaymentRecoveryChallenge(db, {
@@ -969,7 +924,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         quantity: orderItems.quantity,
         price: orderItems.price,
         productName: orderItems.productName,
-        productImageObjectKey: media.objectKey,
+        productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
         variantLabel: orderItems.variantLabel,
         unitPriceMinor: orderItems.unitPriceMinor,
@@ -1088,7 +1043,7 @@ app.openapi(createReceiptSupportRequestRoute, async (c) => {
   });
   await enqueueOrderSupportRequestNotificationForOrder({
     db,
-    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: c.env.JOBS_QUEUE,
     orderId: id,
     requestId: result.request.id,
     notificationType: "support_request_submitted",
@@ -1602,7 +1557,7 @@ const createOrderSchema = z.object({
     .min(0, "Shipping charge must be greater than or equal to 0"),
   shippingMethodId: z.string().optional().nullable(),
   paymentMethod: z
-    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.POLAR, PaymentMethod.COD])
+    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.COD])
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])

@@ -29,13 +29,11 @@ const STALE_INCOMPLETE_PAYMENT_STATUSES: RecoverableStalePaymentStatus[] = [
 
 type HostedPaymentMethod =
     | typeof PaymentMethod.STRIPE
-    | typeof PaymentMethod.SSLCOMMERZ
-    | typeof PaymentMethod.POLAR;
+    | typeof PaymentMethod.SSLCOMMERZ;
 
 const HOSTED_PAYMENT_METHODS: HostedPaymentMethod[] = [
     PaymentMethod.STRIPE,
     PaymentMethod.SSLCOMMERZ,
-    PaymentMethod.POLAR,
 ];
 
 const noActivePaymentClaimCondition = sql`NOT EXISTS (

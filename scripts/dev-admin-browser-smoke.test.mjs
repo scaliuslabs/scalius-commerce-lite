@@ -181,7 +181,7 @@ describe("local admin product rich-text browser smoke CLI", () => {
       excludeFromProductFeed: true,
       productCondition: "new",
     });
-    expect(product.images).toEqual([]);
+    expect(product.media).toEqual([]);
     expect(product.additionalInfo).toEqual([]);
   });
 

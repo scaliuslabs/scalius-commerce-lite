@@ -1,8 +1,7 @@
 import { GripVertical } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
   HERO_SLIDE_PRESENTATION,
-  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
 } from "@scalius/shared/hero-slider";
 import { cn } from "@scalius/shared/utils";
@@ -36,13 +35,7 @@ export function SlideOverlay({
         style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
       >
         <img
-          src={getOptimizedImageUrl(
-            image.url,
-            getHeroSlideImageTransform(type, image.focalPoint, {
-              width: 560,
-              quality: 80,
-            }),
-          )}
+          src={mediaImageUrl(image.url, 640)}
           alt={image.title}
           className="h-full w-full object-cover"
           style={{ objectPosition: getHeroSlideObjectPosition(image.focalPoint) }}

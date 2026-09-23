@@ -4,15 +4,14 @@
 
 import type { APIRoute } from "astro";
 
+// Exactly the script hosts `resolveUrl` in lib/partytown-config.ts proxies.
+// Never add a shared CDN (for example cdn.jsdelivr.net): it would let anyone
+// serve arbitrary JavaScript from the merchant's origin.
 const ALLOWED_HOSTS = new Set([
   "connect.facebook.net",
-  "www.facebook.com",
   "analytics.tiktok.com",
   "www.googletagmanager.com",
   "www.google-analytics.com",
-  "www.googleadservices.com",
-  "cdn.jsdelivr.net",
-  "static.cloudflareinsights.com",
 ]);
 
 const ALLOWED_PROTOCOLS = new Set(["https:"]);

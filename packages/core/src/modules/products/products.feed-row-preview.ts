@@ -8,10 +8,7 @@ import {
   type CatalogFeedRowProjection,
 } from "@scalius/shared/catalog-feed-row";
 import { normalizeCatalogDiscoveryBaseUrl } from "@scalius/shared/catalog-discovery-media";
-import {
-  getOptimizedImageUrl,
-  type ImageContext,
-} from "@scalius/shared/image-optimizer";
+import { resolveMediaUrl } from "@scalius/shared/media-url";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import type { StorefrontFeedProduct } from "./products.types";
@@ -60,9 +57,7 @@ export type ProductFeedRowPreviewDiagnosticReason =
   | (typeof PRODUCT_FEED_ROW_PREVIEW_DIAGNOSTIC_REASONS)[number];
 
 export interface ProductFeedRowPreviewMediaPolicy {
-  enabled: boolean;
   canonicalCdnUrl: string;
-  allowedImageHosts: readonly string[];
   canonicalHostAliases: readonly string[];
 }
 
@@ -201,30 +196,18 @@ function normalizedHost(value: string | null | undefined): string {
   }
 }
 
-export function buildProductFeedRowPreviewImageContext(
+/** The same media URL resolution the storefront feed applies to image sources. */
+function productFeedRowPreviewImageSource(
   mediaPolicy: ProductFeedRowPreviewMediaPolicy,
   environmentCdnUrl?: string | null,
-): ImageContext {
-  const configuredHost = normalizedHost(mediaPolicy.canonicalCdnUrl);
-  const environmentHost = normalizedHost(environmentCdnUrl);
-  const canonicalHost = configuredHost || environmentHost;
-  const cdnHosts = new Set<string>();
-  for (const value of [
-    configuredHost,
-    environmentHost,
-    ...mediaPolicy.allowedImageHosts.map(normalizedHost),
-  ]) {
-    if (value) cdnHosts.add(value);
-  }
-
+) {
+  const host = normalizedHost(mediaPolicy.canonicalCdnUrl) ||
+    normalizedHost(environmentCdnUrl);
   return {
-    enabled: mediaPolicy.enabled,
-    cdnBase: canonicalHost ? `https://${canonicalHost}` : "",
-    cdnHosts: [...cdnHosts],
+    cdnBase: host ? `https://${host}` : "",
     cdnHostAliases: mediaPolicy.canonicalHostAliases
       .map(normalizedHost)
       .filter(Boolean),
-    isDev: false,
   };
 }
 
@@ -825,7 +808,7 @@ export async function executeProductFeedRowPreview(
     exactSkuMatch = exactSku;
   }
 
-  const imageContext = buildProductFeedRowPreviewImageContext(
+  const imageSource = productFeedRowPreviewImageSource(
     input.mediaPolicy,
     input.environmentCdnUrl,
   );
@@ -844,8 +827,8 @@ export async function executeProductFeedRowPreview(
       includeUnavailableProducts:
         input.feedsPolicy.includeUnavailableProducts,
     },
-    transformImageUrl: (sourceUrl, options) =>
-      getOptimizedImageUrl(sourceUrl, options, imageContext),
+    resolveImageUrl: (sourceUrl) =>
+      resolveMediaUrl(sourceUrl, imageSource.cdnBase, imageSource),
     maxReportedOmissions: 250,
   });
   const outcomes = orderedProjectionEntries(
@@ -858,7 +841,7 @@ export async function executeProductFeedRowPreview(
     feedsPolicy: input.feedsPolicy,
     storefrontBaseUrl,
     currencyCode: input.currencyCode,
-    imageContext,
+    imageSource,
   });
   return paginateOutcomes(baseInput, outcomes, state);
 }

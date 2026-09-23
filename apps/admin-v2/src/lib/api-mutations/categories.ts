@@ -3,65 +3,16 @@ import { toast } from "sonner";
 import {
   bulkDeleteCategories,
   bulkRestoreCategories,
-  createCategory,
   deleteCategory,
   deleteCategoryPermanent,
   restoreCategory,
-  updateCategory,
-  updateCategoryStatus,
   type CategoryRevisionClaim,
-  type CreateCategoryInput,
-  type UpdateCategoryInput,
 } from "../api-functions/categories";
-import type { CategoryStatus } from "@scalius/shared/category-publication";
 import {
   getServerFnError,
   invalidateProductStatsQueries,
   queryKeys,
 } from "./shared";
-
-export function useCreateCategory() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateCategoryInput) => createCategory({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
-      toast.success("Category created");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create category")),
-  });
-}
-
-export function useUpdateCategory() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: UpdateCategoryInput) => updateCategory({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.detail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
-      toast.success("Category updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update category")),
-  });
-}
 
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
@@ -173,34 +124,5 @@ export function useBulkRestoreCategories() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore categories")),
-  });
-}
-
-export function useUpdateCategoryStatus() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CategoryRevisionClaim & { status: CategoryStatus }) =>
-      updateCategoryStatus({ data }),
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.detail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      toast.success(
-        result.status === "published"
-          ? "Category published"
-          : result.status === "internal"
-            ? "Category made internal"
-            : "Category moved to draft",
-      );
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to change category status")),
   });
 }

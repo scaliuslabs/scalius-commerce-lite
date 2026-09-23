@@ -218,12 +218,6 @@ export async function loadVariantSelectedOptions(
     return result;
 }
 
-export function formatSelectedOptions(
-    selectedOptions: readonly Pick<SelectedProductOption, "name" | "value">[],
-): string {
-    return selectedOptions.map((option) => `${option.name}: ${option.value}`).join(" / ");
-}
-
 /** Compact buyer/admin label for projections that do not need structured axes. */
 export function variantOptionLabelSql(_variantId: SQLWrapper): SQL<string | null> {
     // Every caller projects from the concrete product_variants table. Drizzle

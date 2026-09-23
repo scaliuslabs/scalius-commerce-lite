@@ -8,10 +8,8 @@ const mocks = vi.hoisted(() => ({
   getLayoutData: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
   getRuntimeCdnDomain: vi.fn(() => ""),
-  getRuntimeImageCdnAllowedHosts: vi.fn(() => []),
   getRuntimeImageCdnBaseUrl: vi.fn(() => ""),
   getRuntimeImageCdnCanonicalHostAliases: vi.fn(() => []),
-  getRuntimeImageOptimizationEnabled: vi.fn(() => false),
   setRuntimeImageCdnPolicy: vi.fn(),
 }));
 
@@ -27,10 +25,8 @@ vi.mock("@/lib/api/storefront", () => ({
 vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
   getRuntimeCdnDomain: mocks.getRuntimeCdnDomain,
-  getRuntimeImageCdnAllowedHosts: mocks.getRuntimeImageCdnAllowedHosts,
   getRuntimeImageCdnBaseUrl: mocks.getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases: mocks.getRuntimeImageCdnCanonicalHostAliases,
-  getRuntimeImageOptimizationEnabled: mocks.getRuntimeImageOptimizationEnabled,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));
 

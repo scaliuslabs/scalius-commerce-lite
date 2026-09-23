@@ -30,7 +30,6 @@ vi.mock("../create-order", () => ({
 }));
 
 import { CheckoutOrderError } from "../create-order";
-import { polarHandler } from "./polar";
 import { sslcommerzHandler } from "./sslcommerz";
 import { resetStripePaymentElement, stripeHandler } from "./stripe";
 import type { CheckoutConfig, PaymentContext } from "../types";
@@ -90,13 +89,6 @@ describe("hosted online payment handlers", () => {
       gateway: "sslcommerz",
       successBody: { gatewayUrl: "https://ssl.example.test/pay" },
     },
-    {
-      label: "Polar",
-      handler: polarHandler,
-      endpoint: "/api/checkout/polar-session",
-      gateway: "polar",
-      successBody: { gatewayUrl: "https://polar.example.test/pay" },
-    },
   ])("lets the API derive payment type for $label sessions", async ({
     handler,
     endpoint,
@@ -140,12 +132,6 @@ describe("hosted online payment handlers", () => {
       gateway: "sslcommerz",
       gatewayUrl: "https://ssl.example.test/pay",
     },
-    {
-      label: "Polar",
-      handler: polarHandler,
-      gateway: "polar",
-      gatewayUrl: "https://polar.example.test/pay",
-    },
   ])("uses the fused $label session returned by order creation", async ({
     handler,
     gateway,
@@ -173,7 +159,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("falls back to the private receipt after $gateway returns an unsafe URL", async ({
     handler,
     gateway,
@@ -234,7 +219,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("returns a receipt recovery URL after $gateway order creation when session setup fails", async ({
     handler,
     gateway,
@@ -256,7 +240,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("records $gateway recovery immediately after order creation", async ({ handler, gateway }) => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
@@ -272,7 +255,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("returns a receipt recovery URL after $gateway order creation when session setup is still processing", async ({
     handler,
     gateway,
@@ -301,7 +283,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("does not retry $gateway session creation when fused initialization already failed", async ({
     handler,
     gateway,
@@ -326,7 +307,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
-    { handler: polarHandler, gateway: "polar" },
   ])("returns backend order failure status for $gateway before payment setup", async ({
     handler,
   }) => {
@@ -353,7 +333,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz", endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
-    { handler: polarHandler, gateway: "polar", endpoint: "/api/checkout/polar-session", gatewayUrl: "https://polar.example.test/pay" },
   ])("replaces an existing order payment through $gateway without creating another order", async ({
     handler,
     gateway,
@@ -387,7 +366,6 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
-    { handler: polarHandler, endpoint: "/api/checkout/polar-session", gatewayUrl: "https://polar.example.test/pay" },
   ])("keeps the existing method for an accepted deposit balance through $endpoint", async ({
     handler,
     endpoint,

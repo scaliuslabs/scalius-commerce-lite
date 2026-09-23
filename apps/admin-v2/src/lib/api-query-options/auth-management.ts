@@ -1,23 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
-  get2faInfo,
   getAccountSessions,
   getAccountSecurity,
-  getAdminUsers,
-  getSetupStatus,
 } from "../api-functions/auth-management";
 import { queryKeys } from "../query-keys";
 
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
 const ACCOUNT_SESSIONS_STALE_TIME_MS = 1000 * 30;
-const STATIC_STALE_TIME_MS = 1000 * 60 * 60;
-
-export const adminUsersQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.adminUsers.list(),
-    queryFn: () => getAdminUsers(),
-    staleTime: LOOKUP_STALE_TIME_MS,
-  });
 
 export const accountSecurityQueryOptions = () =>
   queryOptions({
@@ -32,18 +21,4 @@ export const accountSessionsQueryOptions = () =>
     queryFn: () => getAccountSessions(),
     staleTime: ACCOUNT_SESSIONS_STALE_TIME_MS,
     refetchOnMount: "always",
-  });
-
-export const twoFaInfoQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.auth.twoFaInfo(),
-    queryFn: () => get2faInfo(),
-    staleTime: LOOKUP_STALE_TIME_MS,
-  });
-
-export const setupStatusQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.setup.status(),
-    queryFn: () => getSetupStatus(),
-    staleTime: STATIC_STALE_TIME_MS,
   });

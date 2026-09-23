@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
-  getPolarSettings: vi.fn(),
   createPaymentProvider: vi.fn(),
   providerCreateRefund: vi.fn(),
   getCurrencyConfig: vi.fn(),
@@ -14,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./gateway-settings", () => ({
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-  getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("./factory", () => ({
@@ -44,7 +42,7 @@ import {
 } from "@scalius/database/schema";
 import { processRefund } from "./refund-service";
 
-type Gateway = "stripe" | "sslcommerz" | "polar";
+type Gateway = "stripe" | "sslcommerz";
 
 function createDbMock(gateway: Gateway) {
   const order = {
@@ -72,16 +70,7 @@ function createDbMock(gateway: Gateway) {
     status: "succeeded",
     stripeChargeId: "ch_1",
     sslcommerzBankTranId: "bank_1",
-    polarCheckoutId: "polar_order_1",
-    metadata: gateway === "polar"
-      ? JSON.stringify({
-          originalCurrency: "bdt",
-          gatewayCurrency: "usd",
-          exchangeRate: "110",
-          originalAmount: "100",
-          gatewayAmount: 0.91,
-        })
-      : null,
+    metadata: null,
   };
   const refundAttempt = {
     id: "rfa_refund_order_1_3_1",
@@ -183,18 +172,11 @@ describe("refund gateway settings freshness", () => {
       storePassword: "password",
       sandbox: true,
     });
-    mocks.getPolarSettings.mockResolvedValue({
-      enabled: true,
-      accessToken: "polar_token",
-      productId: "polar_product",
-      sandbox: true,
-    });
   });
 
   it.each([
     ["stripe", mocks.getStripeSettings],
     ["sslcommerz", mocks.getSSLCommerzSettings],
-    ["polar", mocks.getPolarSettings],
   ] as const)("uses fresh %s settings when dispatching refunds", async (gateway, settingsReader) => {
     const db = createDbMock(gateway);
     const kv = { id: "kv" } as unknown as KVNamespace;
@@ -220,11 +202,6 @@ describe("refund gateway settings freshness", () => {
       type: gateway,
       settings: expect.objectContaining({ enabled: true }),
     }));
-    if (gateway === "polar") {
-      expect(mocks.providerCreateRefund).toHaveBeenCalledWith(expect.objectContaining({
-        amount: 9,
-      }));
-    }
   });
 
   it("marks the local refund claim failed when a fresh settings read fails before provider dispatch", async () => {

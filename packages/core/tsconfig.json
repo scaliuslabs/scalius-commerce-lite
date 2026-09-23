@@ -2,10 +2,22 @@
   "extends": "@scalius/tsconfig/worker.json",
   "compilerOptions": {
     "paths": {
-      "@scalius/core/*": ["./src/*"],
-      "@scalius/database/*": ["../database/src/*"],
-      "@scalius/shared/*": ["../shared/src/*"]
-    }
+      "@scalius/core/*": [
+        "./src/*"
+      ],
+      "@scalius/database/*": [
+        "../database/src/*"
+      ],
+      "@scalius/shared/*": [
+        "../shared/src/*"
+      ]
+    },
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

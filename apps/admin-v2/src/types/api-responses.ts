@@ -11,15 +11,6 @@
 // explicitly with matching shapes.
 
 import type { ReadinessStatus } from "@scalius/shared/readiness";
-import type {
-  GetApiV1AdminDashboardResponse,
-  GetApiV1AdminCollectionsFormOptionsResponse,
-} from "@scalius/api-client/types";
-
-// ---------------------------------------------------------------------------
-// Utility: extract data from SDK { success, data } envelope
-// ---------------------------------------------------------------------------
-type ExtractData<T> = T extends { success: true; data: infer D } ? D : never;
 
 // ---------------------------------------------------------------------------
 // Enums (const objects + derived union types — runtime values, not in SDK)
@@ -40,36 +31,6 @@ export const OrderStatus = {
 } as const;
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
-
-export const DeliveryProvider = {
-  PATHAO: "pathao",
-  STEADFAST: "steadfast",
-} as const;
-
-export type DeliveryProviderType =
-  (typeof DeliveryProvider)[keyof typeof DeliveryProvider];
-
-// ---------------------------------------------------------------------------
-// SDK-derived types (where SDK has no index signatures or unknown fields)
-// ---------------------------------------------------------------------------
-type DashboardResponseData = ExtractData<GetApiV1AdminDashboardResponse>;
-
-// ProductListItem and ProductStats are defined as explicit interfaces below
-// because SDK types include [key: string]: unknown index signatures that
-// break spread/assignment compatibility.
-
-/** Dashboard stats */
-export type DashboardStats = DashboardResponseData["stats"];
-export type DashboardRecentOrder =
-  DashboardResponseData["recentOrders"][number];
-export type DashboardDailyActivity =
-  DashboardResponseData["dailyActivityData"][number];
-/** Full dashboard response (stats + recentOrders + dailyActivityData) */
-export type DashboardData = DashboardResponseData;
-
-/** Collection form options from GET /admin/collections/form-options */
-export type CollectionFormOptions =
-  ExtractData<GetApiV1AdminCollectionsFormOptionsResponse>;
 
 // ---------------------------------------------------------------------------
 // Product domain
@@ -234,185 +195,9 @@ export interface ProductDetail extends Product {
   }>;
 }
 
-export interface ProductListItem {
-  id: string;
-  aggregateRevision: number;
-  name: string;
-  slug: string;
-  price: number;
-  description: string | null;
-  isActive: boolean;
-  discountPercentage: number | null;
-  discountType: "percentage" | "flat" | null;
-  discountAmount: number | null;
-  freeDelivery: boolean;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-  category: { name: string };
-  variantCount: number;
-  mediaCount: number;
-  primaryImage: string | null;
-  sku?: string;
-}
-
-export interface ProductStats {
-  totalProducts: number;
-  activeProducts: number;
-  productsWithImages: number;
-  categoriesCount: number;
-  totalCategories?: number;
-  categoriesWithImages?: number;
-}
-
-export interface ProductVariantDetail {
-  id: string;
-  productId: string;
-  sku: string | null;
-  barcode: string | null;
-  price: number | null;
-  compareAtPrice: number | null;
-  costPerItem: number | null;
-  stock: number;
-  reserved: number;
-  lowStockThreshold: number | null;
-  weight: number | null;
-  supplier: string | null;
-  isDefault: boolean;
-  trackInventory?: boolean;
-  isActive: boolean;
-  version: number;
-  stockVersion: number;
-  createdAt: string | number;
-  updatedAt: string | number;
-}
-
 // ---------------------------------------------------------------------------
 // Order domain
 // ---------------------------------------------------------------------------
-
-export interface Order {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  customerEmail: string | null;
-  shippingAddress: string;
-  city: string;
-  zone: string;
-  area: string | null;
-  cityName: string | null;
-  zoneName: string | null;
-  areaName: string | null;
-  totalAmount: number;
-  shippingCharge: number;
-  discountAmount: number | null;
-  currencyCode?: string | null;
-  currencyDecimalPlaces?: number | null;
-  subtotalAmountMinor?: number | null;
-  shippingAmountMinor?: number | null;
-  discountAmountMinor?: number | null;
-  taxAmountMinor?: number | null;
-  totalAmountMinor?: number | null;
-  taxLabel?: string | null;
-  pricesIncludeTax?: boolean | null;
-  status: string;
-  notes: string | null;
-  paymentMethod: string;
-  paymentStatus: string;
-  paymentIntentId: string | null;
-  paidAmount: number;
-  balanceDue: number;
-  fulfillmentStatus: string;
-  inventoryPool: string;
-  inventoryAction: string;
-  expectedDelivery: string | null;
-  version: number;
-  customerId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-  itemCount?: number;
-  latestShipment?: unknown;
-  fullEditReadiness: {
-    allowed: boolean;
-    reason: string | null;
-  };
-}
-
-export interface OrderItem {
-  id: string;
-  productId: string;
-  variantId: string | null;
-  quantity: number;
-  price: number;
-  productName: string | null;
-  productImage: string | null;
-  variantLabel: string | null;
-  unitPriceMinor?: number | null;
-  lineSubtotalMinor?: number | null;
-  discountAmountMinor?: number | null;
-  taxableAmountMinor?: number | null;
-  taxAmountMinor?: number | null;
-}
-
-export interface OrderDetail extends Order {
-  items: OrderItem[];
-  latestShipment: unknown;
-  itemCount: number;
-  amendmentReadiness: {
-    allowed: boolean;
-    reason: string | null;
-  };
-}
-
-export interface OrderFormData {
-  order: {
-    id: string;
-    version: number;
-    customerName: string;
-    customerPhone: string;
-    customerEmail: string | null;
-    shippingAddress: string;
-    city: string;
-    zone: string;
-    area: string | null;
-    notes: string | null;
-    discountAmount: number | null;
-    shippingCharge: number;
-    status: string;
-    createdAt: Date | string | number;
-    updatedAt: Date | string | number;
-  };
-  productsWithVariants: Array<{
-    id: string;
-    name: string;
-    price: number;
-    discountPercentage: number | null;
-    variants: ProductVariant[];
-  }>;
-  defaultValues: {
-    id: string;
-    version: number;
-    customerName: string;
-    customerPhone: string;
-    customerEmail: string | null;
-    shippingAddress: string;
-    city: string;
-    zone: string;
-    area: string | null;
-    notes: string | null;
-    discountAmount: number | null;
-    shippingCharge: number;
-    status: string;
-    createdAt: Date | string | number;
-    updatedAt: Date | string | number;
-    items: Array<{
-      productId: string;
-      variantId: string | null;
-      quantity: number;
-      price: number;
-    }>;
-  };
-}
 
 export interface AbandonedCheckout {
   id: string;
@@ -476,32 +261,6 @@ export interface DeliveryProviderRecord {
   readiness?: DeliveryProviderReadiness | null;
   createdAt?: Date | string | number;
   updatedAt?: Date | string | number;
-}
-
-export interface DeliveryShipment {
-  id: string;
-  orderId: string;
-  providerId: string | null;
-  providerType: string;
-  externalId: string | null;
-  trackingId: string | null;
-  trackingUrl: string | null;
-  courierName: string | null;
-  status: string;
-  rawStatus: string | null;
-  note: string | null;
-  metadata: string | null;
-  lastChecked: Date | null;
-  shipmentItems: string | null;
-  shipmentAmount: number | null;
-  isFinalShipment: boolean | null;
-  webhookId: string | null;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-}
-
-export interface EnhancedShipment extends DeliveryShipment {
-  providerName: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -604,16 +363,6 @@ export interface CustomerHistoryPage {
   hasNextPage: boolean;
 }
 
-export interface CustomerHistoryData {
-  customer: Customer;
-  history: CustomerHistoryRecord[];
-  orders: CustomerOrderSummary[];
-  pagination: {
-    history: CustomerHistoryPage;
-    orders: CustomerHistoryPage;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Discount domain
 // ---------------------------------------------------------------------------
@@ -684,68 +433,13 @@ export interface MetaPixelParityDiagnostics {
   parseableFacebookPixelScriptCount: number;
 }
 
-export interface MetaConversionsLog {
-  id: string;
-  eventId: string;
-  eventName: string;
-  status: "success" | "failed";
-  requestPayload: string;
-  responsePayload: string | null;
-  errorMessage: string | null;
-  eventTime: Date;
-  createdAt: Date;
-}
-
 // ---------------------------------------------------------------------------
 // Settings domain
 // ---------------------------------------------------------------------------
 
-export interface GeneralSettings {
-  headerConfig: Record<string, unknown> | null;
-  footerConfig: Record<string, unknown> | null;
-}
-
 export interface MetaConversionsSettingsResponse {
   settings: MetaConversionsSettings | null;
   pixelParity: MetaPixelParityDiagnostics;
-}
-
-export interface FraudCheckerProvider {
-  id: string;
-  name: string;
-  apiUrl: string;
-  apiKey: string;
-  apiSecret?: string;
-  userId?: string;
-  providerType?: string;
-  isActive: boolean;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-}
-
-export interface ShippingMethod {
-  id: string;
-  name: string;
-  fee: number;
-  description: string | null;
-  isActive: boolean;
-  sortOrder: number;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
-}
-
-export interface CheckoutLanguage {
-  id: string;
-  name: string;
-  code: string;
-  isActive: boolean;
-  isDefault: boolean;
-  languageData: string;
-  fieldVisibility: string;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -846,51 +540,10 @@ export interface PaginationResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Loader-level response shapes (list endpoints)
-// ---------------------------------------------------------------------------
-
-export interface CustomerListData {
-  customers: Customer[];
-  pagination: PaginationResponse;
-}
-
-export interface DiscountListData {
-  discounts: Discount[];
-  pagination: PaginationResponse;
-}
-
-// ---------------------------------------------------------------------------
-// Form option shapes
-// ---------------------------------------------------------------------------
-
-export interface CategoryOption {
-  id: string;
-  name: string;
-  slug?: string;
-}
-
-export interface ProductOption {
-  id: string;
-  name: string;
-  slug?: string;
-  price?: number;
-}
-
-export interface CollectionFormOptionsData {
-  categories: CategoryOption[];
-  products: ProductOption[];
-}
-
-// ---------------------------------------------------------------------------
 // Account security
 // ---------------------------------------------------------------------------
 
 export interface AccountSecurity {
   twoFactorMethod: string | null;
   isSuperAdmin: boolean;
-}
-
-export interface RbacPermission {
-  id: string;
-  name: string;
 }

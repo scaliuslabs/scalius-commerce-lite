@@ -2001,7 +2001,7 @@ describe("reviewed agent workflow resolver", () => {
       expect(resolution.plan.rules.join(" ")).not.toMatch(/\b(?:80|150)\b/);
       expect(serialized).toContain("Never touch SEO/analytics");
       expect(resolution.plan.operationIds.join(" ")).not.toMatch(
-        /stripe_update|polar_update|seo|analytics/i,
+        /stripe_update|seo|analytics/i,
       );
     }
   });

@@ -19,14 +19,6 @@ describe("header and footer builder workflow boundaries", () => {
     }
   });
 
-  it("previews footer destinations against the real storefront origin", () => {
-    const footerMenus = source("../footer-builder/NavigationMenusSection.tsx");
-
-    expect(footerMenus).toContain("useStorefrontUrl");
-    expect(footerMenus).toContain("getStorefrontPath={getStorefrontPath}");
-    expect(footerMenus).not.toContain('getStorefrontPath={() => "#"}');
-  });
-
   it("keeps navigation mutations in the dedicated workspace", () => {
     const headerBuilder = source("../header-builder/HeaderBuilder.tsx");
     const footerBuilder = source("../footer-builder/FooterBuilder.tsx");

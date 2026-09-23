@@ -7,7 +7,8 @@ import {
   agentGrants,
 } from "@scalius/database/schema";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
-import { ConflictError, ForbiddenError, NotFoundError, RateLimitError, ServiceUnavailableError, UnauthorizedError, ValidationError } from "../utils/api-error";
+import { ConflictError, ForbiddenError, NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "../utils/api-error";
+import { isWithinRateLimit } from "../utils/rate-limit";
 import { getBearerToken, hmacAgentOpaqueValue, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer } from "../agent-access/principal";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
@@ -60,11 +61,10 @@ function verificationUri(env: Env): string {
 }
 
 async function enforceUnauthenticatedAuthRate(c: { env: Env; req: { header(name: string): string | undefined } }, endpoint: string) {
-  const limiter = c.env.AGENT_RATE_LIMITER;
-  if (!limiter) throw new ServiceUnavailableError("Agent authentication rate limiting is unavailable");
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const result = await limiter.limit({ key: `agent-auth:${endpoint}:${ip}` });
-  if (!result.success) throw new RateLimitError("Agent authentication rate limit exceeded");
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", `agent-auth:${endpoint}`, ip))) {
+    throw new RateLimitError("Agent authentication rate limit exceeded");
+  }
 }
 
 const startRoute = createRoute({

@@ -13,7 +13,7 @@ import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import { GALLERY_CONFIG } from "@/components/product/config";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { resolveMediaUrl } from "@/lib/media-url";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
@@ -203,41 +203,23 @@ const requestedVariantImageUrl = hasProductImage(requestedVariantImageCandidate)
   ? requestedVariantImageCandidate
   : null;
 const initialGalleryImageSource = requestedVariantImageUrl
-  ? { url: requestedVariantImageUrl, trimBorder: true }
-  : featuredGalleryMedia?.kind === "image"
-    ? { url: featuredGalleryMedia.url, trimBorder: true }
+  ?? (featuredGalleryMedia?.kind === "image"
+    ? featuredGalleryMedia.url
     : featuredGalleryMedia?.posterUrl
-      ? { url: featuredGalleryMedia.posterUrl, trimBorder: false }
-      : !featuredGalleryMedia && primaryImageUrl
-        ? { url: primaryImageUrl, trimBorder: true }
-        : null;
+      ?? (!featuredGalleryMedia ? primaryImageUrl : null));
 const initialGalleryMobilePreloadUrl = initialGalleryImageSource
-  ? getProductImageUrl(initialGalleryImageSource.url, {
-      width: GALLERY_CONFIG.imageTransforms.mobileDisplay,
-      height: GALLERY_CONFIG.imageTransforms.mobileDisplay,
-      quality: GALLERY_CONFIG.imageTransforms.mobileQuality,
-      format: "auto",
-      fit: "contain",
-      ...(initialGalleryImageSource.trimBorder ? { trim: "border" } : {}),
-    })
+  ? getProductImageUrl(
+      initialGalleryImageSource,
+      GALLERY_CONFIG.imageWidths.mobileDisplay,
+    )
   : null;
 const initialGalleryDesktopPreloadUrl = initialGalleryImageSource
-  ? getProductImageUrl(initialGalleryImageSource.url, {
-      width: GALLERY_CONFIG.imageTransforms.display,
-      height: GALLERY_CONFIG.imageTransforms.display,
-      quality: 85,
-      format: "auto",
-      fit: "contain",
-      ...(initialGalleryImageSource.trimBorder ? { trim: "border" } : {}),
-    })
+  ? getProductImageUrl(
+      initialGalleryImageSource,
+      GALLERY_CONFIG.imageWidths.display,
+    )
   : null;
-const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
-  width: 600,
-  height: 600,
-  quality: 85,
-  format: "auto",
-  fit: "contain",
-});
+const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, 640);
 const schemaImageUrls = storefrontUrl
   ? Array.from(
       new Set(
@@ -245,16 +227,7 @@ const schemaImageUrls = storefrontUrl
           const resolved = resolveCatalogDiscoveryImageUrl(
             candidate,
             storefrontUrl,
-            {
-              transformImageUrl: (imageUrl) =>
-                getOptimizedImageUrl(imageUrl, {
-                  width: 1200,
-                  height: 630,
-                  quality: 85,
-                  format: "auto",
-                  fit: "pad",
-                }),
-            },
+            { resolveImageUrl: resolveMediaUrl },
           );
           return resolved ? [resolved] : [];
         }),
@@ -359,16 +332,7 @@ function getVariantSchemaImages(
   const resolved = resolveCatalogDiscoveryImageUrl(
     variant.imageUrl,
     storefrontUrl,
-    {
-      transformImageUrl: (imageUrl) =>
-        getOptimizedImageUrl(imageUrl, {
-          width: 1200,
-          height: 630,
-          quality: 85,
-          format: "auto",
-          fit: "pad",
-        }),
-    },
+    { resolveImageUrl: resolveMediaUrl },
   );
   return resolved
     ? Array.from(new Set([resolved, ...schemaImageUrls]))

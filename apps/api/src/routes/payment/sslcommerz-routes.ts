@@ -333,7 +333,7 @@ app.post("/success", async (c) => {
         if (validation && (validation.status === "VALID" || validation.status === "VALIDATED")) {
           await reconcileValidatedSSLCommerzSuccess({
             db,
-            queue: c.env.PAYMENT_EVENTS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             validation,
             requestedValId: valId,
             expectedTranId: tranId,

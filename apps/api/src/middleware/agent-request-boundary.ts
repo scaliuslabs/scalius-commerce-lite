@@ -2,16 +2,16 @@ import type { Context, Next } from "hono";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 import type { AgentPrincipal } from "../agent-access/types";
 import { writeAgentAuditEvent } from "../agent-access/audit";
-import { RateLimitError, ServiceUnavailableError } from "../utils/api-error";
+import { RateLimitError } from "../utils/api-error";
+import { isWithinRateLimit } from "../utils/rate-limit";
 
 export async function enforceAgentRateLimit(
   c: Context,
   principal: AgentPrincipal,
 ): Promise<void> {
-  const limiter = c.env.AGENT_RATE_LIMITER as RateLimit | undefined;
-  if (!limiter) throw new ServiceUnavailableError("Agent request rate limiting is unavailable");
-  const allowed = await limiter.limit({ key: `grant:${principal.grantId}` });
-  if (!allowed.success) throw new RateLimitError("Agent request rate limit exceeded");
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "agent", `grant:${principal.grantId}`))) {
+    throw new RateLimitError("Agent request rate limit exceeded");
+  }
 }
 
 export async function writeDeniedAgentRequestAudit(

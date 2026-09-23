@@ -675,6 +675,8 @@ export const mediaSchema = z.object({
   caption: z.string().nullable().optional(),
   width: z.number().nullable().optional(),
   height: z.number().nullable().optional(),
+  /** Largest pre-generated WebP rendition; null when only the original exists. */
+  variantWidth: z.number().int().nullable().optional(),
   durationMs: z.number().nullable().optional(),
   posterMediaId: z.string().nullable().optional(),
   posterUrl: z.string().nullable(),

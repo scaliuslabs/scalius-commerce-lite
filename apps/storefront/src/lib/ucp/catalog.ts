@@ -4,7 +4,7 @@ import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { resolveMediaUrl } from "@/lib/media-url";
 import {
   availableQuantityForVariant,
   isVariantAvailable,
@@ -28,13 +28,6 @@ const MAX_SEARCH_LIMIT = 50;
 const MAX_LOOKUP_IDS = 25;
 const MAX_UCP_BODY_BYTES = 64 * 1024;
 const GID_PREFIX = "gid://scalius/";
-const CATALOG_IMAGE_OPTIONS = {
-  width: 1200,
-  quality: 90,
-  format: "auto",
-  fit: "scale-down",
-} as const;
-
 type UcpStatus = "success" | "error";
 type UcpMessageType = "info" | "warning" | "error";
 type VariantMatchMode = "featured" | "exact";
@@ -549,8 +542,7 @@ function catalogMedia(
   altText?: string | null,
 ) {
   const url = resolveCatalogDiscoveryImageUrl(imageUrl, baseUrl, {
-    transformImageUrl: (imageUrl) =>
-      getOptimizedImageUrl(imageUrl, CATALOG_IMAGE_OPTIONS),
+    resolveImageUrl: resolveMediaUrl,
   });
   if (!url) return undefined;
 

@@ -7,7 +7,6 @@ import {
     bulkActivateCollections,
     listCollections,
     listCollectionProductOptions,
-    resolveCollectionProducts,
     resolveCollectionProductsBatch,
     updateCollection,
 } from "./collections.service";
@@ -123,7 +122,7 @@ function createCategoryBatchDb(options: {
     };
 }
 
-describe("resolveCollectionProducts", () => {
+describe("collection writes", () => {
     it("rejects create-time collection canonical overrides before an ID route exists", async () => {
         await expect(createCollection(createDb([]), {
             name: "Summer Edit",
@@ -181,58 +180,6 @@ describe("resolveCollectionProducts", () => {
             canonicalPath: undefined,
         })).rejects.toThrow(/changed while you were editing/);
         expect(db.update).not.toHaveBeenCalled();
-    });
-
-    it("keeps manually configured product order and maxProducts stable", async () => {
-        const db = createDb([
-            [product("p1"), product("p2"), product("p3")],
-            [],
-        ]);
-
-        const result = await resolveCollectionProducts(db, {
-            productIds: ["missing_or_hidden", "p3", "p1", "p2"],
-            maxProducts: 2,
-        });
-
-        expect(result.products.map((item) => item.id)).toEqual(["p3", "p1"]);
-    });
-
-    it("keeps category metadata in configured category order", async () => {
-        const db = createDb([
-            [
-                { id: "cat_b", name: "B", slug: "b" },
-                { id: "cat_a", name: "A", slug: "a" },
-            ],
-            [],
-            [],
-        ]);
-
-        const result = await resolveCollectionProducts(db, {
-            source: "dynamic",
-            categoryIds: ["cat_a", "cat_b"],
-        });
-
-        expect(result.categories.map((category) => category.id)).toEqual([
-            "cat_a",
-            "cat_b",
-        ]);
-    });
-
-    it("uses the explicit content source when stale selections exist", async () => {
-        const db = createDb([
-            [{ id: "cat_a", name: "A", slug: "a" }],
-            [product("category_product", "cat_a")],
-            [],
-        ]);
-
-        const result = await resolveCollectionProducts(db, {
-            source: "dynamic",
-            categoryIds: ["cat_a"],
-            productIds: ["stale_manual_product"],
-        });
-
-        expect(result.products.map((item) => item.id)).toEqual(["category_product"]);
-        expect(result.categories.map((item) => item.id)).toEqual(["cat_a"]);
     });
 });
 

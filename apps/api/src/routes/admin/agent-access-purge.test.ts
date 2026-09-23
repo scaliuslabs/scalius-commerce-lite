@@ -19,7 +19,7 @@ vi.mock("../../utils/ops-log", () => ({ logOpsEvent: mocks.logOpsEvent }));
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminAgentAccessRoutes } from "./agent-access";
 
-const env = { AGENT_ARTIFACTS: { delete: vi.fn() } } as unknown as Env;
+const env = { BUCKET: { delete: vi.fn() } } as unknown as Env;
 
 function createApp(options: {
   user?: Record<string, unknown>;
@@ -83,7 +83,7 @@ describe("DELETE /admin/agent-access/connections/revoked", () => {
     expect(db).toEqual({ tag: "db" });
     expect(options.resource).toBe("storefront");
 
-    const artifacts = [{ id: "aah_1", r2Key: "agent-artifacts/agr_1/a" }];
+    const artifacts = [{ id: "aah_1", r2Key: "private/agent-artifacts/agr_1/a" }];
     await options.onArtifactsPurging(artifacts);
     expect(mocks.deleteAgentArtifactObjects).toHaveBeenCalledWith(env, artifacts);
 

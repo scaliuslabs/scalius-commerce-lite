@@ -2,7 +2,6 @@
 import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
-import { withOptimizedProductPageImages } from "@/lib/serialized-media";
 
 export const prerender = false;
 
@@ -28,7 +27,7 @@ export const GET: APIRoute = async ({ params }) => {
     }
 
     return new Response(
-      JSON.stringify(withOptimizedProductPageImages(productData)),
+      JSON.stringify(productData),
       {
         status: 200,
         headers: {

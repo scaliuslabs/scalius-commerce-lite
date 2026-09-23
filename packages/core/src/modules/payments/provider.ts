@@ -1,7 +1,7 @@
 // src/modules/payments/provider.ts
 // PaymentProvider interface — common abstraction over all payment gateways.
 //
-// Each gateway (Stripe, SSLCommerz, Polar, COD) implements this interface.
+// Each gateway (Stripe, SSLCommerz, COD) implements this interface.
 // The interface models what the gateways actually do:
 //   - Create a payment session (returns a client secret or redirect URL)
 //   - Create a refund
@@ -41,7 +41,7 @@ export interface CreatePaymentParams {
  * Result of creating a payment session.
  * Depending on the gateway, the consumer uses either:
  *   - `clientSecret` (Stripe — client-side confirmation)
- *   - `redirectUrl`  (SSLCommerz, Polar — server-side redirect)
+ *   - `redirectUrl`  (SSLCommerz — server-side redirect)
  *   - neither        (COD — no external action needed)
  */
 export interface CreatePaymentResult {
@@ -49,7 +49,7 @@ export interface CreatePaymentResult {
   transactionId?: string;
   /** Stripe client secret for client-side confirmation */
   clientSecret?: string;
-  /** URL to redirect the customer to (SSLCommerz, Polar) */
+  /** URL to redirect the customer to (SSLCommerz) */
   redirectUrl?: string;
 }
 

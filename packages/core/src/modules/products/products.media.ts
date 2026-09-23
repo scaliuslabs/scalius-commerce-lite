@@ -1,6 +1,6 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { getCurrentMediaUrl } from "../../integrations/storage";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
@@ -34,6 +34,7 @@ export interface ProductMediaProjectionRow {
     mediaId: string;
     kind: "image" | "video";
     objectKey: string;
+    variantWidth: number | null;
     mediaAltText: string | null;
     contextualAltText: string | null;
     caption: string | null;
@@ -42,6 +43,7 @@ export interface ProductMediaProjectionRow {
     durationMs: number | null;
     posterMediaId: string | null;
     posterObjectKey: string | null;
+    posterVariantWidth: number | null;
     posterKind: "image" | "video" | null;
     posterStatus: "uploading" | "processing" | "ready" | "failed" | "deleting" | "trashed" | null;
     isPrimary: boolean;
@@ -164,6 +166,7 @@ export function selectProductMediaProjectionRows(
             mediaId: productMedia.mediaId,
             kind: media.kind,
             objectKey: media.objectKey,
+            variantWidth: media.variantWidth,
             mediaAltText: media.altText,
             contextualAltText: sql<string | null>`${productMedia.altText}`
                 .as("product_media_contextual_alt_text"),
@@ -175,6 +178,8 @@ export function selectProductMediaProjectionRows(
                 .as("product_media_poster_id"),
             posterObjectKey: sql<string | null>`${poster.objectKey}`
                 .as("product_media_poster_object_key"),
+            posterVariantWidth: sql<number | null>`${poster.variantWidth}`
+                .as("product_media_poster_variant_width"),
             posterKind: sql<"image" | "video" | null>`${poster.kind}`
                 .as("product_media_poster_kind"),
             posterStatus: sql<ProductMediaProjectionRow["posterStatus"]>`${poster.status}`
@@ -221,6 +226,7 @@ export function selectCheckoutProductMediaProjectionRows(
             mediaId: productMedia.mediaId,
             kind: media.kind,
             objectKey: media.objectKey,
+            variantWidth: media.variantWidth,
             mediaAltText: media.altText,
             contextualAltText: sql<string | null>`${productMedia.altText}`
                 .as("product_media_contextual_alt_text"),
@@ -232,6 +238,8 @@ export function selectCheckoutProductMediaProjectionRows(
                 .as("product_media_poster_id"),
             posterObjectKey: sql<string | null>`${poster.objectKey}`
                 .as("product_media_poster_object_key"),
+            posterVariantWidth: sql<number | null>`${poster.variantWidth}`
+                .as("product_media_poster_variant_width"),
             posterKind: sql<"image" | "video" | null>`${poster.kind}`
                 .as("product_media_poster_kind"),
             posterStatus: sql<ProductMediaProjectionRow["posterStatus"]>`${poster.status}`
@@ -311,10 +319,10 @@ export function resolveProductMediaProjectionRows(
             id: row.id,
             mediaId: row.mediaId,
             kind: row.kind,
-            url: getCurrentPublicMediaUrl(row.objectKey),
+            url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
             posterMediaId: posterIsUsable ? row.posterMediaId : null,
             posterUrl: posterIsUsable
-                ? getCurrentPublicMediaUrl(row.posterObjectKey!)
+                ? getCurrentMediaUrl(row.posterObjectKey!, row.posterVariantWidth)
                 : null,
             contextualAltText: row.contextualAltText,
             altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,

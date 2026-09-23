@@ -38,7 +38,7 @@ import {
 
 // Resolved per request, never at module init: this module loads once per Worker
 // isolate, before any request runtime is seeded. Order:
-// 1. SSR: per-request runtime seeded by the middleware from /api/v1/platform
+// 1. SSR: per-request runtime seeded by the middleware from the layout payload
 // 2. Browser: window.__API_BASE_URL__ injected by Layout.astro from that runtime
 // 3. Local `astro dev` only: the fixed local API port
 // Missing configuration fails loudly because storefront does not expose a

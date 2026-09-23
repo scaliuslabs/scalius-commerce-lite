@@ -48,7 +48,7 @@ function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
         CACHE: { id: "api-cache" },
-        ORDER_NOTIFICATIONS_QUEUE: queue,
+        JOBS_QUEUE: queue,
         CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as unknown as Env;
 

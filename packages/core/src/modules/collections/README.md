@@ -113,7 +113,6 @@ The service provides product resolution for the storefront, computing `discounte
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `resolveCollectionProducts` | `(db, config)` | Resolve products from explicit `config.source`. Manual order is preserved; dynamic membership uses selected categories. Featured product resolves independently. Limits by `maxProducts` (1-24, default 8). |
 | `resolveCollectionProductsBatch` | `(db, parsedCollections)` | Batch-resolve products for multiple collections in 2 D1 round-trips (4 batched queries). Returns `Map<collectionId, CollectionProductResult>`. Avoids N+1 queries for homepage. |
 
 Only the selected membership source is buyer-visible. Stale selections from the

@@ -664,7 +664,7 @@ describe("storefront mixed-media source boundaries", () => {
     expect(controller).not.toContain("controller-image-update");
   });
 
-  it("uses one reusable preview transform without background display warming", () => {
+  it("uses one reusable preview rendition without background display warming", () => {
     const gallery = readFileSync(GALLERY_SOURCE, "utf8");
     const controller = readFileSync(
       storefrontSourcePath(
@@ -675,7 +675,7 @@ describe("storefront mixed-media source boundaries", () => {
     expect(gallery).not.toContain("data-variant-image");
     expect(gallery).not.toContain("variantImageIds");
     expect(gallery).toContain("data-preview-url");
-    expect(gallery).toContain("imageTransforms.preview");
+    expect(gallery).toContain("imageWidths.preview");
     expect(controller).toContain("const shouldUsePreview =");
     expect(controller).toContain('source !== "initial"');
     expect(controller).toContain("root.dataset.activeMediaKey !== currentKey");

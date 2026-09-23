@@ -1,5 +1,8 @@
+import { MEDIA_DISCOVERY_IMAGE_WIDTH, mediaImageUrl } from "./media-variants";
+
 export interface CatalogDiscoveryImageOptions {
-  transformImageUrl?: (source: string) => string | null | undefined;
+  /** Resolves a persisted source (bare key, CDN alias) to its public URL. */
+  resolveImageUrl?: (source: string) => string | null | undefined;
 }
 
 function cleanString(value: string | null | undefined): string | null {
@@ -69,19 +72,23 @@ export function resolveCatalogDiscoveryImageUrl(
     return null;
   }
 
-  const transformed = cleanString(
-    options.transformImageUrl ? options.transformImageUrl(source) : source,
+  const resolved = cleanString(
+    options.resolveImageUrl ? options.resolveImageUrl(source) : source,
   );
   if (
-    !transformed ||
-    transformed.startsWith("//") ||
-    hasUnsafeUrlChars(transformed)
+    !resolved ||
+    resolved.startsWith("//") ||
+    hasUnsafeUrlChars(resolved)
   ) {
     return null;
   }
 
   try {
-    const parsed = new URL(transformed, `${base}/`);
+    // Crawlers get a pre-generated rendition of at least 1200 px when one exists.
+    const parsed = new URL(
+      mediaImageUrl(resolved, MEDIA_DISCOVERY_IMAGE_WIDTH),
+      `${base}/`,
+    );
     return parsed.protocol === "https:" || parsed.protocol === "http:"
       ? parsed.toString()
       : null;

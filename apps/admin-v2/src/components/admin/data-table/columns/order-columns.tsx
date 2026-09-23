@@ -83,9 +83,7 @@ function PaymentMethodLabel({ method }: { method: string }) {
         ? "Stripe"
         : method === "sslcommerz"
           ? "SSL"
-          : method === "polar"
-            ? "Polar"
-            : method;
+          : method;
   return (
     <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
       {label}

@@ -347,7 +347,7 @@ describe("initCartFunctionality", () => {
   it("keeps the recovery pointer while the cart still matches the pending checkout", async () => {
     expect(
       writeHostedPaymentRecoverySession(
-        "/order-success?orderId=order_current&payment=polar",
+        "/order-success?orderId=order_current&payment=sslcommerz",
         {
           checkoutId: "checkout_current",
           cartItems: cartState.items,

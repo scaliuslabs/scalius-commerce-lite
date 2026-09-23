@@ -1,5 +1,4 @@
 // src/lib/middleware-helper/csp-handler.ts
-import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import {
   normalizePlatformOrigin,
   parseMerchantCspSources,
@@ -8,12 +7,9 @@ import {
 /**
  * Builds the page Content-Security-Policy.
  *
- * Platform origins are passed in explicitly by the middleware from the
- * request context (seeded from /api/v1/platform). Merchant-managed additional
- * sources come from the API's storefront CSP settings; there is no
- * environment-variable source. Reads use request-local coalescing so repeated
- * calls within one SSR render share work without retaining a fetch promise
- * across Worker requests.
+ * Platform origins and merchant-managed additional sources (Settings ->
+ * Security) both arrive in the request's layout payload, so building the
+ * header costs no extra read. There is no environment-variable source.
  */
 
 /** Platform origins that are always allowed, resolved per request. */
@@ -26,62 +22,6 @@ export interface CspPlatformOrigins {
   mediaUrl?: string;
   /** Effective image CDN base (dashboard media setting or platform media host). */
   cdnBaseUrl?: string;
-}
-
-// Empty sentinel keeps a failed read deterministic within the current request.
-const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
-
-async function parseAdditionalDomains(apiBaseUrl: string): Promise<string[]> {
-  let additionalDomains = "";
-  try {
-    if (apiBaseUrl) {
-      const cachedData = await withEdgeCache(
-        "global_security_settings",
-        async () => {
-          try {
-            const url = `${apiBaseUrl}/api/v1/storefront/csp`;
-            const response = await fetch(url, {
-              headers: {
-                Accept: "application/json",
-              },
-              signal: AbortSignal.timeout(4000),
-            });
-
-            if (!response.ok) {
-              // Always cancel the response body to prevent stalled deadlocks
-              await response.body?.cancel();
-              // Return empty sentinel (NOT null) for request-local coalescing.
-              return EMPTY_CSP_DATA;
-            }
-            const json = (await response.json()) as {
-              cspAllowedDomains?: string;
-              data?: { cspAllowedDomains?: string };
-            };
-            return {
-              cspAllowedDomains:
-                json.data?.cspAllowedDomains ?? json.cspAllowedDomains ?? "",
-            };
-          } catch {
-            // Return empty sentinel for request-local coalescing.
-            return EMPTY_CSP_DATA;
-          }
-        },
-        { ttlSeconds: CACHE_TTL.SHORT },
-      );
-
-      if (cachedData?.cspAllowedDomains) {
-        additionalDomains = cachedData.cspAllowedDomains;
-      }
-    }
-  } catch (e: unknown) {
-    console.error("Failed to fetch merchant CSP sources via EdgeCache", e);
-  }
-
-  if (!additionalDomains) {
-    return [];
-  }
-
-  return parseMerchantCspSources(additionalDomains);
 }
 
 // Define essential hardcoded CSP directives that should never be configurable
@@ -223,14 +163,17 @@ function getPlatformDomains(origins: CspPlatformOrigins): string[] {
 
 /**
  * Applies Content Security Policy (CSP) headers to a given Response object.
- * Platform origins come from the per-request context; nothing is hardcoded.
+ * Platform origins and merchant sources come from the per-request context.
  */
-export async function setPageCspHeader(
+export function setPageCspHeader(
   response: Response,
   origins: CspPlatformOrigins = {},
-): Promise<Response> {
+  merchantSources = "",
+): Response {
   const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
-  const additionalDomains = await parseAdditionalDomains(apiBaseUrl);
+  const additionalDomains = merchantSources
+    ? parseMerchantCspSources(merchantSources)
+    : [];
   const platformDomains = getPlatformDomains(origins);
 
   // Dev mode detection — allow http://localhost in dev, never in production

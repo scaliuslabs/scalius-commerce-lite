@@ -50,8 +50,8 @@ describe("FCMMessagingService", () => {
   });
 
   it("creates request-scoped messaging services instead of retaining Worker bindings", () => {
-    const firstEnvironment = { SHARED_AUTH_CACHE: { get: vi.fn(), put: vi.fn() } };
-    const secondEnvironment = { SHARED_AUTH_CACHE: { get: vi.fn(), put: vi.fn() } };
+    const firstEnvironment = { CACHE: { get: vi.fn(), put: vi.fn() } };
+    const secondEnvironment = { CACHE: { get: vi.fn(), put: vi.fn() } };
 
     const first = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
     const sameEnvironment = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
@@ -151,7 +151,7 @@ describe("FCMMessagingService", () => {
       {
         // Removed tunable: must be ignored.
         FCM_SEND_CONCURRENCY: "2",
-        SHARED_AUTH_CACHE: cache,
+        CACHE: cache,
         CREDENTIAL_ENCRYPTION_KEY: credentialKey,
       },
       serviceAccountJson,
@@ -231,7 +231,7 @@ describe("FCMMessagingService", () => {
 
     const messaging = new FCMMessagingService(
       {
-        SHARED_AUTH_CACHE: cache,
+        CACHE: cache,
         CREDENTIAL_ENCRYPTION_KEY: credentialKey,
       },
       signableServiceAccountJson,
@@ -304,7 +304,7 @@ describe("FCMMessagingService", () => {
 
     const messaging = new FCMMessagingService(
       {
-        SHARED_AUTH_CACHE: cache,
+        CACHE: cache,
       },
       signableServiceAccountJson,
     );

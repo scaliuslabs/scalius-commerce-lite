@@ -102,7 +102,7 @@ describe("PaymentCard session history", () => {
   it.each([
     { gateway: "stripe", providerSessionId: null, attempts: 1, lastError: "Gateway configuration is unavailable." },
     { gateway: "sslcommerz", providerSessionId: "hosted_cancelled", attempts: 1, lastError: "Hosted payment was cancelled before completion." },
-    { gateway: "polar", providerSessionId: "retained_before_reclaim", attempts: 2, lastError: "Gateway session request failed." },
+    { gateway: "stripe", providerSessionId: "retained_before_reclaim", attempts: 2, lastError: "Gateway session request failed." },
   ])("describes failed $gateway attempts without guessing the failure stage", async (session) => {
     await render({ ...session, providerCorrelationId: "correlation_recorded" }, {
       status: "cancelled", paymentMethod: session.gateway,
@@ -119,7 +119,7 @@ describe("PaymentCard session history", () => {
     expect(recoveryButton()).toBeUndefined();
   });
 
-  describe.each(["stripe", "sslcommerz", "polar"])("%s created sessions", (gateway) => {
+  describe.each(["stripe", "sslcommerz"])("%s created sessions", (gateway) => {
     it.each([
       { status: "cancelled", paymentStatus: "failed", paidAmount: 0 },
       { status: "delivered", paymentStatus: "paid", paidAmount: 1800 },
@@ -136,7 +136,7 @@ describe("PaymentCard session history", () => {
     });
   });
 
-  it.each(["stripe", "sslcommerz", "polar"])("describes stale %s processing without promising retry", async (gateway) => {
+  it.each(["stripe", "sslcommerz"])("describes stale %s processing without promising retry", async (gateway) => {
     await render({ gateway, status: "processing", staleProcessing: true, claimExpiresAt: 1_783_000_030 }, {
       status: "cancelled", paymentMethod: gateway,
     });

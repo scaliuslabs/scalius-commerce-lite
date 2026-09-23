@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 62,
-  name: "0062_identity_handoff_audit",
+  version: 63,
+  name: "0063_media_variants_drop_polar",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -88,8 +88,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "d324f4bd25505b7f4ac6ff25e611c581febbcee8e6c0f16b2fd867782c481cb8",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 62,
+    name: "0062_identity_handoff_audit",
     sourceSha256: "c514c87ba34755f276246babc6d94a012a39a9e839919c5114539d41378c4cf7",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "c5b1317a03ab33940205e39cbd6217552e5322aef9291beea5fdad18ca93211e",
   },
 ] as const;
 

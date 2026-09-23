@@ -14,6 +14,7 @@ import {
 } from "@/lib/seo-base-url";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl } from "@/lib/product-media";
+import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -123,13 +124,7 @@ function getPaginationUrl(page: number) {
 }
 const ogImageUrl = firstProductImage
   ? toAbsoluteStorefrontSeoUrl(
-      getProductImageUrl(firstProductImage, {
-        width: 1200,
-        height: 630,
-        quality: 85,
-        format: "auto",
-        fit: "pad",
-      }),
+      getProductImageUrl(firstProductImage, MEDIA_DISCOVERY_IMAGE_WIDTH),
     )
   : undefined;
 

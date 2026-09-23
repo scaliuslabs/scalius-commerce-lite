@@ -21,6 +21,8 @@ app.get("/:key{.+}", async (c) => {
   let key: string;
   try {
     key = validateMediaObjectKey(c.req.param("key"));
+    // `private/` holds sealed agent artifacts in the same bucket; never serve it.
+    if (key.startsWith("private/")) return c.notFound();
   } catch {
     // This public development route should not expose storage-policy details
     // or turn an unsupported path into an operational 5xx signal.

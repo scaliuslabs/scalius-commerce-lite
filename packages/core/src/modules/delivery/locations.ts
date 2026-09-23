@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { deliveryLocations } from "@scalius/database/schema";
-import { and, eq, isNull, like, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { normalizeRequiredDeliveryLocationName } from "./location-names";
 
@@ -82,29 +82,6 @@ export async function getAreas(db: Database, zoneId: string) {
     .orderBy(deliveryLocations.sortOrder);
 }
 
-/** Search locations by name */
-export async function searchLocations(
-  db: Database,
-  query: string,
-  type?: "city" | "zone" | "area",
-) {
-  const whereConditions: (ReturnType<typeof like> | ReturnType<typeof isNull> | ReturnType<typeof eq>)[] = [
-    like(deliveryLocations.name, `%${query}%`),
-    isNull(deliveryLocations.deletedAt),
-  ];
-
-  if (type) {
-    whereConditions.push(eq(deliveryLocations.type, type));
-  }
-
-  return db
-    .select()
-    .from(deliveryLocations)
-    .where(and(...whereConditions))
-    .orderBy(deliveryLocations.name)
-    .limit(50);
-}
-
 /** Create a new location */
 export async function createLocation(db: Database, data: LocationData) {
   const id = data.id || createId();
@@ -153,19 +130,6 @@ export async function updateLocation(db: Database, id: string, data: Partial<Loc
     .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
 
   return getLocationById(db, id);
-}
-
-/** Soft-delete a location */
-export async function deleteLocation(db: Database, id: string) {
-  await db
-    .update(deliveryLocations)
-    .set({
-      deletedAt: sql`(unixepoch())`,
-      updatedAt: sql`(unixepoch())`,
-    })
-    .where(eq(deliveryLocations.id, id));
-
-  return { success: true };
 }
 
 /** Get a location by ID */

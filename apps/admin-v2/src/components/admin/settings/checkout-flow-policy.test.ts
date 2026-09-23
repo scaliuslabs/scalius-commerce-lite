@@ -151,7 +151,6 @@ describe("checkout flow preview policy", () => {
             ["cod"],
             ["stripe"],
             ["sslcommerz"],
-            ["polar"],
             ["cod", "stripe"],
         ];
         const advances = [

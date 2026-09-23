@@ -13,7 +13,7 @@ import {
 } from "@/lib/api/runtime";
 import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
@@ -116,36 +116,11 @@ const hasProductShortcode = processedContent.includes(
 
 const featuredImage = page.featuredImage ?? null;
 const featuredImageUrl = featuredImage?.url
-  ? getOptimizedImageUrl(featuredImage.url, {
-      width: 1280,
-      height: 640,
-      quality: 85,
-      format: "auto",
-      fit: "cover",
-      gravity: "auto",
-    })
+  ? mediaImageUrl(featuredImage.url, 1280)
   : "";
 const featuredImageSrcSet = featuredImage?.url
-  ? [
-      [384, 192],
-      [640, 320],
-      [768, 384],
-      [960, 480],
-      [1280, 640],
-    ]
-      .map(
-        ([width, height]) =>
-          `${getOptimizedImageUrl(featuredImage.url, {
-            width,
-            height,
-            quality: width <= 768 ? 72 : width === 960 ? 78 : 82,
-            format: "auto",
-            fit: "cover",
-            gravity: "auto",
-          })} ${width}w`,
-      )
-      .join(", ")
-  : "";
+  ? mediaImageSrcSet(featuredImage.url)
+  : undefined;
 const featuredImageAlt =
   featuredImage?.altText || featuredImage?.filename || page.title;
 
@@ -182,7 +157,7 @@ const richContentClasses =
               alt={featuredImageAlt}
               width={1280}
               height={640}
-              class="h-auto w-full rounded-lg object-cover"
+              class="aspect-[2/1] h-auto w-full rounded-lg object-cover"
               loading="eager"
               fetchpriority="high"
               decoding="sync"
@@ -210,7 +185,7 @@ const richContentClasses =
               alt={featuredImageAlt}
               width={1280}
               height={640}
-              class="h-auto w-full object-cover"
+              class="aspect-[2/1] h-auto w-full object-cover"
               loading="eager"
               fetchpriority="high"
               decoding="sync"

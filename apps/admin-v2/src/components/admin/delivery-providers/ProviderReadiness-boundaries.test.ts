@@ -6,7 +6,6 @@ import { getDeliveryProviderMarkId } from "./ProviderIcon";
 const ICON_SOURCE = fileURLToPath(new URL("./ProviderIcon.tsx", import.meta.url));
 const SIDEBAR_SOURCE = fileURLToPath(new URL("./ProviderListSidebar.tsx", import.meta.url));
 const BULK_SHIP_SOURCE = fileURLToPath(new URL("../order-list/BulkShipDialog.tsx", import.meta.url));
-const SHIPMENT_FORM_SOURCE = fileURLToPath(new URL("../ShipmentForm.tsx", import.meta.url));
 const CONTAINER_SOURCE = fileURLToPath(new URL("./DeliveryProvidersContainer.tsx", import.meta.url));
 
 describe("delivery provider readiness UI boundaries", () => {
@@ -50,14 +49,5 @@ describe("delivery provider readiness UI boundaries", () => {
     expect(source).toContain("Provider cannot create shipments");
     expect(source).toContain("disabled={!readiness.canCreateShipment}");
     expect(source).toContain("No shipment-ready delivery providers");
-  });
-
-  it("blocks single shipment forms when readiness cannot create shipments", () => {
-    const formSource = readFileSync(SHIPMENT_FORM_SOURCE, "utf8");
-
-    expect(formSource).toContain("resolveProviderReadiness");
-    expect(formSource).toContain("!selectedReadiness?.canCreateShipment");
-    expect(formSource).toContain("disabled={!resolveProviderReadiness(provider).canCreateShipment}");
-    expect(formSource).toContain("No shipment-ready providers");
   });
 });

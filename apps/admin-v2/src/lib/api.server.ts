@@ -22,7 +22,6 @@ import {
   type AdminApiReadTimeoutHandle,
   AdminApiReadTimeoutError,
   createAdminApiReadTimeout,
-  wrapResponseWithAdminApiReadTimeout,
 } from "./admin-api-timeout";
 import { AdminApiResponseError } from "./admin-api-error";
 import { fetchApi, getRuntimeEnv } from "./runtime-env.server";
@@ -270,28 +269,4 @@ export async function apiBasePost<T>(
 ): Promise<T> {
   const fullPath = buildPath(path, undefined, false);
   return readApiFetch("POST", fullPath, { body, headers: options?.headers }, handleResponse<T>);
-}
-
-/**
- * Raw fetch to API worker (returns Response, does not unwrap envelope).
- * Useful for endpoints that return non-standard responses (e.g. file uploads).
- */
-export async function apiRawFetch(
-  method: string,
-  path: string,
-  options?: {
-    params?: Record<string, string>;
-    body?: unknown;
-    headers?: Record<string, string>;
-    signal?: AbortSignal;
-    prefixed?: boolean;
-  },
-): Promise<Response> {
-  const fullPath = buildPath(path, options?.params, options?.prefixed ?? true);
-  const { response, timeout } = await apiFetchRaw(method, fullPath, {
-    body: options?.body,
-    headers: options?.headers,
-    signal: options?.signal,
-  });
-  return wrapResponseWithAdminApiReadTimeout(response, timeout);
 }

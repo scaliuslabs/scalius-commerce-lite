@@ -175,7 +175,7 @@ app.post("/", async (c) => {
         const statusResult = await updateOrderStatusFromShipment(db, shipment.id, normalizedStatus);
         await enqueueOrderStatusChangeNotification({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             statusChange: statusResult?.statusChange ?? null,
             trackingId: shipment.trackingId,
             source: "pathao-webhook",

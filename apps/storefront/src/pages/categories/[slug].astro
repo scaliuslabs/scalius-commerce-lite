@@ -23,7 +23,8 @@ import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
+import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   buildProductListPaginationHref,
   resolveProductListQueryState,
@@ -157,14 +158,7 @@ const discoverySettings = normalizeSeoDiscoverySettings(
 // OG image from category image (per OG-02, OG-05)
 const ogImageUrl = category?.imageUrl
   ? toAbsoluteStorefrontSeoUrl(
-      getOptimizedImageUrl(category.imageUrl, {
-        width: 1200,
-        height: 630,
-        quality: 85,
-        format: "auto",
-        fit: "cover",
-        gravity: "auto",
-      }),
+      mediaImageUrl(category.imageUrl, MEDIA_DISCOVERY_IMAGE_WIDTH),
     )
   : null;
 

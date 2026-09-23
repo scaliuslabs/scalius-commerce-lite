@@ -99,14 +99,12 @@ describe("hero slider workflow boundaries", () => {
     expect(carouselSource).not.toContain('type === "desktop" ? 1300 : 640');
   });
 
-  it("keeps merchant crop focus consistent from the editor to Cloudflare delivery", () => {
+  it("keeps merchant crop focus consistent from the editor to storefront delivery", () => {
     expect(rowSource).toContain("HeroFocalPointEditor");
     expect(rowSource).toContain("getHeroSlideObjectPosition(image.focalPoint)");
     expect(focalPointEditorSource).toContain("Click the subject that must stay visible.");
     expect(focalPointEditorSource).toContain('type="range"');
     expect(focalPointEditorSource).toContain("HERO_SLIDE_DEFAULT_FOCAL_POINT");
-    expect(rowSource).toContain("getHeroSlideImageTransform(type, image.focalPoint");
-    expect(carouselSource).toContain("getHeroSlideImageTransform(type, focalPoint");
     expect(carouselSource).toContain("getHeroSlideObjectPosition(focalPoint)");
   });
 });

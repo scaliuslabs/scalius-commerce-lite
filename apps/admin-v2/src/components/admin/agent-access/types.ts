@@ -192,10 +192,6 @@ export const AGENT_RESOURCE_COPY: Record<
   },
 };
 
-export function isAgentPreset(value: string): value is AgentPreset {
-  return AGENT_PRESETS.some((preset) => preset.id === value);
-}
-
 export function permissionLabel(permission: string): string {
   return permission
     .split(/[._-]/g)

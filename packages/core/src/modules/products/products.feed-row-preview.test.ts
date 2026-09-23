@@ -123,9 +123,7 @@ function previewInput(
       description: "",
     },
     mediaPolicy: {
-      enabled: true,
       canonicalCdnUrl: "cdn.example.com",
-      allowedImageHosts: ["legacy.example.com"],
       canonicalHostAliases: ["old-cdn.example.com"],
     },
     readers: readers(product()),
@@ -226,8 +224,8 @@ describe("product feed row preview", () => {
       { name: "size", value: "Small" },
       { name: "material", value: "Cotton" },
     ]);
-    expect(entry.row.imageLink).toMatch(
-      /^https:\/\/cdn\.example\.com\/cdn-cgi\/image\/[^/]*width=1200[^/]*quality=90[^/]*format=auto[^/]*fit=scale-down[^/]*\/products\/cotton-shirt\/small\.jpg$/u,
+    expect(entry.row.imageLink).toBe(
+      "https://cdn.example.com/products/cotton-shirt/small.jpg",
     );
     expect(result.semantics).toEqual({
       basis: "current_saved_state",

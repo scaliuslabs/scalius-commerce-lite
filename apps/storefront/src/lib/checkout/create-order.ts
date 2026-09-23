@@ -19,7 +19,7 @@ export type InitialPaymentSession =
       currency?: string;
     }
   | {
-      gateway: "sslcommerz" | "polar";
+      gateway: "sslcommerz";
       gatewayUrl?: string;
       sessionKey?: string;
       checkoutId?: string;
