@@ -40,10 +40,21 @@ export function calculateDiscountedPriceAtPrecision(
   precision: number,
 ): number {
   const places = Number.isInteger(precision) && precision >= 0 && precision <= 3 ? precision : 2;
-  const amount = (value: number | null | undefined) =>
-    value != null && Number.isFinite(value) && value > 0 ? toMinor(value, places) : 0;
+  // Amounts too large for integer minor units are not prices: the result is
+  // 0, which every caller already treats as "not sellable at a price".
+  const amount = (value: number | null | undefined): number | null => {
+    if (value == null || !Number.isFinite(value) || value <= 0) return 0;
+    try {
+      return toMinor(value, places);
+    } catch {
+      return null;
+    }
+  };
+  const priceMinor = amount(price);
+  const discountMinor = amount(discountAmount);
+  if (priceMinor === null || discountMinor === null) return 0;
   return fromMinor(
-    discountedPriceMinor(amount(price), discountType, percentToBps(discountPercentage), amount(discountAmount)),
+    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor),
     places,
   );
 }
