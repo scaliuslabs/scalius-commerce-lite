@@ -2503,7 +2503,6 @@ export type GetApiV1StorefrontHomepageResponses = {
         success: true;
         data: {
             seo: {
-                siteTitle: string | null;
                 homepageTitle: string | null;
                 homepageMetaDescription: string | null;
             };
@@ -2874,34 +2873,12 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             seo: {
                 discovery: {
-                    sitemap: {
-                        enabled: boolean;
-                        staticPages: boolean;
-                        products: boolean;
-                        categories: boolean;
-                        collections: boolean;
-                        pages: boolean;
-                        articles: boolean;
-                    };
                     feeds: {
                         productCatalogEnabled: boolean;
                         includeUnavailableProducts: boolean;
                         variantStrategy: 'products' | 'variants';
                         title: string;
                         description: string;
-                    };
-                    robots: {
-                        advertiseSitemap: boolean;
-                    };
-                    structuredData: {
-                        organization: boolean;
-                        websiteSearch: boolean;
-                        products: boolean;
-                        productGroups: boolean;
-                        offerShippingDetails: boolean;
-                        breadcrumbs: boolean;
-                        collections: boolean;
-                        articles: boolean;
                     };
                 };
                 returnPolicy: {
@@ -2913,6 +2890,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                     returnMethod: 'mail' | 'in_store' | 'both';
                     policyUrl: string;
                 };
+                socialImage: string;
             };
             platform: {
                 storefrontUrl: string;
@@ -9616,39 +9594,16 @@ export type GetApiV1SeoResponses = {
     200: {
         success: true;
         data: {
-            siteTitle: string | null;
-            homepageTitle: string | null;
-            homepageMetaDescription: string | null;
-            robotsTxt: string | null;
+            homepageTitle: string;
+            homepageMetaDescription: string;
+            socialImage: string;
             discovery: {
-                sitemap: {
-                    enabled: boolean;
-                    staticPages: boolean;
-                    products: boolean;
-                    categories: boolean;
-                    collections: boolean;
-                    pages: boolean;
-                    articles: boolean;
-                };
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
                     variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
-                };
-                robots: {
-                    advertiseSitemap: boolean;
-                };
-                structuredData: {
-                    organization: boolean;
-                    websiteSearch: boolean;
-                    products: boolean;
-                    productGroups: boolean;
-                    offerShippingDetails: boolean;
-                    breadcrumbs: boolean;
-                    collections: boolean;
-                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -30759,39 +30714,16 @@ export type GetApiV1AdminSettingsSeoResponses = {
     200: {
         success: true;
         data: {
-            siteTitle: string;
             homepageTitle: string;
             homepageMetaDescription: string;
-            robotsTxt: string;
+            socialImage: string;
             discovery: {
-                sitemap: {
-                    enabled: boolean;
-                    staticPages: boolean;
-                    products: boolean;
-                    categories: boolean;
-                    collections: boolean;
-                    pages: boolean;
-                    articles: boolean;
-                };
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
                     variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
-                };
-                robots: {
-                    advertiseSitemap: boolean;
-                };
-                structuredData: {
-                    organization: boolean;
-                    websiteSearch: boolean;
-                    products: boolean;
-                    productGroups: boolean;
-                    offerShippingDetails: boolean;
-                    breadcrumbs: boolean;
-                    collections: boolean;
-                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -30811,39 +30743,16 @@ export type GetApiV1AdminSettingsSeoResponse = GetApiV1AdminSettingsSeoResponses
 
 export type PostApiV1AdminSettingsSeoData = {
     body: {
-        siteTitle?: string;
         homepageTitle?: string;
         homepageMetaDescription?: string;
-        robotsTxt?: string;
+        socialImage?: string;
         discovery?: {
-            sitemap?: {
-                enabled?: boolean;
-                staticPages?: boolean;
-                products?: boolean;
-                categories?: boolean;
-                collections?: boolean;
-                pages?: boolean;
-                articles?: boolean;
-            };
             feeds?: {
                 productCatalogEnabled?: boolean;
                 includeUnavailableProducts?: boolean;
                 variantStrategy?: 'products' | 'variants';
                 title?: string;
                 description?: string;
-            };
-            robots?: {
-                advertiseSitemap?: boolean;
-            };
-            structuredData?: {
-                organization?: boolean;
-                websiteSearch?: boolean;
-                products?: boolean;
-                productGroups?: boolean;
-                offerShippingDetails?: boolean;
-                breadcrumbs?: boolean;
-                collections?: boolean;
-                articles?: boolean;
             };
         };
         returnPolicy?: {
