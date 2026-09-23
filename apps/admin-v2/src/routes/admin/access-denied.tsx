@@ -1,27 +1,53 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { Lock } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { broadcastAdminSignOut } from "~/components/auth/AdminSessionSync";
+import { translate, useMessages } from "~/i18n";
+import { appMessages } from "~/i18n/app";
+import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { NotFoundState, PageState } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/access-denied")({
-  head: () => ({ meta: [{ title: "Access Denied | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: translate(appMessages, "forbiddenTitle") }] }),
   component: AccessDeniedPage,
 });
 
+const adminRoute = getRouteApi("/admin");
+
 function AccessDeniedPage() {
+  const { hasAdminAccess } = adminRoute.useRouteContext();
+  // Someone with any permission has a Home to go back to.
+  return hasAdminAccess ? <NotFoundState forbidden /> : <NoAccess />;
+}
+
+/** An account with no permissions at all: Home would only lead back here, so the way out is signing out. */
+function NoAccess() {
+  const t = useMessages(appMessages);
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = async () => {
+    setSigningOut(true);
+    clearAdminRouteContextCache();
+    try {
+      const { authClient } = await import("~/lib/auth-client");
+      await authClient.signOut();
+      broadcastAdminSignOut();
+    } catch {
+      // The sign-in page reads the session again and sends a live one back here.
+    }
+    window.location.replace(withDashboardBasePath("/auth/login"));
+  };
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <div className="rounded-full bg-destructive/10 p-6 mb-6">
-        <ShieldAlert className="w-12 h-12 text-destructive" strokeWidth={1.5} />
-      </div>
-      <h1 className="text-2xl font-semibold text-foreground mb-2">Access Denied</h1>
-      <p className="text-muted-foreground mb-6 max-w-md">
-        You don't have permission to access this page. Contact your administrator if you believe this is an error.
-      </p>
-      <Link
-        to="/admin"
-        className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
-      >
-        Go to Dashboard
-      </Link>
-    </div>
+    <PageState
+      icon={Lock}
+      title={t("forbiddenTitle")}
+      body={t("noAccessBody")}
+      action={
+        <Button loading={signingOut} onClick={() => void signOut()}>
+          {t("signOut")}
+        </Button>
+      }
+    />
   );
 }

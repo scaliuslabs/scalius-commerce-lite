@@ -1,305 +1,232 @@
-// src/components/auth/TwoFactorSetup.tsx
-// Simple email-based 2FA setup - sends code to email automatically
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { Check, Copy } from "lucide-react";
 import { postApiV1AdminAuth2FaMethod } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useMessages } from "~/i18n";
+import { authMessages, type AuthMessageKey } from "~/i18n/auth";
+import { authFailureMessage, type AuthMessage } from "./auth-error";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Loader2, Mail, AlertCircle, Check, Copy } from "lucide-react";
-import { toast } from "sonner";
-import { useHydrated } from "@/hooks/use-hydrated";
+  AuthAlert,
+  AuthHeader,
+  CodeInput,
+  Field,
+  PasswordInput,
+  SignOutButton,
+  describedBy,
+  linkClassName,
+  useResendCooldown,
+} from "./auth-ui";
 
-type SetupStep = "password" | "verify" | "backup";
+type Step = "password" | "verify" | "backup";
 
-interface TwoFactorSetupProps {
-  userEmail: string;
-}
-
+// Better Auth loads on the first action, keeping it out of this route's chunk.
 async function loadTwoFactorClient() {
   const { authClient } = await import("@/lib/auth-client");
   return authClient.twoFactor;
 }
 
-export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
+/**
+ * First sign-in when the store requires two-step verification: confirm the
+ * password, prove the email code arrives, then save the backup codes.
+ */
+export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
+  const t = useMessages(authMessages);
   const navigate = useNavigate();
-  const [step, setStep] = useState<SetupStep>("password");
+  const busy = useRef(false);
+  const [step, setStep] = useState<Step>("password");
   const [password, setPassword] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
+  const [code, setCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [savedCodes, setSavedCodes] = useState(false);
+  const [copied, setCopied] = useState<"yes" | "failed" | null>(null);
+  const [fieldError, setFieldError] = useState<AuthMessageKey | null>(null);
+  const [failure, setFailure] = useState<AuthMessage | null>(null);
+  const [notice, setNotice] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const isHydrated = useHydrated();
+  const { seconds: resendIn, start: startCooldown, reset: resetCooldown } = useResendCooldown();
 
-  const handleEnable2FA = async () => {
-    setError(null);
+  function fail(error: unknown, pick: (code: string, status: number | null) => AuthMessageKey | null) {
+    setFailure(authFailureMessage(error, ({ code: errorCode, status }) => pick(errorCode, status)));
+  }
+
+  async function sendCode(announce: boolean) {
+    setFailure(null);
+    setNotice(false);
+    startCooldown();
+    try {
+      const { error } = await (await loadTwoFactorClient()).sendOtp();
+      if (!error) return setNotice(announce);
+      fail(error, () => "sendFailed");
+    } catch (error) {
+      fail(error, () => "sendFailed");
+    }
+    resetCooldown();
+  }
+
+  async function confirmPassword() {
+    if (!password) return setFieldError("passwordRequired");
     setIsLoading(true);
-
     try {
       const twoFactor = await loadTwoFactorClient();
-      const result = await twoFactor.enable({ password, method: "totp" });
-
-      if (result.error) {
-        setError(result.error.message || "Incorrect password");
-        setIsLoading(false);
-        return;
+      // A TOTP enrolment is what creates the backup codes; the email method is confirmed next.
+      const { data, error } = await twoFactor.enable({ password, method: "totp" });
+      if (error || data?.method !== "totp") {
+        setPassword("");
+        return fail(error, (errorCode, status) =>
+          errorCode === "INVALID_PASSWORD" || status === 400 || status === 401 ? "incorrectPassword" : null,
+        );
       }
-
-      if (result.data) {
-        if (result.data.method !== "totp") {
-          setError("Failed to create two-factor recovery codes");
-          return;
-        }
-        setBackupCodes(result.data.backupCodes || []);
-        const otpResult = await twoFactor.sendOtp();
-        if (otpResult?.error) {
-          setError(otpResult.error.message || "Failed to send verification code");
-          return;
-        }
-        setStep("verify");
-        toast.success("Verification code sent to your email");
-      }
-    } catch {
-      setError("Something went wrong. Please try again.");
+      setBackupCodes(data.backupCodes);
+      setPassword("");
+      setStep("verify");
+      await sendCode(false);
+    } catch (error) {
+      fail(error, () => null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleVerify = async () => {
-    setError(null);
+  // The sixth digit submits before React re-renders, so the code arrives as an argument.
+  async function verifyCode(entered: string) {
+    if (entered.length !== 6) return setFieldError("codeIncomplete");
     setIsLoading(true);
-
     try {
-      await apiData(postApiV1AdminAuth2FaMethod({
-        body: { method: "email", code: verificationCode },
-      }));
-
+      await apiData(postApiV1AdminAuth2FaMethod({ body: { method: "email", code: entered } }));
       setStep("backup");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+    } catch (error) {
+      fail(error, (errorCode, status) =>
+        errorCode === "OTP_HAS_EXPIRED" ? "codeExpired" : status === 400 || status === 401 ? "codeInvalid" : null,
+      );
+      setCode("");
+      document.getElementById("setup-code")?.focus();
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleResendOtp = async () => {
-    setIsLoading(true);
+  function run(action: () => Promise<unknown>) {
+    if (busy.current) return;
+    busy.current = true;
+    setFieldError(null);
+    setFailure(null);
+    setNotice(false);
+    void action().finally(() => {
+      busy.current = false;
+    });
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    run(step === "password" ? confirmPassword : () => verifyCode(code));
+  }
+
+  async function copyCodes() {
     try {
-      const twoFactor = await loadTwoFactorClient();
-      const result = await twoFactor.sendOtp();
-      if (result?.error) {
-        toast.error(result.error.message || "Failed to send code");
-        return;
-      }
-      toast.success("New code sent to your email");
+      await navigator.clipboard.writeText(backupCodes.join("\n"));
+      setCopied("yes");
     } catch {
-      toast.error("Failed to send code");
-    } finally {
-      setIsLoading(false);
+      setCopied("failed");
     }
-  };
-
-  const copyBackupCodes = () => {
-    navigator.clipboard.writeText(backupCodes.join("\n"));
-    toast.success("Backup codes copied");
-  };
-
-  const handleComplete = () => {
-    void navigate({ to: "/admin" });
-  };
-
-  // Password confirmation
-  if (step === "password") {
-    return (
-      <Card className="w-full border-0 shadow-none bg-transparent">
-        <CardHeader className="space-y-4 text-center px-0 pt-0">
-          <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-            <Mail className="h-8 w-8 text-foreground" />
-          </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Verify your email
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              We'll send a verification code to {userEmail}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <form
-            method="post"
-            action="/auth/setup-2fa"
-            onSubmit={(e) => { e.preventDefault(); handleEnable2FA(); }}
-            className="space-y-6"
-            noValidate
-          >
-            {error && (
-              <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Confirm your password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="h-11"
-                disabled={!isHydrated || isLoading}
-                autoFocus
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={!isHydrated || isLoading || !password}
-              className="w-full h-11"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending code...
-                </>
-              ) : (
-                "Send verification code"
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    );
   }
 
-  // Email verification
-  if (step === "verify") {
-    return (
-      <Card className="w-full border-0 shadow-none bg-transparent">
-        <CardHeader className="space-y-4 text-center px-0 pt-0">
-          <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-            <Mail className="h-8 w-8 text-foreground" />
-          </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Check your email
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Enter the 6-digit code sent to {userEmail}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <form
-            method="post"
-            action="/auth/setup-2fa"
-            onSubmit={(e) => { e.preventDefault(); handleVerify(); }}
-            className="space-y-6"
-            noValidate
-          >
-            {error && (
-              <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="code" className="sr-only">Verification Code</Label>
-              <Input
-                id="code"
-                type="text"
-                inputMode="numeric"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                placeholder="000000"
-                className="text-center text-2xl tracking-[0.5em] font-mono h-14"
-                maxLength={6}
-                disabled={!isHydrated || isLoading}
-                autoFocus
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={!isHydrated || isLoading || verificationCode.length !== 6}
-              className="w-full h-11"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                "Verify"
-              )}
-            </Button>
-
-            <button
-              type="button"
-              onClick={handleResendOtp}
-              disabled={!isHydrated || isLoading}
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Didn't receive the code? <span className="underline">Resend</span>
-            </button>
-          </form>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Backup codes
   if (step === "backup") {
     return (
-      <Card className="w-full border-0 shadow-none bg-transparent">
-        <CardHeader className="space-y-4 text-center px-0 pt-0">
-          <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-            <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={t("backupCodesTitle")} description={t("backupCodesDescription")} />
+        <div className="flex flex-col gap-3 rounded-lg bg-muted p-4">
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-body tabular-nums">
+            {backupCodes.map((backupCode) => (
+              <li key={backupCode}>{backupCode}</li>
+            ))}
+          </ul>
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => void copyCodes()}>
+              {copied === "yes" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              {copied === "yes" ? t("copied") : t("copyCodes")}
+            </Button>
+            {copied === "failed" ? (
+              <p role="status" className="text-body text-destructive">
+                {t("copyFailed")}
+              </p>
+            ) : null}
           </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              You're all set!
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Save these backup codes in case you lose access to your email.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0 pb-0 space-y-6">
-          <div className="bg-muted p-4 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium">Backup codes</span>
-              <Button variant="ghost" size="sm" onClick={copyBackupCodes} className="h-8">
-                <Copy className="h-4 w-4 mr-1" />
-                Copy
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 font-mono text-sm">
-              {backupCodes.map((code, index) => (
-                <div key={index} className="text-center py-1">{code}</div>
-              ))}
-            </div>
-          </div>
-
-          <Button onClick={handleComplete} className="w-full h-11">
-            Continue to dashboard
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox id="saved-codes" checked={savedCodes} onCheckedChange={(checked) => setSavedCodes(checked === true)} />
+          <label htmlFor="saved-codes" className="text-body">
+            {t("savedCodes")}
+          </label>
+        </div>
+        <Button className="w-full" disabled={!savedCodes} onClick={() => void navigate({ to: "/admin", replace: true })}>
+          {t("continueToDashboard")}
+        </Button>
+      </div>
     );
   }
 
-  return null;
+  const message = fieldError ? t(fieldError) : null;
+  return (
+    <div className="flex flex-col gap-6">
+      {step === "password" ? (
+        <AuthHeader title={t("setupTwoFactorTitle")} description={t("setupTwoFactorDescription", { email: userEmail })} />
+      ) : (
+        <AuthHeader title={t("checkEmailTitle")} description={t("emailDescription", { email: userEmail })} />
+      )}
+      <form method="post" action="/auth/setup-2fa" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <AuthAlert message={failure} />
+        {step === "password" ? (
+          <Field id="setup-password" label={t("password")} error={message}>
+            <PasswordInput
+              id="setup-password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setFieldError(null);
+              }}
+              {...describedBy("setup-password", message)}
+            />
+          </Field>
+        ) : (
+          <>
+            <Field id="setup-code" label={t("codeLabel")} error={message}>
+              <CodeInput
+                id="setup-code"
+                value={code}
+                autoFocus
+                invalid={Boolean(message)}
+                describedById={message ? "setup-code-message" : undefined}
+                onChange={(next) => {
+                  setCode(next);
+                  setFieldError(null);
+                }}
+                onComplete={(full) => run(() => verifyCode(full))}
+              />
+            </Field>
+            <p className="text-body text-muted-foreground" aria-live="polite">
+              {notice ? `${t("codeSent")} ` : null}
+              {resendIn > 0 ? (
+                t("resendIn", { count: resendIn })
+              ) : (
+                <button type="button" className={linkClassName} onClick={() => void sendCode(true)}>
+                  {t("resendCode")}
+                </button>
+              )}
+            </p>
+          </>
+        )}
+        <Button type="submit" className="w-full" loading={isLoading}>
+          {step === "password" ? t("sendCode") : t("verify")}
+        </Button>
+      </form>
+      <div>
+        <SignOutButton />
+      </div>
+    </div>
+  );
 }

@@ -1,94 +1,72 @@
-// src/components/admin/attributes-manager/components/AttributeValueEditor.tsx
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Badge } from "~/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import {
-  Loader2,
-  Search,
-  Edit3,
-  Trash2,
-  Check,
-  X,
-  Package,
-  Plus,
-  AlertTriangle,
-  RefreshCw,
-} from "lucide-react";
+import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import type { AttributeValue } from "../types";
-import { getServerFnError } from "~/lib/api-helpers";
 import {
   deleteApiV1AdminAttributesByIdValues,
   postApiV1AdminAttributesByIdValues,
   putApiV1AdminAttributesByIdValues,
 } from "@scalius/api-client/sdk";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
+import { AdminListPagination } from "~/components/admin/shared/AdminListPagination";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useDebounce } from "~/hooks/use-debounce";
+import { formatNumber, useMessages } from "~/i18n";
+import { attributeValueMessages } from "~/i18n/attributes";
 import { apiData } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
 import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
 import { queryKeys } from "~/lib/query-keys";
-import { useDebounce } from "~/hooks/use-debounce";
-import { AdminListPagination } from "~/components/admin/shared/AdminListPagination";
+import type { AttributeValue, AttributeValuesViewerProps } from "../types";
 
-const ATTRIBUTE_VALUES_PAGE_SIZE = 20;
+const PAGE_SIZE = 20;
 
-interface AttributeValueEditorProps {
-  attributeId: string | null;
-  attributeName: string | null;
-  onClose: () => void;
-  openerRef: React.RefObject<HTMLElement | null>;
-}
-
+/**
+ * An attribute's values: search, and (unless `readOnly`) add, rename and
+ * delete. A rename or delete reaches every product using the value, so each
+ * command runs alone and the dialog stays until the list has refreshed.
+ */
 export function AttributeValueEditor({
   attributeId,
   attributeName,
   onClose,
   openerRef,
-}: AttributeValueEditorProps) {
+  readOnly = false,
+}: AttributeValuesViewerProps & { readOnly?: boolean }) {
+  const t = useMessages(attributeValueMessages);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [editingValue, setEditingValue] = useState<string | null>(null);
   const [editedValue, setEditedValue] = useState("");
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newValue, setNewValue] = useState("");
   const [savingValue, setSavingValue] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [newValue, setNewValue] = useState("");
-  const [isAddingNew, setIsAddingNew] = useState(false);
   const commandInFlight = useRef(false);
   const openerAttributeId = useRef<string | null>(null);
-  const pending = savingValue !== null;
-  const queryClient = useQueryClient();
   const debouncedSearch = useDebounce(searchQuery.trim(), 300);
+  const pending = savingValue !== null;
 
   useEffect(() => {
     if (attributeId) openerAttributeId.current = attributeId;
+    setSearchQuery("");
+    setPage(1);
   }, [attributeId]);
 
   const valuesQuery = useQuery({
     ...attributeValuesQueryOptions({
       attributeId: attributeId ?? undefined,
       page,
-      limit: ATTRIBUTE_VALUES_PAGE_SIZE,
+      limit: PAGE_SIZE,
       search: debouncedSearch || undefined,
     }),
     enabled: Boolean(attributeId),
   });
-
   const values: AttributeValue[] = valuesQuery.data?.values ?? [];
   const isLoading = Boolean(attributeId) && valuesQuery.isPending;
 
@@ -97,405 +75,312 @@ export function AttributeValueEditor({
     if (totalPages > 0 && page > totalPages) setPage(totalPages);
   }, [page, valuesQuery.data?.totalPages]);
 
-  const refreshAttributeQueries = async () => {
-    await queryClient.invalidateQueries(
-      { queryKey: queryKeys.attributes.all },
-      { throwOnError: false },
+  /** Runs one write at a time and keeps the dialog busy until the list shows its result. */
+  async function run(key: string, write: () => Promise<unknown>, success: string, failure: string, done: () => void) {
+    if (commandInFlight.current || !attributeId) return;
+    commandInFlight.current = true;
+    setSavingValue(key);
+    try {
+      await write();
+      toast.success(success);
+      done();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }, { throwOnError: false });
+    } catch (error: unknown) {
+      toast.error(getServerFnError(error, failure));
+    } finally {
+      commandInFlight.current = false;
+      setSavingValue(null);
+    }
+  }
+
+  const addValue = () => {
+    const value = newValue.trim();
+    if (!value || !attributeId) return;
+    void run(
+      "new",
+      () => apiData(postApiV1AdminAttributesByIdValues({ path: { id: attributeId }, body: { value } })),
+      t("added"),
+      t("addFailed"),
+      () => {
+        setNewValue("");
+        setIsAddingNew(false);
+      },
     );
   };
 
-  const handleClose = () => {
-    if (!commandInFlight.current) onClose();
+  const saveRename = () => {
+    const next = editedValue.trim();
+    if (!editingValue || !next || !attributeId) return;
+    void run(
+      editingValue,
+      () =>
+        apiData(
+          putApiV1AdminAttributesByIdValues({ path: { id: attributeId }, body: { oldValue: editingValue, newValue: next } }),
+        ),
+      t("renamed"),
+      t("renameFailed"),
+      () => {
+        setEditingValue(null);
+        setEditedValue("");
+      },
+    );
   };
 
-  const handleCancelAdd = () => {
+  const deleteValue = (value: string) => {
+    if (!attributeId) return;
+    void run(
+      value,
+      () => apiData(deleteApiV1AdminAttributesByIdValues({ path: { id: attributeId }, body: { value } })),
+      t("deleted"),
+      t("deleteFailed"),
+      () => setDeleteConfirm(null),
+    );
+  };
+
+  const close = () => {
+    if (!commandInFlight.current) onClose();
+  };
+  const cancelAdd = () => {
     if (commandInFlight.current) return;
     setIsAddingNew(false);
     setNewValue("");
   };
-
-  const handleStartEdit = (value: string) => {
-    if (commandInFlight.current) return;
-    setEditingValue(value);
-    setEditedValue(value);
-  };
-
-  const handleCancelEdit = () => {
+  const cancelRename = () => {
     if (commandInFlight.current) return;
     setEditingValue(null);
     setEditedValue("");
   };
 
-  const handleSaveEdit = async () => {
-    if (commandInFlight.current || !attributeId || !editingValue || !editedValue.trim()) return;
-
-    commandInFlight.current = true;
-    setSavingValue(editingValue);
-    try {
-      await apiData(putApiV1AdminAttributesByIdValues({
-        path: { id: attributeId },
-        body: {
-          oldValue: editingValue,
-          newValue: editedValue.trim(),
-        },
-      }));
-
-      toast.success(`Value renamed to "${editedValue.trim()}"`);
-      setEditingValue(null);
-      setEditedValue("");
-      await refreshAttributeQueries();
-    } catch (error: unknown) {
-      console.error("Error updating value:", error);
-      toast.error(getServerFnError(error, "Failed to update value"));
-    } finally {
-      commandInFlight.current = false;
-      setSavingValue(null);
-    }
-  };
-
-  const handleAddValue = async () => {
-    if (commandInFlight.current || !attributeId || !newValue.trim()) return;
-
-    commandInFlight.current = true;
-    setSavingValue("new");
-    try {
-      await apiData(postApiV1AdminAttributesByIdValues({
-        path: { id: attributeId },
-        body: { value: newValue.trim() },
-      }));
-
-      toast.success(`Value "${newValue.trim()}" added`);
-      setNewValue("");
-      setIsAddingNew(false);
-      await refreshAttributeQueries();
-    } catch (error: unknown) {
-      console.error("Error adding value:", error);
-      toast.error(getServerFnError(error, "Failed to add value"));
-    } finally {
-      commandInFlight.current = false;
-      setSavingValue(null);
-    }
-  };
-
-  const handleDelete = async (value: string) => {
-    if (commandInFlight.current || !attributeId) return;
-
-    commandInFlight.current = true;
-    setSavingValue(value);
-    try {
-      await apiData(deleteApiV1AdminAttributesByIdValues({
-        path: { id: attributeId },
-        body: { value },
-      }));
-
-      toast.success(`Value "${value}" deleted from all products`);
-      setDeleteConfirm(null);
-      await refreshAttributeQueries();
-    } catch (error: unknown) {
-      console.error("Error deleting value:", error);
-      toast.error(getServerFnError(error, "Failed to delete value"));
-    } finally {
-      commandInFlight.current = false;
-      setSavingValue(null);
-    }
-  };
-
-  const totalValues = valuesQuery.data?.totalValues ?? 0;
-  const totalProducts = valuesQuery.data?.totalProducts ?? 0;
+  const loaded = !isLoading && !valuesQuery.isError;
+  const stat = (count: number | undefined) => (loaded ? formatNumber(count ?? 0) : "–");
 
   return (
     <>
-      <Dialog open={!!attributeId} onOpenChange={handleClose}>
+      <Dialog open={Boolean(attributeId)} onOpenChange={close}>
         <DialogContent
-          className="max-w-3xl overflow-y-auto flex flex-col"
+          className="sm:max-w-2xl"
           showCloseButton={!pending}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            const row = Array.from(
-              document.querySelectorAll<HTMLElement>("[data-attribute-values-opener]"),
-            ).find((node) => node.dataset.attributeValuesOpener === openerAttributeId.current)?.closest("tr");
+            const row = Array.from(document.querySelectorAll<HTMLElement>("[data-attribute-values-opener]"))
+              .find((node) => node.dataset.attributeValuesOpener === openerAttributeId.current)
+              ?.closest("tr");
             const replacement = row?.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
-            const target = openerRef.current?.isConnected ? openerRef.current : replacement;
-            target?.focus();
+            (openerRef.current?.isConnected ? openerRef.current : replacement)?.focus();
           }}
         >
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 [overflow-wrap:anywhere]">
-              <Edit3 className="h-5 w-5 shrink-0" />
-              Edit Values: {attributeName}
-            </DialogTitle>
-            <DialogDescription>
-              Rename or delete values for this attribute. Changes affect all
-              products using these values.
-            </DialogDescription>
+          <DialogHeader>
+            <DialogTitle className="break-words">{t("title", { name: attributeName ?? "" })}</DialogTitle>
+            <DialogDescription>{t(readOnly ? "viewDescription" : "editDescription")}</DialogDescription>
           </DialogHeader>
 
-          <fieldset disabled={pending} className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_auto_minmax(16rem,1fr)_auto] gap-4">
-            {/* Statistics */}
-            <p className="text-sm text-muted-foreground">
-              Unique values: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalValues}</span>
-              {" · "}
-              Products: <span className="font-medium text-foreground">{isLoading || valuesQuery.isError ? "-" : totalProducts}</span>
-            </p>
-
-            {/* Add Value & Search */}
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+          <fieldset disabled={pending} className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search values..."
+                  type="search"
+                  aria-label={t("searchValues")}
+                  placeholder={t("searchValues")}
                   value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
                     setPage(1);
                   }}
-                  className="pl-10"
-                  aria-label="Search attribute values"
+                  // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
+                  className="pl-9"
                 />
               </div>
-              <div className="flex min-w-0 gap-2 sm:shrink-0">
-                {isAddingNew ? (
-                  <div className="flex min-w-0 flex-1 items-center gap-2 animate-in fade-in slide-in-from-right-5">
-                    <Input
-                      placeholder="New value"
-                      aria-label="New attribute value"
-                      value={newValue}
-                      onChange={(e) => setNewValue(e.target.value)}
-                      className="min-w-0 flex-1 sm:w-[200px] sm:flex-none"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleAddValue();
-                        }
-                        if (e.key === "Escape") handleCancelAdd();
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      className="shrink-0"
-                      onClick={handleAddValue}
-                      disabled={
-                        !newValue.trim() ||
-                        savingValue !== null ||
-                        valuesQuery.isError
+              {readOnly ? null : isAddingNew ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <Input
+                    aria-label={t("newValue")}
+                    placeholder={t("newValue")}
+                    value={newValue}
+                    autoFocus
+                    onChange={(event) => setNewValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addValue();
                       }
-                      aria-label="Save new value"
-                    >
-                      {pending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0"
-                      onClick={handleCancelAdd}
-                      aria-label="Cancel adding value"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
+                      if (event.key === "Escape") cancelAdd();
+                    }}
+                  />
                   <Button
-                    onClick={() => setIsAddingNew(true)}
-                    disabled={valuesQuery.isError}
+                    size="icon"
+                    className="shrink-0"
+                    aria-label={t("saveNewValue")}
+                    disabled={!newValue.trim() || valuesQuery.isError}
+                    loading={savingValue === "new"}
+                    onClick={addValue}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Value
+                    <Check />
                   </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Values Table */}
-            <div className="border rounded-lg overflow-hidden min-h-0 min-w-0 flex flex-col">
-              {isLoading ? (
-                <div className="flex items-center justify-center flex-1">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : valuesQuery.isError ? (
-                <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto px-6 py-4 text-center [justify-content:safe_center]">
-                  <AlertTriangle className="h-10 w-10 shrink-0 text-destructive/70 mb-2" />
-                  <p className="text-sm font-medium">Could not load attribute values</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 shrink-0"
-                    onClick={() => void valuesQuery.refetch()}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry
+                  <Button size="icon" variant="ghost" className="shrink-0" aria-label={t("cancelNewValue")} onClick={cancelAdd}>
+                    <X />
                   </Button>
-                </div>
-              ) : values.length > 0 ? (
-                <div className="min-h-0 flex-1 overflow-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead className="bg-muted/50">Value</TableHead>
-                        <TableHead className="text-center bg-muted/50 w-24">
-                          Products
-                        </TableHead>
-                        <TableHead className="bg-muted/50 w-24 text-right sm:w-32">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {values.map((item) => (
-                        <TableRow key={item.value}>
-                          <TableCell>
-                            {editingValue === item.value ? (
-                              <div className="flex min-w-32 flex-wrap items-center gap-2 sm:flex-nowrap">
-                                <Input
-                                  value={editedValue}
-                                  aria-label={`New value for ${item.value}`}
-                                  onChange={(e) =>
-                                    setEditedValue(e.target.value)
-                                  }
-                                  className="h-8 min-w-0 basis-full sm:flex-1 sm:basis-auto"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      void handleSaveEdit();
-                                    }
-                                    if (e.key === "Escape") handleCancelEdit();
-                                  }}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 shrink-0 text-green-600"
-                                  onClick={handleSaveEdit}
-                                  disabled={savingValue === item.value}
-                                  aria-label={`Save rename for ${item.value}`}
-                                >
-                                  {savingValue === item.value ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 shrink-0"
-                                  onClick={handleCancelEdit}
-                                  aria-label={`Cancel rename for ${item.value}`}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="font-medium [overflow-wrap:anywhere]">{item.value}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex flex-wrap justify-center gap-1">
-                              <Badge
-                                variant={
-                                  item.productCount > 0
-                                    ? "secondary"
-                                    : "outline"
-                                }
-                              >
-                                {item.productCount}
-                              </Badge>
-                              {item.isPreset && (
-                                <Badge
-                                  variant="outline"
-                                  className="border-primary/50 text-primary"
-                                >
-                                  Preset
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {editingValue !== item.value && (
-                              <div className="flex justify-end gap-1">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  onClick={() => handleStartEdit(item.value)}
-                                  disabled={savingValue !== null}
-                                  aria-label={`Rename ${item.value}`}
-                                >
-                                  <Edit3 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={() => setDeleteConfirm(item.value)}
-                                  disabled={savingValue !== null}
-                                  aria-label={`Delete ${item.value}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col items-center overflow-auto p-4 text-center [justify-content:safe_center]">
-                  <Package className="h-10 w-10 shrink-0 opacity-40 mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    {searchQuery
-                      ? "No values match your search"
-                      : "No values found for this attribute"}
-                  </p>
-                </div>
+                <Button variant="outline" disabled={valuesQuery.isError} onClick={() => setIsAddingNew(true)}>
+                  <Plus aria-hidden="true" />
+                  {t("addValue")}
+                </Button>
               )}
-              {!valuesQuery.isError &&
-                valuesQuery.data &&
-                valuesQuery.data.totalValues > 0 && (
-                  <AdminListPagination
-                    pagination={{
-                      total: valuesQuery.data.totalValues,
-                      page: valuesQuery.data.page,
-                      limit: valuesQuery.data.limit,
-                      totalPages: valuesQuery.data.totalPages,
-                    }}
-                    itemLabel="values"
-                    onPageChange={setPage}
-                  />
-                )}
             </div>
 
-            <div className="flex justify-end shrink-0">
-              <Button variant="outline" onClick={handleClose}>
-                <X className="h-4 w-4 mr-2" />
-                Close
-              </Button>
+            <p className="text-body text-muted-foreground tabular-nums">
+              {t("summary", { values: stat(valuesQuery.data?.totalValues), products: stat(valuesQuery.data?.totalProducts) })}
+            </p>
+
+            <div className="overflow-clip rounded-lg border">
+              {isLoading ? (
+                <div role="status" aria-label={t("loading")} className="flex min-h-64 items-center justify-center">
+                  <Loader2 aria-hidden="true" className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : valuesQuery.isError ? (
+                <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-4 text-center">
+                  <p className="text-body">{t("loadFailed")}</p>
+                  <Button variant="outline" size="sm" onClick={() => void valuesQuery.refetch()}>
+                    {t("retry")}
+                  </Button>
+                </div>
+              ) : values.length === 0 ? (
+                <p className="flex min-h-64 items-center justify-center p-4 text-center text-body text-muted-foreground">
+                  {t(searchQuery ? "noMatches" : "noValues")}
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("value")}</TableHead>
+                      <TableHead className="w-24 text-right">{t("products")}</TableHead>
+                      {readOnly ? null : <TableHead className="w-24" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {values.map((item) => (
+                      <TableRow key={item.value}>
+                        <TableCell>
+                          {editingValue === item.value ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                aria-label={t("renameField", { value: item.value })}
+                                value={editedValue}
+                                autoFocus
+                                onChange={(event) => setEditedValue(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    saveRename();
+                                  }
+                                  if (event.key === "Escape") cancelRename();
+                                }}
+                              />
+                              <Button
+                                size="icon-sm"
+                                className="shrink-0"
+                                aria-label={t("saveRename", { value: item.value })}
+                                disabled={!editedValue.trim()}
+                                loading={savingValue === item.value}
+                                onClick={saveRename}
+                              >
+                                <Check />
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                className="shrink-0"
+                                aria-label={t("cancelRename", { value: item.value })}
+                                onClick={cancelRename}
+                              >
+                                <X />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex min-w-0 flex-col gap-0.5">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium break-words">{item.value}</span>
+                                {item.isPreset ? <Badge variant="secondary">{t("preset")}</Badge> : null}
+                              </span>
+                              {item.sampleProducts?.length ? (
+                                <span className="truncate text-muted-foreground">
+                                  {item.sampleProducts.slice(0, 3).join(", ")}
+                                  {item.sampleProducts.length > 3 ? ` ${t("moreProducts", { count: item.sampleProducts.length - 3 })}` : ""}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{formatNumber(item.productCount)}</TableCell>
+                        {readOnly ? null : (
+                          <TableCell>
+                            {editingValue === item.value ? null : (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={t("rename", { value: item.value })}
+                                  onClick={() => {
+                                    if (commandInFlight.current) return;
+                                    setEditingValue(item.value);
+                                    setEditedValue(item.value);
+                                  }}
+                                >
+                                  <Pencil />
+                                </Button>
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={t("delete", { value: item.value })}
+                                  onClick={() => setDeleteConfirm(item.value)}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {loaded && valuesQuery.data && valuesQuery.data.totalValues > 0 ? (
+                <AdminListPagination
+                  pagination={{
+                    total: valuesQuery.data.totalValues,
+                    page: valuesQuery.data.page,
+                    limit: valuesQuery.data.limit,
+                    totalPages: valuesQuery.data.totalPages,
+                  }}
+                  onPageChange={setPage}
+                />
+              ) : null}
             </div>
           </fieldset>
+
+          <DialogFooter>
+            <Button variant="outline" disabled={pending} onClick={close}>
+              {t("close")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <ConfirmDialog
-        open={!!deleteConfirm}
+        open={Boolean(deleteConfirm)}
         onOpenChange={() => {
           if (!commandInFlight.current) setDeleteConfirm(null);
         }}
-        title="Delete Value?"
-        description={`This will remove the value "${deleteConfirm}" from all products using it. This action cannot be undone.`}
-        confirmLabel="Delete"
-        loadingLabel="Deleting..."
+        title={t("deleteTitle", { value: deleteConfirm ?? "" })}
+        description={t("deleteBody")}
+        confirmLabel={t("deleteConfirm")}
+        cancelLabel={t("cancel")}
+        loadingLabel={t("deleting")}
         isLoading={pending}
         variant="destructive"
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
+        onConfirm={() => deleteConfirm && deleteValue(deleteConfirm)}
       />
     </>
   );

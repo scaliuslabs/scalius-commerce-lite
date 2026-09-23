@@ -1,16 +1,7 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 export interface AdminListPaginationState {
   total: number;
@@ -19,120 +10,45 @@ export interface AdminListPaginationState {
   totalPages: number;
 }
 
-interface AdminListPaginationProps {
-  pagination: AdminListPaginationState;
-  itemLabel: string;
-  onPageChange: (nextPage: number) => void;
-  onLimitChange?: (nextLimit: number) => void;
-  pageSizeOptions?: number[];
-  showFirstLast?: boolean;
-}
-
+/**
+ * Previous/next for a server-paged list, as under the data tables: the range
+ * on the left ("21–40 of 95"), arrow buttons on the right.
+ */
 export function AdminListPagination({
   pagination,
-  itemLabel,
   onPageChange,
-  onLimitChange,
-  pageSizeOptions = [10, 20, 50, 100],
-  showFirstLast = false,
-}: AdminListPaginationProps) {
-  if (!pagination || pagination.total === 0) return null;
+}: {
+  pagination: AdminListPaginationState;
+  onPageChange: (nextPage: number) => void;
+}) {
+  const t = useMessages(resourceMessages);
+  const { total, page, limit, totalPages } = pagination;
+  if (total === 0) return null;
 
-  const start = (pagination.page - 1) * pagination.limit + 1;
-  const end = Math.min(pagination.page * pagination.limit, pagination.total);
-  const canPrev = pagination.page > 1;
-  const canNext = pagination.page < pagination.totalPages;
-
+  const start = (page - 1) * limit + 1;
+  const end = Math.min(page * limit, total);
   return (
-    <div className="flex flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="text-sm text-muted-foreground">
-          Showing{" "}
-          <span className="font-medium text-foreground">{start}</span> to{" "}
-          <span className="font-medium text-foreground">{end}</span> of{" "}
-          <span className="font-medium text-foreground">{pagination.total}</span>{" "}
-          {itemLabel}
-        </div>
-        {onLimitChange && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-11 px-3 text-xs text-foreground sm:h-8 sm:px-2"
-              >
-                {pagination.limit} per page
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {pageSizeOptions.map((size) => (
-                <DropdownMenuItem
-                  key={size}
-                  onClick={() => onLimitChange(size)}
-                  className={
-                    pagination.limit === size ? "bg-muted font-medium" : ""
-                  }
-                >
-                  {size} per page
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-
-      <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1.5">
-        {showFirstLast && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(1)}
-            disabled={!canPrev}
-            className="h-11 w-11 p-0 sm:h-8 sm:w-8"
-            aria-label="First page"
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-        )}
+    <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-body text-muted-foreground">
+      <span>{t("showing", { start, end, total })}</span>
+      <nav aria-label={t("page", { page, pages: Math.max(1, totalPages) })} className="flex items-center gap-1">
         <Button
           variant="outline"
-          size="sm"
-          onClick={() => onPageChange(pagination.page - 1)}
-          disabled={!canPrev}
-          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
+          size="icon"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          aria-label={t("previous")}
         >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Previous
+          <ChevronLeft />
         </Button>
-        <div className="min-w-[90px] text-center text-sm text-muted-foreground">
-          Page <span className="font-medium text-foreground">{pagination.page}</span>{" "}
-          of{" "}
-          <span className="font-medium text-foreground">
-            {pagination.totalPages}
-          </span>
-        </div>
         <Button
           variant="outline"
-          size="sm"
-          onClick={() => onPageChange(pagination.page + 1)}
-          disabled={!canNext}
-          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
+          size="icon"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          aria-label={t("next")}
         >
-          Next
-          <ChevronRight className="ml-1 h-4 w-4" />
+          <ChevronRight />
         </Button>
-        {showFirstLast && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(pagination.totalPages)}
-            disabled={!canNext}
-            className="h-11 w-11 p-0 sm:h-8 sm:w-8"
-            aria-label="Last page"
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
-        )}
       </nav>
     </div>
   );
