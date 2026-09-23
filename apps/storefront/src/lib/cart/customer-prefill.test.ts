@@ -7,7 +7,9 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-languag
 import type { AuthState } from "../api/customer-auth";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { readCheckoutFormDraft, syncCheckoutTransferSession, writeCheckoutFormDraft } from "../checkout/session-state";
-import { getEffectiveCartShippingFee } from "../../store/cart";
+import { cartHasFreeDeliveryItem, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
+import { enhanceShippingMethods } from "../checkout/shipping-methods";
+import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
 import { initCheckoutPhoneField } from "../checkout/phone-field";
 import { storefrontSourcePath } from "../test-source-paths";
 
@@ -39,13 +41,17 @@ function startCart() {
   const dependencies = {
     initCartFunctionality: () => Promise.resolve(),
     getCustomerSession: () => new Promise<AuthState>((resolve) => { resolveSession = resolve; }),
+    cartHasFreeDeliveryItem,
+    cartStore,
+    enhanceShippingMethods,
+    enhanceLocationSelects,
+    fetchLocationOptions,
     getEffectiveCartShippingFee,
     readCheckoutFormDraft,
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
     findNamedCheckoutControl,
     initCheckoutPhoneField,
-    ENGLISH_CHECKOUT_LANGUAGE_DATA,
   };
   captureDraft = new Function(...Object.keys(dependencies), `${script}\nreturn persistCheckoutFormDraftNow;`)(...Object.values(dependencies));
 }
@@ -60,6 +66,7 @@ beforeEach(() => {
   vi.spyOn(document, "readyState", "get").mockReturnValue("complete");
   sessionStorage.clear();
   document.cookie = "cs_auth=1; path=/";
+  window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA };
   document.body.innerHTML = `<div id="checkout-meta" data-guest-checkout-enabled="true"></div>
     <form id="checkoutForm">
       <input id="customerName" name="customerName" />

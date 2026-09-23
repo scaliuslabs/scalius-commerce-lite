@@ -12,7 +12,10 @@ import {
   validatePlatformDraft,
 } from "./PlatformSettingsBuilder";
 import { queryKeys } from "~/lib/query-keys";
-import type { PlatformSettingsPayload } from "~/lib/api-functions/platform";
+import type { getApiV1AdminSettingsPlatform } from "@scalius/api-client/sdk";
+import type { ApiResult } from "~/lib/api";
+
+type PlatformSettingsPayload = ApiResult<typeof getApiV1AdminSettingsPlatform>;
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -20,9 +23,10 @@ const api = vi.hoisted(() => ({
   blocker: vi.fn(),
   permission: vi.fn(),
 }));
-vi.mock("~/lib/api-functions/platform", () => ({
-  getPlatformSettings: api.get,
-  updatePlatformSettings: api.update,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsPlatform: api.get,
+  putApiV1AdminSettingsPlatform: api.update,
 }));
 vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: api.permission }),
@@ -288,7 +292,7 @@ describe("PlatformSettingsBuilder", () => {
     await click(button("Save platform")!);
 
     expect(api.update).toHaveBeenCalledWith({
-      data: {
+      body: {
         apiUrl: "https://api2.example.com",
         corsAllowedOrigins: ["https://app.example.com", "https://portal.example.com"],
       },

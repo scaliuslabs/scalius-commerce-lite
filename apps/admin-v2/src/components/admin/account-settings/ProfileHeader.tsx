@@ -21,7 +21,8 @@ import { MediaManager, type MediaFile } from "../media-manager";
 import type { User } from "./AccountSettingsContainer";
 import { useRouter } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
-import { updateProfile } from "~/lib/api-functions/auth-management";
+import { postApiV1AdminAuthUpdateProfile } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
@@ -92,9 +93,9 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
     setIsLoading(true);
 
     try {
-      const result = await updateProfile({
-        data: { name: normalizedName, image: image || null },
-      });
+      const result = await apiData(postApiV1AdminAuthUpdateProfile({
+        body: { name: normalizedName, image: image || null },
+      }));
       const updatedName = result.user?.name ?? normalizedName;
       const updatedImage =
         result.user?.image === undefined ? image || "" : result.user.image || "";

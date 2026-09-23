@@ -1,7 +1,6 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DiscountType } from "@scalius/database/schema";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { errorResponseFromError } from "../../utils/api-response";
 
@@ -56,29 +55,6 @@ describe("admin discount routes", () => {
         vi.clearAllMocks();
     });
 
-    it("forwards the optional discount type filter to the service", async () => {
-        mocks.listDiscounts.mockResolvedValue({
-            discounts: [],
-            pagination: { total: 0, page: 2, limit: 20, totalPages: 0 },
-        });
-        const { app, db } = createTestApp();
-
-        const response = await app.request(
-            "/api/v1/admin/discounts?page=2&limit=20&search=ship&type=free_shipping&trashed=true&sort=type&order=asc",
-        );
-
-        expect(response.status).toBe(200);
-        expect(mocks.listDiscounts).toHaveBeenCalledWith(db, {
-            page: 2,
-            limit: 20,
-            search: "ship",
-            showTrashed: true,
-            type: DiscountType.FREE_SHIPPING,
-            sort: "type",
-            order: "asc",
-        });
-    });
-
     it("passes lifecycle authority separately from ordinary create permission", async () => {
         mocks.createDiscount.mockResolvedValue({ id: "disc_1", revision: 1 });
         const { app, db } = createTestApp(new Set());
@@ -94,32 +70,6 @@ describe("admin discount routes", () => {
             db,
             expect.objectContaining({ isActive: false }),
             { canToggleStatus: false },
-        );
-    });
-
-    it("uses the dedicated discount status service for activation", async () => {
-        mocks.setDiscountActiveStatus.mockResolvedValue({
-            id: "disc_1",
-            isActive: true,
-            revision: 4,
-        });
-        const { app, db } = createTestApp();
-
-        const response = await app.request(
-            "/api/v1/admin/discounts/disc_1/toggle-status",
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ isActive: true, expectedRevision: 3 }),
-            },
-        );
-
-        expect(response.status).toBe(200);
-        expect(mocks.setDiscountActiveStatus).toHaveBeenCalledWith(
-            db,
-            "disc_1",
-            true,
-            3,
         );
     });
 

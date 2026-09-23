@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  createShippingMethod,
-  deleteShippingMethod,
-  permanentDeleteShippingMethod,
-  restoreShippingMethod,
-  type ShippingMethodWriteInput,
-  updateShippingMethod,
-} from "../api-functions/shipping-methods";
+  deleteApiV1AdminSettingsShippingMethodsById,
+  deleteApiV1AdminSettingsShippingMethodsByIdPermanentDelete,
+  postApiV1AdminSettingsShippingMethods,
+  postApiV1AdminSettingsShippingMethodsByIdRestore,
+  putApiV1AdminSettingsShippingMethodsById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import { getServerFnError, queryKeys } from "./shared";
 
 function invalidateShippingMethodQueries(
@@ -21,11 +21,18 @@ function invalidateShippingMethodQueries(
   });
 }
 
+export const trashShippingMethod = (id: string) =>
+  apiData(deleteApiV1AdminSettingsShippingMethodsById({ path: { id } }));
+export const permanentDeleteShippingMethod = (id: string) =>
+  apiData(deleteApiV1AdminSettingsShippingMethodsByIdPermanentDelete({ path: { id } }));
+export const restoreShippingMethod = (id: string) =>
+  apiData(postApiV1AdminSettingsShippingMethodsByIdRestore({ path: { id } }));
+
 export function useCreateShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ShippingMethodWriteInput) =>
-      createShippingMethod({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminSettingsShippingMethods>) =>
+      apiData(postApiV1AdminSettingsShippingMethods({ body })),
     onSuccess: () => {
       invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method created");
@@ -38,8 +45,10 @@ export function useCreateShippingMethod() {
 export function useUpdateShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; update: ShippingMethodWriteInput }) =>
-      updateShippingMethod({ data }),
+    mutationFn: ({ id, update }: {
+      id: string;
+      update: ApiBody<typeof putApiV1AdminSettingsShippingMethodsById>;
+    }) => apiData(putApiV1AdminSettingsShippingMethodsById({ path: { id }, body: update })),
     onSuccess: () => {
       invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method updated");
@@ -52,7 +61,7 @@ export function useUpdateShippingMethod() {
 export function useDeleteShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) => deleteShippingMethod({ data }),
+    mutationFn: ({ id }: { id: string }) => trashShippingMethod(id),
     onSuccess: () => {
       invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method moved to trash");
@@ -65,8 +74,7 @@ export function useDeleteShippingMethod() {
 export function usePermanentDeleteShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) =>
-      permanentDeleteShippingMethod({ data }),
+    mutationFn: ({ id }: { id: string }) => permanentDeleteShippingMethod(id),
     onSuccess: () => {
       invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method permanently deleted");
@@ -79,7 +87,7 @@ export function usePermanentDeleteShippingMethod() {
 export function useRestoreShippingMethod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) => restoreShippingMethod({ data }),
+    mutationFn: ({ id }: { id: string }) => restoreShippingMethod(id),
     onSuccess: () => {
       invalidateShippingMethodQueries(queryClient);
       toast.success("Shipping method restored");

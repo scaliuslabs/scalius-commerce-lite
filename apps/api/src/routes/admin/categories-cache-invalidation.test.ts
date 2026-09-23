@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   bulkDeleteCategories: vi.fn(),
   restoreCategories: vi.fn(),
   permanentlyDeleteCategory: vi.fn(),
-  invalidateCatalogCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/categories", async () => {
@@ -36,13 +36,13 @@ vi.mock("@scalius/core/modules/categories", async () => {
   };
 });
 
-vi.mock("../../utils/cache-invalidation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-invalidation")>(
-    "../../utils/cache-invalidation",
+vi.mock("../../utils/cache-generation", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
+    "../../utils/cache-generation",
   );
   return {
     ...actual,
-    invalidateCatalogCaches: mocks.invalidateCatalogCaches,
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
   };
 });
 
@@ -76,8 +76,6 @@ function createTestApp() {
   const db = createDb();
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
   mocks.getCategoryById.mockResolvedValue({ id: "cat_1", slug: "old-fish" });
@@ -94,7 +92,7 @@ function createTestApp() {
   mocks.bulkDeleteCategories.mockResolvedValue(undefined);
   mocks.restoreCategories.mockResolvedValue(undefined);
   mocks.permanentlyDeleteCategory.mockResolvedValue(undefined);
-  mocks.invalidateCatalogCaches.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -144,9 +142,7 @@ describe("admin category cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "categories",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -166,9 +162,7 @@ describe("admin category cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "categories",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 });

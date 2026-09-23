@@ -37,11 +37,10 @@ import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadF
 import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
 import { CollapsibleCard } from "@/components/admin/product-form/CollapsibleCard";
 import {
-  createPage,
-  updatePage,
-  type PageIdPayload,
-  type PageMutationPayload,
-} from "@/lib/api-functions/pages";
+  postApiV1AdminPages,
+  putApiV1AdminPagesById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiResult } from "@/lib/api";
 import {
   pageFormSchema,
   type PageFormInput,
@@ -148,7 +147,7 @@ export function PageForm({
       entityName: contentType === "article" ? "Article" : "Page",
       isEdit,
       entityId: defaultValues?.id,
-      createFn: (data) => createPage({ data: toCreatePageInput(data) }),
+      createFn: (data) => apiData(postApiV1AdminPages({ body: toCreatePageInput(data) })),
       updateFn: (data) => {
         if (
           !data.revision ||
@@ -159,13 +158,13 @@ export function PageForm({
             `${contentType === "article" ? "Article" : "Page"} revision is missing. Reload before saving.`,
           );
         }
-        return updatePage({
-          data: {
-            id: data.id,
+        return apiData(putApiV1AdminPagesById({
+          path: { id: data.id },
+          body: {
             expectedRevision: data.revision,
             ...toUpdatePageInput(data),
           },
-        });
+        }));
       },
       invalidateKeys: [
         queryKeys.pages.list(),
@@ -176,7 +175,8 @@ export function PageForm({
       navigateTo:
         contentType === "article" ? "/admin/articles" : "/admin/pages",
       onSuccess: (result) => {
-        const mutation = result as PageMutationPayload & Partial<PageIdPayload>;
+        const mutation = result as ApiResult<typeof putApiV1AdminPagesById> &
+          Partial<ApiResult<typeof postApiV1AdminPages>>;
         const id = mutation.id || defaultValues?.id;
         form.reset({
           ...form.getValues(),

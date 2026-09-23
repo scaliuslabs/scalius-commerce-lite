@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   deleteVariant: vi.fn(),
   getProductVariants: vi.fn(),
   saveProductOptionMatrix: vi.fn(),
-  invalidateCatalogCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/products/products.admin", () => ({
@@ -52,13 +52,13 @@ vi.mock("@scalius/core/modules/products/products.option-matrix", async () => {
   };
 });
 
-vi.mock("../../utils/cache-invalidation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-invalidation")>(
-    "../../utils/cache-invalidation",
+vi.mock("../../utils/cache-generation", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
+    "../../utils/cache-generation",
   );
   return {
     ...actual,
-    invalidateCatalogCaches: mocks.invalidateCatalogCaches,
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
   };
 });
 
@@ -135,8 +135,6 @@ function createTestApp() {
   const db = createDb();
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
   mocks.createProduct.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });
@@ -157,7 +155,7 @@ function createTestApp() {
   mocks.updateVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
   mocks.deleteVariant.mockResolvedValue({ aggregateRevision: 2 });
   mocks.saveProductOptionMatrix.mockResolvedValue({ aggregateRevision: 2 });
-  mocks.invalidateCatalogCaches.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -206,9 +204,7 @@ describe("admin product cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "products",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -224,9 +220,7 @@ describe("admin product cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "products",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -241,9 +235,7 @@ describe("admin product cache invalidation", () => {
     const response = await requestJson(app, env, path, method, body);
 
     expect([200, 204]).toContain(response.status);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "products",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -282,7 +274,7 @@ describe("admin product cache invalidation", () => {
         ],
       },
     });
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledOnce();
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
   });
 
   it("does not churn catalog caches when every permanent delete is blocked", async () => {
@@ -303,12 +295,12 @@ describe("admin product cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([
     { label: "create variant", path: "/prod_1/variants", method: "POST", body: createVariantBody(), status: 201 },
-    { label: "update variant", path: "/prod_1/variants/var_1", method: "PUT", body: createVariantBody(), status: 200 },
+    { label: "update variant", path: "/prod_1/variants/var_1", method: "PUT", body: { ...createVariantBody(), expectedStockVersion: 1 }, status: 200 },
     { label: "delete variant", path: "/prod_1/variants/var_1?expectedAggregateRevision=1", method: "DELETE", status: 200 },
     {
       label: "save normalized option matrix",
@@ -348,9 +340,7 @@ describe("admin product cache invalidation", () => {
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "products",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 });

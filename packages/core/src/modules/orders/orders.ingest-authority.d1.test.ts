@@ -1,10 +1,8 @@
-import { DatabaseSync, type SQLInputValue, type SQLOutputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { safeBatch, type Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { createAtomicCheckoutAttempt } from "./checkout-attempts";
 import { commitStorefrontOrderPayload } from "./orders.ingest";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
@@ -12,51 +10,6 @@ import { calculateDiscountAmount, isDiscountValid } from "../discounts/discounts
 import { createDiscount, deleteDiscount, permanentlyDeleteDiscount, restoreDiscounts, setDiscountActiveStatus, updateDiscount } from "../discounts/discounts.service";
 import { createDiscountSchema, updateDiscountSchema } from "../discounts/discounts.validation";
 import { prepareStockReservationBatch } from "../inventory";
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  query: string;
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: sqlite.prepare(query).all(...values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    query,
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
 
 function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommitPayload {
   return {
@@ -178,11 +131,15 @@ describe("storefront checkout authority at the atomic commit", () => {
   let databaseNow: number;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
+    beforeWriteBatch = undefined;
+    ({ sqlite, db } = createSqliteD1Database({
+      async beforeBatch(_sqlite, statements) {
+        if (!statements.some((statement) => statement.query.startsWith('insert into "orders"'))) return;
+        const beforeWrite = beforeWriteBatch;
+        beforeWriteBatch = undefined;
+        await beforeWrite?.();
+      },
+    }));
     databaseNow = Math.floor(Date.now() / 1000);
     sqlite.function("unixepoch", () => databaseNow);
     sqlite.exec(`
@@ -194,27 +151,6 @@ describe("storefront checkout authority at the atomic commit", () => {
       INSERT INTO shipping_methods (id, name, fee, is_active)
       VALUES ('shipping_standard', 'Standard delivery', 60, 1);
     `);
-    beforeWriteBatch = undefined;
-    const binding = {
-      prepare: (query: string) => createD1Statement(sqlite, query),
-      async batch(statements: SqliteD1Statement[]) {
-        if (statements.some((statement) => statement.query.startsWith('insert into "orders"'))) {
-          const beforeWrite = beforeWriteBatch;
-          beforeWriteBatch = undefined;
-          await beforeWrite?.();
-        }
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
   });
 
   afterEach(() => sqlite.close());

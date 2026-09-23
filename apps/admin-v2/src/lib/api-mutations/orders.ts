@@ -6,49 +6,32 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
-  approveOrderReturn,
-  archiveOrders,
-  bulkShipOrders,
-  cancelOrderReturn,
-  createFulfillmentShipment,
-  createOrder,
-  confirmManualOrderAmendment,
-  createOrderReturn,
-  createOrderShipment,
-  issueOrderPaymentRecoveryLink,
-  reconcileRefundAttempt,
-  receiveOrderReturn,
-  refundOrder,
-  reconcileShipment,
-  lookupUnknownShipment,
-  resolveUnknownShipment,
-  resendOrderNotification,
-  resolveOrderSupportRequest,
-  retryOrderNotification,
-  restoreOrder,
-  reconcileOrderReturn,
-  updateOrder,
-  updateOrderCod,
-  updateOrderStatus,
-  type ArchiveOrdersInput,
-  type BulkShipOrdersInput,
-  type BulkShipOrdersPayload,
-  type CreateFulfillmentShipmentInput,
-  type CreateOrderInput,
-  type ConfirmManualOrderAmendmentInput,
-  type CreateOrderShipmentInput,
-  type IssueOrderPaymentRecoveryLinkInput,
-  type RefundOrderInput,
-  type ReconcileShipmentInput,
-  type LookupUnknownShipmentInput,
-  type ResolveUnknownShipmentInput,
-  type ReconcileRefundAttemptInput,
-  type ResendOrderNotificationInput,
-  type ResolveOrderSupportRequestInput,
-  type UpdateOrderCodInput,
-  type UpdateOrderInput,
-  type UpdateOrderStatusInput,
-} from "../api-functions/orders";
+  postApiV1AdminOrders,
+  postApiV1AdminOrdersArchive,
+  postApiV1AdminOrdersBulkShip,
+  postApiV1AdminOrdersByIdAmendments,
+  postApiV1AdminOrdersByIdCod,
+  postApiV1AdminOrdersByIdFulfill,
+  postApiV1AdminOrdersByIdNotificationsByOutboxIdResend,
+  postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry,
+  postApiV1AdminOrdersByIdPaymentRecoveryLink,
+  postApiV1AdminOrdersByIdRefund,
+  postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile,
+  postApiV1AdminOrdersByIdRestore,
+  postApiV1AdminOrdersByIdReturns,
+  postApiV1AdminOrdersByIdReturnsByReturnIdApprove,
+  postApiV1AdminOrdersByIdReturnsByReturnIdCancel,
+  postApiV1AdminOrdersByIdReturnsByReturnIdReceive,
+  postApiV1AdminOrdersByIdReturnsByReturnIdReconcile,
+  postApiV1AdminOrdersByIdShipments,
+  postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile,
+  postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
+  postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
+  putApiV1AdminOrdersById,
+  putApiV1AdminOrdersByIdStatus,
+  putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "../api";
 import type {
   ApproveOrderReturnInput,
   CancelOrderReturnInput,
@@ -61,6 +44,22 @@ import {
   invalidateDashboardQueries,
   queryKeys,
 } from "./shared";
+
+type BulkShipOrdersPayload = ApiResult<typeof postApiV1AdminOrdersBulkShip>;
+type OrderShipmentRef = { orderId: string; shipmentId: string };
+export type UpdateOrderStatusInput = { orderId: string; note?: string } &
+  ApiBody<typeof putApiV1AdminOrdersByIdStatus>;
+export type ConfirmManualOrderAmendmentInput = { id: string } &
+  ApiBody<typeof postApiV1AdminOrdersByIdAmendments>;
+type ResolveUnknownShipmentBody =
+  ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown>;
+/** Flat dialog command; the outcome decides which contract branch it satisfies. */
+export type ResolveUnknownShipmentInput = OrderShipmentRef &
+  Omit<ResolveUnknownShipmentBody, "outcome"> & {
+    outcome: ResolveUnknownShipmentBody["outcome"];
+    externalId?: string;
+    trackingId?: string;
+  };
 
 const ORDER_CATALOG_PRODUCTS_QUERY_PREFIX = [
   "orders",
@@ -130,7 +129,8 @@ function toastBulkShipResult(result: BulkShipOrdersPayload) {
 export function useCreateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderInput) => createOrder({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminOrders>) =>
+      apiData(postApiV1AdminOrders({ body })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -144,8 +144,8 @@ export function useConfirmManualOrderAmendment() {
   const queryClient = useQueryClient();
   const router = useRouter();
   return useMutation({
-    mutationFn: (data: ConfirmManualOrderAmendmentInput) =>
-      confirmManualOrderAmendment({ data }),
+    mutationFn: ({ id, ...body }: ConfirmManualOrderAmendmentInput) =>
+      apiData(postApiV1AdminOrdersByIdAmendments({ path: { id }, body })),
     onSuccess: async (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -169,7 +169,8 @@ export function useConfirmManualOrderAmendment() {
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateOrderInput) => updateOrder({ data }),
+    mutationFn: ({ id, ...body }: { id: string } & ApiBody<typeof putApiV1AdminOrdersById>) =>
+      apiData(putApiV1AdminOrdersById({ path: { id }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -192,7 +193,8 @@ export function useUpdateOrder() {
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateOrderStatusInput) => updateOrderStatus({ data }),
+    mutationFn: ({ orderId, status }: UpdateOrderStatusInput) =>
+      apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body: { status } })),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -210,8 +212,9 @@ export function useUpdateOrderStatus() {
 export function useCreateOrderShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderShipmentInput) =>
-      createOrderShipment({ data }),
+    mutationFn: ({ orderId, ...body }: { orderId: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdShipments>) =>
+      apiData(postApiV1AdminOrdersByIdShipments({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -241,7 +244,8 @@ export function useCreateOrderShipment() {
 export function useBulkShipOrders() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: BulkShipOrdersInput) => bulkShipOrders({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminOrdersBulkShip>) =>
+      apiData(postApiV1AdminOrdersBulkShip({ body })),
     onSuccess: (result, variables) => {
       const touchedOrderIds = [
         ...new Set([
@@ -264,8 +268,9 @@ export function useBulkShipOrders() {
 export function useCreateFulfillmentShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateFulfillmentShipmentInput) =>
-      createFulfillmentShipment({ data }),
+    mutationFn: ({ orderId, ...body }: { orderId: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdFulfill>) =>
+      apiData(postApiV1AdminOrdersByIdFulfill({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -290,7 +295,9 @@ export function useCreateFulfillmentShipment() {
 export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: RefundOrderInput) => refundOrder({ data }),
+    mutationFn: ({ orderId, ...body }: { orderId: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdRefund>) =>
+      apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -322,8 +329,8 @@ export function useRefundOrder() {
 export function useIssueOrderPaymentRecoveryLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: IssueOrderPaymentRecoveryLinkInput) =>
-      issueOrderPaymentRecoveryLink({ data }),
+    mutationFn: ({ orderId }: { orderId: string }) =>
+      apiData(postApiV1AdminOrdersByIdPaymentRecoveryLink({ path: { id: orderId } })),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -341,8 +348,10 @@ export function useIssueOrderPaymentRecoveryLink() {
 export function useReconcileRefundAttempt() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ReconcileRefundAttemptInput) =>
-      reconcileRefundAttempt({ data }),
+    mutationFn: ({ orderId, attemptId }: { orderId: string; attemptId: string }) =>
+      apiData(postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile({
+        path: { id: orderId, attemptId },
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -380,7 +389,10 @@ export function useReconcileRefundAttempt() {
 export function useReconcileShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ReconcileShipmentInput) => reconcileShipment({ data }),
+    mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
+      apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile({
+        path: { id: orderId, shipmentId },
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -405,7 +417,12 @@ export function useReconcileShipment() {
 export function useLookupUnknownShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: LookupUnknownShipmentInput) => lookupUnknownShipment({ data }),
+    mutationFn: ({ orderId, shipmentId, expectedOrderVersion, operationKey }: OrderShipmentRef &
+      ApiBody<typeof postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup>) =>
+      apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup({
+        path: { id: orderId, shipmentId },
+        body: { expectedOrderVersion, operationKey },
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -422,7 +439,11 @@ export function useLookupUnknownShipment() {
 export function useResolveUnknownShipment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ResolveUnknownShipmentInput) => resolveUnknownShipment({ data }),
+    mutationFn: ({ orderId, shipmentId, ...body }: ResolveUnknownShipmentInput) =>
+      apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown({
+        path: { id: orderId, shipmentId },
+        body: body as ResolveUnknownShipmentBody,
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -439,7 +460,9 @@ export function useResolveUnknownShipment() {
 export function useUpdateOrderCod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateOrderCodInput) => updateOrderCod({ data }),
+    mutationFn: ({ orderId, ...body }: { orderId: string } &
+      ApiBody<typeof postApiV1AdminOrdersByIdCod>) =>
+      apiData(postApiV1AdminOrdersByIdCod({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       queryClient.invalidateQueries({
@@ -472,8 +495,10 @@ export function useUpdateOrderCod() {
 export function useRetryOrderNotification() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; outboxId: string }) =>
-      retryOrderNotification({ data }),
+    mutationFn: ({ orderId, outboxId }: { orderId: string; outboxId: string }) =>
+      apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry({
+        path: { id: orderId, outboxId },
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.notifications(variables.orderId),
@@ -496,8 +521,15 @@ export function useRetryOrderNotification() {
 export function useResendOrderNotification() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ResendOrderNotificationInput) =>
-      resendOrderNotification({ data }),
+    mutationFn: ({ orderId, outboxId, resendRequestId }: {
+      orderId: string;
+      outboxId: string;
+      resendRequestId: string;
+    }) =>
+      apiData(postApiV1AdminOrdersByIdNotificationsByOutboxIdResend({
+        path: { id: orderId, outboxId },
+        body: { resendRequestId },
+      })),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.notifications(variables.orderId),
@@ -520,8 +552,14 @@ export function useResendOrderNotification() {
 export function useResolveOrderSupportRequest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ResolveOrderSupportRequestInput) =>
-      resolveOrderSupportRequest({ data }),
+    mutationFn: ({ orderId, requestId, status, note, returnRequest }: {
+      orderId: string;
+      requestId: string;
+    } & ApiBody<typeof putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus>) =>
+      apiData(putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus({
+        path: { id: orderId, requestId },
+        body: { status, note: note ?? null, returnRequest },
+      })),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
@@ -556,7 +594,8 @@ function invalidateOrderReturnQueries(
 export function useCreateOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderReturnInput) => createOrderReturn({ data }),
+    mutationFn: ({ orderId, ...body }: CreateOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       toast.success("Return requested");
@@ -571,7 +610,11 @@ export function useCreateOrderReturn() {
 export function useApproveOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ApproveOrderReturnInput) => approveOrderReturn({ data }),
+    mutationFn: ({ orderId, returnId, ...body }: ApproveOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({
+        path: { id: orderId, returnId },
+        body,
+      })),
     onSuccess: (result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       toast.success(result.status === "rejected" ? "Return rejected" : "Return approved");
@@ -586,7 +629,11 @@ export function useApproveOrderReturn() {
 export function useReceiveOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ReceiveOrderReturnInput) => receiveOrderReturn({ data }),
+    mutationFn: ({ orderId, returnId, ...body }: ReceiveOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({
+        path: { id: orderId, returnId },
+        body,
+      })),
     onSuccess: (result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       if (variables.lines.some((line) => line.restockQuantity > 0)) {
@@ -607,7 +654,11 @@ export function useReceiveOrderReturn() {
 export function useCancelOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CancelOrderReturnInput) => cancelOrderReturn({ data }),
+    mutationFn: ({ orderId, returnId, ...body }: CancelOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({
+        path: { id: orderId, returnId },
+        body,
+      })),
     onSuccess: (_result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       toast.success("Return cancelled");
@@ -622,8 +673,10 @@ export function useCancelOrderReturn() {
 export function useReconcileOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ReconcileOrderReturnInput) =>
-      reconcileOrderReturn({ data }),
+    mutationFn: ({ orderId, returnId }: ReconcileOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReconcile({
+        path: { id: orderId, returnId },
+      })),
     onSuccess: (_result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
@@ -640,8 +693,8 @@ export function useReconcileOrderReturn() {
 export function useRestoreOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string; expectedVersion: number }) =>
-      restoreOrder({ data: input }),
+    mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion: number }) =>
+      apiData(postApiV1AdminOrdersByIdRestore({ path: { id }, body: { expectedVersion } })),
     onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
@@ -656,7 +709,8 @@ export function useRestoreOrder() {
 export function useArchiveOrders() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ArchiveOrdersInput) => archiveOrders({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminOrdersArchive>) =>
+      apiData(postApiV1AdminOrdersArchive({ body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);

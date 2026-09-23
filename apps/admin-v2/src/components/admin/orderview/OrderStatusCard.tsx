@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -16,6 +17,7 @@ import { AlertTriangle, Receipt, Loader2 } from "lucide-react";
 import type { Order } from "./types";
 import { useUpdateOrderStatus } from "@/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { ConfirmDialog } from "@/components/admin/shared/ConfirmDialog";
 import {
   getAdminOrderCancellationBlockedReason,
   getAdminOrderStatusTransitions,
@@ -31,6 +33,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const canChangeStatus = orderActions.canChangeOrderStatus;
 
   const statusMutation = useUpdateOrderStatus();
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
@@ -64,6 +67,10 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
       toast.error("Shipment recovery active", {
         description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before changing order status.",
       });
+      return;
+    }
+    if (newStatus === "cancelled") {
+      setConfirmCancel(true);
       return;
     }
     statusMutation.mutate({ orderId: order.id, status: newStatus });
@@ -161,6 +168,15 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         )}
 
       </CardContent>
+      <ConfirmDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        title={`Cancel order #${order.id}?`}
+        description="Stock is released and the customer is notified."
+        confirmLabel="Cancel order"
+        cancelLabel="Keep order"
+        onConfirm={() => statusMutation.mutate({ orderId: order.id, status: "cancelled" })}
+      />
     </Card>
   );
 }

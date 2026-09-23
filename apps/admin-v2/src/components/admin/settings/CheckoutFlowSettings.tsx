@@ -20,12 +20,10 @@ import { AlertTriangle, CheckCircle2, Loader2, MapPinned, RotateCcw, Save, Shiel
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-    getCheckoutFlowSettings,
-    updateCheckoutFlowSettings,
-    type CheckoutFlowSettingsPayload,
-    type CheckoutReadinessPayload,
-    type PaymentMethodsPayload,
-} from "~/lib/api-functions/settings";
+  type CheckoutFlowSettingsPayload,
+  type CheckoutReadinessPayload,
+  type PaymentMethodsPayload,
+} from "~/lib/api-query-options/settings";
 import { readCheckoutFlowRevisionConflict } from "~/lib/admin-api-error";
 import {
     checkoutFlowSettingsQueryOptions,
@@ -46,6 +44,11 @@ import {
     rebaseCheckoutFlowDraft,
     type CheckoutFlowValues,
 } from "./checkout-flow-draft";
+import {
+  getApiV1AdminSettingsCheckoutFlow,
+  putApiV1AdminSettingsCheckoutFlow,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 type CheckoutMode = "all" | "guest_cod_only" | "gateways_only";
 const CUSTOMER_SIGN_IN_READINESS_CODE = "unusable_customer_sign_in";
@@ -335,12 +338,12 @@ export default function CheckoutFlowSettings() {
         setSaving(true);
 
         try {
-            const saved = await updateCheckoutFlowSettings({
-                data: {
+            const saved = await apiData(putApiV1AdminSettingsCheckoutFlow({
+                body: {
                     ...submitted,
                     expectedRevision: editor.revision,
                 },
-            });
+            }));
             const savedValues = readCheckoutFlowValues(saved);
             setEditor((current) => ({
                 saved: savedValues,
@@ -390,7 +393,7 @@ export default function CheckoutFlowSettings() {
             });
             toast.error("Checkout settings changed in another tab. Your unsaved values are still here.");
             try {
-                const latest = await getCheckoutFlowSettings();
+                const latest = await apiData(getApiV1AdminSettingsCheckoutFlow());
                 setConflict({
                     submitted,
                     currentRevision: latest.revision,
@@ -412,7 +415,7 @@ export default function CheckoutFlowSettings() {
         if (!conflict) return;
         setConflict((current) => current ? { ...current, loading: true, loadFailed: false } : current);
         try {
-            const latest = await getCheckoutFlowSettings();
+            const latest = await apiData(getApiV1AdminSettingsCheckoutFlow());
             setConflict({ ...conflict, currentRevision: latest.revision, latest, loading: false, loadFailed: false });
         } catch {
             setConflict((current) => current ? { ...current, loading: false, loadFailed: true } : current);

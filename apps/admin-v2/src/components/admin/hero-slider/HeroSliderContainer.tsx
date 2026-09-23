@@ -7,11 +7,12 @@ import type { HeroSlider } from "./helpers";
 import { getServerFnError } from "~/lib/api-helpers";
 import { readHeroSliderRevisionConflict } from "~/lib/admin-api-error";
 import {
-  createHeroSlider,
-  getHeroSlider,
-  getHeroSliders,
-  updateHeroSlider,
-} from "~/lib/api-functions/hero-sliders";
+  getApiV1AdminSettingsHeroSliders,
+  getApiV1AdminSettingsHeroSlidersById,
+  postApiV1AdminSettingsHeroSliders,
+  putApiV1AdminSettingsHeroSlidersById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import type { HeroSliderWorkspaceSection } from "./hero-slider-workspace";
 
 const SliderTab = lazy(() =>
@@ -59,9 +60,8 @@ export function HeroSliderContainer({
     let cancelled = false;
     void (async () => {
       try {
-        const data = await getHeroSliders();
+        const items = await apiData(getApiV1AdminSettingsHeroSliders());
         if (cancelled) return;
-        const items = Array.isArray(data) ? data : [];
         const next: SliderState = {
           desktop: items.find((slider) => slider.type === "desktop") ?? null,
           mobile: items.find((slider) => slider.type === "mobile") ?? null,
@@ -94,9 +94,9 @@ export function HeroSliderContainer({
   const handleCreate = async (type: SliderType) => {
     setSaving((current) => ({ ...current, [type]: true }));
     try {
-      const slider = await createHeroSlider({
-        data: { type, images: [], isActive: false },
-      });
+      const slider = await apiData(postApiV1AdminSettingsHeroSliders({
+        body: { type, images: [], isActive: false },
+      }));
       setSaved((current) => ({ ...current, [type]: cloneSlider(slider) }));
       setDrafts((current) => ({ ...current, [type]: cloneSlider(slider) }));
       toast.success(`${type === "desktop" ? "Desktop" : "Mobile"} hero created`, {
@@ -117,16 +117,14 @@ export function HeroSliderContainer({
 
     setSaving((current) => ({ ...current, [type]: true }));
     try {
-      const updated = await updateHeroSlider({
-        data: {
-          id: draft.id,
-          update: {
-            expectedRevision: draft.revision,
-            images: draft.images,
-            isActive: draft.isActive,
-          },
+      const updated = await apiData(putApiV1AdminSettingsHeroSlidersById({
+        path: { id: draft.id },
+        body: {
+          expectedRevision: draft.revision,
+          images: draft.images,
+          isActive: draft.isActive,
         },
-      });
+      }));
       setSaved((current) => ({ ...current, [type]: cloneSlider(updated) }));
       setDrafts((current) => ({ ...current, [type]: cloneSlider(updated) }));
       setConflicts((current) => ({ ...current, [type]: false }));
@@ -159,7 +157,7 @@ export function HeroSliderContainer({
     if (!draft || saving[type]) return;
     setSaving((current) => ({ ...current, [type]: true }));
     try {
-      const latest = await getHeroSlider({ data: draft.id });
+      const latest = await apiData(getApiV1AdminSettingsHeroSlidersById({ path: { id: draft.id } }));
       setSaved((current) => ({ ...current, [type]: cloneSlider(latest) }));
       setDrafts((current) => ({ ...current, [type]: cloneSlider(latest) }));
       setConflicts((current) => ({ ...current, [type]: false }));

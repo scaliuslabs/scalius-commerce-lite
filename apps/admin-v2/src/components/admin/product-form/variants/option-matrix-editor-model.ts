@@ -2,13 +2,16 @@ import {
   MAX_PRODUCT_OPTION_AXES,
   MAX_PRODUCT_OPTION_COMBINATIONS,
 } from "@scalius/shared/product-options";
-import type { ProductOptionMatrixInput } from "../../../../lib/api-functions/products";
+import type {
+  CreateProductInput,
+  ProductOptionMatrixInput,
+} from "../../../../lib/api-query-options/products";
 import type {
   ProductSkuImageChoice,
   ProductOptionDefinition,
   ProductOptionStandardMapping,
   ProductVariant,
-} from "../../../../types/api-responses";
+} from "../../../../lib/api-query-options/products";
 
 export type DraftOption = {
   id: string;
@@ -17,7 +20,25 @@ export type DraftOption = {
   values: Array<{ id: string; value: string }>;
 };
 
-export type DraftVariant = ProductOptionMatrixInput["variants"][number];
+/** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
+export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "stock"> & { stock: number };
+
+/** What a new product's composition adds to the create request. */
+export type ProductCreateComposition = Pick<CreateProductInput, "optionMatrix" | "defaultSku">;
+
+/** Inventory of the hidden SKU that a product without options sells. */
+export type SimpleSkuDraft = { sku: string; trackInventory: boolean; stock: number };
+
+export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean): string | null {
+  const sku = draft.sku.trim();
+  if ((skuRequired || sku) && sku.length < 3) return "SKU must be at least 3 characters.";
+  if (!draft.trackInventory) {
+    return committed > 0 ? "Release committed stock before turning off quantity tracking." : null;
+  }
+  if (!Number.isInteger(draft.stock) || draft.stock < 0) return "Quantity must be a whole number of zero or greater.";
+  if (draft.stock < committed) return "Quantity cannot be lower than committed stock.";
+  return null;
+}
 
 export interface OptionMatrixEditorHandle {
   save: (expectedAggregateRevision?: number) => void;
@@ -56,12 +77,29 @@ export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
       stock: variant.stock,
       trackInventory: variant.trackInventory ?? true,
       weight: variant.weight,
-      barcode: variant.barcode,
+      barcode: variant.barcode ?? null,
       barcodeType: (variant.barcodeType as DraftVariant["barcodeType"]) ?? null,
       discountType: variant.discountType === "flat" ? "flat" : "percentage",
-      discountPercentage: variant.discountPercentage,
-      discountAmount: variant.discountAmount,
+      discountPercentage: variant.discountPercentage ?? null,
+      discountAmount: variant.discountAmount ?? null,
     }));
+}
+
+/**
+ * Sends a saved row's quantity only when the merchant changed it, as a
+ * compare-and-set on the stockVersion the editor loaded. Unchanged rows omit
+ * stock so a sale since the editor opened is never written back over.
+ */
+export function matrixSaveVariants(
+  variants: DraftVariant[],
+  savedVariants: ProductVariant[],
+): ProductOptionMatrixInput["variants"] {
+  const savedById = new Map(savedVariants.map((variant) => [variant.id, variant]));
+  return variants.map(({ stock, ...variant }) => {
+    const saved = savedById.get(variant.id);
+    if (!saved) return { ...variant, stock };
+    return saved.stock === stock ? variant : { ...variant, stock, expectedStockVersion: saved.stockVersion };
+  });
 }
 
 export function initialOptions(options: ProductOptionDefinition[]): DraftOption[] {

@@ -70,7 +70,7 @@ The browser side (Firebase SDK init, token registration, foreground messages) li
 
 ## Admin Dashboard Integration
 
-### `getFirebaseConfig()` (`apps/admin-v2/src/lib/api-functions/firebase.ts`)
+### `getFirebaseConfig()` (`apps/admin-v2/src/lib/api-server-fns.ts`)
 
 A TanStack server function that fetches the public Firebase config from
 `GET /api/v1/auth/firebase-config` and normalizes it to `Record<string, string>`.

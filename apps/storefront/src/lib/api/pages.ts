@@ -14,7 +14,7 @@ import {
 /**
  * Fetches a single CMS page by its URL-friendly slug.
  * This function only returns pages that are marked as 'published'.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  *
  * @param slug The unique slug of the page.
  * @returns A promise resolving to the Page object or null if not found or not published.
@@ -86,7 +86,7 @@ export interface PageListOptions {
 
 /**
  * Fetches a paginated list of all CMS pages.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  *
  * @param options Filtering, sorting, and pagination options.
  * @returns A promise resolving to a paginated list of Page objects or null on failure.

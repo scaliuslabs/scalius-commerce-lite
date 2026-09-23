@@ -24,8 +24,10 @@ import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowA
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import { PagePublicationBadge } from "~/components/admin/pages/PagePublicationBadge";
-import type { Page } from "~/types/api-responses";
-import type { PageRevisionClaim } from "~/lib/api-functions/pages";
+import type {
+  PageListItem as Page,
+} from "~/lib/api-query-options/pages";
+import type { PageRevisionClaim } from "~/lib/api-query-options/pages";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {

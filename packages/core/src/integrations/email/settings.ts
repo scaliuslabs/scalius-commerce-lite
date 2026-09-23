@@ -100,7 +100,6 @@ export const emailSettingsDocument = defineSettingsDocument<EmailSettingsDocumen
   defaults: { provider: "", sender: "", resendApiKey: "" },
   secretFields: ["resendApiKey"],
   // Email readiness is projected into the cached public checkout config.
-  invalidationGroups: ["checkout"],
   legacy: {
     async read(db, ctx) {
       const rows = await db

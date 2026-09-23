@@ -33,13 +33,6 @@ import {
 } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
-    getAuthSettings,
-    getEmailSettings,
-    updateAuthSettings,
-    getSmsSettings,
-    updateSmsSettings,
-} from "@/lib/api-functions/settings";
-import {
     CUSTOMER_AUTH_CHANNEL_OPTIONS,
     CUSTOMER_AUTH_METHODS,
     CUSTOMER_AUTH_OTP_CHANNELS,
@@ -61,6 +54,14 @@ import {
 } from "./provider-marks";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { isReady } from "@scalius/shared/readiness";
+import {
+  getApiV1AdminSettingsAuth,
+  getApiV1AdminSettingsEmail,
+  getApiV1AdminSettingsSms,
+  postApiV1AdminSettingsAuth,
+  postApiV1AdminSettingsSms,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "@/lib/api";
 
 const MASKED_VALUE = "••••••••••••";
 type EmailCollectionMode = "none" | "optional" | "required";
@@ -151,7 +152,7 @@ const SMS_READINESS_LOAD_ERROR =
 async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
     const result: Partial<AuthAndSmsSettings> = {};
 
-    const authData = await getAuthSettings();
+    const authData = await apiData(getApiV1AdminSettingsAuth());
     result.customerAuthPolicy = normalizeCustomerAuthPolicy(
         authData.customerAuthPolicy,
         authData.authVerificationMethod,
@@ -163,7 +164,7 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
 
     // Email fetch is non-fatal; backend save still enforces readiness.
     try {
-        const emailData = await getEmailSettings();
+        const emailData = await apiData(getApiV1AdminSettingsEmail());
         result.emailSender = emailData.sender || "";
         result.emailCloudflareConfigured = emailData.cloudflareBindingConfigured === true;
         result.emailResendConfigured = emailData.resendConfigured === true;
@@ -175,7 +176,7 @@ async function fetchAuthAndSms(): Promise<Partial<AuthAndSmsSettings>> {
 
     // SMS fetch is non-fatal
     try {
-        const smsData = await getSmsSettings() as Record<string, unknown>;
+        const smsData = await apiData(getApiV1AdminSettingsSms()) as Record<string, unknown>;
         result.smsProvider = (smsData.activeProvider as string) || "";
         result.smsProviderConfigured = smsData.activeProviderConfigured === true;
         result.smsProviderError = (smsData.activeProviderError as string) || "";
@@ -292,9 +293,10 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
         if (smsReadinessIssue) throw new Error(smsReadinessIssue);
         const smsIssue = getSmsProviderIssue(v);
         if (smsIssue) throw new Error(smsIssue);
-        await updateSmsSettings({
-            data: {
-                activeProvider: v.smsProvider,
+        await apiData(postApiV1AdminSettingsSms({
+            body: {
+                // getSmsProviderIssue() above rejects an empty or unknown provider.
+                activeProvider: v.smsProvider as ApiBody<typeof postApiV1AdminSettingsSms>["activeProvider"],
                 smsnetbdApiKey: v.smsnetbdApiKey,
                 smsnetbdSenderId: v.smsnetbdSenderId,
                 bdbulksmsToken: v.bdbulksmsToken,
@@ -305,7 +307,7 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
                 gennetBaseUrl: v.gennetBaseUrl,
                 gennetSid: v.gennetSid,
             },
-        });
+        }));
     }
 
     if (customerAuthPolicyUsesWhatsAppProvider(customerAuthPolicy)) {
@@ -313,15 +315,15 @@ async function saveAuthAndSms(v: AuthAndSmsSettings): Promise<void> {
         if (whatsappIssue) throw new Error(whatsappIssue);
     }
 
-    await updateAuthSettings({
-        data: {
+    await apiData(postApiV1AdminSettingsAuth({
+        body: {
             authVerificationMethod: getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy),
             customerAuthPolicy: serializeCustomerAuthPolicy(customerAuthPolicy),
             whatsappAccessToken: v.whatsappAccessToken,
             whatsappPhoneNumberId: v.whatsappPhoneNumberId,
             whatsappTemplateName: v.whatsappTemplateName,
         },
-    });
+    }));
 }
 
 export default function AuthSettingsBuilder() {

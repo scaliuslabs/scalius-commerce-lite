@@ -5,15 +5,7 @@ import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { useHasPermission } from "@/contexts/PermissionContext";
 import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
-import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
-
-const CacheNukeButton = lazy(() =>
-  import("@/components/admin/CacheNukeButton").then((module) => ({
-    default: module.CacheNukeButton,
-  })),
-);
 
 const NotificationDropdown = lazy(() =>
   import("@/components/admin/NotificationDropdown").then((module) => ({
@@ -81,22 +73,12 @@ function useDeferredHeaderActions() {
   return ready;
 }
 
-function HeaderActionsSkeleton({
-  showCacheAction,
-}: {
-  showCacheAction: boolean;
-}) {
+function HeaderActionsSkeleton() {
   return (
     <div
       aria-hidden="true"
       className="flex h-9 items-center gap-2 px-1 text-muted-foreground/40"
     >
-      {showCacheAction ? (
-        <>
-          <div className="h-8 w-8 rounded-md bg-muted/60" />
-          <div className="h-5 w-px bg-border" />
-        </>
-      ) : null}
       <div className="h-8 w-8 rounded-md bg-muted/60" />
       <div className="h-5 w-px bg-border" />
     </div>
@@ -128,29 +110,17 @@ function UserMenuFallback({ user }: { user: AdminHeaderUser }) {
   );
 }
 
-function DeferredAdminHeaderActions({
-  userId,
-  canManageCache,
-}: {
-  userId: string;
-  canManageCache: boolean;
-}) {
+function DeferredAdminHeaderActions({ userId }: { userId: string }) {
   const ready = useDeferredHeaderActions();
 
   if (!ready) {
-    return <HeaderActionsSkeleton showCacheAction={canManageCache} />;
+    return <HeaderActionsSkeleton />;
   }
 
   return (
     <Suspense
-      fallback={<HeaderActionsSkeleton showCacheAction={canManageCache} />}
+      fallback={<HeaderActionsSkeleton />}
     >
-      {canManageCache ? (
-        <>
-          <CacheNukeButton />
-          <div className="h-5 w-px bg-border mx-2.5" />
-        </>
-      ) : null}
       <NotificationDropdown userId={userId} />
       <div className="h-5 w-px bg-border mx-2.5" />
     </Suspense>
@@ -174,9 +144,6 @@ export function AdminHeader({ user }: AdminHeaderProps) {
     select: (location) => location.pathname,
   });
   const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
-  const canManageCache = useHasPermission(
-    ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE,
-  );
 
   return (
     <header className="h-14 shrink-0 border-b border-border px-3 sm:px-4 flex items-center justify-between bg-background transition-colors duration-200">
@@ -189,10 +156,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
       <TooltipProvider>
         <div className="flex shrink-0 items-center">
           <div className="hidden min-w-[5.75rem] items-center justify-end md:flex">
-            <DeferredAdminHeaderActions
-              userId={user.id}
-              canManageCache={canManageCache}
-            />
+            <DeferredAdminHeaderActions userId={user.id} />
           </div>
           <DarkModeToggle />
           <div className="h-5 w-px bg-border mx-2.5" />

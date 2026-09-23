@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteDeliveryLocations,
-  cleanAllDeliveryLocations,
-  createDeliveryLocation,
-  deleteDeliveryLocation,
-  type DeliveryLocationWriteInput,
-  updateDeliveryLocation,
-} from "../api-functions/delivery";
+  deleteApiV1AdminSettingsDeliveryLocations,
+  deleteApiV1AdminSettingsDeliveryLocationsAll,
+  deleteApiV1AdminSettingsDeliveryLocationsById,
+  postApiV1AdminSettingsDeliveryLocations,
+  putApiV1AdminSettingsDeliveryLocationsById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import { getServerFnError, queryKeys } from "./shared";
 
 function invalidateDeliveryLocationQueries(
@@ -27,8 +27,8 @@ function invalidateDeliveryLocationQueries(
 export function useCreateDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: DeliveryLocationWriteInput) =>
-      createDeliveryLocation({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminSettingsDeliveryLocations>) =>
+      apiData(postApiV1AdminSettingsDeliveryLocations({ body })),
     onSuccess: () => {
       invalidateDeliveryLocationQueries(queryClient);
       toast.success("Location created");
@@ -41,10 +41,10 @@ export function useCreateDeliveryLocation() {
 export function useUpdateDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
+    mutationFn: ({ id, update }: {
       id: string;
-      update: Partial<DeliveryLocationWriteInput>;
-    }) => updateDeliveryLocation({ data }),
+      update: ApiBody<typeof putApiV1AdminSettingsDeliveryLocationsById>;
+    }) => apiData(putApiV1AdminSettingsDeliveryLocationsById({ path: { id }, body: update })),
     onSuccess: () => {
       invalidateDeliveryLocationQueries(queryClient);
       toast.success("Location updated");
@@ -57,7 +57,8 @@ export function useUpdateDeliveryLocation() {
 export function useDeleteDeliveryLocation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string }) => deleteDeliveryLocation({ data }),
+    mutationFn: ({ id }: { id: string }) =>
+      apiData(deleteApiV1AdminSettingsDeliveryLocationsById({ path: { id } })),
     onSuccess: () => {
       invalidateDeliveryLocationQueries(queryClient);
       toast.success("Location deleted");
@@ -70,8 +71,8 @@ export function useDeleteDeliveryLocation() {
 export function useBulkDeleteDeliveryLocations() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { ids: string[] }) =>
-      bulkDeleteDeliveryLocations({ data }),
+    mutationFn: (body: { ids: string[] }) =>
+      apiData(deleteApiV1AdminSettingsDeliveryLocations({ body })),
     onSuccess: (_data, variables) => {
       invalidateDeliveryLocationQueries(queryClient);
       toast.success(`${variables.ids.length} location(s) deleted`);
@@ -84,7 +85,8 @@ export function useBulkDeleteDeliveryLocations() {
 export function useCleanAllDeliveryLocations() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => cleanAllDeliveryLocations(),
+    mutationFn: () =>
+      apiData(deleteApiV1AdminSettingsDeliveryLocationsAll({ body: { confirmDeleteAll: true } })),
     onSuccess: () => {
       invalidateDeliveryLocationQueries(queryClient);
       toast.success("All delivery locations cleared");

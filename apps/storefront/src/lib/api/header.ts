@@ -8,7 +8,7 @@ import { getApiV1Header } from "@scalius/api-client/sdk";
 
 /**
  * Fetches the configuration data for the site header.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getHeaderData(): Promise<HeaderData | null> {
   return withEdgeCache(

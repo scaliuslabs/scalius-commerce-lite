@@ -33,6 +33,11 @@ import {
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
+import {
+  buildPartytownBootstrap,
+  partytownForwardFor,
+} from "@/lib/partytown-config";
+import { partytownLoaderPath } from "virtual:scalius/partytown";
 
 interface Props {
   title: string;
@@ -208,6 +213,14 @@ const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
   : "standard";
 
+// Partytown loads only when an enabled script actually runs in it.
+const partytownBootstrap = analyticsScripts.some((script) => script.usePartytown)
+  ? buildPartytownBootstrap(
+      partytownForwardFor(analyticsScripts),
+      partytownLoaderPath,
+    )
+  : null;
+
 const headScripts = analyticsScripts.filter(
   (script) => script.location === "head",
 );
@@ -299,6 +312,7 @@ if (!window.$RefreshReg$) {
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
+    {partytownBootstrap && <script is:inline set:html={partytownBootstrap} />}
 
     <!-- Prevent browser from caching this HTML -->
     <meta

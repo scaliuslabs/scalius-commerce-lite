@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getCategorySection } from "./categories.service";
@@ -15,31 +15,13 @@ describe("bounded admin category sections", () => {
   });
 
   function database(): Database {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE categories (
-        id TEXT PRIMARY KEY, name TEXT NOT NULL, slug TEXT NOT NULL,
-        description TEXT, content TEXT, image_url TEXT, meta_title TEXT,
-        meta_description TEXT, canonical_path TEXT, no_index INTEGER NOT NULL,
-        exclude_from_sitemap INTEGER NOT NULL, status TEXT NOT NULL,
-        revision INTEGER NOT NULL, deleted_at INTEGER
-      );
-    `);
+    const harness = createSqliteD1Database();
+    sqlite = harness.sqlite;
     sqlite.prepare(`
-      INSERT INTO categories VALUES (?, 'Long category', 'long-category', ?, ?, NULL,
-        NULL, NULL, NULL, 0, 0, 'published', 4, NULL)
+      INSERT INTO categories (id, name, slug, description, content, status, revision)
+      VALUES (?, 'Long category', 'long-category', ?, ?, 'published', 4)
     `).run("cat_long", "D".repeat(100_000), "C".repeat(100_000));
-
-    return drizzle(async (query, params, method) => {
-      const prepared = sqlite!.prepare(query);
-      prepared.setReturnArrays(true);
-      if (method === "run") {
-        prepared.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") return { rows: prepared.get(...params) as unknown as unknown[] };
-      return { rows: prepared.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    return harness.db;
   }
 
   it("reads lengths and reconstructs both 100k fields in bounded chunks", async () => {

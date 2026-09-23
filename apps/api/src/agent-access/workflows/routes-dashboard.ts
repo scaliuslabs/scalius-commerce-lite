@@ -1146,24 +1146,4 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "Confirm the write, then probe canonical discovery surfaces.",
     ],
   },
-  {
-    id: "dashboard.cache-purge-selected",
-    surface: "dashboard",
-    kind: "write",
-    title: "Purge selected cache groups",
-    summary: "List valid cache groups and purge only the selected product and feed groups.",
-    examples: [
-      "List cache domains and purge only product and feed caches, not every public cache.",
-    ],
-    tags: ["cache", "products", "feeds", "operations"],
-    operationIds: ["dashboard.cache.groups_list", "dashboard.cache.purge_groups"],
-    requiresFacts: false,
-    requiresConfirmation: true,
-    requiresVerification: true,
-    rules: [
-      "Resolve valid cache group names before mutation.",
-      "Select only the requested product and feed groups; never expand to purge-all.",
-      "Confirm the selected purge and verify the bounded operation result.",
-    ],
-  },
 ] satisfies readonly AgentWorkflowIntentRoute[];

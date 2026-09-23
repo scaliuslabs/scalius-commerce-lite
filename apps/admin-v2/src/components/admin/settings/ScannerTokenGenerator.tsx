@@ -15,7 +15,8 @@ import { toast } from "sonner";
 
 import { usePermissions } from "@/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
-import { createScannerLink } from "@/lib/api-functions/auth-management";
+import { postApiV1AdminAuthScannerLink } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,7 @@ export function ScannerTokenGenerator() {
     setCopied(false);
 
     try {
-      const link = await createScannerLink();
+      const link = await apiData(postApiV1AdminAuthScannerLink());
       setToken(link.token);
       const expiry = new Date(link.expiresAt);
       setExpiresAt(Number.isNaN(expiry.getTime())

@@ -20,7 +20,11 @@ import {
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
-import { getProductActionsPresentation } from "./lib/product-actions";
+import {
+  DEFAULT_PRODUCT_ACTION_COPY,
+  getProductActionsPresentation,
+  type ProductActionCopy,
+} from "./lib/product-actions";
 
 interface Props {
   product: Product;
@@ -32,6 +36,7 @@ interface Props {
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
+  actionCopy?: ProductActionCopy;
 }
 
 const {
@@ -43,6 +48,7 @@ const {
   initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
+  actionCopy = DEFAULT_PRODUCT_ACTION_COPY,
 } = Astro.props;
 
 const formatPrice = (price: number) => `${currencySymbol}${price.toLocaleString("en-US", {
@@ -63,6 +69,7 @@ const actionPresentation = getProductActionsPresentation({
   productName: product.name,
   exactVariantAvailable: addToCartAvailable,
   anyVariantAvailable: buyerStockSummary.canPurchaseAny,
+  copy: actionCopy,
 });
 const stockStatus = buyerStockSummary.tone === "available"
   ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
@@ -164,7 +171,14 @@ function optionAriaLabel(
     <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
     <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
-    <div id="product-actions" class="space-y-1.5 pt-0.5 lg:space-y-3 lg:pt-2">
+    <div
+      id="product-actions"
+      class="space-y-1.5 pt-0.5 lg:space-y-3 lg:pt-2"
+      data-add-to-cart-text={actionCopy.addToCartText}
+      data-buy-now-text={actionCopy.buyNowText}
+      data-select-options-text={actionCopy.selectOptionsText}
+      data-unavailable-text={actionCopy.unavailableText}
+    >
       <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
         {initialUnavailableVariant ? `The requested ${unavailableLabel} combination is out of stock. Choose another available option.` : ""}
       </div>

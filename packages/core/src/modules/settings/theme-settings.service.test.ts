@@ -1,12 +1,6 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/d1";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -23,56 +17,6 @@ import {
 } from "./site-settings.service";
 import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function resultRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: resultRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = resultRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
 describe("versioned storefront theme settings", () => {
   let sqlite: DatabaseSync;
   let db: Database;
@@ -80,73 +24,7 @@ describe("versioned storefront theme settings", () => {
 
   beforeEach(() => {
     batchCalls = 0;
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE settings (
-        id TEXT PRIMARY KEY NOT NULL,
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        type TEXT NOT NULL,
-        category TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        expires_at INTEGER,
-        UNIQUE (key, category)
-      );
-      CREATE TABLE theme_settings (
-        id TEXT PRIMARY KEY NOT NULL DEFAULT 'default',
-        colors TEXT NOT NULL DEFAULT '{}',
-        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        CHECK (id = 'default')
-      );
-      CREATE TABLE theme_settings_drafts (
-        id TEXT PRIMARY KEY NOT NULL DEFAULT 'default',
-        theme TEXT NOT NULL,
-        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
-        base_published_revision INTEGER NOT NULL CHECK (base_published_revision >= 0),
-        updated_by TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        CHECK (id = 'default')
-      );
-      CREATE TABLE theme_settings_versions (
-        id TEXT PRIMARY KEY NOT NULL,
-        published_revision INTEGER NOT NULL UNIQUE CHECK (published_revision >= 1),
-        theme TEXT NOT NULL,
-        source TEXT NOT NULL,
-        source_revision INTEGER CHECK (source_revision IS NULL OR source_revision >= 1),
-        published_by TEXT,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE theme_preview_sessions (
-        token_hash TEXT PRIMARY KEY NOT NULL,
-        theme TEXT NOT NULL,
-        draft_revision INTEGER NOT NULL CHECK (draft_revision >= 1),
-        base_published_revision INTEGER NOT NULL CHECK (base_published_revision >= 0),
-        expires_at INTEGER NOT NULL,
-        created_by TEXT,
-        created_at INTEGER NOT NULL
-      );
-      CREATE INDEX theme_preview_sessions_expires_at_idx
-        ON theme_preview_sessions (expires_at);
-    `);
-    const client = {
-      prepare: (query: string) => createD1Statement(sqlite, query),
-      batch: async (statements: SqliteD1Statement[]) => {
-        batchCalls += 1;
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(client as unknown as D1Database, { schema }) as unknown as Database;
+    ({ sqlite, db } = createSqliteD1Database({ beforeBatch: () => { batchCalls += 1; } }));
   });
 
   afterEach(() => sqlite.close());

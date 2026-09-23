@@ -131,7 +131,6 @@ export const whatsappAccessTokenDocument = defineSettingsDocument<{ accessToken:
   secretFields: ["accessToken"],
   // The row stays one bare ciphertext string, exactly as it was stored before.
   codec: rawStringSettingsCodec("accessToken"),
-  invalidationGroups: ["checkout"],
 });
 
 export async function getWhatsAppCloudApiSettings(

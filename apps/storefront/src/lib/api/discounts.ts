@@ -5,7 +5,7 @@ import type { CartItem } from "@/store/cart";
 import type { DiscountValidationResponse } from "./types";
 import { unwrapData } from "./unwrap";
 import { postApiV1DiscountsValidate } from "@scalius/api-client/sdk";
-import type { PostApiV1DiscountsValidateData } from "@scalius/api-client/types";
+import { buildDiscountValidationBody } from "@/lib/cart/browser-api";
 
 /**
  * Validates a discount code against the current cart state.
@@ -29,28 +29,13 @@ export async function validateDiscount(
     return null;
   }
   try {
-    const body: PostApiV1DiscountsValidateData["body"] = { code };
-    if (total !== undefined) body.total = total;
-    if (shippingCost !== undefined) body.shippingCost = shippingCost;
-    if (customerPhone) body.customerPhone = customerPhone;
-    if (items && items.length > 0) {
-      const apiItems: NonNullable<PostApiV1DiscountsValidateData["body"]["items"]> = items.flatMap((item) => {
-        const legacyProductId =
-          "productId" in item && typeof item.productId === "string"
-            ? item.productId
-            : undefined;
-        const id = item.id || legacyProductId;
-        if (!id) return [];
-
-        return {
-          id,
-          price: Number(item.price),
-          quantity: Number(item.quantity),
-          ...(item.variantId ? { variantId: item.variantId } : {}),
-        };
-      });
-      if (apiItems.length > 0) body.items = apiItems;
-    }
+    const body = buildDiscountValidationBody(
+      code,
+      total,
+      items,
+      shippingCost,
+      customerPhone,
+    );
 
     const { data, error } = await postApiV1DiscountsValidate({
       client: getConfiguredSdkClient(),

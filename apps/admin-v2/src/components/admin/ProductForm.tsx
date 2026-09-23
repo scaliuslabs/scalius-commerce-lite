@@ -33,8 +33,8 @@ import {
 } from "./product-form";
 import type { ProductSeoDiagnosticVariant } from "@/lib/product-seo-diagnostics";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
-import type { ProductOptionMatrixInput } from "@/lib/api-functions/products";
-import type { ProductSkuImageChoice } from "@/types/api-responses";
+import type { ProductCreateComposition } from "./product-form/variants/option-matrix-editor-model";
+import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 import { getProductEditorSaveStep } from "./product-form/save-orchestration";
 
 interface ProductFormProps {
@@ -57,7 +57,7 @@ interface ProductFormProps {
     requestSave: () => void;
     productSaving: boolean;
   }) => React.ReactNode);
-  optionMatrixDraft?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null;
+  createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
   optionMatrixSaving?: boolean;
@@ -75,7 +75,7 @@ export function ProductForm({
   onOpenRevisionConflict,
   onProductSaved,
   optionManager,
-  optionMatrixDraft,
+  createComposition,
   optionMatrixIssue = null,
   optionMatrixDirty = false,
   optionMatrixSaving = false,
@@ -133,7 +133,7 @@ export function ProductForm({
       onRevisionConflict,
       onOpenRevisionConflict,
       onProductSaved,
-      optionMatrixDraft,
+      createComposition,
       optionMatrixIssue,
     });
   const productFormDirty = form.formState.isDirty;

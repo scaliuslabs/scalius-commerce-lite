@@ -1,101 +1,21 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import { customers, orders } from "@scalius/database/schema";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
+import { withPublicMediaUrl } from "../../integrations/storage";
+import { getCustomerOrderDetail } from "./customers.service";
 import { claimGuestOrderToAccount } from "./order-account-claim";
-
-const migrationDirectory = fileURLToPath(new URL(
-  "../../../../database/migrations/",
-  import.meta.url,
-));
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function statementRows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function d1Statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: statementRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = statementRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createDatabase(): { sqlite: DatabaseSync; db: Database } {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()) {
-    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "d1"));
-  }
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-  return {
-    sqlite,
-    db: drizzle(binding as unknown as D1Database, { schema }) as unknown as Database,
-  };
-}
 
 describe("guest order account claim", () => {
   let sqlite: DatabaseSync;
   let db: Database;
 
   beforeEach(async () => {
-    ({ sqlite, db } = createDatabase());
+    ({ sqlite, db } = createSqliteD1Database());
     await db.insert(customers).values([
       { id: "guest_crm", name: "Guest", email: "buyer@example.com", phone: "+8801711111111", totalOrders: 1, totalSpent: 0 },
       { id: "account_1", name: "Buyer", email: "buyer@example.com", phone: "+8801722222222" },
@@ -165,5 +85,25 @@ describe("guest order account claim", () => {
       customerEmail: "buyer@example.com",
       customerPhone: "+8801733333333",
     })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("shows the claimed account the order-line snapshot, never the product's current media", async () => {
+    sqlite.exec(`
+      UPDATE orders SET account_owner_customer_id = 'account_1' WHERE id = 'order_1';
+      INSERT INTO products (id, name, slug, price) VALUES ('product_1', 'Renamed product', 'renamed', 100);
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type) VALUES
+        ('med_snapshot0001', 'old.webp', 'image', 'media/med_snapshot0001.webp', 1, 'image/webp'),
+        ('med_current00001', 'new.webp', 'image', 'media/med_current00001.webp', 1, 'image/webp');
+      INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order)
+        VALUES ('pmed_current01', 'product_1', 'med_current00001', 1, 0);
+      INSERT INTO order_items (id, order_id, product_id, quantity, price, product_name, product_image_media_id)
+        VALUES ('item_1', 'order_1', 'product_1', 1, 100, 'Original name', 'med_snapshot0001');
+    `);
+
+    const detail = await withPublicMediaUrl("https://media.example", () => getCustomerOrderDetail(db, "account_1", "order_1"));
+    expect(JSON.stringify(detail)).toContain("https://media.example/media/med_snapshot0001.webp");
+    expect(JSON.stringify(detail)).not.toContain("med_current00001");
+    expect(JSON.stringify(detail)).toContain("Original name");
+    await expect(getCustomerOrderDetail(db, "account_2", "order_1")).rejects.toThrow();
   });
 });

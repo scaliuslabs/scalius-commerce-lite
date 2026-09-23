@@ -1,76 +1,44 @@
 /**
- * Server-only API helper for TanStack Start.
+ * Server half of the admin API transport (SSR loaders and server functions).
  *
- * Calls the API worker directly:
- * - Production: via Cloudflare Service Binding (env.API) -- zero latency
- * - `vite dev`: via HTTP to the fixed local API port (see runtime-env.server)
+ * Sends a request built by the generated SDK client to the API worker:
+ * - Production: Cloudflare Service Binding (env.API)
+ * - `vite dev`: HTTP to the fixed local API port (see runtime-env.server)
  *
- * Handles the standard API envelope { success: true, data: T },
- * unwrapping to return T directly.
+ * The incoming request's cookie/authorization headers are forwarded, and any
+ * Set-Cookie the API returns is appended to the TanStack response. Reads are
+ * bounded by the admin read timeout, including while the body streams.
  *
- * Auth cookies are forwarded from the incoming request via
- * TanStack Start's getRequestHeader().
- *
- * IMPORTANT: This file is .server.ts -- it must NEVER be imported
- * from client-side code. Only import inside createServerFn handlers
- * or other .server.ts files.
+ * IMPORTANT: server-only. Browser code reaches the API through `lib/api.ts`.
  */
 
 import { getRequestHeader, getResponseHeaders } from "@tanstack/react-start/server";
 import { splitSetCookieHeader } from "better-auth/cookies";
 import {
-  type AdminApiReadTimeoutHandle,
   AdminApiReadTimeoutError,
   createAdminApiReadTimeout,
+  wrapResponseWithAdminApiReadTimeout,
 } from "./admin-api-timeout";
-import { AdminApiResponseError } from "./admin-api-error";
 import { fetchApi, getRuntimeEnv } from "./runtime-env.server";
-
-// Admin API prefix -- all admin endpoints live under this path
-const API_PATH_PREFIX = "/api/v1/admin";
-
-// Non-admin prefix for auth/setup/cache endpoints
-const API_BASE_PREFIX = "/api/v1";
-
-interface ApiEnvelope {
-  success: boolean;
-  data?: unknown;
-  error?: { code?: string; message?: string; details?: unknown } | string;
-  [key: string]: unknown;
-}
 
 type HeadersWithGetSetCookie = Headers & { getSetCookie?: () => string[] };
 
-/**
- * Extract cookie and authorization headers for forwarding to the API worker.
- * Uses TanStack Start's request context (no AsyncLocalStorage needed).
- *
- * The session cookie is forwarded so the API worker validates it via Better Auth.
- * Both workers MUST share the same BETTER_AUTH_SECRET for this to work.
- */
-function getForwardHeaders(): Record<string, string> {
-  const forwarded: Record<string, string> = {};
+function forwardIncomingAuthHeaders(headers: Headers): void {
   try {
     const cookie = getRequestHeader("cookie");
-    if (cookie) forwarded["cookie"] = cookie;
+    if (cookie) headers.set("cookie", cookie);
     const auth = getRequestHeader("authorization");
-    if (auth) forwarded["authorization"] = auth;
+    if (auth) headers.set("authorization", auth);
   } catch {
-    // Outside request context (e.g. during build) -- no headers to forward
+    // Outside a request context (e.g. during build) -- nothing to forward.
   }
-  return forwarded;
-}
-
-function getSetCookieValues(headers: Headers): string[] {
-  const headersWithCookies = headers as HeadersWithGetSetCookie;
-  if (typeof headersWithCookies.getSetCookie === "function") {
-    return headersWithCookies.getSetCookie();
-  }
-  return splitSetCookieHeader(headers.get("set-cookie") ?? "");
 }
 
 function propagateResponseSetCookies(response: Response): void {
-  const setCookies = getSetCookieValues(response.headers);
+  const headers = response.headers as HeadersWithGetSetCookie;
+  const setCookies = typeof headers.getSetCookie === "function"
+    ? headers.getSetCookie()
+    : splitSetCookieHeader(headers.get("set-cookie") ?? "");
   if (setCookies.length === 0) return;
 
   try {
@@ -83,190 +51,33 @@ function propagateResponseSetCookies(response: Response): void {
   }
 }
 
-/**
- * Parse API response envelope. The API returns { success, data: T }.
- * Returns T directly. Throws on error.
- */
-async function handleResponse<T>(response: Response): Promise<T> {
-  propagateResponseSetCookies(response);
+/** `fetch` implementation the SDK client uses on the server. */
+export async function fetchAdminApiFromServer(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const headers = new Headers(request.headers);
+  forwardIncomingAuthHeaders(headers);
+  const body = request.method === "GET" || request.method === "HEAD"
+    ? undefined
+    : await request.text();
+  const timeout = createAdminApiReadTimeout(request.method);
 
-  if (!response.ok) {
-    let message = `API error: ${response.status} ${response.statusText}`;
-    let code: string | undefined;
-    let details: unknown;
-    try {
-      const body = (await response.json()) as ApiEnvelope;
-      const err = body.error;
-      if (typeof err === "string") message = err;
-      else if (err && typeof err === "object" && "message" in err) {
-        message = err.message ?? message;
-        code = err.code;
-        details = err.details;
-      }
-    } catch {
-      // Use default message
-    }
-    throw new AdminApiResponseError(message, response.status, code, details);
-  }
-
-  if (response.status === 204) return undefined as T;
-
-  const body = (await response.json()) as ApiEnvelope;
-  if (body.success === false) {
-    const err = body.error;
-    const msg =
-      typeof err === "string"
-        ? err
-        : err && typeof err === "object" && "message" in err
-          ? (err.message ?? "Unknown API error")
-          : "Unknown API error";
-    throw new Error(msg);
-  }
-
-  // Standard envelope: { success, data: T } -- return data
-  if (body.data !== undefined) return body.data as T;
-
-  // Fallback: strip success and return the rest
-  const { success: _, ...rest } = body;
-  return rest as T;
-}
-
-/**
- * Build URL path with query params.
- * @param path - Path after /api/v1/admin/ (or full path if prefixed=false)
- * @param params - Query parameters
- * @param prefixed - If true (default), prepends API_PATH_PREFIX
- */
-function buildPath(
-  path: string,
-  params?: Record<string, string>,
-  prefixed = true,
-): string {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const fullPath = prefixed
-    ? `${API_PATH_PREFIX}${normalizedPath}`
-    : `${API_BASE_PREFIX}${normalizedPath}`;
-  if (!params || Object.keys(params).length === 0) return fullPath;
-  const sp = new URLSearchParams(params);
-  return `${fullPath}?${sp.toString()}`;
-}
-
-/**
- * Execute a fetch against the API worker.
- * Uses the service binding in production, HTTP to the local port in `vite dev`.
- */
-async function apiFetchRaw(
-  method: string,
-  fullPath: string,
-  options?: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal },
-): Promise<{ response: Response; timeout: AdminApiReadTimeoutHandle }> {
-  const env = getRuntimeEnv();
-  const forwardHeaders = getForwardHeaders();
-  const timeout = createAdminApiReadTimeout(method, options?.signal);
-
-  const headers: Record<string, string> = {
-    ...forwardHeaders,
-    ...(options?.headers ?? {}),
-    ...(options?.body ? { "Content-Type": "application/json" } : {}),
-  };
-
-  const fetchOptions: RequestInit = {
-    method,
-    headers,
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  };
-  if (timeout.signal) {
-    fetchOptions.signal = timeout.signal;
-  }
+  const init: RequestInit = { method: request.method, headers };
+  if (body) init.body = body;
+  if (timeout.signal) init.signal = timeout.signal;
 
   try {
-    const response = await fetchApi(env, fullPath, fetchOptions);
-    return { response, timeout };
+    const response = await fetchApi(getRuntimeEnv(), `${url.pathname}${url.search}`, init);
+    propagateResponseSetCookies(response);
+    return wrapResponseWithAdminApiReadTimeout(response, timeout);
   } catch (error) {
     timeout.cleanup();
-    if (timeout.didTimeout()) {
-      throw new AdminApiReadTimeoutError();
-    }
+    if (timeout.didTimeout()) throw new AdminApiReadTimeoutError();
     throw error;
   }
 }
 
-async function readApiFetch<T>(
-  method: string,
-  fullPath: string,
-  options: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } | undefined,
-  readResponse: (response: Response) => Promise<T>,
-): Promise<T> {
-  const { response, timeout } = await apiFetchRaw(method, fullPath, options);
-  try {
-    return await readResponse(response);
-  } catch (error) {
-    if (timeout.didTimeout()) {
-      throw new AdminApiReadTimeoutError();
-    }
-    throw error;
-  } finally {
-    timeout.cleanup();
-  }
-}
-
-// ─── Public helpers (admin endpoints) ─────────────────────────────
-
-/** GET request to an admin API endpoint. Path is relative to /api/v1/admin/. */
-export async function apiGet<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const fullPath = buildPath(path, params);
-  return readApiFetch("GET", fullPath, undefined, handleResponse<T>);
-}
-
-/** POST request to an admin API endpoint. */
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const fullPath = buildPath(path);
-  return readApiFetch("POST", fullPath, { body }, handleResponse<T>);
-}
-
-/** PUT request to an admin API endpoint. */
-export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
-  const fullPath = buildPath(path);
-  return readApiFetch("PUT", fullPath, { body }, handleResponse<T>);
-}
-
-/** PATCH request to an admin API endpoint. */
-export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
-  const fullPath = buildPath(path);
-  return readApiFetch("PATCH", fullPath, { body }, handleResponse<T>);
-}
-
-/** DELETE request to an admin API endpoint. */
-export async function apiDelete<T = void>(path: string, body?: unknown): Promise<T> {
-  const fullPath = buildPath(path);
-  return readApiFetch(
-    "DELETE",
-    fullPath,
-    body ? { body } : undefined,
-    handleResponse<T>,
-  );
-}
-
-// ─── Public helpers (non-admin endpoints: auth, setup, cache) ─────
-
-/** GET request to a non-admin API endpoint. Path is relative to /api/v1/. */
-export async function apiBaseGet<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const fullPath = buildPath(path, params, false);
-  return readApiFetch("GET", fullPath, undefined, handleResponse<T>);
-}
-
-/** POST request to a non-admin API endpoint. */
-export async function apiBasePost<T>(
-  path: string,
-  body?: unknown,
-  options?: { headers?: Record<string, string> },
-): Promise<T> {
-  const fullPath = buildPath(path, undefined, false);
-  return readApiFetch("POST", fullPath, { body, headers: options?.headers }, handleResponse<T>);
+/** POST a non-admin API endpoint from a server function. Path is relative to /api/v1/. */
+export async function apiBasePost<T>(path: string, body?: unknown): Promise<T> {
+  const { apiClient, apiData } = await import("./api");
+  return apiData(apiClient.post({ url: `/api/v1${path}`, body })) as Promise<T>;
 }

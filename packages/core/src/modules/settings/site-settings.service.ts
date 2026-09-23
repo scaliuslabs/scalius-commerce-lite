@@ -1390,7 +1390,6 @@ export const mediaOptimizationDocument = defineSettingsDocument<MediaOptimizatio
     canonicalCdnUrl: "",
     canonicalHostAliases: [],
   },
-  invalidationGroups: ["media"],
 });
 
 export async function getMediaOptimizationSettings(

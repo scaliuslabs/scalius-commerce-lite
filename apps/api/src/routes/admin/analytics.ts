@@ -26,10 +26,9 @@ import {
     paginatedEnvelope,
     successEnvelope,
 } from "../../schemas/responses";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
 const timestampSchema = z.string().nullable();
 const analyticsSummarySchema = z.object({
@@ -122,7 +121,7 @@ app.openapi(createRouteDefinition, async (c) => {
     const result = await createAnalyticsScript(c.get("db"), c.req.valid("json"), {
         canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
     });
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return created(c, result);
 });
 
@@ -237,7 +236,7 @@ app.openapi(updateRoute, async (c) => {
         canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
     });
     if (!script) throw new NotFoundError("Analytics script not found");
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, { script });
 });
 
@@ -269,7 +268,7 @@ app.openapi(toggleRoute, async (c) => {
     const data = c.req.valid("json");
     const script = await toggleAnalyticsScript(c.get("db"), c.req.valid("param").id, data);
     if (!script) throw new NotFoundError("Analytics script not found");
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, {
         message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
         script,
@@ -302,7 +301,7 @@ app.openapi(trashRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -332,7 +331,7 @@ app.openapi(restoreRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -362,7 +361,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 

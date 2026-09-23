@@ -64,16 +64,12 @@ describe("createRequestRuntime", () => {
     expect(store.apiJwt).toEqual({ token: null, expiresAt: null, refresh: null });
   });
 
-  it("derives API_TOKEN and PURGE_TOKEN from SCALIUS_SECRET", async () => {
+  it("derives API_TOKEN from SCALIUS_SECRET", async () => {
     const store = await createRequestRuntime(request, { SCALIUS_SECRET: MASTER_SECRET });
 
     expect(store.API_TOKEN).toBe(
       await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.API_TOKEN),
     );
-    expect(store.PURGE_TOKEN).toBe(
-      await deriveRuntimeSecret(MASTER_SECRET, RUNTIME_SECRET_PURPOSES.PURGE_TOKEN),
-    );
-    expect(store.API_TOKEN).not.toBe(store.PURGE_TOKEN);
     expect(store.API_TOKEN).not.toContain(MASTER_SECRET);
   });
 
@@ -81,8 +77,26 @@ describe("createRequestRuntime", () => {
     for (const env of [{}, { SCALIUS_SECRET: "short" }, null]) {
       const store = await createRequestRuntime(request, env);
       expect(store.API_TOKEN).toBeUndefined();
-      expect(store.PURGE_TOKEN).toBeUndefined();
     }
+  });
+
+  it("pins API reads to the gateway's cache generation only when it is well formed", async () => {
+    const pinned = await createRequestRuntime(
+      new Request("https://storefront-host.example.test/", {
+        headers: { "X-Scalius-Cache-Generation": "a1b2c3d4e5f60718" },
+      }),
+      null,
+    );
+    expect(pinned.CACHE_GENERATION).toBe("a1b2c3d4e5f60718");
+
+    const malformed = await createRequestRuntime(
+      new Request("https://storefront-host.example.test/", {
+        headers: { "X-Scalius-Cache-Generation": "../../evil" },
+      }),
+      null,
+    );
+    expect(malformed.CACHE_GENERATION).toBeUndefined();
+    expect((await createRequestRuntime(request, null)).CACHE_GENERATION).toBeUndefined();
   });
 });
 

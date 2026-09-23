@@ -1,148 +1,20 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
-import { drizzle } from "drizzle-orm/d1";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createPostgresDatabase, safeBatch, type Database } from "@scalius/database/client";
 import {
-  createPostgresDatabase,
-  createTursoDatabase,
-  safeBatch,
-  type Database,
-} from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+  createMigratedSqlite,
+  createSqliteD1Database,
+  createSqliteTursoDatabase,
+} from "@scalius/database/testing/sqlite-d1";
 
 import { prepareSettingAggregateStatements, saveSettingAggregate } from "./settings-write";
 import { getBusinessSettings, saveBusinessSettings } from "./business-settings.service";
 import { buildClearNotificationProviderBlocksStatement } from "../notifications/notification-provider-health";
 import { readFirebaseServiceAccountJsonFromStoredValue } from "../../integrations/firebase/settings";
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
 const sqliteDatabases: DatabaseSync[] = [];
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createSettingsSchema() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqliteDatabases.push(sqlite);
-  sqlite.exec(`
-    CREATE TABLE settings (
-      id TEXT PRIMARY KEY NOT NULL,
-      key TEXT NOT NULL,
-      value TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'string',
-      category TEXT NOT NULL DEFAULT 'general',
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      expires_at INTEGER,
-      UNIQUE(key, category)
-    );
-  `);
-  return sqlite;
-}
-
-function createD1SettingsDatabase(sqlite: DatabaseSync): Database {
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  return drizzle(binding, { schema }) as unknown as Database;
-}
-
-function createTursoSettingsDatabase(sqlite: DatabaseSync): Database {
-  return createTursoDatabase(
-    { url: "turso://settings-conformance.turso.io", authToken: "test" },
-    {
-      connect: () => ({
-        async batch(statements, options) {
-          const transactional = options?.mode !== undefined;
-          if (transactional) sqlite.exec("BEGIN IMMEDIATE");
-          try {
-            const results = statements.map((statement) => {
-              const sqlText = typeof statement === "string" ? statement : statement.sql;
-              const args = typeof statement === "string" || statement.args === undefined
-                ? []
-                : statement.args;
-              if (!Array.isArray(args)) throw new Error("Positional arguments are required.");
-              const prepared = sqlite.prepare(sqlText);
-              if (prepared.columns().length === 0) {
-                const result = prepared.run(...args as SQLInputValue[]);
-                return { rows: [], rowsAffected: Number(result.changes) };
-              }
-              prepared.setReturnArrays(true);
-              return {
-                rows: prepared.all(...args as SQLInputValue[]) as unknown as SQLOutputValue[][],
-                rowsAffected: 0,
-              };
-            });
-            if (transactional) sqlite.exec("COMMIT");
-            return results;
-          } catch (error) {
-            if (transactional && sqlite.isTransaction) sqlite.exec("ROLLBACK");
-            throw error;
-          }
-        },
-      }),
-      writeBatchMode: "concurrent",
-    },
-  );
-}
 
 function storedValue(sqlite: DatabaseSync, key: string): string | undefined {
   return sqlite.prepare(
@@ -155,9 +27,15 @@ afterEach(() => {
 });
 
 describe.each([
-  ["D1", createD1SettingsDatabase],
-  ["TursoDB", createTursoSettingsDatabase],
-] as const)("%s settings aggregate conformance", (_provider, createDatabase) => {
+  ["D1", "d1", (sqlite: DatabaseSync) => createSqliteD1Database({ sqlite }).db],
+  ["TursoDB", "turso", (sqlite: DatabaseSync) => createSqliteTursoDatabase(sqlite)],
+] as const)("%s settings aggregate conformance", (_name, provider, createDatabase: (sqlite: DatabaseSync) => Database) => {
+  const createSettingsSchema = () => {
+    const sqlite = createMigratedSqlite({ provider });
+    sqliteDatabases.push(sqlite);
+    return sqlite;
+  };
+
   it("rejects malformed Business email before any aggregate write", async () => {
     const sqlite = createSettingsSchema();
     const db = createDatabase(sqlite);

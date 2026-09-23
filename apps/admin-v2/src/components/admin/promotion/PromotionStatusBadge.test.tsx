@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { PromotionAggregate } from "~/lib/api-functions/promotions";
+import type { PromotionAggregate } from "~/lib/api-query-options/promotions";
 import { getPromotionOperationalStatus, PromotionStatusBadge } from "./PromotionStatusBadge";
 
 function promotion(overrides: Partial<PromotionAggregate> = {}): PromotionAggregate {

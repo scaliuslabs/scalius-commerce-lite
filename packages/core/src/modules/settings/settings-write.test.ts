@@ -1,83 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  safeBatch: vi.fn(),
-  encryptCredentials: vi.fn(async (value: string) => `encrypted:${value}`),
-}));
-
-vi.mock("@scalius/database/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/database/client")>()),
-  safeBatch: mocks.safeBatch,
-}));
-
-vi.mock("@scalius/core/utils/credential-encryption", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/utils/credential-encryption")>()),
-  encryptCredentials: mocks.encryptCredentials,
-}));
-
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { describe, expect, it } from "vitest";
+import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { saveSettingAggregate } from "./settings-write";
 
-function createDatabase() {
-  const statements: Array<Record<string, unknown>> = [];
-  const db = {
-    insert: vi.fn(() => ({
-      values: vi.fn((values: Record<string, unknown>) => ({
-        onConflictDoUpdate: vi.fn((conflict: Record<string, unknown>) => {
-          const statement = { values, conflict };
-          statements.push(statement);
-          return statement;
-        }),
-      })),
-    })),
-  };
-  return { db, statements };
+const KEY = Buffer.alloc(32, 3).toString("base64");
+
+function setup() {
+  const harness = createSqliteD1Database();
+  const rows = () => harness.sqlite.prepare("SELECT key, value FROM settings ORDER BY key").all() as
+    Array<{ key: string; value: string }>;
+  return { ...harness, rows };
 }
 
 describe("saveSettingAggregate", () => {
-  beforeEach(() => {
-    mocks.safeBatch.mockReset().mockResolvedValue([]);
-    mocks.encryptCredentials.mockClear();
-  });
+  it("encrypts secrets with the credential key and writes the aggregate together", async () => {
+    const { db, rows } = setup();
 
-  it("encrypts all secrets before submitting one atomic batch", async () => {
-    const { db, statements } = createDatabase();
-
-    await saveSettingAggregate(db as never, [
+    await saveSettingAggregate(db, [
       { category: "stripe", key: "publishable_key", value: "pk_test_value" },
       { category: "stripe", key: "secret_key", value: "sk_test_value", encrypted: true },
       { category: "stripe", key: "enabled", value: "true" },
-    ], "encryption-key");
+    ], KEY);
 
-    expect(mocks.encryptCredentials).toHaveBeenCalledTimes(1);
-    expect(statements).toHaveLength(3);
-    expect(statements[1]?.values).toMatchObject({
-      category: "stripe",
-      key: "secret_key",
-      value: "enc:encrypted:sk_test_value",
-    });
-    expect(mocks.safeBatch).toHaveBeenCalledOnce();
-    expect(mocks.safeBatch).toHaveBeenCalledWith(db, statements);
+    const saved = Object.fromEntries(rows().map((row) => [row.key, row.value]));
+    expect(saved).toMatchObject({ publishable_key: "pk_test_value", enabled: "true" });
+    expect(saved.secret_key).toMatch(/^enc:/);
+    expect(JSON.stringify(rows())).not.toContain("sk_test_value");
+    await expect(readStoredCredentialStrict(saved.secret_key, KEY)).resolves.toMatchObject({ value: "sk_test_value" });
   });
 
-  it("fails before constructing database statements when encryption authority is missing", async () => {
-    const { db } = createDatabase();
+  it("fails without writing anything when encryption authority is missing", async () => {
+    const { db, rows } = setup();
 
-    await expect(saveSettingAggregate(db as never, [
+    await expect(saveSettingAggregate(db, [
+      { category: "stripe", key: "enabled", value: "true" },
       { category: "stripe", key: "secret_key", value: "secret", encrypted: true },
     ])).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY");
-
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(rows()).toEqual([]);
   });
 
   it("rejects duplicate keys instead of relying on statement ordering", async () => {
-    const { db } = createDatabase();
+    const { db, rows } = setup();
 
-    await expect(saveSettingAggregate(db as never, [
+    await expect(saveSettingAggregate(db, [
       { category: "email", key: "provider", value: "resend" },
       { category: "email", key: "provider", value: "cloudflare" },
     ])).rejects.toThrow("Duplicate setting write");
-
-    expect(mocks.safeBatch).not.toHaveBeenCalled();
+    expect(rows()).toEqual([]);
   });
 });

@@ -27,11 +27,12 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import {
-  getNavigationMenuMoveOptionsAuthority,
-  type NavigationMenuItemRow,
-  type NavigationMenuSummary,
-} from "~/lib/api-functions/navigation-authority";
+import { getApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptions } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
+import type {
+  NavigationMenuItemRow,
+  NavigationMenuSummary,
+} from "~/lib/api-query-options/navigation";
 
 interface NavigationAuthorityMoveDialogProps {
   open: boolean;
@@ -83,15 +84,18 @@ export function NavigationAuthorityMoveDialog({
       selectedParentId,
       debouncedParentQuery,
     ],
-    queryFn: () => getNavigationMenuMoveOptionsAuthority({
-      data: {
-        menuId: menu.id,
-        itemId: item.id,
-        query: debouncedParentQuery || undefined,
+    queryFn: () => apiData(getApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptions({
+      path: { menuId: menu.id, itemId: item.id },
+      query: {
         limit: 50,
-        selectedParentId,
+        q: debouncedParentQuery || undefined,
+        ...(selectedParentId === null
+          ? { topLevel: "true" as const }
+          : selectedParentId
+            ? { parentId: selectedParentId }
+            : {}),
       },
-    }),
+    })),
     enabled: open,
     staleTime: 15_000,
   });

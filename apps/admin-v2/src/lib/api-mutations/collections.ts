@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteCollections,
-  deleteCollection,
-  deleteCollectionPermanent,
-  reorderCollections,
-  restoreCollection,
-  updateCollection,
-  type UpdateCollectionInput,
-} from "../api-functions/collections";
+  deleteApiV1AdminCollectionsById,
+  deleteApiV1AdminCollectionsByIdPermanent,
+  postApiV1AdminCollectionsBulkDelete,
+  postApiV1AdminCollectionsByIdRestore,
+  postApiV1AdminCollectionsReorder,
+  putApiV1AdminCollectionsById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import {
   getServerFnError,
   invalidateCollectionLookupQueries,
@@ -18,7 +18,8 @@ import {
 export function useUpdateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateCollectionInput) => updateCollection({ data }),
+    mutationFn: ({ id, ...body }: { id: string } & ApiBody<typeof putApiV1AdminCollectionsById>) =>
+      apiData(putApiV1AdminCollectionsById({ path: { id }, body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);
@@ -38,7 +39,7 @@ export function useUpdateCollection() {
 export function useDeleteCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteCollection({ data: { id } }),
+    mutationFn: (id: string) => apiData(deleteApiV1AdminCollectionsById({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);
@@ -56,7 +57,8 @@ export function useDeleteCollection() {
 export function usePermanentDeleteCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteCollectionPermanent({ data: { id } }),
+    mutationFn: (id: string) =>
+      apiData(deleteApiV1AdminCollectionsByIdPermanent({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);
@@ -76,7 +78,7 @@ export function usePermanentDeleteCollection() {
 export function useRestoreCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreCollection({ data: { id } }),
+    mutationFn: (id: string) => apiData(postApiV1AdminCollectionsByIdRestore({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);
@@ -96,8 +98,8 @@ export function useRestoreCollection() {
 export function useReorderCollections() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { items: { id: string; sortOrder: number; expectedVersion: number }[] }) =>
-      reorderCollections({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminCollectionsReorder>) =>
+      apiData(postApiV1AdminCollectionsReorder({ body })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);
@@ -111,9 +113,9 @@ export function useBulkDeleteCollections() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { ids: string[]; permanent?: boolean }) =>
-      bulkDeleteCollections({
-        data: { collectionIds: data.ids, permanent: data.permanent },
-      }),
+      apiData(postApiV1AdminCollectionsBulkDelete({
+        body: { collectionIds: data.ids, permanent: data.permanent },
+      })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
       invalidateCollectionLookupQueries(queryClient);

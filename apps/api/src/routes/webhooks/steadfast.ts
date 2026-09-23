@@ -15,7 +15,7 @@ import {
     markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
 import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -314,11 +314,7 @@ app.post("/", async (c) => {
             && Array.isArray(statusResult.availabilityTransitionVariantIds)
             && statusResult.availabilityTransitionVariantIds.length > 0
         ) {
-            await invalidateProductAvailabilityCaches(
-                db,
-                { variantIds: statusResult.availabilityTransitionVariantIds },
-                c,
-            );
+            await bumpCacheGeneration(c);
         }
 
         await markWebhookEventProcessed(

@@ -8,7 +8,9 @@ import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import type { ProductDetail } from "~/types/api-responses";
+import type {
+  ProductDetailDto as ProductDetail,
+} from "~/lib/api-query-options/products";
 import {
   DEFAULT_PRODUCT_CONDITION,
   type ProductFormValues,
@@ -136,7 +138,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
     name: formSnapshot.name,
     description: formSnapshot.description,
     price: formSnapshot.price,
-    categoryId: formSnapshot.categoryId,
+    categoryId: formSnapshot.categoryId ?? "",
     slug: formSnapshot.slug,
     metaTitle: formSnapshot.metaTitle,
     metaDescription: formSnapshot.metaDescription,

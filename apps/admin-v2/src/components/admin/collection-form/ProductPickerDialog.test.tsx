@@ -8,9 +8,9 @@ import type { Mock } from "vitest";
 
 const getCollectionProductOptions = vi.hoisted(() => vi.fn());
 
-vi.mock("~/lib/api-functions/collections", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/lib/api-functions/collections")>()),
-  getCollectionProductOptions,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminCollectionsProductOptions: getCollectionProductOptions,
 }));
 
 import { ProductPickerDialog } from "./ProductPickerDialog";
@@ -65,7 +65,7 @@ describe("ProductPickerDialog", () => {
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     });
     getCollectionProductOptions.mockImplementation(
-      ({ data }: { data: { page: number; search?: string } }) => {
+      ({ query: data }: { query: { page: number; search?: string } }) => {
         if (data.search === "missing") {
           return Promise.resolve({
             products: [],
@@ -214,12 +214,12 @@ describe("ProductPickerDialog", () => {
       () => expect(document.body.textContent).toContain("No products found."),
     );
     expect(getCollectionProductOptions).toHaveBeenLastCalledWith({
-      data: {
+      query: {
         page: 1,
         limit: 20,
         search: "missing",
-        categoryIds: [],
-        selectedProductIds: [],
+        categoryIds: undefined,
+        selectedProductIds: undefined,
       },
     });
     expect(dialogButtonWithText("Cancel").className).toContain("h-11");

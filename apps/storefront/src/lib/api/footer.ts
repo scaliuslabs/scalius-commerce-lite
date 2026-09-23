@@ -8,7 +8,7 @@ import { getApiV1Footer } from "@scalius/api-client/sdk";
 
 /**
  * Fetches the configuration data for the site footer.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getFooterData(): Promise<FooterData | null> {
   return withEdgeCache(

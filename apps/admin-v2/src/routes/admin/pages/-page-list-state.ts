@@ -26,7 +26,7 @@ export function pageListQueryParams(deps: ReturnType<typeof validatePageSearch>)
     search: deps.search || undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? ("true" as const) : undefined,
     status: deps.trashed ? undefined : deps.status,
   };
 }

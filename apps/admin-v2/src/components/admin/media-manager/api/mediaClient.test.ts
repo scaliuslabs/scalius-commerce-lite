@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MediaFileDto } from "~/lib/api-functions/media";
-import { MediaApiClient, toMediaFile } from "./mediaClient";
+
+const sdk = vi.hoisted(() => ({ getApiV1AdminMedia: vi.fn() }));
+vi.mock("@scalius/api-client/sdk", () => sdk);
+
+import { MediaApiClient, toMediaFile, type MediaFileDto } from "./mediaClient";
 
 function dto(posterUrl: string | null): MediaFileDto {
   return {
@@ -18,6 +21,8 @@ function dto(posterUrl: string | null): MediaFileDto {
     version: 2,
     createdAt: 1,
     updatedAt: 1,
+    trashedAt: null,
+    deletedAt: null,
   };
 }
 
@@ -33,17 +38,19 @@ describe("toMediaFile", () => {
 });
 
 describe("MediaApiClient reads", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => vi.clearAllMocks());
 
-  it("reads the live media endpoint without reusing a cached empty result", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
-      success: true,
+  function listResponse(files: MediaFileDto[]) {
+    return {
       data: {
-        files: [dto(null)],
-        pagination: { limit: 24, hasMore: false, nextCursor: null },
+        success: true,
+        data: { files, pagination: { limit: 24, hasMore: false, nextCursor: null } },
       },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    };
+  }
+
+  it("omits blank search and maps the listed files", async () => {
+    sdk.getApiV1AdminMedia.mockResolvedValue(listResponse([dto(null)]));
 
     const result = await MediaApiClient.fetchFiles(undefined, 24, {
       search: "  ",
@@ -53,37 +60,31 @@ describe("MediaApiClient reads", () => {
     });
 
     expect(result.files).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/v1/admin/media?limit=24&sortBy=createdAt&sortOrder=desc&view=ready",
-      expect.objectContaining({
-        method: "GET",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: expect.objectContaining({ "Cache-Control": "no-cache" }),
-      }),
-    );
+    expect(sdk.getApiV1AdminMedia).toHaveBeenCalledWith({
+      query: {
+        cursor: undefined,
+        limit: 24,
+        search: undefined,
+        folderId: undefined,
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        kind: undefined,
+        view: "ready",
+      },
+    });
   });
 
   it("keeps the unfiled folder filter explicit", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({
-      success: true,
-      data: {
-        files: [],
-        pagination: { limit: 24, hasMore: false, nextCursor: null },
-      },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    sdk.getApiV1AdminMedia.mockResolvedValue(listResponse([]));
 
     await MediaApiClient.fetchFiles(undefined, 24, {
+      search: "",
       folderId: null,
       sortBy: "filename",
       sortOrder: "asc",
       view: "ready",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("folderId=root"),
-      expect.any(Object),
-    );
+    expect(sdk.getApiV1AdminMedia.mock.calls[0]![0].query.folderId).toBe("root");
   });
 });

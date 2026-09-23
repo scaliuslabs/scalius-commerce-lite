@@ -19,7 +19,7 @@ describe("canonical schema hygiene", () => {
       expect(d1Tables).toEqual(tursoTables);
       expect(d1Tables).toHaveLength(122);
       expect(d1Tables).toContain("scalius_schema_migrations");
-      expect(d1Tables).toContain("cache_invalidation_state");
+      expect(d1Tables).toContain("cache_generation");
       expect(d1Tables).toContain("agent_grants");
       expect(d1Tables).toContain("agent_artifact_handles");
       expect(d1Tables).toContain("agent_browser_handoffs");

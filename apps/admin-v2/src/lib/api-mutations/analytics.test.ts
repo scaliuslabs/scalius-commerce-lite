@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AnalyticsScriptsListResponse } from "~/types/api-responses";
+import type { AnalyticsScriptsListResponse } from "../api-query-options/analytics";
 import { removeAnalyticsScriptFromListPage } from "./analytics";
 
 function listPage(): AnalyticsScriptsListResponse {

@@ -45,9 +45,12 @@ import { AdminListPagination } from "@/components/admin/shared/AdminListPaginati
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
-  adjustInventory,
-  acknowledgeInventoryAlert,
-  stockSet,
+  postApiV1AdminInventoryByVariantIdAdjust,
+  patchApiV1AdminInventoryAlerts,
+  postApiV1AdminInventoryStockSet,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import {
   type InventoryAlert,
   type InventoryMovement,
   type InventoryMovementPageInfo,
@@ -55,7 +58,7 @@ import {
   type InventoryStats,
   type InventoryVariant,
   type InventoryAdjustmentReason,
-} from "@/lib/api-functions/inventory";
+} from "@/lib/api-query-options/inventory";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import type { InventoryWorkspaceSection } from "./inventory-workspace";
@@ -334,7 +337,7 @@ export function InventoryManager({
   const movementHealthQuery = useQuery({
     ...inventoryQueryOptions({
       section: "movements",
-      movementHealthOnly: true,
+      movementHealthOnly: "true",
       page: 1,
       limit: 1,
     }),
@@ -355,7 +358,8 @@ export function InventoryManager({
   });
 
   const acknowledgeAlertMutation = useMutation({
-    mutationFn: (variantId: string) => acknowledgeInventoryAlert({ data: { variantId } }),
+    mutationFn: (variantId: string) =>
+      apiData(patchApiV1AdminInventoryAlerts({ body: { variantId } })),
     onSuccess: async () => {
       toast.success("Alert acknowledged");
       await queryClient.invalidateQueries({ queryKey: ["inventory"] });
@@ -1443,14 +1447,14 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
           newStock: countedStock,
           reason: stocktakeReason,
         }));
-        await stockSet({
-          data: {
+        await apiData(postApiV1AdminInventoryStockSet({
+          body: {
             operationKey,
             variantId: variant.id,
             newStock: countedStock,
             reason: stocktakeReason,
           },
-        });
+        }));
       } else {
         const trimmedNotes = notes.trim();
         const operationKey = operationKeyForIntent(JSON.stringify({
@@ -1460,15 +1464,15 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
           reason,
           notes: trimmedNotes || null,
         }));
-        await adjustInventory({
-          data: {
+        await apiData(postApiV1AdminInventoryByVariantIdAdjust({
+          path: { variantId: variant.id },
+          body: {
             operationKey,
-            variantId: variant.id,
             delta,
             reason,
             ...(trimmedNotes ? { notes: trimmedNotes } : {}),
           },
-        });
+        }));
       }
       onSubmit();
       onClose();

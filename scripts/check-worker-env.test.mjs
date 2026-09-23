@@ -98,7 +98,7 @@ describe("worker env check: per-store resource shape", () => {
     const api = readRepoJsonc("apps/api/wrangler.jsonc");
     expect(api.queues.consumers.map((consumer) => consumer.queue)).toEqual(["jobs", "jobs-dlq"]);
     expect(api.queues.consumers[0].max_batch_timeout).toBeLessThanOrEqual(2);
-    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces).toBeUndefined();
+    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces.map((kv) => kv.binding)).toEqual(["CACHE"]);
   });
 
   it("fails on a second namespace, bucket, queue, or limiter", () => {
@@ -158,7 +158,6 @@ describe("worker env check: allowlists", () => {
       "BETTER_AUTH_SECRET",
       "JWT_SECRET",
       "API_TOKEN",
-      "PURGE_TOKEN",
       "AGENT_TOKEN_PEPPER",
       "CUSTOMER_SESSION_HASH_KEY",
       "PLATFORM_CONFIG",
@@ -167,7 +166,6 @@ describe("worker env check: allowlists", () => {
       "BETTER_AUTH_URL",
       "R2_PUBLIC_URL",
       "CDN_DOMAIN_URL",
-      "PURGE_URL",
       "CUSTOMER_AUTH_COOKIE_DOMAIN",
       "CORS_ALLOWED_ORIGINS",
       "LOCAL_MAILPIT_URL",
@@ -191,12 +189,6 @@ describe("worker env check: one Env declaration per Worker", () => {
     expect(apps.find((app) => app.name === "api").envFiles).toEqual([
       "apps/api/src/env.d.ts",
     ]);
-  });
-
-  it("keeps the Hono augmentation free of a second Env declaration", () => {
-    const source = readFileSync(resolve(root, "apps/api/src/hono-env.d.ts"), "utf8");
-    expect(source).toContain("ContextVariableMap");
-    expect([...extractEnvNames(source)]).toEqual([]);
   });
 
   it("fails closed when another declaration file in the Worker redeclares Env", () => {

@@ -4,7 +4,7 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_STOREFRONT_THEME_SETTINGS, type StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
-import type { ThemeDraftPayload, ThemeWorkspacePayload } from "~/lib/api-functions/settings";
+import type { ThemeDraftPayload, ThemeWorkspacePayload } from "~/lib/api-query-options/settings";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import ThemeSettingsPage from "./ThemeSettingsPage";
 import type { ThemeWorkspaceSection } from "./theme-workspace";
@@ -13,10 +13,15 @@ const api = vi.hoisted(() => ({
   get: vi.fn(), save: vi.fn(), publish: vi.fn(), rebase: vi.fn(), restore: vi.fn(), history: vi.fn(),
   preview: vi.fn(), prepare: vi.fn(), submitPreview: vi.fn(), close: vi.fn(), blocker: vi.fn(), permission: vi.fn(),
 }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getThemeWorkspace: api.get, saveThemeDraft: api.save, publishThemeDraft: api.publish,
-  rebaseThemeDraft: api.rebase, rollbackTheme: api.restore, getThemeVersions: api.history,
-  createThemePreviewSession: api.preview,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsThemeWorkspace: api.get,
+  postApiV1AdminSettingsThemeDraft: api.save,
+  postApiV1AdminSettingsThemePublish: api.publish,
+  postApiV1AdminSettingsThemeDraftRebase: api.rebase,
+  postApiV1AdminSettingsThemeRollback: api.restore,
+  getApiV1AdminSettingsThemeVersions: api.history,
+  postApiV1AdminSettingsThemePreviewSession: api.preview,
 }));
 vi.mock("~/contexts/PermissionContext", () => ({ usePermissions: () => ({ hasPermission: api.permission }) }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: api.blocker }));
@@ -134,7 +139,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(host.textContent).toContain("Draft r8 · unsaved");
     api.save.mockResolvedValueOnce(workspace(headingTheme(later as "modern" | "system"), 9).draft);
     await save();
-    expect(api.save.mock.calls.at(-1)![0].data).toMatchObject({ expectedDraftRevision: 8, basePublishedRevision: 4 });
+    expect(api.save.mock.calls.at(-1)![0].body).toMatchObject({ expectedDraftRevision: 8, basePublishedRevision: 4 });
     expect(host.textContent).toContain("Draft r9 · saved");
   });
 
@@ -178,7 +183,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     api.rebase.mockReturnValueOnce(rebase.promise);
     await click(button("Rebase mine"));
     expectProgress("Rebasing…");
-    const submitted = api.rebase.mock.calls[0]![0].data;
+    const submitted = api.rebase.mock.calls[0]![0].body;
     expect(submitted).toMatchObject({
       expectedDraftRevision: 8, theme: { typography: { heading: "system" }, density: "compact", containerWidth: "wide" },
     });
@@ -231,9 +236,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Save draft"]')!.disabled).toBe(true);
     await act(async () => { retry.resolve(workspace({ ...editorial, containerWidth: "wide" }, 8)); });
     expect(heading()).toBe("system");
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 9).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 9).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls[0]![0].data).toMatchObject({
+    expect(api.rebase.mock.calls[0]![0].body).toMatchObject({
       expectedDraftRevision: 8,
       theme: { typography: { heading: "system" }, density: "compact", containerWidth: "wide" },
     });
@@ -257,9 +262,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(host.textContent).toContain("Merged colors need attention: On primary / Primary");
     expect(button("Use latest")).toBeDefined();
     await color("Primary", "#333333");
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 9).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 9).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls[0]![0].data.theme.colors).toEqual({ primary: "#333333", "primary-foreground": "#bbbbbb" });
+    expect(api.rebase.mock.calls[0]![0].body.theme.colors).toEqual({ primary: "#333333", "primary-foreground": "#bbbbbb" });
     expect(host.textContent).toContain("Draft r9 · saved");
   });
 
@@ -277,9 +282,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     await act(async () => {
       rebase.reject(conflictedAgain ? new AdminApiResponseError("Changed again", 409) : new Error("Offline"));
     });
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 10).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 10).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls.at(-1)![0].data).toMatchObject({
+    expect(api.rebase.mock.calls.at(-1)![0].body).toMatchObject({
       expectedDraftRevision: conflictedAgain ? 9 : 8,
       theme: { typography: { heading: "system", body: "modern" }, density: "compact", containerWidth: conflictedAgain ? "wide" : base.containerWidth },
     });
@@ -293,9 +298,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     await conflict(pending, workspace({ ...base, containerWidth: "wide" }, 8));
     await discard();
     expect(heading()).toBe("system");
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 9).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 9).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls[0]![0].data.theme).toEqual({ ...base, containerWidth: "wide" });
+    expect(api.rebase.mock.calls[0]![0].body.theme).toEqual({ ...base, containerWidth: "wide" });
   });
 
   it("treats Restore store defaults as an explicit replacement before rebasing", async () => {
@@ -308,9 +313,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     await conflict(pending, workspace({ ...editorial, density: "compact", containerWidth: "wide" }, 8));
     await menuAction("Restore store defaults");
     expect(heading()).toBe("system");
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 9).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 9).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls[0]![0].data.theme).toEqual({ ...base, containerWidth: "wide" });
+    expect(api.rebase.mock.calls[0]![0].body.theme).toEqual({ ...base, containerWidth: "wide" });
   });
 
   it("publishes the saved snapshot while preserving edits during both response stages", async () => {
@@ -328,7 +333,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(button("Publishing…")?.disabled).toBe(true);
     expectProgress("Publishing…");
     expect(heading()).toBe("system");
-    expect(api.publish).toHaveBeenCalledWith({ data: { expectedPublishedRevision: 4, expectedDraftRevision: 8 } });
+    expect(api.publish).toHaveBeenCalledWith({ body: { expectedPublishedRevision: 4, expectedDraftRevision: 8 } });
     await choice("Headings", "modern");
     await act(async () => {
       publishPending.resolve({ ...workspace(editorial, 9, 5), published: { theme: editorial, revision: 5 } });
@@ -351,7 +356,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     await choice("Headings", "modern");
     await act(async () => { savePending.resolve(workspace(editorial, 8).draft); });
     expect(heading()).toBe("modern");
-    expect(api.preview.mock.calls[0]![0].data.expectedDraftRevision).toBe(8);
+    expect(api.preview.mock.calls[0]![0].body.expectedDraftRevision).toBe(8);
     expectProgress("Opening…");
     await choice("Headings", "system");
     await act(async () => {
@@ -379,9 +384,9 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(host.textContent).toContain("Draft r8 · unsaved");
     expect(host.textContent).toContain("Published r4");
     expect(heading()).toBe("system");
-    api.rebase.mockImplementationOnce(async ({ data }) => workspace(data.theme, 10).draft);
+    api.rebase.mockImplementationOnce(async ({ body: data }) => workspace(data.theme, 10).draft);
     await click(button("Rebase mine"));
-    expect(api.rebase.mock.calls[0]![0].data).toMatchObject({
+    expect(api.rebase.mock.calls[0]![0].body).toMatchObject({
       expectedDraftRevision: 9, theme: { typography: { heading: "system" }, density: "compact" },
     });
   });
@@ -409,7 +414,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(button("Preview draft").disabled).toBe(false);
     await click(button("Preview draft"));
     expect(api.save).not.toHaveBeenCalled();
-    expect(api.preview).toHaveBeenCalledWith({ data: { expectedDraftRevision: 7, path: "/", device: "desktop" } });
+    expect(api.preview).toHaveBeenCalledWith({ body: { expectedDraftRevision: 7, path: "/", device: "desktop" } });
     expect(api.submitPreview).toHaveBeenCalledTimes(1);
     expect(button("Restore").disabled).toBe(true);
   });
@@ -428,7 +433,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(button("Use latest").disabled).toBe(false);
     await click(button("Use latest"));
     await click(button("Preview"));
-    expect(api.preview.mock.calls.at(-1)![0].data.expectedDraftRevision).toBe(8);
+    expect(api.preview.mock.calls.at(-1)![0].body.expectedDraftRevision).toBe(8);
     expect(api.save).not.toHaveBeenCalled();
     expect(api.submitPreview).toHaveBeenCalledTimes(1);
   });
@@ -467,7 +472,7 @@ describe("ThemeSettingsPage operation acknowledgments", () => {
     expect(host.textContent).toContain("Draft r1 · unsaved");
     api.save.mockResolvedValueOnce(workspace(editorial, 2).draft);
     await save();
-    expect(api.save.mock.calls.at(-1)![0].data.expectedDraftRevision).toBe(1);
+    expect(api.save.mock.calls.at(-1)![0].body.expectedDraftRevision).toBe(1);
   });
 
   it("serializes Save and Review actions even before pending controls rerender", async () => {

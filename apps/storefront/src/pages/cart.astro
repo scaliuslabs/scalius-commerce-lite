@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import LocationSelector from "@/components/LocationSelector";
-import ShippingLocationSelector from "@/components/ShippingLocationSelector";
+import CheckoutLocationFields from "@/components/checkout/CheckoutLocationFields.astro";
+import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMethods.astro";
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
@@ -657,8 +657,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               <div class="sm:col-span-2">
                 <div class="space-y-4">
                   <div class="relative pt-1">
-                    <LocationSelector
-                      client:load
+                    <CheckoutLocationFields
                       cities={cities}
                       cityLabel={lang.languageData.cityLabel}
                       zoneLabel={lang.languageData.zoneLabel}
@@ -679,8 +678,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     </p>
                   </div>
 
-                  <ShippingLocationSelector
-                    client:load
+                  <CheckoutShippingMethods
                     shippingMethods={shippingMethods}
                     shippingMethodLabel={lang.languageData.shippingMethodLabel}
                     freeText={copy.freeText}
@@ -761,7 +759,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     resumeCartPageFromHistory,
   } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
-  import { getEffectiveCartShippingFee } from "@/store/cart";
+  import {
+    cartHasFreeDeliveryItem,
+    cartStore,
+    getEffectiveCartShippingFee,
+  } from "@/store/cart";
+  import { enhanceShippingMethods } from "@/lib/checkout/shipping-methods";
+  import { browserApiUrl } from "@/lib/api/browser-url";
+  import {
+    enhanceLocationSelects,
+    fetchLocationOptions,
+    type LocationPrefillDetail,
+  } from "@/lib/checkout/location-select";
   import {
     checkoutPhoneResult,
     initCheckoutPhoneField,
@@ -783,11 +792,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     hideCheckoutLoadingOverlay,
     showCheckoutLoadingOverlay,
   } from "@/lib/checkout/loading-overlay";
-  import {
-    ENGLISH_CHECKOUT_LANGUAGE_DATA,
-    formatCheckoutLanguageText,
-    type CheckoutLanguageData as CheckoutLanguageStrings,
-  } from "@scalius/shared/checkout-language";
+  import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+  import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
 
   type CustomerAutofillProfile = {
     name?: string | null;
@@ -811,12 +817,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   const codOnly = meta?.dataset.codOnly === "true";
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
-  const checkoutLanguage = window.__CHECKOUT_LANGUAGE__ as
-    | {
-        languageData?: CheckoutLanguageStrings;
-      }
-    | undefined;
-  const checkoutCopy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  // The frontmatter always serializes a fully resolved language (English
+  // fallback included), so the browser never ships the default copy tables.
+  const checkoutCopy = (
+    window.__CHECKOUT_LANGUAGE__ as { languageData: CheckoutLanguageStrings }
+  ).languageData;
   const checkoutUnavailableMessage =
     meta?.dataset.checkoutUnavailableMessage ||
     checkoutCopy.checkoutUnavailableMessage;
@@ -834,7 +839,43 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   };
 
   initCheckoutPhoneField(cartPageSignal);
+
   void initCartFunctionality();
+
+  // Wired after the cart runtime so its listeners receive the initial
+  // delivery-method and location events.
+  const locationRoot = document.querySelector<HTMLElement>("[data-location-fields]");
+  const locationSelects = locationRoot
+    ? enhanceLocationSelects(locationRoot, {
+        load: (level, parentId) =>
+          fetchLocationOptions(browserApiUrl(""), level, parentId),
+        onChange: (detail) =>
+          window.dispatchEvent(
+            new CustomEvent("checkout-location-change", { detail }),
+          ),
+        signal: cartPageSignal,
+      })
+    : null;
+  window.addEventListener(
+    "location-prefill",
+    (event) =>
+      void locationSelects?.prefill(
+        (event as CustomEvent<LocationPrefillDetail>).detail ?? {},
+      ),
+    { signal: cartPageSignal },
+  );
+
+  const shippingMethods = enhanceShippingMethods(document, {
+    readDraftMethod: () => readCheckoutFormDraft()?.shippingLocation,
+    isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
+    signal: cartPageSignal,
+  });
+  const unsubscribeShippingFees = cartStore.subscribe(() =>
+    shippingMethods?.refreshFees(),
+  );
+  cartPageSignal.addEventListener("abort", unsubscribeShippingFees, {
+    once: true,
+  });
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
 
@@ -911,7 +952,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         input.dataset.e164Value !== undefined
           ? input.dataset.e164Value
           : input?.value;
-      // Initialization may snapshot empty controls before account/React hydration.
+      // Initialization may snapshot empty controls before account prefill.
       // Only buyer edits or an explicit submit give those blanks draft ownership.
       if (
         !inputValue &&
@@ -1070,9 +1111,21 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     document.addEventListener("cart-updated", persistCheckoutFormDraft, {
       signal: cartPageSignal,
     });
+
+    const draft = readCheckoutFormDraft();
+    if (draft?.city || draft?.cityName) {
+      void locationSelects?.prefill({
+        city: draft.city,
+        cityName: draft.cityName,
+        zone: draft.zone,
+        zoneName: draft.zoneName,
+        area: draft.area,
+        areaName: draft.areaName,
+      });
+    }
   });
 
-  // Helper to auto-select City/Zone dropdowns through LocationSelector's event API.
+  // Helper to auto-select City/Zone/Area selects for a signed-in customer.
   const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
     try {
       if (latestDraftLocation.city || latestDraftLocation.cityName) return;
@@ -1093,9 +1146,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         : customer;
       if (!preferred?.cityName && !preferred?.city) return;
       const existingCity =
-        document.querySelector<HTMLInputElement>('input[name="city"]')?.value;
+        document.querySelector<HTMLSelectElement>('select[name="city"]')?.value;
       const existingZone =
-        document.querySelector<HTMLInputElement>('input[name="zone"]')?.value;
+        document.querySelector<HTMLSelectElement>('select[name="zone"]')?.value;
       if (existingCity || existingZone) return;
       window.dispatchEvent(
         new CustomEvent("location-prefill", {
@@ -1509,12 +1562,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               block: "center",
             });
           }
-          const target = document.querySelector<HTMLButtonElement>(
-            missingCity
-              ? 'button[aria-label^="City:"]'
-              : 'button[aria-label^="Zone:"]',
-          );
-          target?.focus({ preventScroll: true });
+          document
+            .getElementById(missingCity ? "checkout-city" : "checkout-zone")
+            ?.focus({ preventScroll: true });
           return;
         }
 
@@ -1530,7 +1580,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             shippingLocationError.classList.remove("hidden");
             shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
           }
-          document.querySelector<HTMLButtonElement>('[role="radio"][aria-label]')
+          document
+            .querySelector<HTMLInputElement>('input[name="shippingLocation"]')
             ?.focus({ preventScroll: true });
           return;
         }
@@ -1610,7 +1661,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             if (el) checkoutData[f] = el.value;
           }
 
-          // Capture the current shipping fee from the ShippingLocationSelector
+          // Capture the current shipping fee from the delivery options
           // Fall back to the first shipping method's fee when no selection has been made
           const defaultShippingFee = parseFloat(
             meta?.dataset.defaultShippingFee || "0",
@@ -1663,12 +1714,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         submitButton.disabled = true;
         setSubmitButtonText(checkoutCopy.processingText);
         showCheckoutLoadingOverlay({
-          title:
-            checkoutLanguage?.languageData?.processingOrderTitle ||
-            checkoutCopy.processingOrderTitle,
-          message:
-            checkoutLanguage?.languageData?.processingOrderMessage ||
-            checkoutCopy.processingOrderMessage,
+          title: checkoutCopy.processingOrderTitle,
+          message: checkoutCopy.processingOrderMessage,
         });
       },
       { signal: cartPageSignal },

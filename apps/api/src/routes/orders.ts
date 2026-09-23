@@ -71,11 +71,11 @@ import {
 } from "@scalius/core/modules/tax";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import {
-  findCheckoutReservationAvailabilityTransitions,
+  bumpCacheGeneration,
   getOptionalExecutionContext,
-  invalidateProductAvailabilityCaches,
+  findCheckoutReservationAvailabilityTransitions,
   type WaitUntilExecutionContext,
-} from "../utils/cache-invalidation";
+} from "../utils/cache-generation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../utils/encryption-key";
 import { getClientIp } from "@scalius/shared/rate-limit";
@@ -1677,7 +1677,7 @@ function createCheckoutAvailabilityInvalidation(
       ? await findCheckoutReservationAvailabilityTransitions(db, reservationEntries)
       : [...new Set(transitionVariantIds)];
     if (variantIds.length === 0) return;
-    await invalidateProductAvailabilityCaches(db, { variantIds }, c);
+    await bumpCacheGeneration(c);
   })();
 }
 
@@ -1823,11 +1823,7 @@ app.openapi(createOrderRoute, async (c) => {
       const coordinatedAvailabilityTransitions =
         coordinated.availabilityTransitionVariantIds ?? [];
       if (coordinatedAvailabilityTransitions.length > 0) {
-        const availabilityInvalidation = invalidateProductAvailabilityCaches(
-          db,
-          { variantIds: coordinatedAvailabilityTransitions },
-          c,
-        );
+        const availabilityInvalidation = bumpCacheGeneration(c);
         if (executionCtx && typeof executionCtx.waitUntil === "function") {
           executionCtx.waitUntil(availabilityInvalidation);
         } else {

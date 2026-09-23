@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getSmsSettings: vi.fn(),
   saveSmsSettings: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/integrations/sms", () => ({
@@ -18,9 +18,9 @@ vi.mock("@scalius/core/modules/notifications/notification-provider-health", () =
   clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups:
-    mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration:
+    mocks.bumpCacheGeneration,
 }));
 
 import { smsSettingsRoutes } from "./sms";
@@ -73,8 +73,6 @@ describe("SMS settings cache invalidation", () => {
   it("invalidates public checkout readiness after a provider save", async () => {
     const env = {
       CACHE: { id: "api-cache-kv" },
-      PURGE_URL: "https://storefront.example.com/api/purge-cache",
-      PURGE_TOKEN: "secret-token",
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -82,7 +80,7 @@ describe("SMS settings cache invalidation", () => {
 
     mocks.saveSmsSettings.mockResolvedValue(undefined);
     mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
-    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.use("*", async (c, next) => {
       c.set("db", db as never);
@@ -101,9 +99,7 @@ describe("SMS settings cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 });

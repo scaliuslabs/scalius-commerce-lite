@@ -80,29 +80,32 @@ import { Switch } from "~/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  createNavigationMenuAuthority,
-  createNavigationMenuItemAuthority,
-  deleteNavigationMenuItemAuthority,
-  getNavigationMenuAuthority,
-  getNavigationMenuItemAuthority,
-  getNavigationMenuItemPage,
-  getNavigationMenusAuthority,
-  getNavigationPlacementSettings,
-  getNavigationPublications,
-  publishNavigationMenuAuthority,
-  restoreNavigationMenuAuthority,
-  rollbackNavigationMenuAuthority,
-  saveNavigationPlacementAuthority,
-  searchNavigationMenuItemsAuthority,
-  trashNavigationMenuAuthority,
-  updateNavigationMenuItemAuthority,
-  updateNavigationMenuMetadataAuthority,
-  moveNavigationMenuItemAuthority,
-  type NavigationItemDraft,
-  type NavigationMenuItemRow,
-  type NavigationMenuSummary,
-  type NavigationPlacementSetting,
-} from "~/lib/api-functions/navigation-authority";
+  deleteApiV1AdminNavigationMenusByMenuId,
+  deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId,
+  getApiV1AdminNavigationMenus,
+  getApiV1AdminNavigationMenusByMenuId,
+  getApiV1AdminNavigationMenusByMenuIdItems,
+  getApiV1AdminNavigationMenusByMenuIdItemsByItemId,
+  getApiV1AdminNavigationMenusByMenuIdPublications,
+  getApiV1AdminNavigationMenusByMenuIdSearch,
+  getApiV1AdminNavigationPlacementSettings,
+  patchApiV1AdminNavigationMenusByMenuId,
+  patchApiV1AdminNavigationMenusByMenuIdItemsByItemId,
+  postApiV1AdminNavigationMenus,
+  postApiV1AdminNavigationMenusByMenuIdItems,
+  postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove,
+  postApiV1AdminNavigationMenusByMenuIdPublish,
+  postApiV1AdminNavigationMenusByMenuIdRestore,
+  postApiV1AdminNavigationMenusByMenuIdRollback,
+  putApiV1AdminNavigationPlacementsByPlacementId,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
+import type {
+  NavigationItemDraft,
+  NavigationMenuItemRow,
+  NavigationMenuSummary,
+  NavigationPlacementSetting,
+} from "~/lib/api-query-options/navigation";
 import { queryKeys } from "~/lib/query-keys";
 import { NavigationAuthorityMoveDialog } from "./NavigationAuthorityMoveDialog";
 import { NavigationResourcePicker } from "./NavigationResourcePicker";
@@ -153,7 +156,8 @@ function mutationError(error: unknown, fallback: string) {
   toast.error(fallback, { description: getServerFnError(error, fallback) });
 }
 
-function formatDate(value: string | number) {
+function formatDate(value: string | number | null) {
+  if (value === null) return "Unknown date";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? "Unknown date"
@@ -425,9 +429,10 @@ function MenuLevel({
 }: MenuLevelProps) {
   const query = useInfiniteQuery({
     queryKey: queryKeys.navigation.menuItems(menuId, parentId),
-    queryFn: ({ pageParam }) => getNavigationMenuItemPage({
-      data: { menuId, parentId, cursor: pageParam, limit: 100 },
-    }),
+    queryFn: ({ pageParam }) => apiData(getApiV1AdminNavigationMenusByMenuIdItems({
+      path: { menuId },
+      query: { parentId: parentId || undefined, cursor: pageParam || undefined, limit: 100 },
+    })),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30_000,
@@ -568,7 +573,9 @@ function MenuItemDialog({
   const editing = itemId !== "new";
   const itemQuery = useQuery({
     queryKey: [...queryKeys.navigation.menu(menu.id), "item", itemId],
-    queryFn: () => getNavigationMenuItemAuthority({ data: { menuId: menu.id, itemId } }),
+    queryFn: () => apiData(getApiV1AdminNavigationMenusByMenuIdItemsByItemId({
+      path: { menuId: menu.id, itemId },
+    })),
     enabled: editing,
   });
   const [draft, setDraft] = useState<NavigationItemDraft>({
@@ -587,23 +594,15 @@ function MenuItemDialog({
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (editing) {
-        return updateNavigationMenuItemAuthority({
-          data: {
-            ...draft,
-            menuId: menu.id,
-            itemId,
-            expectedRevision: menu.revision,
-          },
-        });
+        return apiData(patchApiV1AdminNavigationMenusByMenuIdItemsByItemId({
+          path: { menuId: menu.id, itemId },
+          body: { ...draft, expectedRevision: menu.revision },
+        }));
       }
-      return createNavigationMenuItemAuthority({
-        data: {
-          ...draft,
-          menuId: menu.id,
-          expectedRevision: menu.revision,
-          parentId: parentId ?? null,
-        },
-      });
+      return apiData(postApiV1AdminNavigationMenusByMenuIdItems({
+        path: { menuId: menu.id },
+        body: { ...draft, expectedRevision: menu.revision, parentId: parentId ?? null },
+      }));
     },
     onSuccess: () => {
       toast.success(editing ? "Menu item updated" : "Menu item added");
@@ -612,9 +611,10 @@ function MenuItemDialog({
     onError: (error) => mutationError(error, "Menu item was not saved"),
   });
   const deleteMutation = useMutation({
-    mutationFn: () => deleteNavigationMenuItemAuthority({
-      data: { menuId: menu.id, itemId, expectedRevision: menu.revision },
-    }),
+    mutationFn: () => apiData(deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId({
+      path: { menuId: menu.id, itemId },
+      body: { expectedRevision: menu.revision },
+    })),
     onSuccess: (result) => {
       toast.success(result.deletedCount > 1 ? `${result.deletedCount} menu items removed` : "Menu item removed");
       onSaved();
@@ -860,13 +860,16 @@ function MenuMetadataDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       if (menu) {
-        await updateNavigationMenuMetadataAuthority({
-          data: { menuId: menu.id, expectedRevision: menu.revision, name, handle },
-        });
+        await apiData(patchApiV1AdminNavigationMenusByMenuId({
+          path: { menuId: menu.id },
+          body: { expectedRevision: menu.revision, name, handle },
+        }));
         return menu.id;
       }
-      const result = await createNavigationMenuAuthority({ data: { name, ...(handle ? { handle } : {}) } });
-      return result.menu.id;
+      const result = await apiData(postApiV1AdminNavigationMenus({
+        body: { name, ...(handle ? { handle } : {}) },
+      }));
+      return (result.menu as NavigationMenuSummary).id;
     },
     onSuccess: (menuId) => {
       toast.success(menu ? "Menu details updated" : "Menu created");
@@ -878,9 +881,10 @@ function MenuMetadataDialog({
   const trashMutation = useMutation({
     mutationFn: () => {
       if (!menu) throw new Error("Menu is unavailable.");
-      return trashNavigationMenuAuthority({
-        data: { menuId: menu.id, expectedRevision: menu.revision },
-      });
+      return apiData(deleteApiV1AdminNavigationMenusByMenuId({
+        path: { menuId: menu.id },
+        body: { expectedRevision: menu.revision },
+      }));
     },
     onSuccess: () => {
       toast.success("Menu moved to Trash", {
@@ -967,14 +971,17 @@ function MenuTrashDialog({
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: [...queryKeys.navigation.menus(), "trash"],
-    queryFn: () => getNavigationMenusAuthority({ data: { limit: 100, includeTrash: true } }),
+    queryFn: () => apiData(getApiV1AdminNavigationMenus({
+      query: { limit: 100, includeTrash: "true" },
+    })),
     enabled: open,
   });
   const trashedMenus = (query.data?.items ?? []).filter((menu) => Boolean(menu.deletedAt));
   const mutation = useMutation({
-    mutationFn: (menu: NavigationMenuSummary) => restoreNavigationMenuAuthority({
-      data: { menuId: menu.id, expectedRevision: menu.revision },
-    }),
+    mutationFn: (menu: NavigationMenuSummary) => apiData(postApiV1AdminNavigationMenusByMenuIdRestore({
+      path: { menuId: menu.id },
+      body: { expectedRevision: menu.revision },
+    })),
     onSuccess: async (_result, menu) => {
       toast.success("Menu restored", { description: "Storefront locations stay disabled until you assign them again." });
       await queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menus() });
@@ -1035,7 +1042,10 @@ function PlacementPanel({
   const queryClient = useQueryClient();
   const placementsQuery = useQuery({
     queryKey: queryKeys.navigation.placements(),
-    queryFn: () => getNavigationPlacementSettings(),
+    queryFn: async () => ({
+      placements: (await apiData(getApiV1AdminNavigationPlacementSettings()))
+        .placements as unknown as NavigationPlacementSetting[],
+    }),
   });
   const mutation = useMutation({
     mutationFn: (input: {
@@ -1047,9 +1057,11 @@ function PlacementPanel({
     }) => {
       if (!input.menuId && !input.placement) return Promise.resolve(null);
       const current = input.placement?.placement;
-      return saveNavigationPlacementAuthority({
-        data: {
+      return apiData(putApiV1AdminNavigationPlacementsByPlacementId({
+        path: {
           placementId: current?.id ?? `placement_${input.surface}_${input.slot}_${input.position}`,
+        },
+        body: {
           expectedRevision: current?.revision ?? 0,
           surface: input.surface,
           slot: input.slot,
@@ -1058,7 +1070,7 @@ function PlacementPanel({
           labelOverride: current?.labelOverride ?? null,
           isEnabled: Boolean(input.menuId),
         },
-      });
+      }));
     },
     onSuccess: () => {
       toast.success("Storefront location updated");
@@ -1136,13 +1148,17 @@ function PublicationHistory({
 }) {
   const query = useQuery({
     queryKey: queryKeys.navigation.publications(menu.id),
-    queryFn: () => getNavigationPublications({ data: { menuId: menu.id, limit: 50 } }),
+    queryFn: () => apiData(getApiV1AdminNavigationMenusByMenuIdPublications({
+      path: { menuId: menu.id },
+      query: { limit: 50 },
+    })),
   });
   const [restoreRevision, setRestoreRevision] = useState<number | null>(null);
   const mutation = useMutation({
-    mutationFn: (sourceRevision: number) => rollbackNavigationMenuAuthority({
-      data: { menuId: menu.id, expectedRevision: menu.revision, sourceRevision },
-    }),
+    mutationFn: (sourceRevision: number) => apiData(postApiV1AdminNavigationMenusByMenuIdRollback({
+      path: { menuId: menu.id },
+      body: { expectedRevision: menu.revision, sourceRevision },
+    })),
     onSuccess: () => {
       toast.success("Earlier version restored as a new publication");
       setRestoreRevision(null);
@@ -1210,7 +1226,7 @@ export function NavigationWorkspace({
   const queryClient = useQueryClient();
   const menusQuery = useQuery({
     queryKey: queryKeys.navigation.menus(),
-    queryFn: () => getNavigationMenusAuthority({ data: { limit: 100 } }),
+    queryFn: () => apiData(getApiV1AdminNavigationMenus({ query: { limit: 100 } })),
   });
   const menus = menusQuery.data?.items ?? [];
   const selectedId = selectedMenuId && menus.some((menu) => menu.id === selectedMenuId)
@@ -1218,7 +1234,9 @@ export function NavigationWorkspace({
     : menus[0]?.id;
   const menuQuery = useQuery({
     queryKey: queryKeys.navigation.menu(selectedId ?? "none"),
-    queryFn: () => getNavigationMenuAuthority({ data: { menuId: selectedId! } }),
+    queryFn: async () => (await apiData(getApiV1AdminNavigationMenusByMenuId({
+      path: { menuId: selectedId! },
+    }))) as { menu: NavigationMenuSummary },
     enabled: Boolean(selectedId),
   });
   const menu = menuQuery.data?.menu;
@@ -1249,9 +1267,10 @@ export function NavigationWorkspace({
 
   const searchQuery = useQuery({
     queryKey: [...queryKeys.navigation.menu(selectedId ?? "none"), "search", query],
-    queryFn: () => searchNavigationMenuItemsAuthority({
-      data: { menuId: selectedId!, query, limit: 100 },
-    }),
+    queryFn: () => apiData(getApiV1AdminNavigationMenusByMenuIdSearch({
+      path: { menuId: selectedId! },
+      query: { q: query, limit: 100 },
+    })),
     enabled: Boolean(selectedId && query.trim().length >= 2),
   });
 
@@ -1266,14 +1285,10 @@ export function NavigationWorkspace({
   const moveMutation = useMutation({
     mutationFn: ({ itemId: movingItemId, destination }: { itemId: string; destination: MoveDestination }) => {
       if (!menu) throw new Error("Menu is unavailable.");
-      return moveNavigationMenuItemAuthority({
-        data: {
-          menuId: menu.id,
-          itemId: movingItemId,
-          expectedRevision: menu.revision,
-          ...destination,
-        },
-      });
+      return apiData(postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove({
+        path: { menuId: menu.id, itemId: movingItemId },
+        body: { expectedRevision: menu.revision, ...destination },
+      }));
     },
     onSuccess: () => {
       toast.success("Menu item moved");
@@ -1283,9 +1298,10 @@ export function NavigationWorkspace({
     onError: (error) => mutationError(error, "Menu item was not moved"),
   });
   const publishMutation = useMutation({
-    mutationFn: () => publishNavigationMenuAuthority({
-      data: { menuId: menu!.id, expectedRevision: menu!.revision },
-    }),
+    mutationFn: () => apiData(postApiV1AdminNavigationMenusByMenuIdPublish({
+      path: { menuId: menu!.id },
+      body: { expectedRevision: menu!.revision },
+    })),
     onSuccess: () => {
       toast.success("Menu published", { description: "Storefront navigation is refreshing." });
       void invalidateMenu();

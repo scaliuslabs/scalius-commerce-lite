@@ -44,8 +44,10 @@ import {
 } from "@/lib/api-mutations/analytics";
 import type {
   AnalyticsScriptSummary,
-  PaginationResponse,
-} from "~/types/api-responses";
+  AnalyticsScriptsListResponse,
+} from "~/lib/api-query-options/analytics";
+
+type PaginationResponse = AnalyticsScriptsListResponse["pagination"];
 import { cn } from "@scalius/shared/utils";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { AnalyticsMobileCard } from "./AnalyticsMobileCard";

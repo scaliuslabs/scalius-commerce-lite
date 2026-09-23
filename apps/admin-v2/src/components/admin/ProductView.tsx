@@ -37,7 +37,10 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useCurrency } from "@/hooks/use-currency";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
-import type { ProductDetail, ProductMediaDetail } from "@/types/api-responses";
+import type {
+  ProductDetailDto as ProductDetail,
+  ProductMediaDetail,
+} from "~/lib/api-query-options/products";
 import {
   normalizeProductCondition,
   PRODUCT_CONDITION_LABELS,

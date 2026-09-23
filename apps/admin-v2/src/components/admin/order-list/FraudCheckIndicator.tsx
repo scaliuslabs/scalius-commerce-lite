@@ -8,11 +8,11 @@ import {
 import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
-import {
-  fraudCheckerLookup,
-  type FraudLookupData,
-  type RiskLevel,
-} from "@/lib/api-functions/fraud-checker";
+import type { FraudLookupData } from "@/lib/api-query-options/fraud-checker";
+import { postApiV1AdminFraudCheckerLookup } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+
+type RiskLevel = NonNullable<FraudLookupData["riskLevel"]>;
 
 interface FraudCheckIndicatorProps {
   phone: string;
@@ -33,7 +33,7 @@ export function FraudCheckIndicator({
     setHasRequestedFraudData(true);
     setIsLoading(true);
     try {
-      const result = await fraudCheckerLookup({ data: { phone } });
+      const result = await apiData(postApiV1AdminFraudCheckerLookup({ body: { phone } }));
       setFraudData(result);
     } catch (error) {
       toast.error("Check Failed", { description: getServerFnError(error, "Failed to check fraud data") });
@@ -157,12 +157,9 @@ export function FraudCheckIndicator({
                     {getRiskLevel()}
                   </span>
                 </div>
-                {(fraudData.provider_status || fraudData.customer_tag || fraudData.message) && (
+                {(fraudData.provider_status || fraudData.customer_tag) && (
                   <div className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
-                    {(fraudData.provider_status || fraudData.customer_tag) && (
-                      <p>Status: {fraudData.provider_status || fraudData.customer_tag}</p>
-                    )}
-                    {fraudData.message && <p>{fraudData.message}</p>}
+                    <p>Status: {fraudData.provider_status || fraudData.customer_tag}</p>
                   </div>
                 )}
               </div>
@@ -221,7 +218,7 @@ export function FraudCheckIndicator({
               )}
 
               <p className="text-xs text-[var(--muted-foreground)] text-center">
-                Data for: {fraudData.mobile_number || phone}
+                Data for: {phone}
               </p>
             </div>
           ) : (

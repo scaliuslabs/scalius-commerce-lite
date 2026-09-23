@@ -1,7 +1,7 @@
 import type {
   CollectionProductOptionDto,
   CollectionProductOptionsPayload,
-} from "./api-functions/collections";
+} from "./api-query-options/collections";
 
 interface PaginationFallback {
   page: number;

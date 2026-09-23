@@ -1,65 +1,17 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import * as ordersAdmin from "./orders.admin";
 import {
   confirmManualOrderAmendment,
   getAdminOrderAmendmentReadiness,
   previewManualOrderAmendment,
+  updateOrder,
 } from "./orders.admin";
 import type { ConfirmManualOrderAmendmentInput } from "./orders.validation";
 import type { PreviewManualOrderAmendmentInput } from "./orders.validation";
-
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  query: string;
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): D1Statement {
-  const execute = (): D1Result => ({
-    results: sqlite.prepare(query).all(...values),
-    success: true,
-    meta: {},
-  });
-  return {
-    query,
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
 
 describe("manual COD order amendments on D1 storage", () => {
   let sqlite: DatabaseSync;
@@ -67,11 +19,15 @@ describe("manual COD order amendments on D1 storage", () => {
   let beforeAmendmentBatch: (() => void) | null;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
+    beforeAmendmentBatch = null;
+    ({ sqlite, db } = createSqliteD1Database({
+      beforeBatch(_sqlite, statements) {
+        if (!statements.some((statement) => statement.query.includes('"order_amendments"'))) return;
+        const before = beforeAmendmentBatch;
+        beforeAmendmentBatch = null;
+        before?.();
+      },
+    }));
     sqlite.exec(`
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES
@@ -147,27 +103,6 @@ describe("manual COD order amendments on D1 storage", () => {
         2, 'regular', 1, 0, 1, 0, 0, 2, 2, 0, 0, 0
       );
     `);
-    beforeAmendmentBatch = null;
-    const binding = {
-      prepare: (query: string) => d1Statement(sqlite, query),
-      async batch(statements: D1Statement[]) {
-        if (statements.some((statement) => statement.query.includes('"order_amendments"'))) {
-          const before = beforeAmendmentBatch;
-          beforeAmendmentBatch = null;
-          before?.();
-        }
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
   });
 
   afterEach(() => sqlite.close());
@@ -392,5 +327,63 @@ describe("manual COD order amendments on D1 storage", () => {
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
       .toEqual({ reserved_stock: 2 });
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_amendments").get()).toEqual({ count: 0 });
+  });
+
+  it("refuses full-editor replacement for a stale revision, lifecycle change, issued invoice, or return", async () => {
+    // A full-editable manual order has no checkout tax snapshot.
+    sqlite.exec("DELETE FROM order_item_tax_snapshots; DELETE FROM order_tax_snapshots;");
+    const edit = (overrides: Record<string, unknown> = {}) => updateOrder(db, "order_1", {
+      ...input(),
+      items: [{ productId: "product_1", variantId: "variant_1", quantity: 3, price: 100 }],
+      status: "confirmed",
+      ...overrides,
+    } as never);
+
+    const state = () => [
+      sqlite.prepare("SELECT version FROM orders").get(),
+      sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get(),
+    ];
+
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/changed after you opened/i);
+    await expect(edit({ status: "shipped" })).rejects.toThrow(/order status action/i);
+    expect(state()).toEqual([{ version: 1 }, { reserved_stock: 2 }]);
+    await expect(edit()).resolves.toMatchObject({ id: "order_1" });
+    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
+
+    // Invoice then return: each refusal is attributable because the return check runs first.
+    sqlite.exec(`INSERT INTO order_invoices (id, order_id, invoice_number, prefix, formatted_number,
+      order_version, snapshot, content_hash, render_version, issued_at)
+      VALUES ('invoice_1', 'order_1', 1, 'INV', 'INV-1', 2, '{}', '${"a".repeat(64)}', 'v1', unixepoch())`);
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/invoice/i);
+    sqlite.exec(`INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id)
+      VALUES ('return_1', 'order_1', 'cancelled', 'Test return', 'admin', 'admin_1')`);
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/return/i);
+    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
+  });
+
+  it("commits a manual order with its reservation, COD tracking, customer stats and replay evidence exactly once", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, phone, total_orders, total_spent)
+      VALUES ('cust_1', 'Buyer', '+8801712345678', 4, 900)`);
+    const { expectedVersion: _expectedVersion, ...draft } = input();
+    const data = { ...draft, items: [{ productId: "product_1", variantId: "variant_1", quantity: 3 }] };
+
+    const created = await ordersAdmin.createOrder(db, data, "admin_1");
+    await expect(ordersAdmin.createOrder(db, data, "admin_1")).resolves.toEqual(created);
+
+    expect(sqlite.prepare("SELECT customer_id, total_amount, balance_due, payment_status, inventory_action FROM orders WHERE id = ?")
+      .get(created.id)).toEqual({
+      customer_id: "cust_1", total_amount: 360, balance_due: 360, payment_status: "unpaid", inventory_action: "reserved",
+    });
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ reserved_stock: 5 });
+    expect(sqlite.prepare("SELECT total_orders, total_spent FROM customers").get()).toEqual({ total_orders: 5, total_spent: 900 });
+    expect(sqlite.prepare("SELECT cod_status FROM cod_tracking WHERE order_id = ?").get(created.id)).toEqual({ cod_status: "pending" });
+    expect(sqlite.prepare("SELECT status FROM admin_order_create_attempts WHERE order_id = ?").get(created.id))
+      .toEqual({ status: "committed" });
+  });
+
+  it("exposes archive but no permanent order deletion service", () => {
+    expect(Object.keys(ordersAdmin).filter((name) => /delete/i.test(name))).toEqual([]);
+    expect(ordersAdmin.archiveOrders).toBeTypeOf("function");
   });
 });

@@ -4,7 +4,7 @@ import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AttributeValuesPayload } from "~/lib/api-functions/attributes";
+import type { AttributeValuesPayload } from "~/lib/api-query-options/attributes";
 import { queryKeys } from "~/lib/query-keys";
 import { AttributeValueEditor } from "./AttributeValueEditor";
 
@@ -13,9 +13,10 @@ const api = vi.hoisted(() => ({
   success: vi.fn(), error: vi.fn(), close: vi.fn(),
 }));
 let focusBeforeOpen: Element | null = null;
-vi.mock("~/lib/api-functions/attributes", () => ({
-  getAttributeValues: api.read, addAttributeValue: api.add,
-  renameAttributeValue: api.rename, removeAttributeValue: api.remove,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminAttributesByIdValues: api.read, postApiV1AdminAttributesByIdValues: api.add,
+  putApiV1AdminAttributesByIdValues: api.rename, deleteApiV1AdminAttributesByIdValues: api.remove,
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -142,9 +143,9 @@ describe("attribute value commands", () => {
       expect(api.error).toHaveBeenCalledTimes(1);
       await type(field, "Corrected"); await click(save);
       expect(api[kind]).toHaveBeenCalledTimes(2);
-      expect(api[kind].mock.calls[1][0].data).toMatchObject(kind === "add"
-        ? { attributeId: "attribute-a", value: "Corrected" }
-        : { attributeId: "attribute-a", oldValue: "Original", newValue: "Corrected" });
+      expect(api[kind].mock.calls[1][0]).toMatchObject(kind === "add"
+        ? { path: { id: "attribute-a" }, body: { value: "Corrected" } }
+        : { path: { id: "attribute-a" }, body: { oldValue: "Original", newValue: "Corrected" } });
       expect(field.isConnected).toBe(false);
     });
   }
@@ -192,7 +193,7 @@ describe("attribute value commands", () => {
     expect(field.isConnected).toBe(true);
     expect(field.value).toBe("New editor draft");
     expect(isDisabled(field)).toBe(false);
-    expect(api.add.mock.calls[0][0].data.attributeId).toBe("attribute-a");
+    expect(api.add.mock.calls[0][0].path.id).toBe("attribute-a");
   });
 
   it("preserves an idle rename draft during a background query refresh", async () => {

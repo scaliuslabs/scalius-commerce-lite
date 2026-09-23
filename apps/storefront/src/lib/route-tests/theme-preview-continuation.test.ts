@@ -1,7 +1,5 @@
 // @vitest-environment node
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -169,22 +167,16 @@ describe("theme preview continuation route", () => {
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
 
-  it("has no legacy URL-code, browser postMessage, or JSON bearer acceptance route", () => {
-    const storefrontRoot = process.cwd().endsWith("apps/storefront")
-      ? process.cwd()
-      : resolve(process.cwd(), "apps/storefront");
-    expect(existsSync(resolve(storefrontRoot, "src/pages/theme-preview/handoff.astro"))).toBe(false);
-    expect(existsSync(resolve(storefrontRoot, "src/pages/theme-preview/session.ts"))).toBe(false);
-    expect(existsSync(resolve(
-      storefrontRoot,
-      "src/pages/theme-preview/continue/[continuationId].ts",
-    ))).toBe(false);
-    const continuationSource = readFileSync(
-      resolve(storefrontRoot, "src/pages/theme-preview/continue.ts"),
-      "utf8",
-    );
-    expect(continuationSource).not.toMatch(/postMessage|request\.json|console\.|continue\/\$\{|continue\/\[continuationId\]/);
-    expect(continuationSource).toContain("apiFetch(");
-    expect(continuationSource).toContain('"/storefront/agent-continuations/theme-preview"');
+  it("accepts no JSON bearer body", async () => {
+    const response = await POST({
+      request: new Request(ROUTE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Origin": "https://storefront.example.test" },
+        body: JSON.stringify({ continuationCode: CONTINUATION_CODE, path: "/", device: "full" }),
+      }),
+      url: new URL(ROUTE_URL),
+    } as never);
+    expect(response.status).toBe(400);
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 });

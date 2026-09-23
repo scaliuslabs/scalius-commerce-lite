@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { fileURLToPath, URL } from "node:url";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   SCANNER_COOKIE_NAME,
@@ -333,17 +331,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       effectivePermissions,
     );
     expect(next).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps ordinary admin session checks on the direct signed-cookie path", () => {
-    const source = readFileSync(
-      fileURLToPath(new URL("./admin-auth.ts", import.meta.url)),
-      "utf8",
-    );
-
-    expect(source).toContain("verifyBetterAuthSignedCookieValue");
-    expect(source).not.toContain("getAuth(");
-    expect(source).not.toContain("auth.api.getSession");
   });
 
   it("rejects mixed dashboard-cookie and agent credentials before authority lookup", async () => {

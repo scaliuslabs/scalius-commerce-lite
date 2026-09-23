@@ -6,7 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
     getBusinessSettings: vi.fn(),
     saveBusinessSettings: vi.fn(),
-    invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/business-settings.service", () => ({
@@ -14,8 +14,8 @@ vi.mock("@scalius/core/modules/settings/business-settings.service", () => ({
     saveBusinessSettings: mocks.saveBusinessSettings,
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-    invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { businessSettingsRoutes } from "./business";
@@ -24,14 +24,12 @@ function createTestApp() {
     const db = { id: "db" };
     const env = {
         CACHE: { id: "api-cache-kv" },
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
         STOREFRONT_URL: "https://storefront.example.com",
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
     mocks.saveBusinessSettings.mockResolvedValue(undefined);
-    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -112,9 +110,7 @@ describe("business settings cache invalidation", () => {
                 country: "BD",
             }),
         );
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["layout"],
-            expect.anything(),
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
         );
     });
 
@@ -134,7 +130,7 @@ describe("business settings cache invalidation", () => {
 
         expect(response.status).toBe(500);
         expect(mocks.saveBusinessSettings).toHaveBeenCalledOnce();
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -157,6 +153,6 @@ describe("business settings cache invalidation", () => {
 
         expect(response.status).toBe(400);
         expect(mocks.saveBusinessSettings).not.toHaveBeenCalled();
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
 });

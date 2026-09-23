@@ -290,9 +290,7 @@ export const OPERATIONS = {
   "dashboard.attributes.trash": { risk: "destructive" },
   "dashboard.attributes.update": {},
 
-  "dashboard.cache.groups_list": { limits: { request: 16_384 } },
   "dashboard.cache.purge_all": { limits: { request: 16_384, response: 8_192 } },
-  "dashboard.cache.purge_groups": { limits: { request: 16_384, response: 8_192 } },
 
   "dashboard.categories.bulk_delete": {
     risk: "destructive",

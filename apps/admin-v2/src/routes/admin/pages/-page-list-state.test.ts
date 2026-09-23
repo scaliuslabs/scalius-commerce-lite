@@ -31,7 +31,7 @@ describe("page list route state", () => {
       status: "published",
     } as never);
     expect(pageListQueryParams(trashSearch)).toMatchObject({
-      showTrashed: true,
+      trashed: "true",
       status: undefined,
     });
   });

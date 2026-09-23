@@ -1,14 +1,8 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { MEDIA_MULTIPART_PART_SIZE_BYTES } from "@scalius/shared/media-policy";
+import { errorResponseFromError } from "../../utils/api-response";
 import { adminMediaRoutes } from "./media";
-
-const source = readFileSync(
-    resolve(dirname(fileURLToPath(import.meta.url)), "media.ts"),
-    "utf8",
-);
 
 describe("admin media upload transport boundaries", () => {
     it("publishes an exact bounded octet-stream request contract", () => {
@@ -45,23 +39,33 @@ describe("admin media upload transport boundaries", () => {
         });
     });
 
-    it("rejects oversized parts before touching the request stream", () => {
-        const handler = source.indexOf("app.openapi(uploadPartRoute");
-        const sizeGuard = source.indexOf("declaredLength > MEDIA_MULTIPART_PART_SIZE_BYTES", handler);
-        const bodyRead = source.indexOf("const body = c.req.raw.body", handler);
-        const boundedRead = source.indexOf("readExactMediaPart", bodyRead);
-        expect(sizeGuard).toBeGreaterThan(handler);
-        expect(bodyRead).toBeGreaterThan(sizeGuard);
-        expect(boundedRead).toBeGreaterThan(bodyRead);
-    });
+    it.each([
+        ["an oversized declared length", "application/octet-stream", String(MEDIA_MULTIPART_PART_SIZE_BYTES + 1)],
+        ["a missing declared length", "application/octet-stream", undefined],
+        ["a non-binary content type", "multipart/form-data", "4"],
+    ])("rejects %s before touching the request stream or storage", async (_, contentType, contentLength) => {
+        const pulled = vi.fn();
+        const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+        app.onError((error, c) => {
+            const { body, status } = errorResponseFromError(error);
+            return c.json(body, status);
+        });
+        app.use("*", async (c, next) => {
+            c.set("db", new Proxy({}, { get: () => { throw new Error("db touched"); } }) as never);
+            await next();
+        });
+        app.route("/admin/media", adminMediaRoutes);
+        const headers: Record<string, string> = { "Content-Type": contentType };
+        if (contentLength) headers["Content-Length"] = contentLength;
 
-    it("buffers only one bounded part into a known-length R2 body", () => {
-        expect(source).not.toContain("parseBody(");
-        expect(source).not.toContain("arrayBuffer(");
-        expect(source).not.toContain("TransformStream");
-        expect(source).not.toContain("countBody");
-        expect(source).toContain('application/octet-stream');
-        expect(source).toContain("const value = await readExactMediaPart(body, declaredLength)");
-        expect(source).toContain("value.slice(0, Math.min(declaredLength, MEDIA_SIGNATURE_READ_BYTES))");
+        const response = await app.request("/api/v1/admin/media/uploads/upload_1234/parts/1", {
+            method: "PUT",
+            headers,
+            body: new ReadableStream({ pull: pulled }, { highWaterMark: 0 }),
+            duplex: "half",
+        } as RequestInit);
+
+        expect(response.status).toBe(400);
+        expect(pulled).not.toHaveBeenCalled();
     });
 });

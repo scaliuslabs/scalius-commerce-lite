@@ -34,9 +34,10 @@ import {
   type AnalyticsScriptType,
 } from "@/lib/form-schemas";
 import {
-  createAnalyticsScript,
-  updateAnalyticsScript,
-} from "@/lib/api-functions/analytics";
+  postApiV1AdminAnalytics,
+  putApiV1AdminAnalyticsById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -190,14 +191,15 @@ export function AnalyticsForm({
     entityName: "Analytics integration",
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => createAnalyticsScript({ data }),
+    createFn: (data) => apiData(postApiV1AdminAnalytics({ body: data })),
     updateFn: (data) => {
       if (!data.id || !data.expectedRevision) {
         throw new Error("Analytics revision is missing. Reload before saving.");
       }
-      return updateAnalyticsScript({
-        data: data as AnalyticsFormValues & { id: string; expectedRevision: number },
-      });
+      return apiData(putApiV1AdminAnalyticsById({
+        path: { id: data.id },
+        body: data as AnalyticsFormValues & { id: string; expectedRevision: number },
+      }));
     },
     invalidateKeys: [
       queryKeys.analytics.all,

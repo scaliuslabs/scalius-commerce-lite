@@ -20,7 +20,11 @@ const workspaceMocks = vi.hoisted(() => ({
   homepage: vi.fn(),
 }));
 
-vi.mock("~/lib/api-functions/storefront-url", () => storefrontUrlApi);
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsStorefrontUrl: storefrontUrlApi.getStorefrontUrl,
+  postApiV1AdminSettingsStorefrontUrl: storefrontUrlApi.updateStorefrontUrl,
+}));
 vi.mock("./shared/UnsavedChangesGuard", () => ({
   UnsavedChangesGuard: (props: unknown) => { workspaceMocks.guard(props); return null; },
 }));
@@ -173,7 +177,7 @@ describe("StorefrontUrlBuilder", () => {
 
     await waitFor(() => {
       expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalledWith({
-        data: { storefrontUrl: "https://new-shop.example.com" },
+        body: { storefrontUrl: "https://new-shop.example.com" },
       });
     });
 

@@ -1,12 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment happy-dom
 
-const clientMocks = vi.hoisted(() => ({
-  apiFetch: vi.fn(),
-}));
-
-vi.mock("./transport", () => ({
-  apiFetch: clientMocks.apiFetch,
-}));
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendMetaCapiEvent, type MetaCapiEventPayload } from "./tracking";
 
@@ -23,40 +17,44 @@ const payload: MetaCapiEventPayload = {
   },
 };
 
+const fetchMock = vi.fn();
+
 describe("sendMetaCapiEvent", () => {
   beforeEach(() => {
-    clientMocks.apiFetch.mockReset();
-    clientMocks.apiFetch.mockResolvedValue(new Response("{}", { status: 200 }));
+    window.__API_BASE_URL__ = "https://api.example.test/api/v1";
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("uses a single short no-auth dispatch instead of the storefront SDK retry transport", async () => {
+  afterEach(() => {
+    delete window.__API_BASE_URL__;
+    vi.unstubAllGlobals();
+  });
+
+  it("sends one short keepalive POST to the public API without retries", async () => {
     await sendMetaCapiEvent(payload);
 
-    expect(clientMocks.apiFetch).toHaveBeenCalledTimes(1);
-    expect(clientMocks.apiFetch).toHaveBeenCalledWith(
-      "/meta/events",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-        cache: "no-store",
-        keepalive: true,
-      },
-      { retries: 0, timeout: 2500, auth: false, logTerminalFailure: false },
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.example.test/api/v1/meta/events");
+    expect(init).toMatchObject({
+      method: "POST",
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      keepalive: true,
+    });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("keeps analytics failures out of buyer flows", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    clientMocks.apiFetch.mockRejectedValueOnce(new Error("network down"));
+    fetchMock.mockRejectedValueOnce(new Error("network down"));
 
     await expect(sendMetaCapiEvent(payload)).resolves.toBeUndefined();
 
-    expect(clientMocks.apiFetch).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();

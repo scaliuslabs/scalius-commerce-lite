@@ -21,11 +21,9 @@ import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 import {
-  CACHE_INVALIDATION_SWEEP_LIMIT,
-  flushPendingCacheInvalidations,
-  invalidateProductAvailabilityCaches,
-  type WaitUntilExecutionContext,
-} from "./utils/cache-invalidation";
+  bumpCacheGeneration,
+  syncCacheGenerationMirror,
+} from "./utils/cache-generation";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -163,24 +161,14 @@ async function runScheduledMaintenanceInner(
   runContext: ScheduledRunContext,
 ): Promise<void> {
   const db = getDb(env);
-  const cacheExecutionCtx = executionCtx as unknown as WaitUntilExecutionContext;
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
 
-  const cacheInvalidations = await timed("cache_invalidation_flush", () =>
-    flushPendingCacheInvalidations(
-      db,
-      env,
-      cacheExecutionCtx,
-      CACHE_INVALIDATION_SWEEP_LIMIT,
-    ),
-  );
-  if (cacheInvalidations.scanned > 0 || cacheInvalidations.pending > 0) {
-    console.log(
-      `[scheduled] Cache invalidation flush: scanned=${cacheInvalidations.scanned}, `
-        + `applied=${cacheInvalidations.applied}, pending=${cacheInvalidations.pending}`,
-    );
-  }
+  // Backstop for a KV mirror write that every bump pass missed. A KV outage is
+  // logged by `timed` and must not block the commerce maintenance below.
+  const mirrorRepaired = await timed("cache_generation_mirror_sync", () =>
+    syncCacheGenerationMirror(env, db)).catch(() => false);
+  if (mirrorRepaired) console.log("[scheduled] Cache generation mirror repaired");
 
   const result = await timed("inventory_expiry_sweep", () =>
     releaseExpiredReservations(db, 30, {
@@ -189,12 +177,8 @@ async function runScheduledMaintenanceInner(
   );
   const expiryAvailabilityTransitions = result.availabilityTransitionVariantIds ?? [];
   if (expiryAvailabilityTransitions.length > 0) {
-    await timed("inventory_expiry_cache_invalidation", () =>
-      invalidateProductAvailabilityCaches(
-        db,
-        { variantIds: expiryAvailabilityTransitions },
-        { env, executionCtx: cacheExecutionCtx },
-      ),
+    await timed("inventory_expiry_cache_generation", () =>
+      bumpCacheGeneration({ env, executionCtx }),
     );
   }
 

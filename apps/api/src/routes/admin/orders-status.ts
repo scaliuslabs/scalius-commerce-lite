@@ -10,7 +10,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import {
     enqueueOrderNotificationMessage,
     enqueueOrderNotificationsForStatus,
@@ -24,15 +24,6 @@ import {
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-async function invalidateAvailabilityTransitions(
-    db: Parameters<typeof invalidateProductAvailabilityCaches>[0],
-    variantIds: readonly string[] | undefined,
-    c: Parameters<typeof invalidateProductAvailabilityCaches>[2],
-): Promise<void> {
-    if (!variantIds || variantIds.length === 0) return;
-    await invalidateProductAvailabilityCaches(db, { variantIds }, c);
-}
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
@@ -163,11 +154,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
-    await invalidateAvailabilityTransitions(
-        db,
-        result.availabilityTransitionVariantIds,
-        c,
-    );
+    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
     if (result.notification) {
         await enqueueOrderNotificationMessage({
@@ -260,7 +247,7 @@ app.openapi(postCodRoute, async (c) => {
     const data = c.req.valid("json");
     const result = await OrdersService.processCodAction(db, orderId, data);
     const { availabilityTransitionVariantIds, ...responseData } = result;
-    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
     // Enqueue notification for COD status changes that affect order status
     const COD_NOTIFICATION_MAP: Partial<Record<typeof data.action, OrderNotificationType>> = {
@@ -363,7 +350,7 @@ app.openapi(postFulfillRoute, async (c) => {
         availabilityTransitionVariantIds,
         ...responseData
     } = result;
-    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
     await enqueueOrderStatusChangeNotification({
         db,
         queue: c.env.JOBS_QUEUE,
@@ -454,13 +441,8 @@ app.openapi(createShipmentRoute, async (c) => {
         console.error(`Failed to create shipment for order ${orderId}: ${errorMessage}`);
         throw new ValidationError(errorMessage);
     }
-    await invalidateAvailabilityTransitions(
-        db,
-        Array.isArray(shipmentResult.availabilityTransitionVariantIds)
-            ? shipmentResult.availabilityTransitionVariantIds
-            : [],
-        c,
-    );
+    if (Array.isArray(shipmentResult.availabilityTransitionVariantIds)
+        && shipmentResult.availabilityTransitionVariantIds.length > 0) await bumpCacheGeneration(c);
 
     const provider = await getDeliveryProvider(db, data.providerId);
     const createdShipmentRecord = await getLatestShipment(db, orderId);
@@ -663,7 +645,7 @@ app.openapi(reconcileShipmentRoute, async (c) => {
 
     const result = await OrdersService.reconcileOrderShipment(db, orderId, shipmentId);
     const { availabilityTransitionVariantIds, ...responseData } = result;
-    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
@@ -723,7 +705,7 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
     });
     const { availabilityTransitionVariantIds, ...responseData } = result;
-    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
     if (result.status === "repaired" && RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,
@@ -774,7 +756,7 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
     if (result.status === "released") return ok(c, result);
 
     const { availabilityTransitionVariantIds, ...responseData } = result;
-    await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
+    if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,

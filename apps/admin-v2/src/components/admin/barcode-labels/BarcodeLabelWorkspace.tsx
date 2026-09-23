@@ -32,10 +32,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useCurrency } from "@/hooks/use-currency";
 import { useDebounce } from "@/hooks/use-debounce";
-import {
-  getInventory,
-  getInventoryLabelPreview,
-} from "@/lib/api-functions/inventory";
+import { postApiV1AdminInventoryLabelsPreview } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import { fetchInventory } from "@/lib/api-query-options/inventory";
 import { cn } from "@scalius/shared/utils";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import {
@@ -365,21 +364,23 @@ export function BarcodeLabelWorkspace({
 
   const previewQuery = useQuery({
     queryKey: ["inventory", "label-preview", selectedVariantIds],
-    queryFn: () => getInventoryLabelPreview({ data: { variantIds: selectedVariantIds } }),
+    queryFn: () => apiData(postApiV1AdminInventoryLabelsPreview({
+      body: { variantIds: selectedVariantIds },
+    })),
     enabled: selectedVariantIds.length > 0,
     staleTime: 30_000,
   });
 
   const pickerQuery = useQuery({
     queryKey: ["inventory", "label-picker", search, searchPage],
-    queryFn: () => getInventory({ data: {
+    queryFn: () => fetchInventory({
       section: "variants",
       search: search || undefined,
       page: searchPage,
       limit: 20,
       sort: "productName",
       order: "asc",
-    } }),
+    }),
     staleTime: 30_000,
   });
 

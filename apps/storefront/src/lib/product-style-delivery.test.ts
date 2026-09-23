@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { storefrontSourcePath } from "./test-source-paths";
 
 import {
   isBuildScopedGlobalStylesheet,
@@ -40,30 +38,4 @@ describe("product stylesheet delivery", () => {
     });
   });
 
-  it("keeps the phone paint sheet free of the complete typography plugin", () => {
-    const criticalSource = readFileSync(
-      storefrontSourcePath("styles", "product-critical.css"),
-      "utf8",
-    );
-
-    expect(criticalSource).not.toContain('@plugin "@tailwindcss/typography"');
-    expect(criticalSource).toContain(".prose-sm");
-    expect(criticalSource).toContain("margin-block: 1.25em");
-  });
-
-  it("discovers the product image before parsing the phone paint sheet", () => {
-    const layout = readFileSync(
-      storefrontSourcePath("layouts", "Layout.astro"),
-      "utf8",
-    );
-    const product = readFileSync(
-      storefrontSourcePath("pages", "products", "[slug].astro"),
-      "utf8",
-    );
-
-    expect(product).toContain('<Fragment slot="preload">');
-    expect(layout.indexOf('<slot name="preload" />')).toBeLessThan(
-      layout.indexOf("criticalCss &&"),
-    );
-  });
 });

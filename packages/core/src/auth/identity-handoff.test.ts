@@ -1,18 +1,9 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import type { DatabaseSync } from "node:sqlite";
 
-import { drizzle } from "drizzle-orm/d1";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Database } from "@scalius/database/client";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { IdentityHandoffConfig } from "@scalius/shared/platform-config";
 
 import {
@@ -29,75 +20,6 @@ import {
   type IdentityHandoffClaims,
 } from "./identity-handoff";
 import { getUserPermissions } from "./rbac/helpers";
-
-const migrationDirectory = fileURLToPath(new URL("../../../database/migrations/", import.meta.url));
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function createSchemaDatabase(): DatabaseSync {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory)
-    .filter((candidate) => /^\d{4}_.+\.sql$/.test(candidate))
-    .sort()) {
-    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "d1"));
-  }
-  sqlite.exec("PRAGMA foreign_keys = ON");
-  return sqlite;
-}
-
-function d1Statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: (sqlite.prepare(query) as StatementSync).all(...values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createDb(sqlite: DatabaseSync): Database {
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-  return drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
-}
 
 const SECRET = "identity-handoff-secret-for-tests-0123456789abcdefghijk";
 const CONFIG: IdentityHandoffConfig = {
@@ -200,8 +122,7 @@ describe("performIdentityHandoff", () => {
 
   beforeEach(() => {
     counter = 0;
-    sqlite = createSchemaDatabase();
-    db = createDb(sqlite);
+    ({ sqlite, db } = createSqliteD1Database({ foreignKeys: true }));
     sqlite.exec(`
       INSERT INTO roles (id, name, display_name, is_system) VALUES
         ('role_manager', 'manager', 'Manager', 1),

@@ -3,7 +3,7 @@ import {
   parsePhoneNumber,
   type Country,
 } from "react-phone-number-input";
-import type { AllowedCountriesPayload } from "@/lib/api-functions/settings";
+import type { AllowedCountriesPayload } from "@/lib/api-query-options/settings";
 
 const supportedCountries = new Set(getCountries());
 

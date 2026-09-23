@@ -1,6 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -15,53 +15,7 @@ describe("header and footer settings revision authority", () => {
   let db: Database;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE site_settings (
-        id TEXT PRIMARY KEY NOT NULL,
-        singleton_key TEXT NOT NULL DEFAULT 'default' UNIQUE,
-        logo TEXT,
-        favicon TEXT,
-        site_name TEXT NOT NULL,
-        site_description TEXT,
-        header_config TEXT NOT NULL,
-        header_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (header_config_revision >= 1),
-        footer_config TEXT NOT NULL,
-        footer_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (footer_config_revision >= 1),
-        social_links TEXT,
-        contact_info TEXT,
-        site_title TEXT,
-        homepage_title TEXT,
-        homepage_meta_description TEXT,
-        homepage_config TEXT NOT NULL DEFAULT '{}',
-        homepage_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (homepage_config_revision >= 1),
-        robots_txt TEXT,
-        storefront_url TEXT DEFAULT '/',
-        auth_verification_method TEXT NOT NULL DEFAULT 'email',
-        guest_checkout_enabled INTEGER NOT NULL DEFAULT 1,
-        checkout_mode TEXT NOT NULL DEFAULT 'all',
-        partial_payment_enabled INTEGER NOT NULL DEFAULT 0,
-        partial_payment_amount REAL NOT NULL DEFAULT 0,
-        checkout_flow_revision INTEGER NOT NULL DEFAULT 1,
-        whatsapp_access_token TEXT,
-        whatsapp_phone_number_id TEXT,
-        whatsapp_template_name TEXT DEFAULT 'auth_otp',
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-    `);
-    db = drizzle(async (query, params, method) => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      if (method === "run") {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") {
-        return { rows: statement.get(...params) as unknown as unknown[] };
-      }
-      return { rows: statement.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    ({ sqlite, db } = createSqliteD1Database());
   });
 
   afterEach(() => sqlite.close());

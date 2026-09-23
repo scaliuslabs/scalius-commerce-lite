@@ -699,16 +699,6 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     requiresVerification: true,
   },
   {
-    id: "dashboard.cache-purge-selected",
-    surface: "dashboard",
-    kind: "write",
-    prompt: "List cache domains and purge only product and feed caches, not every public cache.",
-    expectedOperationIds: ["dashboard.cache.groups_list", "dashboard.cache.purge_groups"],
-    forbiddenOperationIds: ["dashboard.cache.purge_all"],
-    requiresConfirmation: true,
-    requiresVerification: true,
-  },
-  {
     id: "storefront.product-research",
     surface: "storefront",
     kind: "read",

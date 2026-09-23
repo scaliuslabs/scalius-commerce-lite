@@ -465,6 +465,12 @@ describe("agent operation contract", () => {
         },
       });
     }
+    const hostedContinuations = manifest.filter((operation) =>
+      operation.pathTemplate.startsWith("/api/v1/storefront/agent-continuations/"));
+    expect(hostedContinuations).toHaveLength(9);
+    for (const operation of hostedContinuations) {
+      expect(operation, operation.operationId).toMatchObject({ principals: ["internal"], exposure: "excluded" });
+    }
     expect(byId(manifest, "system.storefront_continuations.theme_preview_exchange")).toMatchObject({
       pathTemplate: "/api/v1/storefront/agent-continuations/theme-preview",
       surface: "system",

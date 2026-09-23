@@ -1,32 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { getMetaConversionsLogs, clearMetaConversionsLogs, cleanupMetaConversionsLogs } from "~/lib/api-functions/settings";
 import { getServerFnError } from "@/lib/api-helpers";
+import {
+  deleteApiV1AdminSettingsMetaConversionsLogs,
+  getApiV1AdminSettingsMetaConversionsLogs,
+  postApiV1AdminSettingsMetaConversionsLogs,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiResult } from "~/lib/api";
 
-// Local type replacing @scalius/database/schema import
-export interface MetaConversionsLog {
-  id: string;
-  eventId: string;
-  eventName: string;
-  status: "success" | "failed";
-  requestPayload: string;
-  responsePayload: string | null;
-  errorMessage: string | null;
-  eventTime: Date;
-  createdAt: Date;
-}
-
-export interface RetentionInfo {
-  days: number;
-  hours: number;
-}
-
-interface LogsPagination {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
+type LogsPayload = ApiResult<typeof getApiV1AdminSettingsMetaConversionsLogs>;
+type LogsPagination = LogsPayload["pagination"];
+export type RetentionInfo = LogsPayload["retention"];
+// The contract renders these nullable timestamp unions as `unknown`; the API
+// sends `string | number | null`.
+export type MetaConversionsLog = Omit<LogsPayload["logs"][number], "eventTime" | "createdAt"> & {
+  eventTime: string | number | null;
+  createdAt: string | number | null;
+};
 
 export function useMetaConversionsLogs() {
   const [logs, setLogs] = useState<MetaConversionsLog[]>([]);
@@ -48,10 +38,12 @@ export function useMetaConversionsLogs() {
     setLogsLoading(true);
     setLogsError(null);
     try {
-      const data = await getMetaConversionsLogs({ data: { page: logsPagination.page, limit: logsPagination.limit } }) as Record<string, unknown>;
-      setLogs((data.logs as MetaConversionsLog[]) || []);
-      setLogsPagination((prev) => (data.pagination as LogsPagination) || prev);
-      setRetentionInfo((data.retention as RetentionInfo) || null);
+      const data = await apiData(getApiV1AdminSettingsMetaConversionsLogs({
+        query: { page: logsPagination.page, limit: logsPagination.limit },
+      }));
+      setLogs(data.logs as MetaConversionsLog[]);
+      setLogsPagination(data.pagination);
+      setRetentionInfo(data.retention);
     } catch (error: unknown) {
       const message = getServerFnError(error, "Failed to load delivery activity");
       setLogsError(message);
@@ -68,7 +60,7 @@ export function useMetaConversionsLogs() {
   const handleClearLogs = async () => {
     setLogsLoading(true);
     try {
-      await clearMetaConversionsLogs();
+      await apiData(deleteApiV1AdminSettingsMetaConversionsLogs());
       setLogs([]);
       setLogsPagination((prev) => ({
         ...prev,
@@ -87,7 +79,7 @@ export function useMetaConversionsLogs() {
   const handleManualCleanup = async () => {
     setIsManualCleanupLoading(true);
     try {
-      const data = await cleanupMetaConversionsLogs() as Record<string, unknown>;
+      const data = await apiData(postApiV1AdminSettingsMetaConversionsLogs()) as Record<string, unknown>;
       toast.success((data.message as string) || "Manual cleanup completed");
       await fetchLogs();
     } catch (error: unknown) {

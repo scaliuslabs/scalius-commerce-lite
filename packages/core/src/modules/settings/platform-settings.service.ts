@@ -95,7 +95,6 @@ export const platformSettingsDocument = defineSettingsDocument<PlatformConfig>({
   defaults: emptyPlatformConfig(),
   cache: { key: PLATFORM_CONFIG_CACHE_KEY, ttlSeconds: PLATFORM_CONFIG_CACHE_TTL_SECONDS },
   // Origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
-  invalidationGroups: ["layout", "homepage", "discovery", "checkout"],
   columns: {
     fields: ["storefrontUrl"],
     async read(db) {

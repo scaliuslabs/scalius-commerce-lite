@@ -5,8 +5,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { AppError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
-  getOptionalExecutionContext: vi.fn(),
-  invalidateApiAndStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   listHeroSliders: vi.fn(),
   getHeroSlider: vi.fn(),
   createHeroSlider: vi.fn(),
@@ -14,9 +13,8 @@ const mocks = vi.hoisted(() => ({
   deleteHeroSlider: vi.fn(),
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  getOptionalExecutionContext: mocks.getOptionalExecutionContext,
-  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/hero-sliders", () => ({
@@ -53,8 +51,6 @@ function createDb() {
 function createTestApp(db = createDb()) {
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
@@ -63,12 +59,7 @@ function createTestApp(db = createDb()) {
   mocks.createHeroSlider.mockResolvedValue(sliderRecord);
   mocks.updateHeroSlider.mockResolvedValue(sliderRecord);
   mocks.deleteHeroSlider.mockResolvedValue({ ...sliderRecord, isActive: false });
-  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue({
-    attempted: true,
-    ok: true,
-    status: 200,
-  });
-  mocks.getOptionalExecutionContext.mockReturnValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
@@ -104,11 +95,7 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage"],
-      env,
-      { cleanupExecutionCtx: undefined },
-    );
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
   });
 
   it("does not invalidate homepage caches after hero slider reads", async () => {
@@ -121,7 +108,7 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("invalidates homepage caches after hero slider updates", async () => {
@@ -138,11 +125,7 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage"],
-      env,
-      { cleanupExecutionCtx: undefined },
-    );
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
   });
 
   it("invalidates homepage caches after hero slider deletes", async () => {
@@ -159,11 +142,7 @@ describe("hero slider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage"],
-      env,
-      { cleanupExecutionCtx: undefined },
-    );
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
   });
 
   it("preserves the typed stale-write conflict and does not invalidate caches", async () => {
@@ -193,6 +172,6 @@ describe("hero slider cache invalidation", () => {
       code: "HERO_SLIDER_REVISION_CONFLICT",
       details: { expectedRevision: 1, currentRevision: 2 },
     });
-    expect(mocks.invalidateApiAndStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 });

@@ -52,12 +52,14 @@ import { queryKeys } from "@/lib/query-keys";
 import { checkoutFlowSettingsQueryOptions } from "@/lib/api-query-options/settings";
 import { currencySettingsQueryOptions } from "@/lib/api-query-options/currency";
 import {
-    getPaymentMethods,
-    updatePaymentMethods,
-    getPaymentGatewaySettings,
-    type SettingsPayload,
-    updatePaymentGatewaySettings,
-} from "@/lib/api-functions/settings";
+  getApiV1AdminSettingsPaymentMethods,
+  getApiV1AdminSettingsSslcommerz,
+  getApiV1AdminSettingsStripe,
+  postApiV1AdminSettingsPaymentMethods,
+  postApiV1AdminSettingsSslcommerz,
+  postApiV1AdminSettingsStripe,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 // --- Main Component ---
 
@@ -132,7 +134,7 @@ export default function PaymentGatewaysManager() {
         if (showInitialLoader) setLoading(true);
         setMethodsLoadError(null);
         try {
-            const d = await getPaymentMethods() as PaymentMethodsData;
+            const d = await apiData(getApiV1AdminSettingsPaymentMethods()) as PaymentMethodsData;
             setMethods(d);
             if (!preserveDraft) {
                 setEnabledMethods(new Set(d.enabledMethods));
@@ -164,12 +166,11 @@ export default function PaymentGatewaysManager() {
             return next;
         });
         try {
-            const d = await getPaymentGatewaySettings({ data: { gateway: gw } }) as Record<string, unknown>;
             if (gw === "stripe") {
-                const sd = d as unknown as StripeData;
+                const sd = await apiData(getApiV1AdminSettingsStripe());
                 setStripe(sd); setSavedStripe({ ...sd }); setStripeConf({ secret: !!sd.secretKey, webhook: !!sd.webhookSecret });
-            } else if (gw === "sslcommerz") {
-                const sd = d as unknown as SSLCommerzData;
+            } else {
+                const sd = await apiData(getApiV1AdminSettingsSslcommerz());
                 setSsl(sd); setSavedSsl({ ...sd }); setSslConf({ password: !!sd.storePassword });
             }
             loadedGateways.current.add(gw);
@@ -234,7 +235,7 @@ export default function PaymentGatewaysManager() {
         setSavingMethods(true);
         try {
             const nextEnabledMethods = methodOrder.filter((method) => enabledMethods.has(method));
-            await updatePaymentMethods({ data: { enabledMethods: nextEnabledMethods, defaultMethod } });
+            await apiData(postApiV1AdminSettingsPaymentMethods({ body: { enabledMethods: nextEnabledMethods, defaultMethod } }));
             setMethods((current) => current
                 ? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }
                 : current);
@@ -264,7 +265,9 @@ export default function PaymentGatewaysManager() {
         }
         setSaving(true);
         try {
-            await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
+            await (gw === "stripe"
+                ? apiData(postApiV1AdminSettingsStripe({ body }))
+                : apiData(postApiV1AdminSettingsSslcommerz({ body })));
             if (gw === "stripe") {
                 const committed = {
                     ...stripe,

@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { firebaseConfigQueryOptions } from "~/lib/api-query-options/firebase";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { postApiV1AdminFcmToken } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 type PushInitStatus =
   | "idle"
@@ -92,10 +94,8 @@ export function useFirebaseInit(userId: string | undefined) {
       }
 
       const browser = detectBrowser();
-      const response = await fetch(withDashboardBasePath("/api/v1/admin/fcm-token"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiData(postApiV1AdminFcmToken({
+        body: {
           token,
           userId,
           deviceInfo: JSON.stringify({
@@ -104,9 +104,8 @@ export function useFirebaseInit(userId: string | undefined) {
             url: window.location.href,
             browser,
           }),
-        }),
-      });
-      if (!response.ok) throw new Error("Push registration failed");
+        },
+      }));
 
       onMessage(messaging, (payload) => {
         const title = payload.data?.customerName

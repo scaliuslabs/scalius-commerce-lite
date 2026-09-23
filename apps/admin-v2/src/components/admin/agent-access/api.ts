@@ -1,5 +1,22 @@
-import { apiDelete, apiGet, apiPatch, apiPost } from "~/lib/api";
 import { queryOptions } from "@tanstack/react-query";
+import {
+  deleteApiV1AdminAgentAccessConnectionsRevoked,
+  deleteApiV1AdminAgentAccessGrantsByGrantId,
+  getApiV1AdminAgentAccessAuthorizationRequestsByRequestId,
+  getApiV1AdminAgentAccessConnections,
+  getApiV1AdminAgentAccessConnectionsByGrantId,
+  getApiV1AdminAgentAccessConnectionsByGrantIdEvents,
+  patchApiV1AdminAgentAccessGrantsByGrantId,
+  postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove,
+  postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny,
+  postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove,
+  postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDeny,
+  postApiV1AdminAgentAccessDeviceAuthorizationsLookup,
+  postApiV1AdminAgentAccessRevokeAll,
+  postApiV1AdminAgentAccessTokens,
+  postApiV1AdminAgentAccessTokensByCredentialIdRotate,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 import type {
   AgentAuditPage,
@@ -21,7 +38,12 @@ import type {
   UpdateAgentGrantInput,
 } from "./types";
 
-const BASE = "/agent-access";
+/**
+ * Contract gap: the Agent Access routes declare their responses as open
+ * records, so this module keeps its own response types (./types) and states
+ * them at each call. Requests are still checked against the contract.
+ */
+const typed = <T>(call: Promise<unknown>) => call as Promise<T>;
 
 export interface AgentConnectionFilters {
   status?: AgentConnectionStatusFilter;
@@ -49,13 +71,7 @@ export function listAgentConnections(params?: {
   resource?: AgentResource;
   kind?: AgentGrantKind;
 }): Promise<AgentConnectionsPage> {
-  return apiGet<AgentConnectionsPage>(`${BASE}/connections`, {
-    ...(params?.page ? { page: String(params.page) } : {}),
-    ...(params?.limit ? { limit: String(params.limit) } : {}),
-    ...(params?.status ? { status: params.status } : {}),
-    ...(params?.resource ? { resource: params.resource } : {}),
-    ...(params?.kind ? { kind: params.kind } : {}),
-  });
+  return typed(apiData(getApiV1AdminAgentAccessConnections({ query: params })));
 }
 
 /**
@@ -89,14 +105,12 @@ export async function countClearableAgentConnections(): Promise<AgentClearableCo
 export function purgeRevokedAgentConnections(
   resource?: AgentResource,
 ): Promise<AgentPurgeRevokedResult> {
-  return apiDelete<AgentPurgeRevokedResult>(
-    `${BASE}/connections/revoked${resource ? `?resource=${resource}` : ""}`,
-  );
+  return apiData(deleteApiV1AdminAgentAccessConnectionsRevoked({ query: { resource } }));
 }
 
 export function getAgentConnection(grantId: string): Promise<AgentConnection> {
-  return apiGet<{ connection: AgentConnection }>(
-    `${BASE}/connections/${encodeURIComponent(grantId)}`,
+  return typed<{ connection: AgentConnection }>(
+    apiData(getApiV1AdminAgentAccessConnectionsByGrantId({ path: { grantId } })),
   ).then((result) => result.connection);
 }
 
@@ -104,38 +118,34 @@ export function listAgentAuditEvents(
   grantId: string,
   params?: { page?: number; limit?: number },
 ): Promise<AgentAuditPage> {
-  return apiGet<AgentAuditPage>(
-    `${BASE}/connections/${encodeURIComponent(grantId)}/events`,
-    {
-      ...(params?.page ? { page: String(params.page) } : {}),
-      ...(params?.limit ? { limit: String(params.limit) } : {}),
-    },
-  );
+  return typed(apiData(getApiV1AdminAgentAccessConnectionsByGrantIdEvents({
+    path: { grantId },
+    query: params,
+  })));
 }
 
 export function createAgentToken(
   input: CreateAgentTokenInput,
 ): Promise<AgentSecretResult> {
-  return apiPost<AgentSecretResult>(`${BASE}/tokens`, input);
+  return typed(apiData(postApiV1AdminAgentAccessTokens({ body: input })));
 }
 
 export function rotateAgentToken(
   credentialId: string,
   expiresInDays?: number,
 ): Promise<AgentRotationResult> {
-  return apiPost<AgentRotationResult>(
-    `${BASE}/tokens/${encodeURIComponent(credentialId)}/rotate`,
-    expiresInDays ? { expiresInDays } : {},
-  );
+  return typed(apiData(postApiV1AdminAgentAccessTokensByCredentialIdRotate({
+    path: { credentialId },
+    body: expiresInDays ? { expiresInDays } : {},
+  })));
 }
 
 export function updateAgentGrant(
   grantId: string,
   input: UpdateAgentGrantInput,
 ): Promise<AgentConnection> {
-  return apiPatch<{ connection: AgentConnection }>(
-    `${BASE}/grants/${encodeURIComponent(grantId)}`,
-    input,
+  return typed<{ connection: AgentConnection }>(
+    apiData(patchApiV1AdminAgentAccessGrantsByGrantId({ path: { grantId }, body: input })),
   ).then((result) => result.connection);
 }
 
@@ -143,24 +153,23 @@ export function revokeAgentGrant(
   grantId: string,
   reason?: string,
 ): Promise<void> {
-  return apiDelete<{ status: "revoked"; grantId: string }>(`${BASE}/grants/${encodeURIComponent(grantId)}`, {
-    ...(reason ? { reason } : {}),
-  }).then(() => undefined);
+  return apiData(deleteApiV1AdminAgentAccessGrantsByGrantId({
+    path: { grantId },
+    body: reason ? { reason } : {},
+  })).then(() => undefined);
 }
 
 export function revokeAllAgentGrants(reason?: string): Promise<{
   count: number;
 }> {
-  return apiPost<{ status: "revoked"; count: number }>(`${BASE}/revoke-all`, {
-    ...(reason ? { reason } : {}),
-  });
+  return typed(apiData(postApiV1AdminAgentAccessRevokeAll({ body: reason ? { reason } : {} })));
 }
 
 export function getAgentAuthorizationRequest(
   requestId: string,
 ): Promise<AgentAuthorizationRequest> {
-  return apiGet<{ authorizationRequest: AgentAuthorizationRequest }>(
-    `${BASE}/authorization-requests/${encodeURIComponent(requestId)}`,
+  return typed<{ authorizationRequest: AgentAuthorizationRequest }>(
+    apiData(getApiV1AdminAgentAccessAuthorizationRequestsByRequestId({ path: { requestId } })),
   ).then((result) => result.authorizationRequest);
 }
 
@@ -169,28 +178,27 @@ export function approveAgentAuthorizationRequest(
   selection: AgentGrantSelection & { label?: string },
 ): Promise<AgentAuthorizationDecisionResult> {
   const { resource: _resource, ...approval } = selection;
-  return apiPost<AgentAuthorizationDecisionResult>(
-    `${BASE}/authorization-requests/${encodeURIComponent(requestId)}/approve`,
-    approval,
-  );
+  return typed(apiData(postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove({
+    path: { requestId },
+    body: approval,
+  })));
 }
 
 export function denyAgentAuthorizationRequest(
   requestId: string,
   reason?: string,
 ): Promise<AgentAuthorizationDecisionResult> {
-  return apiPost<AgentAuthorizationDecisionResult>(
-    `${BASE}/authorization-requests/${encodeURIComponent(requestId)}/deny`,
-    reason ? { reason } : {},
-  );
+  return typed(apiData(postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny({
+    path: { requestId },
+    body: reason ? { reason } : {},
+  })));
 }
 
 export function lookupAgentDeviceAuthorization(
   userCode: string,
 ): Promise<AgentDeviceAuthorization> {
-  return apiPost<{ deviceAuthorization: AgentDeviceAuthorization }>(
-    `${BASE}/device-authorizations/lookup`,
-    { userCode },
+  return typed<{ deviceAuthorization: AgentDeviceAuthorization }>(
+    apiData(postApiV1AdminAgentAccessDeviceAuthorizationsLookup({ body: { userCode } })),
   ).then((result) => result.deviceAuthorization);
 }
 
@@ -199,18 +207,18 @@ export function approveAgentDeviceAuthorization(
   selection: AgentGrantSelection & { label?: string },
 ): Promise<AgentDeviceDecisionResult> {
   const { resource: _resource, ...approval } = selection;
-  return apiPost<AgentDeviceDecisionResult>(
-    `${BASE}/device-authorizations/${encodeURIComponent(deviceId)}/approve`,
-    approval,
-  );
+  return typed(apiData(postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove({
+    path: { deviceId },
+    body: approval,
+  })));
 }
 
 export function denyAgentDeviceAuthorization(
   deviceId: string,
   reason?: string,
 ): Promise<AgentDeviceDecisionResult> {
-  return apiPost<AgentDeviceDecisionResult>(
-    `${BASE}/device-authorizations/${encodeURIComponent(deviceId)}/deny`,
-    reason ? { reason } : {},
-  );
+  return typed(apiData(postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDeny({
+    path: { deviceId },
+    body: reason ? { reason } : {},
+  })));
 }

@@ -33,14 +33,16 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getPlatformSettings,
-  updatePlatformSettings,
-  type PlatformSettingsPayload,
-  type PlatformUrlKey,
-  type UpdatePlatformSettingsInput,
-} from "~/lib/api-functions/platform";
+  getApiV1AdminSettingsPlatform,
+  putApiV1AdminSettingsPlatform,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+
+type PlatformSettingsPayload = ApiResult<typeof getApiV1AdminSettingsPlatform>;
+type PlatformUrlKey = PlatformSettingsPayload["readiness"]["missing"][number];
+type UpdatePlatformSettingsInput = ApiBody<typeof putApiV1AdminSettingsPlatform>;
 
 export interface PlatformDraft {
   storefrontUrl: string;
@@ -69,7 +71,7 @@ export const PLATFORM_URL_FIELDS: readonly PlatformUrlField[] = [
     key: "storefrontUrl",
     label: "Storefront URL",
     placeholder: "https://shop.example.com",
-    help: "Public store origin. Required for links, discovery XML, purge callbacks, and checkout returns.",
+    help: "Public store origin. Required for links, discovery XML, and checkout returns.",
   },
   {
     key: "apiUrl",
@@ -218,7 +220,7 @@ export function PlatformSettingsBuilder() {
   const queryClient = useQueryClient();
   const platformQuery = useQuery({
     queryKey: queryKeys.settings.platform(),
-    queryFn: getPlatformSettings,
+    queryFn: () => apiData(getApiV1AdminSettingsPlatform()),
   });
   const [draft, setDraft] = useState<PlatformDraft | null>(null);
   const [saved, setSaved] = useState<PlatformDraft | null>(null);
@@ -241,7 +243,8 @@ export function PlatformSettingsBuilder() {
   const hasErrors = Object.keys(errors).length > 0;
 
   const saveMutation = useMutation({
-    mutationFn: (patch: UpdatePlatformSettingsInput) => updatePlatformSettings({ data: patch }),
+    mutationFn: (patch: UpdatePlatformSettingsInput) =>
+      apiData(putApiV1AdminSettingsPlatform({ body: patch })),
     onSuccess: async (payload) => {
       const next = toPlatformDraft(payload);
       setDraft(next);

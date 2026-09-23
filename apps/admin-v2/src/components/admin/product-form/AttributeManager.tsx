@@ -21,12 +21,15 @@ import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "@/lib/api-helpers";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import {
-  addAttributeValue,
-  createAttribute,
-  getAttributes,
+  getApiV1AdminAttributes,
+  postApiV1AdminAttributes,
+  postApiV1AdminAttributesByIdValues,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import {
   getAttributeValues,
   type AttributeDto,
-} from "@/lib/api-functions/attributes";
+} from "@/lib/api-query-options/attributes";
 import {
   attributeAssignmentSignature,
   mergeAttributeValuePages,
@@ -46,7 +49,7 @@ interface AttributeManagerProps {
   ) => void;
 }
 
-type AttributeDefinition = AttributeDto;
+type AttributeDefinition = Omit<AttributeDto, "valueCount"> & { valueCount?: number };
 
 function definitionMapFromAssignments(assignments: AssignedAttribute[]) {
   const definitions = new Map<string, AttributeDefinition>();
@@ -111,9 +114,9 @@ export function AttributeManager({
     const requestId = ++definitionLookupRequest.current;
     setDefinitionLookupLoading(true);
     setDefinitionLookupFailed(false);
-    void getAttributes({
-      data: { ids: incomingIdsKey, limit: 90, sort: "name", order: "asc" },
-    }).then((data) => {
+    void apiData(getApiV1AdminAttributes({
+      query: { ids: incomingIdsKey, limit: 90, sort: "name", order: "asc" },
+    })).then((data) => {
       if (requestId !== definitionLookupRequest.current) return;
       setDefinitions((current) => {
         const next = new Map(current);
@@ -156,9 +159,9 @@ export function AttributeManager({
 
     setIsCreating(true);
     try {
-      const data = await createAttribute({
-        data: { name, slug, filterable: true, options: [] },
-      });
+      const data = await apiData(postApiV1AdminAttributes({
+        body: { name, slug, filterable: true, options: [] },
+      }));
       const created = data.attribute;
       rememberDefinitions([{
         ...created,
@@ -312,15 +315,15 @@ function AttributeDefinitionCombobox({
     setLoading(true);
     setError(null);
     try {
-      const data = await getAttributes({
-        data: {
+      const data = await apiData(getApiV1AdminAttributes({
+        query: {
           page: pageNumber,
           limit: 25,
-          search: search.trim(),
+          search: search.trim() || undefined,
           sort: "name",
           order: "asc",
         },
-      });
+      }));
       if (requestId !== requestSequence.current) return;
       setItems((current) => reset
         ? data.attributes
@@ -492,13 +495,11 @@ function AttributeValueSelector({
     setError(null);
     try {
       const data = await getAttributeValues({
-        data: {
-          attributeId,
-          page: pageNumber,
-          limit: 20,
-          sort: "asc",
-          ...(search.trim() ? { search: search.trim() } : {}),
-        },
+        attributeId,
+        page: pageNumber,
+        limit: 20,
+        sort: "asc",
+        ...(search.trim() ? { search: search.trim() } : {}),
       });
       if (requestId !== requestSequence.current) return;
       setItems((current) => reset
@@ -533,7 +534,10 @@ function AttributeValueSelector({
     if (!nextValue) return;
     setSavingPreset(true);
     try {
-      await addAttributeValue({ data: { attributeId, value: nextValue } });
+      await apiData(postApiV1AdminAttributesByIdValues({
+        path: { id: attributeId },
+        body: { value: nextValue },
+      }));
       setItems((current) => mergeAttributeValuePages(current, [{ value: nextValue, isPreset: true }]));
       onChange(nextValue);
       setOpen(false);

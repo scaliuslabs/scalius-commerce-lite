@@ -29,13 +29,14 @@ import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { getServerFnError } from "@/lib/api-helpers";
-import {
-  getSecuritySettings,
-  updateSecuritySettings,
-} from "@/lib/api-functions/settings";
-import { getInheritedSecuritySources } from "@/lib/api-functions/security-runtime";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
+import {
+  getApiV1AdminSettingsSecurity,
+  getApiV1AdminSettingsSecurityRuntimeSources,
+  postApiV1AdminSettingsSecurity,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 function sourcesEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((source, index) => source === right[index]);
@@ -55,11 +56,11 @@ export function SecuritySettingsBuilder() {
   const queryClient = useQueryClient();
   const securityQuery = useQuery({
     queryKey: queryKeys.settings.security(),
-    queryFn: getSecuritySettings,
+    queryFn: () => apiData(getApiV1AdminSettingsSecurity()),
   });
   const inheritedQuery = useQuery({
     queryKey: ["settings", "security", "inherited-sources"],
-    queryFn: getInheritedSecuritySources,
+    queryFn: () => apiData(getApiV1AdminSettingsSecurityRuntimeSources()),
     staleTime: 1000 * 60 * 10,
   });
   const [merchantSources, setMerchantSources] = useState<string[] | null>(null);
@@ -94,9 +95,9 @@ export function SecuritySettingsBuilder() {
   }, [dirty]);
 
   const saveMutation = useMutation({
-    mutationFn: (nextSources: string[]) => updateSecuritySettings({
-      data: { cspAllowedDomains: serializeMerchantCspSources(nextSources) },
-    }),
+    mutationFn: (nextSources: string[]) => apiData(postApiV1AdminSettingsSecurity({
+      body: { cspAllowedDomains: serializeMerchantCspSources(nextSources) },
+    })),
     onSuccess: (_response, saved) => {
       const serialized = serializeMerchantCspSources(saved);
       setMerchantSources(saved);
@@ -175,7 +176,7 @@ export function SecuritySettingsBuilder() {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Inherited platform trust</h3>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Read-only origins configured in Settings → System → Platform.
+                These addresses come from Settings → Platform.
               </p>
             </div>
           </div>
@@ -222,7 +223,7 @@ export function SecuritySettingsBuilder() {
                     )}
                     {!source.source ? (
                       <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                        {source.consequence} Set it in the Platform section.
+                        {source.consequence}
                       </p>
                     ) : null}
                   </div>

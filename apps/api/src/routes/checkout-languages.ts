@@ -20,9 +20,8 @@ import { NotFoundError, ConflictError } from "../utils/api-error";
 import { ok, created, noContent } from "../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../schemas/responses";
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
-import { invalidateApiAndScheduleStorefrontGroups } from "../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../utils/cache-generation";
 
-const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING =
   "CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING";
 
@@ -466,7 +465,7 @@ adminApp.openapi(createRoute2, async (c) => {
     rethrowCheckoutLanguageConstraint(error);
   }
 
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return created(c, {
     language: insertedLanguage
       ? {
@@ -617,7 +616,7 @@ adminApp.openapi(updateRoute, async (c) => {
     rethrowCheckoutLanguageConstraint(error);
   }
   if (!updated) throw new NotFoundError("Not found");
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, {
     language: {
       ...updated,
@@ -659,7 +658,7 @@ adminApp.openapi(softDeleteRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!trashed) throw new NotFoundError("Not found");
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, {});
 });
 
@@ -688,7 +687,7 @@ adminApp.openapi(hardDeleteRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!deleted) throw new NotFoundError("Not found");
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return noContent(c);
 });
 
@@ -721,7 +720,7 @@ adminApp.openapi(restoreRoute, async (c) => {
     .where(eq(checkoutLanguages.id, id))
     .returning({ id: checkoutLanguages.id });
   if (!restored) throw new NotFoundError("Not found");
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, {});
 });
 

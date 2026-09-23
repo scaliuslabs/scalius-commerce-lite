@@ -1,12 +1,11 @@
-import { DatabaseSync } from "node:sqlite";
-
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/d1";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 
 import { ConflictError } from "@scalius/core/errors";
 import {
+  type AtomicCheckoutAttempt,
   buildCheckoutAttemptIdentity,
   buildCheckoutStatusTokenFromRequestKey,
   createAtomicCheckoutAttempt,
@@ -154,110 +153,50 @@ describe("atomic checkout attempts", () => {
     )).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it("prepares candidate arbitration and receipt around one order commit", async () => {
-    const db = drizzle({} as D1Database, { schema }) as unknown as Database;
-    const plan = await prepareAtomicCheckoutAttemptCommit(
-      db,
-      {
-        commitMode: "atomic",
-        origin: "new",
-        id: "attempt_atomic_1",
-        requestKey: "checkout_submit:v1:atomic_key",
-        requestHash: "atomic_request_hash",
-        orderId: "order_atomic_1",
-        checkoutToken: "chk_atomic_receipt_secret",
-        statusToken: "cst_atomic_status",
-      },
-      {
+  it("commits one attempt, order and hashed receipt; a losing duplicate or later failure rolls back", async () => {
+    const { sqlite, db } = createSqliteD1Database({ foreignKeys: true });
+    const commit = async (attempt: AtomicCheckoutAttempt, orderId = attempt.orderId) => {
+      const plan = await prepareAtomicCheckoutAttemptCommit(db, attempt, {
         paymentMethod: "cod",
         totalAmount: 125,
-        response: { orderId: "order_atomic_1", message: "Order created" },
-      },
-    );
-
-    const attemptWrite = compile(plan.writesBeforeOrder[0]);
-    const guard = compile(plan.writesBeforeOrder[1]);
-    const receiptWrite = compile(plan.writesAfterOrder[0]);
-
-    expect(plan.writesBeforeOrder).toHaveLength(2);
-    expect(plan.writesAfterOrder).toHaveLength(1);
-    expect(attemptWrite.sql.toLowerCase()).toContain('insert into "checkout_attempts"');
-    expect(attemptWrite.sql.toLowerCase()).toContain("on conflict");
-    expect(attemptWrite.params).toContain(JSON.stringify({
-      orderId: "order_atomic_1",
-      message: "Order created",
-    }));
-    expect(guard.sql).toContain("CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT");
-    expect(receiptWrite.sql.toLowerCase()).toContain('insert into "order_receipts"');
-    expect(receiptWrite.params).toContain(await hashOrderReceiptToken("chk_atomic_receipt_secret"));
-  });
-
-  it("rolls back a losing duplicate or any later order failure", async () => {
-    const sqlite = createAtomicCheckoutTestDatabase();
-    const db = drizzle({} as D1Database, { schema }) as unknown as Database;
-    try {
-      const winner = {
-        commitMode: "atomic" as const,
-        origin: "new" as const,
-        id: "attempt_winner",
-        requestKey: "checkout_submit:v1:shared_key",
-        requestHash: "shared_hash",
-        orderId: "order_winner",
-        checkoutToken: "chk_winner_secret",
-        statusToken: "cst_shared",
-      };
-      const winnerPlan = await prepareAtomicCheckoutAttemptCommit(db, winner, {
-        paymentMethod: "cod",
-        totalAmount: 125,
-        response: { orderId: winner.orderId },
+        response: { orderId: attempt.orderId },
       });
-      executeAtomicCheckoutTestTransaction(sqlite, winnerPlan, winner.orderId);
+      await db.batch([
+        ...plan.writesBeforeOrder,
+        db.insert(schema.orders).values({
+          id: orderId, customerName: "Buyer", customerPhone: "+8801712345678",
+          shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmount: 125, shippingCharge: 0,
+        }),
+        ...plan.writesAfterOrder,
+      ] as never);
+    };
+    const winner: AtomicCheckoutAttempt = {
+      commitMode: "atomic",
+      origin: "new",
+      id: "attempt_winner",
+      requestKey: "checkout_submit:v1:shared_key",
+      requestHash: "shared_hash",
+      orderId: "order_winner",
+      checkoutToken: "chk_winner_secret",
+      statusToken: "cst_shared",
+    };
 
-      const loser = {
-        ...winner,
-        id: "attempt_loser",
-        orderId: "order_loser",
-        checkoutToken: "chk_loser_secret",
-      };
-      const loserPlan = await prepareAtomicCheckoutAttemptCommit(db, loser, {
-        paymentMethod: "cod",
-        totalAmount: 125,
-        response: { orderId: loser.orderId },
-      });
-      expect(() => executeAtomicCheckoutTestTransaction(sqlite, loserPlan, loser.orderId))
-        .toThrow(/CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT/);
+    await commit(winner);
+    await expect(commit({ ...winner, id: "attempt_loser", orderId: "order_loser", checkoutToken: "chk_loser_secret" }))
+      .rejects.toThrow(/CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT/);
+    await expect(commit({
+      ...winner,
+      id: "attempt_later_failure",
+      requestKey: "checkout_submit:v1:later_failure",
+      orderId: "order_later_failure",
+      checkoutToken: "chk_later_failure_secret",
+    }, "order_winner")).rejects.toThrow(/UNIQUE constraint failed: orders\.id/);
 
-      const laterFailure = {
-        ...winner,
-        id: "attempt_later_failure",
-        requestKey: "checkout_submit:v1:later_failure",
-        orderId: "order_later_failure",
-        checkoutToken: "chk_later_failure_secret",
-      };
-      const laterFailurePlan = await prepareAtomicCheckoutAttemptCommit(db, laterFailure, {
-        paymentMethod: "cod",
-        totalAmount: 125,
-        response: { orderId: laterFailure.orderId },
-      });
-      expect(() => executeAtomicCheckoutTestTransaction(sqlite, laterFailurePlan, null))
-        .toThrow(/NOT NULL constraint failed: orders\.id/);
-
-      expect(sqlite.prepare("SELECT id FROM orders ORDER BY id").all()).toEqual([
-        { id: "order_winner" },
-      ]);
-      expect(sqlite.prepare(
-        "SELECT id, order_id AS orderId, status FROM checkout_attempts ORDER BY id",
-      ).all()).toEqual([{
-        id: "attempt_winner",
-        orderId: "order_winner",
-        status: "committed",
-      }]);
-      expect(sqlite.prepare("SELECT order_id AS orderId FROM order_receipts").all()).toEqual([
-        { orderId: "order_winner" },
-      ]);
-    } finally {
-      sqlite.close();
-    }
+    expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: "order_winner" }]);
+    expect(sqlite.prepare("SELECT id, order_id AS orderId, status, response_payload AS response FROM checkout_attempts").all())
+      .toEqual([{ id: "attempt_winner", orderId: "order_winner", status: "committed", response: '{"orderId":"order_winner"}' }]);
+    expect(sqlite.prepare("SELECT token_hash AS tokenHash, order_id AS orderId FROM order_receipts").all())
+      .toEqual([{ tokenHash: await hashOrderReceiptToken("chk_winner_secret"), orderId: "order_winner" }]);
   });
 });
 
@@ -293,80 +232,6 @@ function createResolverDb(row: AttemptRow | undefined): Database {
       }),
     }),
   } as unknown as Database;
-}
-
-function compile(statement: unknown): { sql: string; params: unknown[] } {
-  return (statement as { toSQL(): { sql: string; params: unknown[] } }).toSQL();
-}
-
-function createAtomicCheckoutTestDatabase(): DatabaseSync {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE checkout_attempts (
-      id TEXT PRIMARY KEY NOT NULL,
-      request_key TEXT NOT NULL,
-      request_hash TEXT NOT NULL,
-      checkout_token TEXT NOT NULL,
-      order_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'processing',
-      payment_method TEXT,
-      total_amount REAL,
-      response_payload TEXT,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      claim_id TEXT,
-      claim_expires_at INTEGER,
-      last_error TEXT,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-    CREATE UNIQUE INDEX checkout_attempts_request_key_unique
-      ON checkout_attempts(request_key);
-    CREATE UNIQUE INDEX checkout_attempts_checkout_token_unique
-      ON checkout_attempts(checkout_token);
-    CREATE TABLE orders (id TEXT PRIMARY KEY NOT NULL);
-    CREATE TABLE order_receipts (
-      token_hash TEXT PRIMARY KEY NOT NULL,
-      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-      source TEXT NOT NULL,
-      status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-  `);
-  return sqlite;
-}
-
-function executeCompiledStatement(sqlite: DatabaseSync, statement: unknown): void {
-  const compiled = compile(statement);
-  const prepared = sqlite.prepare(compiled.sql);
-  if (/^\s*select\b/i.test(compiled.sql)) {
-    prepared.all(...compiled.params as never[]);
-  } else {
-    prepared.run(...compiled.params as never[]);
-  }
-}
-
-function executeAtomicCheckoutTestTransaction(
-  sqlite: DatabaseSync,
-  plan: Awaited<ReturnType<typeof prepareAtomicCheckoutAttemptCommit>>,
-  orderId: string | null,
-): void {
-  sqlite.exec("BEGIN IMMEDIATE");
-  try {
-    for (const statement of plan.writesBeforeOrder) {
-      executeCompiledStatement(sqlite, statement);
-    }
-    sqlite.prepare("INSERT INTO orders (id) VALUES (?)").run(orderId);
-    for (const statement of plan.writesAfterOrder) {
-      executeCompiledStatement(sqlite, statement);
-    }
-    sqlite.exec("COMMIT");
-  } catch (error) {
-    sqlite.exec("ROLLBACK");
-    throw error;
-  }
 }
 
 function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): CreateStorefrontOrderInput {

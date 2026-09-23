@@ -1,19 +1,5 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
-import { drizzle } from "drizzle-orm/d1";
 import { describe, expect, it } from "vitest";
-import {
-  createTursoDatabase,
-  type Database,
-} from "@scalius/database/client";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import type { Database } from "@scalius/database/client";
 import {
   OrderStatus,
   PaymentPlanStatus,
@@ -24,129 +10,20 @@ import {
   paymentPlans,
   paymentSessionAttempts,
 } from "@scalius/database/schema";
-import * as schema from "@scalius/database/schema";
+import {
+  createMigratedSqlite,
+  createSqliteD1Database,
+  createSqliteTursoDatabase,
+} from "@scalius/database/testing/sqlite-d1";
 
 import { reconcileHostedPaymentReturn } from "./hosted-payment-return";
 import { processPaymentConfirmed } from "./process-payment";
 
-const migrationDirectory = fileURLToPath(new URL(
-  "../../../../database/migrations/",
-  import.meta.url,
-));
+const createPaymentDatabase = () => createSqliteD1Database();
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function statementRows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: statementRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = statementRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createPaymentDatabase(): { sqlite: DatabaseSync; db: Database } {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()) {
-    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "d1"));
-  }
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-  return {
-    sqlite,
-    db: drizzle(binding as unknown as D1Database, { schema }) as unknown as Database,
-  };
-}
-
-function createTursoPaymentDatabase(): { sqlite: DatabaseSync; db: Database } {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()) {
-    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "turso"));
-  }
-  const db = createTursoDatabase(
-    { url: "turso://hosted-return-conformance.turso.io", authToken: "test" },
-    {
-      connect: () => ({
-        async batch(statements, options) {
-          const transactional = options?.mode !== undefined;
-          if (transactional) sqlite.exec("BEGIN IMMEDIATE");
-          try {
-            const results = statements.map((statement) => {
-              const sqlText = typeof statement === "string" ? statement : statement.sql;
-              const args = typeof statement === "string" || statement.args === undefined
-                ? []
-                : statement.args;
-              if (!Array.isArray(args)) throw new Error("Positional arguments are required.");
-              const prepared = sqlite.prepare(sqlText);
-              if (prepared.columns().length === 0) {
-                const result = prepared.run(...args as SQLInputValue[]);
-                return { rows: [], rowsAffected: Number(result.changes) };
-              }
-              prepared.setReturnArrays(true);
-              return {
-                rows: prepared.all(...args as SQLInputValue[]) as unknown as SQLOutputValue[][],
-                rowsAffected: 0,
-              };
-            });
-            if (transactional) sqlite.exec("COMMIT");
-            return results;
-          } catch (error) {
-            if (transactional && sqlite.isTransaction) sqlite.exec("ROLLBACK");
-            throw error;
-          }
-        },
-      }),
-      writeBatchMode: "concurrent",
-    },
-  );
-  return { sqlite, db };
+function createTursoPaymentDatabase() {
+  const sqlite = createMigratedSqlite({ provider: "turso" });
+  return { sqlite, db: createSqliteTursoDatabase(sqlite) };
 }
 
 async function insertHostedOrder(

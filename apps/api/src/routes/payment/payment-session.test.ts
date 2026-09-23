@@ -56,6 +56,7 @@ vi.mock("@scalius/core/modules/payments/hosted-payment-return", async (importOri
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
 import {
+  createAgentContextPaymentSession,
   createCustomerAccountPaymentSession,
   resolveCustomerPaymentSessionRecovery,
 } from "./payment-session-create";
@@ -1690,6 +1691,51 @@ describe("payment session receipt-token proof", () => {
       expect(response.status).toBe(302);
       expectNoReceiptProofInUrl(response.headers.get("location"));
     }
+  });
+
+  it.each([
+    ["acn_abcdefghij0123456789", "https://shop.example.test/checkout/continue/acn_abcdefghij0123456789"],
+    ["acn_short", "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=cancelled&paymentType=full"],
+    ["https://evil.example/x", "https://shop.example.test/order-success?orderId=order_1&payment=sslcommerz&result=cancelled&paymentType=full"],
+  ])("returns agent hosted payments only to a strict opaque continuation page (%s)", async (continuationId, expected) => {
+    const { app, kv } = createTestApp("valid", "sslcommerz");
+
+    const response = await app.request(
+      `/api/v1/payment/sslcommerz/cancel?order_id=order_1&return_to=agent&continuation_id=${encodeURIComponent(continuationId)}&payment_type=full`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ tran_id: "order_1_full_ABC12345" }).toString(),
+      },
+      envFor(kv),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(expected);
+  });
+
+  it("binds agent payment-session idempotency to the context and returns through its continuation", async () => {
+    const db = createDbMock("sslcommerz");
+    const context = createPaymentRouteContext(db, createKvMock("valid"));
+
+    await createAgentContextPaymentSession(context, {
+      orderId: "order_1",
+      contextId: "asc_12345678901234567890",
+      continuationId: "acn_abcdefghij0123456789",
+      customerId: null,
+    });
+
+    expect(mocks.buildPaymentSessionAttemptIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      proof: { kind: "agent_context", value: "asc_12345678901234567890" },
+    }));
+    expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
+      "store",
+      "ssl_store_password_123",
+      true,
+      expect.objectContaining({
+        successUrl: "https://api.example.test/api/v1/payment/sslcommerz/success?order_id=order_1&return_to=agent&continuation_id=acn_abcdefghij0123456789&payment_type=full",
+      }),
+    );
   });
 
   it("creates SSLCommerz balance sessions from stored balance without inserting a new payment plan", async () => {

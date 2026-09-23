@@ -11,11 +11,9 @@ const mocks = vi.hoisted(() => ({
   getCustomerSession: vi.fn(),
   logoutCustomer: vi.fn(),
   updateCustomerProfile: vi.fn(),
-  getZones: vi.fn(),
 }));
 vi.mock("@/lib/api/customer-auth", () => mocks);
 vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
-vi.mock("@/lib/api", () => ({ getZones: mocks.getZones, getAreas: vi.fn() }));
 vi.mock("@/lib/checkout/session-state", () => ({ readCheckoutFormDraft: vi.fn() }));
 
 import AuthModal from "./AuthModal";
@@ -29,6 +27,10 @@ const customer = {
 };
 let root: Root;
 let host: HTMLDivElement;
+
+const zoneSelect = () => host.querySelector<HTMLSelectElement>("#profile-zone")!;
+const zoneReads = () =>
+  vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/locations/zones"));
 
 async function changeInput(selector: string, value: string) {
   const input = host.querySelector<HTMLInputElement>(selector)!;
@@ -45,11 +47,15 @@ beforeEach(() => {
   root = createRoot(host);
   window.__CHECKOUT_CONFIG__ = { authVerificationMethod: "email", allowedCountries: ["BD"] } as CheckoutConfig;
   window.__scaliusAuthModalOpenPending = true;
-  mocks.getZones.mockResolvedValue([{ id: "zone_mirpur", name: "Mirpur" }]);
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => ({
     ok: true,
-    json: async () => ({ success: true, data: [{ id: "city_dhaka", name: "Dhaka" }] }),
-  }));
+    json: async () => ({
+      success: true,
+      data: url.includes("/locations/zones?cityId=city_dhaka")
+        ? [{ id: "zone_mirpur", name: "Mirpur" }]
+        : [{ id: "city_dhaka", name: "Dhaka" }],
+    }),
+  })));
 });
 
 afterEach(async () => {
@@ -85,10 +91,10 @@ describe("account dialog forms", () => {
     expect(host.querySelector<HTMLInputElement>("#customer-otp")?.disabled).toBe(true);
     await act(async () => resolveVerify({ success: true, customer }));
     expect(host.querySelector("h2")?.textContent).toBe("Complete your profile");
-    expect(host.querySelector('[aria-label="Zone: Mirpur"]')).not.toBeNull();
+    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
   });
 
-  it("resumes saved locations, consumes nested Escape, and submits profile fields natively", async () => {
+  it("resumes saved locations in native selects and submits profile fields natively", async () => {
     document.cookie = "cs_auth=1; path=/";
     let resolveSave!: (value: { success: boolean; error: string }) => void;
     mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });
@@ -96,13 +102,10 @@ describe("account dialog forms", () => {
     await act(async () => root.render(<AuthModal />));
     expect(host.querySelectorAll("h2, h3")).toHaveLength(1);
     expect(host.querySelector("h2")?.textContent).toBe("Complete your profile");
-    const city = host.querySelector<HTMLButtonElement>('[aria-label="City: Dhaka"]')!;
-    expect(host.querySelector('[aria-label="Zone: Mirpur"]')).not.toBeNull();
-    await act(async () => city.click());
-    await act(async () => host.querySelector('[role="combobox"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-    expect(host.querySelector('[role="listbox"]')).toBeNull();
-    expect(host.querySelector('[role="alert"]')).toBeNull();
-    await vi.waitFor(() => expect(document.activeElement).toBe(city));
+    const city = host.querySelector<HTMLSelectElement>("#profile-city")!;
+    expect(city.value).toBe("city_dhaka");
+    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
+    expect(zoneSelect().disabled).toBe(false);
     await act(async () => city.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(host.querySelector('[role="dialog"]')).not.toBeNull();
     expect(host.querySelector('[role="alert"]')?.textContent).toBe("Save your delivery profile or sign out to continue.");
@@ -116,8 +119,8 @@ describe("account dialog forms", () => {
     await act(async () => resolveSave({ success: false, error: "Please try saving again." }));
     expect(host.querySelector<HTMLFieldSetElement>("fieldset")?.disabled).toBe(false);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe("Please try saving again.");
-    expect(host.querySelector('[aria-label="Zone: Mirpur"]')).not.toBeNull();
-    expect(mocks.getZones).toHaveBeenCalledTimes(1);
+    expect(zoneSelect().value).toBe("zone_mirpur");
+    expect(zoneReads()).toHaveLength(1);
   });
 
   it.each([
@@ -134,10 +137,12 @@ describe("account dialog forms", () => {
     await changeInput("#profile-address", "House 10, Road 2");
     const retry = [...host.querySelectorAll("button")].find((button) => button.textContent === "Retry")!;
     await act(async () => retry.click());
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/locations/cities")),
+    ).toHaveLength(2);
     expect(host.querySelector('[role="alert"]')).toBeNull();
     expect(host.querySelector<HTMLInputElement>("#profile-address")?.value).toBe("House 10, Road 2");
-    expect(host.querySelector('[aria-label="Zone: Mirpur"]')).not.toBeNull();
+    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
     expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
   });
 });

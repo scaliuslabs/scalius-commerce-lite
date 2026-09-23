@@ -12,11 +12,13 @@ import {
 } from "./ProviderDetailPanel";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  saveDeliveryProvider,
-  deleteDeliveryProvider,
-  testDeliveryProvider,
-  testDeliveryCredentials,
-} from "~/lib/api-functions/delivery";
+  deleteApiV1AdminSettingsDeliveryProvidersById,
+  postApiV1AdminSettingsDeliveryProviders,
+  postApiV1AdminSettingsDeliveryProvidersById,
+  postApiV1AdminSettingsDeliveryProvidersCreateTest,
+  putApiV1AdminSettingsDeliveryProviders,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
@@ -270,9 +272,15 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         config: formData.config,
         isActive: formData.isActive,
       };
-      const savedProvider = await saveDeliveryProvider({
-        data: { provider: providerPayload },
-      }) as DeliveryProviderRecord;
+      // The form keeps the provider type and settings loosely typed; the API
+      // validates them against the provider-specific schema.
+      const savedProvider = (providerPayload.id
+        ? await apiData(putApiV1AdminSettingsDeliveryProviders({
+            body: providerPayload as ApiBody<typeof putApiV1AdminSettingsDeliveryProviders>,
+          }))
+        : await apiData(postApiV1AdminSettingsDeliveryProviders({
+            body: providerPayload as ApiBody<typeof postApiV1AdminSettingsDeliveryProviders>,
+          }))) as DeliveryProviderRecord;
       if (isCreating) {
         setProviders((prev) => [...prev, savedProvider]);
       } else {
@@ -297,7 +305,7 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     if (!selectedProvider) return;
     setIsDeleting(true);
     try {
-      await deleteDeliveryProvider({ data: { id: selectedProvider.id } });
+      await apiData(deleteApiV1AdminSettingsDeliveryProvidersById({ path: { id: selectedProvider.id } }));
       setProviders((prev) =>
         prev.filter((p) => p.id !== selectedProvider.id),
       );
@@ -315,9 +323,9 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
     if (!selectedProvider) return;
     setIsTesting(true);
     try {
-      const result = await testDeliveryProvider({
-        data: { id: selectedProvider.id },
-      }) as { success: boolean; message?: string };
+      const result = await apiData(postApiV1AdminSettingsDeliveryProvidersById({
+        path: { id: selectedProvider.id },
+      }));
       await refreshDeliveryProviderQueries();
       if (result.success) {
         toast.success(result.message || "Connection successful");
@@ -346,9 +354,14 @@ const DeliveryProvidersContainer: FC<DeliveryProvidersContainerProps> = ({
         toast.error("Invalid credentials or config format");
         return;
       }
-      const result = await testDeliveryCredentials({
-        data: { type: formData.type, credentials, config, name: "Credential Test" },
-      }) as { success: boolean; message?: string };
+      const result = await apiData(postApiV1AdminSettingsDeliveryProvidersCreateTest({
+        body: {
+          type: formData.type,
+          credentials,
+          config,
+          name: "Credential Test",
+        } as ApiBody<typeof postApiV1AdminSettingsDeliveryProvidersCreateTest>,
+      }));
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {

@@ -47,7 +47,7 @@ import { formatDate } from "@scalius/shared/timestamps";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
-const StatusBadge = React.memo(function StatusBadge({ status }: { status: string }) {
+const StatusBadge = React.memo(function StatusBadge({ status }: { status: string | null }) {
   return (
     <Badge
       variant={status === "success" ? "default" : "destructive"}

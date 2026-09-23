@@ -1,44 +1,64 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
 
-const source = readFileSync(
-  resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "SecuritySettingsBuilder.tsx",
-  ),
-  "utf8",
-);
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SecuritySettingsBuilder } from "./SecuritySettingsBuilder";
 
-describe("SecuritySettingsBuilder contract", () => {
-  it("separates inherited platform trust from merchant additions", () => {
-    expect(source).toContain("Inherited platform trust");
-    expect(source).toContain("Read-only origins configured in Settings → System → Platform.");
-    expect(source).toContain("Set it in the Platform section.");
-    expect(source).not.toContain("Read-only origins from the deployed platform.");
-    expect(source).toContain("Additional storefront services");
-    expect(source).toContain("getInheritedSecuritySources");
-    expect(source).toContain("merchantSources.map");
-    expect(source).toContain('source.source ? "Trusted" : "Missing"');
-    expect(source).toContain("{dirty || hasPendingInput ? (");
-    expect(source).toContain("merchantListOpen");
-    expect(source).toContain('merchantSources.length === 1 ? "origin" : "origins"');
-    expect(source).not.toContain("Comma-separated domains");
+vi.mock("@/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
+vi.mock("@/contexts/PermissionContext", () => ({ usePermissions: () => ({ hasPermission: () => true }) }));
+vi.mock("@/lib/api", () => ({ apiData: (result: unknown) => result }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsSecurity: async () => ({ cspAllowedDomains: "https://storefront.example.com" }),
+  postApiV1AdminSettingsSecurity: vi.fn(),
+  getApiV1AdminSettingsSecurityRuntimeSources: async () => [
+    {
+      key: "storefront", label: "Storefront", kind: "storefront",
+      source: "https://storefront.example.com", consequence: "Add the Storefront URL in Settings → Platform.",
+    },
+    {
+      key: "r2", label: "Public media storage", kind: "media",
+      source: null, consequence: "Add the Media URL in Settings → Platform.",
+    },
+  ],
+}));
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+describe("SecuritySettingsBuilder", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
   });
 
-  it("keeps failed authority reads locked and validates additions before save", () => {
-    expect(source).toContain("SettingsLoadFailure");
-    expect(source).toContain("normalizeMerchantCspSource");
-    expect(source).toContain("serializeMerchantCspSources");
-    expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
-    expect(source).toContain("<UnsavedChangesGuard");
-    expect(source).toContain("setMerchantSources(savedMerchantSources)");
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
   });
 
-  it("keeps exact and wildcard trust semantics explicit", () => {
-    expect(source).toContain("Exact HTTPS origins stay exact");
-    expect(source).toContain("already trusted by the platform");
-    expect(source).toContain("visibleMerchantSources");
+  it("names where inherited addresses come from and how to add a missing one", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <SecuritySettingsBuilder />
+        </QueryClientProvider>,
+      );
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain("Missing"));
+
+    const text = host.textContent ?? "";
+    expect(text).toContain("These addresses come from Settings → Platform.");
+    expect(text).toContain("https://storefront.example.com");
+    expect(text).toContain("Missing");
+    expect(text).toContain("Add the Media URL in Settings → Platform.");
+    expect(text).not.toMatch(/→ \.|the {2}section/);
+    // Inherited addresses are not repeated as merchant additions.
+    expect(text).toContain("No merchant-added origins.");
   });
 });

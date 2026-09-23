@@ -1,0 +1,98 @@
+---
+// Server-rendered city → zone → area selects. `enhanceLocationSelects()`
+// (src/lib/checkout/location-select.ts) loads zones/areas as the buyer picks.
+import type { LocationData } from "@/lib/api";
+
+interface Props {
+  cities: LocationData[];
+  cityLabel: string;
+  zoneLabel: string;
+  areaLabel: string;
+  cityPlaceholder: string;
+  zonePlaceholder: string;
+  areaPlaceholder: string;
+  loadingText: string;
+  zonesLoadFailedText: string;
+  areasLoadFailedText: string;
+  showAreaField: boolean;
+}
+
+const {
+  cities,
+  cityLabel,
+  zoneLabel,
+  areaLabel,
+  cityPlaceholder,
+  zonePlaceholder,
+  areaPlaceholder,
+  loadingText,
+  zonesLoadFailedText,
+  areasLoadFailedText,
+  showAreaField,
+} = Astro.props;
+
+const labelClass = "mb-1 block text-sm font-medium text-foreground";
+const selectClass =
+  "block min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50";
+const retryClass =
+  "mt-1 text-xs font-medium text-destructive underline underline-offset-2";
+---
+
+<div class="grid gap-3" data-location-fields data-loading-text={loadingText}>
+  <div>
+    <label for="checkout-city" class={labelClass}>
+      {cityLabel}
+      <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+    </label>
+    <select
+      id="checkout-city"
+      name="city"
+      required
+      aria-describedby="shippingLocationError"
+      class={selectClass}
+    >
+      <option value="">{cityPlaceholder}</option>
+      {cities.map((city) => <option value={city.id}>{city.name}</option>)}
+    </select>
+  </div>
+
+  <div>
+    <label for="checkout-zone" class={labelClass}>
+      {zoneLabel}
+      <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+    </label>
+    <select
+      id="checkout-zone"
+      name="zone"
+      required
+      disabled
+      aria-describedby="shippingLocationError"
+      class={selectClass}
+    >
+      <option value="">{zonePlaceholder}</option>
+    </select>
+    <button type="button" hidden data-location-retry="zone" class={retryClass}>
+      {zonesLoadFailedText}
+    </button>
+  </div>
+
+  {
+    showAreaField && (
+      <div>
+        <label for="checkout-area" class={labelClass}>
+          {areaLabel}
+        </label>
+        <select id="checkout-area" name="area" disabled class={selectClass}>
+          <option value="">{areaPlaceholder}</option>
+        </select>
+        <button type="button" hidden data-location-retry="area" class={retryClass}>
+          {areasLoadFailedText}
+        </button>
+      </div>
+    )
+  }
+
+  <input type="hidden" name="cityName" />
+  <input type="hidden" name="zoneName" />
+  {showAreaField && <input type="hidden" name="areaName" />}
+</div>

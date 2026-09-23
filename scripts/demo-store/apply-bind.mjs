@@ -190,6 +190,7 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
         id: stableDraftId("draft_variant", intended.logicalKey), sku: intended.sku,
         stock: intended.inventory.mode === "tracked" ? intended.inventory.onHand : null,
         trackInventory: true, weight: null, barcode: null, barcodeType: null, imageId: null,
+        stockVersion: undefined,
       };
       const authority = match ?? fallback;
       if (intended.inventory.mode === "preserve" && !match) throw new Error(`Retained variant is missing: ${logicalKey}.`);

@@ -1,32 +1,34 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteCategories,
-  bulkRestoreCategories,
-  deleteCategory,
-  deleteCategoryPermanent,
-  restoreCategory,
-  type CategoryRevisionClaim,
-} from "../api-functions/categories";
+  deleteApiV1AdminCategoriesById,
+  deleteApiV1AdminCategoriesByIdPermanent,
+  postApiV1AdminCategoriesBulkDelete,
+  postApiV1AdminCategoriesBulkRestore,
+  postApiV1AdminCategoriesByIdRestore,
+} from "@scalius/api-client/sdk";
+import { apiData } from "../api";
+import type { CategoryRevisionClaim } from "../api-query-options/categories";
 import {
   getServerFnError,
   invalidateProductStatsQueries,
   queryKeys,
 } from "./shared";
 
+function invalidateCategoryLists(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.collections.categoryOptions() });
+  invalidateProductStatsQueries(queryClient);
+}
+
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: CategoryRevisionClaim) => deleteCategory({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: CategoryRevisionClaim) =>
+      apiData(deleteApiV1AdminCategoriesById({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
+      invalidateCategoryLists(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(claim.id) });
       toast.success("Category moved to trash");
     },
@@ -38,16 +40,10 @@ export function useDeleteCategory() {
 export function usePermanentDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: CategoryRevisionClaim) => deleteCategoryPermanent({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: CategoryRevisionClaim) =>
+      apiData(deleteApiV1AdminCategoriesByIdPermanent({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
+      invalidateCategoryLists(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.categories.detail(claim.id) });
       toast.success("Category permanently deleted");
     },
@@ -61,16 +57,10 @@ export function usePermanentDeleteCategory() {
 export function useRestoreCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: CategoryRevisionClaim) => restoreCategory({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: CategoryRevisionClaim) =>
+      apiData(postApiV1AdminCategoriesByIdRestore({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
+      invalidateCategoryLists(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.detail(claim.id),
       });
@@ -84,17 +74,10 @@ export function useRestoreCategory() {
 export function useBulkDeleteCategories() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { categories: CategoryRevisionClaim[]; permanent?: boolean }) =>
-      bulkDeleteCategories({ data }),
+    mutationFn: (body: { categories: CategoryRevisionClaim[]; permanent?: boolean }) =>
+      apiData(postApiV1AdminCategoriesBulkDelete({ body })),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
+      invalidateCategoryLists(queryClient);
       toast.success(
         variables.permanent
           ? `${variables.categories.length} categories permanently deleted`
@@ -110,16 +93,9 @@ export function useBulkRestoreCategories() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (categories: CategoryRevisionClaim[]) =>
-      bulkRestoreCategories({ data: { categories } }),
+      apiData(postApiV1AdminCategoriesBulkRestore({ body: { categories } })),
     onSuccess: (_data, categories) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.formOptions(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.categoryOptions(),
-      });
-      invalidateProductStatsQueries(queryClient);
+      invalidateCategoryLists(queryClient);
       toast.success(`${categories.length} categories restored`);
     },
     onError: (err) =>

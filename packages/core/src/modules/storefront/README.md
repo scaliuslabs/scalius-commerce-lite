@@ -67,20 +67,20 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 ### Public Storefront (`/api/v1/storefront`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/media writes invalidate it |
-| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page writes invalidate exact page render keys |
-| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery, public platform origins, merchant CSP sources) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
+| GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `PublicApi` edge cache keyed by the store cache generation |
+| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `PublicApi` edge cache keyed by the store cache generation |
+| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery, public platform origins, merchant CSP sources) | `PublicApi` edge cache keyed by the store cache generation |
 
 ### Public Hero (`/api/v1/hero`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/sliders` | Get active hero sliders. Optional `?type=desktop\|mobile` filter. Auto-detects mobile via User-Agent. Sets `X-Device-Type` header | Explicit `type=desktop/mobile` requests use `api:hero:*` with 3600s TTL; untyped User-Agent-derived requests bypass shared cache |
-| GET | `/sliders/{id}` | Get hero slider by ID (active only) | `api:hero:*` with 3600s TTL |
+| GET | `/sliders` | Get active hero sliders. Optional `?type=desktop\|mobile` filter. Auto-detects mobile via User-Agent. Sets `X-Device-Type` header | Explicit `type=desktop/mobile` requests use the `PublicApi` edge cache keyed by the store cache generation; untyped User-Agent-derived requests bypass shared cache |
+| GET | `/sliders/{id}` | Get hero slider by ID (active only) | `PublicApi` edge cache keyed by the store cache generation |
 
 ### Public SEO (`/api/v1/seo`)
 | Method | Path | Description | Cache |
 |--------|------|-------------|-------|
-| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy, and merchant return-policy schema settings) | `api:seo:*` with CACHE_TTLS.STANDARD / 3600s |
+| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy, and merchant return-policy schema settings) | `PublicApi` edge cache keyed by the store cache generation |
 
 ### Public Checkout (`/api/v1/checkout`)
 | Method | Path | Description |
@@ -108,11 +108,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 ### Cache Management (`/api/v1/cache`)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/stats` | Get KV cache statistics |
-| GET | `/groups` | Get invalidation group definitions and admin path-to-group mapping |
-| GET | `/last-cleared` | Get last-cleared timestamps per group |
-| POST | `/clear` | Clear ALL cache. Also triggers storefront purge via `PURGE_URL` (resolved at Worker entry from the Platform storefront URL setting, not configured) |
-| POST | `/clear-group` | Clear specific groups. Records timestamps, triggers storefront purge if groups bump HTML |
+| POST | `/clear` | "Refresh store": starts a new public cache generation (`bumpCacheGeneration`). Saves already do this; there are no purges or groups |
 
 ## Storefront Consumers
 

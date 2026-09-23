@@ -1,12 +1,11 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
-import { getOrderDetails, listOrders, previewOrderPaymentRecoveryLink } from "./orders.admin";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { withPublicMediaUrl } from "../../integrations/storage";
+import { archiveOrders, getOrderDetails, listOrders, previewOrderPaymentRecoveryLink } from "./orders.admin";
 
-type Query = { sql: string; params: unknown[]; method: "run" | "all" | "values" | "get" };
+type Query = { sql: string; params: readonly unknown[] };
 
 describe("admin order recovery lifecycle", () => {
   let sqlite: DatabaseSync;
@@ -15,28 +14,12 @@ describe("admin order recovery lifecycle", () => {
   const now = Math.floor(Date.now() / 1000);
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
     queries = [];
-    // The existing SQLite proxy test pattern executes the public service's
-    // actual filters, count, pagination, projections and enrichment queries.
-    const execute = (query: Query) => {
-      queries.push(query);
-      const statement = sqlite.prepare(query.sql);
-      statement.setReturnArrays(true);
-      const params = query.params as SQLInputValue[];
-      return { rows: query.method === "get"
-        ? statement.get(...params) as unknown as unknown[]
-        : statement.all(...params) as unknown as unknown[][] };
-    };
-    db = drizzle(
-      async (sql, params, method) => execute({ sql, params, method }),
-      async (batch) => batch.map(execute),
-      { schema },
-    ) as unknown as Database;
+    // Executes the public service's actual filters, count, pagination,
+    // projections and enrichment queries against the migrated schema.
+    ({ sqlite, db } = createSqliteD1Database({
+      onQuery: (sql, params) => queries.push({ sql, params }),
+    }));
   });
 
   afterEach(() => sqlite.close());
@@ -109,6 +92,7 @@ describe("admin order recovery lifecycle", () => {
     const detail = await getOrderDetails(db, "unshipped");
     expect(detail?.shipmentRecovery).toEqual(list.orders[0]?.shipmentRecovery);
     expect(detail?.shipmentRecovery).toMatchObject({ state: "none", canRepair: false });
+    expect(detail?.version).toBe(1);
   });
 
   function payment(orderId: string, status: string, paymentType = "full", amount = 100) {
@@ -139,6 +123,7 @@ describe("admin order recovery lifecycle", () => {
     expect(detail?.paymentRecovery).toEqual(row?.paymentRecovery);
     expect(row).not.toHaveProperty("paymentRecoveryApplicable");
     expect(detail).not.toHaveProperty("paymentRecoveryApplicable");
+    expect(JSON.stringify([row?.paymentRecovery, detail?.paymentRecovery])).not.toMatch(/key_|test-hash|claim/);
     if (state !== "none" && row?.status !== "incomplete") {
       expect(row?.paymentRecovery.message).not.toMatch(/retry/i);
     }
@@ -224,20 +209,60 @@ describe("admin order recovery lifecycle", () => {
     await expectRecovery("closed", status === "processed" ? "none" : "needs_attention");
   });
 
-  it("keeps a full filtered page inside D1 bind limits and uses order-id evidence indexes", async () => {
-    for (let index = 0; index < 100; index++) order(`open_${index}`, "incomplete");
+  it("keeps a clamped full filtered page inside D1 bind limits and uses order-id evidence indexes", async () => {
+    for (let index = 0; index < 101; index++) order(`open_${index}`, "incomplete");
     const result = await listOrders(db, {
-      paymentRecovery: "recoverable", search: "+8801700000000", limit: 100, page: 1,
+      paymentRecovery: "recoverable", search: "+8801700000000", limit: 1000, page: 0,
       status: "incomplete", paymentStatus: "failed", paymentMethod: "sslcommerz",
       fulfillmentStatus: "pending", startDate: new Date(0), endDate: new Date("2100-01-01"),
       sort: "relevance", order: "desc",
     });
     expect(result.orders).toHaveLength(100);
-    expect(result.pagination.total).toBe(100);
+    expect(result.pagination).toMatchObject({ page: 1, limit: 100, total: 101 });
     expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(100);
     const orderQuery = queries.find((query) => query.sql.includes('"webhook_events"'));
     expect(orderQuery).toBeDefined();
     const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${orderQuery!.sql}`).all(...orderQuery!.params as SQLInputValue[]);
     expect(plan.map((step) => String(step.detail)).join("\n")).toContain("webhook_events_order_id_idx");
+  });
+
+  it("archives only settled orders at the loaded version without touching inventory or live payment setup", async () => {
+    order("done", "completed", "paid", 100);
+    order("busy", "completed", "paid", 100);
+    attempt("busy", "processing", now + 300);
+    order("open", "confirmed", "unpaid");
+
+    await expect(archiveOrders(db, [{ id: "done", expectedVersion: 2 }])).rejects.toThrow(/changed/);
+    await expect(archiveOrders(db, [{ id: "busy", expectedVersion: 1 }])).rejects.toThrow();
+    await expect(archiveOrders(db, [{ id: "open", expectedVersion: 1 }])).rejects.toThrow();
+    queries = [];
+    await archiveOrders(db, [{ id: "done", expectedVersion: 1 }]);
+
+    expect(queries.some((query) => /product_variants|inventory_movements|DELETE FROM/i.test(query.sql))).toBe(false);
+    expect(sqlite.prepare("SELECT id, version, archived_at IS NOT NULL AS archived, status FROM orders ORDER BY id").all())
+      .toEqual([
+        { id: "busy", version: 1, archived: 0, status: "completed" },
+        { id: "done", version: 2, archived: 1, status: "completed" },
+        { id: "open", version: 1, archived: 0, status: "confirmed" },
+      ]);
+  });
+
+  it("shows the image snapshotted on the order line, not the product's current media", async () => {
+    order("history", "completed", "paid", 100);
+    sqlite.exec(`
+      INSERT INTO products (id, name, slug, price) VALUES ('product_h', 'Renamed product', 'renamed', 100);
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type) VALUES
+        ('med_snapshot0001', 'old.webp', 'image', 'media/med_snapshot0001.webp', 1, 'image/webp'),
+        ('med_current00001', 'new.webp', 'image', 'media/med_current00001.webp', 1, 'image/webp');
+      INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order)
+        VALUES ('pmed_current01', 'product_h', 'med_current00001', 1, 0);
+      INSERT INTO order_items (id, order_id, product_id, quantity, price, product_name, product_image_media_id)
+        VALUES ('item_h', 'history', 'product_h', 1, 100, 'Original name', 'med_snapshot0001');
+    `);
+    const detail = await withPublicMediaUrl("https://media.example", () => getOrderDetails(db, "history"));
+    expect(detail?.items).toEqual([expect.objectContaining({
+      productName: "Original name",
+      productImage: "https://media.example/media/med_snapshot0001.webp",
+    })]);
   });
 });

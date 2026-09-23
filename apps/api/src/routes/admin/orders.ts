@@ -57,9 +57,9 @@ import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 import { adminOrdersReturnRoutes } from "./orders-returns";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
+    bumpCacheGeneration,
     findCheckoutReservationAvailabilityTransitions,
-    invalidateProductAvailabilityCaches,
-} from "../../utils/cache-invalidation";
+} from "../../utils/cache-generation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
@@ -883,13 +883,7 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         { ...payload, requestKey },
         user?.id ?? null,
     );
-    if (result.inventoryMutationVariantIds.length > 0) {
-        await invalidateProductAvailabilityCaches(
-            c.get("db"),
-            { variantIds: result.inventoryMutationVariantIds },
-            c,
-        );
-    }
+    if (result.inventoryMutationVariantIds.length > 0) await bumpCacheGeneration(c);
     return ok(c, {
         id: result.id,
         version: result.version,
@@ -939,11 +933,7 @@ app.openapi(createOrderRoute, async (c) => {
             ),
         );
     if (availabilityTransitionVariantIds.length > 0) {
-        await invalidateProductAvailabilityCaches(
-            db,
-            { variantIds: availabilityTransitionVariantIds },
-            c,
-        );
+        await bumpCacheGeneration(c);
     }
     return created(c, result);
 });
@@ -1007,11 +997,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
             : [],
     );
     if (availabilityTransitionVariantIds.length > 0) {
-        await invalidateProductAvailabilityCaches(
-            db,
-            { variantIds: availabilityTransitionVariantIds },
-            c,
-        );
+        await bumpCacheGeneration(c);
     }
     const responseResults = results.map((result) => {
         const {
@@ -1153,11 +1139,7 @@ app.openapi(updateOrderRoute, async (c) => {
         Array.isArray(result.inventoryMutationVariantIds)
         && result.inventoryMutationVariantIds.length > 0
     ) {
-        await invalidateProductAvailabilityCaches(
-            db,
-            { variantIds: result.inventoryMutationVariantIds },
-            c,
-        );
+        await bumpCacheGeneration(c);
     }
     return ok(c, { id: result.id });
 });

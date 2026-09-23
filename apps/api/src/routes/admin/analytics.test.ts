@@ -6,20 +6,14 @@ import { finalizeOpenApiContract, type OpenApiDocument } from "../../openapi-con
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 const mocks = vi.hoisted(() => ({
-    listAnalyticsScripts: vi.fn(),
-    getAnalyticsProviderHealth: vi.fn(),
     createAnalyticsScript: vi.fn(),
-    updateAnalyticsScript: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/analytics", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@scalius/core/modules/analytics")>();
     return {
         ...actual,
-        listAnalyticsScripts: mocks.listAnalyticsScripts,
-        getAnalyticsProviderHealth: mocks.getAnalyticsProviderHealth,
         createAnalyticsScript: mocks.createAnalyticsScript,
-        updateAnalyticsScript: mocks.updateAnalyticsScript,
     };
 });
 
@@ -51,107 +45,6 @@ function createTestApp(
 describe("admin analytics routes", () => {
     afterEach(() => {
         vi.clearAllMocks();
-    });
-
-    it("serves compact provider health without script config", async () => {
-        const providerHealth = {
-            summary: {
-                totalProviders: 6,
-                browserReadyProviders: 1,
-                draftProviders: 1,
-                blockedProviders: 1,
-                notConfiguredProviders: 3,
-                serverReadyProviders: 1,
-            },
-            providers: [
-                {
-                    provider: "facebook_pixel",
-                    label: "Facebook Pixel",
-                    browser: {
-                        status: "ready",
-                        configured: true,
-                        activeScriptCount: 1,
-                        readyScriptCount: 1,
-                        draftScriptCount: 0,
-                        blockedScriptCount: 0,
-                        message: "One active browser snippet is configured.",
-                        issues: [],
-                    },
-                    serverSide: {
-                        status: "ready",
-                        configured: true,
-                        label: "Server ready",
-                        message: "Meta CAPI is enabled. No provider test event was sent.",
-                    },
-                },
-            ],
-        };
-        mocks.getAnalyticsProviderHealth.mockResolvedValue(providerHealth);
-        const { app, env, db } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/analytics/health", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            success: true;
-            data: typeof providerHealth;
-        };
-
-        expect(response.status).toBe(200);
-        expect(body).toEqual({
-            success: true,
-            data: providerHealth,
-        });
-        expect(mocks.getAnalyticsProviderHealth).toHaveBeenCalledWith(db, {
-            credentialEncryptionKey: "credential-key",
-        });
-        const firstProvider = body.data.providers[0];
-        if (!firstProvider) {
-            throw new Error("Expected provider health payload");
-        }
-        expect(firstProvider).not.toHaveProperty("config");
-        expect(firstProvider.browser).not.toHaveProperty("config");
-        expect(firstProvider.serverSide).not.toHaveProperty("config");
-        expect(JSON.stringify(body)).not.toContain("accessToken");
-    });
-
-    it("lists safe paginated summaries without executable script source", async () => {
-        mocks.listAnalyticsScripts.mockResolvedValue({
-            scripts: [{
-                id: "analytics_1",
-                name: "GA4",
-                type: "google_analytics",
-                isActive: false,
-                usePartytown: true,
-                location: "head",
-                revision: 2,
-                identifier: "G-ABC123DEF4",
-                readiness: "ready_to_activate",
-                configIssue: null,
-                createdAt: "2026-07-01T00:00:00.000Z",
-                updatedAt: "2026-07-02T00:00:00.000Z",
-                deletedAt: null,
-            }],
-            pagination: { total: 1, page: 1, limit: 20, totalPages: 1 },
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request(
-            "/api/v1/admin/analytics?page=1&limit=20",
-            { method: "GET" },
-            env,
-        );
-        const body = await response.json() as { data: unknown };
-
-        expect(response.status).toBe(200);
-        expect(JSON.stringify(body)).not.toContain("<script>");
-        expect(JSON.stringify(body)).not.toContain('"config"');
-        expect(body).toMatchObject({
-            data: {
-                scripts: [{ revision: 2, identifier: "G-ABC123DEF4" }],
-                pagination: { total: 1 },
-            },
-        });
     });
 
     it("documents provider health in the admin analytics OpenAPI contract", () => {

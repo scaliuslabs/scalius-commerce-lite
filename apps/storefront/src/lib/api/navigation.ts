@@ -14,7 +14,7 @@ type StorefrontNavigationQuery = {
 
 /**
  * Fetches navigation data for specified areas of the site.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param type The type of navigation to fetch ('header', 'footer', or 'mobile_menu').
  * @returns A promise resolving to an array of navigation items, or null on failure.
  */

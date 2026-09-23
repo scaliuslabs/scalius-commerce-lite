@@ -62,7 +62,7 @@ export function getDiscountValueLabel(
   }
 }
 
-function parseDate(value: string | null): number | null {
+function parseDate(value: string | number | null): number | null {
   if (!value) return null;
   const timestamp = new Date(value).getTime();
   return Number.isFinite(timestamp) ? timestamp : null;

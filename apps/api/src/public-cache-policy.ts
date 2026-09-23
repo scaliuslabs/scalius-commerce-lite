@@ -1,16 +1,23 @@
-import { CACHE_TTLS } from "./utils/cache-ttls";
+import { PUBLIC_CACHE_MAX_AGE_SECONDS } from "@scalius/shared/cache-generation";
 
+/**
+ * Anonymous public API reads served through the `PublicApi` Workers Cache
+ * entrypoint. The cache key is the canonical path + sorted query plus the
+ * store's cache generation, so a buyer-visible write makes every entry stale
+ * without a purge.
+ */
 export interface PublicApiCachePolicy {
   canonicalUrl: string;
-  edgeTtlSeconds: number;
-  tags: readonly string[];
 }
 
-interface PublicApiRoutePolicy extends Omit<PublicApiCachePolicy, "canonicalUrl"> {
+interface PublicApiRoutePolicy {
   path: string;
   exact?: boolean;
   isEligible?: (url: URL) => boolean;
 }
+
+/** Internal query parameter carrying the cache generation into the key. */
+export const CACHE_GENERATION_QUERY_PARAM = "__cg";
 
 const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
@@ -41,117 +48,24 @@ function isHeroRequestEligible(url: URL): boolean {
 }
 
 const PUBLIC_API_ROUTE_POLICIES: readonly PublicApiRoutePolicy[] = [
-  {
-    path: "/api/v1/products",
-    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
-    tags: ["products", "search", "discovery"],
-  },
-  {
-    path: "/api/v1/categories",
-    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
-    tags: ["categories", "products", "search"],
-    isEligible: (url) =>
-      url.pathname.replace(/\/$/, "").endsWith("/products"),
-  },
-  {
-    path: "/api/v1/collections",
-    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
-    tags: ["collections", "products", "search"],
-    isEligible: (url) =>
-      url.pathname.replace(/\/$/, "") !== "/api/v1/collections",
-  },
-  {
-    path: "/api/v1/storefront/homepage",
-    exact: true,
-    edgeTtlSeconds: CACHE_TTLS.AVAILABILITY,
-    tags: ["homepage", "products", "categories", "collections"],
-  },
-  {
-    path: "/api/v1/checkout/config",
-    exact: true,
-    edgeTtlSeconds: CACHE_TTLS.CHECKOUT_CONFIG,
-    tags: ["checkout"],
-  },
-  {
-    path: "/api/v1/shipping-methods",
-    edgeTtlSeconds: CACHE_TTLS.SHORT,
-    tags: ["checkout"],
-  },
-  {
-    path: "/api/v1/locations",
-    edgeTtlSeconds: CACHE_TTLS.MEDIUM,
-    tags: ["checkout"],
-  },
-  {
-    path: "/api/v1/attributes",
-    edgeTtlSeconds: CACHE_TTLS.ATTRIBUTES,
-    tags: ["attributes", "search"],
-  },
-  {
-    path: "/api/v1/categories",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["categories"],
-    isEligible: (url) =>
-      !url.pathname.replace(/\/$/, "").endsWith("/products"),
-  },
-  {
-    path: "/api/v1/collections",
-    exact: true,
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["collections"],
-  },
-  {
-    path: "/api/v1/pages",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["pages"],
-  },
-  {
-    path: "/api/v1/articles",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["pages"],
-  },
-  {
-    path: "/api/v1/hero",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["homepage"],
-    isEligible: isHeroRequestEligible,
-  },
-  {
-    path: "/api/v1/seo",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["homepage", "layout", "discovery"],
-  },
-  {
-    path: "/api/v1/header",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["layout"],
-  },
-  {
-    path: "/api/v1/navigation",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["layout", "categories"],
-  },
-  {
-    path: "/api/v1/footer",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["layout"],
-  },
-  {
-    path: "/api/v1/storefront/pages/slug",
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["pages", "layout"],
-  },
-  {
-    path: "/api/v1/storefront/layout",
-    exact: true,
-    edgeTtlSeconds: CACHE_TTLS.STANDARD,
-    tags: ["layout", "media"],
-  },
+  { path: "/api/v1/products" },
+  { path: "/api/v1/categories" },
+  { path: "/api/v1/collections" },
+  { path: "/api/v1/storefront/homepage", exact: true },
+  { path: "/api/v1/checkout/config", exact: true },
+  { path: "/api/v1/shipping-methods" },
+  { path: "/api/v1/locations" },
+  { path: "/api/v1/attributes" },
+  { path: "/api/v1/pages" },
+  { path: "/api/v1/articles" },
+  { path: "/api/v1/hero", isEligible: isHeroRequestEligible },
+  { path: "/api/v1/seo" },
+  { path: "/api/v1/header" },
+  { path: "/api/v1/navigation" },
+  { path: "/api/v1/footer" },
+  { path: "/api/v1/storefront/pages/slug" },
+  { path: "/api/v1/storefront/layout", exact: true },
 ] as const;
-
-const PUBLIC_API_CACHE_TAGS = new Set(
-  PUBLIC_API_ROUTE_POLICIES.flatMap((policy) => policy.tags),
-);
 
 function routeMatches(pathname: string, policy: PublicApiRoutePolicy): boolean {
   if (policy.exact) return pathname === policy.path;
@@ -178,12 +92,6 @@ function buildPublicApiCacheKey(url: URL): string {
   return query ? `${pathname}?${query}` : pathname;
 }
 
-export function normalizePublicApiCacheTags(tags: readonly string[]): string[] {
-  return [
-    ...new Set(tags.filter((tag) => PUBLIC_API_CACHE_TAGS.has(tag))),
-  ];
-}
-
 export function getPublicApiCachePolicy(
   request: Request,
 ): PublicApiCachePolicy | null {
@@ -191,6 +99,7 @@ export function getPublicApiCachePolicy(
   if (hasPrivateRequestSignals(request)) return null;
 
   const url = new URL(request.url);
+  if (url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return null;
   if (!hasBoundedPublicQuery(url)) return null;
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   const policy = PUBLIC_API_ROUTE_POLICIES.find(
@@ -200,19 +109,27 @@ export function getPublicApiCachePolicy(
   );
   if (!policy) return null;
 
-  const canonicalCachePath = buildPublicApiCacheKey(url);
-
   return {
-    canonicalUrl: new URL(canonicalCachePath, url.origin).toString(),
-    edgeTtlSeconds: policy.edgeTtlSeconds,
-    tags: policy.tags,
+    canonicalUrl: new URL(buildPublicApiCacheKey(url), url.origin).toString(),
   };
 }
 
-export function decoratePublicApiResponse(
-  response: Response,
-  policy: PublicApiCachePolicy,
-): Response {
+/** The canonical URL with the generation appended; it becomes the cache key. */
+export function withCacheGeneration(canonicalUrl: string, generation: string): string {
+  const url = new URL(canonicalUrl);
+  url.searchParams.append(CACHE_GENERATION_QUERY_PARAM, generation);
+  return url.toString();
+}
+
+/** Removes the generation before the request reaches the application. */
+export function withoutCacheGeneration(request: Request): Request {
+  const url = new URL(request.url);
+  if (!url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return request;
+  url.searchParams.delete(CACHE_GENERATION_QUERY_PARAM);
+  return new Request(url.toString(), request);
+}
+
+export function decoratePublicApiResponse(response: Response): Response {
   if (!response.ok || response.headers.get("Cache-Control")?.includes("no-store")) {
     return response;
   }
@@ -221,9 +138,8 @@ export function decoratePublicApiResponse(
   headers.set("Cache-Control", "public, max-age=0, no-cache, must-revalidate");
   headers.set(
     "Cloudflare-CDN-Cache-Control",
-    `public, max-age=${policy.edgeTtlSeconds}, must-revalidate`,
+    `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`,
   );
-  headers.set("Cache-Tag", policy.tags.join(","));
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

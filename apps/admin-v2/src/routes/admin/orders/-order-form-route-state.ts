@@ -1,5 +1,7 @@
 import type { Product } from "~/components/admin/order-form/types";
-import type { ProductVariant } from "~/types/api-responses";
+import type {
+  ProductVariant,
+} from "~/lib/api-query-options/products";
 
 export interface EditOrderFormProduct {
   id: string;

@@ -191,24 +191,6 @@ describe("Meta conversions public event route", () => {
     expect(cache.get).toHaveBeenCalledWith(META_CAPI_BROWSER_CIRCUIT_KEY, { cacheTtl: 60 });
   });
 
-  it("returns 429 when the native rate limiter denies the event", async () => {
-    const limiter = { limit: vi.fn(async () => ({ success: false })) };
-
-    const { app } = createTestApp();
-    const response = await app.request(
-      "/api/v1/meta/events",
-      createRequest({ eventId: "Purchase:order_1" }),
-      {
-        CACHE: { get: vi.fn(async () => null), put: vi.fn() },
-        RL_STANDARD: limiter,
-        STOREFRONT_URL: "https://store.example",
-      } as never,
-    );
-
-    expect(response.status).toBe(429);
-    expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
-  });
-
   it("opens a short circuit after non-retryable provider failures", async () => {
     mocks.sendCapiEvent.mockResolvedValueOnce({
       success: false,

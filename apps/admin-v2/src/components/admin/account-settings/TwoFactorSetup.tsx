@@ -24,9 +24,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  set2faMethod,
-  startTwoFactorMethodChallenge,
-} from "~/lib/api-functions/auth-management";
+  postApiV1AdminAuth2FaMethod,
+  postApiV1AdminAuth2FaMethodChallenge,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import type { User } from "./AccountSettingsContainer";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
@@ -62,11 +63,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     code: string,
     challengeId?: string,
   ) => {
-    await set2faMethod({
-      data: challengeId
+    await apiData(postApiV1AdminAuth2FaMethod({
+      body: challengeId
         ? { method, challengeId, code }
         : { method, code },
-    });
+    }));
   };
 
   const refreshAdminContext = () => {
@@ -153,9 +154,9 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const challenge = await startTwoFactorMethodChallenge({
-        data: { method: "totp", password },
-      });
+      const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({
+        body: { method: "totp", password },
+      }));
       setMethodChallengeId(challenge.challengeId);
       setTotpUri(challenge.totpUri);
       setBackupCodes([]);
@@ -179,13 +180,13 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       if (!methodChallengeId) {
         throw new Error("Authenticator setup expired. Start again.");
       }
-      const result = await set2faMethod({
-        data: {
+      const result = await apiData(postApiV1AdminAuth2FaMethod({
+        body: {
           method: "totp",
           challengeId: methodChallengeId,
           code: verificationCode,
         },
-      });
+      }));
       if (!result.backupCodes?.length) {
         throw new Error("Recovery codes were not returned after setup.");
       }
@@ -207,9 +208,9 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const challenge = await startTwoFactorMethodChallenge({
-        data: { method: "email", password },
-      });
+      const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({
+        body: { method: "email", password },
+      }));
       setMethodChallengeId(challenge.challengeId);
       // Changing the delivery method must preserve the current authenticator
       // secret and recovery codes. Only a verified email OTP changes method.

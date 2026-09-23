@@ -1,12 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { getSeoDiscoveryLiveProbe } from "../api-functions/seo-discovery-live-probe-rpc";
+import { getApiV1AdminSettingsSeoLiveProbe } from "@scalius/api-client/sdk";
+import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
 export const seoDiscoveryLiveProbeQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.seoDiscoveryLiveProbe(),
-    queryFn: () => getSeoDiscoveryLiveProbe(),
+    queryFn: () => apiData(getApiV1AdminSettingsSeoLiveProbe()),
     staleTime: 0,
     gcTime: 1000 * 60 * 5,
     retry: false,
