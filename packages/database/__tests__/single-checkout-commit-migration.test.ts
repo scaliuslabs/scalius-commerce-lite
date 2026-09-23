@@ -467,6 +467,29 @@ describe.each(providers)("single checkout commit migration (%s)", (provider) => 
     `)).rejects.toThrow(/ledger v2 operation semantics/);
   });
 
+  it("voids an orphaned aggregate whose request key committed another order", async () => {
+    const store = await populatedStore(provider);
+    // The old coordinator accepted a reused key with another payload and never
+    // projected the second order; the key already belongs to order_b2.
+    await insertLaneOrder(store, "order_e5", [{ variantId: "var_cold", quantity: 1, lane: 1 }], "pending");
+    await store.run(`INSERT INTO checkout_attempts (id, request_key, request_hash, checkout_token, order_id, status)
+      VALUES ('att_reused', 'checkout_submit:v1:order_e5', 'other_hash', 'chk_other', 'order_b2', 'committed')`);
+    const coldBefore = await variant(store, "var_cold");
+
+    await store.migrate();
+
+    expect(await one(store, "SELECT status, inventory_action FROM orders WHERE id = 'order_e5'"))
+      .toEqual({ status: "cancelled", inventory_action: "restored" });
+    expect(await count(store, "SELECT COUNT(*) AS count FROM order_items WHERE order_id = 'order_e5'")).toBe(0);
+    // Its hold is released, not folded: var_cold only gains order_b2's unit.
+    expect((await variant(store, "var_cold")).reserved_stock).toBe(coldBefore.reserved_stock + 1);
+    expect(await store.all(`SELECT type, quantity, ledger_version FROM inventory_movements
+      WHERE order_id = 'order_e5' ORDER BY type`)).toEqual([
+      { type: "released", quantity: -1, ledger_version: 1 },
+      { type: "reserved", quantity: 1, ledger_version: 1 },
+    ]);
+  });
+
   it("aborts without changes when lane counters disagree with outstanding lane edges", async () => {
     const store = await populatedStore(provider);
     await store.run(

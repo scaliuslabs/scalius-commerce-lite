@@ -26,6 +26,71 @@ SELECT 0 WHERE EXISTS (
   HAVING SUM(delta) <> 0
 );
 --> statement-breakpoint
+-- Orphaned aggregates: a pending projection whose request key already
+-- committed a different order (the key was reused with another payload). The
+-- buyer never received this order, so it cannot be materialized. Record its
+-- lane hold as a voided legacy pair, then cancel it.
+INSERT INTO `inventory_movements` (
+  `id`, `variant_id`, `order_id`, `type`, `quantity`, `previous_stock`, `new_stock`,
+  `notes`, `created_by`, `ledger_version`, `pool`, `reservation_generation`, `created_at`
+)
+SELECT
+  'lane-orphan:' || movement.type || ':' || orphan_edge.order_id || ':' || orphan_edge.variant_id,
+  orphan_edge.variant_id,
+  orphan_edge.order_id,
+  movement.type,
+  movement.sign * orphan_edge.quantity,
+  variant.stock,
+  variant.stock,
+  'Orphaned checkout-lane hold voided by migration 0065 (its request key belongs to another order)',
+  NULL,
+  1,
+  'regular',
+  1,
+  unixepoch()
+FROM (
+  SELECT
+    checkout_order.id AS order_id,
+    CAST(json_extract(edge.value, '$.variantId') AS TEXT) AS variant_id,
+    CAST(json_extract(edge.value, '$.quantity') AS INTEGER) AS quantity
+  FROM orders AS checkout_order, json_each(checkout_order.checkout_inventory_edges) AS edge
+  WHERE checkout_order.checkout_aggregate_version = 1
+    AND checkout_order.checkout_projection_status <> 'complete'
+    AND EXISTS (
+      SELECT 1 FROM `checkout_attempts` AS attempt
+      WHERE attempt.request_key = checkout_order.checkout_request_key
+        AND attempt.order_id IS NOT NULL
+        AND attempt.order_id <> checkout_order.id
+    )
+    AND checkout_order.inventory_authority = 'checkout_lane_v1'
+    AND checkout_order.inventory_action = 'reserved'
+) AS orphan_edge
+JOIN `product_variants` AS variant ON variant.id = orphan_edge.variant_id
+CROSS JOIN (
+  SELECT 'reserved' AS type, 1 AS sign
+  UNION ALL
+  SELECT 'released' AS type, -1 AS sign
+) AS movement;
+--> statement-breakpoint
+UPDATE orders
+SET
+  status = 'cancelled',
+  inventory_action = CASE WHEN inventory_action = 'reserved' THEN 'restored' ELSE inventory_action END,
+  checkout_projection_status = 'complete',
+  notes = trim(COALESCE(notes, '') || ' Voided by migration 0065: checkout never completed and its request key belongs to another order.'),
+  updated_at = unixepoch()
+WHERE id IN (
+  SELECT checkout_order.id FROM orders AS checkout_order
+  WHERE checkout_order.checkout_aggregate_version = 1
+    AND checkout_order.checkout_projection_status <> 'complete'
+    AND EXISTS (
+      SELECT 1 FROM `checkout_attempts` AS attempt
+      WHERE attempt.request_key = checkout_order.checkout_request_key
+        AND attempt.order_id IS NOT NULL
+        AND attempt.order_id <> checkout_order.id
+    )
+);
+--> statement-breakpoint
 DROP TRIGGER `product_variants_checkout_lane_capacity_sync`;
 --> statement-breakpoint
 -- 1. Materialize every deferred checkout projection (order items, tax
@@ -865,4 +930,4 @@ DROP TABLE `checkout_inventory_lane_movements`;
 --> statement-breakpoint
 DROP TABLE `inventory_reservation_lanes`;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (65, '0065_single_checkout_commit', '8ca2839b75518f5abb60eaa60533f99859bfa466b3f21facac1ebb0033fa4bc5');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (65, '0065_single_checkout_commit', 'b00f8d765b7c4851d6547678a02cd94be2c0ae6d7e42df46de845361df4d08fb');
