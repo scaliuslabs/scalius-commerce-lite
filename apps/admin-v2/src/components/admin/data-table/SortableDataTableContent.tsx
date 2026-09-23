@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   flexRender,
   type Row,
@@ -58,16 +58,14 @@ function SortableTableRow<TData extends TableRowData>({
     isDragging,
   } = useSortable({ id: row.id });
 
-  const style = getSortableStyle(transform, transition);
+  const style = getSortableStyle(transform, transition, isDragging ? { opacity: 0.5 } : undefined);
 
   return (
     <TableRow
       ref={setNodeRef}
+      // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
       style={style}
-      data-state={row.getIsSelected() ? "selected" : undefined}
-      className={cn(
-        isDragging && "bg-primary/5 opacity-50 shadow-lg ring-1 ring-primary/20",
-      )}
+      data-state={row.getIsSelected() || isDragging ? "selected" : undefined}
     >
       <TableCell className="w-[40px] px-2">
         <div
@@ -132,10 +130,8 @@ export function SortableDataTableContent<TData extends TableRowData>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    style={{
-                      width:
-                        header.getSize() !== 150 ? header.getSize() : undefined,
-                    }}
+                    className={cn(header.getSize() !== 150 && "w-(--column-width)")}
+                    style={{ "--column-width": `${header.getSize()}px` } as CSSProperties}
                   >
                     {header.isPlaceholder
                       ? null

@@ -32,7 +32,6 @@ import { Switch } from "~/components/ui/switch";
 import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
 import type {
   NavigationMenuSummary,
   NavigationPlacementSetting,
@@ -45,8 +44,15 @@ import {
 } from "~/lib/api-query-options/online-store";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { SocialLinksCard, isSafeSocialDestination } from "./SocialLinksCard";
-import { OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
+import { SocialLinksCard, isSafeSocialDestination, socialFieldId, type SocialLink } from "./SocialLinksCard";
+import { actionErrorText, failSave, Field, OnlineStorePage, SectionCard, useDocumentDraft } from "./shared";
+
+/** `social.2.url` → the control that shows it. */
+function socialField(path: string, social: SocialLink[]): string | undefined {
+  const [group, index, field] = path.split(".");
+  const link = group === "social" ? social[Number(index)] : undefined;
+  return link && (field === "url" || field === "label") ? socialFieldId(link.id, field) : undefined;
+}
 
 /** Storefront slots a menu can fill: the header menu and four footer columns. */
 const SLOTS = [
@@ -80,9 +86,11 @@ function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
 
   const create = async () => {
     setSaving(true);
+    setError(undefined);
     try {
       const { menu } = await apiData(postApiV1AdminNavigationMenus({ body: { name: name.trim() } }));
       const created = menu as unknown as NavigationMenuSummary;
@@ -96,8 +104,8 @@ function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
       onOpenChange(false);
       setName("");
       void navigate({ to: "/admin/online-store/navigation/$menuId", params: { menuId: created.id } });
-    } catch (error) {
-      toast.error(t("saveFailed"), { description: getServerFnError(error, t("tryAgain")) });
+    } catch (failure) {
+      setError(actionErrorText(failure));
     } finally {
       setSaving(false);
     }
@@ -118,21 +126,26 @@ function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
             if (name.trim() && !saving) void create();
           }}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="new-menu-name">{t("menuName")}</Label>
+          <Field id="new-menu-name" label={t("menuName")}>
             <Input
               id="new-menu-name"
               value={name}
               maxLength={100}
               autoFocus
-              onChange={(event) => setName(event.target.value)}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "new-menu-name-error" : undefined}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError(undefined);
+              }}
             />
-          </div>
+          </Field>
+          {error ? <p id="new-menu-name-error" role="alert" className="text-body text-destructive">{error}</p> : null}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
               {t("cancel")}
             </Button>
-            <Button type="submit" disabled={!name.trim() || saving}>
+            <Button type="submit" loading={saving} disabled={!name.trim()}>
               {t("addMenu")}
             </Button>
           </DialogFooter>
@@ -155,11 +168,11 @@ function MenusCard() {
   }
 
   return (
-    <SectionCard title={t("menus")}>
-      {menus.items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("noMenus")}</p>
-      ) : (
-        <ul className="-mx-4 divide-y border-t">
+    <SectionCard
+      title={t("menus")}
+      description={menus.items.length === 0 ? t("noMenus") : undefined}
+      rows={menus.items.length === 0 ? undefined : (
+        <ul>
           {menus.items.map((menu) => {
             const locations = locationsByMenu.get(menu.id) ?? [];
             return (
@@ -167,11 +180,11 @@ function MenusCard() {
                 <Link
                   to="/admin/online-store/navigation/$menuId"
                   params={{ menuId: menu.id }}
-                  className="flex min-h-14 items-center gap-3 px-4 py-2 hover:bg-muted/50"
+                  className="flex min-h-14 items-center gap-3 border-t border-border px-4 py-3 hover:bg-muted"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{menu.name}</span>
-                    <span className="block truncate text-sm text-muted-foreground">
+                    <span className="block text-body font-medium">{menu.name}</span>
+                    <span className="block text-body text-muted-foreground">
                       {[
                         menu.itemCount === 1 ? t("oneItem") : t("itemCount", { count: menu.itemCount }),
                         locations.length ? locations.join(", ") : t("notShown"),
@@ -186,7 +199,7 @@ function MenusCard() {
           })}
         </ul>
       )}
-    </SectionCard>
+    />
   );
 }
 
@@ -205,6 +218,7 @@ function LocationsCard() {
     [placements],
   );
   const { draft, setDraft } = useDocumentDraft({
+    label: t("menuLocations"),
     saved,
     save: async (next) => {
       try {
@@ -244,7 +258,7 @@ function LocationsCard() {
           const key = slotKey(slot);
           return (
             <div key={key} className="space-y-1.5">
-              <Label>{slotLabel(slot)}</Label>
+              <Label htmlFor={`menu-location-${key}`}>{slotLabel(slot)}</Label>
               <Select
                 value={draft[key] || "none"}
                 onValueChange={(menuId) => setDraft((current) => ({
@@ -252,7 +266,7 @@ function LocationsCard() {
                   [key]: menuId === "none" ? "" : menuId,
                 }))}
               >
-                <SelectTrigger aria-label={slotLabel(slot)}>
+                <SelectTrigger id={`menu-location-${key}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,8 +292,15 @@ function StoreDetailsCards() {
   const socialInvalid = (social: { url: string }[]) =>
     social.some((link) => !isSafeSocialDestination(link.url));
   const headerDraft = useDocumentDraft({
+    label: t("header"),
     saved: header.data.config,
     invalid: (config) => socialInvalid(config.social),
+    fields: (path, config) =>
+      socialField(path, config.social) ?? ({
+        "topBar.text": "announcement-text",
+        "contact.phone": "contact-phone",
+        "contact.text": "contact-text",
+      } as Record<string, string>)[path],
     save: async (config) => {
       try {
         const saved = await apiData(postApiV1AdminSettingsHeader({
@@ -292,8 +313,12 @@ function StoreDetailsCards() {
     },
   });
   const footerDraft = useDocumentDraft({
+    label: t("footer"),
     saved: footer.data.config,
     invalid: (config) => socialInvalid(config.social),
+    fields: (path, config) =>
+      socialField(path, config.social) ??
+      ({ tagline: "footer-tagline", copyrightText: "footer-copyright" } as Record<string, string>)[path],
     save: async (config) => {
       try {
         const saved = await apiData(postApiV1AdminSettingsFooter({
@@ -325,8 +350,7 @@ function StoreDetailsCards() {
           />
         }
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="announcement-text">{t("message")}</Label>
+        <Field id="announcement-text" label={t("message")}>
           <Input
             id="announcement-text"
             value={headerConfig.topBar.text}
@@ -334,7 +358,7 @@ function StoreDetailsCards() {
             placeholder={t("announcementPlaceholder")}
             onChange={(event) => setHeader({ topBar: { ...headerConfig.topBar, text: event.target.value } })}
           />
-        </div>
+        </Field>
       </SectionCard>
 
       <SectionCard
@@ -349,8 +373,7 @@ function StoreDetailsCards() {
         }
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="contact-phone">{t("phoneNumber")}</Label>
+          <Field id="contact-phone" label={t("phoneNumber")}>
             <Input
               id="contact-phone"
               type="tel"
@@ -359,9 +382,8 @@ function StoreDetailsCards() {
               placeholder="+880 1712 345678"
               onChange={(event) => setHeader({ contact: { ...headerConfig.contact, phone: event.target.value } })}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="contact-text">{t("phoneLabel")}</Label>
+          </Field>
+          <Field id="contact-text" label={t("phoneLabel")}>
             <Input
               id="contact-text"
               value={headerConfig.contact.text}
@@ -369,7 +391,7 @@ function StoreDetailsCards() {
               placeholder={t("phoneLabelPlaceholder")}
               onChange={(event) => setHeader({ contact: { ...headerConfig.contact, text: event.target.value } })}
             />
-          </div>
+          </Field>
         </div>
       </SectionCard>
 
@@ -382,17 +404,16 @@ function StoreDetailsCards() {
       />
 
       <SectionCard title={t("footer")}>
-        <div className="space-y-1.5">
-          <Label htmlFor="footer-tagline">{t("tagline")}</Label>
+        <Field id="footer-tagline" label={t("tagline")}>
           <Input
             id="footer-tagline"
             value={footerConfig.tagline ?? ""}
             maxLength={200}
             onChange={(event) => setFooter({ tagline: event.target.value })}
           />
-        </div>
+        </Field>
         <div className="space-y-1.5">
-          <Label>{t("aboutText")}</Label>
+          <Label id="footer-about-label">{t("aboutText")}</Label>
           <DeferredTiptapEditor
             content={footerConfig.description ?? ""}
             onChange={(description) => setFooter({ description })}
@@ -400,16 +421,15 @@ function StoreDetailsCards() {
             compact
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="footer-copyright">{t("copyright")}</Label>
+        <Field id="footer-copyright" label={t("copyright")} help={t("copyrightHelp")}>
           <Input
             id="footer-copyright"
             value={footerConfig.copyrightText ?? ""}
             maxLength={200}
+            aria-describedby="footer-copyright-note"
             onChange={(event) => setFooter({ copyrightText: event.target.value })}
           />
-          <p className="text-sm text-muted-foreground">{t("copyrightHelp")}</p>
-        </div>
+        </Field>
       </SectionCard>
     </>
   );
@@ -424,7 +444,7 @@ export function NavigationPage() {
         title={t("navigationTitle")}
         actions={
           <Button onClick={() => setAdding(true)}>
-            <Plus className="size-4" /> {t("addMenu")}
+            <Plus /> {t("addMenu")}
           </Button>
         }
       >

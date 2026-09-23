@@ -19,6 +19,8 @@ export const formMessages = defineMessages({
     futureTime: "Choose a time in the future.",
     addressTooLong: "Keep the address to 500 characters.",
     emailInvalid: "Enter an email address like name@example.com.",
+    phoneCountriesLoading: "Loading phone countries…",
+    phoneCountriesRetry: "Couldn't load phone countries. Retry",
   },
   bn: {
     nameLength: "৩ থেকে ১০০ অক্ষর লিখুন।",
@@ -37,5 +39,7 @@ export const formMessages = defineMessages({
     futureTime: "ভবিষ্যতের একটি সময় বেছে নিন।",
     addressTooLong: "ঠিকানা ৫০০ অক্ষরের মধ্যে রাখুন।",
     emailInvalid: "name@example.com এর মতো একটি ইমেইল ঠিকানা দিন।",
+    phoneCountriesLoading: "ফোনের দেশগুলো লোড হচ্ছে…",
+    phoneCountriesRetry: "ফোনের দেশগুলো লোড হয়নি। আবার চেষ্টা করুন",
   },
 });

@@ -1,34 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ListTree, Plus } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { ListTree, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminNavigationMenusByMenuId,
+  deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId,
   patchApiV1AdminNavigationMenusByMenuId,
   postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove,
   postApiV1AdminNavigationMenusByMenuIdPublish,
   postApiV1AdminNavigationMenusByMenuIdRollback,
 } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { SaveBarProvider, useSaveBar } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
 import {
   navigationMenuQueryOptions,
   navigationMenusQueryOptions,
   navigationPlacementsQueryOptions,
 } from "~/lib/api-query-options/online-store";
+import type { NavigationMenuItemRow } from "~/lib/api-query-options/navigation";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { MenuItemDialog } from "./MenuItemDialog";
+import { MenuItemDialog, type MenuItemTarget } from "./MenuItemDialog";
 import { MenuTree, type MoveDestination } from "./MenuTree";
-import { SectionCard, failSave } from "./shared";
-
-type ItemDialogState = { itemId: string; parentId?: string } | null;
+import { actionErrorText, failSave, Field, OnlineStorePage, SectionCard } from "./shared";
 
 function MenuEditor({ menuId }: { menuId: string }) {
   const t = useMessages(onlineStoreMessages);
@@ -49,14 +49,23 @@ function MenuEditor({ menuId }: { menuId: string }) {
     if (name === savedName) setName(menu.name);
   }
   const [saving, setSaving] = useState(false);
-  const [dialog, setDialog] = useState<ItemDialogState>(null);
+  const [dialog, setDialog] = useState<MenuItemTarget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<NavigationMenuItemRow | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // A deleted menu has nothing left to save: leave without the unsaved-changes prompt.
+  const [deleted, setDeleted] = useState(false);
+  useEffect(() => {
+    if (deleted) void navigate({ to: "/admin/online-store/navigation" });
+  }, [deleted, navigate]);
   const nameChanged = name.trim() !== menu.name;
   const unpublished = menu.revision !== menu.publishedRevision;
 
   useSaveBar({
-    dirty: nameChanged || unpublished,
+    label: menu.name,
+    fields: { name: "menu-name" },
+    dirty: !deleted && (nameChanged || unpublished),
     saving,
     invalid: !name.trim(),
     save: async () => {
@@ -87,7 +96,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
         path: { menuId: menu.id },
         body: { expectedRevision: menu.revision, sourceRevision: menu.publishedRevision },
       }))
-        .catch((error) => toast.error(t("saveFailed"), { description: getServerFnError(error, t("tryAgain")) }))
+        .catch((error) => toast.error(t("saveFailed"), { description: actionErrorText(error) }))
         .finally(() => void refresh());
     },
   });
@@ -99,9 +108,26 @@ function MenuEditor({ menuId }: { menuId: string }) {
         body: { expectedRevision: menu.revision, ...destination },
       }));
     } catch (error) {
-      toast.error(t("moveFailed"), { description: getServerFnError(error, t("tryAgain")) });
+      toast.error(t("moveFailed"), { description: actionErrorText(error) });
     }
     await queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menu(menu.id) });
+  };
+
+  const deleteItem = async (item: NavigationMenuItemRow) => {
+    setRemoving(true);
+    try {
+      await apiData(deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId({
+        path: { menuId: menu.id, itemId: item.id },
+        body: { expectedRevision: menu.revision },
+      }));
+      toast.success(t("itemDeleted"));
+      setDeletingItem(null);
+    } catch (error) {
+      toast.error(t("deleteFailed"), { description: actionErrorText(error) });
+    } finally {
+      setRemoving(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menu(menu.id) });
+    }
   };
 
   const deleteMenu = async () => {
@@ -111,34 +137,26 @@ function MenuEditor({ menuId }: { menuId: string }) {
         path: { menuId: menu.id },
         body: { expectedRevision: menu.revision },
       }));
-      queryClient.removeQueries({ queryKey: queryKeys.navigation.menu(menu.id) });
       await queryClient.invalidateQueries({ queryKey: navigationMenusQueryOptions().queryKey });
       toast.success(t("menuDeleted"));
-      void navigate({ to: "/admin/online-store/navigation" });
+      setConfirmDelete(false);
+      setDeleted(true);
     } catch (error) {
-      toast.error(t("deleteFailed"), { description: getServerFnError(error, t("tryAgain")) });
+      toast.error(t("deleteFailed"), { description: actionErrorText(error) });
       setDeleting(false);
     }
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 pb-10">
-      <div className="flex min-h-10 items-center gap-2">
-        <Button asChild variant="ghost" size="icon" aria-label={t("navigationTitle")}>
-          <Link to="/admin/online-store/navigation"><ArrowLeft /></Link>
-        </Button>
-        <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight">{menu.name}</h1>
-      </div>
-
-      <SectionCard title={t("menuName")}>
-        <Input
-          value={name}
-          maxLength={100}
-          aria-label={t("menuName")}
-          aria-invalid={!name.trim()}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </SectionCard>
+    <OnlineStorePage
+      title={menu.name}
+      back={{ to: "/admin/online-store/navigation", label: t("navigationTitle") }}
+    >
+      <Card className="p-4">
+        <Field id="menu-name" label={t("menuName")} error={name.trim() ? undefined : t("menuNameRequired")}>
+          <Input id="menu-name" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
+        </Field>
+      </Card>
 
       <SectionCard
         title={t("menuItems")}
@@ -153,41 +171,51 @@ function MenuEditor({ menuId }: { menuId: string }) {
           empty={
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <ListTree className="size-5 text-muted-foreground" aria-hidden />
-              <p className="text-sm text-muted-foreground">{t("emptyMenu")}</p>
+              <p className="text-body text-muted-foreground">{t("emptyMenu")}</p>
             </div>
           }
           onEdit={(itemId) => setDialog({ itemId })}
+          onDelete={setDeletingItem}
           onAddChild={(parentId) => setDialog({ itemId: "new", parentId })}
           onMove={(itemId, destination) => void move(itemId, destination)}
         />
       </SectionCard>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
         <Button
           type="button"
           variant="outline"
           disabled={inUse}
+          aria-describedby={inUse ? "menu-delete-note" : undefined}
           onClick={() => setConfirmDelete(true)}
         >
           {t("deleteMenu")}
         </Button>
+        {inUse ? (
+          <p id="menu-delete-note" className="text-right text-body text-muted-foreground">{t("deleteMenuInUse")}</p>
+        ) : null}
       </div>
-      {inUse ? (
-        <p className="text-right text-sm text-muted-foreground">{t("deleteMenuInUse")}</p>
-      ) : null}
 
-      {dialog ? (
-        <MenuItemDialog
-          menu={menu}
-          itemId={dialog.itemId}
-          parentId={dialog.parentId}
-          onClose={() => setDialog(null)}
-          onSaved={() => {
-            setDialog(null);
-            void queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menu(menu.id) });
-          }}
-        />
-      ) : null}
+      <MenuItemDialog
+        menu={menu}
+        target={dialog}
+        onClose={() => setDialog(null)}
+        onSaved={() => {
+          setDialog(null);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menu(menu.id) });
+        }}
+      />
+      <ConfirmDialog
+        open={deletingItem !== null}
+        onOpenChange={(open) => !open && setDeletingItem(null)}
+        title={t("deleteItemTitle", { name: deletingItem?.label ?? "" })}
+        description={t("deleteItemHelp")}
+        confirmLabel={t("delete")}
+        cancelLabel={t("cancel")}
+        loadingLabel={t("deleting")}
+        isLoading={removing}
+        onConfirm={() => deletingItem && void deleteItem(deletingItem)}
+      />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -199,7 +227,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
         isLoading={deleting}
         onConfirm={() => void deleteMenu()}
       />
-    </div>
+    </OnlineStorePage>
   );
 }
 

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { GripVertical, X } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
@@ -6,16 +7,20 @@ import {
   HERO_SLIDE_PRESENTATION,
   HERO_SLIDE_TITLE_LIMIT,
   getHeroSlideObjectPosition,
+  normalizeHeroSlideImageUrl,
   type HeroSlide,
   type HeroSlideViewport,
 } from "@scalius/shared/hero-slider";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import type { SortableItemRenderProps } from "~/components/admin/shared/SortableList";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { HeroFocalPointEditor } from "./HeroFocalPointEditor";
+import { Field } from "./shared";
+
+/** Control ids of one banner, so server errors mark the right field. */
+export const bannerFieldId = (slideId: string, field: "text" | "link") => `banner-${field}-${slideId}`;
 
 export function SlideRow({
   slide,
@@ -33,17 +38,17 @@ export function SlideRow({
   onRemove: () => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const link = parseNavigationHref(slide.link);
   const presentation = HERO_SLIDE_PRESENTATION[viewport];
-  const textMissing = slide.title.trim().length === 0;
-  const imageOk = /^https:\/\/[^@\s]+$/i.test(slide.url);
+  const textId = bannerFieldId(slide.id, "text");
+  const linkId = bannerFieldId(slide.id, "link");
   return (
     <div
       ref={sortable.ref}
+      // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
       style={sortable.style}
       className={cn(
-        "flex flex-col gap-3 rounded-lg border bg-background p-2.5 sm:flex-row sm:items-start",
-        sortable.isDragging && "relative z-10 shadow-lg",
+        "flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-start",
+        sortable.isDragging && "relative z-10",
       )}
     >
       <div className="flex items-start gap-2">
@@ -58,17 +63,20 @@ export function SlideRow({
           <GripVertical />
         </Button>
         <div
+          // The crop preview follows the merchant's focus point (runtime values as custom properties).
+          style={{
+            "--ratio": `${presentation.width} / ${presentation.height}`,
+            "--focus": getHeroSlideObjectPosition(slide.focalPoint),
+          } as CSSProperties}
           className={cn(
-            "relative w-full shrink-0 overflow-hidden rounded-md border bg-muted/30",
+            "relative aspect-(--ratio) w-full shrink-0 overflow-clip rounded-md bg-muted",
             viewport === "desktop" ? "sm:w-44" : "sm:w-32",
           )}
-          style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
         >
           <img
             src={mediaImageUrl(slide.url, 640)}
             alt=""
-            className="h-full w-full object-cover"
-            style={{ objectPosition: getHeroSlideObjectPosition(slide.focalPoint) }}
+            className="size-full object-cover object-(--focus)"
             loading="lazy"
             decoding="async"
           />
@@ -82,29 +90,33 @@ export function SlideRow({
         </div>
       </div>
       <div className="grid min-w-0 flex-1 gap-3">
-        {!imageOk ? <p className="text-sm text-destructive">{t("bannerImageInvalid")}</p> : null}
-        <div className="space-y-1.5">
-          <Label htmlFor={`banner-text-${slide.id}`}>{t("bannerText")}</Label>
+        {normalizeHeroSlideImageUrl(slide.url) ? null : (
+          <p role="alert" className="text-body text-destructive">{t("bannerImageInvalid")}</p>
+        )}
+        <Field
+          id={textId}
+          label={t("bannerText")}
+          error={slide.title.trim() ? undefined : t("bannerTextRequired")}
+        >
           <Input
-            id={`banner-text-${slide.id}`}
+            id={textId}
             value={slide.title}
             maxLength={HERO_SLIDE_TITLE_LIMIT}
             onChange={(event) => onChange({ title: event.target.value })}
-            aria-invalid={textMissing}
           />
-          {textMissing ? <p className="text-sm text-destructive">{t("bannerTextRequired")}</p> : null}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`banner-link-${slide.id}`}>{t("bannerLink")}</Label>
+        </Field>
+        <Field
+          id={linkId}
+          label={t("bannerLink")}
+          error={parseNavigationHref(slide.link).ok ? undefined : t("bannerLinkInvalid")}
+        >
           <Input
-            id={`banner-link-${slide.id}`}
+            id={linkId}
             value={slide.link}
-            onChange={(event) => onChange({ link: event.target.value })}
             placeholder="/collections/new"
-            aria-invalid={!link.ok}
+            onChange={(event) => onChange({ link: event.target.value })}
           />
-          {!link.ok ? <p className="text-sm text-destructive">{t("bannerLinkInvalid")}</p> : null}
-        </div>
+        </Field>
       </div>
       <Button
         type="button"

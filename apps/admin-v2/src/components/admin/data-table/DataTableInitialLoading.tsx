@@ -4,18 +4,22 @@ import { TableCell, TableRow } from "../../ui/table";
 const DESKTOP_SKELETON_ROWS = 5;
 const MOBILE_SKELETON_CARDS = 4;
 
-const CELL_WIDTHS = [
-  "w-5",
-  "w-40 max-w-full",
-  "w-28 max-w-full",
-  "w-20 max-w-full",
-  "w-32 max-w-full",
-] as const;
-
-function cellSkeletonClass(columnIndex: number, columnCount: number): string {
-  if (columnIndex === 0) return "h-4 w-4 rounded-sm";
-  if (columnIndex === columnCount - 1) return "ml-auto h-8 w-8";
-  return `h-4 ${CELL_WIDTHS[columnIndex % CELL_WIDTHS.length]}`;
+/** Placeholder widths vary by column so the skeleton reads like real rows. */
+function CellSkeleton({ columnIndex, columnCount }: { columnIndex: number; columnCount: number }) {
+  if (columnIndex === 0) return <Skeleton className="size-4" />;
+  if (columnIndex === columnCount - 1) return <Skeleton className="ml-auto size-8" />;
+  switch (columnIndex % 5) {
+    case 1:
+      return <Skeleton className="h-4 w-40 max-w-full" />;
+    case 2:
+      return <Skeleton className="h-4 w-28 max-w-full" />;
+    case 3:
+      return <Skeleton className="h-4 w-20 max-w-full" />;
+    case 4:
+      return <Skeleton className="h-4 w-32 max-w-full" />;
+    default:
+      return <Skeleton className="h-4 w-5" />;
+  }
 }
 
 export function DataTableInitialRows({
@@ -39,7 +43,7 @@ export function DataTableInitialRows({
           key={`initial-loading-cell-${rowIndex}-${columnIndex}`}
           className={includeDragColumn && columnIndex === 0 ? "w-[40px] px-2" : undefined}
         >
-          <Skeleton className={cellSkeletonClass(columnIndex, safeColumnCount)} />
+          <CellSkeleton columnIndex={columnIndex} columnCount={safeColumnCount} />
         </TableCell>
       ))}
     </TableRow>

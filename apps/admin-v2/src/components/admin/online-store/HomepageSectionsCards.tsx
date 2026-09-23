@@ -9,7 +9,6 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { SortableList } from "~/components/admin/shared/SortableList";
@@ -18,7 +17,7 @@ import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categor
 import { homepageSectionsQueryOptions } from "~/lib/api-query-options/online-store";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { SectionCard, failSave, useDocumentDraft } from "./shared";
+import { Field, SectionCard, failSave, useDocumentDraft } from "./shared";
 
 /** Featured categories and the delivery & returns strip on the homepage. */
 export function HomepageSectionsCards() {
@@ -27,7 +26,9 @@ export function HomepageSectionsCards() {
   const { data, refetch } = useSuspenseQuery(homepageSectionsQueryOptions());
   const { data: categoryOptions } = useSuspenseQuery(categoryFormOptionsQueryOptions());
   const { draft, setDraft } = useDocumentDraft<HomepagePresentationConfig>({
+    label: t("featuredCategories"),
     saved: data.config,
+    fields: (path) => (path === "categoryRail.title" ? "homepage-category-title" : undefined),
     save: async (config) => {
       try {
         const saved = await apiData(postApiV1AdminSettingsHomepagePresentation({
@@ -60,15 +61,14 @@ export function HomepageSectionsCards() {
           />
         }
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="homepage-category-title">{t("heading")}</Label>
+        <Field id="homepage-category-title" label={t("heading")}>
           <Input
             id="homepage-category-title"
             value={rail.title}
             maxLength={MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH}
             onChange={(event) => setRail({ title: event.target.value })}
           />
-        </div>
+        </Field>
         {selected.length > 0 ? (
           <SortableList
             items={selected}
@@ -78,8 +78,8 @@ export function HomepageSectionsCards() {
                 ref={sortable.ref}
                 style={sortable.style}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg border bg-background p-1",
-                  sortable.isDragging && "relative z-10 shadow-md",
+                  "flex items-center gap-2 rounded-lg border bg-card p-1",
+                  sortable.isDragging && "relative z-10",
                 )}
               >
                 <Button
@@ -92,7 +92,7 @@ export function HomepageSectionsCards() {
                 >
                   <GripVertical />
                 </Button>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+                <span className="min-w-0 flex-1 truncate text-body font-medium">{item.name}</span>
                 <Button
                   type="button"
                   variant="ghost"

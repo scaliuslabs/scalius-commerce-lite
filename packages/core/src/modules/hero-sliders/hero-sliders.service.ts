@@ -58,7 +58,7 @@ export class HeroSliderRevisionConflictError extends AppError {
 function normalizeSlides(images: unknown): HeroSlide[] {
   const result = validateAndNormalizeHeroSlides(images);
   if (!result.ok) {
-    throw new ValidationError("Hero slides need attention before saving.", {
+    throw new ValidationError("Some banners can't be saved. Check each banner's image, description and link.", {
       issues: result.errors,
     });
   }

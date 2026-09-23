@@ -17,7 +17,7 @@ import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
-import type { User } from "./AccountSettingsContainer";
+import type { User } from "./ProfileHeader";
 
 type Step = "method" | "password" | "qr" | "verify" | "codes";
 type Method = "totp" | "email";

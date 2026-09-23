@@ -117,7 +117,7 @@ export function NavigationResourcePicker({
           />
           <CommandList className="max-h-80 overflow-auto">
             {selected && !selected.available ? (
-              <div className="border-b px-3 py-2 text-sm" role="status">
+              <div className="border-b px-3 py-2 text-body" role="status">
                 <span className="font-medium">{selected.name}</span>
                 <span className="ml-2 text-destructive">{t("unavailable")}</span>
               </div>
@@ -126,12 +126,12 @@ export function NavigationResourcePicker({
             {isInitialLoading ? (
               <div className="flex items-center justify-center py-7" role="status">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                <span className="text-sm text-muted-foreground">{t("searching")}</span>
+                <span className="text-body text-muted-foreground">{t("searching")}</span>
               </div>
             ) : isInitialError ? (
               <div className="space-y-2 px-3 py-6 text-center" role="alert">
                 <AlertCircle className="mx-auto h-4 w-4 text-destructive" />
-                <p className="text-sm text-muted-foreground">{t("loadFailed")}</p>
+                <p className="text-body text-muted-foreground">{t("loadFailed")}</p>
                 <Button
                   type="button"
                   variant="outline"
@@ -142,7 +142,7 @@ export function NavigationResourcePicker({
                 </Button>
               </div>
             ) : options.length === 0 ? (
-              <div className="px-3 py-7 text-center text-sm text-muted-foreground">
+              <div className="px-3 py-7 text-center text-body text-muted-foreground">
                 {t("noResults")}
               </div>
             ) : (
@@ -155,7 +155,7 @@ export function NavigationResourcePicker({
                       onValueChange(option.id, option.name);
                       setOpen(false);
                     }}
-                    className="cursor-pointer gap-2"
+                    className="cursor-pointer"
                   >
                     <Check
                       className={cn(

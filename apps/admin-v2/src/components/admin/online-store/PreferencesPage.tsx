@@ -21,7 +21,7 @@ import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
-import { OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
+import { Field, OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
 
 interface Preferences {
   homepageTitle: string;
@@ -31,24 +31,27 @@ interface Preferences {
   includeUnavailableProducts: boolean;
 }
 
-function FeedLink({ label, url }: { label: string; url: string }) {
+function FeedLink({ id, label, url }: { id: string; label: string; url: string }) {
   const t = useMessages(onlineStoreMessages);
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <div className="flex gap-2">
-        <Input value={url} readOnly aria-label={label} />
+        <Input id={id} value={url} readOnly />
         <Button
           type="button"
           variant="outline"
           size="icon"
           className="shrink-0"
-          aria-label={t("copyLink")}
+          aria-label={t("copyLinkFor", { name: label })}
           onClick={() => {
-            void navigator.clipboard.writeText(url).then(() => toast.success(t("linkCopied")));
+            navigator.clipboard.writeText(url).then(
+              () => toast.success(t("linkCopied")),
+              () => toast.error(t("copyFailed")),
+            );
           }}
         >
-          <Copy className="size-4" />
+          <Copy />
         </Button>
       </div>
     </div>
@@ -69,7 +72,12 @@ function PreferencesCards() {
     includeUnavailableProducts: data.discovery.feeds.includeUnavailableProducts,
   }), [data]);
   const { draft, setDraft } = useDocumentDraft<Preferences>({
+    label: t("preferencesTitle"),
     saved,
+    fields: (path) => ({
+      homepageTitle: "preferences-title",
+      homepageMetaDescription: "preferences-description",
+    } as Record<string, string>)[path],
     save: async (next) => {
       try {
         await apiData(postApiV1AdminSettingsSeo({
@@ -103,34 +111,33 @@ function PreferencesCards() {
             description={draft.homepageMetaDescription}
           />
         ) : null}
-        <div className="space-y-1.5">
-          <Label htmlFor="preferences-title">{t("homepageTitle")}</Label>
+        <Field
+          id="preferences-title"
+          label={t("homepageTitle")}
+          help={t("charactersUsed", { count: draft.homepageTitle.length, limit: SEARCH_TITLE_LENGTH })}
+        >
           <Input
             id="preferences-title"
             value={draft.homepageTitle}
             maxLength={200}
+            aria-describedby="preferences-title-note"
             onChange={(event) => set({ homepageTitle: event.target.value })}
           />
-          <p className="text-sm text-muted-foreground">
-            {t("charactersUsed", { count: draft.homepageTitle.length, limit: SEARCH_TITLE_LENGTH })}
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="preferences-description">{t("homepageDescription")}</Label>
+        </Field>
+        <Field
+          id="preferences-description"
+          label={t("homepageDescription")}
+          help={t("charactersUsed", { count: draft.homepageMetaDescription.length, limit: SEARCH_DESCRIPTION_LENGTH })}
+        >
           <Textarea
             id="preferences-description"
             value={draft.homepageMetaDescription}
             maxLength={1000}
             rows={3}
+            aria-describedby="preferences-description-note"
             onChange={(event) => set({ homepageMetaDescription: event.target.value })}
           />
-          <p className="text-sm text-muted-foreground">
-            {t("charactersUsed", {
-              count: draft.homepageMetaDescription.length,
-              limit: SEARCH_DESCRIPTION_LENGTH,
-            })}
-          </p>
-        </div>
+        </Field>
       </SectionCard>
 
       <SectionCard title={t("socialImage")} description={t("socialImageHelp")}>
@@ -155,21 +162,23 @@ function PreferencesCards() {
       >
         {draft.productCatalogEnabled ? (
           <>
-            <label className="flex items-start gap-3 text-sm">
-              <Checkbox
-                checked={draft.includeUnavailableProducts}
-                onCheckedChange={(checked) => set({ includeUnavailableProducts: checked === true })}
-                className="mt-0.5"
-              />
-              <span>{t("includeSoldOut")}</span>
-            </label>
+            <div className="flex items-start gap-3">
+              <span className="flex h-lh items-center text-body">
+                <Checkbox
+                  id="preferences-sold-out"
+                  checked={draft.includeUnavailableProducts}
+                  onCheckedChange={(checked) => set({ includeUnavailableProducts: checked === true })}
+                />
+              </span>
+              <Label htmlFor="preferences-sold-out">{t("includeSoldOut")}</Label>
+            </div>
             {origin ? (
               <div className="space-y-3">
-                <FeedLink label={t("facebookFeed")} url={`${origin}/api/facebook-feed.xml`} />
-                <FeedLink label={t("googleFeed")} url={`${origin}/api/product-feed.xml`} />
+                <FeedLink id="preferences-facebook-feed" label={t("facebookFeed")} url={`${origin}/api/facebook-feed.xml`} />
+                <FeedLink id="preferences-google-feed" label={t("googleFeed")} url={`${origin}/api/product-feed.xml`} />
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t("feedNeedsStoreAddress")}</p>
+              <p className="text-body text-muted-foreground">{t("feedNeedsStoreAddress")}</p>
             )}
           </>
         ) : null}

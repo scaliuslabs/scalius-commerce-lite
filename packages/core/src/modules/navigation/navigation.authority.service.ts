@@ -186,9 +186,9 @@ async function rethrowNavigationMutationError(
             current?.revision ?? null,
         );
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     if (/navigation_menus_active_handle_unique|UNIQUE constraint failed.*navigation_menus/i.test(message)) {
-        throw new ConflictError("An active menu already uses this handle.");
+        throw new ConflictError("Another menu already has this name. Use a different name.");
     }
     throw error;
 }
@@ -266,6 +266,17 @@ async function executeMenuItemMutation(
     }
 }
 
+/** The error and its causes: drivers wrap constraint failures (e.g. Drizzle's "Failed query"). */
+function errorText(error: unknown): string {
+    const parts: string[] = [];
+    let current: unknown = error;
+    for (let depth = 0; depth < 4 && current; depth += 1) {
+        parts.push(current instanceof Error ? current.message : String(current));
+        current = current instanceof Error ? (current as { cause?: unknown }).cause : undefined;
+    }
+    return parts.join(" | ");
+}
+
 export async function createNavigationMenu(
     db: Database,
     input: { name: string; handle?: string },
@@ -285,9 +296,9 @@ export async function createNavigationMenu(
         if (!row) throw new ConflictError("The menu could not be created.");
         return row;
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorText(error);
         if (/navigation_menus_active_handle_unique|UNIQUE constraint failed.*navigation_menus/i.test(message)) {
-            throw new ConflictError("An active menu already uses this handle.");
+            throw new ConflictError("Another menu already has this name. Use a different name.");
         }
         throw error;
     }
@@ -1700,7 +1711,7 @@ export async function saveNavigationPlacement(
         return { placement };
     } catch (error) {
         if (error instanceof NavigationPlacementRevisionConflictError) throw error;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = errorText(error);
         if (/navigation_placements_active_slot_unique|UNIQUE constraint failed.*navigation_placements/i.test(message)) {
             throw new ConflictError("Another menu already occupies this storefront placement.");
         }

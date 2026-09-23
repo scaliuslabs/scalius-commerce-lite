@@ -79,6 +79,7 @@ import {
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
+import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 // ─────────────────────────────────────────
 // CURRENCY
@@ -1349,13 +1350,7 @@ const saveSeoDiscoverySchema = z.object({
 /** Blank, or an absolute https URL without credentials (the media library's CDN URL). */
 function isValidSocialImageUrl(value: string): boolean {
   if (value === "") return true;
-  if (value.trim() !== value) return false;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" && !parsed.username && !parsed.password;
-  } catch {
-    return false;
-  }
+  return value.trim() === value && isPublicMediaUrl(value);
 }
 
 const saveSeoReturnPolicySchema = z.object({
@@ -1389,7 +1384,7 @@ const saveSeoSchema = z.object({
     .max(SEO_SOCIAL_IMAGE_MAX_LENGTH)
     .refine(
       isValidSocialImageUrl,
-      "Social image must be blank or an absolute https URL",
+      "Choose the social sharing image from Files.",
     )
     .optional(),
   discovery: saveSeoDiscoverySchema.optional(),

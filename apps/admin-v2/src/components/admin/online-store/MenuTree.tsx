@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -42,6 +42,7 @@ export interface MoveDestination {
 
 interface TreeHandlers {
   onEdit: (itemId: string) => void;
+  onDelete: (item: NavigationMenuItemRow) => void;
   onAddChild: (parentId: string) => void;
   onMove: (itemId: string, destination: MoveDestination) => void;
 }
@@ -112,12 +113,14 @@ function MenuRow({
   return (
     <div className="relative">
       <div
-        style={draggable.transform
-          ? { transform: `translate3d(${draggable.transform.x}px, ${draggable.transform.y}px, 0)` }
-          : undefined}
+        // The dragged row follows the pointer (runtime offset as custom properties).
+        style={{
+          "--drag-x": `${draggable.transform?.x ?? 0}px`,
+          "--drag-y": `${draggable.transform?.y ?? 0}px`,
+        } as CSSProperties}
         className={cn(
-          "flex min-h-12 items-center gap-1 rounded-lg bg-background px-1 hover:bg-muted/50",
-          isDragging && "relative z-20 opacity-80 shadow-lg",
+          "flex min-h-12 items-center gap-1 rounded-lg bg-card px-1 hover:bg-muted",
+          isDragging && "relative z-20 translate-x-(--drag-x) translate-y-(--drag-y) opacity-80 shadow-popover",
           !item.isEnabled && "text-muted-foreground",
         )}
       >
@@ -141,9 +144,9 @@ function MenuRow({
           onClick={() => handlers.onEdit(item.id)}
           className="min-w-0 flex-1 py-2 text-left"
         >
-          <span className="block truncate text-sm font-medium">{item.label}</span>
+          <span className="block truncate text-body font-medium">{item.label}</span>
           {!item.isEnabled ? (
-            <span className="block truncate text-sm text-muted-foreground">{t("hiddenItem")}</span>
+            <span className="block truncate text-body text-muted-foreground">{t("hiddenItem")}</span>
           ) : null}
         </button>
         {childCount > 0 ? (
@@ -194,6 +197,10 @@ function MenuRow({
             >
               {t("moveOutOfGroup")}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => handlers.onDelete(item)}>
+              {t("delete")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -237,7 +244,7 @@ function MenuLevel({
 
   if (query.isError) {
     return (
-      <div className="flex items-center justify-between gap-3 px-2 py-3 text-sm">
+      <div className="flex items-center justify-between gap-3 px-2 py-3 text-body">
         <span className="text-destructive">{t("loadFailed")}</span>
         <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
           {t("retry")}

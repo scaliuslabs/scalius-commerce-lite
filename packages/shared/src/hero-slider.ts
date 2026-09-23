@@ -1,4 +1,5 @@
 import { parseNavigationHref } from "./navigation-href";
+import { isPublicMediaUrl } from "./platform-config";
 
 export const HERO_SLIDE_LIMIT = 12;
 export const HERO_SLIDE_TITLE_LIMIT = 160;
@@ -34,20 +35,16 @@ export type HeroSlidesValidationResult =
   | { ok: true; slides: HeroSlide[] }
   | { ok: false; errors: string[] };
 
-function normalizeImageUrl(value: unknown): string | undefined {
+/**
+ * A banner image must be a credential-free HTTPS URL. Plain HTTP is accepted
+ * only for loopback hosts, so local development media (http://localhost) works.
+ */
+export function normalizeHeroSlideImageUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const candidate = value.trim();
   if (!candidate || candidate.length > HERO_SLIDE_URL_LIMIT) return undefined;
 
-  try {
-    const parsed = new URL(candidate);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
-      return undefined;
-    }
-    return parsed.toString();
-  } catch {
-    return undefined;
-  }
+  return isPublicMediaUrl(candidate) ? new URL(candidate).toString() : undefined;
 }
 
 function normalizeFocalCoordinate(value: unknown): number | undefined {
@@ -117,9 +114,9 @@ export function validateAndNormalizeHeroSlides(
       ids.add(id);
     }
 
-    const url = normalizeImageUrl(row.url);
+    const url = normalizeHeroSlideImageUrl(row.url);
     if (!url) {
-      errors.push(`Slide ${position} image must be a credential-free HTTPS URL.`);
+      errors.push(`Slide ${position} image must be a credential-free HTTPS URL (HTTP only on localhost).`);
     }
 
     const title = typeof row.title === "string" ? row.title.trim() : "";

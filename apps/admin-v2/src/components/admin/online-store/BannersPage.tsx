@@ -28,7 +28,7 @@ import {
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { HomepageSectionsCards } from "./HomepageSectionsCards";
-import { SlideRow } from "./SlideRow";
+import { SlideRow, bannerFieldId } from "./SlideRow";
 import { OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
 
 interface BannerDraft {
@@ -52,7 +52,14 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
     [slider],
   );
   const { draft, setDraft } = useDocumentDraft<BannerDraft>({
+    label: t(viewport === "desktop" ? "desktopBanners" : "phoneBanners"),
     saved,
+    fields: (path, value) => {
+      const [group, index, field] = path.split(".");
+      const slide = group === "images" ? value.images[Number(index)] : undefined;
+      if (!slide) return undefined;
+      return field === "title" ? bannerFieldId(slide.id, "text") : field === "link" ? bannerFieldId(slide.id, "link") : undefined;
+    },
     invalid: (value) =>
       (value.isActive && value.images.length === 0) ||
       !validateAndNormalizeHeroSlides(value.images).ok,
@@ -115,7 +122,7 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
           onSelectMultiple={addImages}
           trigger={
             <Button type="button" variant="outline" size="sm" disabled={full}>
-              <Plus className="size-4" /> {t("addBanners")}
+              <Plus /> {t("addBanners")}
             </Button>
           }
         />
@@ -130,10 +137,10 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
         />
       </div>
       {draft.isActive && draft.images.length === 0 ? (
-        <p className="text-sm text-destructive">{t("bannersRequired")}</p>
+        <p role="alert" className="text-body text-destructive">{t("bannersRequired")}</p>
       ) : null}
       {draft.images.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center text-body text-muted-foreground">
           <ImageIcon className="size-5" aria-hidden />
           {t("noBanners")}
         </div>

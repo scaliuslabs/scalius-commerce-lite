@@ -288,6 +288,15 @@ describe("navigation authority D1 commands", () => {
       .toEqual({ revision: 8 });
   });
 
+  it("refuses a second active menu with the same name as a conflict, not a server error", async () => {
+    const db = createDatabase();
+    await createNavigationMenu(db, { name: "Main menu" });
+    await expect(createNavigationMenu(db, { name: "Main menu" })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Another menu already has this name. Use a different name.",
+    });
+  });
+
   it("deletes a bounded menu subtree without recursive SQL", async () => {
     const db = createDatabase();
     const menu = await createNavigationMenu(db, { name: "Delete tree" });
