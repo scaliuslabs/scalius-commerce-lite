@@ -194,8 +194,8 @@ describe("provider-neutral schema upgrades", () => {
       {
         version: 65,
         name: "0065_single_checkout_commit",
-        sqliteStatements: 49,
-        postgresStatements: 54,
+        sqliteStatements: 51,
+        postgresStatements: 56,
       },
       {
         version: 66,

@@ -105,7 +105,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 65,
     name: "0065_single_checkout_commit",
-    sourceSha256: "8ca2839b75518f5abb60eaa60533f99859bfa466b3f21facac1ebb0033fa4bc5",
+    sourceSha256: "b00f8d765b7c4851d6547678a02cd94be2c0ae6d7e42df46de845361df4d08fb",
   },
   {
     version: 66,
