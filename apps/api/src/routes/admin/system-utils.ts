@@ -103,7 +103,7 @@ const abandonedCheckoutAgentSummarySchema = z.object({
     total: z.number().min(0),
     hasCustomerContact: z.boolean(),
     orderId: z.string().max(160).nullable(),
-    paymentMethod: z.enum(["stripe", "sslcommerz"]).nullable(),
+    paymentMethod: z.string().max(64).nullable(),
     paymentStatus: z.enum(["unpaid", "failed"]).nullable(),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),

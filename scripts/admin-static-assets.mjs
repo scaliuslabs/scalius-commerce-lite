@@ -127,7 +127,7 @@ function validateHeaders(content, label) {
 export function inspectAdminStaticAssets({ rootDir }) {
   const resolvedRoot = resolve(rootDir);
   const publicRoot = resolve(resolvedRoot, "apps/admin-v2/public");
-  const distRoot = resolve(resolvedRoot, "apps/admin-v2/dist/client");
+  const distRoot = resolve(resolvedRoot, "apps/admin-v2/dist");
   const sourceHeadersPath = resolve(publicRoot, "_headers");
   const distHeadersPath = resolve(distRoot, "_headers");
   const errors = [];
@@ -164,11 +164,11 @@ export function inspectAdminStaticAssets({ rootDir }) {
 
   let distHeaders;
   if (!existsSync(distHeadersPath)) {
-    errors.push("apps/admin-v2/dist/client/_headers is missing.");
+    errors.push("apps/admin-v2/dist/_headers is missing.");
   } else {
     distHeaders = readFileSync(distHeadersPath, "utf8");
     errors.push(
-      ...validateHeaders(distHeaders, "apps/admin-v2/dist/client/_headers"),
+      ...validateHeaders(distHeaders, "apps/admin-v2/dist/_headers"),
     );
   }
 
@@ -178,7 +178,7 @@ export function inspectAdminStaticAssets({ rootDir }) {
     sourceHeaders !== distHeaders
   ) {
     errors.push(
-      "apps/admin-v2/dist/client/_headers does not exactly match apps/admin-v2/public/_headers.",
+      "apps/admin-v2/dist/_headers does not exactly match apps/admin-v2/public/_headers.",
     );
   }
 
@@ -194,7 +194,7 @@ export function inspectAdminStaticAssets({ rootDir }) {
     copiedPublicScriptsAndStyles += 1;
     if (!distFileSet.has(file)) {
       errors.push(
-        `apps/admin-v2/dist/client/${file}: copied public script/style is missing or was moved.`,
+        `apps/admin-v2/dist/${file}: copied public script/style is missing or was moved.`,
       );
     }
   }
@@ -207,7 +207,7 @@ export function inspectAdminStaticAssets({ rootDir }) {
 
     if (isImmutableNamespace && (file.endsWith(".map") || extension === ".html")) {
       errors.push(
-        `apps/admin-v2/dist/client/${file}: source maps and HTML must stay outside the immutable namespace.`,
+        `apps/admin-v2/dist/${file}: source maps and HTML must stay outside the immutable namespace.`,
       );
       continue;
     }
@@ -217,7 +217,7 @@ export function inspectAdminStaticAssets({ rootDir }) {
     if (isImmutableNamespace) {
       if (!ADMIN_HASHED_SCRIPT_OR_STYLE_PATTERN.test(file)) {
         errors.push(
-          `apps/admin-v2/dist/client/${file}: immutable scripts/styles require a Vite content hash of at least eight characters.`,
+          `apps/admin-v2/dist/${file}: immutable scripts/styles require a Vite content hash of at least eight characters.`,
         );
       }
       if (extension === ".js") scripts += 1;
@@ -227,19 +227,19 @@ export function inspectAdminStaticAssets({ rootDir }) {
 
     if (!publicFileSet.has(file)) {
       errors.push(
-        `apps/admin-v2/dist/client/${file}: generated scripts/styles must be emitted under ${ADMIN_IMMUTABLE_ASSET_DIR}/.`,
+        `apps/admin-v2/dist/${file}: generated scripts/styles must be emitted under ${ADMIN_IMMUTABLE_ASSET_DIR}/.`,
       );
     }
   }
 
   if (scripts === 0) {
     errors.push(
-      `apps/admin-v2/dist/client/${ADMIN_IMMUTABLE_ASSET_DIR}: no hashed JavaScript assets found.`,
+      `apps/admin-v2/dist/${ADMIN_IMMUTABLE_ASSET_DIR}: no hashed JavaScript assets found.`,
     );
   }
   if (styles === 0) {
     errors.push(
-      `apps/admin-v2/dist/client/${ADMIN_IMMUTABLE_ASSET_DIR}: no hashed CSS assets found.`,
+      `apps/admin-v2/dist/${ADMIN_IMMUTABLE_ASSET_DIR}: no hashed CSS assets found.`,
     );
   }
 

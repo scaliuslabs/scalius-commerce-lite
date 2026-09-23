@@ -193,9 +193,7 @@ describe("reserveStockBatch sellability guard", () => {
     expect(guard.sql).toContain('"products"."id" = "product_variants"."product_id"');
     expect(guard.sql).toContain('"product_variants"."id" = ?');
     expect(guard.sql).toContain('"product_variants"."stock_version"');
-    expect(guard.sql).toContain('"product_variants"."stock" - (');
-    expect(guard.sql).toContain('SUM("inventory_reservation_lanes"."reserved_quantity")');
-    expect(guard.sql).toContain('"inventory_reservation_lanes"."pool" = \'regular\'');
+    expect(guard.sql).toContain('"product_variants"."stock" - "product_variants"."reserved_stock"');
     expect(guard.params).toContain(7);
     expect(guard.params).toContain(2);
     expect(guard.sql).toContain("INVENTORY_RESERVATION_CONFLICT");

@@ -37,10 +37,10 @@ A PostgreSQL deployment installs:
 - optionally `DATABASE_PROVIDER=postgres` as an explicit pin
 
 These are the only optional runtime secrets beyond the two every deployment
-installs (`SCALIUS_SECRET` on all workers, `CREDENTIAL_ENCRYPTION_KEY` on API
-and admin). None of them appear in the checked-in Wrangler configs, which carry
+installs (`SCALIUS_SECRET` on both Workers, `CREDENTIAL_ENCRYPTION_KEY` on the
+API). None of them appear in the checked-in Wrangler configs, which carry
 no `vars` at all; the deployment operator installs each one with
-`wrangler secret put` on API and admin.
+`wrangler secret put` on the API.
 
 `POSTGRES_DATABASE_URL` alone is sufficient for Neon and generic PostgreSQL.
 For generic PostgreSQL on production Workers, the deployment operator should
@@ -151,7 +151,7 @@ evidence for each transition:
    final receipts containing hashes and safe target identity only. A completed
    retry resolves locally from matching receipts; a partial retry resumes from
    the last verified phase instead of silently recreating the target.
-6. Install provider secrets, deploy API and admin, and require repeated Turso
+6. Install provider secrets, deploy the API, and require repeated Turso
    readiness success before removing the freeze.
 7. Exercise public reads, authenticated admin reads, one idempotent checkout,
    order transition, inventory release, queues, storefront rendering, and
@@ -380,86 +380,25 @@ synchronous reads/writes and touches enough shared SQLite pages that conflicts
 dominate far earlier. Raising retry counts would increase latency rather than
 solve that architecture.
 
-## Checkout coordinator v2 architecture — 2026-08-03
+## Single checkout commit — 2026-09-24
 
-The live results above measured the earlier one-request/one-checkout path and
-must not be used to characterize coordinator v2. Cloudflare documents a soft
-limit of 1,000 requests/second for one Durable Object and approximately
-200–500 requests/second for complex work. A single per-merchant checkout object
-therefore could not be the ingress for an honest thousands-of-orders/second
-claim regardless of database capacity. Coordinator v2 removes that structural
-ceiling without moving money, inventory, or idempotency authority out of the
-selected relational database:
+The checkout coordinator Durable Object, its reservation lanes, and the
+deferred checkout projection were retired. Every storefront and agent checkout
+now commits through one guarded database batch that writes the order, its
+items, the SKU hold (ledger v2 + `stockVersion`), the idempotency row, the
+receipt, and the outbox rows together. Load results below dated before this
+section measured the retired coordinator path and do not describe the current
+commit.
 
-- D1 keeps one deterministic ingress object and one commit object. The commit
-  engine remains single-writer and may use both reservation lanes serially.
-- TursoDB and PostgreSQL use 16 deterministic ingress objects. The checkout
-  request key selects the ingress object, so concurrent duplicates and changed
-  payloads for one idempotency key still meet at the same coordinator.
-- Each ingress object holds a bounded 25-ms microbatch window, performs one
-  shared authority read for that batch, prepares immutable order commands, and
-  groups them by the two existing reservation lanes.
-- One commit object owns each concurrent-provider lane. It combines incoming
-  microbatches, submits exactly one bounded atomic database transaction at a
-  time for that lane, and relies on database authority revision, lane-version
-  CAS, unique checkout identity, and durable aggregate/outbox rows for recovery.
-- An overloaded Durable Object is not retried at the coordinator boundary;
-  retry amplification would worsen overload. The API performs its existing
-  database replay lookup before returning an uncertain failure.
-- Sold-out availability transitions are assigned to exactly the order that
-  crosses the inventory boundary, rather than copied to every order in its
-  commit batch. Cache invalidation still runs when durable projection owns the
-  notification/Meta side effects.
+A local workerd + D1 comparison (requests dispatched directly to the Worker;
+200 simultaneous checkouts per round) measured:
 
-This topology has local end-to-end D1 authority/projection coverage and focused
-routing, lane grouping, response-order, overload, replay, and sold-out
-invalidation tests. It is an architectural prerequisite, not by itself a
-capacity claim. The disposable D1 and full Worker-to-Neon evidence below cover
-those provider shapes; current TursoDB concurrent-writer capacity still needs
-the same sustainable arrival-rate, p95/p99 latency, overload, projection-lag,
-exact order/idempotency, and inventory proof before publishing its throughput.
-See Cloudflare's current
-[Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
-and Turso's [concurrent-write contract](https://docs.turso.tech/tursodb/concurrent-writes/).
-
-## Verified disposable D1 coordinator-v2 load — 2026-08-03
-
-The sentinel-protected D1 target and Worker contained no production resources.
-Migration `0051_orders_checkout_write_path` removed one stale legacy customer
-index, removed two redundant single-column indexes, made three nullable indexes
-partial, and stopped synchronously indexing a coordinated order in FTS before
-its durable projection was complete. Projected orders remain searchable; local
-behavioral coverage and a live 1,000-order oracle both proved exact FTS
-visibility after projection.
-
-- Before the write-path migration, a short 1,000-order run at 250 scheduled
-  arrivals/second completed at 157.29 responses/second. The same short shape
-  completed at 180.75 after removing the redundant initial FTS/index writes.
-- A sustained 5,000-order untracked-SKU run at 250 scheduled arrivals/second
-  returned 5,000/5,000 HTTP 201 responses with exact order, item, and checkout
-  attempt counts. It completed at 235.32 responses/second with p95 service
-  latency 1.506 seconds and projection catch-up in 1.537 seconds.
-- After applying and recording release 0051 through normal Wrangler migration
-  and deployment, a second 5,000-order run returned 5,000/5,000 HTTP 201,
-  completed at 236.87 responses/second, had p95/p99 service latency of
-  2.195/2.839 seconds, and projected in 1.767 seconds. Foreign keys remained
-  clean and no legacy inventory movement was created.
-- One tracked SKU with exactly 5,000 available units received 6,000 submissions
-  at 250/second. Exactly 5,000 orders committed and 1,000 were rejected as
-  unavailable. Accepted orders completed at 200.86/second; the two reservation
-  lanes advanced by exactly 5,000 contiguous version/quantity edges, physical
-  stock and `stockVersion` did not drift, and no oversell or duplicate ledger
-  edge occurred.
-- The final clean-name deployment `aac260ed-6fe1-4bda-910d-0768df2e89c3`
-  served 100%, reported `schema 51/0051_orders_checkout_write_path`, and passed
-  a fresh 100-way simultaneous replay burst with 100 HTTP 201 responses but
-  exactly one order, one item, and one checkout attempt.
-
-These are database/coordinator capacity results with external providers and the
-production KV/rate-limit bindings intentionally absent. They prove that this D1
-shape can absorb the measured 250-order arrival stream while preserving its
-authority invariants; they do not prove thousands of orders/second or every
-merchant cart/provider workload.
+- 200 orders across 20 SKUs: 80–95 committed orders/second on the single
+  commit versus 73–83 on the retired coordinator.
+- 150 buyers racing for 20 units of one SKU plus 50 buyers on ten other SKUs:
+  exactly 20 hot orders committed every round on both paths; the round took a
+  median of about 2.2 s on the single commit versus about 1.3 s on the
+  coordinator, whose 30-second authority cache also served stale settings.
 
 ## Verified live TursoDB to PostgreSQL cutover — 2026-08-03
 
@@ -487,10 +426,10 @@ the existing merchant data, login, dashboard, storefront, and API domains.
 
 ## Verified full Worker-to-Neon checkout load — 2026-08-03
 
-A sentinel-protected Worker and disposable database on the demo project's
-smallest fixed 0.25-CU Neon compute exercised the complete public checkout
-route, coordinator, native PostgreSQL commit, durable projection, and direct
-database oracle. External gateways and notification consumers remained outside
+Historical: measured on the retired coordinator v2 path. A sentinel-protected
+Worker and disposable database on the demo project's smallest fixed 0.25-CU
+Neon compute exercised the complete public checkout route, coordinator, native
+PostgreSQL commit, durable projection, and direct database oracle. External gateways and notification consumers remained outside
 the measured path.
 
 - Three independent migrations from the same immutable canonical SQLite source

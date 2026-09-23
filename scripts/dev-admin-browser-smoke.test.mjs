@@ -113,7 +113,7 @@ describe("local admin product rich-text browser smoke CLI", () => {
     );
   });
 
-  it("accepts an unauthenticated JSON session denial from the admin worker", async () => {
+  it("accepts an unauthenticated JSON session denial from the dashboard origin", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "content-type": "application/json" },

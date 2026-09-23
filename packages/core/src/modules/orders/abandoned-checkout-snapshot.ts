@@ -1,4 +1,5 @@
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { isOnlinePaymentMethod } from "../payments/gateways/registry";
 
 const MAX_TEXT_LENGTH = 500;
 const MAX_NOTES_LENGTH = 1_000;
@@ -28,7 +29,8 @@ export interface AbandonedCheckoutAgentSummary {
     total: number;
     hasCustomerContact: boolean;
     orderId: string | null;
-    paymentMethod: "stripe" | "sslcommerz" | null;
+    /** An online payment gateway id. */
+    paymentMethod: string | null;
     paymentStatus: "unpaid" | "failed" | null;
 }
 
@@ -54,10 +56,7 @@ export function projectAbandonedCheckoutAgentSummary(
         const data = asRecord(JSON.parse(checkoutData));
         if (!data) throw new Error("Checkout data is not an object");
 
-        const paymentMethod = data.paymentMethod === "stripe"
-            || data.paymentMethod === "sslcommerz"
-            ? data.paymentMethod
-            : null;
+        const paymentMethod = isOnlinePaymentMethod(data.paymentMethod) ? data.paymentMethod : null;
         const paymentStatus = data.paymentStatus === "unpaid" || data.paymentStatus === "failed"
             ? data.paymentStatus
             : null;

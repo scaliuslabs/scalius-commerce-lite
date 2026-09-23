@@ -12,8 +12,11 @@ import type {
 import type { Readiness } from "@scalius/shared/readiness";
 
 export interface GatewayConfig {
-  id: "stripe" | "sslcommerz" | "cod";
+  /** A registered gateway id or "cod". */
+  id: string;
   name: string;
+  /** card: Stripe.js confirms in the browser; hosted: redirect to the provider; cod: no online payment. */
+  flow?: "card" | "hosted" | "cod";
   publishableKey?: string;   // Stripe only
   currencies?: string[];
   testMode?: boolean;

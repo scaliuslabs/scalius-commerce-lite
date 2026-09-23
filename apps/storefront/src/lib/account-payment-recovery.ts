@@ -3,7 +3,7 @@ import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
 
 export type AccountPaymentRecoveryAction = {
   visible: boolean;
-  gateway: "stripe" | "sslcommerz";
+  gateway: string;
   title: string;
   description: string;
   buttonLabel: string;
@@ -68,7 +68,7 @@ export function getAccountPaymentReturnNotice(
   result: string | null | undefined,
 ): AccountPaymentReturnNotice {
   const gateway = normalize(payment);
-  if (gateway !== "sslcommerz" && gateway !== "stripe") {
+  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(gateway) || gateway === "cod") {
     return null;
   }
 

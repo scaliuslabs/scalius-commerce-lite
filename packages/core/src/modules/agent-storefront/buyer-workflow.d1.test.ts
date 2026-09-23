@@ -25,15 +25,10 @@ describe("agent storefront checkout submission on D1 storage", () => {
     const now = Math.floor(Date.now() / 1000);
     sqlite.exec(`
       INSERT INTO settings (id, key, value, type, category) VALUES
-        ('s_currency', 'currency_code', 'BDT', 'string', 'currency'),
-        ('s_symbol', 'currency_symbol', '৳', 'string', 'currency'),
-        ('s_rate', 'usd_exchange_rate', '1', 'string', 'currency'),
-        ('s_phone', 'allowed_countries', '{"countries":["BD"],"mode":"include"}', 'json', 'phone'),
-        ('s_methods', 'enabled_methods', '["cod"]', 'json', 'payment_methods'),
-        ('s_default', 'default_method', 'cod', 'string', 'payment_methods');
-      INSERT INTO site_settings (id, singleton_key, site_name, header_config, footer_config,
-        guest_checkout_enabled, checkout_mode, partial_payment_enabled, partial_payment_amount)
-      VALUES ('site_default', 'default', 'Agent shop', '{}', '{}', 1, 'all', 0, 0);
+        ('s_currency', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","usdExchangeRate":"1"}', 'json', 'currency'),
+        ('s_countries', 'document', '{"allowedCountries":["BD"],"allowedCountriesMode":"include"}', 'json', 'customer_countries'),
+        ('s_methods', 'document', '{"enabledMethods":["cod"],"defaultMethod":"cod"}', 'json', 'payment_methods'),
+        ('s_checkout', 'document', '{"guestCheckoutEnabled":true,"checkoutMode":"all","partialPaymentEnabled":false,"partialPaymentAmount":0}', 'json', 'checkout');
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
              ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);
@@ -136,7 +131,7 @@ describe("agent storefront checkout submission on D1 storage", () => {
     ["a revoked session when guest checkout is off", () => {
       signIn();
       sqlite.exec(`UPDATE customer_sessions SET revoked_at = unixepoch();
-        UPDATE site_settings SET guest_checkout_enabled = 0;`);
+        UPDATE settings SET value = json_set(value, '$.guestCheckoutEnabled', json('false')) WHERE category = 'checkout';`);
     }, {}, UnauthorizedError, "Please sign in before checkout."],
     ["a signed-in account without a phone", () => {
       signIn();

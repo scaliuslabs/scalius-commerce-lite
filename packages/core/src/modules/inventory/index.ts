@@ -6,11 +6,13 @@ export {
   reserveMultiple,
   reserveStockBatch,
   prepareStockReservationBatch,
+  selectReservationVariantStates,
   isInventoryReservationConflictError,
   validateStockBatchAvailability,
 } from "./reserve";
 export type {
   PreparedStockReservationBatch,
+  ReservationVariantState,
   ReserveStockBatchResult,
 } from "./reserve";
 export { deductStock, deductMultiple } from "./deduct";

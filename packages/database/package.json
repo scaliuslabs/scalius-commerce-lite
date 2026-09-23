@@ -6,12 +6,7 @@
   "exports": {
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
-    "./checkout-commit": "./src/checkout-commit.ts",
-    "./checkout-transport": "./src/checkout-transport.ts",
-    "./checkout-projection": "./src/checkout-projection.ts",
     "./postgres-adapter": "./src/postgres-adapter.ts",
-    "./postgres-checkout": "./src/postgres-checkout.ts",
-    "./inventory-authority": "./src/inventory-authority.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
     "./migration-plan": "./src/migration-plan.ts",
     "./schema-contract": "./src/schema-contract.ts",

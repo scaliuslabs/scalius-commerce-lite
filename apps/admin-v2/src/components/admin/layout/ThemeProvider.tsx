@@ -59,9 +59,3 @@ function applyTheme(theme: Theme) {
   }
   root.style.colorScheme = theme;
 }
-
-/**
- * Inline script string to inject in <head> to prevent FOUC.
- * Must run before React hydration.
- */
-export const themeInitScript = `(function(){var t="light";try{t=localStorage.getItem("theme")||"light"}catch(e){}if(t==="dark"){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}document.documentElement.style.colorScheme=t})()`;

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import {
   getActivePaymentMethods,
@@ -9,50 +10,71 @@ import {
   getStripeCheckoutReadiness,
   isStripePlaceholderCredential,
   resolveActivePaymentMethodsFromRows,
-  upsertEncryptedSetting,
 } from "./gateway-settings";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
-import { getGatewayMeta } from "./gateway-registry";
-import { decryptCredentials, encryptCredentials } from "../../utils/credential-encryption";
+import { encryptCredentials } from "../../utils/credential-encryption";
 
-function createDbReturningCategoryReads(
-  rowsByRead: Array<Array<{ key: string; value: string }>>,
-) {
-  let readIndex = 0;
+type LegacyRow = { category?: string; key: string; value: string };
+
+const STRIPE_FIELDS: Record<string, string> = {
+  secret_key: "secretKey",
+  publishable_key: "publishableKey",
+  webhook_secret: "webhookSecret",
+};
+const SSLCOMMERZ_FIELDS: Record<string, string> = { store_id: "storeId", store_password: "storePassword" };
+
+function categoryOf(rows: LegacyRow[]): string | null {
+  if (rows.some((row) => row.key in STRIPE_FIELDS)) return "stripe";
+  if (rows.some((row) => row.key in SSLCOMMERZ_FIELDS || row.key === "sandbox")) return "sslcommerz";
+  if (rows.some((row) => row.key === "enabled_methods" || row.key === "default_method")) return "payment_methods";
+  return null;
+}
+
+/** The documents the 0065 migration builds from these per-key fixture rows. */
+function documentFor(category: string, rows: LegacyRow[]): Record<string, unknown> {
+  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  if (category === "payment_methods") {
+    let enabledMethods: unknown = null;
+    if (values.enabled_methods !== undefined) {
+      try {
+        enabledMethods = JSON.parse(values.enabled_methods);
+      } catch {
+        enabledMethods = [];
+      }
+    }
+    return { enabledMethods, defaultMethod: values.default_method ?? "cod" };
+  }
+  const fields = category === "stripe" ? STRIPE_FIELDS : SSLCOMMERZ_FIELDS;
   return {
-    select: (projection: Record<string, unknown>) => ({
-      from: () => ({
-        where: () => ({
-          all: async () => {
-            if ("category" in projection) {
-              const categories = ["payment_methods", "stripe", "sslcommerz"];
-              return rowsByRead.flatMap((rows, index) => rows.map((row) => ({
-                ...row,
-                category: categories[index],
-              })));
-            }
-            return rowsByRead[readIndex++] ?? [];
-          },
-        }),
-      }),
-    }),
+    ...Object.fromEntries(rows.filter((row) => row.key in fields).map((row) => [fields[row.key], row.value])),
+    ...(values.sandbox !== undefined ? { sandbox: values.sandbox !== "false" } : {}),
+    ...(values.enabled !== undefined ? { enabled: values.enabled !== "false" } : {}),
   };
 }
 
-function createDbCapturingInsert() {
-  const captured: { values?: Record<string, unknown> } = {};
-  const db = {
-    insert: vi.fn(() => ({
-      values: vi.fn((values: Record<string, unknown>) => {
-        captured.values = values;
-        return {
-          onConflictDoUpdate: vi.fn(async () => undefined),
-        };
-      }),
-    })),
-  };
+function documentRows(rows: LegacyRow[]) {
+  const byCategory = new Map<string, LegacyRow[]>();
+  for (const row of rows) {
+    const category = row.category ?? categoryOf([row]);
+    if (category) byCategory.set(category, [...(byCategory.get(category) ?? []), row]);
+  }
+  return [...byCategory].map(([category, categoryRows]) => ({
+    category,
+    value: JSON.stringify(documentFor(category, categoryRows)),
+    revision: 1,
+  }));
+}
 
-  return { db, captured };
+/** Each group of fixture rows is one gateway settings document. */
+function createDbReturningCategoryReads(groups: LegacyRow[][]) {
+  const { db, sqlite } = createSqliteD1Database();
+  for (const rows of groups) {
+    const category = categoryOf(rows);
+    if (!category) continue;
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES (?, 'document', ?, 'json', ?)")
+      .run(category, JSON.stringify(documentFor(category, rows)), category);
+  }
+  return db;
 }
 
 describe("payment gateway settings reads", () => {
@@ -74,13 +96,13 @@ describe("payment gateway settings reads", () => {
       ],
     ]);
 
-    await expect(getStripeSettings(oldDb as never)).resolves.toMatchObject({
+    await expect(getStripeSettings(oldDb)).resolves.toMatchObject({
       secretKey: "sk_old",
       publishableKey: "pk_old",
       enabled: true,
     });
 
-    await expect(getStripeSettings(freshDb as never)).resolves.toMatchObject({
+    await expect(getStripeSettings(freshDb)).resolves.toMatchObject({
       secretKey: "sk_new",
       publishableKey: "pk_new",
       enabled: false,
@@ -102,12 +124,12 @@ describe("payment gateway settings reads", () => {
       [],
     ]);
 
-    await expect(getActivePaymentMethods(oldDb as never)).resolves.toEqual({
+    await expect(getActivePaymentMethods(oldDb)).resolves.toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
     });
 
-    await expect(getActivePaymentMethods(freshDb as never)).resolves.toEqual({
+    await expect(getActivePaymentMethods(freshDb)).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
     });
@@ -121,7 +143,7 @@ describe("payment gateway settings reads", () => {
       ],
     ]);
 
-    await expect(getActivePaymentMethods(db as never)).resolves.toEqual({
+    await expect(getActivePaymentMethods(db)).resolves.toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
     });
@@ -143,11 +165,18 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never),
+      getActivePaymentMethods(db),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
     });
+  });
+
+  it("fails closed for a stored payment-method document that is not JSON", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    sqlite.exec("INSERT INTO settings (id, key, value, type, category) VALUES ('pm', 'document', '{not json', 'json', 'payment_methods')");
+
+    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: [], defaultMethod: "cod" });
   });
 
   it("does not make Stripe active without a publishable key", async () => {
@@ -164,7 +193,7 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never),
+      getActivePaymentMethods(db),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -188,7 +217,7 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never, wrongKey),
+      getActivePaymentMethods(db, wrongKey),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -214,8 +243,8 @@ describe("payment gateway settings reads", () => {
       ],
     ]);
 
-    const stripe = await getStripeSettings(stripeDb as never, wrongKey);
-    const ssl = await getSSLCommerzSettings(sslDb as never, wrongKey);
+    const stripe = await getStripeSettings(stripeDb, wrongKey);
+    const ssl = await getSSLCommerzSettings(sslDb, wrongKey);
 
     expect(getStripeCheckoutReadiness(stripe)).toMatchObject({
       configured: false,
@@ -301,30 +330,6 @@ describe("payment gateway settings reads", () => {
     });
   });
 
-  it("publishes one test-mode fact for every online gateway", () => {
-    expect(getGatewayMeta("stripe")?.getPublicConfig?.({
-      secretKey: "sk_test_realishValue",
-      publishableKey: "pk_test_realishValue",
-    })).toMatchObject({ testMode: true });
-    expect(getGatewayMeta("stripe")?.getPublicConfig?.({
-      secretKey: "sk_live_realishValue",
-      publishableKey: "pk_live_realishValue",
-    })).toMatchObject({ testMode: false });
-    expect(getGatewayMeta("sslcommerz")?.getPublicConfig?.({ sandbox: true }))
-      .toMatchObject({
-        testMode: true,
-        amountLimits: { currency: "BDT", min: 10, max: 500_000 },
-      });
-    expect(getGatewayMeta("sslcommerz")?.getPublicConfig?.({ sandbox: false }))
-      .toMatchObject({ testMode: false });
-  });
-
-  it("advertises SSLCommerz only for its supported BDT checkout currency", () => {
-    expect(getGatewayMeta("sslcommerz")?.getCurrencies?.("usd")).toEqual(["bdt"]);
-    expect(getGatewayMeta("stripe")?.getCurrencies?.("bhd")).toContain("bhd");
-    expect(getGatewayMeta("cod")?.getCurrencies?.("jpy")).toEqual(["jpy"]);
-  });
-
   it("blocks Stripe checkout readiness when credentials are placeholders", () => {
     expect(getStripeCheckoutReadiness({
       secretKey: "stripe_secret_key",
@@ -360,7 +365,7 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never),
+      getActivePaymentMethods(db),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -441,7 +446,7 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never),
+      getActivePaymentMethods(db),
     ).resolves.toEqual({
       enabledMethods: [],
       defaultMethod: "cod",
@@ -463,7 +468,7 @@ describe("payment gateway settings reads", () => {
     ]);
 
     await expect(
-      getActivePaymentMethods(db as never),
+      getActivePaymentMethods(db),
     ).resolves.toEqual({
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
@@ -483,37 +488,9 @@ describe("payment gateway settings reads", () => {
       { category: "sslcommerz", key: "enabled", value: "true" },
     ];
 
-    await expect(resolveActivePaymentMethodsFromRows(rows)).resolves.toEqual({
+    await expect(resolveActivePaymentMethodsFromRows(documentRows(rows))).resolves.toEqual({
       enabledMethods: ["cod", "stripe", "sslcommerz"],
       defaultMethod: "stripe",
     });
-  });
-
-  it("fails closed instead of storing provider secrets without an encryption key", async () => {
-    const { db } = createDbCapturingInsert();
-
-    await expect(
-      upsertEncryptedSetting(db as never, "stripe", "secret_key", "sk_live_missing_key"),
-    ).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
-    expect(db.insert).not.toHaveBeenCalled();
-  });
-
-  it("encrypts provider secrets before writing them to settings", async () => {
-    const { db, captured } = createDbCapturingInsert();
-    const key = Buffer.alloc(32, 7).toString("base64");
-
-    await upsertEncryptedSetting(db as never, "stripe", "secret_key", "sk_live_secret", key);
-
-    expect(captured.values).toMatchObject({
-      category: "stripe",
-      key: "secret_key",
-      type: "string",
-    });
-    expect(captured.values?.value).toEqual(expect.any(String));
-    expect(captured.values?.value).toMatch(/^enc:/);
-    expect(captured.values?.value).not.toBe("sk_live_secret");
-    await expect(
-      decryptCredentials(String(captured.values?.value).slice("enc:".length), key),
-    ).resolves.toBe("sk_live_secret");
   });
 });

@@ -51,23 +51,19 @@ vi.mock("../integrations/email", () => ({
 import { createAuth, getAuth } from "./auth";
 import { getEmailProviderReadiness } from "../integrations/email/settings";
 import { encryptCredentials } from "../utils/credential-encryption";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
+/** Stores the email document exactly as given (bypassing save-time validation). */
 function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
-  return {
-    // `.get()` is the email settings-document row (absent here, so the legacy
-    // per-key rows are assembled); `.all()` is the legacy category read.
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          all: async () => rows,
-          get: async () => undefined,
-        }),
-      }),
-    }),
-    insert: () => ({
-      values: () => ({ onConflictDoUpdate: () => ({ statement: "upsert-email-config" }) }),
-    }),
+  const fields: Record<string, string> = {
+    email_provider: "provider",
+    email_sender: "sender",
+    resend_api_key: "resendApiKey",
   };
+  const { db, sqlite } = createSqliteD1Database();
+  sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('email', 'document', ?, 'json', 'email')")
+    .run(JSON.stringify(Object.fromEntries(rows.map(({ key, value }) => [fields[key], value]))));
+  return db;
 }
 
 describe("createAuth", () => {

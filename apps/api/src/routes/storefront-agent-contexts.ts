@@ -39,6 +39,7 @@ import {
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { bumpCacheGeneration, getOptionalExecutionContext } from "../utils/cache-generation";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
+import { listPaymentMethodIds } from "@scalius/core/modules/payments/gateways/registry";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -200,7 +201,7 @@ const checkoutSubmitSchema = z.object({
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500),
   notes: z.string().trim().max(500).nullable(),
-  paymentMethod: z.enum(["cod", "stripe", "sslcommerz"]).openapi({
+  paymentMethod: z.enum(listPaymentMethodIds() as [string, ...string[]]).openapi({
     description: "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.",
   }),
 }).strict();

@@ -14,7 +14,6 @@ import {
 } from "@scalius/core/modules/orders/orders.validation";
 import {
     FulfillmentStatus,
-    PaymentMethod,
     PaymentStatus,
     orderPayments,
     paymentPlans,
@@ -66,6 +65,7 @@ import { enqueueOrderNotificationsForStatus } from "../../utils/order-notificati
 import {
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
+    listPaymentMethodIds,
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
 import { listPaymentWebhookIssuesForOrder } from "../../utils/payment-webhook-issues";
@@ -97,11 +97,7 @@ const paymentStatusQuerySchema = z.enum([
     PaymentStatus.FAILED,
 ]);
 
-const paymentMethodQuerySchema = z.enum([
-    PaymentMethod.COD,
-    PaymentMethod.STRIPE,
-    PaymentMethod.SSLCOMMERZ,
-]);
+const paymentMethodQuerySchema = z.enum(listPaymentMethodIds() as [string, ...string[]]);
 
 const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PENDING,
@@ -241,11 +237,8 @@ const orderPaymentSchema = z.object({
     paymentMethod: z.string(),
     paymentType: z.string(),
     status: z.string(),
-    stripePaymentIntentId: z.string().nullable(),
-    stripeChargeId: z.string().nullable(),
-    sslcommerzTranId: z.string().nullable(),
-    sslcommerzValId: z.string().nullable(),
-    sslcommerzBankTranId: z.string().nullable(),
+    providerRef: z.string().nullable(),
+    providerSecondaryRef: z.string().nullable(),
     codCollectedBy: z.string().nullable(),
     codCollectedAt: z.union([z.string(), z.number()]).nullable(),
     codReceiptUrl: z.string().nullable(),
@@ -305,7 +298,7 @@ const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
     expiresAt: timestampSchema.nullable(),
     accessMode: z.literal("buyer_verified_receipt"),
     note: z.string(),
-    gateway: z.enum(["sslcommerz"]),
+    gateway: z.string(),
     paymentType: recoveryLinkPaymentTypeSchema.nullable(),
     depositAmount: z.number().nullable(),
     paymentRecovery: orderPaymentRecoverySchema,
@@ -1268,11 +1261,8 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
             paymentMethod: orderPayments.paymentMethod,
             paymentType: orderPayments.paymentType,
             status: orderPayments.status,
-            stripePaymentIntentId: orderPayments.stripePaymentIntentId,
-            stripeChargeId: orderPayments.stripeChargeId,
-            sslcommerzTranId: orderPayments.sslcommerzTranId,
-            sslcommerzValId: orderPayments.sslcommerzValId,
-            sslcommerzBankTranId: orderPayments.sslcommerzBankTranId,
+            providerRef: orderPayments.providerRef,
+            providerSecondaryRef: orderPayments.providerSecondaryRef,
             codCollectedBy: orderPayments.codCollectedBy,
             codCollectedAt: orderPayments.codCollectedAt,
             codReceiptUrl: orderPayments.codReceiptUrl,

@@ -6,11 +6,6 @@
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {
-  availableRegularStockSql,
-  coordinatedRegularReservedStockSql,
-  effectiveRegularReservedStockSql,
-} from "@scalius/database/inventory-authority";
-import {
   buildBatchGuard,
   isBatchGuardError,
   isTursoConflictError,
@@ -18,6 +13,7 @@ import {
   type Database,
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
+import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
@@ -57,7 +53,7 @@ export async function reserveStock(
       .select({
         id: productVariants.id,
         stock: productVariants.stock,
-        reservedStock: effectiveRegularReservedStockSql(),
+        reservedStock: productVariants.reservedStock,
         preorderStock: productVariants.preorderStock,
         allowPreorder: productVariants.allowPreorder,
         allowBackorder: productVariants.allowBackorder,
@@ -173,10 +169,10 @@ export async function reserveStock(
         ? sql`${productVariants.allowBackorder} = 1
             AND (
               ${productVariants.backorderLimit} = 0
-              OR ${effectiveRegularReservedStockSql()} + ${quantity}
+              OR ${productVariants.reservedStock} + ${quantity}
                 <= ${productVariants.backorderLimit}
             )`
-        : sql`${availableRegularStockSql()} >= ${quantity}`;
+        : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${quantity}`;
 
     const result = await db
       .update(productVariants)
@@ -292,6 +288,11 @@ export interface ReserveStockBatchOptions {
    * existing generation.
    */
   freshOrderIds?: ReadonlySet<string>;
+  /**
+   * Counter rows already read by `selectReservationVariantStates` in the
+   * caller's read batch. The guarded writes re-check them in-transaction.
+   */
+  variantStates?: readonly ReservationVariantState[];
 }
 
 export type ReserveStockBatchResult = {
@@ -309,6 +310,49 @@ export type ReserveStockBatchResult = {
 export interface PreparedStockReservationBatch extends ReserveStockBatchResult {
   statements: SQLiteBatchItem[];
   resolveIdempotentReplay(error: unknown): Promise<ReserveStockBatchResult | null>;
+  /**
+   * Variants whose buyer availability band changed, read from the counter
+   * rows this plan's own statements returned (the committed after-state).
+   */
+  availabilityTransitions(statementResults: readonly unknown[]): string[];
+}
+
+const NO_RESERVATION_STATEMENTS = {
+  statements: [],
+  resolveIdempotentReplay: async () => null,
+  availabilityTransitions: () => [],
+} satisfies Pick<
+  PreparedStockReservationBatch,
+  "statements" | "resolveIdempotentReplay" | "availabilityTransitions"
+>;
+
+function reservationAvailabilityTransitions(
+  statementResults: readonly unknown[],
+  entries: readonly ReservationBatchItem[],
+  variants: ReadonlyMap<string, ReservationVariantState>,
+): string[] {
+  const quantities = new Map(entries.map((entry) => [entry.variantId, entry.quantity]));
+  const transitions = new Set<string>();
+  for (const result of statementResults) {
+    if (!Array.isArray(result)) continue;
+    for (const row of result as Array<Record<string, unknown>>) {
+      const quantity = typeof row?.id === "string" ? quantities.get(row.id) : undefined;
+      if (
+        quantity === undefined
+        || typeof row.stock !== "number"
+        || typeof row.reservedStock !== "number"
+      ) continue;
+      const availableAfter = Math.max(0, row.stock - row.reservedStock);
+      const lowStockThreshold = variants.get(row.id as string)?.lowStockThreshold ?? null;
+      if (
+        resolveTrackedBuyerAvailabilityBand(availableAfter + quantity, lowStockThreshold)
+        !== resolveTrackedBuyerAvailabilityBand(availableAfter, lowStockThreshold)
+      ) {
+        transitions.add(row.id as string);
+      }
+    }
+  }
+  return [...transitions];
 }
 
 type ReservationMovementClaim = {
@@ -340,8 +384,7 @@ export async function prepareStockReservationBatch(
     return {
       success: true,
       results: [],
-      statements: [],
-      resolveIdempotentReplay: async () => null,
+      ...NO_RESERVATION_STATEMENTS,
     };
   }
 
@@ -362,17 +405,21 @@ export async function prepareStockReservationBatch(
       })),
       error: `Variant ${multiOrderVariant} cannot be reserved for multiple orders in one counter mutation`,
       manualReconciliationRequired: true,
-      statements: [],
-      resolveIdempotentReplay: async () => null,
+      ...NO_RESERVATION_STATEMENTS,
     };
   }
 
-  const variantLoad = await loadReservationVariantStates(db, entries);
+  const variantLoad = resolveReservationVariantStates(
+    entries,
+    options.variantStates ?? await selectReservationVariantStates(
+      db,
+      entries.map((entry) => entry.variantId),
+    ).all(),
+  );
   if (!variantLoad.success) {
     return {
       ...variantLoad,
-      statements: [],
-      resolveIdempotentReplay: async () => null,
+      ...NO_RESERVATION_STATEMENTS,
     };
   }
   const variants = variantLoad.variants;
@@ -383,8 +430,7 @@ export async function prepareStockReservationBatch(
       success: false,
       results: validationErrors,
       error: validationErrors[0]?.error,
-      statements: [],
-      resolveIdempotentReplay: async () => null,
+      ...NO_RESERVATION_STATEMENTS,
     };
   }
 
@@ -395,8 +441,7 @@ export async function prepareStockReservationBatch(
     return {
       success: true,
       results,
-      statements: [],
-      resolveIdempotentReplay: async () => null,
+      ...NO_RESERVATION_STATEMENTS,
     };
   }
 
@@ -439,6 +484,8 @@ export async function prepareStockReservationBatch(
         pool,
         error,
       ),
+      availabilityTransitions: (statementResults) =>
+        reservationAvailabilityTransitions(statementResults, entries, variants),
     };
   }
 
@@ -471,7 +518,11 @@ export async function prepareStockReservationBatch(
         isNull(productVariants.deletedAt),
         eq(productVariants.stockVersion, variant.stockVersion),
       ))
-      .returning({ id: productVariants.id });
+      .returning({
+        id: productVariants.id,
+        stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
+      });
   });
 
   return {
@@ -486,6 +537,8 @@ export async function prepareStockReservationBatch(
       pool,
       error,
     ),
+    availabilityTransitions: (statementResults) =>
+      reservationAvailabilityTransitions(statementResults, entries, variants),
   };
 }
 
@@ -548,10 +601,9 @@ export async function reserveStockBatch(
   };
 }
 
-type ReservationVariantState = {
+export type ReservationVariantState = {
   id: string;
   stock: number;
-  legacyReservedStock?: number;
   reservedStock: number;
   preorderStock: number;
   allowPreorder: boolean;
@@ -559,6 +611,7 @@ type ReservationVariantState = {
   backorderLimit: number;
   trackInventory: boolean;
   stockVersion: number;
+  lowStockThreshold?: number | null;
 };
 
 function buildReservationBatchGuard(
@@ -574,9 +627,9 @@ function buildReservationBatchGuard(
       ? sql`${productVariants.allowBackorder} = 1
           AND (
             ${productVariants.backorderLimit} = 0
-            OR ${effectiveRegularReservedStockSql()} + ${entry.quantity} <= ${productVariants.backorderLimit}
+            OR ${productVariants.reservedStock} + ${entry.quantity} <= ${productVariants.backorderLimit}
           )`
-      : sql`${availableRegularStockSql()} >= ${entry.quantity}`;
+      : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${entry.quantity}`;
 
   return buildBatchGuard(db, sql`EXISTS (
     SELECT 1
@@ -710,7 +763,6 @@ async function buildReservationMovementClaims(
 
   for (const entry of movementEntries) {
     const variant = variants.get(entry.variantId)!;
-    const legacyReservedStock = variant.legacyReservedStock ?? variant.reservedStock;
     const reservationKey = entry.reservationKey ?? options.reservationKey;
     const deterministic = Boolean(entry.movementId || (reservationKey && entry.orderId));
     const reservationGeneration = entry.orderId
@@ -737,13 +789,13 @@ async function buildReservationMovementClaims(
       reservationGeneration,
       before: {
         stock: variant.stock,
-        reservedStock: legacyReservedStock,
+        reservedStock: variant.reservedStock,
         preorderStock: variant.preorderStock,
         stockVersion: variant.stockVersion,
       },
       after: {
         stock: variant.stock,
-        reservedStock: legacyReservedStock + entry.quantity,
+        reservedStock: variant.reservedStock + entry.quantity,
         preorderStock: pool === "preorder"
           ? variant.preorderStock - entry.quantity
           : variant.preorderStock,
@@ -840,12 +892,9 @@ function buildFreshReservationMovementInsert(
       ? sql`${variant.allowBackorder} = 1
           AND (
             ${variant.backorderLimit} = 0
-            OR ${variant.reservedStock}
-              + ${coordinatedRegularReservedStockSql(variant.id)}
-              + ${claim.quantity} <= ${variant.backorderLimit}
+            OR ${variant.reservedStock} + ${claim.quantity} <= ${variant.backorderLimit}
           )`
-      : sql`${variant.stock} - ${variant.reservedStock}
-          - ${coordinatedRegularReservedStockSql(variant.id)} >= ${claim.quantity}`;
+      : sql`${variant.stock} - ${variant.reservedStock} >= ${claim.quantity}`;
   const nextPreorderStock = pool === "preorder"
     ? sql`${variant.preorderStock} - ${claim.quantity}`
     : sql`${variant.preorderStock}`;
@@ -931,7 +980,7 @@ function buildFreshReservationCounterUpdate(
     .returning({
       id: productVariants.id,
       stock: productVariants.stock,
-      reservedStock: effectiveRegularReservedStockSql(),
+      reservedStock: productVariants.reservedStock,
     });
 }
 
@@ -1120,39 +1169,52 @@ function mergeReservationItemsByVariant(items: ReservationBatchItem[]): Reservat
   return Array.from(merged.values());
 }
 
-async function loadReservationVariantStates(
+/** Buyer-sellable counter rows; composable into a caller's read batch. */
+export function selectReservationVariantStates(
   db: Database,
-  entries: ReservationBatchItem[],
-): Promise<
-  | { success: true; variants: Map<string, ReservationVariantState> }
-  | { success: false; results: StockOperationResult[]; error: string }
-> {
-  const requestedVariantIds = entries.map((entry) => entry.variantId);
-  const rows = await db
+  variantIds: readonly string[],
+) {
+  return db
     .select({
       id: productVariants.id,
       stock: productVariants.stock,
-      legacyReservedStock: productVariants.reservedStock,
-      reservedStock: effectiveRegularReservedStockSql(),
+      reservedStock: productVariants.reservedStock,
       preorderStock: productVariants.preorderStock,
       allowPreorder: productVariants.allowPreorder,
       allowBackorder: productVariants.allowBackorder,
       backorderLimit: productVariants.backorderLimit,
       trackInventory: productVariants.trackInventory,
       stockVersion: productVariants.stockVersion,
+      lowStockThreshold: productVariants.lowStockThreshold,
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))
     .where(
       and(
-        inArray(productVariants.id, requestedVariantIds),
+        inArray(productVariants.id, [...variantIds]),
         isNull(productVariants.deletedAt),
         eq(products.isActive, true),
         isNull(products.deletedAt),
       ),
-    )
-    .all();
+    );
+}
 
+async function loadReservationVariantStates(
+  db: Database,
+  entries: ReservationBatchItem[],
+) {
+  return resolveReservationVariantStates(
+    entries,
+    await selectReservationVariantStates(db, entries.map((entry) => entry.variantId)).all(),
+  );
+}
+
+function resolveReservationVariantStates(
+  entries: ReservationBatchItem[],
+  rows: readonly ReservationVariantState[],
+):
+  | { success: true; variants: Map<string, ReservationVariantState> }
+  | { success: false; results: StockOperationResult[]; error: string } {
   const variants = new Map<string, ReservationVariantState>(
     rows.map((variant) => [variant.id, variant]),
   );

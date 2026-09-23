@@ -3,15 +3,13 @@ import type { Database } from "@scalius/database/client";
 import {
     orderPaymentRecoveryChallenges,
     orders,
-    settings as genericSettings,
-    siteSettings,
 } from "@scalius/database/schema";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
     isCustomerAuthOtpChannel,
-    normalizeCustomerAuthPolicy,
     type CustomerAuthOtpChannel,
 } from "@scalius/shared/customer-auth-policy";
+import { customerAuthDocument } from "../settings/documents";
 import { isReady } from "@scalius/shared/readiness";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
@@ -46,7 +44,6 @@ export interface SendOrderPaymentRecoveryOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
-    migrationEncryptionKey?: string;
 }
 
 export interface SendOrderPaymentRecoveryOtpResult {
@@ -122,7 +119,6 @@ export async function sendOrderPaymentRecoveryOtp(
         channel,
         emailEnv: input.emailEnv,
         credentialEncryptionKey: input.credentialEncryptionKey,
-        migrationEncryptionKey: input.migrationEncryptionKey,
     });
 
     await enforceCustomerAuthOtpIpRateLimit(db, {
@@ -363,23 +359,7 @@ async function resolveRecoveryChannel(
 }
 
 async function getRecoveryOtpPolicy(db: Database) {
-    const [settingsRow, policyRow] = await Promise.all([
-        db.select().from(siteSettings).limit(1).then((rows) => rows[0] ?? null),
-        db.select({ value: genericSettings.value })
-            .from(genericSettings)
-            .where(and(eq(genericSettings.category, "customer_auth"), eq(genericSettings.key, "policy")))
-            .get()
-            .catch(() => null),
-    ]);
-
-    if (!settingsRow) {
-        throw new ServiceUnavailableError("Customer authentication settings are not initialized.");
-    }
-
-    return normalizeCustomerAuthPolicy(
-        parseJson(policyRow?.value),
-        settingsRow.authVerificationMethod,
-    );
+    return (await customerAuthDocument.read(db)).policy;
 }
 
 async function assertRecoveryChannelReady(
@@ -388,7 +368,6 @@ async function assertRecoveryChannelReady(
         channel: CustomerAuthOtpChannel;
         emailEnv?: EmailRuntimeContext["env"];
         credentialEncryptionKey?: string;
-        migrationEncryptionKey?: string;
     },
 ): Promise<void> {
     if (input.channel === "email") {
@@ -411,10 +390,7 @@ async function assertRecoveryChannelReady(
         return;
     }
 
-    const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey, {
-        migrateLegacy: true,
-        migrationEncryptionKey: input.migrationEncryptionKey,
-    });
+    const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
     if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
         throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
     }
@@ -658,15 +634,6 @@ function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {
     if (channel === "whatsapp") return "whatsapp_otp";
     if (channel === "sms") return "sms_otp";
     return "email";
-}
-
-function parseJson(value: string | null | undefined): unknown {
-    if (!value) return undefined;
-    try {
-        return JSON.parse(value) as unknown;
-    } catch {
-        return undefined;
-    }
 }
 
 function currentUnixSeconds(): number {

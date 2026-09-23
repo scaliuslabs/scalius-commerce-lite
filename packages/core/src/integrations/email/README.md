@@ -51,7 +51,7 @@ The context lets the selector detect `env.EMAIL`, read DB settings without relyi
 
 ## Cloudflare Binding
 
-The API and admin Workers declare:
+The API Worker declares:
 
 ```jsonc
 "send_email": [{ "name": "EMAIL" }]

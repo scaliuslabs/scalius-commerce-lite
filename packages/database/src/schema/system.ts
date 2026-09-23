@@ -1,5 +1,5 @@
 // src/db/schema/system.ts
-// System/platform tables: settings, siteSettings, analytics, adminFcmTokens,
+// System/platform tables: settings, analytics, adminFcmTokens,
 // shippingMethods, checkoutLanguages.
 
 import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
@@ -42,6 +42,8 @@ export const settings = sqliteTable(
         value: text("value").notNull(),
         type: text("type").notNull(),
         category: text("category").notNull(),
+        /** Optimistic-concurrency revision of a settings document row. */
+        revision: integer("revision").notNull().default(1),
         updatedAt: integer("updated_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -181,49 +183,6 @@ export const themePreviewSessions = sqliteTable("theme_preview_sessions", {
     ),
 ]);
 
-export const siteSettings = sqliteTable("site_settings", {
-    id: text("id").primaryKey(),
-    singletonKey: text("singleton_key").notNull().default("default"),
-    logo: text("logo"),
-    favicon: text("favicon"),
-    siteName: text("site_name").notNull(),
-    siteDescription: text("site_description"),
-    headerConfig: text("header_config").notNull(),
-    headerConfigRevision: integer("header_config_revision").notNull().default(1),
-    footerConfig: text("footer_config").notNull(),
-    footerConfigRevision: integer("footer_config_revision").notNull().default(1),
-    socialLinks: text("social_links"),
-    contactInfo: text("contact_info"),
-    siteTitle: text("site_title"),
-    homepageTitle: text("homepage_title"),
-    homepageMetaDescription: text("homepage_meta_description"),
-    homepageConfig: text("homepage_config").notNull().default("{}"),
-    homepageConfigRevision: integer("homepage_config_revision").notNull().default(1),
-    robotsTxt: text("robots_txt"),
-    storefrontUrl: text("storefront_url").default("/"),
-    authVerificationMethod: text("auth_verification_method", { enum: ["email", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
-    guestCheckoutEnabled: integer("guest_checkout_enabled", { mode: "boolean" }).notNull().default(true),
-    checkoutMode: text("checkout_mode", { enum: ["guest_cod_only", "gateways_only", "all"] }).notNull().default("all"),
-    partialPaymentEnabled: integer("partial_payment_enabled", { mode: "boolean" }).notNull().default(false),
-    partialPaymentAmount: real("partial_payment_amount").notNull().default(0),
-    checkoutFlowRevision: integer("checkout_flow_revision").notNull().default(1),
-    whatsappAccessToken: text("whatsapp_access_token"),
-    whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
-    whatsappTemplateName: text("whatsapp_template_name").default("auth_otp"),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-}, (table) => [
-    uniqueIndex("site_settings_singleton_idx").on(table.singletonKey),
-    check("site_settings_header_config_revision_positive", sql`${table.headerConfigRevision} >= 1`),
-    check("site_settings_footer_config_revision_positive", sql`${table.footerConfigRevision} >= 1`),
-    check("site_settings_homepage_config_revision_positive", sql`${table.homepageConfigRevision} >= 1`),
-    check("site_settings_checkout_flow_revision_positive", sql`${table.checkoutFlowRevision} >= 1`),
-]);
-
 export const analytics = sqliteTable("analytics", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
@@ -307,7 +266,6 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
 ]);
 
 export type Setting = InferSelectModel<typeof settings>;
-export type SiteSettings = InferSelectModel<typeof siteSettings>;
 export type Analytics = InferSelectModel<typeof analytics>;
 export type AdminFcmToken = InferSelectModel<typeof adminFcmTokens>;
 export type ShippingMethod = InferSelectModel<typeof shippingMethods>;

@@ -3,8 +3,7 @@ import type { Database } from "@scalius/database/client";
 import {
   orderPaymentRecoveryChallenges,
   orders,
-  settings as genericSettings,
-  siteSettings,
+  settings,
 } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
@@ -75,23 +74,20 @@ function createDb(options: FakeDbOptions = {}) {
               customerEmail: "buyer@example.com",
             };
           }
-          if (selectedTable === genericSettings) {
-            return {
-              value: JSON.stringify({
-                otpChannels: ["sms", "email"],
-                defaultOtpChannel: "sms",
-                emailCollection: "optional",
-              }),
-            };
-          }
           return null;
         },
-        limit: async () => {
-          if (selectedTable === siteSettings) {
-            return [{ authVerificationMethod: "sms_otp" }];
-          }
-          return [];
-        },
+        limit: async () => [],
+        // Awaiting the query is the settings-document read.
+        then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(selectedTable === settings
+          ? [{
+            category: "customer_auth",
+            value: JSON.stringify({
+              authVerificationMethod: "sms_otp",
+              policy: { otpChannels: ["sms", "email"], defaultOtpChannel: "sms" },
+            }),
+            revision: 1,
+          }]
+          : []).then(resolve),
       };
       return query;
     }),

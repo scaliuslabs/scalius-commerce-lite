@@ -199,7 +199,6 @@ app.openapi(sendOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
 
   if (!result.success) {
@@ -703,7 +702,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
 
 const customerPaymentRecoverySchema = z.object({
   eligible: z.boolean(),
-  gateway: z.enum(["stripe", "sslcommerz"]).nullable(),
+  gateway: z.string().nullable(),
   paymentType: z.enum(["full", "deposit", "balance"]).nullable(),
   amountDue: z.number(),
   label: z.string().nullable(),
@@ -1088,31 +1087,24 @@ app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
   return created(c, result);
 });
 
-const paymentSessionBaseSchema = z.object({
+/** Card gateways return `stripe` (browser confirmation); hosted gateways return `hosted` (redirect). */
+const customerPaymentSessionSchema = z.object({
+  gateway: z.string(),
   paymentType: z.enum(["full", "deposit", "balance"]),
   amount: z.number(),
   currency: z.string(),
+  stripe: z.object({
+    clientSecret: z.string().optional(),
+    paymentIntentId: z.string().optional(),
+    publishableKey: z.string(),
+    amount: z.number(),
+    currency: z.string(),
+  }).optional(),
+  hosted: z.object({
+    gatewayUrl: z.string().optional(),
+    sessionKey: z.string().optional(),
+  }).optional(),
 });
-
-const customerPaymentSessionSchema = z.discriminatedUnion("gateway", [
-  paymentSessionBaseSchema.extend({
-    gateway: z.literal("stripe"),
-    stripe: z.object({
-      clientSecret: z.string().optional(),
-      paymentIntentId: z.string().optional(),
-      publishableKey: z.string(),
-      amount: z.number(),
-      currency: z.string(),
-    }),
-  }),
-  paymentSessionBaseSchema.extend({
-    gateway: z.literal("sslcommerz"),
-    hosted: z.object({
-      gatewayUrl: z.string().optional(),
-      sessionKey: z.string().optional(),
-    }),
-  }),
-]);
 
 const createCustomerOrderPaymentSessionRoute = createRoute({
   method: "post",
@@ -1127,7 +1119,7 @@ const createCustomerOrderPaymentSessionRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            gateway: z.enum(["stripe", "sslcommerz"]).optional(),
+            gateway: z.string().max(64).optional(),
             replaceExistingAttempt: z.boolean().optional(),
           }).strict(),
         },
@@ -1172,23 +1164,7 @@ app.openapi(createCustomerOrderPaymentSessionRoute, async (c) => {
     return acceptedPaymentSessionProcessing(c, result);
   }
 
-  if (result.gateway === "stripe") {
-    return ok(c, {
-      gateway: result.gateway,
-      paymentType: result.paymentType,
-      amount: result.amount,
-      currency: result.currency,
-      stripe: result.stripe,
-    });
-  }
-
-  return ok(c, {
-    gateway: result.gateway,
-    paymentType: result.paymentType,
-    amount: result.amount,
-    currency: result.currency,
-    hosted: result.hosted,
-  });
+  return ok(c, result);
 });
 
 export { app as customerAuthRoutes };

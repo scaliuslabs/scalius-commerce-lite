@@ -1,13 +1,11 @@
 // src/modules/payments/process-payment.ts
-// Shared business logic for processing confirmed payments.
-// Called by both Stripe and SSLCommerz webhook handlers after signature verification.
+// Applies provider-authenticated payment events to orders, for every gateway.
 
 import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
   orders,
   orderPayments,
   paymentPlans,
-  webhookEvents,
   PaymentStatus,
   OrderStatus,
   PaymentRecordStatus,
@@ -22,7 +20,8 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
-import type { PaymentType, ProcessPaymentParams, PaymentGateway } from "./types";
+import type { PaymentType, ProcessPaymentParams } from "./types";
+import { isOnlinePaymentMethod } from "./gateways/registry";
 import { validateTransition } from "../orders/order-state-machine";
 import {
   assertNoActiveShipmentClaim,
@@ -50,9 +49,14 @@ const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
+/** Drizzle wraps driver errors ("Failed query: ..."); the constraint text is on the cause. */
 function isConstraintError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /constraint|unique|primary key/i.test(message);
+  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (/constraint|unique|primary key/i.test(message)) return true;
+    if (!(current instanceof Error)) return false;
+  }
+  return false;
 }
 
 function isPaymentType(value: unknown): value is PaymentType {
@@ -311,20 +315,56 @@ async function validateIncomingPaymentState(
   return "Unsupported payment type";
 }
 
+async function inferPaymentType(
+  db: Database,
+  order: { id: string; totalAmount: number; paidAmount: number | null; balanceDue: number | null },
+  amount: number,
+  currency: OrderCurrencySnapshot,
+): Promise<PaymentType | null> {
+  const plan = await db
+    .select({ depositAmount: paymentPlans.depositAmount, balanceDue: paymentPlans.balanceDue })
+    .from(paymentPlans)
+    .where(eq(paymentPlans.orderId, order.id))
+    .get();
+  const paidAmount = Number(order.paidAmount ?? 0);
+  if (plan && orderMoneyEqual(amount, plan.depositAmount, currency)) return "deposit";
+  const balanceDue = plan ? plan.balanceDue : computedBalanceDue(order, currency);
+  if (balanceDue > 0 && (plan || paidAmount > 0) && orderMoneyEqual(amount, balanceDue, currency)) return "balance";
+  if (orderMoneyEqual(amount, order.totalAmount, currency)) return "full";
+  return null;
+}
+
+/** A provider success may land on an order whose failed checkout switched to another online gateway. */
+function acceptsProviderPayment(
+  order: { paymentMethod: string; paymentStatus: string; paidAmount: number | null },
+  provider: string,
+): boolean {
+  if (order.paymentMethod === provider) return true;
+  return isOnlinePaymentMethod(order.paymentMethod) &&
+    order.paymentStatus === PaymentStatus.FAILED &&
+    Number(order.paidAmount ?? 0) <= 0;
+}
+
 /**
- * Process a confirmed payment event.
+ * Apply one provider-confirmed payment to its order.
  *
- * This function:
- * 1. Records the payment in orderPayments
- * 2. Updates order.paidAmount, order.paymentStatus, order.balanceDue
+ * 1. Claims (or resumes) the order_payments row keyed by UNIQUE(provider, provider_ref)
+ * 2. Updates order.paidAmount, order.paymentStatus, order.balanceDue with a version CAS
  * 3. Updates paymentPlans if applicable
  *
- * Idempotent: checking for existing orderPayments prevents double-processing.
+ * Idempotent: a provider reference is credited at most once. `retryable: false`
+ * failures need manual reconciliation; other failures should be retried.
  */
 export async function processPaymentConfirmed(
   db: Database,
   params: ProcessPaymentParams
-): Promise<{ success: boolean; error?: string; retryable?: boolean; alreadyProcessed?: boolean }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  retryable?: boolean;
+  alreadyProcessed?: boolean;
+  paymentType?: PaymentType;
+}> {
   try {
     const shipmentClaim = await db
       .select({
@@ -340,79 +380,48 @@ export async function processPaymentConfirmed(
     if (!shipmentClaim) {
       return { success: false, error: `Order ${params.orderId} not found` };
     }
-    if (shipmentClaim && hasActiveShipmentClaim(shipmentClaim)) {
+    if (hasActiveShipmentClaim(shipmentClaim)) {
       return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
     }
     const currency = resolveOrderCurrencySnapshot(shipmentClaim);
+    try {
+      assertOrderPaymentCurrency(params.currency, currency, `${params.provider} provider payment`);
+    } catch (error) {
+      return { success: false, retryable: false, error: error instanceof Error ? error.message : String(error) };
+    }
     const incomingAmount = roundOrderMoney(params.amount, currency);
-    if (
-      (params.paymentGateway === "stripe" || params.paymentGateway === "sslcommerz") &&
-      params.metadata?.currency != null
-    ) {
-      assertOrderPaymentCurrency(
-        params.metadata.currency,
-        currency,
-        `${params.paymentGateway} provider payment`,
-      );
-    }
 
-    // ── 0. Claim or resume the gateway payment record ──
-    // Unique partial indexes on the gateway IDs are the primary idempotency
-    // guarantee. We store a pending local claim first, then mark it succeeded
-    // only after the order amount update wins its optimistic-lock check.
+    // ── 0. Claim or resume the provider payment record ──
+    // UNIQUE(provider, provider_ref) is the primary idempotency guarantee. We
+    // store a pending local claim first, then mark it succeeded only after the
+    // order amount update wins its optimistic-lock check.
     let paymentId: string | undefined;
-    if (params.stripePaymentIntentId) {
-      const existing = await db
-        .select({
-          id: orderPayments.id,
-          amount: orderPayments.amount,
-          status: orderPayments.status,
-          currency: orderPayments.currency,
-        })
-        .from(orderPayments)
-        .where(and(
-          eq(orderPayments.orderId, params.orderId),
-          eq(orderPayments.stripePaymentIntentId, params.stripePaymentIntentId),
-        ))
-        .get();
-      if (existing) {
-        assertOrderPaymentCurrency(existing.currency, currency, "Existing Stripe payment");
-        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
-          return { success: false, error: "Existing Stripe payment amount does not match webhook amount" };
-        }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
-          return { success: true, alreadyProcessed: true };
-        }
-        paymentId = existing.id;
+    const existing = await db
+      .select({
+        id: orderPayments.id,
+        orderId: orderPayments.orderId,
+        amount: orderPayments.amount,
+        status: orderPayments.status,
+        currency: orderPayments.currency,
+      })
+      .from(orderPayments)
+      .where(and(
+        eq(orderPayments.paymentMethod, params.provider),
+        eq(orderPayments.providerRef, params.providerRef),
+      ))
+      .get();
+    if (existing) {
+      if (existing.orderId !== params.orderId) {
+        return { success: false, retryable: false, error: "Provider payment reference already belongs to another order" };
       }
-    }
-    if (!paymentId && (params.sslcommerzValId || params.sslcommerzTranId)) {
-      const sslIdCondition = params.sslcommerzValId
-        ? eq(orderPayments.sslcommerzValId, params.sslcommerzValId)
-        : eq(orderPayments.sslcommerzTranId, params.sslcommerzTranId!);
-      const existing = await db
-        .select({
-          id: orderPayments.id,
-          amount: orderPayments.amount,
-          status: orderPayments.status,
-          currency: orderPayments.currency,
-        })
-        .from(orderPayments)
-        .where(and(
-          eq(orderPayments.orderId, params.orderId),
-          sslIdCondition,
-        ))
-        .get();
-      if (existing) {
-        assertOrderPaymentCurrency(existing.currency, currency, "Existing SSLCommerz payment");
-        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
-          return { success: false, error: "Existing SSLCommerz payment amount does not match webhook amount" };
-        }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
-          return { success: true, alreadyProcessed: true };
-        }
-        paymentId = existing.id;
+      assertOrderPaymentCurrency(existing.currency, currency, "Existing provider payment");
+      if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
+        return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }
+      if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+        return { success: true, alreadyProcessed: true };
+      }
+      paymentId = existing.id;
     }
     const initialOrder = await db
       .select({
@@ -420,6 +429,7 @@ export async function processPaymentConfirmed(
         totalAmount: orders.totalAmount,
         paidAmount: orders.paidAmount,
         balanceDue: orders.balanceDue,
+        paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
         inventoryPool: orders.inventoryPool,
@@ -440,11 +450,23 @@ export async function processPaymentConfirmed(
     if (initialUnpayableReason) {
       return { success: false, error: initialUnpayableReason, retryable: false };
     }
+    if (!acceptsProviderPayment(initialOrder, params.provider)) {
+      return {
+        success: false,
+        retryable: false,
+        error: `Confirmed ${params.provider} payment conflicts with the current order payment method`,
+      };
+    }
+
+    const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmount, currency);
+    if (!paymentType) {
+      return { success: false, retryable: false, error: "Confirmed payment amount does not match any payable amount on the order" };
+    }
 
     const initialPaymentStateError = await validateIncomingPaymentState(
       db,
       initialOrder,
-      params.paymentType,
+      paymentType,
       incomingAmount,
     );
     if (initialPaymentStateError) {
@@ -459,14 +481,11 @@ export async function processPaymentConfirmed(
           orderId: params.orderId,
           amount: incomingAmount,
           currency: currency.code,
-          paymentMethod: params.paymentGateway,
-          paymentType: params.paymentType,
+          paymentMethod: params.provider,
+          paymentType,
           status: PaymentRecordStatus.PENDING,
-          stripePaymentIntentId: params.stripePaymentIntentId ?? null,
-          stripeChargeId: params.stripeChargeId ?? null,
-          sslcommerzTranId: params.sslcommerzTranId ?? null,
-          sslcommerzValId: params.sslcommerzValId ?? null,
-          sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+          providerRef: params.providerRef,
+          providerSecondaryRef: params.secondaryRef ?? null,
           metadata: params.metadata ? JSON.stringify(params.metadata) : null,
           createdAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
@@ -512,7 +531,7 @@ export async function processPaymentConfirmed(
         const paymentStateError = await validateIncomingPaymentState(
           db,
           order,
-          params.paymentType,
+          paymentType,
           incomingAmount,
         );
         if (paymentStateError) {
@@ -531,7 +550,7 @@ export async function processPaymentConfirmed(
       const isFullyPaid = orderMoneyEqual(newBalanceDue, 0, currency);
       const newPaymentStatus = nextPaymentState.paymentStatus;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
-      const paymentPlanReadyPredicate = params.paymentType === "deposit"
+      const paymentPlanReadyPredicate = paymentType === "deposit"
         ? sql`EXISTS (
             SELECT 1 FROM payment_plans
             WHERE order_id = ${params.orderId}
@@ -539,7 +558,7 @@ export async function processPaymentConfirmed(
               AND round(deposit_amount, ${currency.decimalPlaces}) = round(${incomingAmount}, ${currency.decimalPlaces})
               AND round(balance_due, ${currency.decimalPlaces}) = round(${newBalanceDue}, ${currency.decimalPlaces})
           )`
-        : params.paymentType === "balance"
+        : paymentType === "balance"
           ? sql`EXISTS (
               SELECT 1 FROM payment_plans
               WHERE order_id = ${params.orderId}
@@ -555,7 +574,7 @@ export async function processPaymentConfirmed(
       const batchStatements: SQLiteBatchItem[] = [
         db.update(orders).set({
           status: newStatus,
-          paymentMethod: params.paymentGateway,
+          paymentMethod: params.provider,
           paidAmount: newPaidAmount,
           balanceDue: newBalanceDue,
           paymentStatus: newPaymentStatus,
@@ -578,12 +597,10 @@ export async function processPaymentConfirmed(
         db.update(orderPayments).set({
           amount: incomingAmount,
           currency: currency.code,
-          paymentMethod: params.paymentGateway,
-          paymentType: params.paymentType,
+          paymentMethod: params.provider,
+          paymentType,
           status: PaymentRecordStatus.SUCCEEDED,
-          stripeChargeId: params.stripeChargeId ?? null,
-          sslcommerzValId: params.sslcommerzValId ?? null,
-          sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
+          providerSecondaryRef: params.secondaryRef ?? null,
           metadata: params.metadata ? JSON.stringify(params.metadata) : null,
           updatedAt: sql`unixepoch()`,
         }).where(and(
@@ -601,7 +618,7 @@ export async function processPaymentConfirmed(
         )).returning({ id: orderPayments.id }),
       ];
 
-      if (params.paymentType === "deposit") {
+      if (paymentType === "deposit") {
         batchStatements.push(
           db
             .update(paymentPlans)
@@ -624,7 +641,7 @@ export async function processPaymentConfirmed(
             ))
             .returning({ id: paymentPlans.id }),
         );
-      } else if (params.paymentType === "balance" && isFullyPaid) {
+      } else if (paymentType === "balance" && isFullyPaid) {
         batchStatements.push(
           db
             .update(paymentPlans)
@@ -657,7 +674,7 @@ export async function processPaymentConfirmed(
       })) {
         batchStatements.push(buildMetaPurchaseOutboxClaimInsert(db, {
           orderId: params.orderId,
-          source: `payment-${params.paymentGateway}-confirmed`,
+          source: `payment-${params.provider}-confirmed`,
           onlyIf: buildSuccessfulPaymentMetaOutboxCondition({
             orderId: params.orderId,
             paymentId: paymentId!,
@@ -682,7 +699,7 @@ export async function processPaymentConfirmed(
         return { success: false, error: "Payment application changed concurrently; retry required" };
       }
       if (
-        (params.paymentType === "deposit" || (params.paymentType === "balance" && isFullyPaid)) &&
+        (paymentType === "deposit" || (paymentType === "balance" && isFullyPaid)) &&
         (planUpdate?.length ?? 0) === 0
       ) {
         return { success: false, error: "Payment plan changed concurrently; retry required" };
@@ -696,7 +713,7 @@ export async function processPaymentConfirmed(
       return { success: false, error: "Order was modified concurrently while applying payment; retry required" };
     }
 
-    return { success: true };
+    return { success: true, paymentType };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Payment processing error";
     console.error(`[process-payment] Error for order ${params.orderId}:`, err);
@@ -711,8 +728,8 @@ export async function processPaymentConfirmed(
 export async function processPaymentFailed(
   db: Database,
   orderId: string,
-  gateway: PaymentGateway,
-  intentId?: string
+  provider: string,
+  providerRef?: string
 ): Promise<void> {
   try {
     let existing: {
@@ -721,7 +738,7 @@ export async function processPaymentFailed(
       paymentType: string;
     } | undefined;
 
-    if (intentId) {
+    if (providerRef) {
       existing = await db
         .select({
           id: orderPayments.id,
@@ -731,9 +748,8 @@ export async function processPaymentFailed(
         .from(orderPayments)
         .where(and(
           eq(orderPayments.orderId, orderId),
-          gateway === "stripe"
-            ? eq(orderPayments.stripePaymentIntentId, intentId)
-            : eq(orderPayments.sslcommerzTranId, intentId),
+          eq(orderPayments.paymentMethod, provider),
+          eq(orderPayments.providerRef, providerRef),
         ))
         .get();
 
@@ -837,11 +853,10 @@ export async function processPaymentFailed(
           orderId,
           amount: 0,
           currency: currency.code,
-          paymentMethod: gateway,
+          paymentMethod: provider,
           paymentType,
           status: PaymentRecordStatus.FAILED,
-          stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
-          sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
+          providerRef: providerRef ?? null,
           createdAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         }).onConflictDoNothing(),
@@ -884,32 +899,5 @@ export async function releaseOrderInventory(
   } catch (err: unknown) {
     console.error(`[process-payment] Inventory release error for order ${orderId}:`, err);
     throw err;
-  }
-}
-
-/**
- * Record a webhook event for idempotency tracking.
- */
-export async function recordWebhookEvent(
-  db: Database,
-  id: string,
-  provider: string,
-  eventType: string,
-  orderId: string | null,
-  status: "processed" | "failed",
-  result?: unknown
-): Promise<void> {
-  try {
-    await db.insert(webhookEvents).values({
-      id,
-      provider,
-      eventType,
-      orderId: orderId ?? null,
-      status,
-      result: result ? JSON.stringify(result) : null,
-      processedAt: sql`unixepoch()`,
-    });
-  } catch {
-    // Duplicate key = already recorded — safe to ignore
   }
 }

@@ -1,6 +1,7 @@
 import { and, asc, inArray, isNull, lte } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts } from "@scalius/database/schema";
+import { isOnlinePaymentMethod } from "../payments/gateways/registry";
 
 export const DEFAULT_ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const DEFAULT_EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
@@ -65,7 +66,7 @@ export function isAbandonedCheckoutEmpty(checkout: {
 
         const isHostedPaymentArchive =
             typeof data?.id === "string"
-            && ["stripe", "sslcommerz"].includes(data?.paymentMethod)
+            && isOnlinePaymentMethod(data?.paymentMethod)
             && ["unpaid", "failed"].includes(data?.paymentStatus);
 
         return !hasItems && !hasCustomerInfo && !isHostedPaymentArchive;

@@ -14,7 +14,6 @@ export * from "./order-payment-recovery";
 export * from "./cart-validation";
 export * from "./checkout-authority";
 export * from "./checkout-policy";
-export * from "./checkout-aggregate";
 export * from "./order-support-requests";
 export * from "./order-returns";
 export * from "./order-returns.validation";

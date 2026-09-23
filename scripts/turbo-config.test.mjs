@@ -12,7 +12,6 @@ describe("turbo cache inputs", () => {
       expect.arrayContaining([
         "apps/api/.dev.vars",
         "apps/api/.env*",
-        "apps/admin-v2/.dev.vars",
         "apps/admin-v2/.env*",
         "apps/storefront/.dev.vars",
         "apps/storefront/.env*",
@@ -48,6 +47,10 @@ describe("turbo cache inputs", () => {
       "!dist/**/.env.*",
       "!dist/**/*.vars",
     ]));
+  });
+
+  it("builds the dashboard SPA before the API Worker that serves it", () => {
+    expect(turboConfig.tasks["@scalius/api#build"].dependsOn).toContain("@scalius/admin-v2#build");
   });
 
   it("runs workspace typechecks sequentially on constrained release hosts", () => {

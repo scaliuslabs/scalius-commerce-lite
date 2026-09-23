@@ -168,7 +168,7 @@ export function normalizePlatformOriginUrl(value: unknown): string {
 /**
  * Normalizes the dashboard URL: an origin plus an optional lowercase path
  * prefix (at most four segments) and no trailing slash, query, or fragment.
- * The prefix is the runtime base path of the dashboard Worker. Returns ""
+ * The prefix is the runtime base path of the dashboard. Returns ""
  * when invalid.
  */
 export function normalizeDashboardUrl(value: unknown): string {
@@ -231,6 +231,8 @@ function provenDifferentOrigin(left: unknown, right: unknown): boolean {
 /** Prefixes a root-relative dashboard path with the runtime base path exactly once. */
 export function prefixDashboardBasePath(basePath: string, path: string): string {
   if (!basePath) return path;
+  // Absolute (`https:`, `data:`, `blob:`) URLs already name their location.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path;
   if (!path.startsWith("/")) return `${basePath}/${path}`;
   if (path === basePath || path.startsWith(`${basePath}/`)) return path;
   return `${basePath}${path}`;

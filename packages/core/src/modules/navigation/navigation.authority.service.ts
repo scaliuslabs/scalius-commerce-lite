@@ -4,7 +4,6 @@ import {
     navigationMenuPublications,
     navigationMenus,
     navigationPlacements,
-    siteSettings,
 } from "@scalius/database/schema";
 import {
     buildBatchGuard,
@@ -34,6 +33,8 @@ import {
     ValidationError,
 } from "@scalius/core/errors";
 import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
+import { footerDocument, headerDocument } from "../settings/documents";
+import { selectSettingsDocuments } from "../settings/settings-store";
 import {
     buildNavigationHierarchy,
     checksumNavigationPublication,
@@ -1818,18 +1819,15 @@ function itemSignature(item: ExpectedAuthorityItem): string {
 export async function getNavigationAuthorityShadowReport(
     db: Database,
 ): Promise<NavigationAuthorityShadowReport> {
-    const settings = await db
-        .select({
-            headerConfig: siteSettings.headerConfig,
-            footerConfig: siteSettings.footerConfig,
-        })
-        .from(siteSettings)
-        .where(eq(siteSettings.singletonKey, "default"))
-        .get();
+    // The raw rows: pre-authority navigation is still embedded in the stored
+    // documents, which their typed readers deliberately strip.
+    const presentationRows = await selectSettingsDocuments(db, [headerDocument, footerDocument]);
+    const rawPresentation = (key: string) =>
+        JSON.parse(presentationRows.find((row) => row.category === key)?.value ?? "{}") as unknown;
     const expectedMenus: Array<{ id: string; name: string; handle: string; items: NavigationTargetItem[] }> = [];
-    if (settings) {
-        const header = parseNavigationConfig("header", JSON.parse(settings.headerConfig));
-        const footer = parseNavigationConfig("footer", JSON.parse(settings.footerConfig));
+    if (presentationRows.length > 0) {
+        const header = parseNavigationConfig("header", rawPresentation(headerDocument.key));
+        const footer = parseNavigationConfig("footer", rawPresentation(footerDocument.key));
         const headerItems = Array.isArray(header.navigation)
             ? header.navigation as NavigationTargetItem[]
             : [];

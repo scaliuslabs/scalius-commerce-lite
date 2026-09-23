@@ -1,7 +1,4 @@
-import { z } from "zod";
 import type { Database } from "@scalius/database/client";
-import { settings } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
 
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -10,16 +7,7 @@ import {
   type Readiness,
   type ReadinessIssue,
 } from "@scalius/shared/readiness";
-import {
-  decryptCredentials,
-  decryptCredentialsGraceful,
-  readStoredCredentialStrict,
-} from "../../utils/credential-encryption";
-import { defineSettingsDocument } from "@scalius/core/modules/settings/settings-store";
-
-const FIREBASE_SETTINGS_CATEGORY = "firebase";
-const FIREBASE_SERVICE_ACCOUNT_KEY = "service_account";
-const ENCRYPTED_VALUE_PREFIX = "enc:";
+import { firebaseDocument } from "@scalius/core/modules/settings/documents";
 
 interface FirebaseServiceAccount {
   client_email?: unknown;
@@ -89,115 +77,6 @@ export function normalizeFirebaseServiceAccountJson(value: string): string {
   return trimmed;
 }
 
-export async function readFirebaseServiceAccountJsonFromStoredValue(
-  storedValue: string | null | undefined,
-  encryptionKey?: string,
-): Promise<string | undefined> {
-  const trimmed = storedValue?.trim();
-  if (!trimmed) return undefined;
-
-  let plaintext: string | undefined;
-  if (trimmed.startsWith(ENCRYPTED_VALUE_PREFIX)) {
-    if (!encryptionKey) return undefined;
-    try {
-      plaintext = await decryptCredentials(
-        trimmed.slice(ENCRYPTED_VALUE_PREFIX.length),
-        encryptionKey,
-      );
-    } catch (error: unknown) {
-      console.warn(
-        "[Firebase] Failed to decrypt encrypted service account:",
-        error instanceof Error ? error.message : error,
-      );
-      return undefined;
-    }
-  } else {
-    plaintext = await decryptCredentialsGraceful(trimmed, encryptionKey);
-  }
-
-  try {
-    return normalizeFirebaseServiceAccountJson(plaintext);
-  } catch (error: unknown) {
-    console.warn(
-      "[Firebase] Stored service account is not usable:",
-      error instanceof Error ? error.message : error,
-    );
-    return undefined;
-  }
-}
-
-const FIREBASE_PUBLIC_CONFIG_KEY = "public_config";
-
-export interface FirebaseSettingsDocument extends Record<string, unknown> {
-  /** Plaintext service account JSON. Encrypted at rest by the store. */
-  serviceAccount: string;
-  publicConfig: Record<string, unknown>;
-}
-
-/**
- * Dashboard-managed Firebase credentials. The service account is the only
- * secret, so the document is never cached and every read is strict.
- */
-export const firebaseSettingsDocument = defineSettingsDocument<FirebaseSettingsDocument>({
-  category: FIREBASE_SETTINGS_CATEGORY,
-  key: "config",
-  label: "Firebase",
-  schema: z.object({
-    serviceAccount: z.string(),
-    publicConfig: z.record(z.string(), z.unknown()),
-  }),
-  defaults: { serviceAccount: "", publicConfig: {} },
-  secretFields: ["serviceAccount"],
-  legacy: {
-    async read(db, ctx) {
-      const rows = await db
-        .select({ key: settings.key, value: settings.value })
-        .from(settings)
-        .where(eq(settings.category, FIREBASE_SETTINGS_CATEGORY))
-        .all();
-      const values = new Map(rows.map((row) => [row.key, row.value]));
-      const storedServiceAccount = values.get(FIREBASE_SERVICE_ACCOUNT_KEY) || "";
-      const storedPublicConfig = values.get(FIREBASE_PUBLIC_CONFIG_KEY);
-      if (!values.has(FIREBASE_SERVICE_ACCOUNT_KEY) && storedPublicConfig === undefined) {
-        return null;
-      }
-
-      const resolved = await readStoredCredentialStrict(
-        storedServiceAccount,
-        ctx.encryptionKey,
-        "Firebase service account",
-      );
-
-      let publicConfig: Record<string, unknown> = {};
-      if (storedPublicConfig) {
-        try {
-          const parsed = JSON.parse(storedPublicConfig) as unknown;
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            publicConfig = parsed as Record<string, unknown>;
-          }
-        } catch {
-          publicConfig = {};
-        }
-      }
-
-      return {
-        document: {
-          serviceAccount: resolved.error ? "" : resolved.value,
-          publicConfig,
-        },
-        // Never replace a credential the reader could not decrypt.
-        migrate: !resolved.error,
-        secretErrors: resolved.error
-          ? { serviceAccount: resolved.error }
-          : {},
-        secretsConfigured: {
-          serviceAccount: !resolved.error && Boolean(resolved.value),
-        },
-      };
-    },
-  },
-});
-
 export interface StoredFirebaseSettings {
   /** Whether a service account is stored at all, readable or not. */
   serviceAccountStored: boolean;
@@ -211,7 +90,7 @@ export async function readFirebaseSettings(
   db: Database,
   encryptionKey?: string,
 ): Promise<StoredFirebaseSettings> {
-  const stored = await firebaseSettingsDocument.readDetailed(db, { encryptionKey });
+  const stored = await firebaseDocument.readDetailed(db, { encryptionKey });
   const serviceAccountStored = Boolean(stored.value.serviceAccount)
     || Boolean(stored.secretErrors.serviceAccount);
 

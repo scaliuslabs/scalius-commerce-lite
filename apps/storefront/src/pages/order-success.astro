@@ -75,7 +75,11 @@ const paymentResult = Astro.url.searchParams.get("result");
 const requestedPayment = Astro.url.searchParams.get("payment");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
 const requestedDepositAmount = normalizeRetryDepositAmount(Astro.url.searchParams.get("depositAmount"));
-const hostedRecoveryPayment = requestedPayment === "sslcommerz"
+// Hosted (redirect) gateways return here; card (Stripe) and COD never do.
+const hostedRecoveryPayment = requestedPayment
+  && /^[a-z][a-z0-9_-]{0,63}$/.test(requestedPayment)
+  && requestedPayment !== "stripe"
+  && requestedPayment !== "cod"
   ? requestedPayment
   : null;
 

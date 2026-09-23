@@ -294,7 +294,6 @@ export async function seedLiveCheckoutTarget(
       "products",
       "settings",
       "shipping_methods",
-      "site_settings",
     ];
     const schemaRows = await connection.query(
       options.provider === "postgres"
@@ -333,7 +332,6 @@ export async function seedLiveCheckoutTarget(
          (SELECT COUNT(*) FROM orders) AS orders_count,
          (SELECT COUNT(*) FROM customers) AS customers_count,
          (SELECT COUNT(*) FROM settings) AS settings_count,
-         (SELECT COUNT(*) FROM site_settings) AS site_settings_count,
          (SELECT COUNT(*) FROM shipping_methods) AS shipping_methods_count,
          (SELECT COUNT(*) FROM delivery_locations) AS delivery_locations_count`,
     );
@@ -367,31 +365,21 @@ export async function seedLiveCheckoutTarget(
           now,
         ],
       },
-      {
-        sql: `INSERT INTO site_settings
-                (id, singleton_key, site_name, header_config, footer_config,
-                 guest_checkout_enabled, checkout_mode, partial_payment_enabled,
-                 partial_payment_amount)
-              VALUES (?, 'default', 'Scalius Loadtest', '{}', '{}', 1,
-                      'guest_cod_only', 0, 0)`,
-        args: [`${identity.targetId}_site`],
-      },
-      ...[
-        ["currency_code", "BDT", "string", "currency"],
-        ["currency_symbol", "৳", "string", "currency"],
-        ["usd_exchange_rate", "110", "number", "currency"],
-        ["enabled_methods", '["cod"]', "json", "payment_methods"],
-        ["default_method", "cod", "string", "payment_methods"],
-        [
-          "allowed_countries",
-          '{"countries":["BD"],"mode":"include"}',
-          "json",
-          "phone",
-        ],
-      ].map(([key, value, type, category], index) => ({
+      // One settings document per area (see @scalius/core settings documents).
+      ...Object.entries({
+        checkout: {
+          guestCheckoutEnabled: true,
+          checkoutMode: "guest_cod_only",
+          partialPaymentEnabled: false,
+          partialPaymentAmount: 0,
+        },
+        currency: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "110" },
+        payment_methods: { enabledMethods: ["cod"], defaultMethod: "cod" },
+        customer_countries: { allowedCountries: ["BD"], allowedCountriesMode: "include" },
+      }).map(([category, value]) => ({
         sql: `INSERT INTO settings (id, key, value, type, category)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [`${identity.targetId}_setting_${index}`, key!, value!, type!, category!],
+              VALUES (?, 'document', ?, 'json', ?)`,
+        args: [`${identity.targetId}_settings_${category}`, JSON.stringify(value), category],
       })),
       {
         sql: `INSERT INTO shipping_methods

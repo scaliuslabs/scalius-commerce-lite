@@ -35,7 +35,6 @@ import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
 
 export type { AppType } from "./app";
-export { CheckoutCoordinator } from "./checkout-coordinator";
 
 const PROBE_PATHS = new Set([
   "/api/v1/health",
@@ -48,6 +47,10 @@ const PROBE_PATHS = new Set([
 
 function isProbePath(pathname: string): boolean {
   return PROBE_PATHS.has(pathname);
+}
+
+function isApiV1Path(pathname: string): boolean {
+  return pathname === "/api/v1" || pathname.startsWith("/api/v1/");
 }
 
 /**
@@ -123,7 +126,7 @@ export class PublicApi extends WorkerEntrypoint<Env> {
 export default class ApiWorker extends WorkerEntrypoint<Env> {
   // HTTP: Hono handles all requests
   async fetch(incoming: Request) {
-    const request = await resolveFrontProxy(incoming, this.env);
+    let request = await resolveFrontProxy(incoming, this.env);
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
@@ -150,6 +153,18 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       return applyBaselineSecurityHeaders(request, response, {
         frameProtection: "deny",
       });
+    }
+
+    // Everything outside /api/v1 is the dashboard: its SPA shell, Better Auth,
+    // and API calls below a dashboard base path (src/dashboard/surface.ts).
+    if (!isApiV1Path(pathname)) {
+      const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
+      const { routeDashboardRequest } = await import("./dashboard/surface");
+      const routed = await routeDashboardRequest(request, env);
+      if (routed instanceof Response) {
+        return applyBaselineSecurityHeaders(request, routed, { frameProtection: "deny" });
+      }
+      request = routed;
     }
 
     const cachePolicy = getPublicApiCachePolicy(request);

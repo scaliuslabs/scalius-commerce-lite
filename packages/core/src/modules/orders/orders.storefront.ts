@@ -1,7 +1,7 @@
 // src/modules/orders/orders.storefront.ts
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
-import { safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import {
     DEFAULT_CURRENCY,
     getDecimalPlaces,
@@ -23,7 +23,6 @@ import {
     type PromotionCheckoutSnapshot,
 } from "../promotions";
 import {
-    siteSettings,
     shippingMethods,
     PaymentMethod,
     PaymentStatus,
@@ -34,6 +33,7 @@ import { nanoid } from "nanoid";
 
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
+import { checkoutDocument } from "../settings/documents";
 import { ValidationError } from "@scalius/core/errors";
 import type {
     CreateStorefrontOrderCustomerIdentity,
@@ -374,17 +374,11 @@ export async function createStorefrontOrder(
         throw new ValidationError("Checkout policy validation could not be trusted. Please retry checkout.");
     }
 
-    let fallbackSettings: Record<string, unknown> | null = null;
-    if (!checkoutPolicySnapshot) {
-        // Compatibility for direct Core callers. The API route supplies its
-        // already-fresh policy snapshot and skips this extra database roundtrip.
-        const [settingsList = []] = await safeBatch(storefrontDb, [
-            storefrontDb.select().from(siteSettings).limit(1),
-        ]);
-        fallbackSettings = settingsList.length > 0
-            ? settingsList[0] as Record<string, unknown>
-            : null;
-    }
+    // Compatibility for direct Core callers. The API route supplies its
+    // already-fresh policy snapshot and skips this extra database roundtrip.
+    const fallbackSettings = checkoutPolicySnapshot
+        ? null
+        : await checkoutDocument.read(storefrontDb);
 
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
@@ -563,7 +557,7 @@ export async function createStorefrontOrder(
     // PARTIAL PAYMENT SECURITY CHECK
     // ------------------------------------------------------------------
     const isPartialEnabled = checkoutPolicySnapshot?.partialPaymentEnabled
-        ?? (fallbackSettings?.partialPaymentEnabled as boolean)
+        ?? fallbackSettings?.partialPaymentEnabled
         ?? false;
     if (isPartialEnabled && data.paymentMethod === PaymentMethod.COD) {
         throw new ValidationError("Advance deposit is required. COD cannot be selected for the full amount directly.");

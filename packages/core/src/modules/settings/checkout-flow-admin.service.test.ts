@@ -10,10 +10,7 @@ import {
 } from "./checkout-flow-admin.service";
 
 function setup() {
-    const harness = createSqliteD1Database();
-    harness.sqlite.exec(`INSERT INTO site_settings (id, singleton_key, site_name, header_config, footer_config)
-        VALUES ('site_default', 'default', 'Store', '{}', '{}')`);
-    return harness;
+    return createSqliteD1Database();
 }
 
 const gatewaysOnly = {
@@ -25,10 +22,11 @@ const gatewaysOnly = {
 };
 
 describe("checkout flow settings revision authority", () => {
-    it("reads the initialized singleton at revision one and increments exactly once per current save", async () => {
+    it("reads defaults at revision zero and increments exactly once per current save", async () => {
         const { db } = setup();
 
-        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1 });
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 0, checkoutMode: "all" });
+        await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 0 });
         const saved = await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 1 });
 
         expect(saved).toMatchObject({ revision: 2, checkoutMode: "gateways_only", guestCheckoutEnabled: false });
@@ -37,14 +35,14 @@ describe("checkout flow settings revision authority", () => {
 
     it("rejects the stale second tab with the authoritative revision and keeps the first save", async () => {
         const { db } = setup();
-        await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 1 });
+        await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 0 });
 
         const error = await saveCheckoutFlowSettingsDocument(db, {
             guestCheckoutEnabled: true,
             checkoutMode: "all",
             partialPaymentEnabled: false,
             partialPaymentAmount: 0,
-            expectedRevision: 1,
+            expectedRevision: 0,
             availablePaymentMethods: ["cod"],
         }).catch((cause: unknown) => cause);
 
@@ -52,9 +50,9 @@ describe("checkout flow settings revision authority", () => {
         expect(error).toMatchObject({
             status: 409,
             code: "CHECKOUT_FLOW_REVISION_CONFLICT",
-            details: { expectedRevision: 1, currentRevision: 2 },
+            details: { expectedRevision: 0, currentRevision: 1 },
         });
-        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 2, checkoutMode: "gateways_only" });
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1, checkoutMode: "gateways_only" });
     });
 
     it("rejects invalid flow rules before attempting the CAS", async () => {
@@ -63,9 +61,9 @@ describe("checkout flow settings revision authority", () => {
         await expect(saveCheckoutFlowSettingsDocument(db, {
             ...gatewaysOnly,
             guestCheckoutEnabled: true,
-            expectedRevision: 1,
+            expectedRevision: 0,
             availablePaymentMethods: ["cod"],
         })).rejects.toBeInstanceOf(ValidationError);
-        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1, checkoutMode: "all" });
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 0, checkoutMode: "all" });
     });
 });

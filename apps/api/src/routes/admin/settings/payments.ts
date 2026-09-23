@@ -1,7 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { settings, siteSettings } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
-import { eq, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
@@ -12,55 +10,44 @@ import {
     getActivePaymentMethods,
     getStripeSettings,
     getStripeCheckoutReadiness,
-    isStripePlaceholderCredential,
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
-    isSSLCommerzPlaceholderCredential,
-    isStripeCheckoutUsable,
-    isSSLCommerzCheckoutUsable,
 } from "@scalius/core/modules/payments/gateway-settings";
 import {
-    saveSettingAggregate,
-    type SettingAggregateWrite,
-} from "@scalius/core/modules/settings/settings-write";
+    COD_PAYMENT_METHOD,
+    filterPaymentMethodsForCurrency,
+    getPaymentMethodCurrencyIssue,
+    listPaymentGateways,
+    listPaymentMethodIds,
+    paymentMethodLabel,
+    requirePaymentGateway,
+} from "@scalius/core/modules/payments/gateways/registry";
+import type { GatewaySettings } from "@scalius/core/modules/payments/gateways/port";
+import {
+    checkoutDocument,
+    paymentMethodsDocument,
+    sslcommerzDocument,
+    stripeDocument,
+    type SSLCommerzSettingsDocument,
+    type StripeSettingsDocument,
+} from "@scalius/core/modules/settings/documents";
 import {
     getCheckoutFlowValidationIssues,
     isCheckoutGatewayUsableForFlow,
 } from "@scalius/core/modules/settings/checkout-flow";
-import {
-    filterPaymentGatewayIdsForCurrency,
-    getPaymentGatewayCurrencyEligibilityIssue,
-} from "@scalius/core/modules/payments/gateway-currency-policy";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
-import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
-type OnlineGatewayId = "stripe" | "sslcommerz";
-const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
-    stripe: "Stripe",
-    sslcommerz: "SSLCommerz",
-};
-
-function getSandboxEnvironment(sandbox: boolean): "test" | "live" {
-    return sandbox ? "test" : "live";
-}
 
 async function assertDisablingGatewayKeepsCheckoutFlow(
     db: Database,
     env: Env,
-    gatewayId: OnlineGatewayId,
+    gatewayId: string,
 ): Promise<void> {
-    const [checkoutSettings] = await db
-        .select({
-            checkoutMode: siteSettings.checkoutMode,
-            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-            partialPaymentAmount: siteSettings.partialPaymentAmount,
-        })
-        .from(siteSettings)
-        .limit(1);
-
-    if (!checkoutSettings) return;
+    const checkout = await checkoutDocument.readDetailed(db);
+    if (!checkout.stored) return;
+    const checkoutSettings = checkout.value;
 
     const [activePaymentMethods, currencySettings] = await Promise.all([
         getActivePaymentMethods(
@@ -69,7 +56,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
         ),
         getCurrencySettings(db),
     ]);
-    const nextPaymentMethods = filterPaymentGatewayIdsForCurrency(
+    const nextPaymentMethods = filterPaymentMethodsForCurrency(
         activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId),
         currencySettings.currencyCode,
     );
@@ -82,7 +69,7 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 
     if (checkoutFlowIssues.length > 0) {
         throw new ValidationError(
-            `Cannot disable ${GATEWAY_LABELS[gatewayId]} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
+            `Cannot disable ${paymentMethodLabel(gatewayId)} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
         );
     }
 }
@@ -90,12 +77,13 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 // ─────────────────────────────────────────
 // VALIDATION SCHEMAS
 // ─────────────────────────────────────────
+const paymentMethodIdSchema = z.enum(listPaymentMethodIds() as [string, ...string[]]);
 const updateMethodsSchema = z.object({
-    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "cod"]))
+    enabledMethods: z.array(paymentMethodIdSchema)
         .min(1, "At least one payment method is required")
-        .max(3)
+        .max(listPaymentMethodIds().length)
         .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
-    defaultMethod: z.enum(["stripe", "sslcommerz", "cod"])
+    defaultMethod: paymentMethodIdSchema,
 });
 
 const saveStripeSchema = z.object({
@@ -113,137 +101,47 @@ const saveSSLCommerzSchema = z.object({
 });
 
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
-type StripeSettingsMap = Record<string, string | undefined>;
-type SSLCommerzSettingsMap = Record<string, string | undefined>;
 
-async function readSettingsMap(db: Database, category: string): Promise<Record<string, string | undefined>> {
-    const rows = await db
-        .select({ key: settings.key, value: settings.value })
-        .from(settings)
-        .where(eq(settings.category, category))
-        .all();
-    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+function submittedSecret(value: string | undefined): string | undefined {
+    return value && value !== MASKED && value.trim() ? value.trim() : undefined;
 }
 
-async function readStripeSettingsMap(db: Database): Promise<StripeSettingsMap> {
-    return readSettingsMap(db, "stripe");
-}
-
-async function readSSLCommerzSettingsMap(db: Database): Promise<SSLCommerzSettingsMap> {
-    return readSettingsMap(db, "sslcommerz");
-}
-
-function hasStoredSSLCommerzAccount(map: SSLCommerzSettingsMap): boolean {
-    return Boolean(map.store_id?.trim() && map.store_password?.trim());
-}
-
-function storedMarker(value: string | undefined): string {
-    return value?.trim() ? "__stored__" : "";
-}
-
-function effectivePlaceholderAwareSecretValue(
-    submitted: string | undefined,
-    stored: string | undefined,
-    isPlaceholder: (value: unknown) => boolean,
+/** A secret is shown as stored even when this request cannot decrypt it. */
+function maskedSecret(
+    stored: { value: object; secretErrors: Partial<Record<string, string>> },
+    field: string,
 ): string {
-    if (submitted === undefined || submitted === MASKED || submitted.trim() === "") {
-        if (isPlaceholder(stored)) return stored?.trim() ?? "";
-        return storedMarker(stored);
-    }
-    return submitted.trim();
-}
-
-function effectiveSSLCommerzSecretValue(submitted: string | undefined, stored: string | undefined): string {
-    if (submitted === undefined || submitted === MASKED || submitted.trim() === "") {
-        if (isSSLCommerzPlaceholderCredential(stored)) return stored?.trim() ?? "";
-        return storedMarker(stored);
-    }
-    return submitted.trim();
-}
-
-function effectivePlainValue(submitted: string | undefined, stored: string | undefined): string {
-    if (submitted === undefined || submitted === MASKED) return stored ?? "";
-    return submitted.trim();
+    return (stored.value as Record<string, unknown>)[field] || stored.secretErrors[field] ? MASKED : "";
 }
 
 function getEffectiveStripeCheckoutSettings(
-    map: StripeSettingsMap,
     body: SaveStripeInput,
-    storedSettings?: Awaited<ReturnType<typeof getStripeSettings>>,
+    storedSettings: Awaited<ReturnType<typeof getStripeSettings>>,
 ) {
-    const existingEnabled = map.enabled !== undefined
-        ? map.enabled !== "false"
-        : Boolean(map.secret_key && map.webhook_secret && map.publishable_key);
-    const submittedSecretKey = body.secretKey && body.secretKey !== MASKED
-        ? body.secretKey.trim()
-        : "";
-    const submittedWebhookSecret = body.webhookSecret && body.webhookSecret !== MASKED
-        ? body.webhookSecret.trim()
-        : "";
-
     return {
-        secretKey: submittedSecretKey
-            ? submittedSecretKey
-            : (storedSettings?.secretKey ?? effectivePlaceholderAwareSecretValue(
-                body.secretKey,
-                map.secret_key,
-                isStripePlaceholderCredential,
-            )),
-        publishableKey: effectivePlainValue(
-            body.publishableKey,
-            storedSettings?.publishableKey ?? map.publishable_key,
-        ),
-        webhookSecret: submittedWebhookSecret
-            ? submittedWebhookSecret
-            : (storedSettings?.webhookSecret ?? effectivePlaceholderAwareSecretValue(
-                body.webhookSecret,
-                map.webhook_secret,
-                isStripePlaceholderCredential,
-            )),
-        enabled: body.enabled ?? existingEnabled,
+        secretKey: submittedSecret(body.secretKey) ?? storedSettings?.secretKey ?? "",
+        publishableKey: body.publishableKey === undefined || body.publishableKey === MASKED
+            ? storedSettings?.publishableKey ?? ""
+            : body.publishableKey.trim(),
+        webhookSecret: submittedSecret(body.webhookSecret) ?? storedSettings?.webhookSecret ?? "",
+        enabled: body.enabled ?? storedSettings?.enabled ?? false,
         credentialErrors: storedSettings?.credentialErrors,
     };
 }
 
 function getEffectiveSSLCommerzCheckoutSettings(
-    map: SSLCommerzSettingsMap,
     body: z.infer<typeof saveSSLCommerzSchema>,
-    storedSettings?: Awaited<ReturnType<typeof getSSLCommerzSettings>>,
+    storedSettings: Awaited<ReturnType<typeof getSSLCommerzSettings>>,
 ) {
-    const existingEnabled = map.enabled !== undefined
-        ? map.enabled !== "false"
-        : hasStoredSSLCommerzAccount(map);
-    const hasSubmittedStorePassword = Boolean(
-        body.storePassword &&
-        body.storePassword !== MASKED &&
-        body.storePassword.trim(),
-    );
-
     return {
-        storeId: effectivePlainValue(body.storeId, storedSettings?.storeId ?? map.store_id),
-        storePassword: hasSubmittedStorePassword
-            ? body.storePassword!.trim()
-            : (storedSettings?.storePassword || effectiveSSLCommerzSecretValue(body.storePassword, map.store_password)),
-        sandbox: body.sandbox ?? map.sandbox !== "false",
-        enabled: body.enabled ?? existingEnabled,
+        storeId: body.storeId === undefined || body.storeId === MASKED
+            ? storedSettings?.storeId ?? ""
+            : body.storeId.trim(),
+        storePassword: submittedSecret(body.storePassword) ?? storedSettings?.storePassword ?? "",
+        sandbox: body.sandbox ?? storedSettings?.sandbox ?? true,
+        enabled: body.enabled ?? storedSettings?.enabled ?? false,
         credentialErrors: storedSettings?.credentialErrors,
     };
-}
-
-function buildUpsertSettingStatement(db: Database, category: string, key: string, value: string) {
-    return db
-        .insert(settings)
-        .values({
-            id: crypto.randomUUID(),
-            key,
-            value,
-            type: "string",
-            category,
-        })
-        .onConflictDoUpdate({
-            target: [settings.key, settings.category],
-            set: { value, updatedAt: sql`unixepoch()` },
-        });
 }
 
 const gatewayStatusSchema = z.object({
@@ -264,11 +162,8 @@ const paymentMethodsResponseSchema = z.object({
     defaultMethod: z.string(),
     activeMethods: z.array(z.string()).optional(),
     activeDefaultMethod: z.string().optional(),
-    gatewayStatus: z.object({
-        stripe: gatewayStatusSchema,
-        sslcommerz: gatewayStatusSchema,
-        cod: gatewayStatusSchema,
-    }),
+    /** Keyed by payment method id: every registered gateway plus cod. */
+    gatewayStatus: z.object(Object.fromEntries(listPaymentMethodIds().map((id) => [id, gatewayStatusSchema]))),
 }).passthrough();
 
 const getPaymentMethodsRoute = createRoute({
@@ -289,96 +184,65 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey);
     const rawConfig = gatewaySnapshot.preferences;
     const activeConfig = gatewaySnapshot.activePaymentMethods;
-    const { stripe: stripeSettings, sslcommerz: sslSettings } =
-        gatewaySnapshot.settings;
+    const savedSettings = gatewaySnapshot.settings as unknown as Record<string, GatewaySettings | null | undefined>;
 
-    const [stripeMap, sslMap, checkoutSettings, currencySettings] = await Promise.all([
-        readStripeSettingsMap(db),
-        readSSLCommerzSettingsMap(db),
-        db
-            .select({
-                checkoutMode: siteSettings.checkoutMode,
-                partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-                partialPaymentAmount: siteSettings.partialPaymentAmount,
-            })
-            .from(siteSettings)
-            .limit(1)
-            .then((rows) => rows[0]),
+    const [checkoutSettings, currencySettings] = await Promise.all([
+        checkoutDocument.read(db),
         getCurrencySettings(db),
     ]);
-        const stripeReadiness = getStripeCheckoutReadiness(
-            stripeSettings ?? getEffectiveStripeCheckoutSettings(stripeMap, {}),
-        );
-        const sslReadiness = getSSLCommerzCheckoutReadiness(sslSettings ?? {
-            storeId: sslMap.store_id ?? "",
-            storePassword: storedMarker(sslMap.store_password),
-            enabled: sslMap.enabled !== undefined ? sslMap.enabled !== "false" : hasStoredSSLCommerzAccount(sslMap),
-        });
 
-        const flowSettings = {
+    const flowActiveMethods = filterPaymentMethodsForCurrency(
+        activeConfig.enabledMethods,
+        currencySettings.currencyCode,
+    ).filter((method) =>
+        isCheckoutGatewayUsableForFlow({
+            gatewayId: method,
             checkoutMode: checkoutSettings?.checkoutMode ?? "all",
             partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
             partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
-        };
-        const currencyActiveMethods = filterPaymentGatewayIdsForCurrency(
-            activeConfig.enabledMethods,
-            currencySettings.currencyCode,
-        );
-        const flowActiveMethods = currencyActiveMethods.filter((method) =>
-            isCheckoutGatewayUsableForFlow({
-                gatewayId: method,
-                checkoutMode: flowSettings.checkoutMode,
-                partialPaymentEnabled: flowSettings.partialPaymentEnabled,
-                partialPaymentAmount: flowSettings.partialPaymentAmount,
-            }),
-        );
-        const flowDefaultMethod = flowActiveMethods.includes(activeConfig.defaultMethod)
-            ? activeConfig.defaultMethod
-            : flowActiveMethods[0];
-        const sslCurrencyIssue = getPaymentGatewayCurrencyEligibilityIssue(
-            "sslcommerz",
-            currencySettings.currencyCode,
-        );
+        }),
+    );
+    const flowDefaultMethod = flowActiveMethods.includes(activeConfig.defaultMethod)
+        ? activeConfig.defaultMethod
+        : flowActiveMethods[0];
+    const selection = (method: string) => ({
+        checkoutSelected: (rawConfig.enabledMethods as readonly string[]).includes(method),
+        checkoutVisible: flowActiveMethods.includes(method),
+    });
 
-        return ok(c, {
-            enabledMethods: rawConfig.enabledMethods,
-            defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
-                ? rawConfig.defaultMethod
-                : (rawConfig.enabledMethods[0] ?? "cod"),
-            activeMethods: flowActiveMethods,
-            ...(flowDefaultMethod ? { activeDefaultMethod: flowDefaultMethod } : {}),
-            gatewayStatus: {
-                stripe: {
-                    ...stripeReadiness,
-                    environment: getStripeCredentialEnvironment(stripeSettings ?? {
-                        secretKey: stripeMap.secret_key ?? "",
-                        publishableKey: stripeMap.publishable_key ?? "",
-                    }),
-                    providerEnabled: stripeReadiness.enabled,
-                    checkoutSelected: rawConfig.enabledMethods.includes("stripe"),
-                    checkoutVisible: flowActiveMethods.includes("stripe"),
-                },
-                sslcommerz: {
-                    ...sslReadiness,
-                    usable: sslReadiness.usable && !sslCurrencyIssue,
-                    blockedReason: sslCurrencyIssue ?? sslReadiness.blockedReason,
-                    environment: getSandboxEnvironment(sslSettings?.sandbox ?? sslMap.sandbox !== "false"),
-                    providerEnabled: sslReadiness.enabled,
-                    checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
-                    checkoutVisible: flowActiveMethods.includes("sslcommerz"),
-                },
-                cod: {
-                    configured: true,
-                    enabled: true,
-                    usable: true,
-                    missingFields: [],
-                    providerEnabled: true,
-                    checkoutSelected: rawConfig.enabledMethods.includes("cod"),
-                    checkoutVisible: flowActiveMethods.includes("cod"),
-                    environment: "not_applicable" as const,
-                }
-            }
-        });
+    const gatewayStatus: Record<string, z.infer<typeof gatewayStatusSchema>> = {};
+    for (const gateway of listPaymentGateways()) {
+        const settings = savedSettings[gateway.id] ?? null;
+        const readiness = gateway.readiness(settings);
+        const currencyIssue = getPaymentMethodCurrencyIssue(gateway.id, currencySettings.currencyCode);
+        gatewayStatus[gateway.id] = {
+            ...readiness,
+            usable: readiness.usable && !currencyIssue,
+            blockedReason: currencyIssue ?? readiness.blockedReason,
+            environment: gateway.environment(settings),
+            providerEnabled: readiness.enabled,
+            ...selection(gateway.id),
+        };
+    }
+    gatewayStatus[COD_PAYMENT_METHOD] = {
+        configured: true,
+        enabled: true,
+        usable: true,
+        missingFields: [],
+        providerEnabled: true,
+        environment: "not_applicable",
+        ...selection(COD_PAYMENT_METHOD),
+    };
+
+    return ok(c, {
+        enabledMethods: rawConfig.enabledMethods,
+        defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
+            ? rawConfig.defaultMethod
+            : (rawConfig.enabledMethods[0] ?? COD_PAYMENT_METHOD),
+        activeMethods: flowActiveMethods,
+        ...(flowDefaultMethod ? { activeDefaultMethod: flowDefaultMethod } : {}),
+        gatewayStatus,
+    });
 });
 
 const savePaymentMethodsRoute = createRoute({
@@ -403,49 +267,24 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
 
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [stripeSettings, sslSettings, currencySettings] = await Promise.all([
-        getStripeSettings(db, encKey),
-        getSSLCommerzSettings(db, encKey),
-        getCurrencySettings(db),
-    ]);
-    const stripeReadiness = getStripeCheckoutReadiness(stripeSettings);
-    if (data.enabledMethods.includes("stripe") && !stripeReadiness.usable) {
-        throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
+    const currencySettings = await getCurrencySettings(db);
+    for (const method of data.enabledMethods) {
+        if (method === COD_PAYMENT_METHOD) continue;
+        const gateway = requirePaymentGateway(method);
+        const readiness = gateway.readiness(await gateway.loadSettings(db, encKey));
+        if (!readiness.usable) {
+            throw new ValidationError(readiness.blockedReason ?? `${gateway.label} is not ready for checkout.`);
+        }
+        const currencyIssue = getPaymentMethodCurrencyIssue(method, currencySettings.currencyCode);
+        if (currencyIssue) throw new ValidationError(currencyIssue);
     }
-    const sslReadiness = getSSLCommerzCheckoutReadiness(sslSettings);
-    if (data.enabledMethods.includes("sslcommerz") && !sslReadiness.usable) {
-        throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
-    }
-    const sslCurrencyIssue = getPaymentGatewayCurrencyEligibilityIssue(
-        "sslcommerz",
-        currencySettings.currencyCode,
-    );
-    if (data.enabledMethods.includes("sslcommerz") && sslCurrencyIssue) {
-        throw new ValidationError(sslCurrencyIssue);
-    }
-    const credentialUsableMethods = data.enabledMethods.filter((method) => {
-        if (method === "cod") return true;
-        if (method === "stripe") return isStripeCheckoutUsable(stripeSettings);
-        if (method === "sslcommerz") return isSSLCommerzCheckoutUsable(sslSettings);
-        return false;
-    });
-    const usableMethods = filterPaymentGatewayIdsForCurrency(
-        credentialUsableMethods,
-        currencySettings.currencyCode,
-    );
+    const usableMethods = filterPaymentMethodsForCurrency(data.enabledMethods, currencySettings.currencyCode);
 
-    const [checkoutSettings] = await db
-        .select({
-            checkoutMode: siteSettings.checkoutMode,
-            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-            partialPaymentAmount: siteSettings.partialPaymentAmount,
-        })
-        .from(siteSettings)
-        .limit(1);
+    const checkoutSettings = await checkoutDocument.read(db);
     const checkoutFlowIssues = getCheckoutFlowValidationIssues({
-        checkoutMode: checkoutSettings?.checkoutMode,
-        partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
-        partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+        checkoutMode: checkoutSettings.checkoutMode,
+        partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+        partialPaymentAmount: checkoutSettings.partialPaymentAmount,
         availablePaymentMethods: usableMethods,
     });
     if (checkoutFlowIssues.length > 0) {
@@ -453,17 +292,17 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
     if (!isCheckoutGatewayUsableForFlow({
         gatewayId: data.defaultMethod,
-        checkoutMode: checkoutSettings?.checkoutMode,
-        partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
-        partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+        checkoutMode: checkoutSettings.checkoutMode,
+        partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+        partialPaymentAmount: checkoutSettings.partialPaymentAmount,
     })) {
         throw new ValidationError("Default method is hidden by the current checkout flow settings.");
     }
 
-    await safeBatch(db, [
-        buildUpsertSettingStatement(db, "payment_methods", "enabled_methods", JSON.stringify(data.enabledMethods)),
-        buildUpsertSettingStatement(db, "payment_methods", "default_method", data.defaultMethod),
-    ]);
+    await paymentMethodsDocument.write(db, {
+        enabledMethods: data.enabledMethods,
+        defaultMethod: data.defaultMethod,
+    });
 
     await bumpCacheGeneration(c);
 
@@ -495,16 +334,13 @@ const getStripeRoute = createRoute({
 
 app.openapi(getStripeRoute, async (c) => {
     const db = c.get("db");
-        const map = await readStripeSettingsMap(db);
-        const storedEnabled = map.enabled !== undefined
-            ? map.enabled !== "false"
-            : Boolean(map.secret_key && map.webhook_secret && map.publishable_key);
+        const stored = await stripeDocument.readDetailed(db);
 
         return ok(c, {
-            secretKey: map.secret_key ? MASKED : "",
-            publishableKey: map.publishable_key ?? "",
-            webhookSecret: map.webhook_secret ? MASKED : "",
-            enabled: storedEnabled
+            secretKey: maskedSecret(stored, "secretKey"),
+            publishableKey: stored.value.publishableKey,
+            webhookSecret: maskedSecret(stored, "webhookSecret"),
+            enabled: stored.stored && stored.value.enabled,
         });
 });
 
@@ -525,13 +361,9 @@ const saveStripeRoute = createRoute({
 app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const writes: SettingAggregateWrite[] = [];
         const configuredEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-        const [existingMap, storedSettings] = await Promise.all([
-            readStripeSettingsMap(db),
-            getStripeSettings(db, configuredEncryptionKey),
-        ]);
-        const effectiveSettings = getEffectiveStripeCheckoutSettings(existingMap, body, storedSettings);
+        const storedSettings = await getStripeSettings(db, configuredEncryptionKey);
+        const effectiveSettings = getEffectiveStripeCheckoutSettings(body, storedSettings);
         const stripeReadiness = getStripeCheckoutReadiness(effectiveSettings);
         if (stripeReadiness.enabled && !stripeReadiness.configured) {
             throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
@@ -548,12 +380,17 @@ app.openapi(saveStripeRoute, async (c) => {
             await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "stripe");
         }
 
-        if (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) writes.push({ category: "stripe", key: "secret_key", value: body.secretKey.trim(), encrypted: true });
-        if (body.publishableKey !== undefined && body.publishableKey !== MASKED) writes.push({ category: "stripe", key: "publishable_key", value: body.publishableKey.trim() });
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) writes.push({ category: "stripe", key: "webhook_secret", value: body.webhookSecret.trim(), encrypted: true });
-        if (body.enabled !== undefined) writes.push({ category: "stripe", key: "enabled", value: String(body.enabled) });
-
-        await saveSettingAggregate(db, writes, encKey);
+        const patch: Partial<StripeSettingsDocument> = {
+            secretKey: submittedSecret(body.secretKey),
+            publishableKey: body.publishableKey !== undefined && body.publishableKey !== MASKED
+                ? body.publishableKey.trim()
+                : undefined,
+            webhookSecret: submittedSecret(body.webhookSecret),
+            enabled: body.enabled,
+        };
+        if (Object.values(patch).some((value) => value !== undefined)) {
+            await stripeDocument.write(db, patch, { encryptionKey: encKey });
+        }
 
         await bumpCacheGeneration(c);
 
@@ -585,14 +422,13 @@ const getSSLCommerzRoute = createRoute({
 
 app.openapi(getSSLCommerzRoute, async (c) => {
     const db = c.get("db");
-        const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "sslcommerz")).all();
-        const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+        const stored = await sslcommerzDocument.readDetailed(db);
 
         return ok(c, {
-            storeId: map.store_id ?? "",
-            storePassword: map.store_password ? MASKED : "",
-            sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== undefined ? map.enabled !== "false" : hasStoredSSLCommerzAccount(map)
+            storeId: stored.value.storeId,
+            storePassword: maskedSecret(stored, "storePassword"),
+            sandbox: stored.value.sandbox,
+            enabled: stored.stored && stored.value.enabled,
         });
 });
 
@@ -613,13 +449,11 @@ const saveSSLCommerzRoute = createRoute({
 app.openapi(saveSSLCommerzRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
-        const writes: SettingAggregateWrite[] = [];
-        const existingMap = await readSSLCommerzSettingsMap(db);
         const storedSettings = await getSSLCommerzSettings(
             db,
             getCredentialEncryptionKey(c.env as Record<string, unknown>),
         );
-        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(existingMap, body, storedSettings);
+        const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(body, storedSettings);
         const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
         if (sslReadiness.enabled && !sslReadiness.configured) {
             throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
@@ -633,12 +467,15 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
             await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "sslcommerz");
         }
 
-        if (body.storeId && body.storeId.trim()) writes.push({ category: "sslcommerz", key: "store_id", value: body.storeId.trim() });
-        if (body.storePassword && body.storePassword !== MASKED && body.storePassword.trim()) writes.push({ category: "sslcommerz", key: "store_password", value: body.storePassword.trim(), encrypted: true });
-        if (body.sandbox !== undefined) writes.push({ category: "sslcommerz", key: "sandbox", value: String(body.sandbox) });
-        if (body.enabled !== undefined) writes.push({ category: "sslcommerz", key: "enabled", value: String(body.enabled) });
-
-        await saveSettingAggregate(db, writes, encKey);
+        const patch: Partial<SSLCommerzSettingsDocument> = {
+            storeId: body.storeId?.trim() || undefined,
+            storePassword: submittedSecret(body.storePassword),
+            sandbox: body.sandbox,
+            enabled: body.enabled,
+        };
+        if (Object.values(patch).some((value) => value !== undefined)) {
+            await sslcommerzDocument.write(db, patch, { encryptionKey: encKey });
+        }
 
         await bumpCacheGeneration(c);
 

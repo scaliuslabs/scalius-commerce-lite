@@ -1545,31 +1545,22 @@ export const OPERATIONS = {
   },
   "storefront.payment_recovery.status": { exposure: "continuation" },
 
-  "storefront.payment_sslcommerz_session.session": {
-    exposure: "excluded",
-    risk: "financial",
-    openWorld: true,
-    sensitive: true,
-    reason:
-      "Requires raw receipt proof and returns hosted SSLCommerz session material; use the secure storefront payment continuation.",
-  },
-
-  "storefront.payment_stripe_intent.intent": {
-    exposure: "excluded",
-    risk: "financial",
-    openWorld: true,
-    sensitive: true,
-    reason:
-      "Requires raw receipt proof and returns a Stripe client secret; use the secure storefront payment continuation.",
-  },
-
-  "storefront.payment_stripe_reconcile.reconcile": {
+  "storefront.payment_reconcile.reconcile": {
     exposure: "excluded",
     risk: "financial",
     openWorld: true,
     idempotency: "supported",
     reason:
       "Provider reconciliation requires raw receipt proof; storefront.payment.status owns context-authorized safe reconciliation.",
+  },
+
+  "storefront.payment_session.session": {
+    exposure: "excluded",
+    risk: "financial",
+    openWorld: true,
+    sensitive: true,
+    reason:
+      "Requires raw receipt proof and returns a card client secret or hosted gateway session; use the secure storefront payment continuation.",
   },
 
   "storefront.payment.status": { exposure: "continuation" },

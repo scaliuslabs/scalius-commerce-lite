@@ -125,14 +125,6 @@ interface VariantState {
   trackInventory: number;
 }
 
-interface ReservationLaneState {
-  lane: number;
-  capacity: number;
-  reservedQuantity: number;
-  version: number;
-  sourceStockVersion: number;
-}
-
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required.`);
@@ -469,26 +461,6 @@ async function readVariantState(
   };
 }
 
-async function readReservationLaneState(
-  oracle: SqlitePortabilityExecutor,
-  variantId: string,
-): Promise<ReservationLaneState[]> {
-  const rows = await oracle.query(
-    `SELECT lane, capacity, reserved_quantity, version, source_stock_version
-       FROM inventory_reservation_lanes
-      WHERE variant_id = ? AND pool = 'regular'
-      ORDER BY lane`,
-    [variantId],
-  );
-  return rows.map((row) => ({
-    lane: Number(row.lane),
-    capacity: Number(row.capacity),
-    reservedQuantity: Number(row.reserved_quantity),
-    version: Number(row.version),
-    sourceStockVersion: Number(row.source_stock_version),
-  }));
-}
-
 async function readRunFacts(
   oracle: SqlitePortabilityExecutor,
   notes: string,
@@ -508,31 +480,6 @@ async function readRunFacts(
     attempts: scalarNumber(rows, "attempts_count"),
     movements: scalarNumber(rows, "movements_count"),
     supportRequests: scalarNumber(rows, "support_count"),
-  };
-}
-
-async function waitForProjectedRunFacts(
-  oracle: SqlitePortabilityExecutor,
-  notes: string,
-  expected: { orders: number; items: number; attempts: number },
-  timeoutMs: number,
-): Promise<{ facts: Record<string, number>; projectionCatchupMs: number }> {
-  const startedAt = performance.now();
-  let facts = await readRunFacts(oracle, notes);
-  while (
-    (
-      facts.orders !== expected.orders
-      || facts.items !== expected.items
-      || facts.attempts !== expected.attempts
-    )
-    && performance.now() - startedAt < timeoutMs
-  ) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 250));
-    facts = await readRunFacts(oracle, notes);
-  }
-  return {
-    facts,
-    projectionCatchupMs: Math.round(performance.now() - startedAt),
   };
 }
 
@@ -926,12 +873,7 @@ async function runSmoke(
   if (support.result.status !== 201) {
     throw new Error(`Support-request smoke failed with HTTP ${support.result.status}.`);
   }
-  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
-    oracle,
-    notes,
-    { orders: 1, items: 1, attempts: 1 },
-    options.timeoutMs,
-  );
+  const facts = await readRunFacts(oracle, notes);
   if (
     facts.orders !== 1 ||
     facts.items !== 1 ||
@@ -953,7 +895,6 @@ async function runSmoke(
     elapsedMs,
     {
       ...facts,
-      projectionCatchupMs,
       ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
       replay: true,
       receipt: true,
@@ -993,12 +934,7 @@ async function runIdempotency(
     [...results.map(({ value }) => value.orderId), replay.result.orderId].filter(Boolean),
   );
   if (orderIds.size !== 1) throw new Error("Idempotency burst returned more than one order id.");
-  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
-    oracle,
-    notes,
-    { orders: 1, items: 1, attempts: 1 },
-    options.timeoutMs,
-  );
+  const facts = await readRunFacts(oracle, notes);
   if (facts.orders !== 1 || facts.items !== 1 || facts.attempts !== 1) {
     throw new Error(`Idempotency database oracle failed: ${JSON.stringify(facts)}.`);
   }
@@ -1009,7 +945,6 @@ async function runIdempotency(
     loadElapsedMs,
     {
       ...facts,
-      projectionCatchupMs,
       uniqueOrderIds: orderIds.size,
       ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
     },
@@ -1062,12 +997,7 @@ async function runSpread(
     );
   }
   const accepted = options.spreadOrders - failures.length;
-  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
-    oracle,
-    notes,
-    { orders: accepted, items: accepted, attempts: accepted },
-    options.timeoutMs,
-  );
+  const facts = await readRunFacts(oracle, notes);
   if (
     facts.orders !== accepted ||
     facts.items !== accepted ||
@@ -1087,7 +1017,6 @@ async function runSpread(
     loadElapsedMs,
     {
       ...facts,
-      projectionCatchupMs,
       accepted,
       acceptedOrdersPerSecond: Number((accepted / (loadElapsedMs / 1_000)).toFixed(2)),
       failed: failures.length,
@@ -1106,13 +1035,8 @@ async function runHot(
   const scenario = "hot";
   const notes = `scalius-load:${runId}:${scenario}`;
   const before = await readVariantState(oracle, options.fixture.hot.variantId);
-  const lanesBefore = await readReservationLaneState(oracle, options.fixture.hot.variantId);
   if (before.trackInventory !== 1) throw new Error("Hot-test variant must have inventory tracking enabled.");
-  const laneReservedBefore = lanesBefore.reduce(
-    (sum, lane) => sum + lane.reservedQuantity,
-    0,
-  );
-  const available = before.stock - before.reservedStock - laneReservedBefore;
+  const available = before.stock - before.reservedStock;
   if (available < 1) throw new Error("Hot-test variant has no available regular stock.");
   if (options.hotOrders <= available) {
     throw new Error(`Hot test must submit more than the ${available} available units.`);
@@ -1152,101 +1076,21 @@ async function runHot(
     for (const entry of unexpected) increment(statusCounts, entry.value.status);
     violations.push(`unexpected response statuses ${JSON.stringify(statusCounts)}`);
   }
-  const { facts, projectionCatchupMs } = await waitForProjectedRunFacts(
-    oracle,
-    notes,
-    { orders: accepted, items: accepted, attempts: accepted },
-    options.timeoutMs,
-  );
+  const facts = await readRunFacts(oracle, notes);
   const after = await readVariantState(oracle, options.fixture.hot.variantId);
-  const lanesAfter = await readReservationLaneState(oracle, options.fixture.hot.variantId);
-  const edgeRows = await oracle.query(
-    `SELECT
-        CAST(json_extract(edge.value, '$.lane') AS INTEGER) AS lane,
-        COUNT(*) AS edge_count,
-        COUNT(DISTINCT CAST(json_extract(edge.value, '$.reservedBefore') AS INTEGER)) AS distinct_reserved_before,
-        COUNT(DISTINCT CAST(json_extract(edge.value, '$.laneVersionBefore') AS INTEGER)) AS distinct_version_before,
-        COALESCE(SUM(CAST(json_extract(edge.value, '$.quantity') AS INTEGER)), 0) AS quantity,
-        COALESCE(MIN(CAST(json_extract(edge.value, '$.reservedBefore') AS INTEGER)), 0) AS min_reserved_before,
-        COALESCE(MAX(CAST(json_extract(edge.value, '$.reservedAfter') AS INTEGER)), 0) AS max_reserved_after,
-        COALESCE(MIN(CAST(json_extract(edge.value, '$.laneVersionBefore') AS INTEGER)), 0) AS min_version_before,
-        COALESCE(MAX(CAST(json_extract(edge.value, '$.laneVersionAfter') AS INTEGER)), 0) AS max_version_after
-       FROM orders AS checkout_order
-       JOIN json_each(checkout_order.checkout_inventory_edges) AS edge ON 1 = 1
-      WHERE checkout_order.notes = ?
-        AND checkout_order.inventory_authority = 'checkout_lane_v1'
-        AND checkout_order.inventory_action = 'reserved'
-      GROUP BY CAST(json_extract(edge.value, '$.lane') AS INTEGER)
-      ORDER BY lane`,
-    [notes],
-  );
-  const edgeGroups = edgeRows.map((row) => ({
-    lane: Number(row.lane),
-    edgeCount: Number(row.edge_count),
-    distinctReservedBefore: Number(row.distinct_reserved_before),
-    distinctVersionBefore: Number(row.distinct_version_before),
-    quantity: Number(row.quantity),
-    minReservedBefore: Number(row.min_reserved_before),
-    maxReservedAfter: Number(row.max_reserved_after),
-    minVersionBefore: Number(row.min_version_before),
-    maxVersionAfter: Number(row.max_version_after),
-  }));
-  const beforeByLane = new Map(lanesBefore.map((lane) => [lane.lane, lane]));
-  const afterByLane = new Map(lanesAfter.map((lane) => [lane.lane, lane]));
-  const edgeContinuityExact = edgeGroups.every((group) => {
-    const laneBefore = beforeByLane.get(group.lane) ?? {
-      reservedQuantity: 0,
-      version: 0,
-    };
-    const laneAfter = afterByLane.get(group.lane);
-    return Boolean(
-      laneAfter
-      && group.edgeCount === group.quantity
-      && group.distinctReservedBefore === group.edgeCount
-      && group.distinctVersionBefore === group.edgeCount
-      && group.minReservedBefore === laneBefore.reservedQuantity
-      && group.maxReservedAfter === laneAfter.reservedQuantity
-      && group.minVersionBefore === laneBefore.version
-      && group.maxVersionAfter === laneAfter.version
-      && laneAfter.reservedQuantity - laneBefore.reservedQuantity === group.quantity
-      && laneAfter.version - laneBefore.version === group.edgeCount
-    );
-  });
-  const laneReservedAfter = lanesAfter.reduce(
-    (sum, lane) => sum + lane.reservedQuantity,
-    0,
-  );
-  const laneVersionBefore = lanesBefore.reduce((sum, lane) => sum + lane.version, 0);
-  const laneVersionAfter = lanesAfter.reduce((sum, lane) => sum + lane.version, 0);
-  const laneCapacityAfter = lanesAfter.reduce((sum, lane) => sum + lane.capacity, 0);
-  const laneEdgeQuantity = edgeGroups.reduce((sum, group) => sum + group.quantity, 0);
-  const terminalRows = await oracle.query(
-    `SELECT COUNT(*) AS terminal_count
-       FROM checkout_inventory_lane_movements AS movement
-       JOIN orders AS checkout_order ON checkout_order.id = movement.order_id
-      WHERE checkout_order.notes = ?`,
-    [notes],
-  );
-  const terminalMovements = scalarNumber(terminalRows, "terminal_count");
+  // Every accepted order holds exactly one unit through one ledger-v2 edge
+  // committed with its order; rejected orders leave no counter change.
   if (
     accepted !== available ||
     facts.orders !== accepted ||
     facts.items !== accepted ||
     facts.attempts !== accepted ||
-    facts.movements !== 0 ||
+    facts.movements !== accepted ||
     after.stock !== before.stock ||
-    after.reservedStock !== before.reservedStock ||
-    after.stockVersion !== before.stockVersion ||
-    lanesAfter.length !== 2 ||
-    lanesAfter.some((lane) => lane.sourceStockVersion !== after.stockVersion) ||
-    laneCapacityAfter !== Math.max(laneReservedAfter, after.stock - after.reservedStock) ||
-    laneReservedAfter - laneReservedBefore !== accepted ||
-    laneVersionAfter - laneVersionBefore !== accepted ||
-    laneEdgeQuantity !== accepted ||
-    !edgeContinuityExact ||
-    terminalMovements !== 0
+    after.reservedStock - before.reservedStock !== accepted ||
+    after.stockVersion - before.stockVersion !== accepted
   ) {
-    violations.push("stock, order, or checkout-lane ledger invariants did not match accepted orders");
+    violations.push("stock, order, or ledger invariants did not match accepted orders");
   }
   return summarizeScenario(
     scenario,
@@ -1255,21 +1099,13 @@ async function runHot(
     loadElapsedMs,
     {
       ...facts,
-      projectionCatchupMs,
       accepted,
       acceptedOrdersPerSecond: Number((accepted / (loadElapsedMs / 1_000)).toFixed(2)),
       rejected: options.hotOrders - accepted,
       availableBefore: available,
-      laneReservedBefore,
-      laneReservedAfter,
-      laneCapacityAfter,
+      reservedStockDelta: after.reservedStock - before.reservedStock,
       stockAfter: after.stock,
       stockVersionDelta: after.stockVersion - before.stockVersion,
-      checkoutLaneEdgeQuantity: laneEdgeQuantity,
-      checkoutLaneVersionDelta: laneVersionAfter - laneVersionBefore,
-      legacyLedgerMovements: facts.movements,
-      terminalLaneMovements: terminalMovements,
-      edgeContinuityExact,
       ratePerSecond: options.hotRate,
       ...(await assertDatabaseHealth(oracle, options.databaseProvider)),
     },

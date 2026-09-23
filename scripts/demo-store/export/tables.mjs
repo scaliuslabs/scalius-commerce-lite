@@ -75,20 +75,6 @@ export const EXPORT_ROW_FILTERS = Object.freeze({
  */
 export const COMMERCE_ENTANGLEMENT_PROBES = Object.freeze([
   Object.freeze({
-    table: "inventory_reservation_lanes",
-    label: "checkout reservation lane",
-    identitySql: "\"variant_id\" || ':' || \"pool\" || ':' || \"lane\"",
-    variantColumn: "variant_id",
-    productColumn: null,
-  }),
-  Object.freeze({
-    table: "checkout_inventory_lane_movements",
-    label: "checkout lane movement",
-    identitySql: "\"id\"",
-    variantColumn: "variant_id",
-    productColumn: null,
-  }),
-  Object.freeze({
     table: "order_items",
     label: "order line",
     identitySql: "\"id\"",

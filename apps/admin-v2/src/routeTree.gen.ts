@@ -13,15 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ConnectRouteImport } from './routes/connect'
-import { Route as FirebaseMessagingSwDotjsRouteImport } from './routes/firebase-messaging-sw[.]js'
-import { Route as HealthRouteImport } from './routes/health'
 import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAbandonedCheckoutsRouteImport } from './routes/admin/abandoned-checkouts'
 import { Route as AdminAccessDeniedRouteImport } from './routes/admin/access-denied'
 import { Route as AdminAttributesRouteImport } from './routes/admin/attributes'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
-import { Route as ApiScannerTokenRouteImport } from './routes/api/scanner-token'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
@@ -66,7 +63,6 @@ import { Route as AdminSettingsMetaConversionRouteImport } from './routes/admin/
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsThemeRouteImport } from './routes/admin/settings/theme'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminAnalyticsAnalyticsIdEditRouteImport } from './routes/admin/analytics/$analyticsId/edit'
 import { Route as AdminArticlesArticleIdEditRouteImport } from './routes/admin/articles/$articleId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
@@ -81,7 +77,6 @@ import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$
 import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/products/$productId/index'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPromotionsPromotionIdEditRouteImport } from './routes/admin/promotions/$promotionId/edit'
-import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
 
@@ -103,17 +98,6 @@ const AuthRoute = AuthRouteImport.update({
 const ConnectRoute = ConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FirebaseMessagingSwDotjsRoute =
-  FirebaseMessagingSwDotjsRouteImport.update({
-    id: '/firebase-messaging-sw.js',
-    path: '/firebase-messaging-sw.js',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const HealthRoute = HealthRouteImport.update({
-  id: '/health',
-  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScannerRoute = ScannerRouteImport.update({
@@ -145,11 +129,6 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
   id: '/media',
   path: '/media',
   getParentRoute: () => AdminRoute,
-} as any)
-const ApiScannerTokenRoute = ApiScannerTokenRouteImport.update({
-  id: '/api/scanner-token',
-  path: '/api/scanner-token',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/forgot-password',
@@ -377,11 +356,6 @@ const AdminSettingsThemeRoute = AdminSettingsThemeRouteImport.update({
   path: '/settings/theme',
   getParentRoute: () => AdminRoute,
 } as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminAnalyticsAnalyticsIdEditRoute =
   AdminAnalyticsAnalyticsIdEditRouteImport.update({
     id: '/analytics/$analyticsId/edit',
@@ -462,11 +436,6 @@ const AdminPromotionsPromotionIdEditRoute =
     path: '/promotions/$promotionId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
-const ApiV1AdminSplatRoute = ApiV1AdminSplatRouteImport.update({
-  id: '/api/v1/admin/$',
-  path: '/api/v1/admin/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminSettingsAgentAccessAuthorizeRequestIdRoute =
   AdminSettingsAgentAccessAuthorizeRequestIdRouteImport.update({
     id: '/authorize/$requestId',
@@ -485,14 +454,11 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
-  '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
-  '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
-  '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -525,7 +491,6 @@ export interface FileRoutesByFullPath {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -551,7 +516,6 @@ export interface FileRoutesByFullPath {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
-  '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
@@ -561,14 +525,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
-  '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
-  '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
-  '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -601,7 +562,6 @@ export interface FileRoutesByTo {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics': typeof AdminAnalyticsIndexRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
@@ -627,7 +587,6 @@ export interface FileRoutesByTo {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
-  '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
@@ -639,14 +598,11 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
-  '/firebase-messaging-sw.js': typeof FirebaseMessagingSwDotjsRoute
-  '/health': typeof HealthRoute
   '/scanner': typeof ScannerRoute
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
-  '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -679,7 +635,6 @@ export interface FileRoutesById {
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/theme': typeof AdminSettingsThemeRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -705,7 +660,6 @@ export interface FileRoutesById {
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
-  '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
@@ -718,14 +672,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/connect'
-    | '/firebase-messaging-sw.js'
-    | '/health'
     | '/scanner'
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
     | '/admin/media'
-    | '/api/scanner-token'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -758,7 +709,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/articles/'
     | '/admin/categories/'
@@ -784,7 +734,6 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/promotions/$promotionId/edit'
-    | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/admin/settings/agent-access/authorize/$requestId'
@@ -794,14 +743,11 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/connect'
-    | '/firebase-messaging-sw.js'
-    | '/health'
     | '/scanner'
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
     | '/admin/media'
-    | '/api/scanner-token'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -834,7 +780,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/api/auth/$'
     | '/admin/analytics'
     | '/admin/articles'
     | '/admin/categories'
@@ -860,7 +805,6 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/promotions/$promotionId/edit'
-    | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
     | '/admin/settings/agent-access/authorize/$requestId'
@@ -871,14 +815,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/connect'
-    | '/firebase-messaging-sw.js'
-    | '/health'
     | '/scanner'
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
     | '/admin/media'
-    | '/api/scanner-token'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -911,7 +852,6 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications'
     | '/admin/settings/taxes'
     | '/admin/settings/theme'
-    | '/api/auth/$'
     | '/admin/analytics/'
     | '/admin/articles/'
     | '/admin/categories/'
@@ -937,7 +877,6 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
     | '/admin/promotions/$promotionId/edit'
-    | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
     | '/admin/settings/agent-access/authorize/$requestId'
@@ -949,13 +888,8 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   ConnectRoute: typeof ConnectRoute
-  FirebaseMessagingSwDotjsRoute: typeof FirebaseMessagingSwDotjsRoute
-  HealthRoute: typeof HealthRoute
   ScannerRoute: typeof ScannerRoute
-  ApiScannerTokenRoute: typeof ApiScannerTokenRoute
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiV1AdminSplatRoute: typeof ApiV1AdminSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -986,20 +920,6 @@ declare module '@tanstack/react-router' {
       path: '/connect'
       fullPath: '/connect'
       preLoaderRoute: typeof ConnectRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/firebase-messaging-sw.js': {
-      id: '/firebase-messaging-sw.js'
-      path: '/firebase-messaging-sw.js'
-      fullPath: '/firebase-messaging-sw.js'
-      preLoaderRoute: typeof FirebaseMessagingSwDotjsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/health': {
-      id: '/health'
-      path: '/health'
-      fullPath: '/health'
-      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scanner': {
@@ -1043,13 +963,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/media'
       preLoaderRoute: typeof AdminMediaRouteImport
       parentRoute: typeof AdminRoute
-    }
-    '/api/scanner-token': {
-      id: '/api/scanner-token'
-      path: '/api/scanner-token'
-      fullPath: '/api/scanner-token'
-      preLoaderRoute: typeof ApiScannerTokenRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/auth/forgot-password': {
       id: '/auth/forgot-password'
@@ -1359,13 +1272,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsThemeRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/analytics/$analyticsId/edit': {
       id: '/admin/analytics/$analyticsId/edit'
       path: '/analytics/$analyticsId/edit'
@@ -1463,13 +1369,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/promotions/$promotionId/edit'
       preLoaderRoute: typeof AdminPromotionsPromotionIdEditRouteImport
       parentRoute: typeof AdminRoute
-    }
-    '/api/v1/admin/$': {
-      id: '/api/v1/admin/$'
-      path: '/api/v1/admin/$'
-      fullPath: '/api/v1/admin/$'
-      preLoaderRoute: typeof ApiV1AdminSplatRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/admin/settings/agent-access/authorize/$requestId': {
       id: '/admin/settings/agent-access/authorize/$requestId'
@@ -1651,24 +1550,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   ConnectRoute: ConnectRoute,
-  FirebaseMessagingSwDotjsRoute: FirebaseMessagingSwDotjsRoute,
-  HealthRoute: HealthRoute,
   ScannerRoute: ScannerRoute,
-  ApiScannerTokenRoute: ApiScannerTokenRoute,
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
-  ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiV1AdminSplatRoute: ApiV1AdminSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

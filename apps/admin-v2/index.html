@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The API Worker fills in the runtime dashboard base path and prefixes
+         every root-relative src/href below (apps/api/src/dashboard/surface.ts). -->
+    <meta name="scalius-dashboard-base-path" content="">
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Scalius Admin</title>
+    <link rel="icon" href="/favicon.png" />
+    <script>(function(){var t="light";try{t=localStorage.getItem("theme")||"light"}catch(e){}if(t==="dark"){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}document.documentElement.style.colorScheme=t})()</script>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+  <body class="min-h-screen bg-background font-sans antialiased">
+    <!-- Nothing protected renders until the session is known: this blank shell
+         stays until the first route (and its guard) has resolved. -->
+    <div id="root"></div>
+    <noscript>The Scalius dashboard needs JavaScript.</noscript>
+  </body>
+</html>

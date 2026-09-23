@@ -106,13 +106,11 @@ function createPushDb(tokenRows: Array<{ token: string }>): {
     const updateWhere = vi.fn(async () => undefined);
     const updateSet = vi.fn(() => ({ where: updateWhere }));
     const update = vi.fn(() => ({ set: updateSet }));
-    // `.get()` is the Firebase settings-document row, `.all()` the legacy
-    // per-key rows, and awaiting the builder reads the push tokens.
+    // Awaiting the builder reads the (absent) Firebase settings document and
+    // then the push tokens; token rows carry no settings category.
     const select = vi.fn(() => ({
         from: vi.fn(() => ({
             where: vi.fn(() => ({
-                get: vi.fn(async () => undefined),
-                all: vi.fn(async () => []),
                 then: (resolve: (value: typeof tokenRows) => void) =>
                     Promise.resolve(tokenRows).then(resolve),
             })),
@@ -1087,7 +1085,6 @@ describe("order notification dispatch", () => {
             db,
             {
                 encryptionKey: "credential-key",
-                migrationEncryptionKey: "dedicated-key",
                 outboxId: "outbox_wa_1",
             },
         );
@@ -1102,14 +1099,7 @@ describe("order notification dispatch", () => {
                 recipient: "whatsapp:8801700000000",
             }),
         );
-        expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
-            db,
-            "credential-key",
-            {
-                migrateLegacy: true,
-                migrationEncryptionKey: "dedicated-key",
-            },
-        );
+        expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(db, "credential-key");
         expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
             accessToken: "wa_token",
             phoneNumberId: "phone_id_1",
@@ -1284,17 +1274,16 @@ describe("order notification dispatch", () => {
         });
         const tokenRows = [{ token: "fcm_token_1" }];
         const storedServiceAccount = `enc:${await encryptCredentials(serviceAccountJson, credentialKey)}`;
+        // The first awaited read is the Firebase settings document, then the push tokens.
+        const reads: unknown[][] = [
+            [{ category: "firebase", value: JSON.stringify({ serviceAccount: storedServiceAccount, publicConfig: {} }), revision: 1 }],
+        ];
         const db = {
             select: vi.fn(() => ({
                 from: vi.fn(() => ({
                     where: vi.fn(() => ({
-                        // No settings-document row yet; the legacy per-key row
-                        // is assembled and written back on this read.
-                        get: vi.fn(async () => undefined),
-                        all: vi.fn(async () => [
-                            { key: "service_account", value: storedServiceAccount },
-                        ]),
-                        then: (resolve: (value: typeof tokenRows) => void) => Promise.resolve(tokenRows).then(resolve),
+                        then: (resolve: (value: unknown[]) => void) =>
+                            Promise.resolve(reads.shift() ?? tokenRows).then(resolve),
                     })),
                 })),
             })),
@@ -1707,8 +1696,8 @@ describe("order notification dispatch", () => {
             provider: "fcm",
             reason: "Firebase service account JSON is missing required fields",
         });
-        // The Firebase settings-document row plus the legacy rows; no token read.
-        expect(pushDb.db.select).toHaveBeenCalledTimes(2);
+        // Only the Firebase settings document; no token read.
+        expect(pushDb.db.select).toHaveBeenCalledTimes(1);
         expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
         expect(result.hasRetryableFailure).toBe(false);
     });

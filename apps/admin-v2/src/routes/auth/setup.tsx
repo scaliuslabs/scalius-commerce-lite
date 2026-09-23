@@ -1,19 +1,20 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { getApiV1Setup } from "@scalius/api-client/sdk";
 import { SetupForm } from "~/components/auth/SetupForm";
-import { getSetupStatus } from "~/lib/api-server-fns";
-import { checkAdminExists } from "~/lib/auth.fns";
+import { apiData } from "~/lib/api";
+import { readDashboardSession } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/setup")({
   beforeLoad: async () => {
-    // Only accessible when no admin users exist in the shared Better Auth D1 database.
-    const adminExists = await checkAdminExists();
+    // Only accessible while no administrator exists.
+    const { adminExists } = await readDashboardSession();
     if (adminExists) {
       throw redirect({ to: "/auth/login" });
     }
     // The API decides whether setup is token-gated (Platform setting). A
     // failed read must not block the form: the API rejects an unaccompanied
     // request anyway, so the gate is never weakened by guessing here.
-    const setupTokenRequired = await getSetupStatus()
+    const setupTokenRequired = await apiData(getApiV1Setup())
       .then((status) => status.setupTokenRequired === true)
       .catch(() => false);
     return { setupTokenRequired };

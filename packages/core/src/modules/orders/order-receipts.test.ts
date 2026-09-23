@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
+import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import {
   createOrderReceiptToken,
   hashOrderReceiptToken,
@@ -26,7 +26,6 @@ type AttemptRow = {
 function createReceiptDb(options: {
   receipt?: ReceiptRow | null;
   attempt?: AttemptRow | null;
-  aggregate?: { orderId: string; createdAt: Date } | null;
 } = {}) {
   const receipts: ReceiptRow[] = options.receipt ? [options.receipt] : [];
   const inserted: ReceiptRow[] = [];
@@ -42,7 +41,6 @@ function createReceiptDb(options: {
         where: () => query,
         get: async () => {
           if (selectedTable === orderReceipts) return receipts[0] ?? null;
-          if (selectedTable === orders) return options.aggregate ?? null;
           if (selectedTable === checkoutAttempts) return options.attempt ?? null;
           return null;
         },
@@ -176,27 +174,6 @@ describe("order receipts", () => {
       source: "checkout_attempt",
       status: "active",
       expiresAt: 50 + ORDER_RECEIPT_TOKEN_TTL_SECONDS,
-    });
-  });
-
-  it("accepts aggregate receipt authority before compatibility projection", async () => {
-    const tokenHash = await hashOrderReceiptToken("chk_valid");
-    const { db } = createReceiptDb({
-      aggregate: {
-        orderId: "order_1",
-        createdAt: new Date(100_000),
-      },
-    });
-
-    await expect(validateOrderReceiptProof(db, {
-      orderId: "order_1",
-      token: "chk_valid",
-      nowSeconds: 100,
-    })).resolves.toEqual({
-      source: "checkout_aggregate",
-      orderId: "order_1",
-      tokenHash,
-      shouldRepairKv: true,
     });
   });
 

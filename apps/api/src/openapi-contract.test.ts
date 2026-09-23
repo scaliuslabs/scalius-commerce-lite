@@ -147,7 +147,7 @@ describe("finalizeOpenApiContract", () => {
     const spec = finalizeOpenApiContract(specWithPaths({
       "/api/v1/setup": { post: { responses: {} } },
       "/api/v1/admin/rbac/roles": { post: { responses: {} } },
-      "/api/v1/payment/stripe/intent": {
+      "/api/v1/payment/{provider}/session": {
         post: { responses: { "503": existingUnavailable } },
       },
     }));
@@ -155,8 +155,8 @@ describe("finalizeOpenApiContract", () => {
     expect(operation(spec, "/api/v1/setup", "post").responses).toHaveProperty("409");
     expect(operation(spec, "/api/v1/setup", "post").responses).toHaveProperty("503");
     expect(operation(spec, "/api/v1/admin/rbac/roles", "post").responses).toHaveProperty("409");
-    expect(operation(spec, "/api/v1/payment/stripe/intent", "post").responses).toHaveProperty("409");
-    expect(operation(spec, "/api/v1/payment/stripe/intent", "post").responses?.["503"]).toBe(existingUnavailable);
+    expect(operation(spec, "/api/v1/payment/{provider}/session", "post").responses).toHaveProperty("409");
+    expect(operation(spec, "/api/v1/payment/{provider}/session", "post").responses?.["503"]).toBe(existingUnavailable);
   });
 
   it("also supports already-stripped paths for route-level documents", () => {

@@ -89,7 +89,7 @@ export function createAuth(env: Env) {
     }),
     secret,
     baseURL,
-    // The auth routes live on the dashboard Worker under its base path.
+    // The API Worker serves these routes on the dashboard host, below its base path.
     basePath: `${dashboardBasePath}/api/auth`,
     appName,
     emailVerification: {

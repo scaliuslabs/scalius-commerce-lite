@@ -1,8 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-  getDatabaseProviderForClient,
-  type Database,
-} from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 
 import {
   orders,
@@ -17,7 +14,12 @@ import {
   evaluateStorefrontPromotionCode,
   resolvePromotionCustomerIdByPhone,
 } from "@scalius/core/modules/promotions";
-import { getSSLCommerzBdtAmountLimitIssue } from "@scalius/core/modules/payments/sslcommerz";
+import {
+  getCheckoutGatewayPrecommitIssue,
+  getPaymentMethodCurrencyIssue,
+  isOnlinePaymentMethod,
+  listPaymentMethodIds,
+} from "@scalius/core/modules/payments/gateways/registry";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -41,25 +43,18 @@ import {
   createAtomicCheckoutAttempt,
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
-  getCoordinatedCheckoutEligibility,
   getCheckoutAttemptRequestKeyFromStatusToken,
-  prepareCheckoutCommitCommand,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
   sendOrderPaymentRecoveryOtp,
   assertStorefrontCheckoutPolicy,
-  loadStorefrontCheckoutAuthority,
+  loadStorefrontCheckoutReads,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
   verifyOrderPaymentRecoveryOtp,
   type StorefrontCheckoutAuthoritySnapshot,
   type StorefrontCheckoutSettingsSnapshot,
-  type StorefrontOrderCommitPayload,
 } from "@scalius/core/modules/orders";
-import {
-  submitCheckoutCommitToCoordinator,
-  submitCheckoutIntentToCoordinator,
-} from "../checkout-coordinator";
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
@@ -73,7 +68,6 @@ import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy
 import {
   bumpCacheGeneration,
   getOptionalExecutionContext,
-  findCheckoutReservationAvailabilityTransitions,
   type WaitUntilExecutionContext,
 } from "../utils/cache-generation";
 import { AppError, NotFoundError, ValidationError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
@@ -269,35 +263,6 @@ function sanitizeCheckoutStatusPayload(value: unknown): CheckoutStatusResponsePa
   return safePayload;
 }
 
-async function loadCommittedAggregateCheckout(
-  db: Database,
-  requestKey: string,
-): Promise<{ orderId: string; receiptToken: string | null } | null> {
-  const aggregate = await db
-    .select({
-      orderId: orders.id,
-      responsePayload: orders.checkoutResponsePayload,
-    })
-    .from(orders)
-    .where(eq(orders.checkoutRequestKey, requestKey))
-    .get();
-  if (!aggregate) return null;
-
-  let receiptToken: string | null = null;
-  try {
-    const response = JSON.parse(aggregate.responsePayload ?? "null") as unknown;
-    if (response && typeof response === "object" && !Array.isArray(response)) {
-      const candidate = (response as Record<string, unknown>).receiptToken;
-      if (typeof candidate === "string" && candidate.startsWith("chk_")) {
-        receiptToken = candidate;
-      }
-    }
-  } catch {
-    // The indexed order remains commit authority; omit only the repair hint.
-  }
-  return { orderId: aggregate.orderId, receiptToken };
-}
-
 function getCustomerSessionTokenFromRequest(c: { req: { header: (name: string) => string | undefined } }): string | null {
   const explicitSessionToken = c.req.header(CUSTOMER_SESSION_HEADER)?.trim();
   if (explicitSessionToken) return explicitSessionToken;
@@ -423,10 +388,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
 
   if (!c.env.CACHE) {
     console.warn("[Orders] Polling endpoint hit but CACHE KV is not bound!");
-    const aggregate = await loadCommittedAggregateCheckout(c.get("db"), requestKey);
-    if (aggregate) {
-      return ok(c, { status: "completed", orderId: aggregate.orderId });
-    }
     return ok(c, { status: "processing" });
   }
 
@@ -506,23 +467,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
       }, 202);
     }
 
-    const aggregate = await loadCommittedAggregateCheckout(db, requestKey);
-    if (aggregate) {
-      if (aggregate.receiptToken) {
-        scheduleCheckoutSuccessRecoveryHints(
-          c.env,
-          statusToken,
-          aggregate.receiptToken,
-          aggregate.orderId,
-          getOptionalExecutionContext(c),
-        );
-      }
-      return ok(c, {
-        status: "completed",
-        orderId: aggregate.orderId,
-      });
-    }
-
     return c.json({ success: true, data: { status: "processing", message: "Order is waiting in queue." } }, 202);
   }
 
@@ -530,7 +474,7 @@ app.openapi(getOrderStatusRoute, async (c) => {
 
   if (statusData.status === "processing" && statusData.orderId) {
     const db = c.get("db");
-    const [attempt, orderExists, aggregate] = await Promise.all([
+    const [attempt, orderExists] = await Promise.all([
       db
         .select({
           status: checkoutAttempts.status,
@@ -546,7 +490,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
         .from(orders)
         .where(eq(orders.id, statusData.orderId))
         .limit(1),
-      loadCommittedAggregateCheckout(db, requestKey),
     ]);
 
     if (attempt?.status === "failed") {
@@ -575,22 +518,6 @@ app.openapi(getOrderStatusRoute, async (c) => {
       return ok(c, {
         status: "completed",
         orderId: attempt.orderId,
-      });
-    }
-
-    if (aggregate && orderExists.length > 0) {
-      if (aggregate.receiptToken) {
-        scheduleCheckoutSuccessRecoveryHints(
-          c.env,
-          statusToken,
-          aggregate.receiptToken,
-          aggregate.orderId,
-          getOptionalExecutionContext(c),
-        );
-      }
-      return ok(c, {
-        status: "completed",
-        orderId: aggregate.orderId,
       });
     }
   }
@@ -739,7 +666,6 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
       emailEnv: c.env as unknown as Record<string, unknown>,
       encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-      migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     });
   } catch (error) {
     if (error instanceof ValidationError || error instanceof NotFoundError) {
@@ -1557,7 +1483,7 @@ const createOrderSchema = z.object({
     .min(0, "Shipping charge must be greater than or equal to 0"),
   shippingMethodId: z.string().optional().nullable(),
   paymentMethod: z
-    .enum([PaymentMethod.STRIPE, PaymentMethod.SSLCOMMERZ, PaymentMethod.COD])
+    .enum(listPaymentMethodIds() as [string, ...string[]])
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
@@ -1566,57 +1492,26 @@ const createOrderSchema = z.object({
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
-function isCoordinatedGuestCheckoutIntent(
-  data: CreateOrderInput,
-  customerSessionToken: string | null,
-): boolean {
-  return customerSessionToken === null
-    && data.paymentMethod === PaymentMethod.COD
-    && data.inventoryPool === InventoryPool.REGULAR
-    && !data.discountCode?.trim();
+function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: string): void {
+  if (!isOnlinePaymentMethod(data.paymentMethod)) return;
+  const issue = getPaymentMethodCurrencyIssue(data.paymentMethod, currencyCode);
+  if (issue) throw new ValidationError(issue);
 }
 
-function resolveSSLCommerzPrecommitChargeAmount(
-  totalAmount: number,
-  checkoutSettings: CheckoutSettingsSnapshot,
-): number {
-  const checkoutTotal = roundPrice(Number(totalAmount), "BDT");
-  const configuredDeposit = roundPrice(Number(checkoutSettings.partialPaymentAmount), "BDT");
-  if (
-    checkoutSettings.partialPaymentEnabled &&
-    Number.isFinite(configuredDeposit) &&
-    configuredDeposit > 0 &&
-    configuredDeposit < checkoutTotal
-  ) {
-    return configuredDeposit;
-  }
-
-  return checkoutTotal;
-}
-
-function assertSSLCommerzCurrencyReadiness(
-  data: CreateOrderInput,
-  currencyCode: string,
-): void {
-  if (data.paymentMethod === PaymentMethod.SSLCOMMERZ && currencyCode !== "BDT") {
-    throw new ValidationError("SSLCommerz checkout requires the store currency to be BDT.");
-  }
-}
-
-function assertSSLCommerzPrecommitReadiness(
+function assertGatewayPrecommitReadiness(
   data: CreateOrderInput,
   checkoutSettings: CheckoutSettingsSnapshot,
   totalAmount: number,
   currencyCode: string,
 ): void {
-  if (data.paymentMethod !== PaymentMethod.SSLCOMMERZ) return;
-  assertSSLCommerzCurrencyReadiness(data, currencyCode);
-
-  const chargeAmount = resolveSSLCommerzPrecommitChargeAmount(totalAmount, checkoutSettings);
-  const amountIssue = getSSLCommerzBdtAmountLimitIssue(chargeAmount);
-  if (amountIssue) {
-    throw new ValidationError(amountIssue);
-  }
+  const issue = getCheckoutGatewayPrecommitIssue({
+    paymentMethod: data.paymentMethod,
+    currencyCode,
+    totalAmount,
+    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+    partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+  });
+  if (issue) throw new ValidationError(issue);
 }
 
 const checkoutCreatedPayloadSchema = z.object({
@@ -1637,49 +1532,6 @@ const checkoutCreatedPayloadSchema = z.object({
 });
 
 type CheckoutCreatedPayload = z.infer<typeof checkoutCreatedPayloadSchema>;
-
-function checkoutReservationEntries(
-  payload: StorefrontOrderCommitPayload,
-): Array<{ variantId: string; quantity: number }> {
-  if (
-    payload.orderData.inventoryAction !== "reserved"
-    || !Array.isArray(payload.items)
-  ) return [];
-  const quantities = new Map<string, number>();
-  for (const item of payload.items) {
-    if (item.inventoryTracked === false) continue;
-    quantities.set(
-      item.variantId,
-      (quantities.get(item.variantId) ?? 0) + item.quantity,
-    );
-  }
-  return [...quantities.entries()].map(([variantId, quantity]) => ({
-    variantId,
-    quantity,
-  }));
-}
-
-function createCheckoutAvailabilityInvalidation(
-  db: Database,
-  payload: StorefrontOrderCommitPayload,
-  transitionVariantIds: readonly string[] | null,
-  c: {
-    env: Env;
-    executionCtx?: WaitUntilExecutionContext;
-  },
-): Promise<void> | null {
-  const reservationEntries = checkoutReservationEntries(payload);
-  if (transitionVariantIds === null && reservationEntries.length === 0) {
-    return null;
-  }
-  return (async () => {
-    const variantIds = transitionVariantIds === null
-      ? await findCheckoutReservationAvailabilityTransitions(db, reservationEntries)
-      : [...new Set(transitionVariantIds)];
-    if (variantIds.length === 0) return;
-    await bumpCacheGeneration(c);
-  })();
-}
 
 const createOrderRoute = createRoute({
   method: "post",
@@ -1732,139 +1584,32 @@ app.openapi(createOrderRoute, async (c) => {
 
   try {
     const attemptIdentity = await buildCheckoutAttemptIdentity(data);
-    const customerSessionToken = getCustomerSessionTokenFromRequest(c);
-    if (
-      c.env.CHECKOUT_COORDINATOR
-      && isCoordinatedGuestCheckoutIntent(data, customerSessionToken)
-    ) {
-      diagnostics?.mark("attempt");
-      await enforceCheckoutRateLimits(c.env, c.req.raw, data.customerPhone);
-      diagnostics?.mark("rate_limit");
-      const checkoutAttempt = createAtomicCheckoutAttempt(attemptIdentity);
-      const coordinated = await submitCheckoutIntentToCoordinator(
-        c.env.CHECKOUT_COORDINATOR,
-        getDatabaseProviderForClient(db),
-        {
-          attempt: checkoutAttempt,
-          data,
-          requestUrl,
-        },
-      );
-      if (!coordinated.ok) {
-        if (coordinated.code === "CHECKOUT_REJECTED") {
-          throw new AppError(
-            coordinated.status,
-            coordinated.errorCode,
-            coordinated.message,
-            coordinated.details,
-          );
-        }
-        if (coordinated.code === "CHECKOUT_IDEMPOTENCY_CONFLICT") {
-          throw new AppError(
-            409,
-            coordinated.code,
-            "This checkout request was already used for different checkout details. Please refresh checkout and try again.",
-          );
-        }
-        if (coordinated.code === "CHECKOUT_INVENTORY_UNAVAILABLE") {
-          throw new ValidationError("Some items in your cart need attention.", {
-            inventoryError: "One or more items are no longer available in the requested quantity.",
-          });
-        }
-        if (coordinated.code === "CHECKOUT_AUTHORITY_CHANGED") {
-          throw new ValidationError(
-            "Checkout details changed while the order was being placed. Please review the refreshed checkout and try again.",
-          );
-        }
-        const recoveredAttempt = await resolveExistingCheckoutAttempt<CheckoutCreatedPayload>(
-          db,
-          attemptIdentity,
-        ).catch(() => null);
-        if (recoveredAttempt?.status === "replay") {
-          const response = recoveredAttempt.response;
-          scheduleCheckoutSuccessRecoveryHints(
-            c.env,
-            response.statusToken,
-            response.receiptToken,
-            response.orderId,
-            getOptionalExecutionContext(c),
-          );
-          diagnostics?.mark("commit");
-          diagnostics?.apply(c);
-          return created(c, response);
-        }
-        throw new ServiceUnavailableError(
-          "Checkout could not be committed safely. Please retry.",
-        );
-      }
-      diagnostics?.mark("commit");
-
-      const parsedCommittedResponse = checkoutCreatedPayloadSchema.safeParse(
-        coordinated.response,
-      );
-      if (!parsedCommittedResponse.success) {
-        throw new ServiceUnavailableError(
-          "Checkout committed but its response could not be verified. Please retry safely.",
-        );
-      }
-      const committedResponse = parsedCommittedResponse.data;
-      const committedStatusToken = committedResponse.statusToken;
-      const committedReceiptToken = committedResponse.receiptToken;
-      const committedOrderId = committedResponse.orderId;
-      const executionCtx = getOptionalExecutionContext(c);
-      scheduleCheckoutSuccessRecoveryHints(
-        c.env,
-        committedStatusToken,
-        committedReceiptToken,
-        committedOrderId,
-        executionCtx,
-      );
-
-      const coordinatedAvailabilityTransitions =
-        coordinated.availabilityTransitionVariantIds ?? [];
-      if (coordinatedAvailabilityTransitions.length > 0) {
-        const availabilityInvalidation = bumpCacheGeneration(c);
-        if (executionCtx && typeof executionCtx.waitUntil === "function") {
-          executionCtx.waitUntil(availabilityInvalidation);
-        } else {
-          await availabilityInvalidation;
-        }
-      }
-
-      if (coordinated.postCommitPayload) {
-        const sideEffects = runStorefrontOrderPostCommitSideEffects(
-          db,
-          c.env,
-          coordinated.postCommitPayload,
-        );
-        if (executionCtx && typeof executionCtx.waitUntil === "function") {
-          executionCtx.waitUntil(sideEffects);
-        } else {
-          await sideEffects;
-        }
-      }
-
-      diagnostics?.mark("post_commit");
-      diagnostics?.apply(c);
-      return created(c, committedResponse);
-    }
-
-    const existingAttempt = await resolveExistingCheckoutAttempt<{
-      checkoutToken: string;
-      receiptToken: string;
-      statusToken: string;
-      orderId: string;
-      paymentMethod: string;
-      totalAmount: number;
-      totalAmountMinor: number;
-      taxAmount: number;
-      taxAmountMinor: number;
-      taxLabel: string;
-      pricesIncludeTax: boolean;
-      currencyCode: string;
-      decimalPlaces: number;
-      message: string;
-    }>(db, attemptIdentity);
+    // One read round trip: idempotency row, checkout authority, and the rows
+    // the commit needs. A committed request replays before any policy check.
+    const checkoutReads = await loadStorefrontCheckoutReads<CheckoutCreatedPayload>(
+      db,
+      attemptIdentity,
+      {
+        items: data.items.map((item) => ({
+          cartKey: item.cartKey,
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          price: item.price,
+          productName: item.productName,
+          variantLabel: item.variantLabel,
+        })),
+        inventoryPool: data.inventoryPool,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        shippingMethodId: data.shippingMethodId,
+        customerEmail: data.customerEmail,
+        customerPhone: data.customerPhone,
+      },
+      getCredentialEncryptionKey(c.env as Record<string, unknown>),
+    );
+    const existingAttempt = checkoutReads.existingAttempt;
     diagnostics?.mark("attempt");
 
     if (existingAttempt?.status === "replay") {
@@ -1886,28 +1631,7 @@ app.openapi(createOrderRoute, async (c) => {
       ? existingAttempt.attempt
       : null;
 
-    const checkoutAuthority = await loadStorefrontCheckoutAuthority(
-      db,
-      {
-        items: data.items.map((item) => ({
-          cartKey: item.cartKey,
-          productId: item.productId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: item.price,
-          productName: item.productName,
-          variantLabel: item.variantLabel,
-        })),
-        inventoryPool: data.inventoryPool,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        shippingMethodId: data.shippingMethodId,
-        customerEmail: data.customerEmail,
-        customerPhone: data.customerPhone,
-      },
-      getCredentialEncryptionKey(c.env as Record<string, unknown>),
-    );
+    const checkoutAuthority = checkoutReads.authority();
     const { currency, cartValidation, deliveryPreflight } = checkoutAuthority;
     diagnostics?.mark("authority");
 
@@ -1920,7 +1644,7 @@ app.openapi(createOrderRoute, async (c) => {
       data.paymentMethod as CheckoutPaymentMethodId,
       checkoutAuthority,
     );
-    assertSSLCommerzCurrencyReadiness(data, currency.currencyCode);
+    assertGatewayCurrencyReadiness(data, currency.currencyCode);
     diagnostics?.mark("policy");
 
     // This remains memory-only until the authoritative order batch. The
@@ -1983,7 +1707,7 @@ app.openapi(createOrderRoute, async (c) => {
       ),
     );
 
-    assertSSLCommerzPrecommitReadiness(
+    assertGatewayPrecommitReadiness(
       data,
       checkoutSettings,
       result.totalAmount,
@@ -1998,7 +1722,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     const executionCtx = getOptionalExecutionContext(c);
 
-    const responsePayload = {
+    const responsePayload: CheckoutCreatedPayload = {
       checkoutToken: result.checkoutToken,
       receiptToken: result.checkoutToken,
       statusToken: checkoutAttempt.statusToken,
@@ -2015,52 +1739,14 @@ app.openapi(createOrderRoute, async (c) => {
       message: "Order created",
     };
 
-    let committedResponsePayload = responsePayload;
-    let committedAvailabilityTransitionVariantIds: string[] | null = null;
+    let availabilityTransitionVariantIds: string[];
     try {
-      const coordinatedEligibility = getCoordinatedCheckoutEligibility(result.commitPayload);
-      if (coordinatedEligibility.eligible && c.env.CHECKOUT_COORDINATOR) {
-        const command = await prepareCheckoutCommitCommand(
-          result.commitPayload,
-          checkoutAttempt,
-          responsePayload,
-        );
-        const coordinated = await submitCheckoutCommitToCoordinator(
-          c.env.CHECKOUT_COORDINATOR,
-          getDatabaseProviderForClient(db),
-          command,
-        );
-        if (!coordinated.ok) {
-          if (coordinated.code === "CHECKOUT_IDEMPOTENCY_CONFLICT") {
-            throw new AppError(
-              409,
-              coordinated.code,
-              "This checkout request was already used for different checkout details. Please refresh checkout and try again.",
-            );
-          }
-          if (coordinated.code === "CHECKOUT_INVENTORY_UNAVAILABLE") {
-            throw new ValidationError("Some items in your cart need attention.", {
-              inventoryError: "One or more items are no longer available in the requested quantity.",
-            });
-          }
-          if (coordinated.code === "CHECKOUT_AUTHORITY_CHANGED") {
-            throw new ValidationError(
-              "Checkout details changed while the order was being placed. Please review the refreshed checkout and try again.",
-            );
-          }
-          throw new ServiceUnavailableError(
-            "Checkout could not be committed safely. Please retry.",
-          );
-        }
-        committedResponsePayload = coordinated.response as typeof responsePayload;
-        committedAvailabilityTransitionVariantIds =
-          coordinated.availabilityTransitionVariantIds ?? [];
-      } else {
-        await commitStorefrontOrderPayload(db, result.commitPayload, {
-          attempt: checkoutAttempt,
-          response: responsePayload,
-        });
-      }
+      ({ availabilityTransitionVariantIds } = await commitStorefrontOrderPayload(
+        db,
+        result.commitPayload,
+        { attempt: checkoutAttempt, response: responsePayload },
+        checkoutReads.commitReads,
+      ));
     } catch (commitError) {
       const recoveredAttempt = await resolveExistingCheckoutAttempt<typeof responsePayload>(
         db,
@@ -2111,37 +1797,20 @@ app.openapi(createOrderRoute, async (c) => {
       executionCtx,
     );
 
-    const availabilityInvalidation = createCheckoutAvailabilityInvalidation(
-      db,
-      result.commitPayload,
-      committedAvailabilityTransitionVariantIds,
-      c,
-    );
-    if (
-      availabilityInvalidation
-      && executionCtx
-      && typeof executionCtx.waitUntil === "function"
-    ) {
-      executionCtx.waitUntil(availabilityInvalidation);
-    } else if (availabilityInvalidation) {
-      await availabilityInvalidation;
-    }
-
-    const sideEffects = runStorefrontOrderPostCommitSideEffects(
-      db,
-      c.env,
-      result.commitPayload,
-    );
+    const postCommit = Promise.all([
+      availabilityTransitionVariantIds.length > 0 ? bumpCacheGeneration(c) : null,
+      runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
+    ]);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {
-      executionCtx.waitUntil(sideEffects);
+      executionCtx.waitUntil(postCommit);
     } else {
-      await sideEffects;
+      await postCommit;
     }
 
     diagnostics?.mark("post_commit");
     diagnostics?.apply(c);
 
-    return created(c, committedResponsePayload);
+    return created(c, responsePayload);
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       throw new ValidationError("Invalid input data", error.issues);

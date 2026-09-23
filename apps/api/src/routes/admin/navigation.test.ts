@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
     trashNavigationMenu: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
-    invalidateSiteSettingsCache: vi.fn(),
     bumpCacheGeneration: vi.fn(),
 }));
 
@@ -59,10 +58,6 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
 }));
 
-vi.mock("@scalius/core/modules/settings", () => ({
-    invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
-}));
-
 vi.mock("../../utils/cache-generation", () => ({
     bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
@@ -75,7 +70,6 @@ function createTestApp() {
         CACHE: { id: "api-cache-kv" },
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-    mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
     mocks.bumpCacheGeneration.mockResolvedValue(undefined);
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);

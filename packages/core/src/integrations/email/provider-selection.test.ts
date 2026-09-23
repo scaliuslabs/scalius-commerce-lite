@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { sendEmail, type EmailRuntimeSettings } from "./index";
 import { getEmailProviderReadiness, getEmailRuntimeSettings, resolveLocalMailpitUrl } from "./settings";
@@ -14,22 +15,17 @@ const baseSettings: EmailRuntimeSettings = {
   localMailpitUrl: null,
 };
 
+/** Stores the email document exactly as given (bypassing save-time validation). */
 function createEmailSettingsDb(rows: Array<{ key: string; value: string }>) {
-  return {
-    // `.get()` is the settings-document row read (absent here, so the legacy
-    // per-key rows are assembled); `.all()` is the legacy category read.
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          all: async () => rows,
-          get: async () => undefined,
-        }),
-      }),
-    }),
-    insert: () => ({
-      values: () => ({ onConflictDoUpdate: () => ({ statement: "upsert-email-config" }) }),
-    }),
+  const fields: Record<string, string> = {
+    email_provider: "provider",
+    email_sender: "sender",
+    resend_api_key: "resendApiKey",
   };
+  const { db, sqlite } = createSqliteD1Database();
+  sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('email', 'document', ?, 'json', 'email')")
+    .run(JSON.stringify(Object.fromEntries(rows.map(({ key, value }) => [fields[key], value]))));
+  return db;
 }
 
 describe("email provider selection", () => {

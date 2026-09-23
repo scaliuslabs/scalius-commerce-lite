@@ -7,13 +7,13 @@ import {
     paymentSessionAttempts,
     orders,
     OrderStatus,
-    PaymentMethod,
     PaymentPlanStatus,
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory";
 import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "./shipment-claim";
+import { isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
 
 export const DEFAULT_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 25;
 export const MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 100;
@@ -27,14 +27,7 @@ const STALE_INCOMPLETE_PAYMENT_STATUSES: RecoverableStalePaymentStatus[] = [
     PaymentStatus.FAILED,
 ];
 
-type HostedPaymentMethod =
-    | typeof PaymentMethod.STRIPE
-    | typeof PaymentMethod.SSLCOMMERZ;
-
-const HOSTED_PAYMENT_METHODS: HostedPaymentMethod[] = [
-    PaymentMethod.STRIPE,
-    PaymentMethod.SSLCOMMERZ,
-];
+const HOSTED_PAYMENT_METHODS = listPaymentGateways().map((gateway) => gateway.id);
 
 const noActivePaymentClaimCondition = sql`NOT EXISTS (
     SELECT 1 FROM ${orderPayments}
@@ -141,8 +134,8 @@ export async function archiveStaleIncompleteOrders(
                 continue;
             }
 
-            const paymentMethod = order.paymentMethod as HostedPaymentMethod;
-            if (!HOSTED_PAYMENT_METHODS.includes(paymentMethod)) {
+            const paymentMethod = order.paymentMethod;
+            if (!isOnlinePaymentMethod(paymentMethod)) {
                 continue;
             }
 

@@ -8,7 +8,6 @@ import {
   type RefundAttempt,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import {
   assertOrderPaymentCurrency,
@@ -16,19 +15,9 @@ import {
   roundOrderMoney,
   type OrderCurrencySnapshot,
 } from "./order-currency";
-import { resolveStripeRefundProviderMoney } from "./refund-provider-money";
-import {
-  getSSLCommerzSettings,
-  getStripeSettings,
-} from "./gateway-settings";
-import {
-  retrieveStripeRefund,
-  listStripeRefundsForCharge,
-} from "./stripe";
-import type { StripeRefundSnapshot } from "./stripe";
-import {
-  querySSLCommerzRefundStatus,
-} from "./sslcommerz";
+import { resolveRefundProviderMoney } from "./refund-provider-money";
+import { COD_PAYMENT_METHOD, getPaymentGateway } from "./gateways/registry";
+import type { GatewayProviderRefund, GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
 import type { RefundNotificationFact } from "./refund-service";
 
@@ -36,8 +25,9 @@ const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
 const REFUND_RECONCILIATION_RETRY_SECONDS = 15 * 60;
 const REFUND_RECONCILIATION_MANUAL_REVIEW_SECONDS = 6 * 60 * 60;
 const MAX_REFUND_RECONCILIATION_ERROR_LENGTH = 500;
-const STRIPE_EXTERNAL_REFUND_WEBHOOK_EVENT = "charge.refunded";
-const STRIPE_EXTERNAL_REFUND_SOURCE = "stripe_external_webhook";
+/** webhook_events.event_type of a provider-reported refund awaiting import. */
+export const REFUND_OBSERVED_EVENT_TYPE = "refund.observed";
+const EXTERNAL_REFUND_SOURCE = "external_refund_webhook";
 
 const RECOVERABLE_REFUND_ATTEMPT_STATUSES = [
   "pending",
@@ -69,28 +59,7 @@ interface RefundProviderReconciliationContext {
   currency: OrderCurrencySnapshot;
 }
 
-type ProviderProbeOutcome =
-  | {
-      outcome: "accepted";
-      providerRefundId?: string | null;
-      providerStatus: string;
-      responsePayload?: Record<string, unknown>;
-    }
-  | {
-      outcome: "processing" | "unknown";
-      providerRefundId?: string | null;
-      providerStatus?: string;
-      error?: string;
-      responsePayload?: Record<string, unknown>;
-      manualReview?: boolean;
-    }
-  | {
-      outcome: "rejected";
-      providerRefundId?: string | null;
-      providerStatus: string;
-      error?: string;
-      responsePayload?: Record<string, unknown>;
-    };
+type ProviderProbeOutcome = GatewayRefundProbe;
 
 export interface RefundReconciliationResult {
   scanned: number;
@@ -105,7 +74,7 @@ export interface RefundReconciliationResult {
   hasMore: boolean;
 }
 
-export interface StripeExternalRefundWebhookReconciliationResult {
+export interface ExternalRefundWebhookReconciliationResult {
   scanned: number;
   imported: number;
   finalized: number;
@@ -140,7 +109,7 @@ export interface ManualRefundAttemptReconciliationResult {
   refundNotifications: RefundNotificationFact[];
 }
 
-export interface StripeExternalRefundWebhookReconciliationOptions {
+export interface ExternalRefundWebhookReconciliationOptions {
   encryptionKey?: string;
   limit?: number;
   nowSeconds?: number;
@@ -192,14 +161,14 @@ function externalRefundWebhookResult(
 ): Record<string, unknown> {
   return {
     ...parseJsonObject(previousResult),
-    stripeExternalRefundReconciliation: {
+    externalRefundReconciliation: {
       ...patch,
       observedAt: nowSeconds,
     },
   };
 }
 
-async function markStripeExternalRefundWebhook(
+async function markExternalRefundWebhook(
   db: Database,
   eventId: string,
   status: "processed" | "manual_reconciliation",
@@ -227,18 +196,6 @@ function buildRefundAttemptStateNotificationFact(
     amount: roundPrice(attempt.amount, attempt.currency),
     refundId: options.providerRefundId ?? attempt.providerRefundId ?? undefined,
   };
-}
-
-function metadataMatchesAttempt(
-  metadata: Record<string, unknown> | undefined,
-  attempt: RefundAttemptProbeRow,
-): boolean {
-  if (!metadata) return false;
-  return (
-    String(metadata.refundReference ?? "") === attempt.refundReference ||
-    String(metadata.providerIdempotencyKey ?? "") === attempt.providerIdempotencyKey ||
-    String(metadata.idempotencyKey ?? "") === attempt.providerIdempotencyKey
-  );
 }
 
 async function assertRefundAttemptOrderCurrency(
@@ -387,208 +344,72 @@ async function markAcceptedBeforeFinalize(
   }).where(eq(refundAttempts.id, attempt.id));
 }
 
-function mapStripeStatus(status: string | null | undefined): "accepted" | "processing" | "rejected" | "unknown" {
-  if (status === "succeeded") return "accepted";
-  if (status === "failed" || status === "canceled") return "rejected";
-  if (status === "pending" || status === "requires_action") return "processing";
-  return "unknown";
-}
-
-async function probeStripeRefund(
-  db: Database,
-  attempt: RefundAttemptProbeRow,
-  context: RefundProviderReconciliationContext,
-  encryptionKey?: string,
-): Promise<ProviderProbeOutcome> {
-  const settings = await getStripeSettings(db, encryptionKey);
-  if (!settings?.secretKey) {
-    return { outcome: "unknown", error: "Stripe is not configured for refund reconciliation", manualReview: true };
-  }
-  const expectedMoney = resolveStripeRefundProviderMoney(
-    attempt.amount,
-    context.currency,
-  );
-
-  let refund: StripeRefundSnapshot | undefined;
-  if (attempt.providerRefundId) {
-    const result = await retrieveStripeRefund(settings.secretKey, attempt.providerRefundId);
-    if (!result.success) {
-      return { outcome: "unknown", error: result.error ?? "Stripe refund probe failed" };
-    }
-    refund = result.refund;
-  } else if (attempt.sourceTransactionId) {
-    const result = await listStripeRefundsForCharge(settings.secretKey, attempt.sourceTransactionId, 20);
-    if (!result.success) {
-      return { outcome: "unknown", error: result.error ?? "Stripe refund probe failed" };
-    }
-    refund = result.refunds?.find((candidate) =>
-      metadataMatchesAttempt(candidate.metadata, attempt) &&
-      normalizeSupportedCurrencyCode(candidate.currency) === expectedMoney.currency &&
-      candidate.amount === expectedMoney.amountMinor
-    );
-  }
-
-  if (!refund) {
-    return {
-      outcome: "unknown",
-      error: "No Stripe refund matched this attempt. Manual review required before retrying.",
-      manualReview: true,
-    };
-  }
-  if (
-    attempt.sourceTransactionId &&
-    refund.charge !== attempt.sourceTransactionId
-  ) {
-    return {
-      outcome: "unknown",
-      providerRefundId: refund.id,
-      providerStatus: refund.status ?? "unknown",
-      error: "Stripe refund source charge does not match the local refund attempt.",
-      manualReview: true,
-    };
-  }
-  if (
-    normalizeSupportedCurrencyCode(refund.currency) !==
-    context.currency.code
-  ) {
-    return {
-      outcome: "unknown",
-      error: "Stripe refund currency does not match the immutable order currency.",
-      manualReview: true,
-    };
-  }
-  if (refund.amount !== expectedMoney.amountMinor) {
-    return {
-      outcome: "unknown",
-      providerRefundId: refund.id,
-      providerStatus: refund.status ?? "unknown",
-      error: "Stripe refund amount does not match the immutable local refund attempt.",
-      responsePayload: {
-        id: refund.id,
-        status: refund.status,
-        amount: refund.amount,
-        currency: refund.currency,
-        charge: refund.charge,
-      },
-      manualReview: true,
-    };
-  }
-
-  const mapped = mapStripeStatus(refund.status);
-  const payload = {
-    id: refund.id,
-    status: refund.status,
-    amount: refund.amount,
-    currency: refund.currency,
-    charge: refund.charge,
-  };
-
-  if (mapped === "accepted") {
-    return { outcome: "accepted", providerRefundId: refund.id, providerStatus: refund.status ?? "succeeded", responsePayload: payload };
-  }
-  if (mapped === "rejected") {
-    return { outcome: "rejected", providerRefundId: refund.id, providerStatus: refund.status ?? "failed", responsePayload: payload };
-  }
-  return { outcome: mapped, providerRefundId: refund.id, providerStatus: refund.status ?? mapped, responsePayload: payload };
-}
-
-async function probeSSLCommerzRefund(
-  db: Database,
-  attempt: RefundAttemptProbeRow,
-  encryptionKey?: string,
-): Promise<ProviderProbeOutcome> {
-  const settings = await getSSLCommerzSettings(db, encryptionKey);
-  if (!settings?.storeId || !settings.storePassword) {
-    return { outcome: "unknown", error: "SSLCommerz is not configured for refund reconciliation", manualReview: true };
-  }
-  if (!attempt.providerRefundId) {
-    return {
-      outcome: "unknown",
-      error: "SSLCommerz refund reference is missing. Manual provider review required before retrying.",
-      manualReview: true,
-    };
-  }
-
-  const status = await querySSLCommerzRefundStatus(
-    settings.storeId,
-    settings.storePassword,
-    settings.sandbox,
-    attempt.providerRefundId,
-  );
-  const payload = {
-    status: status.status,
-    refundRefId: status.refundRefId,
-    bankTranId: status.bankTranId,
-    tranId: status.tranId,
-    refundedOn: status.refundedOn,
-  };
-
-  if (status.error) {
-    return { outcome: "unknown", providerRefundId: attempt.providerRefundId, providerStatus: status.status, error: status.error, responsePayload: payload };
-  }
-  if (status.status === "refunded") {
-    return { outcome: "accepted", providerRefundId: status.refundRefId, providerStatus: status.status, responsePayload: payload };
-  }
-  if (status.status === "cancelled") {
-    return { outcome: "rejected", providerRefundId: status.refundRefId, providerStatus: status.status, responsePayload: payload };
-  }
-  return { outcome: "processing", providerRefundId: status.refundRefId, providerStatus: status.status, responsePayload: payload };
-}
-
 async function probeProviderRefund(
   db: Database,
-  kv: KVNamespace | undefined,
   attempt: RefundAttemptProbeRow,
   context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
-  switch (attempt.gateway) {
-    case "stripe":
-      return probeStripeRefund(db, attempt, context, encryptionKey);
-    case "sslcommerz":
-      return probeSSLCommerzRefund(db, attempt, encryptionKey);
-    case "cod":
-      return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
-    default:
-      return { outcome: "unknown", error: `Unsupported refund gateway '${attempt.gateway}'`, manualReview: true };
+  if (attempt.gateway === COD_PAYMENT_METHOD) {
+    return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
+  const gateway = getPaymentGateway(attempt.gateway);
+  if (!gateway?.refundStatus) {
+    return { outcome: "unknown", error: `Unsupported refund gateway '${attempt.gateway}'`, manualReview: true };
+  }
+  const settings = await gateway.loadSettings(db, encryptionKey);
+  if (!settings || settings.credentialErrors?.length || !gateway.canVerify(settings)) {
+    return { outcome: "unknown", error: `${gateway.label} is not configured for refund reconciliation`, manualReview: true };
+  }
+  const money = resolveRefundProviderMoney(attempt.amount, context.currency, `${gateway.label} refund`);
+  return gateway.refundStatus(settings, {
+    providerRefundId: attempt.providerRefundId,
+    sourceRef: attempt.sourceTransactionId,
+    amountMinor: money.amountMinor,
+    currency: money.currency,
+    reference: attempt.refundReference,
+    idempotencyKey: attempt.providerIdempotencyKey,
+  });
 }
 
-type StripeExternalRefundWebhookRow = {
+type ExternalRefundWebhookRow = {
   id: string;
+  provider: string;
   orderId: string | null;
   result: string | null;
 };
 
-type StripeSourcePaymentRow = {
+type SourcePaymentRow = {
   id: string;
   orderId: string;
   amount: number;
   currency: string;
-  stripePaymentIntentId: string | null;
-  stripeChargeId: string | null;
+  paymentMethod: string;
+  providerRef: string | null;
+  providerSecondaryRef: string | null;
 };
 
-function getStripeExternalRefundEvidence(row: StripeExternalRefundWebhookRow): {
-  chargeId?: string;
-  paymentIntentId?: string;
+function getExternalRefundEvidence(row: ExternalRefundWebhookRow): {
+  providerRef?: string;
+  secondaryRef?: string;
   eventOrderId?: string;
 } {
   const result = parseJsonObject(row.result);
   return {
-    chargeId: optionalString(result.chargeId),
-    paymentIntentId: optionalString(result.paymentIntentId),
+    providerRef: optionalString(result.providerRef),
+    secondaryRef: optionalString(result.secondaryRef),
     eventOrderId: row.orderId ?? optionalString(result.orderId),
   };
 }
 
-async function findStripeSourcePayment(
+async function findSourcePayment(
   db: Database,
-  evidence: ReturnType<typeof getStripeExternalRefundEvidence>,
-): Promise<StripeSourcePaymentRow | undefined> {
+  provider: string,
+  evidence: ReturnType<typeof getExternalRefundEvidence>,
+): Promise<SourcePaymentRow | undefined> {
   const matchers = [
-    evidence.chargeId ? eq(orderPayments.stripeChargeId, evidence.chargeId) : undefined,
-    evidence.paymentIntentId ? eq(orderPayments.stripePaymentIntentId, evidence.paymentIntentId) : undefined,
+    evidence.secondaryRef ? eq(orderPayments.providerSecondaryRef, evidence.secondaryRef) : undefined,
+    evidence.providerRef ? eq(orderPayments.providerRef, evidence.providerRef) : undefined,
   ].filter(Boolean);
   if (matchers.length === 0) return undefined;
 
@@ -598,16 +419,18 @@ async function findStripeSourcePayment(
       orderId: orderPayments.orderId,
       amount: orderPayments.amount,
       currency: orderPayments.currency,
-      stripePaymentIntentId: orderPayments.stripePaymentIntentId,
-      stripeChargeId: orderPayments.stripeChargeId,
+      paymentMethod: orderPayments.paymentMethod,
+      providerRef: orderPayments.providerRef,
+      providerSecondaryRef: orderPayments.providerSecondaryRef,
     })
     .from(orderPayments)
     .where(and(
-      eq(orderPayments.paymentMethod, "stripe"),
+      eq(orderPayments.paymentMethod, provider),
       eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
+      sql`${orderPayments.paymentType} <> 'refund'`,
       matchers.length === 1 ? matchers[0] : or(...matchers),
     ))
-    .get() as StripeSourcePaymentRow | undefined;
+    .get() as SourcePaymentRow | undefined;
   if (sourcePayment && evidence.eventOrderId && sourcePayment.orderId !== evidence.eventOrderId) {
     return undefined;
   }
@@ -638,97 +461,91 @@ async function getRefundedAmountForSourcePayment(
 
 async function getExistingRefundAttemptByProviderRefundId(
   db: Database,
+  provider: string,
   refundId: string,
 ): Promise<{ id: string; status: string } | undefined> {
   return await db
     .select({ id: refundAttempts.id, status: refundAttempts.status })
     .from(refundAttempts)
     .where(and(
-      eq(refundAttempts.gateway, "stripe"),
+      eq(refundAttempts.gateway, provider),
       eq(refundAttempts.providerRefundId, refundId),
     ))
     .get() as { id: string; status: string } | undefined;
 }
 
-function buildExternalStripeRefundMetadata(params: {
-  webhookEventId: string;
-  sourcePayment: StripeSourcePaymentRow;
-  refund: StripeRefundSnapshot;
-  amount: number;
-}): string {
-  return JSON.stringify({
-    source: STRIPE_EXTERNAL_REFUND_SOURCE,
-    webhookEventId: params.webhookEventId,
-    gateway: "stripe",
-    sourcePaymentId: params.sourcePayment.id,
-    sourceTransactionId: params.sourcePayment.stripeChargeId,
-    paymentIntentId: params.sourcePayment.stripePaymentIntentId,
-    providerRefundId: params.refund.id,
-    providerStatus: params.refund.status,
-    providerAmount: params.refund.amount,
-    providerCurrency: params.refund.currency,
-    amount: params.amount,
-  });
-}
-
-async function insertExternalStripeRefundAttempt(
+async function insertExternalRefundAttempt(
   db: Database,
   params: {
     webhookEventId: string;
-    sourcePayment: StripeSourcePaymentRow;
-    refund: StripeRefundSnapshot;
+    sourcePayment: SourcePaymentRow;
+    refund: GatewayProviderRefund;
     amount: number;
     nowSeconds: number;
   },
 ): Promise<string> {
+  const provider = params.sourcePayment.paymentMethod;
   const refundIdPart = sanitizeIdPart(params.refund.id);
-  const refundPaymentId = `refund_stripe_external_${refundIdPart}`;
-  const attemptId = `rfa_stripe_external_${refundIdPart}`;
-  const refundGroupId = `stripe_external_${sanitizeIdPart(params.sourcePayment.orderId)}_${refundIdPart}`;
-  const metadata = buildExternalStripeRefundMetadata(params);
+  const refundPaymentId = `refund_${provider}_external_${refundIdPart}`;
+  const attemptId = `rfa_${provider}_external_${refundIdPart}`;
+  const refundGroupId = `${provider}_external_${sanitizeIdPart(params.sourcePayment.orderId)}_${refundIdPart}`;
+  const sourceTransactionId = params.sourcePayment.providerSecondaryRef ?? params.sourcePayment.providerRef;
+  const metadata = JSON.stringify({
+    source: EXTERNAL_REFUND_SOURCE,
+    webhookEventId: params.webhookEventId,
+    gateway: provider,
+    sourcePaymentId: params.sourcePayment.id,
+    sourceTransactionId,
+    providerRef: params.sourcePayment.providerRef,
+    providerRefundId: params.refund.id,
+    providerStatus: params.refund.status,
+    providerAmount: params.refund.amountMinor,
+    providerCurrency: params.refund.currency,
+    amount: params.amount,
+  });
   const payload = JSON.stringify({
-    source: STRIPE_EXTERNAL_REFUND_SOURCE,
+    source: EXTERNAL_REFUND_SOURCE,
     webhookEventId: params.webhookEventId,
     providerRefundId: params.refund.id,
     providerStatus: params.refund.status,
-    amount: params.refund.amount,
+    amount: params.refund.amountMinor,
     currency: params.refund.currency,
-    charge: params.refund.charge,
+    sourceRef: params.refund.sourceRef,
   });
 
   try {
     await db.batch([
+      // The refund row never copies the source provider_ref: UNIQUE(provider,
+      // provider_ref) belongs to the captured payment.
       db.insert(orderPayments).values({
         id: refundPaymentId,
         orderId: params.sourcePayment.orderId,
         amount: params.amount,
-        currency: params.sourcePayment.currency || params.refund.currency.toUpperCase(),
-        paymentMethod: "stripe",
+        currency: params.sourcePayment.currency || params.refund.currency,
+        paymentMethod: provider,
         paymentType: "refund",
         status: PaymentRecordStatus.PENDING,
-        stripePaymentIntentId: params.sourcePayment.stripePaymentIntentId,
-        stripeChargeId: params.sourcePayment.stripeChargeId,
         metadata,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       }),
       db.insert(refundAttempts).values({
         id: attemptId,
-        attemptKey: `external:stripe:${params.refund.id}`,
+        attemptKey: `external:${provider}:${params.refund.id}`,
         refundGroupId,
         orderId: params.sourcePayment.orderId,
         sourcePaymentId: params.sourcePayment.id,
         refundPaymentId,
-        gateway: "stripe",
+        gateway: provider,
         amount: params.amount,
-        currency: params.sourcePayment.currency || params.refund.currency.toUpperCase(),
-        reason: "External Stripe refund",
-        requestHash: `external:stripe:${params.refund.id}:${params.refund.amount}:${params.refund.currency}`,
-        providerIdempotencyKey: `external:stripe:${params.refund.id}`,
-        refundReference: `stripe-external:${params.refund.id}`,
+        currency: params.sourcePayment.currency || params.refund.currency,
+        reason: "External provider refund",
+        requestHash: `external:${provider}:${params.refund.id}:${params.refund.amountMinor}:${params.refund.currency}`,
+        providerIdempotencyKey: `external:${provider}:${params.refund.id}`,
+        refundReference: `${provider}-external:${params.refund.id}`,
         allocationIndex: 0,
         allocationCount: 1,
-        sourceTransactionId: params.sourcePayment.stripeChargeId,
+        sourceTransactionId,
         providerRefundId: params.refund.id,
         providerStatus: params.refund.status ?? "succeeded",
         requestPayload: payload,
@@ -744,7 +561,7 @@ async function insertExternalStripeRefundAttempt(
     ] as any);
   } catch (error: unknown) {
     if (!isConstraintError(error)) throw error;
-    const existing = await getExistingRefundAttemptByProviderRefundId(db, params.refund.id);
+    const existing = await getExistingRefundAttemptByProviderRefundId(db, provider, params.refund.id);
     if (existing) return existing.id;
     throw error;
   }
@@ -752,47 +569,51 @@ async function insertExternalStripeRefundAttempt(
   return attemptId;
 }
 
-async function reconcileStripeExternalRefundWebhookEvent(
-  db: Database,
-  kv: KVNamespace | undefined,
-  row: StripeExternalRefundWebhookRow,
-  options: StripeExternalRefundWebhookReconciliationOptions,
-): Promise<{
+type ExternalRefundEventResult = {
   imported: number;
   finalized: number;
   skipped: number;
   deferred: number;
   finalizedOrderIds: string[];
   refundNotifications: RefundNotificationFact[];
-}> {
+};
+
+const DEFERRED_EVENT: ExternalRefundEventResult = {
+  imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [],
+};
+
+/**
+ * Import refunds a merchant issued in the provider dashboard. The observed
+ * webhook is only a hint: the refunds imported are the ones the provider lists
+ * for the captured transaction, each at most once by provider refund id.
+ */
+async function reconcileExternalRefundWebhookEvent(
+  db: Database,
+  row: ExternalRefundWebhookRow,
+  options: ExternalRefundWebhookReconciliationOptions,
+): Promise<ExternalRefundEventResult> {
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-  const evidence = getStripeExternalRefundEvidence(row);
-  if (!evidence.chargeId) {
-    await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
-      outcome: "deferred",
-      reason: "stripe_charge_id_missing",
-    }, nowSeconds);
-    return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
+  const defer = async (patch: Record<string, unknown>): Promise<ExternalRefundEventResult> => {
+    await markExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, { outcome: "deferred", ...patch }, nowSeconds);
+    return DEFERRED_EVENT;
+  };
+  const evidence = getExternalRefundEvidence(row);
+  const gateway = getPaymentGateway(row.provider);
+  if (!gateway?.listRefunds) return defer({ reason: "external_refund_import_unsupported" });
+  if (!evidence.secondaryRef) return defer({ reason: "source_reference_missing" });
+
+  const settings = await gateway.loadSettings(db, options.encryptionKey);
+  if (!settings || settings.credentialErrors?.length || !gateway.canVerify(settings)) {
+    return defer({ reason: "provider_settings_unavailable" });
   }
 
-  const settings = await getStripeSettings(db, options.encryptionKey);
-  if (!settings?.secretKey) {
-    await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
-      outcome: "deferred",
-      reason: "stripe_settings_unavailable",
-    }, nowSeconds);
-    return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
-  }
-
-  const sourcePayment = await findStripeSourcePayment(db, evidence);
+  const sourcePayment = await findSourcePayment(db, row.provider, evidence);
   if (!sourcePayment) {
-    await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
-      outcome: "deferred",
+    return defer({
       reason: "local_source_payment_not_found",
-      chargeId: evidence.chargeId,
-      paymentIntentId: evidence.paymentIntentId ?? null,
-    }, nowSeconds);
-    return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
+      providerRef: evidence.providerRef ?? null,
+      secondaryRef: evidence.secondaryRef,
+    });
   }
   const order = await db
     .select({
@@ -803,30 +624,21 @@ async function reconcileStripeExternalRefundWebhookEvent(
     .where(eq(orders.id, sourcePayment.orderId))
     .get();
   if (!order) {
-    throw new Error(`Order ${sourcePayment.orderId} was not found for Stripe refund reconciliation.`);
+    throw new Error(`Order ${sourcePayment.orderId} was not found for external refund reconciliation.`);
   }
   const currency = resolveOrderCurrencySnapshot(order);
-  assertOrderPaymentCurrency(sourcePayment.currency, currency, "Stripe source payment");
+  assertOrderPaymentCurrency(sourcePayment.currency, currency, `${gateway.label} source payment`);
 
-  const listed = await listStripeRefundsForCharge(settings.secretKey, evidence.chargeId, 100);
-  if (!listed.success) {
-    await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
-      outcome: "deferred",
-      reason: "stripe_refund_list_failed",
-      error: listed.error ?? "Stripe refund lookup failed",
-    }, nowSeconds);
-    return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
+  let providerRefunds: GatewayProviderRefund[];
+  try {
+    providerRefunds = (await gateway.listRefunds(settings, evidence.secondaryRef))
+      .filter((refund) => refund.sourceRef === evidence.secondaryRef);
+  } catch (error: unknown) {
+    return defer({ reason: "provider_refund_list_failed", error: serializeError(error) });
   }
-
-  const providerRefunds = (listed.refunds ?? []).filter((refund) => refund.charge === evidence.chargeId);
-  const succeededRefunds = providerRefunds.filter((refund) => refund.status === "succeeded" && refund.amount > 0);
+  const succeededRefunds = providerRefunds.filter((refund) => refund.succeeded && refund.amountMinor > 0);
   if (succeededRefunds.length === 0) {
-    await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
-      outcome: "deferred",
-      reason: "no_succeeded_provider_refunds",
-      providerRefundCount: providerRefunds.length,
-    }, nowSeconds);
-    return { imported: 0, finalized: 0, skipped: 0, deferred: 1, finalizedOrderIds: [], refundNotifications: [] };
+    return defer({ reason: "no_succeeded_provider_refunds", providerRefundCount: providerRefunds.length });
   }
 
   let imported = 0;
@@ -838,8 +650,8 @@ async function reconcileStripeExternalRefundWebhookEvent(
   const refundNotifications: RefundNotificationFact[] = [];
 
   for (const refund of succeededRefunds) {
-    assertOrderPaymentCurrency(refund.currency, currency, "Stripe provider refund");
-    const existing = await getExistingRefundAttemptByProviderRefundId(db, refund.id);
+    assertOrderPaymentCurrency(refund.currency, currency, `${gateway.label} provider refund`);
+    const existing = await getExistingRefundAttemptByProviderRefundId(db, row.provider, refund.id);
     if (existing) {
       skipped += 1;
       if (existing.status !== "refunded") {
@@ -849,7 +661,7 @@ async function reconcileStripeExternalRefundWebhookEvent(
     }
 
     const amount = roundOrderMoney(
-      refund.amount / Math.pow(10, currency.decimalPlaces),
+      refund.amountMinor / Math.pow(10, currency.decimalPlaces),
       currency,
     );
     const alreadyRefunded = await getRefundedAmountForSourcePayment(db, sourcePayment.id, currency);
@@ -859,7 +671,7 @@ async function reconcileStripeExternalRefundWebhookEvent(
       continue;
     }
 
-    const attemptId = await insertExternalStripeRefundAttempt(db, {
+    const attemptId = await insertExternalRefundAttempt(db, {
       webhookEventId: row.id,
       sourcePayment,
       refund,
@@ -885,7 +697,7 @@ async function reconcileStripeExternalRefundWebhookEvent(
   }
 
   const allRepresented = deferred === 0;
-  await markStripeExternalRefundWebhook(db, row.id, allRepresented ? "processed" : "manual_reconciliation", row.result, {
+  await markExternalRefundWebhook(db, row.id, allRepresented ? "processed" : "manual_reconciliation", row.result, {
     outcome: allRepresented ? "external_refund_reconciled" : "deferred",
     importedRefundIds,
     providerRefundIds: succeededRefunds.map((refund) => refund.id),
@@ -905,29 +717,28 @@ async function reconcileStripeExternalRefundWebhookEvent(
   };
 }
 
-export async function reconcileStripeExternalRefundWebhooks(
+export async function reconcileExternalRefundWebhooks(
   db: Database,
-  kv: KVNamespace | undefined,
-  options: StripeExternalRefundWebhookReconciliationOptions = {},
-): Promise<StripeExternalRefundWebhookReconciliationResult> {
+  options: ExternalRefundWebhookReconciliationOptions = {},
+): Promise<ExternalRefundWebhookReconciliationResult> {
   const limit = normalizeLimit(options.limit);
   const rows = await db
     .select({
       id: webhookEvents.id,
+      provider: webhookEvents.provider,
       orderId: webhookEvents.orderId,
       result: webhookEvents.result,
     })
     .from(webhookEvents)
     .where(and(
-      eq(webhookEvents.provider, "stripe"),
-      eq(webhookEvents.eventType, STRIPE_EXTERNAL_REFUND_WEBHOOK_EVENT),
+      eq(webhookEvents.eventType, REFUND_OBSERVED_EVENT_TYPE),
       eq(webhookEvents.status, "manual_reconciliation"),
     ))
     .orderBy(asc(webhookEvents.processedAt))
-    .limit(limit + 1) as StripeExternalRefundWebhookRow[];
+    .limit(limit + 1) as ExternalRefundWebhookRow[];
 
   const targetRows = rows.slice(0, limit);
-  const result: StripeExternalRefundWebhookReconciliationResult = {
+  const result: ExternalRefundWebhookReconciliationResult = {
     scanned: targetRows.length,
     imported: 0,
     finalized: 0,
@@ -943,7 +754,7 @@ export async function reconcileStripeExternalRefundWebhooks(
   const finalizedOrderIds = new Set<string>();
   for (const row of targetRows) {
     try {
-      const eventResult = await reconcileStripeExternalRefundWebhookEvent(db, kv, row, options);
+      const eventResult = await reconcileExternalRefundWebhookEvent(db, row, options);
       result.imported += eventResult.imported;
       result.finalized += eventResult.finalized;
       result.skipped += eventResult.skipped;
@@ -953,7 +764,7 @@ export async function reconcileStripeExternalRefundWebhooks(
     } catch (error: unknown) {
       const message = serializeError(error);
       result.errors.push({ webhookEventId: row.id, message });
-      await markStripeExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
+      await markExternalRefundWebhook(db, row.id, "manual_reconciliation", row.result, {
         outcome: "deferred",
         reason: "external_refund_reconciliation_error",
         error: message,
@@ -967,7 +778,6 @@ export async function reconcileStripeExternalRefundWebhooks(
 
 export async function reconcileRefundAttemptById(
   db: Database,
-  kv: KVNamespace | undefined,
   attemptId: string,
   options: Omit<RefundReconciliationOptions, "limit"> = {},
 ): Promise<{
@@ -1015,9 +825,9 @@ export async function reconcileRefundAttemptById(
     ? {
         outcome: "accepted",
         providerRefundId: attempt.providerRefundId,
-        providerStatus: attempt.gateway === "cod" ? "manual_confirmed" : "accepted",
+        providerStatus: attempt.gateway === COD_PAYMENT_METHOD ? "manual_confirmed" : "accepted",
       } satisfies ProviderProbeOutcome
-    : await probeProviderRefund(db, kv, attempt, context, options.encryptionKey);
+    : await probeProviderRefund(db, attempt, context, options.encryptionKey);
 
   if (outcome.outcome === "accepted") {
     await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);
@@ -1063,7 +873,6 @@ export async function reconcileRefundAttemptById(
 
 export async function reconcileRefundAttemptForOrder(
   db: Database,
-  kv: KVNamespace | undefined,
   orderId: string,
   attemptId: string,
   options: Omit<RefundReconciliationOptions, "limit"> = {},
@@ -1105,7 +914,7 @@ export async function reconcileRefundAttemptForOrder(
   }
 
   try {
-    const result = await reconcileRefundAttemptById(db, kv, attemptId, {
+    const result = await reconcileRefundAttemptById(db, attemptId, {
       ...options,
       nowSeconds,
     });
@@ -1126,7 +935,6 @@ export async function reconcileRefundAttemptForOrder(
 
 export async function reconcileDueRefundAttempts(
   db: Database,
-  kv: KVNamespace | undefined,
   options: RefundReconciliationOptions = {},
 ): Promise<RefundReconciliationResult> {
   const limit = normalizeLimit(options.limit);
@@ -1161,7 +969,7 @@ export async function reconcileDueRefundAttempts(
     result.claimed += 1;
 
     try {
-      const reconciliation = await reconcileRefundAttemptById(db, kv, candidate.id, {
+      const reconciliation = await reconcileRefundAttemptById(db, candidate.id, {
         ...options,
         nowSeconds,
       });

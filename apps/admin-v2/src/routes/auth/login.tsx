@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LoginForm } from "~/components/auth/LoginForm";
-import { loginPageGuard } from "~/lib/auth.fns";
+import { loginPageGuard } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/login")({
   beforeLoad: () => loginPageGuard(),
