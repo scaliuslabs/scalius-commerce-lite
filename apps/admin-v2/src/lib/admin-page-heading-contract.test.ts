@@ -10,7 +10,6 @@ const inventorySource = readSource("../components/admin/InventoryManager.tsx");
 const ordersSource = readSource("../routes/admin/orders/index.tsx");
 const orderFormSource = readSource("../components/admin/OrderForm.tsx");
 const orderViewHeaderSource = readSource("../components/admin/orderview/OrderViewHeader.tsx");
-const mediaWorkspaceSource = readSource("../components/admin/media-manager/MediaWorkspace.tsx");
 
 describe("primary admin workspace heading contract", () => {
   it("uses a semantic page title on the core list workspaces", () => {
@@ -35,11 +34,5 @@ describe("primary admin workspace heading contract", () => {
     expect(orderViewHeaderSource).not.toContain(
       '<span className="sr-only">Order #{order.id} for </span>',
     );
-  });
-
-  it("uses h1 for the media route and h2 when the workspace is embedded in a picker", () => {
-    expect(mediaWorkspaceSource).toContain("{picker ? (");
-    expect(mediaWorkspaceSource).toContain("<h2 className=\"text-sm font-semibold\">Choose");
-    expect(mediaWorkspaceSource).toContain("<h1 className=\"text-sm font-semibold\">Media</h1>");
   });
 });

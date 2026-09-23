@@ -1,168 +1,65 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { useLocation } from "@tanstack/react-router";
-import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import { generateAdminBreadcrumbs } from "@/lib/adminBreadCrumb";
+import { lazy, Suspense } from "react";
+import { Link } from "@tanstack/react-router";
+import { useSidebar } from "@/components/ui/sidebar";
+import { Menu } from "lucide-react";
+import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
+import logoDarkImg from "@/assets/logo-dark.png";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { useMessages } from "~/i18n";
+import { shellMessages } from "~/i18n/shell";
+import { GlobalSearch } from "./GlobalSearch";
+import type { VisibleNavItem } from "./AdminNav";
 
+// Push notifications pull in Firebase; keep them out of the shell chunk.
 const NotificationDropdown = lazy(() =>
   import("@/components/admin/NotificationDropdown").then((module) => ({
     default: module.NotificationDropdown,
   })),
 );
 
-const UserMenu = lazy(() =>
-  import("@/components/auth/UserMenu").then((module) => ({
-    default: module.UserMenu,
-  })),
-);
-
-interface AdminHeaderUser {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-  role: string | null;
-  twoFactorEnabled: boolean;
-  isSuperAdmin: boolean;
-}
-
 interface AdminHeaderProps {
-  user: AdminHeaderUser;
+  user: UserMenuUser;
+  nav: VisibleNavItem[];
+  canOpen: (path: string) => boolean;
+  showMenu: boolean;
 }
 
-type IdleSchedulerWindow = Window & {
-  requestIdleCallback?: (
-    callback: () => void,
-    options?: { timeout?: number },
-  ) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-function useDeferredHeaderActions() {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-    const markReady = () => {
-      if (!cancelled) setReady(true);
-    };
-
-    const idleWindow = window as IdleSchedulerWindow;
-    if (idleWindow.requestIdleCallback) {
-      const handle = idleWindow.requestIdleCallback(markReady, {
-        timeout: 2_000,
-      });
-      return () => {
-        cancelled = true;
-        idleWindow.cancelIdleCallback?.(handle);
-      };
-    }
-
-    const timeout = window.setTimeout(markReady, 1_000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, []);
-
-  return ready;
-}
-
-function HeaderActionsSkeleton() {
+/**
+ * The black top bar: logo, centred search, notifications and the account
+ * menu. Its centre stays free for the contextual save bar, which portals over
+ * the search while a form has unsaved changes.
+ */
+export function AdminHeader({ user, nav, canOpen, showMenu }: AdminHeaderProps) {
+  const t = useMessages(shellMessages);
   return (
-    <div
-      aria-hidden="true"
-      className="flex h-9 items-center gap-2 px-1 text-muted-foreground/40"
-    >
-      <div className="h-8 w-8 rounded-md bg-muted/60" />
-      <div className="h-5 w-px bg-border" />
-    </div>
-  );
-}
-
-function getUserInitials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function UserMenuFallback({ user }: { user: AdminHeaderUser }) {
-  return (
-    <div
-      aria-hidden="true"
-      className="relative inline-flex h-11 items-center gap-3 rounded-lg px-2 sm:h-10"
-    >
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary ring-2 ring-primary/10">
-        {getUserInitials(user.name)}
+    <header className="relative z-20 flex h-14 shrink-0 items-center gap-2 bg-neutral-950 px-2 text-white sm:px-3">
+      {showMenu ? (
+        <MenuButton label={t("toggleSidebar")} />
+      ) : null}
+      <Link to="/admin" className="hidden shrink-0 items-center md:flex md:w-48">
+        <img src={withDashboardBasePath(logoDarkImg)} alt="Scalius" className="h-7 w-auto" />
+      </Link>
+      <div id="admin-top-bar-center" className="flex min-w-0 flex-1 justify-center">
+        <GlobalSearch nav={nav} canOpen={canOpen} />
       </div>
-      <span className="hidden text-sm font-medium text-foreground md:inline-block">
-        {user.name}
-      </span>
-    </div>
-  );
-}
-
-function DeferredAdminHeaderActions({ userId }: { userId: string }) {
-  const ready = useDeferredHeaderActions();
-
-  if (!ready) {
-    return <HeaderActionsSkeleton />;
-  }
-
-  return (
-    <Suspense
-      fallback={<HeaderActionsSkeleton />}
-    >
-      <NotificationDropdown userId={userId} />
-      <div className="h-5 w-px bg-border mx-2.5" />
-    </Suspense>
-  );
-}
-
-function DeferredUserMenu({ user }: { user: AdminHeaderUser }) {
-  const ready = useDeferredHeaderActions();
-
-  if (!ready) return <UserMenuFallback user={user} />;
-
-  return (
-    <Suspense fallback={<UserMenuFallback user={user} />}>
+      <Suspense fallback={<span className="h-11 w-11 sm:h-9 sm:w-9" />}>
+        <NotificationDropdown userId={user.id} />
+      </Suspense>
       <UserMenu user={user} />
-    </Suspense>
+    </header>
   );
 }
 
-export function AdminHeader({ user }: AdminHeaderProps) {
-  const currentPath = useLocation({
-    select: (location) => location.pathname,
-  });
-  const breadcrumbItems = generateAdminBreadcrumbs(currentPath);
-
+function MenuButton({ label }: { label: string }) {
+  const { toggleSidebar } = useSidebar();
   return (
-    <header className="h-14 shrink-0 border-b border-border px-3 sm:px-4 flex items-center justify-between bg-background transition-colors duration-200">
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:gap-2">
-        <SidebarTrigger className="h-11 w-11 shrink-0 text-muted-foreground hover:text-foreground sm:h-9 sm:w-9" />
-        <Separator orientation="vertical" className="h-4 shrink-0 sm:mr-1" />
-        <Breadcrumb items={breadcrumbItems} />
-      </div>
-
-      <TooltipProvider>
-        <div className="flex shrink-0 items-center">
-          <div className="hidden min-w-[5.75rem] items-center justify-end md:flex">
-            <DeferredAdminHeaderActions userId={user.id} />
-          </div>
-          <DarkModeToggle />
-          <div className="h-5 w-px bg-border mx-2.5" />
-          <DeferredUserMenu user={user} />
-        </div>
-      </TooltipProvider>
-    </header>
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      aria-label={label}
+      className="flex h-11 w-11 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white md:hidden"
+    >
+      <Menu className="h-5 w-5" />
+    </button>
   );
 }

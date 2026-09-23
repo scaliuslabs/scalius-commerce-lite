@@ -1,29 +1,10 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-  useState,
-  type FocusEvent,
-  type MouseEvent,
-} from "react";
-import {
-  Link,
-  useLocation,
-  useRouter,
-  type AnyRouter,
-} from "@tanstack/react-router";
-import { ChevronDown, Globe } from "lucide-react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { ExternalLink } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -32,436 +13,86 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { usePermissions } from "@/contexts/PermissionContext";
-import { getFilteredNavSections, type NavItem, type NavSubItem } from "./AdminNav";
-import {
-  collectPermissionVisibleRouteHrefs,
-  normalizeNavigationPath,
-  preloadAdminRouteChunks,
-  scheduleAdminRouteChunkWarmup,
-} from "./admin-route-chunk-warming";
-import faviconImg from "@/assets/favicon.png";
-import logoDarkImg from "@/assets/logo-dark.png";
-import logoLightImg from "@/assets/logo-light.png";
-// Bundled asset URLs are built at the host root. The dashboard may be served
-// below a runtime path prefix, so every one is resolved per render, never once
-// per isolate: the prefix belongs to the request, not to the module.
-import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { useStorefrontUrl } from "~/hooks/use-storefront-url";
+import { useMessages } from "~/i18n";
+import { shellMessages } from "~/i18n/shell";
+import { SETTINGS_ITEM, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
 
-const NAV_ICON_CLASSNAME = "size-4 shrink-0";
-const NAV_ICON_STROKE_WIDTH = 1.75;
-const NAV_LINK_CLASSNAME =
-  "data-[transitioning]:bg-[var(--sidebar-accent)] data-[transitioning]:text-[var(--sidebar-accent-foreground)] data-[transitioning]:shadow-sm";
-const ROUTE_CHUNK_PRELOAD_DELAY_MS = 80;
-const ROUTE_DATA_PRELOAD_DELAY_MS = 125;
-const DATA_PRELOAD_PATHS = new Set([
-  "/admin/products",
-  "/admin/categories",
-  "/admin/collections",
-  "/admin/orders",
-  "/admin/customers",
-  "/admin/discounts",
-  "/admin/pages",
-]);
-const routeChunkPreloadTimeouts = new WeakMap<
-  EventTarget,
-  ReturnType<typeof setTimeout>
->();
-
-const StorefrontFooterLink = lazy(() =>
-  import("./StorefrontFooterLink").then((module) => ({
-    default: module.StorefrontFooterLink,
-  })),
-);
-
-type IdleSchedulerWindow = Window & {
-  requestIdleCallback?: (
-    callback: () => void,
-    options?: { timeout?: number },
-  ) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-function startRouteChunkPreload(
-  target: EventTarget,
-  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
-  href: string,
-) {
-  if (routeChunkPreloadTimeouts.has(target)) return;
-
-  const timeout = setTimeout(() => {
-    routeChunkPreloadTimeouts.delete(target);
-    void preloadAdminRouteChunks(router, href).catch(() => undefined);
-  }, ROUTE_CHUNK_PRELOAD_DELAY_MS);
-  routeChunkPreloadTimeouts.set(target, timeout);
-}
-
-function cancelRouteChunkPreload(target: EventTarget) {
-  const timeout = routeChunkPreloadTimeouts.get(target);
-  if (timeout === undefined) return;
-
-  clearTimeout(timeout);
-  routeChunkPreloadTimeouts.delete(target);
-}
-
-function getSidebarLinkPreloadProps(
-  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">,
-  href: string,
-) {
-  if (DATA_PRELOAD_PATHS.has(normalizeNavigationPath(href))) {
-    // These explicit list loaders are read-only, auth/RBAC guarded, and share
-    // their exact TanStack Query keys with the rendered lists. A deliberate
-    // 125 ms hover/focus warms one destination while fly-over hovers cancel.
-    return {
-      preload: "intent" as const,
-      preloadDelay: ROUTE_DATA_PRELOAD_DELAY_MS,
-    };
-  }
-
-  const start = (
-    event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>,
-  ) => startRouteChunkPreload(event.currentTarget, router, href);
-  const cancel = (
-    event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>,
-  ) => cancelRouteChunkPreload(event.currentTarget);
-
-  return {
-    // Reinforce that this uses code-only warming rather than route/data preload.
-    preload: false as const,
-    onFocus: start,
-    onBlur: cancel,
-    onMouseEnter: start,
-    onMouseLeave: cancel,
-    onTouchStart: () => {
-      void preloadAdminRouteChunks(router, href).catch(() => undefined);
-    },
-  };
-}
-
-function isRouteActive(currentPath: string, href: string): boolean {
-  if (href === "/admin") return currentPath === href;
-  return currentPath === href || currentPath.startsWith(href + "/");
-}
-
-function useDeferredSidebarFooter() {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-    const markReady = () => {
-      if (!cancelled) setReady(true);
-    };
-
-    const idleWindow = window as IdleSchedulerWindow;
-    if (idleWindow.requestIdleCallback) {
-      const handle = idleWindow.requestIdleCallback(markReady, {
-        timeout: 2_000,
-      });
-      return () => {
-        cancelled = true;
-        idleWindow.cancelIdleCallback?.(handle);
-      };
-    }
-
-    const timeout = window.setTimeout(markReady, 1_000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, []);
-
-  return ready;
-}
+const ICON = "size-4 shrink-0";
 
 /**
- * Determine which sub-item is active.
- * Uses startsWith matching so nested pages (e.g. /admin/products/abc/edit)
- * keep the parent sub-item (Products) highlighted.
- *
- * When multiple sub-items match via startsWith (e.g. /admin/settings and
- * /admin/settings/theme both match /admin/settings/theme), the longest
- * (most specific) href wins.
+ * The store sidebar under the top bar. A section's sub-pages show only while
+ * the section is active; Settings is pinned at the bottom.
  */
-function getActiveSubItemHref(
-  currentPath: string,
-  subItems: NavSubItem[],
-): string | null {
-  let bestMatch: string | null = null;
-  for (const sub of subItems) {
-    const href = sub.href.replace(/\/$/, "");
-    if (currentPath === href || currentPath.startsWith(href + "/")) {
-      if (!bestMatch || href.length > bestMatch.length) {
-        bestMatch = href;
-      }
-    }
-  }
-  return bestMatch;
-}
-
-export function AppSidebar() {
-  const router = useRouter();
-  const { permissions, isSuperAdmin } = usePermissions();
-  const currentPath = useLocation({
-    select: (location) => location.pathname,
-  });
-  const { state, isMobile, setOpenMobile } = useSidebar();
-  const isCollapsed = state === "collapsed";
-  const sidebarContentRef = useRef<HTMLDivElement>(null);
-  const footerReady = useDeferredSidebarFooter();
-
-  const navSections = useMemo(
-    () => getFilteredNavSections(permissions, isSuperAdmin),
-    [permissions, isSuperAdmin],
-  );
-  const permissionVisibleRouteHrefs = useMemo(
-    () => collectPermissionVisibleRouteHrefs(navSections),
-    [navSections],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const cancel = scheduleAdminRouteChunkWarmup({
-      router,
-      hrefs: permissionVisibleRouteHrefs,
-      currentPath,
-      signal: controller.signal,
-    });
-
-    return () => {
-      controller.abort();
-      cancel();
-    };
-  }, [currentPath, permissionVisibleRouteHrefs, router]);
-
-  const closeMobileSidebar = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  }, [isMobile, setOpenMobile]);
-
-  // Auto-scroll sidebar when a collapsible section is opened
-  const handleCollapsibleOpen = useCallback((open: boolean, itemName: string) => {
-    if (open && sidebarContentRef.current) {
-      // Small delay to let the collapsible animation start
-      setTimeout(() => {
-        const el = sidebarContentRef.current?.querySelector(
-          `[data-nav-item="${itemName}"]`
-        );
-        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 100);
-    }
-  }, []);
+export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showSettings: boolean }) {
+  const t = useMessages(shellMessages);
+  const path = useLocation({ select: (location) => location.pathname });
+  const { isMobile, setOpenMobile } = useSidebar();
+  const { storefrontUrl } = useStorefrontUrl();
+  const close = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
-    <Sidebar collapsible="icon">
-      {/* Header — logo, aligned with header bar */}
-      <SidebarHeader className="h-14 flex items-center border-b border-sidebar-border px-3 shrink-0">
-        <Link
-          to="/admin"
-          {...getSidebarLinkPreloadProps(router, "/admin")}
-          className={`flex items-center min-w-0 ${NAV_LINK_CLASSNAME}`}
-          onClick={closeMobileSidebar}
-        >
-          {isCollapsed ? (
-            <img
-              src={withDashboardBasePath(faviconImg)}
-              alt="Scalius"
-              className="w-7 h-7 shrink-0 object-contain"
-            />
-          ) : (
-            <>
-              <img
-                src={withDashboardBasePath(logoLightImg)}
-                alt="Scalius"
-                className="h-7 w-auto object-contain block dark:hidden"
-              />
-              <img
-                src={withDashboardBasePath(logoDarkImg)}
-                alt="Scalius"
-                className="h-7 w-auto object-contain hidden dark:block"
-              />
-            </>
-          )}
-        </Link>
-      </SidebarHeader>
-
-      {/* Main navigation — scrollable */}
-      <SidebarContent ref={sidebarContentRef}>
-        {navSections.map((section, index) => (
-          <SidebarGroup key={section.label} className={index > 0 ? "pt-2" : ""}>
-            {section.label && (
-              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-                {section.label}
-              </SidebarGroupLabel>
-            )}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {section.items.map((item) =>
-                  item.subItems?.length ? (
-                    <CollapsibleNavItem
-                      key={item.href}
-                      item={item}
-                      currentPath={currentPath}
-                      router={router}
-                      onNavigate={closeMobileSidebar}
-                      onOpenChange={(open) => handleCollapsibleOpen(open, item.name)}
-                    />
-                  ) : (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isRouteActive(currentPath, item.href)}
-                        tooltip={item.name}
-                        className={isRouteActive(currentPath, item.href) ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
-                      >
-                        <Link
-                          to={item.href}
-                          {...getSidebarLinkPreloadProps(router, item.href)}
-                          className={NAV_LINK_CLASSNAME}
-                          onClick={closeMobileSidebar}
-                        >
-                          <item.icon
-                            aria-hidden
-                            className={NAV_ICON_CLASSNAME}
-                            strokeWidth={NAV_ICON_STROKE_WIDTH}
-                          />
-                          <span>{item.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ),
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+    <Sidebar aria-label={t("mainNavigation")}>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {nav.map((item) => {
+              const open = isSectionActive(path, item);
+              const activeChild = item.children.find((child) => matchesPath(path, child.to));
+              return (
+                <SidebarMenuItem key={item.key}>
+                  <SidebarMenuButton asChild isActive={open && !activeChild}>
+                    <Link to={item.to} preload="intent" onClick={close}>
+                      <item.icon className={ICON} aria-hidden />
+                      <span className={open ? "font-semibold" : undefined}>{t(item.key)}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {open && item.children.length > 0 ? (
+                    <SidebarMenuSub>
+                      {item.children.map((child) => (
+                        <SidebarMenuSubItem key={child.key}>
+                          <SidebarMenuSubButton asChild isActive={child === activeChild}>
+                            <Link to={child.to} preload="intent" onClick={close}>
+                              {t(child.key)}
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  ) : null}
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer — storefront link */}
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            {footerReady ? (
-              <Suspense fallback={<StorefrontFooterLinkFallback />}>
-                <StorefrontFooterLink onNavigate={closeMobileSidebar} />
-              </Suspense>
-            ) : (
-              <StorefrontFooterLinkFallback />
-            )}
-          </SidebarMenuItem>
+          {storefrontUrl ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <a href={storefrontUrl} target="_blank" rel="noopener noreferrer" onClick={close}>
+                  <ExternalLink className={ICON} aria-hidden />
+                  <span>{t("viewStore")}</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
+          {showSettings ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link to={SETTINGS_ITEM.to} onClick={close}>
+                  <SETTINGS_ITEM.icon className={ICON} aria-hidden />
+                  <span>{t("settings")}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  );
-}
-
-function StorefrontFooterLinkFallback() {
-  return (
-    <SidebarMenuButton
-      disabled
-      tooltip="Visit Storefront"
-      className="opacity-70"
-    >
-      <Globe
-        aria-hidden
-        className={NAV_ICON_CLASSNAME}
-        strokeWidth={NAV_ICON_STROKE_WIDTH}
-      />
-      <span className="flex-1 truncate">Visit Storefront</span>
-    </SidebarMenuButton>
-  );
-}
-
-function CollapsibleNavItem({
-  item,
-  currentPath,
-  router,
-  onNavigate,
-  onOpenChange,
-}: {
-  item: NavItem;
-  currentPath: string;
-  router: Pick<AnyRouter, "loadRouteChunk" | "routesByPath">;
-  onNavigate?: () => void;
-  onOpenChange?: (open: boolean) => void;
-}) {
-  const normalizedPath = currentPath.replace(/\/$/, ""); // strip trailing slash
-  const isParentActive =
-    isRouteActive(normalizedPath, item.href) ||
-    (item.subItems?.some((sub) => isRouteActive(normalizedPath, sub.href)) ?? false);
-
-  // Determine which sub-item is active (longest/most-specific match wins)
-  const activeSubHref = item.subItems
-    ? getActiveSubItemHref(normalizedPath, item.subItems)
-    : null;
-
-  return (
-    <Collapsible
-      asChild
-      defaultOpen={isParentActive || item.defaultOpen === true}
-      className="group/collapsible"
-      onOpenChange={(open) => {
-        onOpenChange?.(open);
-      }}
-    >
-      <SidebarMenuItem data-nav-item={item.name}>
-        <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={item.name} isActive={isParentActive} className={isParentActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}>
-            <item.icon
-              aria-hidden
-              className={NAV_ICON_CLASSNAME}
-              strokeWidth={NAV_ICON_STROKE_WIDTH}
-            />
-            <span>{item.name}</span>
-            <ChevronDown
-              aria-hidden
-              className="ml-auto size-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180"
-              strokeWidth={NAV_ICON_STROKE_WIDTH}
-            />
-          </SidebarMenuButton>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            {item.subItems?.map((subItem) => {
-              const subHref = subItem.href.replace(/\/$/, "");
-              const isSubActive = activeSubHref === subHref;
-              return (
-                <SidebarMenuSubItem key={subItem.href}>
-                  <SidebarMenuSubButton
-                    asChild
-                    isActive={isSubActive}
-                    tooltip={subItem.name}
-                    className={isSubActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
-                  >
-                    <Link
-                      to={subItem.href}
-                      {...getSidebarLinkPreloadProps(router, subItem.href)}
-                      className={NAV_LINK_CLASSNAME}
-                      onClick={onNavigate}
-                    >
-                      {subItem.icon && (
-                        <subItem.icon
-                          aria-hidden
-                          className={NAV_ICON_CLASSNAME}
-                          strokeWidth={NAV_ICON_STROKE_WIDTH}
-                        />
-                      )}
-                      <span>{subItem.name}</span>
-                    </Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              );
-            })}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </SidebarMenuItem>
-    </Collapsible>
   );
 }

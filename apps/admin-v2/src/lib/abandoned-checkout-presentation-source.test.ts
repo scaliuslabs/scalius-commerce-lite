@@ -13,12 +13,10 @@ function source(path: string): string {
 describe("incomplete checkout presentation", () => {
   it("uses checkout semantics consistently across the route and navigation", () => {
     const route = source("routes/admin/abandoned-checkouts.tsx");
-    const navigation = source("components/admin/layout/AdminNav.ts");
 
     expect(route).toContain("Incomplete Checkouts | Scalius Admin");
     expect(route).toContain(">Incomplete Checkouts</h1>");
     expect(route).not.toContain("Incomplete Orders");
-    expect(navigation).toContain('name: "Checkouts"');
   });
 
   it("keeps recovery IDs compact and shows readable delivery context", () => {

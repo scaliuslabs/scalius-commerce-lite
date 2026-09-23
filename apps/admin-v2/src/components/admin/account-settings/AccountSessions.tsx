@@ -106,12 +106,12 @@ function AccountSessionRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="truncate text-sm font-medium">{session.deviceLabel}</p>
           {session.current && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
               Current
             </Badge>
           )}
           {session.impersonated && (
-            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+            <Badge variant="outline" className="h-5 px-1.5 text-xs">
               Impersonated
             </Badge>
           )}
@@ -124,8 +124,8 @@ function AccountSessionRow({
         <div
           className={
             session.twoFactorVerified
-              ? "mt-1 flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400"
-              : "mt-1 flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400"
+              ? "mt-1 flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400"
+              : "mt-1 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400"
           }
         >
           {session.twoFactorVerified ? (
@@ -263,7 +263,7 @@ export function AccountSessions() {
             <MonitorSmartphone className="h-4 w-4" aria-hidden="true" />
             Active sessions
             {!sessionsQuery.isPending && !sessionsQuery.error && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                 {sessionsQuery.data?.hasMore
                   ? `${sessions.length}+`
                   : sessions.length}

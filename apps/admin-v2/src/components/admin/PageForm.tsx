@@ -50,6 +50,9 @@ import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { useMessages } from "~/i18n";
+import { contentMessages } from "~/i18n/content";
+import { resourceMessages } from "~/i18n/resource";
 import {
   defaultPageScheduleDate,
   toDateTimeLocalValue,
@@ -106,6 +109,8 @@ export function PageForm({
   contentType = "page",
 }: PageFormProps) {
   const navigate = useNavigate();
+  const t = useMessages(contentMessages);
+  const tr = useMessages(resourceMessages);
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
   const { hasPermission } = usePermissions();
@@ -183,8 +188,11 @@ export function PageForm({
           ...(id ? { id } : {}),
           revision: mutation.revision,
         });
-        const entity = contentType === "article" ? "Article" : "Page";
-        toast.success(isEdit ? `${entity} saved` : `${entity} created`);
+        toast.success(
+          contentType === "article"
+            ? t(isEdit ? "postSaved" : "postCreated")
+            : t(isEdit ? "pageSaved" : "pageCreated"),
+        );
         if (!isEdit && mutation.id) {
           if (contentType === "article") {
             void navigate({
@@ -268,26 +276,20 @@ export function PageForm({
   return (
     <FormContainer
       title={contentType === "article" ? "Articles" : "Pages"}
-      entityName={form.watch("title")}
+      heading={isEdit
+        ? defaultValues?.title || t(contentType === "article" ? "blogPost" : "page")
+        : t(contentType === "article" ? "addBlogPost" : "addPage")}
       isEdit={isEdit}
       isSubmitting={isSubmitting}
       backUrl={contentType === "article" ? "/admin/articles" : "/admin/pages"}
       newUrl={
         contentType === "article" ? "/admin/articles/new" : "/admin/pages/new"
       }
-      newLabel={contentType === "article" ? "New article" : "New page"}
+      newLabel={t(contentType === "article" ? "addBlogPost" : "addPage")}
       canCreateNew={canCreate}
       canSave={canSave}
-      saveDisabledReason={
-        isEdit
-          ? "You do not have permission to edit pages."
-          : "You do not have permission to create pages."
-      }
-      saveLabel={
-        isEdit
-          ? `Save ${contentType}`
-          : `Create ${contentType}`
-      }
+      saveDisabledReason={tr("noPermissionToSave")}
+      saveLabel={tr("save")}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >

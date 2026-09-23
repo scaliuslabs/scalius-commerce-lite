@@ -7,6 +7,8 @@ import { FolderBrowser, MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQ
 import { OptimizeImagesButton } from "./components/OptimizeImagesButton";
 import type { useMediaManager } from "./hooks/useMediaManager";
 import type { LibraryMediaFile, MediaCapability, MediaFile } from "./types";
+import { useMessages } from "~/i18n";
+import { contentMessages } from "~/i18n/content";
 
 interface MediaWorkspaceProps {
   manager: ReturnType<typeof useMediaManager>;
@@ -26,6 +28,7 @@ function mediaLimitHint(capability: MediaCapability, picker: boolean): string {
 }
 
 export function MediaWorkspace({ manager: mm, capability, picker = false, multiple = false, onSelect, onClose }: MediaWorkspaceProps) {
+  const t = useMessages(contentMessages);
   const [dragging, setDragging] = useState(false);
   const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile; bulk?: true } | null>(null);
   const limitHint = mediaLimitHint(capability, picker);
@@ -75,7 +78,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           {picker ? (
             <h2 className="text-sm font-semibold">Choose {capability === "both" ? "media" : capability}</h2>
           ) : (
-            <h1 className="text-sm font-semibold">Media</h1>
+            <h1 className="text-sm font-semibold">{t("files")}</h1>
           )}
           <p className="sr-only">{limitHint}</p>
         </div>

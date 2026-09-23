@@ -57,6 +57,9 @@ import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissi
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { readCategoryRevisionConflict } from "@/lib/admin-api-error";
+import { useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
+import { resourceMessages } from "~/i18n/resource";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -120,6 +123,8 @@ export function CategoryForm({
   publishReadiness,
 }: CategoryFormProps) {
   const navigate = useNavigate();
+  const t = useMessages(catalogMessages);
+  const tr = useMessages(resourceMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
   const canSave = isEdit
@@ -177,7 +182,7 @@ export function CategoryForm({
         revision: mutation.revision,
         status: mutation.status,
       });
-      toast.success(isEdit ? "Category saved" : "Category created");
+      toast.success(t(isEdit ? "categorySaved" : "categoryCreated"));
       if (!isEdit && mutation.id) {
         void navigate({
           to: "/admin/categories/$categoryId/edit",
@@ -240,18 +245,16 @@ export function CategoryForm({
   return (
     <FormContainer
       title="Categories"
-      entityName={form.watch("name")}
+      heading={isEdit ? defaultValues?.name || t("category") : t("addCategory")}
       isEdit={isEdit}
       isSubmitting={isSubmitting}
       backUrl="/admin/categories"
       newUrl="/admin/categories/new"
-      newLabel="New category"
+      newLabel={t("addCategory")}
       canCreateNew={categoryActions.canCreate}
       canSave={canSave}
-      saveDisabledReason={isEdit
-        ? "You do not have permission to edit categories."
-        : "You do not have permission to create categories."}
-      saveLabel={isEdit ? "Save changes" : "Create category"}
+      saveDisabledReason={tr("noPermissionToSave")}
+      saveLabel={tr("save")}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >
@@ -481,11 +484,11 @@ export function CategoryForm({
                     form.watch("name")?.trim() ||
                     "Search preview"}
                 </p>
-                <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
+                <p className="mt-0.5 truncate text-xs text-emerald-700 dark:text-emerald-400">
                   /categories/{form.watch("slug")?.trim() || "category-url"}
                 </p>
                 {form.watch("metaDescription")?.trim() ? (
-                  <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                  <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
                     {form.watch("metaDescription")?.trim()}
                   </p>
                 ) : null}

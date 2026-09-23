@@ -115,11 +115,11 @@ export const LayoutSettingsSection = React.memo(
               <p className="truncate text-xs font-medium text-foreground">
                 {metaTitle?.trim() || collectionName?.trim() || "Search preview"}
               </p>
-              <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
+              <p className="mt-0.5 truncate text-xs text-emerald-700 dark:text-emerald-400">
                 /collections/{collectionId || "collection-id"}
               </p>
               {metaDescription?.trim() ? (
-                <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
                   {metaDescription.trim()}
                 </p>
               ) : null}

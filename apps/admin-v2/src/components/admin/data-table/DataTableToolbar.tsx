@@ -1,6 +1,8 @@
 import { type ReactNode, useRef, useEffect, useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Search, X } from "lucide-react";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 interface DataTableToolbarProps {
   searchValue: string;
@@ -16,13 +18,14 @@ interface DataTableToolbarProps {
 export function DataTableToolbar({
   searchValue,
   onSearchChange,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   searchDebounceMs = 400,
   selectedCount = 0,
   bulkActions,
   filters,
   actions,
 }: DataTableToolbarProps) {
+  const t = useMessages(resourceMessages);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [localSearch, setLocalSearch] = useState(searchValue);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,7 +100,8 @@ export function DataTableToolbar({
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchInputRef}
-            placeholder={searchPlaceholder}
+            placeholder={searchPlaceholder ?? t("search")}
+            aria-label={searchPlaceholder ?? t("search")}
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             className="h-11 pl-8 pr-11 sm:h-9 sm:pr-9"
@@ -106,7 +110,7 @@ export function DataTableToolbar({
             <button
               type="button"
               onClick={clearSearch}
-              aria-label="Clear search"
+              aria-label={t("clearSearch")}
               className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground sm:h-9 sm:w-9"
             >
               <X className="h-3.5 w-3.5" />

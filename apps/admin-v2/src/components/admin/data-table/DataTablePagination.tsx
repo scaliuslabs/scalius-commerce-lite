@@ -1,178 +1,74 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useState,
-  type ComponentType,
-  type KeyboardEvent,
-} from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Table, TableRowData } from "./table-config";
 import { Button } from "@/components/ui/button";
 import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
-import type { DataTablePaginationPageSizeMenuProps } from "./DataTablePaginationPageSizeMenu";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 interface DataTablePaginationProps<TData extends TableRowData> {
   table: Table<TData>;
-  itemLabel?: string;
   pageSizeOptions?: number[];
-}
-
-const LazyDataTablePaginationPageSizeMenu = lazy(async () => {
-  const module = await import("./DataTablePaginationPageSizeMenu");
-  return {
-    default: module.DataTablePaginationPageSizeMenu as ComponentType<
-      DataTablePaginationPageSizeMenuProps
-    >,
-  };
-});
-
-function isMenuOpenKey(key: string) {
-  return key === "Enter" || key === " " || key === "ArrowDown";
 }
 
 export function DataTablePagination<TData extends TableRowData>({
   table,
-  itemLabel = "items",
   pageSizeOptions = [10, 20, 50, 100],
 }: DataTablePaginationProps<TData>) {
+  const t = useMessages(resourceMessages);
   const { pageIndex, pageSize } = table.state.pagination;
-  const rowCount = table.getRowCount();
-  const pageCount = table.getPageCount();
-  const [isPageSizeMenuRequested, setIsPageSizeMenuRequested] = useState(false);
-  const [isPageSizeMenuOpen, setIsPageSizeMenuOpen] = useState(false);
+  const total = table.getRowCount();
+  if (total === 0) return null;
 
-  const requestPageSizeMenuOpen = useCallback(() => {
-    setIsPageSizeMenuRequested(true);
-    setIsPageSizeMenuOpen(true);
-  }, []);
-
-  const handlePageSizeMenuOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      setIsPageSizeMenuRequested(true);
-    }
-    setIsPageSizeMenuOpen(open);
-  }, []);
-
-  const handlePageSizeTriggerKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLButtonElement>) => {
-      if (!isMenuOpenKey(event.key)) {
-        return;
-      }
-
-      event.preventDefault();
-      requestPageSizeMenuOpen();
-    },
-    [requestPageSizeMenuOpen],
-  );
-
-  if (rowCount === 0) return null;
-
+  const selected = table.getSelectedRowModel().rows.length;
   const start = pageIndex * pageSize + 1;
-  const end = Math.min((pageIndex + 1) * pageSize, rowCount);
-  const selectedCount = table.getSelectedRowModel().rows.length;
-  const pageSizeTrigger = (
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-11 px-3 text-xs text-foreground sm:h-8 sm:px-2"
-      data-state={isPageSizeMenuOpen ? "open" : undefined}
-      aria-haspopup="menu"
-      aria-expanded={isPageSizeMenuOpen}
-      onClick={
-        isPageSizeMenuRequested ? undefined : requestPageSizeMenuOpen
-      }
-      onKeyDown={
-        isPageSizeMenuRequested ? undefined : handlePageSizeTriggerKeyDown
-      }
-    >
-      {pageSize} per page
-    </Button>
-  );
+  const end = Math.min((pageIndex + 1) * pageSize, total);
 
   return (
-    <div className="flex flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="text-sm text-muted-foreground">
-          {selectedCount > 0 && (
-            <span className="mr-2 font-medium text-foreground">
-              {selectedCount} selected
-            </span>
-          )}
-          Showing{" "}
-          <span className="font-medium text-foreground">{start}</span> to{" "}
-          <span className="font-medium text-foreground">{end}</span> of{" "}
-          <span className="font-medium text-foreground">{rowCount}</span>{" "}
-          {itemLabel}
-        </div>
-        {isPageSizeMenuRequested ? (
-          <Suspense fallback={pageSizeTrigger}>
-            <LazyDataTablePaginationPageSizeMenu
-              open={isPageSizeMenuOpen}
-              onOpenChange={handlePageSizeMenuOpenChange}
-              trigger={pageSizeTrigger}
-              pageSize={pageSize}
-              pageSizeOptions={pageSizeOptions}
-              onPageSizeChange={table.setPageSize}
-            />
-          </Suspense>
-        ) : (
-          pageSizeTrigger
-        )}
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2">
+        {selected > 0 ? <span className="font-medium text-foreground">{t("selected", { count: selected })}</span> : null}
+        <span>{t("showing", { start, end, total })}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              {t("perPage", { count: pageSize })}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup value={String(pageSize)} onValueChange={(value) => table.setPageSize(Number(value))}>
+              {pageSizeOptions.map((size) => (
+                <DropdownMenuRadioItem key={size} value={String(size)}>
+                  {t("perPage", { count: size })}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-
-      <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1.5">
+      <nav aria-label={t("page", { page: pageIndex + 1, pages: Math.max(1, table.getPageCount()) })} className="flex items-center gap-1">
         <Button
           variant="outline"
-          size="sm"
-          onClick={() => table.firstPage()}
-          disabled={!table.getCanPreviousPage()}
-          className="h-11 w-11 p-0 sm:h-8 sm:w-8"
-          aria-label="First page"
-        >
-          <ChevronsLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
+          size="icon"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
-          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
+          aria-label={t("previous")}
         >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Previous
+          <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-[90px] text-center text-sm text-muted-foreground">
-          Page{" "}
-          <span className="font-medium text-foreground">{pageIndex + 1}</span>{" "}
-          of{" "}
-          <span className="font-medium text-foreground">
-            {pageCount > 0 ? pageCount : 1}
-          </span>
-        </div>
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
+          aria-label={t("next")}
         >
-          Next
-          <ChevronRight className="ml-1 h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.lastPage()}
-          disabled={!table.getCanNextPage()}
-          className="h-11 w-11 p-0 sm:h-8 sm:w-8"
-          aria-label="Last page"
-        >
-          <ChevronsRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" />
         </Button>
       </nav>
     </div>

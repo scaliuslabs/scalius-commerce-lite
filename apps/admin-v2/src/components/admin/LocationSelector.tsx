@@ -138,7 +138,7 @@ export function LocationSelector() {
   }, [areaValue, areas, form]);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-3">
       <FormField
         control={form.control}
         name="city"

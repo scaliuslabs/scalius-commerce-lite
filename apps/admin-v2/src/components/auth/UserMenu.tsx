@@ -1,128 +1,109 @@
-// src/components/auth/UserMenu.tsx
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
-import { Button } from "@/components/ui/button";
+import { Languages, LogOut, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, User, Shield, Loader2 } from "lucide-react";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
 import { broadcastAdminSignOut } from "@/components/auth/AdminSessionSync";
+import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
+import { LOCALES, setLocale, useLocale, useMessages, type Locale } from "~/i18n";
+import { shellMessages } from "~/i18n/shell";
 
-interface UserMenuProps {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image?: string | null;
-    role?: string | null;
-    twoFactorEnabled?: boolean | null;
-  };
+export interface UserMenuUser {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
 }
 
-export function UserMenu({ user }: UserMenuProps) {
-  const [isLoading, setIsLoading] = useState(false);
+function initials(name: string) {
+  return name.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2);
+}
 
-  const handleSignOut = async () => {
-    setIsLoading(true);
+/** Avatar menu: My account, dashboard language, sign out. */
+export function UserMenu({ user }: { user: UserMenuUser }) {
+  const t = useMessages(shellMessages);
+  const locale = useLocale();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const signOut = async () => {
+    setSigningOut(true);
     try {
       clearAdminRouteContextCache();
       const { authClient } = await import("@/lib/auth-client");
       const result = await authClient.signOut();
-      if (result.error) {
-        throw new Error(result.error.message || "Sign out failed");
-      }
+      if (result.error) throw new Error(result.error.message);
       broadcastAdminSignOut();
       window.location.replace(withDashboardBasePath("/auth/login"));
-    } catch (error: unknown) {
-      console.error("Sign out error:", error);
-      setIsLoading(false);
+    } catch {
+      toast.error(t("signOutFailed"));
+      setSigningOut(false);
     }
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
   };
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative inline-flex h-11 items-center gap-3 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-muted/50 sm:h-10"
-        >
-          <Avatar className="w-8 h-8 ring-2 ring-primary/10 hover:ring-primary/20 transition-all duration-200">
-            {user.image && (
-              <AvatarImage
-                src={mediaImageUrl(user.image, 160)}
-                alt={user.name}
-                className="object-cover"
-              />
-            )}
-            <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-              {getInitials(user.name)}
-            </AvatarFallback>
+        <button type="button" className="flex h-11 items-center gap-2 rounded-md px-1.5 text-white hover:bg-white/10 sm:h-9">
+          <Avatar className="h-7 w-7">
+            {user.image ? <AvatarImage src={mediaImageUrl(user.image, 160)} alt="" className="object-cover" /> : null}
+            <AvatarFallback><span className="text-xs font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
           </Avatar>
-          <span className="hidden md:inline-block font-medium text-sm text-foreground">
-            {user.name}
-          </span>
-        </Button>
+          <span className="hidden max-w-40 truncate text-sm font-medium md:inline">{user.name}</span>
+        </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="w-64 p-2 bg-card/95 backdrop-blur-lg border-border/50 shadow-xl"
-        align="end"
-        forceMount
-      >
+      <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>
-          </div>
+          <p className="truncate text-sm font-medium">{user.name}</p>
+          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="cursor-pointer" asChild>
-          <Link
-            to="/admin/settings/account"
-            search={{ section: "security" }}
-            className="flex items-center gap-2 w-full"
-          >
-            <User className="h-4 w-4" />
-            <span>Account Settings</span>
+        <DropdownMenuItem asChild>
+          <Link to="/admin/account">
+            <UserRound className="mr-2 h-4 w-4" />
+            {t("myAccount")}
           </Link>
         </DropdownMenuItem>
-        {user.twoFactorEnabled && (
-          <DropdownMenuItem className="cursor-pointer" disabled>
-            <Shield className="h-4 w-4 mr-2 text-green-500" />
-            <span className="text-green-600 dark:text-green-400">2FA Enabled</span>
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="flex items-center text-sm font-normal text-muted-foreground">
+          <Languages className="mr-2 h-4 w-4" />
+          {t("language")}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={locale} onValueChange={(value) => setLocale(value as Locale)}>
+          {LOCALES.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value} lang={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <div className="flex items-center justify-between px-2 text-sm">
+          <span>{t("darkMode")}</span>
+          <DarkModeToggle />
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="cursor-pointer text-destructive focus:text-destructive"
-          onClick={handleSignOut}
-          disabled={isLoading}
+          variant="destructive"
+          disabled={signingOut}
+          onSelect={(event) => {
+            event.preventDefault();
+            void signOut();
+          }}
         >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <LogOut className="h-4 w-4 mr-2" />
-          )}
-          <span>Sign out</span>
+          <LogOut className="mr-2 h-4 w-4" />
+          {t("signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

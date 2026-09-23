@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal } from "lucide-react";
 import type { DataTableRowActionsMenuProps } from "./DataTableRowActionsMenu";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 export interface ExtraAction {
   label: string;
@@ -56,8 +58,9 @@ export const DataTableRowActions = memo(function DataTableRowActions({
   extraActions,
   isLoading = false,
   children,
-  menuLabel = "Open actions menu",
+  menuLabel,
 }: DataTableRowActionsProps) {
+  const t = useMessages(resourceMessages);
   const [isMenuRequested, setIsMenuRequested] = useState(false);
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -99,7 +102,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
       onClick={isMenuRequested ? undefined : requestMenuOpen}
       onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
     >
-      <span className="sr-only">{menuLabel}</span>
+      <span className="sr-only">{menuLabel ?? t("actions")}</span>
       <MoreHorizontal className="h-4 w-4" />
     </Button>
   );
