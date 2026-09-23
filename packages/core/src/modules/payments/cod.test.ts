@@ -109,10 +109,9 @@ async function insertAdvancePaymentOrder(db: Database, orderId: string): Promise
     shippingAddress: "Dhaka",
     city: "dhaka",
     zone: "zone_1",
-    totalAmount: 2500,
-    shippingCharge: 0,
-    paidAmount: 500,
-    balanceDue: 2000,
+    totalAmountMinor: 2500,
+    paidAmountMinor: 500,
+    balanceDueMinor: 2000,
     paymentMethod: PaymentMethod.SSLCOMMERZ,
     paymentStatus: PaymentStatus.PARTIAL,
     version: 1,
@@ -120,167 +119,85 @@ async function insertAdvancePaymentOrder(db: Database, orderId: string): Promise
   await db.insert(paymentPlans).values({
     id: `plan_${orderId}`,
     orderId,
-    totalAmount: 2500,
-    depositAmount: 500,
-    balanceDue: 2000,
+    totalAmountMinor: 2500,
+    depositAmountMinor: 500,
+    balanceDueMinor: 2000,
     status: PaymentPlanStatus.DEPOSIT_PAID,
   });
 }
 
 describe("validateCODCollectionDetails", () => {
-  const order = {
-    totalAmount: 2500,
-    paidAmount: 0,
-    balanceDue: 2500,
-  };
+  const BDT = { currencyCode: "BDT", currencyDecimalPlaces: 2 };
+  const order = { totalAmountMinor: 250_000, paidAmountMinor: 0, balanceDueMinor: 250_000, ...BDT };
 
   it("accepts exact outstanding COD collection amounts", () => {
     expect(
-      validateCODCollectionDetails(order, {
-        collectedBy: "Courier A",
-        collectedAmount: 2500,
-      }),
-    ).toMatchObject({
+      validateCODCollectionDetails(order, { collectedBy: "Courier A", collectedAmountMinor: 250_000 }),
+    ).toEqual({
       collectedBy: "Courier A",
-      collectedAmount: 2500,
-      expectedAmount: 2500,
-      newPaidAmount: 2500,
-      newBalanceDue: 0,
+      collectedAmountMinor: 250_000,
+      newPaidAmountMinor: 250_000,
+      newBalanceDueMinor: 0,
     });
   });
 
   it("uses the outstanding balance for partially paid COD orders", () => {
     expect(
       validateCODCollectionDetails(
-        {
-          totalAmount: 2500,
-          paidAmount: 500,
-          balanceDue: 2000,
-        },
-        {
-          collectedBy: "Courier A",
-          collectedAmount: 2000,
-        },
+        { totalAmountMinor: 250_000, paidAmountMinor: 50_000, balanceDueMinor: 200_000, ...BDT },
+        { collectedBy: "Courier A", collectedAmountMinor: 200_000 },
       ),
-    ).toMatchObject({
-      expectedAmount: 2000,
-      newPaidAmount: 2500,
-      newBalanceDue: 0,
-    });
+    ).toMatchObject({ newPaidAmountMinor: 250_000, newBalanceDueMinor: 0 });
   });
 
   it("uses computed balance when stored balance due is stale", () => {
     expect(
       validateCODCollectionDetails(
-        {
-          totalAmount: 2500,
-          paidAmount: 0,
-          balanceDue: 0,
-        },
-        {
-          collectedBy: "Courier A",
-          collectedAmount: 2500,
-        },
+        { totalAmountMinor: 250_000, paidAmountMinor: 0, balanceDueMinor: 0, ...BDT },
+        { collectedBy: "Courier A", collectedAmountMinor: 250_000 },
       ),
-    ).toMatchObject({
-      expectedAmount: 2500,
-      newPaidAmount: 2500,
-      newBalanceDue: 0,
-    });
+    ).toMatchObject({ newPaidAmountMinor: 250_000, newBalanceDueMinor: 0 });
   });
 
   it("rejects missing collectors before any order mutation", () => {
     expect(() =>
-      validateCODCollectionDetails(order, {
-        collectedBy: "   ",
-        collectedAmount: 2500,
-      }),
+      validateCODCollectionDetails(order, { collectedBy: "   ", collectedAmountMinor: 250_000 }),
     ).toThrow(ValidationError);
   });
 
-  it("rejects non-positive or non-finite collection amounts", () => {
-    expect(() =>
-      validateCODCollectionDetails(order, {
-        collectedBy: "Courier A",
-        collectedAmount: 0,
-      }),
-    ).toThrow(ValidationError);
-
-    expect(() =>
-      validateCODCollectionDetails(order, {
-        collectedBy: "Courier A",
-        collectedAmount: Number.NaN,
-      }),
-    ).toThrow(ValidationError);
+  it("rejects non-positive or fractional minor amounts", () => {
+    for (const collectedAmountMinor of [0, -1, 2500.5, Number.NaN]) {
+      expect(() =>
+        validateCODCollectionDetails(order, { collectedBy: "Courier A", collectedAmountMinor }),
+      ).toThrow(ValidationError);
+    }
   });
 
   it("rejects under-collection and over-collection", () => {
-    expect(() =>
-      validateCODCollectionDetails(order, {
-        collectedBy: "Courier A",
-        collectedAmount: 2400,
-      }),
-    ).toThrow(ValidationError);
-
-    expect(() =>
-      validateCODCollectionDetails(order, {
-        collectedBy: "Courier A",
-        collectedAmount: 2600,
-      }),
-    ).toThrow(ValidationError);
+    for (const collectedAmountMinor of [249_999, 250_001]) {
+      expect(() =>
+        validateCODCollectionDetails(order, { collectedBy: "Courier A", collectedAmountMinor }),
+      ).toThrow(ValidationError);
+    }
   });
 
   it("rejects collection when no balance remains", () => {
     expect(() =>
       validateCODCollectionDetails(
-        {
-          totalAmount: 2500,
-          paidAmount: 2500,
-          balanceDue: 0,
-        },
-        {
-          collectedBy: "Courier A",
-          collectedAmount: 2500,
-        },
+        { totalAmountMinor: 250_000, paidAmountMinor: 250_000, balanceDueMinor: 0, ...BDT },
+        { collectedBy: "Courier A", collectedAmountMinor: 250_000 },
       ),
     ).toThrow(ValidationError);
   });
 
-  it.each([
-    {
-      currencyCode: "JPY",
-      decimalPlaces: 0,
-      totalAmount: 100.49,
-      collectedAmount: 100,
-      expectedAmount: 100,
-    },
-    {
-      currencyCode: "KWD",
-      decimalPlaces: 3,
-      totalAmount: 1.2346,
-      collectedAmount: 1.235,
-      expectedAmount: 1.235,
-    },
-  ])(
-    "validates $currencyCode COD collection at the immutable order precision",
-    ({ currencyCode, decimalPlaces, totalAmount, collectedAmount, expectedAmount }) => {
-      expect(validateCODCollectionDetails({
-        totalAmount,
-        paidAmount: 0,
-        balanceDue: totalAmount,
-        currencyCode,
-        currencyDecimalPlaces: decimalPlaces,
-      }, {
-        collectedBy: "Courier A",
-        collectedAmount,
-      })).toMatchObject({
-        collectedAmount: expectedAmount,
-        expectedAmount,
-        newPaidAmount: expectedAmount,
-        newBalanceDue: 0,
-      });
-    },
-  );
+  it("rejects an order whose currency snapshot is corrupt", () => {
+    expect(() =>
+      validateCODCollectionDetails(
+        { ...order, currencyDecimalPlaces: 7 },
+        { collectedBy: "Courier A", collectedAmountMinor: 250_000 },
+      ),
+    ).toThrow(ValidationError);
+  });
 });
 
 describe("recordCODCollection", () => {
@@ -288,12 +205,14 @@ describe("recordCODCollection", () => {
     const { db, batches, inserts } = createCodDbMock({
       selectedOrder: {
         id: "order_1",
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 100,
+        paidAmountMinor: 0,
+        balanceDueMinor: 100,
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.UNPAID,
         version: 1,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
       },
       selectedTracking: null,
     });
@@ -301,7 +220,7 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db as never, {
       orderId: "order_1",
       collectedBy: "Courier A",
-      collectedAmount: 100,
+      collectedAmountMinor: 100,
     })).resolves.toEqual({ success: true });
 
     expect(batches).toHaveLength(1);
@@ -320,16 +239,18 @@ describe("recordCODCollection", () => {
     const { db, batches } = createCodDbMock({
       selectedOrder: {
         id: "order_1",
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
+        totalAmountMinor: 100,
+        paidAmountMinor: 100,
+        balanceDueMinor: 0,
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.PAID,
         version: 2,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 100,
         currency: "BDT",
         paymentType: "full",
         codCollectedBy: "Courier A",
@@ -340,7 +261,7 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db as never, {
       orderId: "order_1",
       collectedBy: "Courier A",
-      collectedAmount: 100,
+      collectedAmountMinor: 100,
     })).rejects.toThrow("evidence is incomplete");
 
     expect(batches).toHaveLength(0);
@@ -350,9 +271,9 @@ describe("recordCODCollection", () => {
     const { db, inserts } = createCodDbMock({
       selectedOrder: {
         id: "order_kwd",
-        totalAmount: 1.235,
-        paidAmount: 0,
-        balanceDue: 1.235,
+        totalAmountMinor: 1235,
+        paidAmountMinor: 0,
+        balanceDueMinor: 1235,
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.UNPAID,
         version: 1,
@@ -365,12 +286,12 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db as never, {
       orderId: "order_kwd",
       collectedBy: "Courier A",
-      collectedAmount: 1.2346,
+      collectedAmountMinor: 1235,
     })).resolves.toEqual({ success: true });
 
     expect(inserts).toContainEqual(expect.objectContaining({
       orderId: "order_kwd",
-      amount: 1.235,
+      amountMinor: 1235,
       currency: "KWD",
       paymentMethod: "cod",
     }));
@@ -380,9 +301,9 @@ describe("recordCODCollection", () => {
     const { db } = createCodDbMock({
       selectedOrder: {
         id: "order_kwd",
-        totalAmount: 1.235,
-        paidAmount: 1.235,
-        balanceDue: 0,
+        totalAmountMinor: 1235,
+        paidAmountMinor: 1235,
+        balanceDueMinor: 0,
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.PAID,
         version: 2,
@@ -391,7 +312,7 @@ describe("recordCODCollection", () => {
       },
       selectedPayment: {
         id: "pay_wrong",
-        amount: 1.235,
+        amountMinor: 1235,
         currency: "BDT",
         paymentType: "full",
         codCollectedBy: "Courier A",
@@ -402,7 +323,7 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db as never, {
       orderId: "order_kwd",
       collectedBy: "Courier A",
-      collectedAmount: 1.235,
+      collectedAmountMinor: 1235,
     })).rejects.toThrow("currency does not match");
   });
 
@@ -410,9 +331,9 @@ describe("recordCODCollection", () => {
     const { db, batches, inserts, updates } = createCodDbMock({
       selectedOrder: {
         id: "order_advance",
-        totalAmount: 2500,
-        paidAmount: 500,
-        balanceDue: 2000,
+        totalAmountMinor: 2500,
+        paidAmountMinor: 500,
+        balanceDueMinor: 2000,
         paymentMethod: PaymentMethod.SSLCOMMERZ,
         paymentStatus: PaymentStatus.PARTIAL,
         version: 4,
@@ -422,7 +343,7 @@ describe("recordCODCollection", () => {
       selectedPlan: {
         id: "plan_1",
         status: PaymentPlanStatus.DEPOSIT_PAID,
-        balanceDue: 2000,
+        balanceDueMinor: 2000,
       },
       selectedTracking: null,
     });
@@ -430,13 +351,13 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db as never, {
       orderId: "order_advance",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).resolves.toEqual({ success: true });
 
     expect(batches).toHaveLength(1);
     expect(inserts).toContainEqual(expect.objectContaining({
       id: "cod_collection:order_advance",
-      amount: 2000,
+      amountMinor: 2000,
       currency: "BDT",
       paymentMethod: PaymentMethod.COD,
       paymentType: "balance",
@@ -445,8 +366,8 @@ describe("recordCODCollection", () => {
     expect(updates).toEqual(expect.arrayContaining([
       expect.objectContaining({
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 2500,
-        balanceDue: 0,
+        paidAmountMinor: 2500,
+        balanceDueMinor: 0,
         version: 5,
       }),
       expect.objectContaining({
@@ -459,24 +380,26 @@ describe("recordCODCollection", () => {
     const { db, batches } = createCodDbMock({
       selectedOrder: {
         id: "order_advance",
-        totalAmount: 2500,
-        paidAmount: 500,
-        balanceDue: 2000,
+        totalAmountMinor: 2500,
+        paidAmountMinor: 500,
+        balanceDueMinor: 2000,
         paymentMethod: PaymentMethod.STRIPE,
         paymentStatus: PaymentStatus.PARTIAL,
         version: 4,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
       },
       selectedPlan: {
         id: "plan_1",
         status: PaymentPlanStatus.DEPOSIT_PAID,
-        balanceDue: 1900,
+        balanceDueMinor: 1900,
       },
     });
 
     await expect(recordCODCollection(db as never, {
       orderId: "order_advance",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).rejects.toThrow("remaining balance in the payment plan");
     expect(batches).toHaveLength(0);
   });
@@ -485,21 +408,23 @@ describe("recordCODCollection", () => {
     const { db, batches } = createCodDbMock({
       selectedOrder: {
         id: "order_advance",
-        totalAmount: 2500,
-        paidAmount: 2500,
-        balanceDue: 0,
+        totalAmountMinor: 2500,
+        paidAmountMinor: 2500,
+        balanceDueMinor: 0,
         paymentMethod: PaymentMethod.SSLCOMMERZ,
         paymentStatus: PaymentStatus.PAID,
         version: 5,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
       },
       selectedPlan: {
         id: "plan_1",
         status: PaymentPlanStatus.COMPLETED,
-        balanceDue: 2000,
+        balanceDueMinor: 2000,
       },
       selectedPayment: {
         id: "cod_collection:order_advance",
-        amount: 2000,
+        amountMinor: 2000,
         currency: "BDT",
         paymentType: "balance",
         codCollectedBy: "Courier A",
@@ -508,14 +433,14 @@ describe("recordCODCollection", () => {
         id: "cod_1",
         codStatus: CodStatus.COLLECTED,
         collectedBy: "Courier A",
-        collectedAmount: 2000,
+        collectedAmountMinor: 2000,
       },
     });
 
     await expect(recordCODCollection(db as never, {
       orderId: "order_advance",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).resolves.toEqual({ success: true });
     expect(batches).toHaveLength(0);
   });
@@ -529,16 +454,16 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db, {
       orderId: "order_race",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).rejects.toThrow("changed while cash collection was being recorded");
 
     expect(sqlite.prepare(
-      "SELECT version, payment_status, paid_amount, balance_due FROM orders WHERE id = ?",
+      "SELECT version, payment_status, paid_amount_minor, balance_due_minor FROM orders WHERE id = ?",
     ).get("order_race")).toMatchObject({
       version: 2,
       payment_status: PaymentStatus.PARTIAL,
-      paid_amount: 500,
-      balance_due: 2000,
+      paid_amount_minor: 500,
+      balance_due_minor: 2000,
     });
     expect(sqlite.prepare("SELECT count(*) AS count FROM order_payments WHERE order_id = ?").get("order_race"))
       .toMatchObject({ count: 0 });
@@ -552,12 +477,12 @@ describe("recordCODCollection", () => {
     const { sqlite, db } = createCodIntegrationDatabase((raceDb) => {
       raceDb.prepare(`
         UPDATE orders
-        SET version = 2, payment_status = 'paid', paid_amount = 2500, balance_due = 0
+        SET version = 2, payment_status = 'paid', paid_amount_minor = 2500, balance_due_minor = 0
         WHERE id = 'order_concurrent'
       `).run();
       raceDb.prepare(`
         INSERT INTO order_payments (
-          id, order_id, amount, currency, payment_method, payment_type, status,
+          id, order_id, amount_minor, currency, payment_method, payment_type, status,
           cod_collected_by, cod_collected_at, created_at, updated_at
         ) VALUES (
           'cod_collection:order_concurrent', 'order_concurrent', 2000, 'BDT',
@@ -567,7 +492,7 @@ describe("recordCODCollection", () => {
       raceDb.prepare(`
         INSERT INTO cod_tracking (
           id, order_id, delivery_attempts, cod_status, collected_by,
-          collected_amount, collected_at, created_at, updated_at
+          collected_amount_minor, collected_at, created_at, updated_at
         ) VALUES (
           'cod_concurrent', 'order_concurrent', 1, 'collected', 'Courier A',
           2000, unixepoch(), unixepoch(), unixepoch()
@@ -584,7 +509,7 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db, {
       orderId: "order_concurrent",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).resolves.toEqual({ success: true });
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM order_payments WHERE order_id = ?").get("order_concurrent"))
@@ -597,12 +522,12 @@ describe("recordCODCollection", () => {
     const { sqlite, db } = createCodIntegrationDatabase((raceDb) => {
       raceDb.prepare(`
         UPDATE orders
-        SET version = 2, payment_status = 'paid', paid_amount = 2500, balance_due = 0
+        SET version = 2, payment_status = 'paid', paid_amount_minor = 2500, balance_due_minor = 0
         WHERE id = 'order_conflicting_collector'
       `).run();
       raceDb.prepare(`
         INSERT INTO order_payments (
-          id, order_id, amount, currency, payment_method, payment_type, status,
+          id, order_id, amount_minor, currency, payment_method, payment_type, status,
           cod_collected_by, cod_collected_at, created_at, updated_at
         ) VALUES (
           'cod_collection:order_conflicting_collector', 'order_conflicting_collector',
@@ -613,7 +538,7 @@ describe("recordCODCollection", () => {
       raceDb.prepare(`
         INSERT INTO cod_tracking (
           id, order_id, delivery_attempts, cod_status, collected_by,
-          collected_amount, collected_at, created_at, updated_at
+          collected_amount_minor, collected_at, created_at, updated_at
         ) VALUES (
           'cod_conflicting_collector', 'order_conflicting_collector', 1,
           'collected', 'Courier B', 2000, unixepoch(), unixepoch(), unixepoch()
@@ -630,7 +555,7 @@ describe("recordCODCollection", () => {
     await expect(recordCODCollection(db, {
       orderId: "order_conflicting_collector",
       collectedBy: "Courier A",
-      collectedAmount: 2000,
+      collectedAmountMinor: 2000,
     })).rejects.toThrow("changed while cash collection was being recorded");
 
     expect(sqlite.prepare(

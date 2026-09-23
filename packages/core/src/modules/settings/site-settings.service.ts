@@ -6,6 +6,7 @@
 import {
   orders,
   products,
+  shippingMethods,
   themePreviewSessions,
   themeSettings,
   themeSettingsDrafts,
@@ -240,13 +241,15 @@ function normalizeUsdExchangeRate(value: string): string {
   return String(rate);
 }
 
+/** Catalog, shipping and order amounts are minor units of this currency, so it locks once any exist. */
 export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
-  const [productRows, orderRows] = await safeBatch(db, [
+  const [productRows, orderRows, shippingRows] = await safeBatch(db, [
     db.select({ id: products.id }).from(products).limit(1),
     db.select({ id: orders.id }).from(orders).limit(1),
+    db.select({ id: shippingMethods.id }).from(shippingMethods).limit(1),
   ]);
 
-  return Boolean(productRows?.length || orderRows?.length);
+  return Boolean(productRows?.length || orderRows?.length || shippingRows?.length);
 }
 
 export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {

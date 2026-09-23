@@ -29,6 +29,14 @@ import type { ProductWithDetails } from "./products.types";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { defaultProductSkuValues } from "./products.public-eligibility";
+import {
+    catalogPriceColumns,
+    presentCatalogPrice,
+    readStoreDecimalPlaces,
+    storeCurrencyCodeSql,
+    storeDecimalPlacesFromCode,
+} from "./products.money";
+import { bpsToPercent, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 import { loadProductOptions, loadVariantSelectedOptions } from "./products.option-model";
@@ -109,8 +117,8 @@ function requireProductTimestamp(
     return date;
 }
 
-function defaultVariantValues(productId: string, price: number) {
-    return defaultProductSkuValues(productId, price);
+function defaultVariantValues(productId: string, priceMinor: number) {
+    return defaultProductSkuValues(productId, priceMinor);
 }
 
 type ProductMediaInput = CreateProductInput["media"][number];
@@ -506,14 +514,14 @@ export async function listProducts(db: Database, options: {
             id: products.id,
             name: products.name,
             slug: products.slug,
-            price: products.price,
+            priceMinor: products.priceMinor,
             description: includeDescription
                 ? products.description
                 : sql<string | null>`NULL`,
             isActive: products.isActive,
-            discountPercentage: products.discountPercentage,
+            discountBps: products.discountBps,
             discountType: products.discountType,
-            discountAmount: products.discountAmount,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             aggregateRevision: products.aggregateRevision,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
@@ -536,7 +544,7 @@ export async function listProducts(db: Database, options: {
                         case "name":
                             return products.name;
                         case "price":
-                            return products.price;
+                            return products.priceMinor;
                         case "category":
                             return categories.name;
                         case "createdAt":
@@ -550,10 +558,10 @@ export async function listProducts(db: Database, options: {
             })(),
         );
 
-    const [countArr, productResults] = await db.batch([
+    const [[countArr, productResults], decimalPlaces] = await Promise.all([db.batch([
         countQuery,
         productResultsQuery,
-    ]);
+    ]), readStoreDecimalPlaces(db)]);
     const count = countArr[0]?.count ?? 0;
 
     if (productResults.length === 0) {
@@ -638,16 +646,18 @@ export async function listProducts(db: Database, options: {
         }
     });
 
-    const combinedProducts = productResults.map((product) => ({
+    const combinedProducts = productResults.map((product) => {
+        const price = presentCatalogPrice(product, decimalPlaces);
+        return {
         id: product.id,
         name: product.name,
         slug: product.slug,
-        price: product.price,
+        price: price.price,
         description: product.description,
         isActive: product.isActive,
-        discountPercentage: product.discountPercentage || 0,
+        discountPercentage: price.discountPercentage,
         discountType: product.discountType || "percentage",
-        discountAmount: product.discountAmount || 0,
+        discountAmount: price.discountAmount,
         freeDelivery: product.freeDelivery,
         aggregateRevision: product.aggregateRevision,
         createdAt: requireProductTimestamp(product.createdAt, "created timestamp"),
@@ -659,7 +669,8 @@ export async function listProducts(db: Database, options: {
         mediaCount: mediaCountMap.get(product.id) || 0,
         primaryImage: primaryImageMap.get(product.id) || null,
         sku: skuMap.get(product.id) || undefined,
-    }));
+        };
+    });
 
     return {
         products: combinedProducts,
@@ -725,20 +736,22 @@ export async function getProductsByIds(
     if (lookupIds.length === 0) return [];
 
     const orderById = new Map(lookupIds.map((id, index) => [id, index]));
-    const rows = await db
+    const [rows, decimalPlaces] = await Promise.all([db
         .select({
             id: products.id,
             name: products.name,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
-            discountPercentage: products.discountPercentage,
+            discountBps: products.discountBps,
         })
         .from(products)
-        .where(and(inArray(products.id, lookupIds), isNull(products.deletedAt)));
+        .where(and(inArray(products.id, lookupIds), isNull(products.deletedAt))), readStoreDecimalPlaces(db)]);
 
     const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
-    return rows.map((row) => ({
+    return rows.map(({ priceMinor, discountBps, ...row }) => ({
         ...row,
+        price: fromMinor(priceMinor, decimalPlaces),
+        discountPercentage: bpsToPercent(discountBps),
         primaryImage: resolveProductImageRepresentation(mediaByProduct.get(row.id) ?? [])?.url ?? null,
     })).sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
 }
@@ -756,7 +769,7 @@ export async function getProductDetails(
             id: products.id,
             name: products.name,
             description: products.description,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             slug: products.slug,
             metaTitle: products.metaTitle,
@@ -771,9 +784,9 @@ export async function getProductDetails(
             updatedAt: products.updatedAt,
             deletedAt: products.deletedAt,
             isActive: products.isActive,
-            discountPercentage: products.discountPercentage,
+            discountBps: products.discountBps,
             discountType: products.discountType,
-            discountAmount: products.discountAmount,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             taxClassId: products.taxClassId,
             taxClassificationVersion: products.taxClassificationVersion,
@@ -787,7 +800,7 @@ export async function getProductDetails(
 
     if (!result) return null;
 
-    const [variants, mediaByProduct, richContent, attributeValues] = await Promise.all([
+    const [variants, mediaByProduct, richContent, attributeValues, decimalPlaces] = await Promise.all([
         db
             .select()
             .from(productVariants)
@@ -806,20 +819,21 @@ export async function getProductDetails(
             })
             .from(productAttributeValues)
             .where(eq(productAttributeValues.productId, id)),
+        readStoreDecimalPlaces(db),
     ]);
     const [optionsByProduct, selectedOptionsByVariant] = await Promise.all([
         loadProductOptions(db, [id]),
         loadVariantSelectedOptions(db, variants.map((variant) => variant.id)),
     ]);
     return {
-        ...result,
+        ...presentCatalogPrice(result, decimalPlaces),
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),
         updatedAt: requireProductTimestamp(result.updatedAt, "updated timestamp"),
         deletedAt: result.deletedAt
             ? requireProductTimestamp(result.deletedAt, "deleted timestamp")
             : null,
         variants: variants.map((variant) => ({
-            ...variant,
+            ...presentCatalogPrice(variant, decimalPlaces),
             selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
         })),
         options: optionsByProduct.get(id) ?? [],
@@ -935,8 +949,11 @@ export async function createProduct(
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
 
     const productId = "prod_" + nanoid();
+    const decimalPlaces = await readStoreDecimalPlaces(db);
+    const productPrice = catalogPriceColumns(data, decimalPlaces);
+    const priceMinor = toMinor(data.price, decimalPlaces);
     const defaultVariant = {
-        ...defaultVariantValues(productId, data.price),
+        ...defaultVariantValues(productId, priceMinor),
         ...(data.defaultSku?.sku ? { sku: data.defaultSku.sku } : {}),
         trackInventory: data.defaultSku?.trackInventory ?? false,
     };
@@ -948,7 +965,7 @@ export async function createProduct(
             id: productId,
             name: data.name,
             description: data.description || null,
-            price: data.price,
+            priceMinor,
             categoryId: data.categoryId,
             slug: data.slug,
             metaTitle: data.metaTitle || null,
@@ -960,8 +977,8 @@ export async function createProduct(
             productCondition: data.productCondition,
             isActive: data.isActive,
             discountType: data.discountType || "percentage",
-            discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-            discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+            discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
+            discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
             freeDelivery: data.freeDelivery,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -1048,7 +1065,7 @@ export async function createProduct(
                 imageId: matrixVariant.imageId,
                 weight: matrixVariant.weight,
                 sku: matrixVariant.sku.trim(),
-                price: matrixVariant.price,
+                priceMinor: toMinor(matrixVariant.price, decimalPlaces),
                 stock: 0,
                 reservedStock: 0,
                 preorderStock: 0,
@@ -1057,11 +1074,11 @@ export async function createProduct(
                 barcode: barcode.barcode,
                 barcodeType: barcode.barcodeType,
                 discountType: matrixVariant.discountType,
-                discountPercentage: matrixVariant.discountType === "percentage"
-                    ? matrixVariant.discountPercentage ?? 0
+                discountBps: matrixVariant.discountType === "percentage"
+                    ? percentToBps(matrixVariant.discountPercentage)
                     : 0,
-                discountAmount: matrixVariant.discountType === "flat"
-                    ? matrixVariant.discountAmount ?? 0
+                discountAmountMinor: matrixVariant.discountType === "flat"
+                    ? toMinor(matrixVariant.discountAmount ?? 0, decimalPlaces)
                     : 0,
                 version: 1,
                 stockVersion: 1,
@@ -1154,7 +1171,7 @@ export async function updateProduct(
     data: UpdateProductInput,
 ): Promise<ProductAggregateRevisionResult> {
     const existingProduct = await db
-        .select({ id: products.id })
+        .select({ id: products.id, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(eq(products.id, id))
         .get();
@@ -1180,6 +1197,9 @@ export async function updateProduct(
     }
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
+    const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
+    const productPrice = catalogPriceColumns(data, decimalPlaces);
+    const priceMinor = toMinor(data.price, decimalPlaces);
 
     const attributeValuesToInsert = (data.attributes ?? [])
         .filter((attr) => attr.attributeId && attr.value.trim())
@@ -1227,7 +1247,7 @@ export async function updateProduct(
             .set({
                 name: data.name,
                 description: data.description,
-                price: data.price,
+                priceMinor,
                 categoryId: data.categoryId,
                 slug: data.slug,
                 metaTitle: data.metaTitle,
@@ -1239,8 +1259,8 @@ export async function updateProduct(
                 productCondition: data.productCondition,
                 isActive: data.isActive,
                 discountType: data.discountType || "percentage",
-                discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage ?? null) : 0,
-                discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount ?? null) : 0,
+                discountBps: (data.discountType || "percentage") === "percentage" ? (productPrice.discountBps ?? 0) : 0,
+                discountAmountMinor: (data.discountType || "percentage") === "flat" ? (productPrice.discountAmountMinor ?? 0) : 0,
                 freeDelivery: data.freeDelivery,
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
@@ -1269,7 +1289,7 @@ export async function updateProduct(
     }
 
     if (data.isActive && activeVariants.length === 0) {
-        batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, data.price)));
+        batchOps.push(db.insert(productVariants).values(defaultVariantValues(id, priceMinor)));
     } else if (hasInvalidSkuTopology(activeVariants)) {
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
@@ -1279,10 +1299,10 @@ export async function updateProduct(
             db
                 .update(productVariants)
                 .set({
-                    price: data.price,
+                    priceMinor,
                     discountType: "percentage",
-                    discountPercentage: 0,
-                    discountAmount: 0,
+                    discountBps: 0,
+                    discountAmountMinor: 0,
                     updatedAt: sql`unixepoch()`,
                 })
                 .where(eq(productVariants.id, activeVariants[0]!.id)),
@@ -1386,7 +1406,7 @@ export async function restoreProduct(
     const product = await db
         .select({
             id: products.id,
-            price: products.price,
+            priceMinor: products.priceMinor,
             isActive: products.isActive,
         })
         .from(products)
@@ -1423,7 +1443,7 @@ export async function restoreProduct(
     ];
 
     if (product.isActive && (activeVariantCount?.count ?? 0) === 0) {
-        const { createdAt: _createdAt, ...defaultSkuRepairValues } = defaultVariantValues(id, product.price);
+        const { createdAt: _createdAt, ...defaultSkuRepairValues } = defaultVariantValues(id, product.priceMinor);
         void _createdAt;
         if (existingDefaultVariant) {
             statements.push(
@@ -1437,7 +1457,7 @@ export async function restoreProduct(
                     .where(eq(productVariants.id, defaultVariantId)),
             );
         } else {
-            statements.push(db.insert(productVariants).values(defaultVariantValues(id, product.price)));
+            statements.push(db.insert(productVariants).values(defaultVariantValues(id, product.priceMinor)));
         }
     }
 

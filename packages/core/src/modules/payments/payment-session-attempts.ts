@@ -2,6 +2,8 @@ import type { Database } from "@scalius/database/client";
 import { paymentSessionAttempts } from "@scalius/database/schema";
 import { and, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import type { PaymentType } from "./types";
 
 export interface PaymentSessionAttemptIdentity {
@@ -11,7 +13,7 @@ export interface PaymentSessionAttemptIdentity {
   orderId: string;
   gateway: string;
   paymentType: PaymentType;
-  amount: number;
+  amountMinor: number;
   currency: string;
 }
 
@@ -19,7 +21,7 @@ export interface BuildPaymentSessionAttemptIdentityInput {
   orderId: string;
   gateway: string;
   paymentType: PaymentType;
-  amount: number;
+  amountMinor: number;
   currency: string;
   receiptToken?: string;
   proof?: {
@@ -140,13 +142,16 @@ export async function buildPaymentSessionAttemptIdentity(
   const proof = resolveAttemptProof(input);
   const proofHash = await sha256Hex(proof.value);
   const currency = input.currency.trim().toLowerCase();
-  const amount = normalizeAmount(input.amount);
+  const amountMinor = input.amountMinor;
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new ServiceUnavailableError("Payment amount is unavailable. Please refresh and try again.");
+  }
   const canonical = proof.kind === "receipt"
     ? {
         orderId: input.orderId,
         gateway: input.gateway,
         paymentType: input.paymentType,
-        amount,
+        amountMinor,
         currency,
         receiptTokenHash: proofHash,
         requestContext: input.requestContext ?? null,
@@ -155,7 +160,7 @@ export async function buildPaymentSessionAttemptIdentity(
         orderId: input.orderId,
         gateway: input.gateway,
         paymentType: input.paymentType,
-        amount,
+        amountMinor,
         currency,
         proofKind: proof.kind,
         proofHash,
@@ -170,7 +175,7 @@ export async function buildPaymentSessionAttemptIdentity(
     orderId: input.orderId,
     gateway: input.gateway,
     paymentType: input.paymentType,
-    amount,
+    amountMinor,
     currency,
   };
 }
@@ -202,7 +207,7 @@ export async function claimPaymentSessionAttempt<TResponse>(
       orderId: input.orderId,
       gateway: input.gateway,
       paymentType: input.paymentType,
-      amount: input.amount,
+      amountMinor: input.amountMinor,
       currency: input.currency,
       requestHash: input.requestHash,
       status: "processing",
@@ -380,7 +385,7 @@ export async function listOrderPaymentSessionAttempts(
       orderId: paymentSessionAttempts.orderId,
       gateway: paymentSessionAttempts.gateway,
       paymentType: paymentSessionAttempts.paymentType,
-      amount: paymentSessionAttempts.amount,
+      amountMinor: paymentSessionAttempts.amountMinor,
       currency: paymentSessionAttempts.currency,
       status: paymentSessionAttempts.status,
       attempts: paymentSessionAttempts.attempts,
@@ -397,7 +402,7 @@ export async function listOrderPaymentSessionAttempts(
     .all();
 
   const now = Math.floor(Date.now() / 1000);
-  return rows.map((row) => {
+  return rows.map(({ amountMinor, ...row }) => {
     const activeProcessing =
       row.status === "processing" &&
       row.claimExpiresAt !== null &&
@@ -408,6 +413,7 @@ export async function listOrderPaymentSessionAttempts(
 
     return {
       ...row,
+      amount: fromMinor(amountMinor, getDecimalPlaces(row.currency)),
       activeProcessing,
       staleProcessing,
     };
@@ -441,7 +447,7 @@ async function resolveLivePaymentSessionClaim<TResponse>(
       orderId: input.orderId,
       gateway: input.gateway,
       paymentType: input.paymentType,
-      amount: input.amount,
+      amountMinor: input.amountMinor,
       currency: input.currency,
       requestHash: input.requestHash,
       status: "processing",
@@ -582,10 +588,6 @@ function createPaymentSessionClaimId(): string {
 function serializeAttemptError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.slice(0, MAX_ERROR_LENGTH);
-}
-
-function normalizeAmount(amount: number): number {
-  return Math.round(amount * 1_000_000) / 1_000_000;
 }
 
 async function sha256Hex(value: string): Promise<string> {

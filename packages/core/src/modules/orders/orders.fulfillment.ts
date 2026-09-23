@@ -24,6 +24,7 @@ import {
     getDeliveryProviderActionReadiness,
     lookupShipmentByMerchantOrderId,
     markShipmentReconciliationRequired,
+    presentShipment,
 } from "../delivery/delivery.service";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import {
@@ -35,7 +36,7 @@ import {
     noActivePaymentSessionAttemptForOrderIdCondition,
 } from "../payments/payment-session-attempts";
 
-import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
+import { sql, eq, and, inArray, getTableColumns, type SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
@@ -44,11 +45,10 @@ import {
 } from "@scalius/shared/order-state";
 import {
     assertOrderPaymentCurrency,
-    orderMoneyEqual,
     resolveOrderCurrencySnapshot,
-    roundOrderMoney,
     type OrderCurrencySnapshot,
 } from "../payments/order-currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { validateTransition } from "./order-state-machine";
 import type {
     OrderShipmentReconciliationResult,
@@ -102,7 +102,7 @@ const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =
 function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
     return sql`
         ${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
-        AND ${orders.paidAmount} = 0
+        AND ${orders.paidAmountMinor} = 0
         AND NOT EXISTS (
             SELECT 1 FROM ${orderPayments}
             WHERE ${orderPayments.orderId} = ${orderId}
@@ -118,14 +118,14 @@ function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
 async function assertGenericCancellationPaymentSafe(
     db: Database,
     orderId: string,
-    payment: { paymentStatus: string; paidAmount: number | null },
+    payment: { paymentStatus: string; paidAmountMinor: number },
 ): Promise<void> {
     const hasSafeOrderPaymentStatus =
         payment.paymentStatus === PaymentStatus.UNPAID
         || payment.paymentStatus === PaymentStatus.FAILED;
     if (
         !hasSafeOrderPaymentStatus
-        || payment.paidAmount !== 0
+        || payment.paidAmountMinor !== 0
     ) {
         throw new ValidationError(CANCELLATION_REQUIRES_REFUND_MESSAGE);
     }
@@ -627,11 +627,11 @@ async function getRecordedCodCollection(
     db: Database,
     orderId: string,
     currency: OrderCurrencySnapshot,
-): Promise<{ amount: number; collectedBy: string } | null> {
+): Promise<{ amountMinor: number; collectedBy: string } | null> {
     const payment = await db
         .select({
             id: orderPayments.id,
-            amount: orderPayments.amount,
+            amountMinor: orderPayments.amountMinor,
             currency: orderPayments.currency,
             collectedBy: orderPayments.codCollectedBy,
         })
@@ -661,10 +661,7 @@ async function getRecordedCodCollection(
     if (!tracking) return null;
     const collectedBy = payment.collectedBy?.trim();
     if (!collectedBy || tracking.collectedBy?.trim() !== collectedBy) return null;
-    const amount = Number(payment.amount);
-    return Number.isFinite(amount)
-        ? { amount: roundOrderMoney(amount, currency), collectedBy }
-        : null;
+    return { amountMinor: payment.amountMinor, collectedBy };
 }
 
 async function hasRecordedCodCollection(
@@ -1152,9 +1149,9 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
     const order = await db.select({
         status: orders.status,
         version: orders.version,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
+        totalAmountMinor: orders.totalAmountMinor,
+        paidAmountMinor: orders.paidAmountMinor,
+        balanceDueMinor: orders.balanceDueMinor,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         inventoryAction: orders.inventoryAction,
@@ -1170,25 +1167,24 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
     switch (body.action) {
         case "collected": {
             assertOrderCodActionAllowed(order.status, "collected");
+            const requestedAmount = body.collectedAmount;
+            if (typeof requestedAmount !== "number" || !Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+                throw new ValidationError("COD collected amount must be a positive finite number.");
+            }
+            const requestedAmountMinor = toMinor(requestedAmount, currency.decimalPlaces);
             const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null
                 : validateCODCollectionDetails(order, {
                     collectedBy: body.collectedBy as string,
-                    collectedAmount: body.collectedAmount as number,
+                    collectedAmountMinor: requestedAmountMinor,
                 });
 
             if (existingCodCollection) {
-                const requestedAmount = typeof body.collectedAmount === "number"
-                    ? roundOrderMoney(body.collectedAmount, currency)
-                    : Number.NaN;
-                if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-                    throw new ValidationError("COD collected amount must be a positive finite number.");
-                }
-                if (!orderMoneyEqual(existingCodCollection.amount, requestedAmount, currency)) {
+                if (existingCodCollection.amountMinor !== requestedAmountMinor) {
                     throw new ValidationError("COD collection was already recorded with a different amount.", {
-                        recordedAmount: existingCodCollection.amount,
-                        collectedAmount: requestedAmount,
+                        recordedAmount: fromMinor(existingCodCollection.amountMinor, currency.decimalPlaces),
+                        collectedAmount: fromMinor(requestedAmountMinor, currency.decimalPlaces),
                     });
                 }
                 const requestedCollector = typeof body.collectedBy === "string"
@@ -1254,7 +1250,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 const colResult = await recordCODCollection(db, {
                     orderId,
                     collectedBy: collection?.collectedBy ?? existingCodCollection!.collectedBy,
-                    collectedAmount: collection?.collectedAmount ?? existingCodCollection!.amount,
+                    collectedAmountMinor: collection?.collectedAmountMinor ?? existingCodCollection!.amountMinor,
                     receiptUrl: body.receiptUrl as string | undefined,
                 });
                 if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
@@ -1350,7 +1346,14 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 }
 
 export async function getOrderShipments(db: Database, orderId: string) {
-    return db.select().from(deliveryShipments).where(eq(deliveryShipments.orderId, orderId)).all();
+    const rows = await db.select({
+        ...getTableColumns(deliveryShipments),
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
+    }).from(deliveryShipments)
+        .innerJoin(orders, eq(orders.id, deliveryShipments.orderId))
+        .where(eq(deliveryShipments.orderId, orderId))
+        .all();
+    return rows.map(presentShipment);
 }
 
 export async function createFulfillmentShipment(db: Database, orderId: string, body: Record<string, unknown>) {
@@ -1359,11 +1362,16 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         status: orders.status,
         fulfillmentStatus: orders.fulfillmentStatus,
         version: orders.version,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
+    const shipmentAmount = body.shipmentAmount;
+    if (shipmentAmount != null && (typeof shipmentAmount !== "number" || !Number.isFinite(shipmentAmount) || shipmentAmount < 0)) {
+        throw new ValidationError("Shipment amount must be a non-negative number.");
+    }
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
@@ -1434,7 +1442,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         status: ShipmentStatus.IN_TRANSIT,
         rawStatus: ShipmentStatus.IN_TRANSIT,
         note: (body.note as string | undefined) ?? null,
-        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmount: (body.shipmentAmount as number | undefined) ?? null, isFinalShipment,
+        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmountMinor: shipmentAmount == null ? null : toMinor(shipmentAmount, order.currencyDecimalPlaces), isFinalShipment,
         createdAt: now, updatedAt: now,
     }));
 
@@ -1532,9 +1540,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         customerEmail: orders.customerEmail,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
+        totalAmountMinor: orders.totalAmountMinor,
+        paidAmountMinor: orders.paidAmountMinor,
+        balanceDueMinor: orders.balanceDueMinor,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
@@ -1551,11 +1559,8 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     if (isDeliveredOrCompleted) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
-        const paidAmount = roundOrderMoney(existingOrder.paidAmount ?? 0, currency);
-        const totalAmount = roundOrderMoney(existingOrder.totalAmount, currency);
-        const storedBalanceDue = roundOrderMoney(existingOrder.balanceDue ?? 0, currency);
-        const computedBalanceDue = roundOrderMoney(Math.max(0, totalAmount - paidAmount), currency);
-        const hasMoneyDue = storedBalanceDue > 0 || computedBalanceDue > 0;
+        const hasMoneyDue = existingOrder.balanceDueMinor > 0
+            || existingOrder.totalAmountMinor > existingOrder.paidAmountMinor;
         if (hasMoneyDue || existingOrder.paymentStatus !== PaymentStatus.PAID) {
             throw new ValidationError(
                 existingOrder.paymentMethod === PaymentMethod.COD
@@ -1568,7 +1573,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
 
         if (existingOrder.paymentMethod === PaymentMethod.COD) {
             const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);
-            if (!hasCodCollection || paidAmount <= 0) {
+            if (!hasCodCollection || existingOrder.paidAmountMinor <= 0) {
                 throw new ValidationError("Record COD collection through the COD action before marking the order delivered or completed.");
             }
         }

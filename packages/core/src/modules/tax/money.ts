@@ -1,5 +1,3 @@
-import currency from "currency.js";
-
 const MAX_MINOR_AMOUNT = 9_000_000_000_000;
 
 function assertMinorAmount(value: number, label: string): number {
@@ -7,21 +5,6 @@ function assertMinorAmount(value: number, label: string): number {
         throw new RangeError(`${label} must be a safe non-negative minor-unit integer.`);
     }
     return value;
-}
-
-export function toMinorUnits(amount: number, decimalPlaces: number): number {
-    if (!Number.isFinite(amount) || amount < 0) {
-        throw new RangeError("Money amount must be finite and non-negative.");
-    }
-    if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 3) {
-        throw new RangeError("Currency decimal places must be an integer between 0 and 3.");
-    }
-    return assertMinorAmount(currency(amount, { precision: decimalPlaces }).intValue, "Money amount");
-}
-
-export function fromMinorUnits(amountMinor: number, decimalPlaces: number): number {
-    assertMinorAmount(amountMinor, "Money amount");
-    return amountMinor / 10 ** decimalPlaces;
 }
 
 export function multiplyMinorByRate(amountMinor: number, rateBps: number): number {

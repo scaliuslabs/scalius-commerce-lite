@@ -130,14 +130,14 @@ describe("atomic checkout attempts", () => {
     const commit = async (attempt: AtomicCheckoutAttempt, orderId = attempt.orderId) => {
       const plan = await prepareAtomicCheckoutAttemptCommit(db, attempt, {
         paymentMethod: "cod",
-        totalAmount: 125,
+        totalAmountMinor: 12_500,
         response: { orderId: attempt.orderId },
       });
       await db.batch([
         ...plan.writesBeforeOrder,
         db.insert(schema.orders).values({
           id: orderId, customerName: "Buyer", customerPhone: "+8801712345678",
-          shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmount: 125, shippingCharge: 0,
+          shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmountMinor: 12_500,
         }),
         ...plan.writesAfterOrder,
       ] as never);
@@ -184,7 +184,7 @@ function createAttemptRow(
     orderId: "order_existing",
     status: "processing",
     paymentMethod: null,
-    totalAmount: null,
+    totalAmountMinor: null,
     responsePayload: null,
     attempts: 1,
     claimId: "legacy_claim",

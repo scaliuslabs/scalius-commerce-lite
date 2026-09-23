@@ -38,6 +38,7 @@ import {
 } from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
 import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
@@ -844,11 +845,10 @@ async function applyPaymentEvent(
   switch (event.kind) {
     case "confirmed": {
       const currency = event.currency ?? "";
-      const amount = (event.amountMinor ?? 0) / 10 ** getDecimalPlaces(currency);
       const result = await processPaymentConfirmed(db, {
         orderId: event.orderId,
         provider,
-        amount,
+        amountMinor: event.amountMinor ?? 0,
         currency,
         paymentType: event.paymentType,
         providerRef: event.providerRef,
@@ -861,7 +861,7 @@ async function applyPaymentEvent(
           orderId: event.orderId,
           gateway: provider,
           paymentType: result.paymentType ?? event.paymentType ?? "full",
-          amount,
+          amount: fromMinor(event.amountMinor ?? 0, getDecimalPlaces(currency)),
         });
         scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, { orderId: event.orderId, gateway: provider });
       }

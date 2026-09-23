@@ -37,13 +37,10 @@ async function insertHostedOrder(
     shippingAddress: "Dhaka",
     city: "dhaka",
     zone: "zone_1",
-    totalAmount: 100,
-    shippingCharge: 0,
     status: OrderStatus.INCOMPLETE,
     paymentMethod: "sslcommerz",
     paymentStatus: PaymentStatus.UNPAID,
-    paidAmount: 0,
-    balanceDue: 100,
+    balanceDueMinor: 10_000,
     version: 3,
     currencyCode: "BDT",
     currencyDecimalPlaces: 2,
@@ -62,7 +59,7 @@ async function insertHostedAttempt(
     orderId: "order_1",
     gateway: "sslcommerz",
     paymentType: "full",
-    amount: 100,
+    amountMinor: 10_000,
     currency: "BDT",
     requestHash: "request_hash_1",
     status: "created",
@@ -116,11 +113,11 @@ describe("hosted payment return reconciliation", () => {
       })).resolves.toBe("retry_ready");
 
       expect(sqlite.prepare(`
-        SELECT payment_status, paid_amount, version
+        SELECT payment_status, paid_amount_minor, version
         FROM orders WHERE id = ?
       `).get("order_1")).toMatchObject({
         payment_status: PaymentStatus.FAILED,
-        paid_amount: 0,
+        paid_amount_minor: 0,
         version: 4,
       });
       expect(sqlite.prepare(`
@@ -176,22 +173,22 @@ describe("hosted payment return reconciliation", () => {
       await insertHostedOrder(db, {
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.PARTIAL,
-        paidAmount: 25,
-        balanceDue: 75,
+        paidAmountMinor: 2500,
+        balanceDueMinor: 7500,
         version: 5,
       });
       await db.insert(paymentPlans).values({
         id: "plan_1",
         orderId: "order_1",
-        totalAmount: 100,
-        depositAmount: 25,
-        balanceDue: 75,
+        totalAmountMinor: 10_000,
+        depositAmountMinor: 2500,
+        balanceDueMinor: 7500,
         status: PaymentPlanStatus.DEPOSIT_PAID,
       });
       await db.insert(orderPayments).values({
         id: "pay_deposit",
         orderId: "order_1",
-        amount: 25,
+        amountMinor: 2500,
         currency: "BDT",
         paymentMethod: "sslcommerz",
         paymentType: "deposit",
@@ -201,7 +198,7 @@ describe("hosted payment return reconciliation", () => {
       await insertHostedAttempt(db, {
         attemptKey: "payment_session:sslcommerz:balance_attempt",
         paymentType: "balance",
-        amount: 75,
+        amountMinor: 7500,
         providerCorrelationId: "order_1_balance_BALANCE1",
       });
 
@@ -214,19 +211,19 @@ describe("hosted payment return reconciliation", () => {
       };
       await expect(reconcileHostedPaymentReturn(db, input)).resolves.toBe("retry_ready");
       expect(sqlite.prepare(`
-        SELECT status, payment_status, paid_amount, balance_due, version
+        SELECT status, payment_status, paid_amount_minor, balance_due_minor, version
         FROM orders WHERE id = ?
       `).get("order_1")).toMatchObject({
         status: OrderStatus.PENDING,
         payment_status: PaymentStatus.PARTIAL,
-        paid_amount: 25,
-        balance_due: 75,
+        paid_amount_minor: 2500,
+        balance_due_minor: 7500,
         version: 6,
       });
       expect(sqlite.prepare("SELECT status FROM payment_session_attempts WHERE id = ?").get("psa_1"))
         .toMatchObject({ status: "failed" });
-      expect(sqlite.prepare("SELECT status, amount FROM order_payments WHERE id = ?").get("pay_deposit"))
-        .toMatchObject({ status: PaymentRecordStatus.SUCCEEDED, amount: 25 });
+      expect(sqlite.prepare("SELECT status, amount_minor FROM order_payments WHERE id = ?").get("pay_deposit"))
+        .toMatchObject({ status: PaymentRecordStatus.SUCCEEDED, amount_minor: 2500 });
 
       await expect(reconcileHostedPaymentReturn(db, input)).resolves.toBe("retry_ready");
       expect(sqlite.prepare("SELECT version FROM orders WHERE id = ?").get("order_1"))
@@ -238,16 +235,16 @@ describe("hosted payment return reconciliation", () => {
         paymentType: "balance",
         providerRef: "val_balance",
         secondaryRef: "bank_balance",
-        amount: 75,
+        amountMinor: 7500,
         currency: "BDT",
       })).resolves.toMatchObject({ success: true });
       expect(sqlite.prepare(`
-        SELECT payment_status, paid_amount, balance_due
+        SELECT payment_status, paid_amount_minor, balance_due_minor
         FROM orders WHERE id = ?
       `).get("order_1")).toMatchObject({
         payment_status: PaymentStatus.PAID,
-        paid_amount: 100,
-        balance_due: 0,
+        paid_amount_minor: 10_000,
+        balance_due_minor: 0,
       });
       expect(sqlite.prepare("SELECT status FROM payment_plans WHERE id = ?").get("plan_1"))
         .toMatchObject({ status: PaymentPlanStatus.COMPLETED });
@@ -269,7 +266,7 @@ describe("hosted payment return reconciliation", () => {
         paymentType: "full" as const,
         providerRef: "val_1",
         secondaryRef: "bank_1",
-        amount: 100,
+        amountMinor: 10_000,
         currency: "BDT",
       },
     },
@@ -304,13 +301,13 @@ describe("hosted payment return reconciliation", () => {
       await expect(processPaymentConfirmed(db, confirmation)).resolves.toMatchObject({ success: true });
 
       expect(sqlite.prepare(`
-        SELECT status, payment_status, paid_amount, balance_due
+        SELECT status, payment_status, paid_amount_minor, balance_due_minor
         FROM orders WHERE id = ?
       `).get("order_1")).toMatchObject({
         status: OrderStatus.PENDING,
         payment_status: PaymentStatus.PAID,
-        paid_amount: 100,
-        balance_due: 0,
+        paid_amount_minor: 10_000,
+        balance_due_minor: 0,
       });
       expect(sqlite.prepare(`
         SELECT count(*) AS count
@@ -338,7 +335,7 @@ describe("hosted payment return reconciliation", () => {
       await db.insert(orderPayments).values({
         id: "pay_pending",
         orderId: "order_1",
-        amount: 100,
+        amountMinor: 10_000,
         currency: "BDT",
         paymentMethod: "sslcommerz",
         paymentType: "full",

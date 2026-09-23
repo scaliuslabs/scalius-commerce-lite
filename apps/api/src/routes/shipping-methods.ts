@@ -2,6 +2,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import { shippingMethods as shippingMethodsTable } from "@scalius/database/schema";
 import { eq, isNull, asc, and } from "drizzle-orm";
+import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { fromMinor } from "@scalius/shared/money";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -36,11 +38,12 @@ const listShippingMethodsRoute = createRoute({
 
 app.openapi(listShippingMethodsRoute, async (c) => {
   const db = c.get("db");
+  const currencyRead = getCurrencyConfig(db);
   const methods = await db
     .select({
       id: shippingMethodsTable.id,
       name: shippingMethodsTable.name,
-      fee: shippingMethodsTable.fee,
+      feeMinor: shippingMethodsTable.feeMinor,
       description: shippingMethodsTable.description,
       isActive: shippingMethodsTable.isActive,
       sortOrder: shippingMethodsTable.sortOrder,
@@ -59,8 +62,10 @@ app.openapi(listShippingMethodsRoute, async (c) => {
       asc(shippingMethodsTable.name),
     );
 
-  const formattedMethods = methods.map((method) => ({
+  const { decimalPlaces } = await currencyRead;
+  const formattedMethods = methods.map(({ feeMinor, ...method }) => ({
     ...method,
+    fee: fromMinor(feeMinor, decimalPlaces),
     createdAt:
       method.createdAt instanceof Date ? method.createdAt.toISOString() : null,
     updatedAt:

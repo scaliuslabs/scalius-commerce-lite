@@ -5,13 +5,13 @@ import { listProducts } from "./products.admin";
 function setup() {
   const harness = createSqliteD1Database();
   harness.sqlite.exec(`
-    INSERT INTO products (id, name, price, slug, is_active, updated_at) VALUES
-      ('p_live', 'Canvas Tote', 10, 'tote', 1, 1700000000),
-      ('p_inactive', 'Paused Tote', 10, 'paused', 0, 1700000000);
-    INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory, barcode, barcode_type, deleted_at) VALUES
-      ('v_live', 'p_live', 'TOTE-NEW', 10, 1, 0, 1, 0, NULL, NULL, NULL),
-      ('v_retired', 'p_live', 'RETIREDSKU', 10, 0, 0, 1, 0, '4006381333931', 'ean13', 1700000000),
-      ('v_paused', 'p_inactive', 'PAUSEDSKU', 10, 1, 0, 1, 0, NULL, NULL, NULL);
+    INSERT INTO products (id, name, price_minor, slug, is_active, updated_at) VALUES
+      ('p_live', 'Canvas Tote', 1000, 'tote', 1, 1700000000),
+      ('p_inactive', 'Paused Tote', 1000, 'paused', 0, 1700000000);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory, barcode, barcode_type, deleted_at) VALUES
+      ('v_live', 'p_live', 'TOTE-NEW', 1000, 1, 0, 1, 0, NULL, NULL, NULL),
+      ('v_retired', 'p_live', 'RETIREDSKU', 1000, 0, 0, 1, 0, '4006381333931', 'ean13', 1700000000),
+      ('v_paused', 'p_inactive', 'PAUSEDSKU', 1000, 1, 0, 1, 0, NULL, NULL, NULL);
   `);
   return harness;
 }

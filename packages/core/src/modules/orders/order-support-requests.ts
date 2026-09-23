@@ -122,7 +122,7 @@ export type SupportRequestActionOrderState = {
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
-  paidAmount: number | null | undefined;
+  paidAmountMinor: number;
 };
 
 type SupportRequestActionContext = {
@@ -345,9 +345,8 @@ export function getCustomerOrderSupportRequestActions(
     PRE_SHIPMENT_CANCEL_STATUSES.has(order.status) &&
     order.fulfillmentStatus === FulfillmentStatus.PENDING &&
     !context.hasShipment;
-  const paidAmount = Number(order.paidAmount ?? 0);
   const canRequestRefund =
-    paidAmount > 0 &&
+    order.paidAmountMinor > 0 &&
     REFUNDABLE_PAYMENT_STATUSES.has(order.paymentStatus) &&
     REFUND_REQUEST_STATUSES.has(order.status);
 
@@ -699,7 +698,7 @@ async function selectSupportRequestOrderState(
       status: orders.status,
       paymentStatus: orders.paymentStatus,
       fulfillmentStatus: orders.fulfillmentStatus,
-      paidAmount: orders.paidAmount,
+      paidAmountMinor: orders.paidAmountMinor,
     })
     .from(orders)
     .where(expectedCustomerId

@@ -30,7 +30,7 @@ async function createDb(
         .run(JSON.stringify({ authVerificationMethod, policy: customerAuthPolicy ?? null }));
     await currencyDocument.write(db, (readiness.currency ?? { currencyCode: "bdt", currencySymbol: "৳" }) as never);
     if ((readiness.activeShippingRows ?? [{ id: "sm_1" }]).length > 0) {
-        sqlite.exec("INSERT INTO shipping_methods (id, name, fee, is_active) VALUES ('sm_1', 'Standard', 60, 1)");
+        sqlite.exec("INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_1', 'Standard', 6000, 1)");
     }
     if ((readiness.activeHierarchyRows ?? [{ id: "zone_1" }]).length > 0) {
         sqlite.exec(`INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)

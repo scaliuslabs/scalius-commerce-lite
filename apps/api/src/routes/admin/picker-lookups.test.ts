@@ -13,7 +13,7 @@ function createTestApp() {
             maxBoundParameters = Math.max(maxBoundParameters, values.length);
         },
     });
-    const product = sqlite.prepare("INSERT INTO products (id, name, price, slug) VALUES (?, ?, ?, ?)");
+    const product = sqlite.prepare("INSERT INTO products (id, name, price_minor, slug) VALUES (?, ?, ?, ?)");
     product.run("prod_a", "Alpha", 10, "alpha");
     product.run("prod_b", "Beta", 20, "beta");
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");

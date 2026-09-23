@@ -19,15 +19,13 @@ import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
 import {
     assertOrderPaymentCurrency,
-    orderMoneyEqual,
     resolveOrderCurrencySnapshot,
-    roundOrderMoney,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import { resolveRefundProviderMoney } from "./refund-provider-money";
 import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
@@ -42,7 +40,7 @@ import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";
 
 export interface RefundRequest {
     orderId: string;
-    /** Amount to refund. If omitted, full refund of paidAmount. */
+    /** Decimal amount from the HTTP request. If omitted, the full paid amount is refunded. */
     amount?: number;
     reason: string;
     /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
@@ -138,7 +136,7 @@ type CapturedPayment = OrderPayment;
 interface RefundAllocation {
     id: string;
     sourcePayment: CapturedPayment;
-    amount: number;
+    amountMinor: number;
     idempotencyKey: string;
     refundReference: string;
     index: number;
@@ -235,24 +233,20 @@ function buildReconciledRefundNotificationDedupeKey(
 
 function computeRefundedBySourcePayment(
     capturedPayments: CapturedPayment[],
-    refundRows: Array<Pick<OrderPayment, "amount" | "metadata">>,
-    currency: OrderCurrencySnapshot,
+    refundRows: Array<Pick<OrderPayment, "amountMinor" | "metadata">>,
 ): Map<string, number> {
     const refundedBySource = new Map<string, number>();
     let unattributedRefundAmount = 0;
 
     for (const refund of refundRows) {
-        const amount = roundOrderMoney(Math.max(0, refund.amount), currency);
+        const amount = Math.max(0, refund.amountMinor);
         if (amount <= 0) continue;
 
         const sourcePaymentId = getRefundSourcePaymentId(refund);
         if (sourcePaymentId) {
-            refundedBySource.set(
-                sourcePaymentId,
-                roundOrderMoney((refundedBySource.get(sourcePaymentId) ?? 0) + amount, currency),
-            );
+            refundedBySource.set(sourcePaymentId, (refundedBySource.get(sourcePaymentId) ?? 0) + amount);
         } else {
-            unattributedRefundAmount = roundOrderMoney(unattributedRefundAmount + amount, currency);
+            unattributedRefundAmount += amount;
         }
     }
 
@@ -262,11 +256,11 @@ function computeRefundedBySourcePayment(
     for (const payment of capturedPayments) {
         if (unattributedRefundAmount <= 0) break;
         const alreadyRefunded = refundedBySource.get(payment.id) ?? 0;
-        const remainingPaymentAmount = roundOrderMoney(Math.max(0, payment.amount - alreadyRefunded), currency);
-        const applied = roundOrderMoney(Math.min(remainingPaymentAmount, unattributedRefundAmount), currency);
+        const remainingPaymentAmount = Math.max(0, payment.amountMinor - alreadyRefunded);
+        const applied = Math.min(remainingPaymentAmount, unattributedRefundAmount);
         if (applied > 0) {
-            refundedBySource.set(payment.id, roundOrderMoney(alreadyRefunded + applied, currency));
-            unattributedRefundAmount = roundOrderMoney(unattributedRefundAmount - applied, currency);
+            refundedBySource.set(payment.id, alreadyRefunded + applied);
+            unattributedRefundAmount -= applied;
         }
     }
 
@@ -276,48 +270,41 @@ function computeRefundedBySourcePayment(
 function buildRefundAllocations(params: {
     orderId: string;
     claimVersion: number;
-    refundAmount: number;
+    refundAmountMinor: number;
     capturedPayments: CapturedPayment[];
-    refundRows: Array<Pick<OrderPayment, "amount" | "metadata">>;
+    refundRows: Array<Pick<OrderPayment, "amountMinor" | "metadata">>;
     currency: OrderCurrencySnapshot;
 }): RefundAllocation[] {
     const refundedBySource = computeRefundedBySourcePayment(
         params.capturedPayments,
         params.refundRows,
-        params.currency,
     );
-    let remainingRefundAmount = params.refundAmount;
+    let remainingRefundAmount = params.refundAmountMinor;
     const allocations: RefundAllocation[] = [];
 
     for (const sourcePayment of params.capturedPayments) {
         if (remainingRefundAmount <= 0) break;
         const alreadyRefunded = refundedBySource.get(sourcePayment.id) ?? 0;
-        const refundableAmount = roundOrderMoney(
-            Math.max(0, sourcePayment.amount - alreadyRefunded),
-            params.currency,
-        );
+        const refundableAmount = Math.max(0, sourcePayment.amountMinor - alreadyRefunded);
         if (refundableAmount <= 0) continue;
 
-        const amount = roundOrderMoney(
-            Math.min(refundableAmount, remainingRefundAmount),
-            params.currency,
-        );
+        const amountMinor = Math.min(refundableAmount, remainingRefundAmount);
         const index = allocations.length;
         allocations.push({
             id: getRefundClaimId(params.orderId, params.claimVersion - 1, index),
             sourcePayment,
-            amount,
+            amountMinor,
             idempotencyKey: buildRefundIdempotencyKey(params.orderId, sourcePayment.id, params.claimVersion),
             refundReference: buildRefundReference(params.orderId, sourcePayment.id, params.claimVersion, index),
             index,
         });
-        remainingRefundAmount = roundOrderMoney(remainingRefundAmount - amount, params.currency);
+        remainingRefundAmount -= amountMinor;
     }
 
     if (remainingRefundAmount > 0) {
         throw new ValidationError("Refund amount exceeds refundable captured payment balance", {
-            requestedAmount: params.refundAmount,
-            remainingUnallocatedAmount: remainingRefundAmount,
+            requestedAmount: fromMinor(params.refundAmountMinor, params.currency.decimalPlaces),
+            remainingUnallocatedAmount: fromMinor(remainingRefundAmount, params.currency.decimalPlaces),
         });
     }
 
@@ -349,20 +336,20 @@ function serializeRefundAttemptError(error: unknown): string {
 
 async function buildRefundRequestHash(params: {
     request: RefundRequest;
-    refundAmount: number;
+    refundAmountMinor: number;
     currency: string;
     allocations: RefundAllocation[];
 }): Promise<string> {
     return sha256Hex(stableStringify({
         orderId: params.request.orderId,
-        amount: params.refundAmount,
+        amountMinor: params.refundAmountMinor,
         reason: params.request.reason,
         gateway: params.request.gateway ?? null,
         manualSettlementConfirmed: params.request.manualSettlementConfirmed === true,
         currency: params.currency,
         allocations: params.allocations.map((allocation) => ({
             sourcePaymentId: allocation.sourcePayment.id,
-            amount: allocation.amount,
+            amountMinor: allocation.amountMinor,
             gateway: allocation.sourcePayment.paymentMethod,
             providerIdempotencyKey: allocation.idempotencyKey,
             refundReference: allocation.refundReference,
@@ -432,43 +419,32 @@ function isRefundedPaymentRow(payment: Pick<OrderPayment, "paymentType" | "statu
 }
 
 function computePaymentStateFromLedger(params: {
-    totalAmount: number;
-    payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amount">>;
-    currency: OrderCurrencySnapshot;
+    totalAmountMinor: number;
+    payments: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
 }) {
-    const capturedAmount = roundOrderMoney(params.payments
+    const capturedAmount = params.payments
         .filter(isCapturedPaymentRow)
-        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0), params.currency);
-    const refundedAmount = roundOrderMoney(params.payments
+        .reduce((sum, payment) => sum + payment.amountMinor, 0);
+    const refundedAmount = params.payments
         .filter(isRefundedPaymentRow)
-        .reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0), params.currency);
-    const paidAmount = roundOrderMoney(Math.max(0, capturedAmount - refundedAmount), params.currency);
-    const isFullRefund = capturedAmount > 0 && (
-        orderMoneyEqual(paidAmount, 0, params.currency) || refundedAmount >= capturedAmount
-    );
+        .reduce((sum, payment) => sum + payment.amountMinor, 0);
+    const isFullRefund = capturedAmount > 0 && refundedAmount >= capturedAmount;
 
     if (isFullRefund) {
         return {
-            capturedAmount,
-            refundedAmount,
             isFullRefund,
-            paidAmount: 0,
-            balanceDue: roundOrderMoney(params.totalAmount, params.currency),
+            paidAmountMinor: 0,
+            balanceDueMinor: params.totalAmountMinor,
             paymentStatus: PaymentStatus.REFUNDED,
         };
     }
 
-    const paymentState = computeOrderPaymentState({
-        totalAmount: params.totalAmount,
-        paidAmount,
-        currency: params.currency,
-    });
-
     return {
-        capturedAmount,
-        refundedAmount,
         isFullRefund,
-        ...paymentState,
+        ...computeOrderPaymentState({
+            totalAmountMinor: params.totalAmountMinor,
+            paidAmountMinor: capturedAmount - refundedAmount,
+        }),
     };
 }
 
@@ -492,7 +468,7 @@ export async function finalizeAcceptedRefundAttemptIds(
             orderId: refundAttempts.orderId,
             refundPaymentId: refundAttempts.refundPaymentId,
             providerRefundId: refundAttempts.providerRefundId,
-            amount: refundAttempts.amount,
+            amountMinor: refundAttempts.amountMinor,
             currency: refundAttempts.currency,
         })
         .from(refundAttempts)
@@ -507,14 +483,14 @@ export async function finalizeAcceptedRefundAttemptIds(
     const reconciliationByOrder = new Map<string, {
         order: {
             id: string;
-            totalAmount: number;
+            totalAmountMinor: number;
             status: string;
             version: number;
-            currencyCode: string | null;
-            currencyDecimalPlaces: number | null;
+            currencyCode: string;
+            currencyDecimalPlaces: number;
         };
         currency: OrderCurrencySnapshot;
-        paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amount">>;
+        paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
     }>();
 
     // Validate every immutable order/payment currency before mutating refund rows.
@@ -522,7 +498,7 @@ export async function finalizeAcceptedRefundAttemptIds(
         const order = await db
             .select({
                 id: orders.id,
-                totalAmount: orders.totalAmount,
+                totalAmountMinor: orders.totalAmountMinor,
                 status: orders.status,
                 version: orders.version,
                 currencyCode: orders.currencyCode,
@@ -545,7 +521,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                 id: orderPayments.id,
                 paymentType: orderPayments.paymentType,
                 status: orderPayments.status,
-                amount: orderPayments.amount,
+                amountMinor: orderPayments.amountMinor,
                 currency: orderPayments.currency,
             })
             .from(orderPayments)
@@ -561,7 +537,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                 status: refundPaymentIdSet.has(payment.id)
                     ? PaymentRecordStatus.REFUNDED
                     : payment.status,
-                amount: payment.amount,
+                amountMinor: payment.amountMinor,
             })),
         });
     }
@@ -582,9 +558,8 @@ export async function finalizeAcceptedRefundAttemptIds(
         const { order, currency, paymentRows } = reconciliation;
 
         const paymentState = computePaymentStateFromLedger({
-            totalAmount: order.totalAmount,
+            totalAmountMinor: order.totalAmountMinor,
             payments: paymentRows,
-            currency,
         });
         const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
         const shouldReleaseInventory =
@@ -592,8 +567,8 @@ export async function finalizeAcceptedRefundAttemptIds(
             (nextOrderStatus === OrderStatus.CANCELLED || order.status === OrderStatus.CANCELLED);
 
         const updateResult = await db.update(orders).set({
-            paidAmount: paymentState.paidAmount,
-            balanceDue: paymentState.balanceDue,
+            paidAmountMinor: paymentState.paidAmountMinor,
+            balanceDueMinor: paymentState.balanceDueMinor,
             paymentStatus: paymentState.paymentStatus,
             ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
             version: sql`${orders.version} + 1`,
@@ -631,9 +606,9 @@ export async function finalizeAcceptedRefundAttemptIds(
                 notificationAttemptIds,
                 paymentState.isFullRefund,
             ),
-            amount: roundOrderMoney(
-                orderAttempts.reduce((sum, attempt) => sum + Number(attempt.amount ?? 0), 0),
-                currency,
+            amount: fromMinor(
+                orderAttempts.reduce((sum, attempt) => sum + attempt.amountMinor, 0),
+                currency.decimalPlaces,
             ),
             refundId: notificationRefundIds.join(",") || undefined,
         });
@@ -751,7 +726,7 @@ function buildRefundAttemptInsert(params: {
         sourcePaymentId: params.allocation.sourcePayment.id,
         refundPaymentId: params.allocation.id,
         gateway: params.allocation.sourcePayment.paymentMethod,
-        amount: params.allocation.amount,
+        amountMinor: params.allocation.amountMinor,
         currency: params.currency,
         reason: params.request.reason,
         requestHash: params.requestHash,
@@ -932,7 +907,7 @@ async function markRefundAllocationsProviderUnknown(
 async function dispatchRefund(
     db: Database,
     payment: CapturedPayment,
-    refundAmount: number,
+    refundAmountMinor: number,
     currency: OrderCurrencySnapshot,
     params: RefundRequest,
     providerMetadata: { idempotencyKey: string; refundReference: string } & Record<string, string>,
@@ -946,7 +921,9 @@ async function dispatchRefund(
     if (!settings.enabled) throw new ServiceUnavailableError(`${gateway.label} payment gateway is disabled`);
     if (settings.credentialErrors?.length) throw new ServiceUnavailableError(`${gateway.label} credentials are not readable`);
     if (!payment.providerRef) throw new ValidationError(`No ${gateway.label} payment reference found on payment record`);
-    const money = resolveRefundProviderMoney(refundAmount, currency, `${gateway.label} refund`);
+    if (!Number.isSafeInteger(refundAmountMinor) || refundAmountMinor <= 0) {
+        throw new ValidationError(`${gateway.label} refund must resolve to a positive provider amount.`);
+    }
 
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -954,8 +931,8 @@ async function dispatchRefund(
             gateway.refund(settings, {
                 providerRef: payment.providerRef,
                 secondaryRef: payment.providerSecondaryRef,
-                amountMinor: money.amountMinor,
-                currency: money.currency,
+                amountMinor: refundAmountMinor,
+                currency: currency.code,
                 reason: params.reason,
                 idempotencyKey: providerMetadata.idempotencyKey,
                 reference: providerMetadata.refundReference,
@@ -984,7 +961,7 @@ function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string
 function buildDirectRefundNotificationFact(params: {
     orderId: string;
     refundGroupId: string;
-    amount: number;
+    amountMinor: number;
     isFullRefund: boolean;
     refundId?: string;
     currency: OrderCurrencySnapshot;
@@ -995,7 +972,7 @@ function buildDirectRefundNotificationFact(params: {
         dedupeKey: params.isFullRefund
             ? buildFullRefundNotificationDedupeKey(params.orderId, params.refundGroupId)
             : buildPartialRefundNotificationDedupeKey(params.orderId, params.refundGroupId),
-        amount: roundOrderMoney(params.amount, params.currency),
+        amount: fromMinor(params.amountMinor, params.currency.decimalPlaces),
         refundId: params.refundId,
     };
 }
@@ -1004,7 +981,7 @@ function buildRefundStateNotificationFact(params: {
     orderId: string;
     refundGroupId: string;
     notificationType: Extract<RefundCustomerNotificationType, "refund_processing" | "refund_failed">;
-    amount: number;
+    amountMinor: number;
     currency: OrderCurrencySnapshot;
 }): RefundNotificationFact {
     const state = params.notificationType === "refund_processing" ? "processing" : "failed";
@@ -1012,7 +989,7 @@ function buildRefundStateNotificationFact(params: {
         orderId: params.orderId,
         notificationType: params.notificationType,
         dedupeKey: buildRefundStateNotificationDedupeKey(params.orderId, params.refundGroupId, state),
-        amount: roundOrderMoney(params.amount, params.currency),
+        amount: fromMinor(params.amountMinor, params.currency.decimalPlaces),
     };
 }
 
@@ -1034,9 +1011,7 @@ export async function processRefund(
     const order = await db
         .select({
             id: orders.id,
-            totalAmount: orders.totalAmount,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
+            paidAmountMinor: orders.paidAmountMinor,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
             status: orders.status,
@@ -1056,11 +1031,11 @@ export async function processRefund(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     const currency = resolveOrderCurrencySnapshot(order);
-    if ((order.discountAmountMinor ?? 0) > 0) {
+    if (order.discountAmountMinor > 0) {
         await readPromotionRefundSnapshot(db, {
             orderId: order.id,
             currencyCode: currency.code,
-            orderDiscountAmountMinor: order.discountAmountMinor ?? 0,
+            orderDiscountAmountMinor: order.discountAmountMinor,
         });
     }
     assertNoActiveShipmentClaim(order);
@@ -1108,23 +1083,26 @@ export async function processRefund(
     }
 
     // Determine and validate refund amount before any gateway calls
-    const paidAmount = roundOrderMoney(order.paidAmount ?? 0, currency);
-    const refundAmount = roundOrderMoney(
-        params.amount ?? (order.paidAmount ?? order.totalAmount),
-        currency,
-    );
+    const paidAmount = order.paidAmountMinor;
+    if (params.amount !== undefined && (!Number.isFinite(params.amount) || params.amount <= 0)) {
+        throw new ValidationError("Refund amount must be greater than zero");
+    }
+    const refundAmount = params.amount === undefined
+        ? paidAmount
+        : toMinor(params.amount, currency.decimalPlaces);
 
     if (refundAmount <= 0) {
         throw new ValidationError("Refund amount must be greater than zero");
     }
 
     if (refundAmount > paidAmount) {
+        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
         throw new ValidationError(
-            `Refund amount (${refundAmount}) exceeds paid amount (${paidAmount})`
+            `Refund amount (${display(refundAmount)}) exceeds paid amount (${display(paidAmount)})`
         );
     }
 
-    const isFullRefund = refundAmount >= paidAmount || orderMoneyEqual(refundAmount, paidAmount, currency);
+    const isFullRefund = refundAmount >= paidAmount;
 
     const capturedPayments = paymentLedgerRows
         .filter((payment) =>
@@ -1151,7 +1129,7 @@ export async function processRefund(
     const allocations = buildRefundAllocations({
         orderId: params.orderId,
         claimVersion,
-        refundAmount,
+        refundAmountMinor: refundAmount,
         capturedPayments,
         refundRows: priorRefundRows,
         currency,
@@ -1166,7 +1144,7 @@ export async function processRefund(
     }
     const refundRequestHash = await buildRefundRequestHash({
         request: params,
-        refundAmount,
+        refundAmountMinor: refundAmount,
         currency: currency.code,
         allocations,
     });
@@ -1188,7 +1166,7 @@ export async function processRefund(
             }).where(and(
                 eq(orders.id, params.orderId),
                 eq(orders.version, order.version),
-                sql`${orders.paidAmount} >= ${refundAmount}`,
+                sql`${orders.paidAmountMinor} >= ${refundAmount}`,
                 noActiveRefundAttemptForOrderIdCondition(params.orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
             )).returning({ id: orders.id, version: orders.version }),
@@ -1196,7 +1174,7 @@ export async function processRefund(
                 db.insert(orderPayments).values({
                     id: allocation.id,
                     orderId: params.orderId,
-                    amount: allocation.amount,
+                    amountMinor: allocation.amountMinor,
                     currency: currency.code,
                     paymentMethod: allocation.sourcePayment.paymentMethod,
                     paymentType: "refund",
@@ -1253,7 +1231,7 @@ export async function processRefund(
             const refundId = await dispatchRefund(
                 db,
                 allocation.sourcePayment,
-                allocation.amount,
+                allocation.amountMinor,
                 currency,
                 params,
                 {
@@ -1309,10 +1287,8 @@ export async function processRefund(
             });
         }
 
-        const completedAmount = roundOrderMoney(
-            completedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0),
-            currency,
-        );
+        const completedAmount = completedAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
+        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
         if (completedAmount > 0) {
             let finalizedResult: FinalizeAcceptedRefundAttemptsResult;
             try {
@@ -1323,10 +1299,10 @@ export async function processRefund(
             } catch (finalizeError: unknown) {
                 await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
                 throw new ServiceUnavailableError(
-                    `Refund partially processed: ${completedAmount} was completed, but local order reconciliation failed. Please review before retrying.`,
+                    `Refund partially processed: ${display(completedAmount)} was completed, but local order reconciliation failed. Please review before retrying.`,
                 );
             }
-            const remainingAmount = roundOrderMoney(refundAmount - completedAmount, currency);
+            const remainingAmount = refundAmount - completedAmount;
             const affectedOrderIds = finalizedResult.orderIds.length > 0
                 ? finalizedResult.orderIds
                 : [params.orderId];
@@ -1337,12 +1313,12 @@ export async function processRefund(
                         orderId: params.orderId,
                         refundGroupId,
                         notificationType: "refund_processing",
-                        amount: remainingAmount,
+                        amountMinor: remainingAmount,
                         currency,
                     }));
                 }
                 throw new PartialRefundProcessedError(
-                    `Refund partially processed: ${completedAmount} was completed, but ${remainingAmount} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
+                    `Refund partially processed: ${display(completedAmount)} was completed, but ${display(remainingAmount)} has an unknown provider outcome. Do not retry until the pending refund is reconciled.`,
                     {
                         affectedOrderIds,
                         gateway: resultGateway,
@@ -1357,12 +1333,12 @@ export async function processRefund(
                     orderId: params.orderId,
                     refundGroupId,
                     notificationType: "refund_failed",
-                    amount: remainingAmount,
+                    amountMinor: remainingAmount,
                     currency,
                 }));
             }
             throw new PartialRefundProcessedError(
-                `Refund partially processed: ${completedAmount} was completed, but ${remainingAmount} could not be completed. Please review before retrying.`,
+                `Refund partially processed: ${display(completedAmount)} was completed, but ${display(remainingAmount)} could not be completed. Please review before retrying.`,
                 {
                     affectedOrderIds,
                     gateway: resultGateway,
@@ -1394,7 +1370,7 @@ export async function processRefund(
     const refundNotification = buildDirectRefundNotificationFact({
         orderId: params.orderId,
         refundGroupId,
-        amount: refundAmount,
+        amountMinor: refundAmount,
         isFullRefund,
         refundId: getCompletedRefundIds(completedAllocations),
         currency,
@@ -1404,7 +1380,7 @@ export async function processRefund(
         success: true,
         gateway: resultGateway,
         refundId: getCompletedRefundIds(completedAllocations),
-        amount: refundAmount,
+        amount: fromMinor(refundAmount, currency.decimalPlaces),
         isFullRefund,
         manualSettlementRecorded: hasManualCodAllocation,
         availabilityTransitionVariantIds,

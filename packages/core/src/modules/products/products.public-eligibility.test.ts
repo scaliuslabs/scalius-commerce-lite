@@ -99,7 +99,7 @@ describe("public product SKU eligibility", () => {
             productId: "prod_1",
             sku: "SIMPLE-prod_1",
             optionCombinationKey: null,
-            price: 1250,
+            priceMinor: 1250,
             stock: 0,
             reservedStock: 0,
             isDefault: true,

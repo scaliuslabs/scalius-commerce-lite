@@ -1,4 +1,5 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus } from "@scalius/database/schema";
+import { fromMinor } from "@scalius/shared/money";
 import { createProvider } from "./factory";
 import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 
@@ -498,10 +499,7 @@ export async function createShipment(
   // Provider money and contents are order authority, never browser/provider-
   // form authority. Keep only genuine merchant choices from the caller and
   // overwrite every commerce fact with the fresh saved order projection.
-  const amountToCollect = Math.max(
-    0,
-    order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)),
-  );
+  const amountToCollect = fromMinor(Math.max(0, order.balanceDueMinor), order.currencyDecimalPlaces);
   const enrichedOptions: ShipmentOptions = {
     deliveryType: options?.deliveryType,
     itemType: options?.itemType,
@@ -611,42 +609,67 @@ export async function createShipment(
   }
 }
 
+/** Shipment columns plus the order currency decimals that convert its amount. */
+function shipmentViewColumns() {
+  return {
+    ...getTableColumns(deliveryShipments),
+    currencyDecimalPlaces: orders.currencyDecimalPlaces,
+  };
+}
+
+/** A shipment in the decimal HTTP contract. */
+export function presentShipment<T extends { shipmentAmountMinor: number | null; currencyDecimalPlaces: number }>(
+  { shipmentAmountMinor, currencyDecimalPlaces, ...shipment }: T,
+) {
+  return {
+    ...shipment,
+    shipmentAmount: shipmentAmountMinor === null ? null : fromMinor(shipmentAmountMinor, currencyDecimalPlaces),
+  };
+}
+
+export type ShipmentView = ReturnType<
+  typeof presentShipment<typeof deliveryShipments.$inferSelect & { currencyDecimalPlaces: number }>
+>;
+
 /**
  * Get shipment by ID
  */
-export async function getShipment(db: Database, id: string) {
+export async function getShipment(db: Database, id: string): Promise<ShipmentView | undefined> {
   const [shipment] = await db
-    .select()
+    .select(shipmentViewColumns())
     .from(deliveryShipments)
+    .innerJoin(orders, eq(orders.id, deliveryShipments.orderId))
     .where(eq(deliveryShipments.id, id));
 
-  return shipment;
+  return shipment ? presentShipment(shipment) : undefined;
 }
 
 /**
  * Get latest shipment for an order
  */
-export async function getLatestShipment(db: Database, orderId: string) {
-  const shipments = await db
-    .select()
+export async function getLatestShipment(db: Database, orderId: string): Promise<ShipmentView | undefined> {
+  const [shipment] = await db
+    .select(shipmentViewColumns())
     .from(deliveryShipments)
+    .innerJoin(orders, eq(orders.id, deliveryShipments.orderId))
     .where(eq(deliveryShipments.orderId, orderId))
     .orderBy(desc(deliveryShipments.createdAt))
     .limit(1);
 
-  return shipments[0];
+  return shipment ? presentShipment(shipment) : undefined;
 }
 
 /**
  * Get all shipments for an order
  */
 export async function getShipments(db: Database, orderId: string) {
-  return db
+  const rows = await db
     .select({
-      ...getTableColumns(deliveryShipments),
+      ...shipmentViewColumns(),
       providerName: deliveryProviders.name,
     })
     .from(deliveryShipments)
+    .innerJoin(orders, eq(orders.id, deliveryShipments.orderId))
     .leftJoin(
       deliveryProviders,
       eq(deliveryShipments.providerId, deliveryProviders.id),
@@ -654,6 +677,7 @@ export async function getShipments(db: Database, orderId: string) {
     .where(eq(deliveryShipments.orderId, orderId))
     .orderBy(desc(deliveryShipments.createdAt), desc(deliveryShipments.id))
     .limit(ORDER_SHIPMENT_LIST_LIMIT);
+  return rows.map(presentShipment);
 }
 
 /**

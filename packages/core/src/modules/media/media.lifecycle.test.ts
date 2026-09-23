@@ -111,7 +111,7 @@ describe("media deletion guards", () => {
         sqlite.exec(`
             INSERT INTO media (id, filename, kind, object_key, size, mime_type, status)
             VALUES ('media_1', 'a.png', 'image', 'media/media_1.png', 12, 'image/png', 'ready');
-            INSERT INTO products (id, name, price, slug) VALUES ('prod_1', 'Product', 10, 'product');
+            INSERT INTO products (id, name, price_minor, slug) VALUES ('prod_1', 'Product', 1000, 'product');
             INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES ('pmed_prod_1', 'prod_1', 'media_1', 1, 0);
             UPDATE media SET status = 'trashed', version = 2, trashed_at = unixepoch() WHERE id = 'media_1';
         `);

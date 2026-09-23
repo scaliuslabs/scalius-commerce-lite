@@ -21,13 +21,13 @@ describe("migrated schema invariants", () => {
   it("keeps SKU identity, default SKUs, same-product SKU images, and inventory history intact", () => {
     const sqlite = createMigratedSqlite();
     const insert = inserter(sqlite);
-    for (const id of ["prod_a", "prod_b"]) insert("products", { id, name: id, price: 100, slug: id });
+    for (const id of ["prod_a", "prod_b"]) insert("products", { id, name: id, price_minor: 10_000, slug: id });
     insert("media", {
       id: "med_a", filename: "a.jpg", kind: "image", object_key: "demo/a.jpg", size: 1, mime_type: "image/jpeg",
     });
     insert("product_media", { id: "pmed_a_image", product_id: "prod_a", media_id: "med_a", sort_order: 0 });
     const variant = (id: string, productId: string, sku: string, extra: Row = {}) =>
-      insert("product_variants", { id, product_id: productId, sku, price: 100, is_default: 1, ...extra });
+      insert("product_variants", { id, product_id: productId, sku, price_minor: 10_000, is_default: 1, ...extra });
 
     variant("var_a", "prod_a", "SKU-1", { image_id: "pmed_a_image" });
     expect(() => variant("var_b", "prod_b", "sku-1")).toThrow(/product_variants_sku_identity_uidx/);
@@ -76,7 +76,7 @@ describe("migrated schema invariants", () => {
     const insert = inserter(sqlite);
     const attempt = (id: string, status: string, extra: Row = {}) => insert("refund_attempts", {
       id, attempt_key: id, refund_group_id: id, order_id: "ord_1", source_payment_id: "pay_1",
-      refund_payment_id: `refund_${id}`, gateway: "stripe", amount: 10, reason: "requested",
+      refund_payment_id: `refund_${id}`, gateway: "stripe", amount_minor: 1_000, reason: "requested",
       request_hash: id, provider_idempotency_key: id, refund_reference: id, status, ...extra,
     });
 
@@ -124,10 +124,10 @@ describe("migrated schema invariants", () => {
     const insert = inserter(sqlite);
     insert("orders", {
       id: "ord_1", customer_name: "Buyer", customer_phone: "01700000000", shipping_address: "Road 1",
-      city: "c", zone: "z", total_amount: 200, shipping_charge: 0,
+      city: "c", zone: "z", total_amount_minor: 20_000,
     });
     insert("order_items", {
-      id: "item_1", order_id: "ord_1", product_id: "prod_1", variant_id: "var_1", quantity: 2, price: 100,
+      id: "item_1", order_id: "ord_1", product_id: "prod_1", variant_id: "var_1", quantity: 2, unit_price_minor: 10_000,
       fulfillment_status: "shipped",
     });
     const returnCase = (id: string) =>

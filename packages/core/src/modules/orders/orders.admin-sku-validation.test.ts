@@ -108,10 +108,8 @@ beforeEach(() => {
         input: StorefrontTaxQuoteInput,
     ) => {
         const decimalPlaces = input.currency?.decimalPlaces ?? 2;
-        const scale = 10 ** decimalPlaces;
-        const minor = (value: number) => Math.round(value * scale);
         const lines = input.lines.map((line) => {
-            const unitPriceMinor = minor(line.unitPrice);
+            const unitPriceMinor = line.unitPriceMinor;
             const grossAmountMinor = unitPriceMinor * line.quantity;
             return {
                 lineId: line.lineId,
@@ -130,8 +128,8 @@ beforeEach(() => {
             };
         });
         const subtotalMinor = lines.reduce((total, line) => total + line.grossAmountMinor, 0);
-        const shippingMinor = minor(input.shippingAmount);
-        const discountMinor = minor(input.discountAmount);
+        const shippingMinor = input.shippingMinor;
+        const discountMinor = input.discountMinor ?? 0;
         return {
             schemaVersion: 1 as const,
             calculationVersion: "tax-v1" as const,
@@ -195,12 +193,12 @@ interface SkuRow {
     variantLabel?: string | null;
     taxClassId?: string | null;
     productDiscountType?: "percentage" | "flat" | null;
-    productDiscountPercentage?: number | null;
-    productDiscountAmount?: number | null;
-    variantPrice?: number;
+    productDiscountBps?: number;
+    productDiscountAmountMinor?: number;
+    variantPriceMinor?: number;
     variantDiscountType?: "percentage" | "flat" | null;
-    variantDiscountPercentage?: number | null;
-    variantDiscountAmount?: number | null;
+    variantDiscountBps?: number;
+    variantDiscountAmountMinor?: number;
 }
 
 interface AdminOrderSkuIssue {
@@ -247,12 +245,12 @@ function createSkuDb(rows: SkuRow[]) {
         variantLabel: null,
         taxClassId: null,
         productDiscountType: null,
-        productDiscountPercentage: null,
-        productDiscountAmount: null,
-        variantPrice: 100,
+        productDiscountBps: 0,
+        productDiscountAmountMinor: 0,
+        variantPriceMinor: 10_000,
         variantDiscountType: null,
-        variantDiscountPercentage: null,
-        variantDiscountAmount: null,
+        variantDiscountBps: 0,
+        variantDiscountAmountMinor: 0,
         ...row,
     })));
     const innerJoin = vi.fn(() => ({ where }));
@@ -299,12 +297,12 @@ function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationR
         variantLabel: null,
         taxClassId: null,
         productDiscountType: null,
-        productDiscountPercentage: null,
-        productDiscountAmount: null,
-        variantPrice: 100,
+        productDiscountBps: 0,
+        productDiscountAmountMinor: 0,
+        variantPriceMinor: 10_000,
         variantDiscountType: null,
-        variantDiscountPercentage: null,
-        variantDiscountAmount: null,
+        variantDiscountBps: 0,
+        variantDiscountAmountMinor: 0,
         ...row,
     })));
     const select = vi.fn(() => {
@@ -411,7 +409,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantLabel: null,
                 productImageMediaId: null,
                 taxClassId: null,
-                catalogUnitPrice: null,
+                catalogUnitPriceMinor: 10_000,
             },
             {
                 productId: "prod_2",
@@ -423,7 +421,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantLabel: null,
                 productImageMediaId: null,
                 taxClassId: null,
-                catalogUnitPrice: null,
+                catalogUnitPriceMinor: 10_000,
             },
         ]);
     });
@@ -437,9 +435,9 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantDeletedAt: null,
                 productActive: true,
                 productDeletedAt: null,
-                variantPrice: 100,
+                variantPriceMinor: 10_000,
                 productDiscountType: "percentage",
-                productDiscountPercentage: 10,
+                productDiscountBps: 1_000,
             },
             {
                 id: "var_variant_discount",
@@ -448,20 +446,20 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantDeletedAt: null,
                 productActive: true,
                 productDeletedAt: null,
-                variantPrice: 100,
+                variantPriceMinor: 10_000,
                 productDiscountType: "percentage",
-                productDiscountPercentage: 10,
+                productDiscountBps: 1_000,
                 variantDiscountType: "flat",
-                variantDiscountAmount: 25,
+                variantDiscountAmountMinor: 2_500,
             },
         ]);
 
         const result = await resolveAdminOrderItemInventory(db, [
             { productId: "prod_1", variantId: "var_product_discount", quantity: 1 },
             { productId: "prod_2", variantId: "var_variant_discount", quantity: 1 },
-        ], { catalogPricePrecision: 2 });
+        ]);
 
-        expect(result.map((item) => item.catalogUnitPrice)).toEqual([90, 75]);
+        expect(result.map((item) => item.catalogUnitPriceMinor)).toEqual([9_000, 7_500]);
     });
 
     it("resolves the exact SKU image asset for a manual-order snapshot", async () => {
@@ -723,14 +721,13 @@ describe("resolveAdminOrderItemInventory", () => {
         }), "admin_test");
 
         const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
-            !Array.isArray(values) && "shippingCharge" in values && "balanceDue" in values,
+            !Array.isArray(values) && "shippingAmountMinor" in values && "balanceDueMinor" in values,
         );
 
         expect(batch).toHaveBeenCalledTimes(1);
         expect(orderInsert).toMatchObject({
-            totalAmount: 260,
-            paidAmount: 0,
-            balanceDue: 260,
+            paidAmountMinor: 0,
+            balanceDueMinor: 26_000,
             paymentStatus: PaymentStatus.UNPAID,
             currencyCode: "BDT",
             currencyDecimalPlaces: 2,
@@ -818,11 +815,9 @@ describe("resolveAdminOrderItemInventory", () => {
     it.each([
         {
             currencyCode: "JPY",
-            itemPrice: 100.49,
+            itemPriceMinor: 100,
             shippingCharge: 1.6,
             discountAmount: 0.6,
-            expectedPrice: 100,
-            expectedTotal: 201,
             expectedSubtotalMinor: 200,
             expectedShippingMinor: 2,
             expectedDiscountMinor: 1,
@@ -831,11 +826,9 @@ describe("resolveAdminOrderItemInventory", () => {
         },
         {
             currencyCode: "KWD",
-            itemPrice: 1.2346,
+            itemPriceMinor: 1_235,
             shippingCharge: 0.0016,
             discountAmount: 0.0006,
-            expectedPrice: 1.235,
-            expectedTotal: 2.471,
             expectedSubtotalMinor: 2_470,
             expectedShippingMinor: 2,
             expectedDiscountMinor: 1,
@@ -846,11 +839,9 @@ describe("resolveAdminOrderItemInventory", () => {
         "persists an immutable $currencyCode snapshot for new manual-order money",
         async ({
             currencyCode,
-            itemPrice,
+            itemPriceMinor,
             shippingCharge,
             discountAmount,
-            expectedPrice,
-            expectedTotal,
             expectedSubtotalMinor,
             expectedShippingMinor,
             expectedDiscountMinor,
@@ -869,7 +860,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantDeletedAt: null,
                 productActive: true,
                 productDeletedAt: null,
-                variantPrice: itemPrice,
+                variantPriceMinor: itemPriceMinor,
             }]);
 
             await createOrder(db, createOrderInput({
@@ -889,14 +880,13 @@ describe("resolveAdminOrderItemInventory", () => {
             expect(orderInsert).toMatchObject({
                 currencyCode,
                 currencyDecimalPlaces: decimalPlaces,
-                totalAmount: expectedTotal,
-                balanceDue: expectedTotal,
+                balanceDueMinor: expectedTotalMinor,
                 subtotalAmountMinor: expectedSubtotalMinor,
                 shippingAmountMinor: expectedShippingMinor,
                 discountAmountMinor: expectedDiscountMinor,
                 totalAmountMinor: expectedTotalMinor,
             });
-            expect(itemInsert?.[0]).toMatchObject({ price: expectedPrice });
+            expect(itemInsert?.[0]).toMatchObject({ unitPriceMinor: itemPriceMinor });
         },
     );
 

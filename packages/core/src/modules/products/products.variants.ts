@@ -17,6 +17,8 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { checkAndAlertLowStock } from "../inventory/alerts";
+import { fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "./products.money";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
     STOCK_CHANGED_MESSAGE,
@@ -344,7 +346,7 @@ export async function lookupByBarcode(db: Database, barcode: string) {
             variantSku: productVariants.sku,
             variantImageId: productVariants.imageId,
             variantWeight: productVariants.weight,
-            variantPrice: productVariants.price,
+            variantPriceMinor: productVariants.priceMinor,
             variantStock: productVariants.stock,
             variantReservedStock: productVariants.reservedStock,
             variantBarcode: productVariants.barcode,
@@ -353,7 +355,7 @@ export async function lookupByBarcode(db: Database, barcode: string) {
             productId: products.id,
             productName: products.name,
             productSlug: products.slug,
-            productPrice: products.price,
+            productPriceMinor: products.priceMinor,
             productIsActive: products.isActive,
         })
         .from(productVariants)
@@ -370,8 +372,11 @@ export async function lookupByBarcode(db: Database, barcode: string) {
 
     if (!variant) return null;
 
-    const selectedOptions = (await loadVariantSelectedOptions(db, [variant.variantId]))
-        .get(variant.variantId) ?? [];
+    const [selectedOptionMap, decimalPlaces] = await Promise.all([
+        loadVariantSelectedOptions(db, [variant.variantId]),
+        readStoreDecimalPlaces(db),
+    ]);
+    const selectedOptions = selectedOptionMap.get(variant.variantId) ?? [];
 
     return {
         variant: {
@@ -380,7 +385,7 @@ export async function lookupByBarcode(db: Database, barcode: string) {
             imageId: variant.variantImageId,
             selectedOptions,
             weight: variant.variantWeight,
-            price: variant.variantPrice,
+            price: fromMinor(variant.variantPriceMinor, decimalPlaces),
             stock: variant.variantStock,
             reservedStock: variant.variantReservedStock,
             barcode: variant.variantBarcode,
@@ -390,7 +395,7 @@ export async function lookupByBarcode(db: Database, barcode: string) {
             id: variant.productId,
             name: variant.productName,
             slug: variant.productSlug,
-            price: variant.productPrice,
+            price: fromMinor(variant.productPriceMinor, decimalPlaces),
             isActive: variant.productIsActive,
         },
     };
@@ -401,18 +406,18 @@ export async function lookupByBarcode(db: Database, barcode: string) {
 // ─────────────────────────────────────────
 
 export async function getProductVariants(db: Database, productId: string) {
-    const variants = await db.select()
+    const [variants, decimalPlaces] = await Promise.all([db.select()
         .from(productVariants)
         .where(
             sql`${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`,
         )
-        .orderBy(productVariants.createdAt);
+        .orderBy(productVariants.createdAt), readStoreDecimalPlaces(db)]);
     const selectedOptionsByVariant = await loadVariantSelectedOptions(
         db,
         variants.map((variant) => variant.id),
     );
     return variants.map((variant) => ({
-        ...variant,
+        ...presentCatalogPrice(variant, decimalPlaces),
         selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
     }));
 }
@@ -421,8 +426,9 @@ export async function createVariant(
     db: Database,
     productId: string,
     data: z.infer<typeof createVariantSchema>,
-): Promise<PersistedVariant & ProductAggregateRevisionResult> {
+): Promise<VariantView & ProductAggregateRevisionResult> {
     assertNormalVariantHasCustomerOption(data);
+    const decimalPlaces = await readStoreDecimalPlaces(db);
     const selection = await resolveSelectedOptionValueIds(
         db,
         productId,
@@ -469,7 +475,7 @@ export async function createVariant(
         imageId: data.imageId,
         weight: data.weight,
         sku,
-        price: data.price,
+        priceMinor: toMinor(data.price, decimalPlaces),
         stock: data.stock > 0 ? 0 : data.stock,
         reservedStock: 0,
         preorderStock: 0,
@@ -479,8 +485,10 @@ export async function createVariant(
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: data.discountType || "percentage",
-        discountPercentage: (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-        discountAmount: (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+        discountBps: (data.discountType || "percentage") === "percentage" ? percentToBps(data.discountPercentage) : 0,
+        discountAmountMinor: (data.discountType || "percentage") === "flat"
+            ? toMinor(data.discountAmount ?? 0, decimalPlaces)
+            : 0,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
     };
@@ -501,7 +509,7 @@ export async function createVariant(
         );
         const variant = (result.mutationResults[0] as PersistedVariant[] | undefined)?.[0];
         if (!variant) throw new ConflictError("The created variant could not be confirmed.");
-        return { ...variant, aggregateRevision: result.aggregateRevision };
+        return { ...presentCatalogPrice(variant, decimalPlaces), aggregateRevision: result.aggregateRevision };
     }
 
     const movement = buildStockMovementClaim(db, {
@@ -547,7 +555,7 @@ export async function createVariant(
         throw new ConflictError("Initial variant stock could not be recorded");
     }
     await checkAndAlertLowStock(db, variantId);
-    return { ...updatedRows[0]!, aggregateRevision: result.aggregateRevision };
+    return { ...presentCatalogPrice(updatedRows[0]!, decimalPlaces), aggregateRevision: result.aggregateRevision };
 }
 
 export async function updateVariant(
@@ -556,7 +564,8 @@ export async function updateVariant(
     variantId: string,
     data: z.infer<typeof updateVariantSchema>,
     adminUserId?: string,
-): Promise<PersistedVariant & ProductAggregateRevisionResult> {
+): Promise<VariantView & ProductAggregateRevisionResult> {
+    const decimalPlaces = await readStoreDecimalPlaces(db);
     const existingVariant = await db
         .select({
             id: productVariants.id,
@@ -628,7 +637,7 @@ export async function updateVariant(
     const simpleProductPricing = existingIsSimpleSku
         ? await db
             .select({
-                price: products.price,
+                priceMinor: products.priceMinor,
             })
             .from(products)
             .where(and(eq(products.id, productId), isNull(products.deletedAt)))
@@ -644,17 +653,17 @@ export async function updateVariant(
         imageId: data.imageId,
         weight: data.weight,
         sku,
-        price: simpleProductPricing?.price ?? data.price,
+        priceMinor: simpleProductPricing?.priceMinor ?? toMinor(data.price, decimalPlaces),
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: existingIsSimpleSku ? "percentage" : data.discountType || "percentage",
-        discountPercentage: existingIsSimpleSku
+        discountBps: existingIsSimpleSku
             ? 0
-            : (data.discountType || "percentage") === "percentage" ? (data.discountPercentage || null) : 0,
-        discountAmount: existingIsSimpleSku
+            : (data.discountType || "percentage") === "percentage" ? percentToBps(data.discountPercentage) : 0,
+        discountAmountMinor: existingIsSimpleSku
             ? 0
-            : (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
+            : (data.discountType || "percentage") === "flat" ? toMinor(data.discountAmount ?? 0, decimalPlaces) : 0,
         updatedAt: sql`unixepoch()`,
     };
     const assignmentStatements = existingIsSimpleSku
@@ -758,7 +767,7 @@ export async function updateVariant(
 
         await checkAndAlertLowStock(db, variantId);
 
-        return { ...variantRows[0]!, aggregateRevision: result.aggregateRevision };
+        return { ...presentCatalogPrice(variantRows[0]!, decimalPlaces), aggregateRevision: result.aggregateRevision };
     }
 
     const variantUpdate = db
@@ -781,7 +790,7 @@ export async function updateVariant(
     );
     const variant = (result.mutationResults[assignmentStatements.length] as PersistedVariant[] | undefined)?.[0];
     if (!variant) throw new NotFoundError("Variant not found");
-    return { ...variant, aggregateRevision: result.aggregateRevision };
+    return { ...presentCatalogPrice(variant, decimalPlaces), aggregateRevision: result.aggregateRevision };
 }
 
 export async function deleteVariant(
@@ -903,6 +912,7 @@ export async function deleteVariant(
 }
 
 type PersistedVariant = typeof productVariants.$inferSelect;
+type VariantView = ReturnType<typeof presentCatalogPrice<PersistedVariant>>;
 
 const LOW_STOCK_RECONCILIATION_WAVE_SIZE = 5;
 

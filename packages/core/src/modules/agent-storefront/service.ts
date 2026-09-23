@@ -7,16 +7,20 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateStorefrontCartItems, validateStorefrontDeliveryPreflight } from "@scalius/core/modules/orders";
+import {
+  presentStorefrontCartValidation,
+  presentStorefrontDeliveryPreflight,
+  validateStorefrontCartItems,
+  validateStorefrontDeliveryPreflight,
+} from "@scalius/core/modules/orders";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
-  fromMinorUnits,
-  toMinorUnits,
 } from "@scalius/core/modules/tax";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -63,15 +67,24 @@ export interface AgentStorefrontContextView {
   updatedAt: string;
 }
 
-export interface AgentStorefrontCartProjection {
+type CartValidation = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
+type DeliveryPreflight = Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+
+/** Cart state in integer minor units of the store currency. */
+interface AgentStorefrontCartState {
   context: AgentStorefrontContextView;
   valid: boolean;
-  issues: Awaited<ReturnType<typeof validateStorefrontCartItems>>["issues"];
-  items: Awaited<ReturnType<typeof validateStorefrontCartItems>>["items"];
-  subtotal: number;
+  issues: CartValidation["issues"];
+  items: CartValidation["items"];
+  subtotalMinor: number;
   hasFreeDeliveryProduct: boolean;
-  delivery?: Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+  delivery?: DeliveryPreflight;
+  currencyCode: string;
+  decimalPlaces: number;
 }
+
+/** The decimal cart projection agents read. */
+export type AgentStorefrontCartProjection = ReturnType<typeof presentAgentStorefrontCart>;
 
 export interface AgentStorefrontCheckoutQuote {
   valid: true;
@@ -442,21 +455,19 @@ export async function setAgentStorefrontDelivery(
   if (current.revision !== expectedRevision) {
     throw new AgentStorefrontContextRevisionConflictError(contextId, expectedRevision, current.revision);
   }
-  const projection = await rehydrateAgentStorefrontCart(db, current);
-  if (!projection.valid) {
+  const cart = await loadAgentStorefrontCart(db, current);
+  if (!cart.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
-      itemIssues: projection.issues,
+      itemIssues: cart.issues,
     });
   }
   if (normalized.cityId && normalized.zoneId) {
-    const currency = await getCurrencySettings(db);
     await validateStorefrontDeliveryPreflight(db, {
       city: normalized.cityId,
       zone: normalized.zoneId,
       area: normalized.areaId,
       shippingMethodId: normalized.shippingMethodId,
-      currencyCode: currency.currencyCode,
-    }, projection);
+    }, cart);
   }
   const row = await mutateContext(db, {
     grantId,
@@ -495,10 +506,10 @@ async function resolveProductIdsForCart(
   }));
 }
 
-async function rehydrateAgentStorefrontCart(
+async function loadAgentStorefrontCart(
   db: Database,
   row: ContextRow,
-): Promise<AgentStorefrontCartProjection> {
+): Promise<AgentStorefrontCartState> {
   const cart = parseAgentStorefrontCartJson(row.cartJson);
   const identityLines = await resolveProductIdsForCart(db, cart);
   const currency = await getCurrencySettings(db);
@@ -506,7 +517,7 @@ async function rehydrateAgentStorefrontCart(
     currencyCode: currency.currencyCode,
   });
 
-  let delivery: Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>> | undefined;
+  let delivery: DeliveryPreflight | undefined;
   if (
     validation.valid
     && row.cityId
@@ -518,7 +529,6 @@ async function rehydrateAgentStorefrontCart(
       zone: row.zoneId,
       area: row.areaId,
       shippingMethodId: row.shippingMethodId,
-      currencyCode: currency.currencyCode,
     }, validation);
   }
 
@@ -527,10 +537,28 @@ async function rehydrateAgentStorefrontCart(
     valid: validation.valid,
     issues: validation.issues,
     items: validation.items,
-    subtotal: validation.subtotal,
+    subtotalMinor: validation.subtotalMinor,
     hasFreeDeliveryProduct: validation.hasFreeDeliveryProduct,
     ...(delivery ? { delivery } : {}),
+    currencyCode: currency.currencyCode,
+    decimalPlaces: getDecimalPlaces(currency.currencyCode),
   };
+}
+
+function presentAgentStorefrontCart(state: AgentStorefrontCartState) {
+  const { context, delivery, currencyCode: _currencyCode, decimalPlaces, ...cart } = state;
+  return {
+    context,
+    ...presentStorefrontCartValidation(cart, decimalPlaces),
+    ...(delivery ? { delivery: presentStorefrontDeliveryPreflight(delivery, decimalPlaces) } : {}),
+  };
+}
+
+async function rehydrateAgentStorefrontCart(
+  db: Database,
+  row: ContextRow,
+): Promise<AgentStorefrontCartProjection> {
+  return presentAgentStorefrontCart(await loadAgentStorefrontCart(db, row));
 }
 
 async function getLiveContextCustomerId(db: Database, row: ContextRow): Promise<string | null> {
@@ -567,12 +595,11 @@ async function getLiveContextCustomerPhone(db: Database, row: ContextRow): Promi
 async function quoteAgentStorefrontDiscount(
   db: Database,
   row: ContextRow,
-  projection: AgentStorefrontCartProjection,
+  projection: AgentStorefrontCartState,
   code: string | null,
   customerPhone?: string | null,
 ) {
   const currency = await getCurrencySettings(db);
-  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
   return quoteStorefrontDiscount(db, {
     code,
     customerId: await getLiveContextCustomerId(db, row),
@@ -583,10 +610,10 @@ async function quoteAgentStorefrontDiscount(
         id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
         productId: item.productId,
         variantId: item.variantId,
-        unitPriceMinor: toMinorUnits(item.unitPrice, decimalPlaces),
+        unitPriceMinor: item.unitPriceMinor,
         quantity: item.quantity,
       })),
-      shippingAmountMinor: toMinorUnits(projection.delivery?.shippingCharge ?? 0, decimalPlaces),
+      shippingAmountMinor: projection.delivery?.shippingMinor ?? 0,
     },
   });
 }
@@ -596,9 +623,9 @@ async function assertAgentStorefrontDiscountValid(
   row: ContextRow,
   normalizedCode: string,
   customerPhone?: string,
-  currentProjection?: AgentStorefrontCartProjection,
+  currentCart?: AgentStorefrontCartState,
 ): Promise<void> {
-  const projection = currentProjection ?? await rehydrateAgentStorefrontCart(db, row);
+  const projection = currentCart ?? await loadAgentStorefrontCart(db, row);
   if (!projection.valid || projection.items.length === 0) {
     throw new ValidationError("Add valid available items before applying a discount.", {
       itemIssues: projection.issues,
@@ -625,22 +652,22 @@ export async function validateAgentStorefrontCheckout(
 ): Promise<AgentStorefrontCartProjection> {
   const now = options.now ?? new Date();
   const row = await loadActiveOwnedContext(db, grantId, contextId, now);
-  const projection = await rehydrateAgentStorefrontCart(db, row);
-  assertAgentStorefrontCheckoutProjection(projection);
+  const cart = await loadAgentStorefrontCart(db, row);
+  assertAgentStorefrontCheckoutProjection(cart);
   if (row.discountCode) {
     await assertAgentStorefrontDiscountValid(
       db,
       row,
       row.discountCode,
       options.customerPhone?.trim() || undefined,
-      projection,
+      cart,
     );
   }
-  return projection;
+  return presentAgentStorefrontCart(cart);
 }
 
 function assertAgentStorefrontCheckoutProjection(
-  projection: AgentStorefrontCartProjection,
+  projection: AgentStorefrontCartState,
 ): void {
   if (projection.context.cart.length === 0) {
     throw new ValidationError("Add at least one item before checkout.");
@@ -666,7 +693,7 @@ export async function quoteAgentStorefrontCheckout(
   input: { customerPhone?: string | null; now?: Date } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
-  const projection = await rehydrateAgentStorefrontCart(db, row);
+  const projection = await loadAgentStorefrontCart(db, row);
   assertAgentStorefrontCheckoutProjection(projection);
   const delivery = projection.delivery!;
   const destination = projection.context.delivery;
@@ -686,15 +713,15 @@ export async function quoteAgentStorefrontCheckout(
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       productId: item.productId,
       variantId: item.variantId,
-      unitPrice: item.unitPrice,
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
     })),
-    shippingAmount: delivery.shippingCharge,
+    shippingMinor: delivery.shippingMinor,
     promotionDiscountAllocation: discount.taxAllocation,
     currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
   });
-  const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
+  const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,
     shippingMethodId: destination.shippingMethodId!,
@@ -725,7 +752,7 @@ export async function quoteAgentStorefrontCheckout(
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
+      unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),

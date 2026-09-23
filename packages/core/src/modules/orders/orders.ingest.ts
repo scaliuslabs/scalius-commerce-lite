@@ -326,18 +326,6 @@ async function resolveCustomerForOrder(
     };
 }
 
-function getCustomerSpendContributionForCommittedOrder(
-    order: StorefrontOrderCommitPayload["orderData"],
-): number {
-    if (
-        ["cancelled", "refunded", "returned", "partially_refunded"].includes(order.status)
-        || ["failed", "refunded"].includes(order.paymentStatus)
-    ) {
-        return 0;
-    }
-    return Math.max(0, order.paidAmount);
-}
-
 function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
     if (payload.orderData.inventoryAction !== "reserved") return [];
     return payload.items
@@ -431,7 +419,6 @@ function buildOrderWriteBatch(
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
-    const customerSpendContribution = getCustomerSpendContributionForCommittedOrder(od);
 
     if (customer.createProfile) {
         writes.push(
@@ -448,7 +435,6 @@ function buildOrderWriteBatch(
                 zoneName: od.zoneName,
                 areaName: od.areaName,
                 totalOrders: 1,
-                totalSpent: customerSpendContribution,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
@@ -492,7 +478,6 @@ function buildOrderWriteBatch(
             .set({
                 ...guestProfileUpdates,
                 totalOrders: sql`${customers.totalOrders} + 1`,
-                totalSpent: sql`${customers.totalSpent} + ${customerSpendContribution}`,
                 lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
                 deletedAt: null,
@@ -535,9 +520,6 @@ function buildOrderWriteBatch(
             zoneName: od.zoneName,
             areaName: od.areaName,
             notes: od.notes,
-            totalAmount: od.totalAmount,
-            shippingCharge: od.shippingCharge,
-            discountAmount: od.discountAmount,
             currencyCode: od.currencyCode,
             currencyDecimalPlaces: od.currencyDecimalPlaces,
             subtotalAmountMinor: od.subtotalAmountMinor,
@@ -555,8 +537,8 @@ function buildOrderWriteBatch(
             status: od.status,
             paymentMethod: od.paymentMethod,
             paymentStatus: od.paymentStatus,
-            paidAmount: od.paidAmount,
-            balanceDue: od.balanceDue,
+            paidAmountMinor: od.paidAmountMinor,
+            balanceDueMinor: od.balanceDueMinor,
             fulfillmentStatus: od.fulfillmentStatus,
             inventoryPool: od.inventoryPool,
             inventoryAction: od.inventoryAction,
@@ -581,7 +563,6 @@ function buildOrderWriteBatch(
             variantId: item.variantId,
             productImageMediaId: item.productImageMediaId,
             quantity: item.quantity,
-            price: item.price,
             productName: item.productName,
             variantLabel: item.variantLabel,
             inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
@@ -612,12 +593,6 @@ function buildOrderWriteBatch(
                 orderId: od.id,
                 taxClassId: line.taxClassId,
                 taxClassName: line.taxClassName,
-                unitPriceMinor: line.unitPriceMinor,
-                quantity: line.quantity,
-                grossAmountMinor: line.grossAmountMinor,
-                discountMinor: line.discountMinor,
-                taxableAmountMinor: line.taxableAmountMinor,
-                taxMinor: line.taxMinor,
                 pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
                 rateSnapshot: JSON.stringify(line.components),
                 createdAt: sql`unixepoch()`,
@@ -638,12 +613,6 @@ function buildOrderWriteBatch(
         displayLabel: payload.taxQuote.displayLabel,
         pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
         shippingTaxed: payload.taxQuote.shippingTaxed,
-        subtotalMinor: payload.taxQuote.subtotalMinor,
-        shippingMinor: payload.taxQuote.shippingMinor,
-        discountMinor: payload.taxQuote.discountMinor,
-        taxableMinor: payload.taxQuote.taxableMinor,
-        taxMinor: payload.taxQuote.taxMinor,
-        totalMinor: payload.taxQuote.totalMinor,
         settingsVersion: payload.taxQuote.settingsVersion,
         calculationVersion: payload.taxQuote.calculationVersion,
         destinationSnapshot: JSON.stringify(payload.taxQuote.destination),
@@ -801,11 +770,13 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
         customerEmail: od.customerEmail,
         city: od.city,
         cityName: od.cityName,
-        totalAmount: od.totalAmount,
+        currencyCode: od.currencyCode,
+        currencyDecimalPlaces: od.currencyDecimalPlaces,
+        totalAmountMinor: od.totalAmountMinor,
         status: od.status,
         paymentMethod: od.paymentMethod,
         paymentStatus: od.paymentStatus,
-        paidAmount: od.paidAmount,
+        paidAmountMinor: od.paidAmountMinor,
         deletedAt: null,
     });
 }
@@ -883,7 +854,7 @@ export async function commitStorefrontOrderPayload(
         const checkoutAttemptPlan = checkoutCommit
             ? await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
                 paymentMethod: payload.orderData.paymentMethod,
-                totalAmount: payload.orderData.totalAmount,
+                totalAmountMinor: payload.orderData.totalAmountMinor,
                 response: checkoutCommit.response,
             })
             : null;
@@ -1076,7 +1047,7 @@ async function finalizeCheckoutAttemptForExistingOrder(
 
     const plan = await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
         paymentMethod: payload.orderData.paymentMethod,
-        totalAmount: payload.orderData.totalAmount,
+        totalAmountMinor: payload.orderData.totalAmountMinor,
         response: checkoutCommit.response,
     });
     try {

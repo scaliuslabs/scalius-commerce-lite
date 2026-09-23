@@ -37,9 +37,6 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
       zoneName: "Mirpur",
       areaName: null,
       notes: null,
-      totalAmount: 260,
-      shippingCharge: 60,
-      discountAmount: 0,
       currencyCode: "BDT",
       currencyDecimalPlaces: 2,
       subtotalAmountMinor: 20_000,
@@ -57,8 +54,8 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
       status: "incomplete",
       paymentMethod: "stripe",
       paymentStatus: "unpaid",
-      paidAmount: 0,
-      balanceDue: 260,
+      paidAmountMinor: 0,
+      balanceDueMinor: 26_000,
       fulfillmentStatus: "pending",
       inventoryPool: "regular",
       inventoryAction: "reserved",
@@ -71,7 +68,6 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
         productId: "prod_1",
         variantId: "variant_1",
         quantity: 2,
-        price: 100,
         productName: "Discounted Product",
         variantLabel: null,
         productImageMediaId: null,
@@ -151,12 +147,12 @@ describe("storefront checkout authority at the atomic commit", () => {
     sqlite.function("unixepoch", () => databaseNow);
     sqlite.exec(`
       PRAGMA foreign_keys = ON;
-      INSERT INTO products (id, name, slug, price, is_active)
-      VALUES ('prod_1', 'Test product', 'test-product', 100, 1);
-      INSERT INTO product_variants (id, product_id, sku, price, stock, is_default, track_inventory)
-      VALUES ('variant_1', 'prod_1', 'AUTHORITY-SKU', 100, 10, 1, 1);
-      INSERT INTO shipping_methods (id, name, fee, is_active)
-      VALUES ('shipping_standard', 'Standard delivery', 60, 1);
+      INSERT INTO products (id, name, slug, price_minor, is_active)
+      VALUES ('prod_1', 'Test product', 'test-product', 10000, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+      VALUES ('variant_1', 'prod_1', 'AUTHORITY-SKU', 10000, 10, 1, 1);
+      INSERT INTO shipping_methods (id, name, fee_minor, is_active)
+      VALUES ('shipping_standard', 'Standard delivery', 6000, 1);
     `);
   });
 
@@ -202,8 +198,8 @@ describe("storefront checkout authority at the atomic commit", () => {
     });
     const minor = quote.applied!.totalDiscountMinor;
     Object.assign(payload.orderData, {
-      totalAmount: 260 - minor / 100, totalAmountMinor: 26_000 - minor,
-      discountAmount: minor / 100, discountAmountMinor: minor, balanceDue: 260 - minor / 100,
+      totalAmountMinor: 26_000 - minor,
+      discountAmountMinor: minor, balanceDueMinor: 26_000 - minor,
     });
     payload.items[0]!.discountAmountMinor = minor;
     payload.taxQuote.discountMinor = minor;
@@ -274,7 +270,8 @@ describe("storefront checkout authority at the atomic commit", () => {
     expect(revision()).toBe(payload.checkoutAuthorityRevision);
     await pausePromotion(db, promotion.id, promotion.revision);
     await expect(commitStorefrontOrderPayload(db, payload)).resolves.toMatchObject({ alreadyCommitted: true });
-    expect(sqlite.prepare("SELECT discount_amount, total_amount FROM orders").all()).toEqual([{ discount_amount: 100, total_amount: 160 }]);
+    expect(sqlite.prepare("SELECT discount_amount_minor, total_amount_minor FROM orders").all())
+      .toEqual([{ discount_amount_minor: 10_000, total_amount_minor: 16_000 }]);
     for (const table of ["promotion_redemptions", "order_discount_allocations", "order_receipts", "inventory_movements"]) {
       expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(1);
     }
@@ -334,7 +331,7 @@ describe("storefront checkout authority at the atomic commit", () => {
   it("rejects a SKU price edit after preparation and leaves no checkout side effects", async () => {
     const { payload, commit } = checkout();
     beforeWriteBatch = () => {
-      sqlite.exec("UPDATE product_variants SET price = 900 WHERE id = 'variant_1'");
+      sqlite.exec("UPDATE product_variants SET price_minor = 90000 WHERE id = 'variant_1'");
     };
 
     await expect(commitStorefrontOrderPayload(db, payload, commit))
@@ -347,15 +344,15 @@ describe("storefront checkout authority at the atomic commit", () => {
     const { payload, commit } = checkout();
     await expect(commitStorefrontOrderPayload(db, payload, commit))
       .resolves.toMatchObject({ alreadyCommitted: false });
-    expect(sqlite.prepare("SELECT price, quantity FROM order_items").get())
-      .toEqual({ price: 100, quantity: 2 });
-    expect(sqlite.prepare("SELECT subtotal_amount_minor, total_amount, total_amount_minor FROM orders").get())
-      .toEqual({ subtotal_amount_minor: 20_000, total_amount: 260, total_amount_minor: 26_000 });
+    expect(sqlite.prepare("SELECT unit_price_minor, quantity FROM order_items").get())
+      .toEqual({ unit_price_minor: 10_000, quantity: 2 });
+    expect(sqlite.prepare("SELECT subtotal_amount_minor, total_amount_minor FROM orders").get())
+      .toEqual({ subtotal_amount_minor: 20_000, total_amount_minor: 26_000 });
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_receipts").get()?.count).toBe(1);
     expect(sqlite.prepare("SELECT status FROM checkout_attempts").get()?.status).toBe("committed");
 
-    sqlite.exec("UPDATE product_variants SET price = 900 WHERE id = 'variant_1'");
+    sqlite.exec("UPDATE product_variants SET price_minor = 90000 WHERE id = 'variant_1'");
     payload.checkoutAuthorityRevision = null;
     await expect(commitStorefrontOrderPayload(db, payload))
       .resolves.toMatchObject({ alreadyCommitted: true, orderId: payload.orderData.id });

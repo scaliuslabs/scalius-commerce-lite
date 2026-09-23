@@ -15,7 +15,8 @@ export const products = sqliteTable(
         id: text("id").primaryKey(),
         name: text("name").notNull(),
         description: text("description"),
-        price: real("price").notNull(),
+        /** Integer minor units of the store currency. */
+        priceMinor: integer("price_minor").notNull().default(0),
         categoryId: text("category_id")
             .references(() => categories.id, { onDelete: "set null" }),
         slug: text("slug").notNull(),
@@ -35,9 +36,10 @@ export const products = sqliteTable(
             .default(UNIX_NOW),
         deletedAt: integer("deleted_at", { mode: "timestamp" }),
         isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-        discountPercentage: real("discount_percentage").default(0),
+        /** Percentage discount in basis points (1250 = 12.5%). */
+        discountBps: integer("discount_bps").notNull().default(0),
         discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
-        discountAmount: real("discount_amount").default(0),
+        discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
         freeDelivery: integer("free_delivery", { mode: "boolean" }).notNull().default(false),
         taxClassId: text("tax_class_id")
             .references(() => taxClasses.id, { onDelete: "set null" }),
@@ -167,7 +169,8 @@ export const productVariants = sqliteTable("product_variants", {
         .references(() => productMedia.id, { onDelete: "set null" }),
     weight: real("weight"),
     sku: text("sku").notNull(),
-    price: real("price").notNull(),
+    /** Integer minor units of the store currency. */
+    priceMinor: integer("price_minor").notNull().default(0),
     stock: integer("stock").notNull().default(0),
     reservedStock: integer("reserved_stock").notNull().default(0),
     preorderStock: integer("preorder_stock").notNull().default(0),
@@ -185,9 +188,10 @@ export const productVariants = sqliteTable("product_variants", {
     taxClassId: text("tax_class_id")
         .references(() => taxClasses.id, { onDelete: "set null" }),
     taxClassificationVersion: integer("tax_classification_version").notNull().default(1),
-    discountPercentage: real("discount_percentage").default(0),
+    /** Percentage discount in basis points (1250 = 12.5%). */
+    discountBps: integer("discount_bps").notNull().default(0),
     discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
-    discountAmount: real("discount_amount").default(0),
+    discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     barcode: text("barcode"),
     barcodeType: text("barcode_type", { enum: ["ean13", "upc", "isbn", "gtin", "code128", "custom"] }),
     createdAt: integer("created_at", { mode: "timestamp" })

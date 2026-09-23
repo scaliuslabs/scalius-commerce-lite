@@ -16,8 +16,8 @@ const feedsPolicy: SeoDiscoverySettings["feeds"] = {
 
 function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
     const insertProduct = sqlite.prepare(`
-        INSERT INTO products (id, name, slug, is_active, price, updated_at, created_at)
-        VALUES (?, ?, ?, 1, 1200, ?, ?)
+        INSERT INTO products (id, name, slug, is_active, price_minor, updated_at, created_at)
+        VALUES (?, ?, ?, 1, 120000, ?, ?)
     `);
     const insertMedia = sqlite.prepare(`
         INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, status)
@@ -28,8 +28,8 @@ function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
         VALUES (?, ?, ?, ?, 0, 1)
     `);
     const insertVariant = sqlite.prepare(`
-        INSERT INTO product_variants (id, product_id, sku, stock, is_default, track_inventory, price)
-        VALUES (?, ?, ?, 0, 1, 0, 1200)
+        INSERT INTO product_variants (id, product_id, sku, stock, is_default, track_inventory, price_minor)
+        VALUES (?, ?, ?, 0, 1, 0, 120000)
     `);
 
     for (let index = 0; index < count; index += 1) {

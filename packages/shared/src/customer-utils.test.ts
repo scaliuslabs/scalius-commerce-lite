@@ -9,14 +9,13 @@ import {
 } from "./customer-utils";
 
 describe("customer commerce stats", () => {
-  it("counts orders but sums only net paid value and normalizes Unix seconds", () => {
+  it("counts orders and normalizes Unix seconds", () => {
     expect(calculateCustomerStats([
-      { paidAmount: 0, createdAt: 1_700_000_000 },
-      { paidAmount: 450.5, createdAt: new Date("2024-01-01T00:00:00.000Z") },
-      { paidAmount: -20, createdAt: 1_800_000_000_000 },
+      { createdAt: 1_700_000_000 },
+      { createdAt: new Date("2024-01-01T00:00:00.000Z") },
+      { createdAt: 1_800_000_000_000 },
     ])).toEqual({
       totalOrders: 3,
-      totalSpent: 450.5,
       lastOrderAt: new Date(1_800_000_000_000),
     });
   });

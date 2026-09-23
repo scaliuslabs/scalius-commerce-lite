@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { percentToBps, toMinor } from "@scalius/shared/money";
+import { readStoreDecimalPlaces } from "./products.money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     buildBatchGuard,
@@ -448,10 +450,10 @@ export async function saveProductOptionMatrix(
     adminUserId?: string,
 ): Promise<{ aggregateRevision: number }> {
     const input = parseProductOptionMatrix(rawInput);
-    const product = await db.select({ id: products.id })
+    const [product, decimalPlaces] = await Promise.all([db.select({ id: products.id })
         .from(products)
         .where(and(eq(products.id, productId), isNull(products.deletedAt)))
-        .get();
+        .get(), readStoreDecimalPlaces(db)]);
     if (!product) throw new NotFoundError("Product not found");
 
     const [existingDefinitions, existingValues, allProductVariants, productImageRows] = await Promise.all([
@@ -856,13 +858,13 @@ export async function saveProductOptionMatrix(
             imageId: variant.imageId,
             weight: variant.weight,
             sku: variant.sku,
-            price: variant.price,
+            priceMinor: toMinor(variant.price, decimalPlaces),
             trackInventory: variant.trackInventory,
             barcode: variant.barcode,
             barcodeType: variant.barcodeType,
             discountType: variant.discountType,
-            discountPercentage: variant.discountType === "percentage" ? variant.discountPercentage ?? 0 : 0,
-            discountAmount: variant.discountType === "flat" ? variant.discountAmount ?? 0 : 0,
+            discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
+            discountAmountMinor: variant.discountType === "flat" ? toMinor(variant.discountAmount ?? 0, decimalPlaces) : 0,
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {

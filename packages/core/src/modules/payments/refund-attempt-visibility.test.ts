@@ -12,7 +12,7 @@ const row: RefundAttemptVisibilityRow = {
   sourcePaymentId: "pay_1",
   refundPaymentId: "refund_1",
   gateway: "stripe",
-  amount: 50,
+  amountMinor: 5_000,
   currency: "BDT",
   reason: "requested_by_customer",
   refundReference: "refund_order_1_1",

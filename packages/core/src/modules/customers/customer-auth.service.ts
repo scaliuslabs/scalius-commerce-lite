@@ -1019,7 +1019,6 @@ export async function verifyOtp(
                     profileCompletionRequiredAt: profileRequiredAt,
                     profileCompletedAt: null,
                     totalOrders: 0,
-                    totalSpent: 0,
                     lastOrderAt: null,
                     createdAt: profileRequiredAt,
                     updatedAt: profileRequiredAt,

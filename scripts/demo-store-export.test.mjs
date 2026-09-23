@@ -90,12 +90,12 @@ function seedDemoCatalog(database) {
   );
 
   const insertProduct = (id, name, slug, price, categoryId) => run(
-    `INSERT INTO products (id, name, description, price, category_id, slug, meta_title, meta_description,
+    `INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description,
       canonical_path, no_index, exclude_from_sitemap, exclude_from_product_feed, product_condition,
-      aggregate_revision, created_at, updated_at, is_active, discount_percentage, discount_type,
-      discount_amount, free_delivery, tax_class_id, tax_classification_version)
+      aggregate_revision, created_at, updated_at, is_active, discount_bps, discount_type,
+      discount_amount_minor, free_delivery, tax_class_id, tax_classification_version)
      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, 0, 'new', 1, ?, ?, 1, 0, 'percentage', 0, 0, NULL, 1)`,
-    id, name, `A ${name} you'll like`, price, categoryId, slug, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+    id, name, `A ${name} you'll like`, Math.round(price * 100), categoryId, slug, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
   insertProduct("prod_halo", "Halo Arc Table Lamp", "halo-arc-table-lamp", 149.5, "cat_lighting");
   insertProduct("prod_basin", "Basin Weekend Tote", "basin-weekend-tote", 89, "cat_bags");
@@ -129,13 +129,13 @@ function seedDemoCatalog(database) {
   insertOptionValue("pov_us", "pod_plug", "US", 1);
 
   const insertVariant = (id, productId, optionKey, imageId, sku, price, stock, isDefault) => run(
-    `INSERT INTO product_variants (id, product_id, option_combination_key, image_id, weight, sku, price, stock,
+    `INSERT INTO product_variants (id, product_id, option_combination_key, image_id, weight, sku, price_minor, stock,
       reserved_stock, preorder_stock, is_default, track_inventory, version, stock_version, low_stock_threshold,
       allow_preorder, preorder_date, preorder_message, allow_backorder, backorder_limit, tax_class_id,
-      tax_classification_version, discount_percentage, discount_type, discount_amount, barcode, barcode_type,
+      tax_classification_version, discount_bps, discount_type, discount_amount_minor, barcode, barcode_type,
       created_at, updated_at)
      VALUES (?, ?, ?, ?, NULL, ?, ?, ?, 0, 0, ?, 1, 1, 1, NULL, 0, NULL, NULL, 0, 0, NULL, 1, 0, 'percentage', 0, NULL, NULL, ?, ?)`,
-    id, productId, optionKey, imageId, sku, price, stock, isDefault, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
+    id, productId, optionKey, imageId, sku, Math.round(price * 100), stock, isDefault, FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
   insertVariant("var_halo_matte_eu", "prod_halo", "matte|eu", "pmed_halo_1", "HALO-MATTE-EU", 149.5, 18, 0);
   insertVariant("var_halo_gloss_eu", "prod_halo", "gloss|eu", "pmed_halo_2", "HALO-GLOSS-EU", 159.5, 12, 0);
@@ -445,8 +445,8 @@ describe("demo store export bundle", () => {
       expect({ table, rows: target.prepare(`SELECT count(*) AS total FROM "${table}"`).get().total })
         .toEqual({ table, rows });
     }
-    expect(target.prepare("SELECT name, price, category_id FROM products WHERE id = 'prod_halo'").get())
-      .toEqual({ name: "Halo Arc Table Lamp", price: 149.5, category_id: "cat_lighting" });
+    expect(target.prepare("SELECT name, price_minor, category_id FROM products WHERE id = 'prod_halo'").get())
+      .toEqual({ name: "Halo Arc Table Lamp", price_minor: 14_950, category_id: "cat_lighting" });
     expect(target.prepare("SELECT sku, stock, image_id FROM product_variants WHERE id = 'var_halo_matte_eu'").get())
       .toEqual({ sku: "HALO-MATTE-EU", stock: 18, image_id: "pmed_halo_1" });
     expect(target.prepare("SELECT description FROM categories WHERE id = 'cat_lighting'").get().description)
@@ -554,17 +554,17 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0068_something_else' WHERE version = 68");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0069_something_else' WHERE version = 69");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 68\/0068_something_else .* can only be exported at revision 68\/0068_single_discount_engine/su);
+      .rejects.toThrow(/is at schema revision 69\/0069_something_else .* can only be exported at revision 69\/0069_integer_money/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 68`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 69`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
@@ -593,12 +593,12 @@ describe("demo store export fail-closed preconditions", () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
       database.prepare(
-        `INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount, shipping_charge)
+        `INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run("ord_1", "Ada", "+8801700000000", "1 Road", "Dhaka", "Gulshan", 149.5, 60);
+      ).run("ord_1", "Ada", "+8801700000000", "1 Road", "Dhaka", "Gulshan", 20_950, 6_000);
       database.prepare(
-        "INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, price) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run("oit_1", "ord_1", "prod_halo", "var_halo_matte_eu", 1, 149.5);
+        "INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("oit_1", "ord_1", "prod_halo", "var_halo_matte_eu", 1, 14_950);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))

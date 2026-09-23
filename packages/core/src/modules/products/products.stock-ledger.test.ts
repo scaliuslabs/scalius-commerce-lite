@@ -28,9 +28,9 @@ function setup() {
     },
   });
   harness.sqlite.exec(`
-    INSERT INTO products (id, name, price, slug) VALUES ('product_1', 'Mug', 120, 'mug');
-    INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory, stock_version, low_stock_threshold)
-    VALUES ('variant_1', 'product_1', 'SKU-001', 120, 5, 0, 1, 1, 3, 6);
+    INSERT INTO products (id, name, price_minor, slug) VALUES ('product_1', 'Mug', 12000, 'mug');
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory, stock_version, low_stock_threshold)
+    VALUES ('variant_1', 'product_1', 'SKU-001', 12000, 5, 0, 1, 1, 3, 6);
     INSERT INTO product_low_stock_alerts (id, variant_id, product_id, current_qty, threshold) VALUES ('alert_1', 'variant_1', 'product_1', 5, 6);
   `);
   const state = () => harness.sqlite.prepare(`

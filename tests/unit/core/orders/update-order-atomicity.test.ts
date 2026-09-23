@@ -193,7 +193,7 @@ function createUpdateOrderDb(options: {
     {
       status: options.existingOrder.status,
       paymentStatus: options.existingOrder.paymentStatus,
-      paidAmount: options.existingOrder.paidAmount,
+      paidAmountMinor: options.existingOrder.paidAmountMinor,
       fulfillmentStatus: options.existingOrder.fulfillmentStatus,
       shipmentClaimId: options.existingOrder.shipmentClaimId ?? null,
       shipmentClaimExpiresAt:
@@ -302,14 +302,18 @@ function archivedOrder(overrides: Partial<{
 }
 
 function item(quantity: number, variantId = EXISTING_VARIANT_ID) {
-  return seedOrderItem({
-    id: `item_${variantId}_${quantity}`,
-    orderId: ORDER_ID,
-    productId: `prod_${variantId}`,
-    variantId,
-    quantity,
+  // One shape serves as the stored order row (minor units) and the editor input (decimal price).
+  return {
+    ...seedOrderItem({
+      id: `item_${variantId}_${quantity}`,
+      orderId: ORDER_ID,
+      productId: `prod_${variantId}`,
+      variantId,
+      quantity,
+      unitPriceMinor: 10_000,
+    }),
     price: 100,
-  });
+  };
 }
 
 function updateData(overrides: Partial<Parameters<UpdateOrder>[2]> = {}): Parameters<UpdateOrder>[2] {

@@ -15,7 +15,7 @@ type AttemptRow = {
   orderId: string;
   gateway: string;
   paymentType: string;
-  amount: number;
+  amountMinor: number;
   currency: string;
   requestHash: string;
   status: string;
@@ -215,7 +215,7 @@ describe("payment session attempts", () => {
       orderId: "order_1",
       gateway: "stripe",
       paymentType: "full",
-      amount: 125,
+      amountMinor: 12_500,
       currency: "BDT",
       proof: { kind: "customer_account", value: "customer_1" },
       requestContext: {
@@ -227,7 +227,7 @@ describe("payment session attempts", () => {
       orderId: "order_1",
       gateway: "stripe",
       paymentType: "full",
-      amount: 125,
+      amountMinor: 12_500,
       currency: "BDT",
       proof: { kind: "customer_account", value: "customer_1" },
       requestContext: {
@@ -291,7 +291,7 @@ async function buildIdentity(requestContext: Record<string, unknown> = {
     orderId: "order_1",
     gateway: "stripe",
     paymentType: "full",
-    amount: 125,
+    amountMinor: 12_500,
     currency: "BDT",
     receiptToken: "receipt_1",
     requestContext,
@@ -334,7 +334,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[]; stats
               orderId: String(values.orderId),
               gateway: String(values.gateway),
               paymentType: String(values.paymentType),
-              amount: Number(values.amount),
+              amountMinor: Number(values.amountMinor),
               currency: String(values.currency),
               requestHash: String(values.requestHash),
               status: String(values.status),
@@ -389,7 +389,7 @@ function createFakePaymentSessionDb(): { db: Database; rows: AttemptRow[]; stats
                 orderId: row.orderId,
                 gateway: row.gateway,
                 paymentType: row.paymentType,
-                amount: row.amount,
+                amountMinor: row.amountMinor,
                 currency: row.currency,
                 status: row.status,
                 attempts: row.attempts,

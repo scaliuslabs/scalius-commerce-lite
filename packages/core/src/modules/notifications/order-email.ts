@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { orders, orderItems } from "@scalius/database/schema";
 import { formatPrice, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { fromMinor } from "@scalius/shared/money";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { asc, eq } from "drizzle-orm";
 import { getBusinessSettings } from "../settings/business-settings.service";
@@ -21,7 +22,7 @@ async function readOrderEmailContext(db: Database, orderId: string) {
     status: orders.status,
     paymentMethod: orders.paymentMethod,
     paymentStatus: orders.paymentStatus,
-    balanceDue: orders.balanceDue,
+    balanceDueMinor: orders.balanceDueMinor,
     currencyCode: orders.currencyCode,
     currencyDecimalPlaces: orders.currencyDecimalPlaces,
     subtotalAmountMinor: orders.subtotalAmountMinor,
@@ -29,16 +30,12 @@ async function readOrderEmailContext(db: Database, orderId: string) {
     discountAmountMinor: orders.discountAmountMinor,
     taxAmountMinor: orders.taxAmountMinor,
     totalAmountMinor: orders.totalAmountMinor,
-    totalAmount: orders.totalAmount,
-    shippingCharge: orders.shippingCharge,
-    discountAmount: orders.discountAmount,
     taxLabel: orders.taxLabel,
     pricesIncludeTax: orders.pricesIncludeTax,
   }, item: {
     productName: orderItems.productName,
     variantLabel: orderItems.variantLabel,
     quantity: orderItems.quantity,
-    price: orderItems.price,
     unitPriceMinor: orderItems.unitPriceMinor,
     lineSubtotalMinor: orderItems.lineSubtotalMinor,
   } }).from(orders)
@@ -97,23 +94,20 @@ export async function composeOrderEmail(input: OrderEmailInput, db?: Database) {
   };
   const message = messages[input.type];
   const currency = normalizeSupportedCurrencyCode(order?.currencyCode);
-  const decimals = order?.currencyDecimalPlaces;
-  const hasCurrency = Boolean(currency) && decimals != null && Number.isInteger(decimals) && decimals >= 0 && decimals <= 3;
-  const factor = hasCurrency ? 10 ** decimals! : 1;
-  const money = (major: number) => formatPrice(major, { symbol: `${currency} `, code: currency!, precision: decimals! });
-  const amount = (minor: number | null, major: number) => money(minor == null ? major : minor / factor);
+  const decimals = order?.currencyDecimalPlaces ?? 0;
+  const hasCurrency = Boolean(currency) && Number.isInteger(decimals) && decimals >= 0 && decimals <= 3;
+  const money = (minor: number) => formatPrice(fromMinor(minor, decimals), { symbol: `${currency} `, code: currency!, precision: decimals });
   const summary: Array<[string, string]> = [];
   if (order && hasCurrency) {
-    const tax = order.taxAmountMinor / factor;
     summary.push(
-      ["Subtotal", amount(order.subtotalAmountMinor, order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0) - (order.pricesIncludeTax ? 0 : tax))],
-      ["Shipping", amount(order.shippingAmountMinor, order.shippingCharge)],
+      ["Subtotal", money(order.subtotalAmountMinor)],
+      ["Shipping", money(order.shippingAmountMinor)],
     );
-    if ((order.discountAmountMinor ?? order.discountAmount ?? 0) > 0) {
-      summary.push(["Discount", `−${amount(order.discountAmountMinor, order.discountAmount ?? 0)}`]);
+    if (order.discountAmountMinor > 0) {
+      summary.push(["Discount", `−${money(order.discountAmountMinor)}`]);
     }
-    if (order.taxAmountMinor > 0) summary.push([`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, money(tax)]);
-    summary.push(["Total", amount(order.totalAmountMinor, order.totalAmount)]);
+    if (order.taxAmountMinor > 0) summary.push([`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, money(order.taxAmountMinor)]);
+    summary.push(["Total", money(order.totalAmountMinor)]);
   }
 
   let payment = "";
@@ -124,7 +118,7 @@ export async function composeOrderEmail(input: OrderEmailInput, db?: Database) {
     else if (closed) payment = "No payment is due for this closed order.";
     else if (order.paymentStatus === "paid") payment = "Paid";
     else if (order.paymentMethod === "cod") {
-      const due = hasCurrency ? `${money(Math.max(0, order.balanceDue))} due on delivery.` : "Payment is due on delivery.";
+      const due = hasCurrency ? `${money(Math.max(0, order.balanceDueMinor))} due on delivery.` : "Payment is due on delivery.";
       payment = `${order.paymentStatus === "partial" ? "Partially paid. " : "Cash on delivery. "}${due}`;
     } else payment = order.paymentStatus === "partial" ? "Partially paid" : "Payment not completed";
   }
@@ -132,8 +126,8 @@ export async function composeOrderEmail(input: OrderEmailInput, db?: Database) {
   const items = context?.items.map((item) => ({
     name: item.productName?.trim() || "Item name unavailable",
     variant: item.variantLabel?.trim(),
-    quantity: hasCurrency ? `${item.quantity} × ${amount(item.unitPriceMinor, item.price)}` : `Quantity: ${item.quantity}`,
-    subtotal: hasCurrency ? amount(item.lineSubtotalMinor, (item.unitPriceMinor == null ? item.price : item.unitPriceMinor / factor) * item.quantity) : "",
+    quantity: hasCurrency ? `${item.quantity} × ${money(item.unitPriceMinor)}` : `Quantity: ${item.quantity}`,
+    subtotal: hasCurrency ? money(item.lineSubtotalMinor) : "",
   })) ?? [];
   const support: Array<{ label: string; href: string }> = [];
   const email = business?.email.trim();

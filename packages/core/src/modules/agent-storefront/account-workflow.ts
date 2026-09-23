@@ -28,6 +28,8 @@ import {
   getReceiptOrderSupportRequestStateForOrder,
 } from "@scalius/core/modules/orders/order-support-requests";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { fromMinor } from "@scalius/shared/money";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   ConflictError,
@@ -592,16 +594,10 @@ export async function getAgentStorefrontReceipt(
     customerId: orders.customerId,
     customerName: orders.customerName,
     shippingAddress: orders.shippingAddress,
-    totalAmount: orders.totalAmount,
-    shippingCharge: orders.shippingCharge,
-    discountAmount: orders.discountAmount,
+    ...orderMoneySelection(orders),
     currencyCode: orders.currencyCode,
-    currencyDecimalPlaces: orders.currencyDecimalPlaces,
     subtotalAmountMinor: orders.subtotalAmountMinor,
-    shippingAmountMinor: orders.shippingAmountMinor,
-    discountAmountMinor: orders.discountAmountMinor,
     taxAmountMinor: orders.taxAmountMinor,
-    totalAmountMinor: orders.totalAmountMinor,
     taxLabel: orders.taxLabel,
     pricesIncludeTax: orders.pricesIncludeTax,
     city: orders.city,
@@ -613,8 +609,6 @@ export async function getAgentStorefrontReceipt(
     status: orders.status,
     paymentMethod: orders.paymentMethod,
     paymentStatus: orders.paymentStatus,
-    paidAmount: orders.paidAmount,
-    balanceDue: orders.balanceDue,
     fulfillmentStatus: orders.fulfillmentStatus,
     createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
     updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
@@ -628,7 +622,6 @@ export async function getAgentStorefrontReceipt(
       productId: orderItems.productId,
       variantId: orderItems.variantId,
       quantity: orderItems.quantity,
-      price: orderItems.price,
       productName: orderItems.productName,
       productImageObjectKey: publishedMediaObjectKey(),
       productImageStatus: media.status,
@@ -643,12 +636,15 @@ export async function getAgentStorefrontReceipt(
       .where(eq(orderItems.orderId, orderId)),
     getReceiptOrderSupportRequestStateForOrder(db, order),
   ]);
+  const { paidAmountMinor: _paidAmountMinor, balanceDueMinor: _balanceDueMinor, ...orderFacts } = order;
   return {
-    ...order,
+    ...orderFacts,
+    ...orderMoneyAmounts(order),
     createdAt: order.createdAt ? new Date(order.createdAt * 1_000).toISOString() : null,
     updatedAt: order.updatedAt ? new Date(order.updatedAt * 1_000).toISOString() : null,
     items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
       ...item,
+      price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
       productImage: productImageObjectKey
         && (productImageStatus === "ready" || productImageStatus === "trashed")
         ? getCurrentPublicMediaUrl(productImageObjectKey)
@@ -674,7 +670,7 @@ export async function createAgentStorefrontOrderSupportRequest(
     status: orders.status,
     paymentStatus: orders.paymentStatus,
     fulfillmentStatus: orders.fulfillmentStatus,
-    paidAmount: orders.paidAmount,
+    paidAmountMinor: orders.paidAmountMinor,
   }).from(orders).where(and(eq(orders.id, orderId), isNull(orders.deletedAt))).get();
   if (!order) throw new NotFoundError("Order not found.");
   const state = await getReceiptOrderSupportRequestStateForOrder(db, order);

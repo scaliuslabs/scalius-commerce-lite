@@ -39,9 +39,7 @@ export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } 
 export {
   assertOrderPaymentCurrency,
   createOrderCurrencySnapshot,
-  orderMoneyEqual,
   resolveOrderCurrencySnapshot,
-  roundOrderMoney,
 } from "./order-currency";
 export type {
   OrderCurrencySnapshot,
@@ -50,8 +48,6 @@ export type {
 export {
   computeOrderPaymentState,
   computePaymentStateAfterPayment,
-  computePaymentStateAfterRefund,
-  paymentStatesEqual,
 } from "./payment-state";
 export type {
   ComputedOrderPaymentState,

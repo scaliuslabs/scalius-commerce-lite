@@ -6,7 +6,7 @@ import {
     listCustomers,
     createCustomer,
     createCustomerSchema,
-    getCustomerById,
+    getCustomerDetail,
     updateCustomer,
     updateCustomerSchema,
     deleteCustomer,
@@ -14,7 +14,9 @@ import {
     restoreCustomer,
     bulkDeleteCustomers,
     buildCustomerOrderMetricsProjection,
+    paidSpendAmount,
 } from "@scalius/core/modules/customers";
+import { fromMinor } from "@scalius/shared/money";
 import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
@@ -192,7 +194,7 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const customer = await getCustomerById(db, id);
+    const customer = await getCustomerDetail(db, id);
     if (!customer) throw new NotFoundError("Customer not found");
     return ok(c, customer);
 });
@@ -336,7 +338,8 @@ app.openapi(getHistoryRoute, async (c) => {
                 area: customers.area,
                 accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
                 totalOrders: metrics.totalOrders,
-                totalSpent: metrics.totalSpent,
+                totalSpentMinor: metrics.totalSpentMinor,
+                spendDecimalPlaces: metrics.spendDecimalPlaces,
                 lastOrderAt: metrics.lastOrderAt,
                 createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
@@ -372,7 +375,8 @@ app.openapi(getHistoryRoute, async (c) => {
         db
             .select({
                 id: orders.id,
-                totalAmount: orders.totalAmount,
+                totalAmountMinor: orders.totalAmountMinor,
+                currencyDecimalPlaces: orders.currencyDecimalPlaces,
                 status: orders.status,
                 createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             })
@@ -421,8 +425,10 @@ app.openapi(getHistoryRoute, async (c) => {
         locations.forEach((loc) => locationMap.set(loc.id, loc.name));
     }
 
+    const { totalSpentMinor, spendDecimalPlaces, ...customerFacts } = customer;
     const enrichedCustomer = {
-        ...customer,
+        ...customerFacts,
+        totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: customer.accountClaimedAt ? new Date(customer.accountClaimedAt * 1000) : null,
         lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
         createdAt: new Date(customer.createdAt * 1000),
@@ -440,8 +446,9 @@ app.openapi(getHistoryRoute, async (c) => {
         areaName: record.area ? locationMap.get(record.area) || record.area : null,
     }));
 
-    const enrichedOrders = customerOrders.map((order) => ({
+    const enrichedOrders = customerOrders.map(({ totalAmountMinor, currencyDecimalPlaces, ...order }) => ({
         ...order,
+        totalAmount: fromMinor(totalAmountMinor, currencyDecimalPlaces),
         createdAt: new Date(order.createdAt * 1000),
     }));
 

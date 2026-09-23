@@ -125,10 +125,12 @@ describe("site currency settings", () => {
 
   it("locks the code once money-bearing rows exist but still accepts symbol and rate updates", async () => {
     const { db, sqlite } = createSqliteD1Database();
-    sqlite.exec("INSERT INTO products (id, name, price, slug) VALUES ('p1', 'Product', 10, 'product')");
+    sqlite.exec("INSERT INTO products (id, name, price_minor, slug) VALUES ('p1', 'Product', 1000, 'product')");
 
     await expect(saveCurrencySettings(db, { currencyCode: "USD" })).rejects.toBeInstanceOf(ConflictError);
     await saveCurrencySettings(db, { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "120" });
+    sqlite.exec("DELETE FROM product_variants; DELETE FROM products; INSERT INTO shipping_methods (id, name, fee_minor) VALUES ('ship', 'Standard', 6000)");
+    await expect(saveCurrencySettings(db, { currencyCode: "JPY" })).rejects.toBeInstanceOf(ConflictError);
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",
       currencySymbol: "Tk",
