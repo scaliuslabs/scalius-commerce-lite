@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
-import { Image, Trash2, Upload } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
+import { useEffect, useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { FolderBrowser, MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQueue } from "./components";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { IndexTabs } from "~/components/admin/resource/IndexTabs";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQueue } from "./components";
 import { OptimizeImagesButton } from "./components/OptimizeImagesButton";
 import type { useMediaManager } from "./hooks/useMediaManager";
-import type { LibraryMediaFile, MediaCapability, MediaFile } from "./types";
+import { capabilityAccept, mediaLimitKey, type LibraryMediaFile, type MediaCapability, type MediaFile } from "./types";
 import { useMessages } from "~/i18n";
-import { contentMessages } from "~/i18n/content";
+import { mediaMessages } from "~/i18n/media";
+import { resourceMessages } from "~/i18n/resource";
 
 interface MediaWorkspaceProps {
   manager: ReturnType<typeof useMediaManager>;
@@ -19,111 +21,198 @@ interface MediaWorkspaceProps {
   onClose?: () => void;
 }
 
-function mediaLimitHint(capability: MediaCapability, picker: boolean): string {
-  if (capability === "image") return "Images up to 20 MiB";
-  if (capability === "video") return "MP4 or WebM up to 100 MiB";
-  return picker
-    ? "Images up to 20 MiB · videos up to 100 MiB"
-    : "Images up to 20 MiB · videos up to 100 MiB · 50 files per batch";
-}
+type Lifecycle = "trash" | "restore" | "permanent";
 
+/**
+ * The Files workspace: the /admin/media page (header, tabs, one card) and the
+ * picker body inside MediaManager's dialog (toolbar, grid, Cancel/Add footer).
+ */
 export function MediaWorkspace({ manager: mm, capability, picker = false, multiple = false, onSelect, onClose }: MediaWorkspaceProps) {
-  const t = useMessages(contentMessages);
+  const t = useMessages(mediaMessages);
+  const r = useMessages(resourceMessages);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile; bulk?: true } | null>(null);
-  const limitHint = mediaLimitHint(capability, picker);
+  const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile } | null>(null);
   const { cancelSelection, selectionMode, showPreview } = mm;
-  const lifecycle = (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
+  const canUpload = mm.view === "ready";
+  const filtered = Boolean(mm.filters.search) || (capability === "both" && Boolean(mm.filters.kind)) || mm.currentFolderId !== "all";
+
+  const lifecycle = (file: LibraryMediaFile, action: Lifecycle) => {
     if (action === "permanent") setConfirm({ file });
     else void mm.mutateOne(file, action);
   };
-  const bulkLifecycle = (action: "trash" | "restore" | "permanent") => {
-    if (action === "permanent") setConfirm({ bulk: true });
+  const bulkLifecycle = (action: Lifecycle) => {
+    if (action === "permanent") setConfirm({});
     else void mm.mutateSelected(action);
   };
   const navigate = (direction: -1 | 1) => {
-    if (!mm.previewFile) return;
     const index = mm.files.findIndex((file) => file.id === mm.previewFile?.id);
     const next = mm.files[index + direction];
-    if (next) mm.setPreviewFile(next);
+    if (index >= 0 && next) mm.setPreviewFile(next);
   };
 
   useEffect(() => {
     if (picker || !selectionMode || showPreview || confirm) return;
-
     const cancelWithEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLElement && activeElement.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
       event.preventDefault();
       cancelSelection();
     };
-
     document.addEventListener("keydown", cancelWithEscape);
     return () => document.removeEventListener("keydown", cancelWithEscape);
   }, [cancelSelection, confirm, picker, selectionMode, showPreview]);
 
+  const body = (
+    <>
+      <input
+        ref={inputRef}
+        className="sr-only"
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-hidden="true"
+        accept={capabilityAccept(capability)}
+        onChange={(event) => {
+          void mm.uploadFiles(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+      {!picker ? (
+        <IndexTabs
+          label={t("title")}
+          tabs={[{ value: "ready", label: r("all") }, { value: "trash", label: r("trash") }]}
+          value={mm.view}
+          onChange={mm.setView}
+        />
+      ) : null}
+      <MediaFilterBar
+        capability={capability}
+        filters={mm.filters}
+        view={mm.view}
+        selectedCount={mm.selectedFileIds.length}
+        selectableCount={mm.selectableFileCount}
+        selectionMode={mm.selectionMode}
+        folders={mm.folders}
+        currentFolderId={mm.currentFolderId}
+        isMutating={mm.isMutating}
+        allowSelection={!picker || multiple}
+        allowManagement={!picker}
+        onSearch={mm.applySearch}
+        onFiltersChange={mm.applyFilters}
+        onUploadClick={canUpload ? () => inputRef.current?.click() : undefined}
+        onFolderSelect={mm.moveToFolder}
+        onFolderCreate={mm.createFolder}
+        onFolderRename={mm.renameFolder}
+        onFolderDelete={mm.deleteFolder}
+        onBeginSelection={mm.beginSelection}
+        onSelectAll={mm.selectAllVisible}
+        onClearSelection={() => mm.clearSelection(true)}
+        onCancelSelection={!picker ? mm.cancelSelection : undefined}
+        onMove={(folderId) => void mm.moveSelected(folderId)}
+        onLifecycle={bulkLifecycle}
+      />
+      <MediaUploadQueue queue={mm.queue} onPause={mm.pause} onResume={mm.resume} onCancel={mm.cancel} onClearFinished={mm.clearFinished} />
+      <div className={picker ? "min-h-0 flex-1 overflow-y-auto" : undefined}>
+        <MediaGallery
+          files={mm.files}
+          selectedFileIds={mm.selectedFileIds}
+          isFileUnavailable={mm.isFileUnavailable}
+          selectionMode={mm.selectionMode}
+          allowManagement={!picker}
+          view={mm.view}
+          filtered={filtered}
+          isLoading={mm.isLoading}
+          isLoadingMore={mm.isLoadingMore}
+          hasMore={mm.hasMore}
+          loadError={mm.loadError}
+          onFileSelect={mm.handleFileSelect}
+          onFilePreview={(file) => {
+            mm.setPreviewFile(file);
+            mm.setShowPreview(true);
+          }}
+          onToggleSelection={mm.toggleSelection}
+          onLifecycle={lifecycle}
+          onLoadMore={mm.loadMore}
+          onRetry={() => void mm.refresh()}
+          onClearFilters={mm.clearFilters}
+          onUploadClick={canUpload ? () => inputRef.current?.click() : undefined}
+        />
+      </div>
+    </>
+  );
+
+  const selected = mm.selectedFileIds.length;
   return (
     <div
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background"
-      onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+      className={picker ? "relative flex min-h-0 flex-1 flex-col" : "relative pb-8"}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
       onDragOver={(event) => event.preventDefault()}
-      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
-      onDrop={(event) => { event.preventDefault(); setDragging(false); if (mm.view === "ready") void mm.uploadFiles(event.dataTransfer.files); }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        if (canUpload) void mm.uploadFiles(event.dataTransfer.files);
+      }}
     >
-      {dragging && mm.view === "ready" && <div className="absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/40 bg-background/95"><div className="text-center"><Upload className="mx-auto h-7 w-7" /><p className="mt-2 text-sm font-semibold">Drop to add assets</p><p className="mt-1 text-xs text-muted-foreground">{limitHint}</p></div></div>}
-
-      <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-3 py-2">
-        <div className="min-w-0 flex-1">
-          {picker ? (
-            <h2 className="text-sm font-semibold">Choose {capability === "both" ? "media" : capability}</h2>
-          ) : (
-            <h1 className="text-sm font-semibold">{t("files")}</h1>
-          )}
-          <p className="sr-only">{limitHint}</p>
+      {dragging && canUpload ? (
+        <div className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-ring bg-card text-center">
+          <Upload className="size-6 text-muted-foreground" aria-hidden="true" />
+          <p className="text-heading-sm">{t("dropToUpload")}</p>
+          <p className="text-body text-muted-foreground">{t(mediaLimitKey(capability))}</p>
         </div>
-        {!picker && mm.view === "ready" && <OptimizeImagesButton onOptimized={() => void mm.refresh()} />}
-        {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
-        {onClose && <Button type="button" variant="ghost" size="sm" className="h-11 sm:h-8" onClick={onClose}>Close</Button>}
-      </header>
+      ) : null}
 
-      <MediaUploadQueue queue={mm.queue} onPause={mm.pause} onResume={mm.resume} onCancel={mm.cancel} onClearFinished={mm.clearFinished} />
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <FolderBrowser folders={mm.folders} currentFolderId={mm.currentFolderId} onFolderSelect={mm.moveToFolder} onFolderCreate={mm.createFolder} onFolderRename={mm.renameFolder} onFolderDelete={mm.deleteFolder} />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MediaFilterBar
-            capability={capability}
-            filters={mm.filters}
-            view={mm.view}
-            selectedCount={mm.selectedFileIds.length}
-            visibleCount={mm.files.length}
-            selectableCount={mm.selectableFileCount}
-            selectionMode={mm.selectionMode}
-            folders={mm.folders}
-            isMutating={mm.isMutating}
-            allowSelection={!picker || multiple}
-            allowManagement={!picker}
-            onSearch={mm.applySearch}
-            onFiltersChange={mm.applyFilters}
-            onUpload={mm.uploadFiles}
-            onBeginSelection={mm.beginSelection}
-            onSelectAll={mm.selectAllVisible}
-            onClearSelection={() => mm.clearSelection(true)}
-            onCancelSelection={!picker ? mm.cancelSelection : undefined}
-            onMove={(folderId) => void mm.moveSelected(folderId)}
-            onLifecycle={bulkLifecycle}
-            onAddSelected={picker && multiple ? mm.addSelected : undefined}
-          />
-          <div className="min-h-0 flex-1">
-            <MediaGallery files={mm.files} selectedFileIds={mm.selectedFileIds} isFileUnavailable={mm.isFileUnavailable} selectionMode={mm.selectionMode} allowManagement={!picker} view={mm.view} isLoading={mm.isLoading} isLoadingMore={mm.isLoadingMore} hasMore={mm.hasMore} loadError={mm.loadError} onFileSelect={mm.handleFileSelect} onFilePreview={(file, event) => { event.stopPropagation(); mm.setPreviewFile(file); mm.setShowPreview(true); }} onToggleSelection={mm.toggleSelection} onLifecycle={lifecycle} onLoadMore={mm.loadMore} onRetry={() => void mm.refresh()} />
-          </div>
-        </main>
-      </div>
+      {picker ? (
+        <>
+          {body}
+          <footer className="flex flex-wrap items-center justify-end gap-2 border-t px-4 py-3">
+            {multiple ? <span className="mr-auto text-body text-muted-foreground" aria-live="polite">{r("selected", { count: selected })}</span> : null}
+            <Button type="button" variant="outline" onClick={onClose}>{r("cancel")}</Button>
+            {multiple ? (
+              <Button type="button" disabled={!selected || mm.isMutating} onClick={mm.addSelected}>
+                {selected ? t("addCount", { count: selected }) : t("add")}
+              </Button>
+            ) : null}
+          </footer>
+        </>
+      ) : (
+        <>
+          <PageHeader title={t("title")} actions={canUpload ? <OptimizeImagesButton onOptimized={() => void mm.refresh()} /> : null} />
+          <div className="overflow-hidden rounded-xl bg-card shadow-card">{body}</div>
+        </>
+      )}
 
-      <MediaPreview open={mm.showPreview} file={mm.previewFile} files={mm.files} onOpenChange={mm.setShowPreview} onNavigate={navigate} onUpdate={mm.updateFile} onSelect={onSelect} />
-      <AlertDialog open={!!confirm} onOpenChange={(value) => !value && setConfirm(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete permanently?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Assets in use cannot be deleted.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep in trash</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => { if (confirm?.file) void mm.mutateOne(confirm.file, "permanent"); else if (confirm?.bulk) void mm.mutateSelected("permanent"); setConfirm(null); }}>Delete permanently</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-      </AlertDialog>
+      <MediaPreview
+        open={mm.showPreview}
+        file={mm.previewFile}
+        files={mm.files}
+        onOpenChange={mm.setShowPreview}
+        onNavigate={navigate}
+        onUpdate={mm.updateFile}
+        onSelect={onSelect}
+      />
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirm(null);
+        }}
+        title={confirm?.file ? t("deleteOneTitle", { name: confirm.file.filename }) : t("deleteManyTitle", { count: selected })}
+        description={t("deleteBody")}
+        confirmLabel={r("deletePermanently")}
+        cancelLabel={r("cancel")}
+        onConfirm={() => {
+          if (confirm?.file) void mm.mutateOne(confirm.file, "permanent");
+          else void mm.mutateSelected("permanent");
+          setConfirm(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Languages, LogOut, UserRound } from "lucide-react";
+import { Languages, LogOut, SunMoon, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DarkModeToggle } from "@/components/ui/DarkModeToggle";
+import { useTheme, type ThemePreference } from "@/components/admin/layout/ThemeProvider";
 import { broadcastAdminSignOut } from "@/components/auth/AdminSessionSync";
 import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
@@ -36,6 +36,7 @@ function initials(name: string) {
 export function UserMenu({ user }: { user: UserMenuUser }) {
   const t = useMessages(shellMessages);
   const locale = useLocale();
+  const { preference, setPreference } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
 
   const signOut = async () => {
@@ -89,10 +90,15 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-2 text-body">
-          <span>{t("darkMode")}</span>
-          <DarkModeToggle />
+        <div className="flex items-center gap-2 px-2 pb-1 pt-1.5 text-body text-muted-foreground">
+          <SunMoon className="size-4" aria-hidden />
+          {t("theme")}
         </div>
+        <DropdownMenuRadioGroup value={preference} onValueChange={(value) => setPreference(value as ThemePreference)}>
+          <DropdownMenuRadioItem value="light">{t("themeLight")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">{t("themeDark")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">{t("themeSystem")}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"

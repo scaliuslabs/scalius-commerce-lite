@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mediaText } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import { ITEMS_PER_PAGE, type LibraryMediaFile, type MediaFilterOptions } from "../types";
 
@@ -28,6 +29,9 @@ export function useMediaFiles(autoLoad = false) {
     if (cursor) setIsLoadingMore(true);
     else setIsLoading(true);
     setLoadError(null);
+    // The requested filters apply at once, so a reload that follows (folder
+    // change, retry) never resurrects the previous search.
+    setFilters(merged);
     try {
       const data = await MediaApiClient.fetchFiles(cursor, ITEMS_PER_PAGE, merged);
       if (requestId !== requestRef.current) return;
@@ -38,11 +42,10 @@ export function useMediaFiles(autoLoad = false) {
       });
       setNextCursor(data.pagination.nextCursor);
       setHasMore(data.pagination.hasMore);
-      setFilters(merged);
       setLoadError(null);
     } catch (error) {
       if (requestId === requestRef.current) {
-        setLoadError(error instanceof Error ? error.message : "The media service did not respond.");
+        setLoadError(error instanceof Error ? error.message : mediaText("loadFailed"));
       }
     } finally {
       if (requestId === requestRef.current) {

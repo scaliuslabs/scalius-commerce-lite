@@ -1,256 +1,129 @@
-import { useState } from "react";
+import { useState, type SyntheticEvent } from "react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
+import { postApiV1AdminAuthChangePassword } from "@scalius/api-client/sdk";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner";
-import { getServerFnError } from "~/lib/api-helpers";
-import { postApiV1AdminAuthChangePassword } from "@scalius/api-client/sdk";
-import { apiData } from "~/lib/api";
-import { useHydrated } from "~/hooks/use-hydrated";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { useHydrated } from "~/hooks/use-hydrated";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { apiData } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
+import { useMessages } from "~/i18n";
+import { accountMessages } from "~/i18n/account";
 
-function getPasswordStrength(password: string) {
-  if (!password) return { strength: 0, label: "", tone: "bg-muted" };
-  let strength = 0;
-  if (password.length >= 8) strength++;
-  if (password.length >= 12) strength++;
-  if (/[A-Z]/.test(password)) strength++;
-  if (/[0-9]/.test(password)) strength++;
-  if (/[^A-Za-z0-9]/.test(password)) strength++;
+const MIN_LENGTH = 12;
+type Field = "current" | "next" | "confirm";
 
-  if (strength <= 2) return { strength, label: "Weak", tone: "bg-destructive" };
-  if (strength <= 3) return { strength, label: "Fair", tone: "bg-foreground/55" };
-  if (strength <= 4) return { strength, label: "Good", tone: "bg-foreground/75" };
-  return { strength, label: "Strong", tone: "bg-primary" };
-}
-
+/**
+ * Password card. The form is POST-only with no `name` attributes and stays
+ * disabled until hydration, so no password can ever reach a URL or the server
+ * without the API call.
+ */
 export function ChangePasswordForm() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const t = useMessages(accountMessages);
   const isHydrated = useHydrated();
+  const [values, setValues] = useState<Record<Field, string>>({ current: "", next: "", confirm: "" });
+  const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
+  const [shown, setShown] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [wrongCurrent, setWrongCurrent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const passwordStrength = getPasswordStrength(newPassword);
+  const errors: Partial<Record<Field, string>> = {
+    current: wrongCurrent ? t("wrongCurrentPassword") : touched.current && !values.current ? t("enterCurrentPassword") : undefined,
+    next: touched.next && values.next.length < MIN_LENGTH ? t("passwordTooShort") : undefined,
+    confirm: touched.confirm && values.confirm !== values.next ? t("passwordsDontMatch") : undefined,
+  };
 
-  const handleSubmit = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
+  const set = (field: Field, value: string) => {
+    setValues((current) => ({ ...current, [field]: value }));
+    if (field === "current") setWrongCurrent(false);
+  };
+
+  const handleSubmit = async (event: SyntheticEvent) => {
+    event.preventDefault();
+    setTouched({ current: true, next: true, confirm: true });
     setError(null);
-
-    if (newPassword !== confirmPassword) {
-      setError("New passwords do not match");
-      return;
-    }
-
-    if (newPassword.length < 12) {
-      setError("Password must be at least 12 characters");
-      return;
-    }
-
-    setIsLoading(true);
-
+    if (!values.current || values.next.length < MIN_LENGTH || values.next !== values.confirm) return;
+    setSaving(true);
     try {
-      await apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword, newPassword } }));
-      toast.success("Password updated");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setShowCurrentPassword(false);
-      setShowNewPassword(false);
-      setShowConfirmPassword(false);
+      await apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword: values.current, newPassword: values.next } }));
+      setValues({ current: "", next: "", confirm: "" });
+      setTouched({});
+      setShown(false);
+      toast.success(t("passwordChanged"));
     } catch (err) {
-      setError(getServerFnError(err, "Failed to change password"));
+      if (err instanceof AdminApiResponseError && err.status === 400 && /current password/i.test(err.message)) setWrongCurrent(true);
+      else setError(getServerFnError(err, t("passwordFailed")));
     } finally {
-      setIsLoading(false);
+      setSaving(false);
     }
   };
 
+  const field = (id: Field, label: string, autoComplete: string, help?: string) => {
+    const describedBy = errors[id] ? `password-${id}-error` : help ? `password-${id}-help` : undefined;
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`password-${id}`}>{label}</Label>
+        <Input
+          id={`password-${id}`}
+          type={shown ? "text" : "password"}
+          value={values[id]}
+          autoComplete={autoComplete}
+          required
+          disabled={!isHydrated || saving}
+          aria-invalid={errors[id] ? true : undefined}
+          aria-describedby={describedBy}
+          onBlur={() => setTouched((current) => ({ ...current, [id]: Boolean(values[id]) || current[id] }))}
+          onChange={(event) => set(id, event.target.value)}
+        />
+        {errors[id] ? (
+          <p id={`password-${id}-error`} className="text-body text-destructive">{errors[id]}</p>
+        ) : help ? (
+          <p id={`password-${id}-help`} className="text-body text-muted-foreground">{help}</p>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
-    <>
+    <Card>
       <UnsavedChangesGuard
-        isDirty={Boolean(currentPassword || newPassword || confirmPassword)}
-        isSubmitting={isLoading}
+        isDirty={Boolean(values.current || values.next || values.confirm)}
+        isSubmitting={saving}
       />
-    <Card className="max-w-3xl rounded-xl shadow-none">
-      <CardHeader className="p-4 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <KeyRound className="h-4 w-4" />
-          Change password
-        </CardTitle>
-        <CardDescription>
-          Use at least 12 characters. Two-factor authentication remains required.
-        </CardDescription>
+      <CardHeader>
+        <CardTitle>{t("password")}</CardTitle>
+        <CardDescription>{t("passwordHelp")}</CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <form
-          method="post"
-          action="/admin/account"
-          onSubmit={handleSubmit}
-          className="space-y-4"
-          noValidate
-        >
-          {error && (
-            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current password</Label>
-            <div className="relative">
-              <Input
-                id="currentPassword"
-                type={showCurrentPassword ? "text" : "password"}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                disabled={!isHydrated || isLoading}
-                className="min-h-11 pr-11 sm:min-h-9"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
-                onClick={() => setShowCurrentPassword((s) => !s)}
-                aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
-              >
-                {showCurrentPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
+      <form method="post" action="/admin/account" onSubmit={handleSubmit} noValidate>
+        <CardContent className="flex flex-col gap-4">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertCircle aria-hidden="true" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {field("current", t("currentPassword"), "current-password")}
+          {field("next", t("newPassword"), "new-password", t("passwordMinHelp"))}
+          {field("confirm", t("confirmPassword"), "new-password")}
+          <div>
+            <Button type="button" variant="link" size="sm" className="-ml-3 sm:-ml-2.5" disabled={!isHydrated || saving} aria-pressed={shown} onClick={() => setShown((value) => !value)}>
+              {shown ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+              {t(shown ? "hidePasswords" : "showPasswords")}
+            </Button>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New password</Label>
-            <div className="relative">
-              <Input
-                id="newPassword"
-                type={showNewPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                disabled={!isHydrated || isLoading}
-                minLength={12}
-                className="min-h-11 pr-11 sm:min-h-9"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
-                onClick={() => setShowNewPassword((s) => !s)}
-                aria-label={showNewPassword ? "Hide new password" : "Show new password"}
-              >
-                {showNewPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
-            {newPassword && (
-              <div className="space-y-1.5">
-                <div
-                  className="flex gap-1"
-                  role="progressbar"
-                  aria-label={`Password strength: ${passwordStrength.label}`}
-                  aria-valuemin={0}
-                  aria-valuemax={5}
-                  aria-valuenow={passwordStrength.strength}
-                >
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength.strength
-                        ? passwordStrength.tone
-                        : "bg-muted"
-                        }`}
-                    />
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Password strength: {passwordStrength.label}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                disabled={!isHydrated || isLoading}
-                minLength={12}
-                className="min-h-11 pr-11 sm:min-h-9"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
-                onClick={() => setShowConfirmPassword((shown) => !shown)}
-                aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
-              >
-                {showConfirmPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
-            {confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords do not match</p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            disabled={
-              !isHydrated ||
-              isLoading ||
-              !currentPassword ||
-              !newPassword ||
-              newPassword !== confirmPassword
-            }
-            className="min-h-11 w-full sm:min-h-9 sm:w-auto"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating…
-              </>
-            ) : (
-              "Update password"
-            )}
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button type="submit" loading={saving} disabled={!isHydrated || !values.current || !values.next || !values.confirm}>
+            {t("changePassword")}
           </Button>
-        </form>
-      </CardContent>
+        </CardFooter>
+      </form>
     </Card>
-    </>
   );
 }

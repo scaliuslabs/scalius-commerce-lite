@@ -69,10 +69,13 @@ function AdminLayout() {
           <main
             id="admin-main-scroll"
             data-scroll-restoration-id="admin-main-scroll"
-            className="min-w-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
+            className="min-w-0 flex-1 overflow-y-auto lg:[scrollbar-gutter:stable]"
           >
-            <div className="mx-auto max-w-7xl">
-              <Outlet />
+            {/* Padding sits inside the scroller so sticky table headers meet the top bar. */}
+            <div className="px-3 py-4 sm:px-4 md:px-6">
+              <div className="mx-auto max-w-7xl">
+                <Outlet />
+              </div>
             </div>
           </main>
         </div>

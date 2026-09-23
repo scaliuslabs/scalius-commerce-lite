@@ -2,12 +2,43 @@ import * as React from "react";
 
 import { cn } from "@scalius/shared/utils";
 
-/** Polaris IndexTable density: subdued header row, 14px rows, tabular numbers. */
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table ref={ref} className={cn("w-full caption-bottom text-body", className)} {...props} />
-  </div>
-));
+/**
+ * Polaris IndexTable density: subdued header row, 14px rows, tabular numbers.
+ *
+ * The header row is sticky. While the table fits its width, the wrapper does
+ * not scroll, so the header sticks to the page's scroll container, just
+ * under the top bar, as the page scrolls (Polaris). When the columns are
+ * wider than the card, the wrapper scrolls both ways inside a viewport-high
+ * box and the header sticks to that box, so horizontal scrolling never
+ * breaks it. Ancestors between the table and the page must use
+ * `overflow-clip`, never `overflow-hidden`, or sticky stops working.
+ */
+const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, ...props }, ref) => {
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const [scrolls, setScrolls] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    const table = wrapper?.firstElementChild;
+    if (!wrapper || !table || typeof ResizeObserver === "undefined") return;
+    const measure = () => setScrolls(table.scrollWidth > wrapper.clientWidth + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    observer.observe(table);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={wrapperRef}
+      data-scrolls={scrolls || undefined}
+      className="relative w-full data-[scrolls]:max-h-[calc(100svh-8rem)] data-[scrolls]:overflow-auto"
+    >
+      <table ref={ref} className={cn("w-full caption-bottom text-body", className)} {...props} />
+    </div>
+  );
+});
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
@@ -36,7 +67,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     <th
       ref={ref}
       className={cn(
-        "h-9 whitespace-nowrap px-3 text-left align-middle text-caption font-medium text-muted-foreground has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pr-0",
+        // Sticky with its own 1px bottom rule: a collapsed `border-b` would scroll away.
+        // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
+        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-left align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pr-0",
         className,
       )}
       {...props}

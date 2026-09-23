@@ -257,7 +257,7 @@ function ProductsPage() {
         }
       />
 
-      <div className="overflow-hidden rounded-xl bg-card shadow-card">
+      <div className="overflow-clip rounded-xl bg-card shadow-card">
         <IndexTabs<ProductTab>
           label={t("products")}
           value={tab}

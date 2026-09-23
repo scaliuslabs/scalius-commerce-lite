@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  type CSSProperties,
   type MouseEvent,
   type ComponentType,
   type ReactNode,
@@ -133,10 +134,8 @@ export function DataTable<TData extends TableRowData>({
             {headerGroup.headers.map((header) => (
               <TableHead
                 key={header.id}
-                className={header.column.columnDef.meta?.numeric ? "text-right" : undefined}
-                style={{
-                  width: header.getSize() !== 150 ? header.getSize() : undefined,
-                }}
+                className={cn(header.getSize() !== 150 && "w-(--column-width)", header.column.columnDef.meta?.numeric && "text-right")}
+                style={{ "--column-width": `${header.getSize()}px` } as CSSProperties}
               >
                 {header.isPlaceholder
                   ? null
@@ -191,7 +190,7 @@ export function DataTable<TData extends TableRowData>({
   );
 
   return (
-    <div className={cn(isCard && "overflow-hidden rounded-xl bg-card shadow-card", className)}>
+    <div className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
       {toolbar}
 
       <div

@@ -64,10 +64,10 @@ export function SearchListingPreview({
 }) {
   return (
     <div className="min-w-0 space-y-1" aria-live="polite">
-      <p className="truncate text-sm text-muted-foreground">{url}</p>
-      <p className="line-clamp-2 text-lg leading-snug text-primary">{title}</p>
+      <p className="truncate text-body text-muted-foreground">{url}</p>
+      <p className="line-clamp-2 text-heading-md text-link">{title}</p>
       {description ? (
-        <p className="line-clamp-2 text-sm text-muted-foreground">{description}</p>
+        <p className="line-clamp-2 text-body text-muted-foreground">{description}</p>
       ) : null}
     </div>
   );
@@ -101,7 +101,7 @@ export function SearchListingCard({
   return (
     <Card>
       <div className="flex items-center justify-between gap-3 p-4">
-        <h2 className="text-base font-semibold">{t("title")}</h2>
+        <h2 className="text-heading-sm">{t("title")}</h2>
         <Button
           type="button"
           variant="ghost"
@@ -118,9 +118,9 @@ export function SearchListingCard({
         {title ? (
           <SearchListingPreview url={`${origin}${shownPath}`} title={title} description={description} />
         ) : (
-          <p className="text-sm text-muted-foreground">{t(`empty_${resource}`)}</p>
+          <p className="text-body text-muted-foreground">{t(`empty_${resource}`)}</p>
         )}
-        {value.hidden ? <p className="text-sm text-muted-foreground">{t("hiddenNote")}</p> : null}
+        {value.hidden ? <p className="text-body text-muted-foreground">{t("hiddenNote")}</p> : null}
 
         {open ? (
           <div className="space-y-4 border-t pt-4">
@@ -134,7 +134,7 @@ export function SearchListingCard({
                 aria-invalid={Boolean(errors.title)}
                 onChange={(event) => onChange({ title: event.target.value })}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {errors.title ?? t("charactersUsed", { count: value.title.length, limit: SEARCH_TITLE_LENGTH })}
               </p>
             </div>
@@ -148,7 +148,7 @@ export function SearchListingCard({
                 onChange={(event) => onChange({ description: event.target.value })}
                 rows={3}
               />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {errors.description ??
                   t("charactersUsed", { count: value.description.length, limit: SEARCH_DESCRIPTION_LENGTH })}
               </p>
@@ -156,21 +156,22 @@ export function SearchListingCard({
             {value.handle !== undefined ? (
               <div className="space-y-1.5">
                 <Label htmlFor={`${id}-handle`}>{t("urlHandle")}</Label>
-                <div className="flex h-10 items-center overflow-hidden rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
-                  <span className="shrink-0 border-r bg-muted px-3 py-2 text-sm text-muted-foreground">{prefix}</span>
-                  <input
-                    id={`${id}-handle`}
-                    value={value.handle}
-                    disabled={disabled}
-                    aria-invalid={Boolean(errors.handle)}
-                    onChange={(event) => onChange({ handle: event.target.value })}
-                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
-                  />
-                </div>
-                {errors.handle ? <p className="text-sm text-destructive">{errors.handle}</p> : null}
+                <Input
+                  id={`${id}-handle`}
+                  value={value.handle}
+                  disabled={disabled}
+                  inputMode="url"
+                  autoCapitalize="none"
+                  aria-invalid={Boolean(errors.handle)}
+                  aria-describedby={`${id}-handle-help`}
+                  onChange={(event) => onChange({ handle: event.target.value })}
+                />
+                <p id={`${id}-handle-help`} className={errors.handle ? "text-body text-destructive" : "truncate text-body text-muted-foreground"}>
+                  {errors.handle ?? `${origin}${prefix}${value.handle ?? ""}`}
+                </p>
               </div>
             ) : null}
-            <label className="flex items-start gap-3 text-sm">
+            <label className="flex items-start gap-3 text-body">
               <Checkbox
                 checked={value.hidden}
                 disabled={disabled}
@@ -183,7 +184,7 @@ export function SearchListingCard({
               </span>
             </label>
             {value.excludeFromFeed !== undefined ? (
-              <label className="flex items-start gap-3 text-sm">
+              <label className="flex items-start gap-3 text-body">
                 <Checkbox
                   checked={value.excludeFromFeed}
                   disabled={disabled}

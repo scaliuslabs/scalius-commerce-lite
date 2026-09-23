@@ -25,6 +25,7 @@ import type {
 } from "../types";
 
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { mediaText } from "~/i18n/media";
 import type { EncodedMediaVariants } from "../utils/media-variants";
 
 /** Same-origin proxy path, below the runtime dashboard base path. */
@@ -89,13 +90,13 @@ async function parseDirectResponse<T>(response: Response): Promise<T> {
   try {
     body = (await response.json()) as ApiEnvelope<T>;
   } catch {
-    throw new Error(`Media request failed (${response.status}).`);
+    throw new Error(mediaText("requestFailed", { status: String(response.status) }));
   }
   if (!response.ok || body.success === false) {
     const message = typeof body.error === "string" ? body.error : body.error?.message;
-    throw new Error(message || `Media request failed (${response.status}).`);
+    throw new Error(message || mediaText("requestFailed", { status: String(response.status) }));
   }
-  if (body.data === undefined) throw new Error("Media service returned an incomplete response.");
+  if (body.data === undefined) throw new Error(mediaText("serverError"));
   return body.data;
 }
 
@@ -126,7 +127,7 @@ export class MediaApiClient {
       folders.push(...data.folders.map(toFolder));
       if (!data.pagination.hasMore || !data.pagination.nextCursor) break;
       if (page === 19) {
-        throw new Error("This library has more than 2,000 folders. Consolidate folders before managing them here.");
+        throw new Error(mediaText("tooManyFolders"));
       }
       cursor = data.pagination.nextCursor;
     }
@@ -242,7 +243,7 @@ export class MediaApiClient {
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Media request failed (${response.status}).`);
+    if (!response.ok) throw new Error(mediaText("requestFailed", { status: String(response.status) }));
     return response.blob();
   }
 

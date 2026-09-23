@@ -1,131 +1,121 @@
 import type React from "react";
 import type { UseFormReturn, FieldValues } from "react-hook-form";
 import { Form } from "@/components/ui/form";
-import { FormActionBar } from "@/components/admin/FormStickyHeader";
+import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
-import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
-import { getFormEntityLabel } from "./form-copy";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
+import { useMessages } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
+import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
+import { useFormSaveBar } from "./use-form-save-bar";
 
 interface FormContainerProps<
   TFieldValues extends FieldValues,
   TTransformedValues extends FieldValues = TFieldValues,
 > {
-  /** The section name shown as breadcrumb link (e.g., "Categories") */
-  title: string;
-  /** Page title (e.g. the record's name). Defaults to "Edit/Create {entity}". */
-  heading?: React.ReactNode;
+  /** Page title: the record's name, or "Add …" for a new one. */
+  heading: React.ReactNode;
   /** Status badge next to the title. */
   badge?: React.ReactNode;
-  /** Accepted for older form call sites; the current bottom action bar no longer displays it. */
-  entityName?: string;
-  isEdit: boolean;
-  isSubmitting: boolean;
-  /** URL to navigate back to (e.g., "/admin/categories") */
+  /** The list this record belongs to, for the back arrow. */
   backUrl: string;
-  /** URL for "New X" button shown in edit mode (e.g., "/admin/categories/new") */
-  newUrl?: string;
-  /** Label for the "New X" button (e.g., "New Category") */
-  newLabel?: string;
-  /** Whether the edit form may offer a shortcut to create another entity. */
-  canCreateNew?: boolean;
+  isSubmitting: boolean;
   /**
-   * Fail-closed submit capability for direct form URLs. Required so every
+   * Fail-closed save capability for direct form URLs. Required so every
    * consumer deliberately maps its create/edit API permission.
    */
   canSave: boolean;
-  /** Whether the current form values pass client-side validation. */
-  isFormValid?: boolean;
-  /** Optional explanation exposed on the disabled save action. */
-  saveDisabledReason?: string;
-  /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
-  saveLabel?: string;
-  /** The react-hook-form instance — used for isDirty and to provide <Form> context */
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
-  /** Called when the save button is clicked or the form is submitted — typically `handleSubmit(onSave)` */
-  onSubmit: () => void;
-  /** Form field content */
+  /** Saves valid values; throws when the save failed (after marking any fields). */
+  onSave: (values: TTransformedValues) => Promise<unknown>;
   children: React.ReactNode;
-  /** Additional className for the <form> element */
   formClassName?: string;
-  /**
-   * Allow URL-backed state changes on this exact form route without showing
-   * the leave-page warning. The guard still blocks a different pathname and
-   * still protects refresh/tab close through beforeunload.
-   */
-  allowSamePathStateNavigation?: boolean;
+}
+
+function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends FieldValues>({
+  form,
+  saving,
+  canSave,
+  save,
+  className,
+  header,
+  children,
+}: {
+  form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
+  saving: boolean;
+  canSave: boolean;
+  save: (values: TTransformedValues) => Promise<unknown>;
+  className: string;
+  header: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const t = useMessages(saveBarMessages);
+  useFormSaveBar({ form, saving, locked: !canSave, save });
+  const scope = useSaveScope();
+  return (
+    <form
+      method="post"
+      noValidate
+      className={className}
+      onSubmit={(event) => {
+        event.preventDefault();
+        // React bubbles submits from forms in portalled dialogs; only this form saves the page.
+        if (event.target === event.currentTarget && scope?.dirty && !scope.busy) void scope.saveAll();
+      }}
+    >
+      {header}
+      {/* A flex gap, so the banner's hidden placeholder adds no space. */}
+      <div className="flex flex-col gap-4">
+        <SaveErrorBanner />
+        <div>{children}</div>
+        {canSave ? (
+          // Shopify repeats Save at the end of the page, under a divider.
+          <div className="flex justify-end border-t pt-4">
+            <Button type="submit" loading={Boolean(scope?.busy)} disabled={!scope?.dirty}>
+              {t("save")}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </form>
+  );
 }
 
 /**
- * Shared form layout wrapper.
- *
- * Layout: Breadcrumb (top) → Form content → Action bar (sticky bottom).
+ * A record editor page: title with a back arrow, then the cards, then Save.
+ * Edits also show the contextual save bar, which saves, discards and guards
+ * leaving the page; a failed save is explained in a banner under the title.
  */
 export function FormContainer<
   TFieldValues extends FieldValues,
   TTransformedValues extends FieldValues = TFieldValues,
 >({
-  title,
   heading,
   badge,
-  isEdit,
-  isSubmitting,
   backUrl,
-  newUrl,
-  newLabel,
-  canCreateNew = true,
+  isSubmitting,
   canSave,
-  isFormValid = true,
-  saveDisabledReason,
-  saveLabel,
   form,
-  onSubmit,
+  onSave,
   children,
   formClassName = "pb-6",
-  allowSamePathStateNavigation = false,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
-  const entityLabel = getFormEntityLabel(title, newLabel);
-
   return (
     <ErrorBoundary>
-      <Form {...form}>
-        <UnsavedChangesGuard
-          isDirty={form.formState.isDirty}
-          isSubmitting={isSubmitting}
-          allowSamePathStateNavigation={allowSamePathStateNavigation}
-        />
-        <form
-          method="post"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (canSave && form.formState.isDirty && isFormValid) onSubmit();
-          }}
-          className={formClassName}
-          noValidate
-        >
-          <PageHeader
-            backTo={backUrl}
-            badge={badge}
-            title={heading ?? (isEdit ? `Edit ${entityLabel}` : `Create ${entityLabel}`)}
-          />
-          {children}
-        </form>
-        <FormActionBar
-          title={entityLabel}
-          isEdit={isEdit}
-          isSubmitting={isSubmitting}
-          isDirty={form.formState.isDirty}
-          cancelUrl={backUrl}
-          newUrl={newUrl}
-          newLabel={newLabel}
-          canCreateNew={canCreateNew}
-          canSave={canSave}
-          isFormValid={isFormValid}
-          saveDisabledReason={saveDisabledReason}
-          saveLabel={saveLabel}
-          onSave={onSubmit}
-        />
-      </Form>
+      <SaveBarProvider>
+        <Form {...form}>
+          <EditorForm
+            form={form}
+            saving={isSubmitting}
+            canSave={canSave}
+            save={onSave}
+            className={formClassName}
+            header={<PageHeader backTo={backUrl} badge={badge} title={heading} />}
+          >
+            {children}
+          </EditorForm>
+        </Form>
+      </SaveBarProvider>
     </ErrorBoundary>
   );
 }

@@ -4,6 +4,8 @@ import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryQueryOptions } from "~/lib/api-query-options/categories";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
+import { translate } from "~/i18n";
+import { categoryFormMessages } from "~/i18n/category-form";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -22,7 +24,7 @@ export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
     }
   },
   head: () => ({
-    meta: [{ title: "Edit Category | Scalius Admin" }],
+    meta: [{ title: translate(categoryFormMessages, "category") }],
   }),
   errorComponent: RouteErrorComponent,
   component: EditCategoryPage,
@@ -35,7 +37,6 @@ function EditCategoryPage() {
   const c = categoryData;
   const defaultValues = {
     ...c,
-    slugEdited: true,
     image: c.imageUrl
       ? { id: `temp_${c.id}`, url: c.imageUrl, filename: c.imageUrl.split("/").pop() || "", size: 0, createdAt: new Date() }
       : null,

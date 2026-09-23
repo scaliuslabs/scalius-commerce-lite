@@ -6,6 +6,8 @@ import { useEffect, useSyncExternalStore, type ReactNode } from "react";
  * preference. This module keeps that class and React in step.
  */
 export type Theme = "light" | "dark";
+/** What the merchant picked: a fixed theme, or follow the device. */
+export type ThemePreference = Theme | "system";
 
 const STORAGE_KEY = "theme";
 const listeners = new Set<() => void>();
@@ -33,12 +35,22 @@ function applyTheme(theme: Theme): void {
 }
 
 export function setTheme(theme: Theme): void {
+  setThemePreference(theme);
+}
+
+/** "system" forgets the saved choice, so the device theme applies again. */
+export function setThemePreference(preference: ThemePreference): void {
   try {
-    localStorage.setItem(STORAGE_KEY, theme);
+    if (preference === "system") localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, preference);
   } catch {
     // Private mode: the choice lasts for this page only.
   }
-  applyTheme(theme);
+  applyTheme(preference === "system" ? systemTheme() : preference);
+}
+
+function currentPreference(): ThemePreference {
+  return savedTheme() ?? "system";
 }
 
 function subscribe(listener: () => void): () => void {
@@ -46,9 +58,22 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void; toggleTheme: () => void } {
+export function useTheme(): {
+  theme: Theme;
+  preference: ThemePreference;
+  setTheme: (theme: Theme) => void;
+  setPreference: (preference: ThemePreference) => void;
+  toggleTheme: () => void;
+} {
   const theme = useSyncExternalStore(subscribe, currentTheme, () => "light" as Theme);
-  return { theme, setTheme, toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark") };
+  const preference = useSyncExternalStore(subscribe, currentPreference, () => "system" as ThemePreference);
+  return {
+    theme,
+    preference,
+    setTheme,
+    setPreference: setThemePreference,
+    toggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"),
+  };
 }
 
 /** Follows the system theme until the merchant picks one, and syncs other tabs. */

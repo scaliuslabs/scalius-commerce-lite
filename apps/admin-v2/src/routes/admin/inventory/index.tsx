@@ -76,7 +76,7 @@ function InventoryPage() {
           </Button>
         )}
       />
-      <div className="overflow-hidden rounded-xl bg-card shadow-card">
+      <div className="overflow-clip rounded-xl bg-card shadow-card">
         <IndexTabs
           label={t("views")}
           value={search.section}

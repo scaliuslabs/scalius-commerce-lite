@@ -1,14 +1,13 @@
 import { useState, type MouseEvent } from "react";
-import { Check, Eye, MoreHorizontal, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Eye, ImageOff, MoreHorizontal, Play, RotateCcw, Trash2 } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
+import { resourceMessages } from "~/i18n/resource";
 import type { LibraryMediaFile, MediaLibraryView } from "../types";
 import { formatDuration, formatFileSize, formatFileType } from "../utils";
 
@@ -26,92 +25,117 @@ interface MediaCardProps {
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
 }
 
+/** One file tile: pre-generated WebP thumbnail, name and size; selected tiles get the focus-blue ring. */
 export function MediaCard({ file, posterUrl, selected, unavailable = false, selectionMode, allowManagement, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
+  const t = useMessages(mediaMessages);
+  const r = useMessages(resourceMessages);
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
-  const duration = formatDuration(file.durationMs);
-  const dimensions = file.width && file.height ? `${file.width} × ${file.height}` : null;
-  const previewUrl = isImage
-    ? mediaImageUrl(file.url, 480)
-    : posterUrl
-      ? mediaImageUrl(posterUrl, 480)
-      : null;
+  const extra = formatDuration(file.durationMs) ?? (file.width && file.height ? `${file.width} × ${file.height}` : null);
+  const previewUrl = isImage ? mediaImageUrl(file.url, 480) : posterUrl ? mediaImageUrl(posterUrl, 480) : null;
+  const label = unavailable
+    ? t("alreadyAdded", { name: file.filename })
+    : selectionMode
+      ? t(selected ? "deselectFile" : "selectFile", { name: file.filename })
+      : t("openFile", { name: file.filename });
 
   return (
     <article
       role="listitem"
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card transition-colors focus-within:border-foreground/40",
-        selected && "border-primary ring-1 ring-primary",
-        unavailable && "opacity-60",
+        "group relative overflow-hidden rounded-lg border bg-card hover:border-muted-foreground",
+        selected && "border-ring ring-2 ring-ring",
+        unavailable && "opacity-50",
       )}
     >
       <button
         type="button"
         disabled={unavailable}
-        className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={selectionMode ? onToggle : onActivate}
         aria-pressed={selectionMode && !unavailable ? selected : undefined}
         aria-keyshortcuts={selectionMode && !unavailable ? "Shift+Enter" : undefined}
-        aria-label={`${unavailable ? "Already added" : selectionMode ? (selected ? "Deselect" : "Select") : "Open"} ${file.filename}`}
-        title={unavailable ? "Already added to this product" : selectionMode ? "Hold Shift to select a range" : undefined}
+        aria-label={label}
+        title={selectionMode && !unavailable ? t("rangeHint") : undefined}
       >
-        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden bg-muted text-muted-foreground">
           {previewUrl && !loadFailed ? (
             <img
               src={previewUrl}
-              alt={isImage ? (file.altText || file.filename) : ""}
-              className="h-full w-full object-contain"
+              alt={isImage ? file.altText || file.filename : ""}
+              className="size-full object-contain"
               loading="lazy"
               decoding="async"
               onError={() => setLoadFailed(true)}
             />
+          ) : file.kind === "video" ? (
+            <Play className="size-8" aria-hidden="true" />
           ) : (
-            <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,hsl(var(--muted)),hsl(var(--background)))] text-muted-foreground">
-              {file.kind === "video" ? <Play className="h-8 w-8" aria-hidden="true" /> : <span className="text-xs">Preview unavailable</span>}
-            </div>
+            <ImageOff className="size-6" aria-label={t("noPreview")} />
           )}
-          {file.kind === "video" && (
-            <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/75 px-1.5 py-1 text-xs font-medium text-white">
-              <Play className="h-3 w-3 fill-current" aria-hidden="true" /> Video
-            </span>
-          )}
+          {file.kind === "video" ? (
+            <Badge className="absolute bottom-2 left-2">
+              <Play aria-hidden="true" />
+              {t("video")}
+            </Badge>
+          ) : null}
           {selectionMode && unavailable ? (
-            <span className="absolute left-2 top-2 rounded bg-background/95 px-1.5 py-1 text-xs font-medium shadow-sm">Added</span>
+            <Badge className="absolute left-2 top-2">{t("added")}</Badge>
           ) : selectionMode ? (
-            <span aria-hidden="true" className={cn("absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border bg-background/90 shadow-sm", selected && "border-primary bg-primary text-primary-foreground")}>{selected && <Check className="h-3.5 w-3.5" />}</span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute left-2 top-2 flex size-5 items-center justify-center rounded-md border border-input bg-card",
+                selected && "border-primary bg-primary text-primary-foreground",
+              )}
+            >
+              {selected ? <Check className="size-3.5" /> : null}
+            </span>
           ) : null}
         </div>
-        <div className="px-2.5 py-2">
-          <p className="truncate text-[13px] font-medium" title={file.filename}>{file.filename}</p>
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <span className="shrink-0">{formatFileType(file.mimeType).replace(/ (Image|Video)$/, "")}</span><span aria-hidden="true">·</span><span className="shrink-0">{formatFileSize(file.size)}</span>{(duration || dimensions) && <><span aria-hidden="true">·</span><span className="truncate">{duration ?? dimensions}</span></>}
-          </p>
+        <div className="flex flex-col px-2.5 py-2 group-hover:bg-accent">
+          <span className="truncate text-body font-medium" title={file.filename}>{file.filename}</span>
+          <span className="truncate text-body text-muted-foreground">
+            {[formatFileType(file.mimeType).replace(/ (Image|Video)$/, ""), formatFileSize(file.size), extra].filter(Boolean).join(" · ")}
+          </span>
         </div>
       </button>
 
-      {!selectionMode && <div className="absolute right-1.5 top-1.5 flex gap-1">
-        <Button type="button" variant="secondary" size="icon" className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
-          <Eye className="h-3.5 w-3.5" />
-        </Button>
-        {allowManagement && <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="secondary" size="icon" className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {view === "ready" ? (
-              <DropdownMenuItem onSelect={() => onLifecycle("trash")}><Trash2 className="mr-2 h-4 w-4" />Move to trash</DropdownMenuItem>
-            ) : (
-              <>
-                <DropdownMenuItem onSelect={() => onLifecycle("restore")}><RotateCcw className="mr-2 h-4 w-4" />Restore</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onLifecycle("permanent")}><Trash2 className="mr-2 h-4 w-4" />Delete permanently</DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>}
-      </div>}
+      {!selectionMode ? (
+        <div className="absolute right-1.5 top-1.5 flex gap-1">
+          <Button type="button" variant="outline" size="icon-sm" onClick={onPreview} aria-label={t("previewFile", { name: file.filename })}>
+            <Eye aria-hidden="true" />
+          </Button>
+          {allowManagement ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" onClick={(event) => event.stopPropagation()} aria-label={r("actionsFor", { name: file.filename })}>
+                  <MoreHorizontal aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {view === "ready" ? (
+                  <DropdownMenuItem onSelect={() => onLifecycle("trash")}>
+                    <Trash2 aria-hidden="true" />
+                    {r("moveToTrash")}
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem onSelect={() => onLifecycle("restore")}>
+                      <RotateCcw aria-hidden="true" />
+                      {r("restore")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onSelect={() => onLifecycle("permanent")}>
+                      <Trash2 aria-hidden="true" />
+                      {r("deletePermanently")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

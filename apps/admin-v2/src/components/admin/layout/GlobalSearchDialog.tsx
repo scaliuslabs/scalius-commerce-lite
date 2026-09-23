@@ -151,13 +151,7 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
 
   return (
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
-      {/* Drops from the top bar like Shopify's search (top of the screen on
-          phones, where the keyboard takes the bottom), same 12px radius. */}
-      <DialogContent
-        aria-describedby={undefined}
-        showCloseButton={false}
-        className="gap-0 overflow-hidden p-0 max-sm:bottom-auto max-sm:pb-0 max-sm:top-0 max-sm:rounded-b-2xl max-sm:rounded-t-none sm:top-2.5 sm:max-w-160 sm:translate-y-0 sm:rounded-xl"
-      >
+      <DialogContent variant="palette" aria-describedby={undefined}>
         <DialogTitle className="sr-only">{t("search")}</DialogTitle>
         <Command shouldFilter={false} loop>
           <CommandInput value={query} onValueChange={setQuery} placeholder={t("searchPlaceholder")} />

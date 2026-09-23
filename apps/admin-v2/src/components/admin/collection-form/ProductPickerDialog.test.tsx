@@ -45,6 +45,14 @@ function dialogButtonWithText(label: string): HTMLButtonElement {
   return button;
 }
 
+function checkbox(name: string): HTMLButtonElement {
+  const box = document.body.querySelector<HTMLButtonElement>(
+    `[role="dialog"] button[role="checkbox"][aria-label="${name}"]`,
+  );
+  if (!box) throw new Error(`Expected a checkbox for ${name}`);
+  return box;
+}
+
 async function waitForUi(assertion: () => void, timeout = 1_000) {
   await act(async () => {
     await vi.waitFor(assertion, { timeout });
@@ -117,31 +125,23 @@ describe("ProductPickerDialog", () => {
   it("stages multiple products across pages and adds them once", async () => {
     const onAddProducts = await renderPicker({ selectedProductIds: ["prod_1"] });
 
-    const existing = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Product 1, already added"]',
-    );
+    const existing = checkbox("Product 1");
     expect(existing?.disabled).toBe(true);
     expect(existing?.getAttribute("aria-checked")).toBe("true");
 
-    const productTwo = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Product 2"]',
-    );
-    if (!productTwo) throw new Error("Expected first-page product");
+    const productTwo = checkbox("Product 2");
     await act(async () => productTwo.click());
     expect(productTwo.getAttribute("aria-checked")).toBe("true");
     expect(document.body.querySelector('img[src*="product-2.webp"]')).not.toBeNull();
 
-    await act(async () => dialogButtonWithText("Load more (20 of 21)").click());
+    await act(async () => dialogButtonWithText("Load more").click());
     await waitForUi(() => {
       expect(document.body.textContent).toContain("Product 21");
     });
-    const productTwentyOne = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Product 21"]',
-    );
-    if (!productTwentyOne) throw new Error("Expected second-page product");
-    await act(async () => productTwentyOne.click());
+    await act(async () => checkbox("Product 21").click());
+    expect(document.body.textContent).toContain("2 selected");
 
-    await act(async () => dialogButtonWithText("Add 2 products").click());
+    await act(async () => dialogButtonWithText("Add").click());
 
     expect(onAddProducts).toHaveBeenCalledTimes(1);
     expect(onAddProducts.mock.calls[0]?.[0].map((item: { id: string }) => item.id))
@@ -151,11 +151,7 @@ describe("ProductPickerDialog", () => {
 
   it("discards staged products on cancel and starts clean when reopened", async () => {
     const onAddProducts = await renderPicker();
-    const productOne = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Product 1"]',
-    );
-    if (!productOne) throw new Error("Expected product option");
-    await act(async () => productOne.click());
+    await act(async () => checkbox("Product 1").click());
     expect(document.body.textContent).toContain("1 selected");
 
     await act(async () => dialogButtonWithText("Cancel").click());
@@ -165,53 +161,46 @@ describe("ProductPickerDialog", () => {
     await waitForUi(() => {
       expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
     });
-    expect(
-      document.body.querySelector<HTMLButtonElement>(
-        'button[aria-label="Select Product 1"]',
-      )?.getAttribute("aria-checked"),
-    ).toBe("false");
-    expect(dialogButtonWithText("Add products").disabled).toBe(true);
+    await waitForUi(() => {
+      expect(checkbox("Product 1").getAttribute("aria-checked")).toBe("false");
+    });
+    expect(dialogButtonWithText("Add").disabled).toBe(true);
   });
 
   it("enforces the remaining collection capacity without trapping deselection", async () => {
     const existingIds = Array.from({ length: 89 }, (_, index) => `prod_existing_${index}`);
     await renderPicker({ selectedProductIds: existingIds, maxProducts: 90 });
 
-    const first = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Product 1"]',
-    );
-    const second = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Product 2"]',
-    );
-    if (!first || !second) throw new Error("Expected product options");
+    const first = checkbox("Product 1");
+    const second = checkbox("Product 2");
     await act(async () => first.click());
+    expect(document.body.textContent).toContain("1 selected · limit reached");
     expect(first.disabled).toBe(false);
     expect(second.disabled).toBe(true);
 
     await act(async () => first.click());
     expect(first.getAttribute("aria-checked")).toBe("false");
     expect(second.disabled).toBe(false);
-    expect(dialogButtonWithText("Add products").disabled).toBe(true);
+    expect(dialogButtonWithText("Add").disabled).toBe(true);
   });
 
-  it("starts a fresh debounced search and exposes compact mobile controls", async () => {
+  it("starts a fresh debounced search", async () => {
     await renderPicker();
     const search = document.body.querySelector<HTMLInputElement>(
       'input[aria-label="Search products"]',
     );
     if (!search) throw new Error("Expected product search");
-    expect(search.className).toContain("h-11");
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
         ?.set?.call(search, "missing");
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(document.body.textContent).toContain("Searching products...");
+    expect(document.body.textContent).toContain("Searching…");
     await act(async () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 350));
     });
     await waitForUi(
-      () => expect(document.body.textContent).toContain("No products found."),
+      () => expect(document.body.textContent).toContain("No products found"),
     );
     expect(getCollectionProductOptions).toHaveBeenLastCalledWith({
       query: {
@@ -222,10 +211,9 @@ describe("ProductPickerDialog", () => {
         selectedProductIds: undefined,
       },
     });
-    expect(dialogButtonWithText("Cancel").className).toContain("h-11");
   });
 
-  it("offers a mobile-sized retry when the initial query fails", async () => {
+  it("offers a retry when the initial query fails", async () => {
     getCollectionProductOptions
       .mockRejectedValueOnce(new Error("network unavailable"))
       .mockResolvedValueOnce({
@@ -240,11 +228,9 @@ describe("ProductPickerDialog", () => {
     await act(async () => buttonWithText("Add products").click());
 
     await waitForUi(() => {
-      expect(document.body.textContent).toContain("Products could not be loaded.");
+      expect(document.body.textContent).toContain("Couldn't load products.");
     });
-    const retry = dialogButtonWithText("Retry");
-    expect(retry.className).toContain("h-11");
-    await act(async () => retry.click());
+    await act(async () => dialogButtonWithText("Try again").click());
     await waitForUi(() => {
       expect(document.body.textContent).toContain("Product 1");
     });

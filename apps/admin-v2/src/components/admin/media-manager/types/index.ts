@@ -125,3 +125,8 @@ export function capabilityAccept(capability: MediaCapability): string {
 export function capabilityKind(capability: MediaCapability): MediaKind | undefined {
   return capability === "both" ? undefined : capability;
 }
+
+/** Catalog key (i18n/media) for the upload limits of a capability. */
+export function mediaLimitKey(capability: MediaCapability) {
+  return capability === "image" ? "limitImages" : capability === "video" ? "limitVideos" : "limitBoth";
+}

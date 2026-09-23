@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import { encodeMediaVariants } from "../utils/media-variants";
 
@@ -14,6 +16,7 @@ const PAGE_SIZE = 20;
  * serving their original until this runs.
  */
 export function OptimizeImagesButton({ onOptimized }: { onOptimized: () => void }) {
+  const t = useMessages(mediaMessages);
   const [pending, setPending] = useState<{ count: number; more: boolean } | null>(null);
   const [done, setDone] = useState<number | null>(null);
 
@@ -41,7 +44,7 @@ export function OptimizeImagesButton({ onOptimized }: { onOptimized: () => void 
         for (const file of page.files) {
           try {
             const variants = await encodeMediaVariants(await MediaApiClient.fetchOriginal(file.id));
-            if (!variants) throw new Error("This browser cannot encode WebP.");
+            if (!variants) throw new Error("WebP encoding unavailable");
             await MediaApiClient.saveVariants(file.id, variants);
             optimized += 1;
           } catch {
@@ -55,22 +58,26 @@ export function OptimizeImagesButton({ onOptimized }: { onOptimized: () => void 
       failed += 1;
     }
     if (failed) {
-      toast.error(`${optimized} optimized, ${failed} not optimized`, {
-        description: "Those keep serving their original. Try again in a current Chrome, Edge, or Firefox.",
-      });
+      toast.error(t("optimizePartial", { done: optimized, failed }), { description: t("optimizePartialHelp") });
     } else {
-      toast.success(`${optimized} image${optimized === 1 ? "" : "s"} optimized`);
+      toast.success(optimized === 1 ? t("optimizedOne") : t("optimizedMany", { count: optimized }));
     }
     setDone(null);
     onOptimized();
     await countPending();
   };
 
+  const count = pending?.count ?? 0;
   return (
-    <Button type="button" variant="outline" size="sm" className="h-11 text-xs sm:h-7" disabled={done !== null} onClick={() => void optimize()}>
+    <Button type="button" variant="outline" disabled={done !== null} aria-busy={done !== null || undefined} onClick={() => void optimize()}>
+      <Sparkles aria-hidden="true" />
       {done !== null
-        ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Optimizing… {done} done</>
-        : <><Sparkles className="mr-1.5 h-3.5 w-3.5" />Optimize {pending?.count}{pending?.more ? "+" : ""} image{pending?.count === 1 && !pending.more ? "" : "s"}</>}
+        ? t("optimizing", { count: done })
+        : pending?.more
+          ? t("optimizeMore", { count })
+          : count === 1
+            ? t("optimizeOne")
+            : t("optimizeMany", { count })}
     </Button>
   );
 }

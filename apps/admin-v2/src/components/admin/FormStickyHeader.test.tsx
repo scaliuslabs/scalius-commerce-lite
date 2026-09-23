@@ -58,7 +58,7 @@ describe("FormActionBar", () => {
 
     const buttons = Array.from(document.querySelectorAll("button"));
     const saveButton = buttons.find((button) =>
-      button.textContent?.includes("Create Customer"),
+      button.textContent?.includes("Create"),
     );
     if (!saveButton) throw new Error("Save button was not rendered");
     return { saveButton, onSave };
@@ -68,7 +68,7 @@ describe("FormActionBar", () => {
     const { saveButton, onSave } = await renderActionBar(false);
 
     expect(saveButton.disabled).toBe(true);
-    expect(saveButton.title).toBe("Fix the highlighted fields before saving");
+    expect(saveButton.title).toBe("Fix the highlighted fields first");
     saveButton.click();
     expect(onSave).not.toHaveBeenCalled();
   });
