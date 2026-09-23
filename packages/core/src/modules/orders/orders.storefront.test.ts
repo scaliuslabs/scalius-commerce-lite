@@ -20,6 +20,19 @@ vi.mock("../products/products.media", async (importOriginal) => ({
   loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
 }));
 
+const discountMocks = vi.hoisted(() => ({
+  quoteStorefrontDiscount: vi.fn(async (): Promise<unknown> => ({
+    applied: null,
+    snapshot: null,
+    taxAllocation: undefined,
+  })),
+}));
+
+vi.mock("../promotions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../promotions")>()),
+  quoteStorefrontDiscount: discountMocks.quoteStorefrontDiscount,
+}));
+
 vi.mock("../tax", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../tax")>();
   return {
@@ -49,7 +62,10 @@ vi.mock("../tax", async (importOriginal) => {
       });
       const subtotalMinor = lines.reduce((sum: number, line) => sum + line.grossAmountMinor, 0);
       const shippingMinor = Math.round(input.shippingAmount * 100);
-      const discountMinor = Math.round(input.discountAmount * 100);
+      const allocation = input.promotionDiscountAllocation;
+      const discountMinor = allocation
+        ? allocation.lines.reduce((sum, line) => sum + line.amountMinor, allocation.shippingMinor)
+        : 0;
       return {
         schemaVersion: 1 as const,
         calculationVersion: "tax-v1" as const,
@@ -259,8 +275,6 @@ it("rejects unbounded storefront carts before database reads", async () => {
       })),
     }),
     "https://shop.example.com/api/v1/orders",
-    vi.fn(),
-    vi.fn(),
   )).rejects.toThrow("at most 99 line items");
   expect(db.select).not.toHaveBeenCalled();
   expect(db.batch).not.toHaveBeenCalled();
@@ -276,11 +290,6 @@ async function placeOrder({
     createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
   ],
   shippingMethods = [createShippingMethod()],
-  discountValidation = null,
-  calculatedDiscountAmount = 0,
-  discountValidator,
-  discountCalculator,
-  promotionAuthority,
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   customerIdentity?: CreateStorefrontOrderCustomerIdentity;
@@ -288,11 +297,6 @@ async function placeOrder({
   variants?: VariantRow[];
   locations?: LocationRow[];
   shippingMethods?: ShippingMethodRow[];
-  discountValidation?: unknown;
-  calculatedDiscountAmount?: number;
-  discountValidator?: Parameters<typeof createStorefrontOrder>[3];
-  discountCalculator?: Parameters<typeof createStorefrontOrder>[4];
-  promotionAuthority?: Parameters<typeof createStorefrontOrder>[10];
 } = {}) {
   const validationProducts = products.filter((product) => product.isActive === true);
   const db = createDbMock(
@@ -308,17 +312,10 @@ async function placeOrder({
     db,
     createOrderInput(inputOverrides),
     "http://localhost:8787/api/v1/orders",
-    discountValidator ?? vi.fn(async () => discountValidation),
-    discountCalculator ?? vi.fn(() => calculatedDiscountAmount),
     undefined,
     undefined,
     undefined,
     customerIdentity,
-    undefined,
-    promotionAuthority ?? {
-      evaluateCode: vi.fn(async () => ({ matched: false as const })),
-      resolveCustomerIdByPhone: vi.fn(async () => null),
-    },
   );
 }
 
@@ -380,32 +377,49 @@ describe("createStorefrontOrder tax discount parity", () => {
         },
       ],
     };
+    const taxAllocation = {
+      lines: [{ lineId: "cart:0:var_standard", amountMinor: 1000 }],
+      shippingMinor: 500,
+    };
+    discountMocks.quoteStorefrontDiscount.mockResolvedValueOnce({
+      applied,
+      snapshot: { cart: {}, applied },
+      taxAllocation,
+    });
     const result = await placeOrder({
-      inputOverrides: { discountCode: "SAVE15" },
-      promotionAuthority: {
-        resolveCustomerIdByPhone: vi.fn(async () => "cust_1"),
-        evaluateCode: vi.fn(async () => ({
-          matched: true as const,
-          valid: true as const,
-          promotion: {} as never,
-          evaluation: {
-            evaluatorVersion: 1,
-            applied,
-            rejected: [],
-            unmatchedCodes: [],
-          },
-        })),
+      inputOverrides: { discountCode: "SAVE15", discountAmount: 9_999 },
+      customerIdentity: { customerId: "customer_session_owner", source: "authenticated" },
+    });
+    expect(discountMocks.quoteStorefrontDiscount).toHaveBeenLastCalledWith(expect.anything(), {
+      code: "SAVE15",
+      customerId: "customer_session_owner",
+      customerPhone: "+8801700000000",
+      cart: {
+        currencyCode: "BDT",
+        lines: [{
+          id: "cart:0:var_standard",
+          productId: "prod_standard",
+          variantId: "var_standard",
+          unitPriceMinor: 12_500,
+          quantity: 1,
+        }],
+        shippingAmountMinor: 6_000,
       },
     });
     const taxInput = vi.mocked(calculateStorefrontTaxQuote).mock.calls.at(-1)?.[1];
-    expect(taxInput?.promotionDiscountAllocation).toEqual({
-      lines: [{ lineId: "cart:0:var_standard", amountMinor: 1000 }],
-      shippingMinor: 500,
-    });
+    expect(taxInput?.promotionDiscountAllocation).toEqual(taxAllocation);
+    expect(taxInput?.discountAmount).toBeUndefined();
     expect(result.commitPayload).toMatchObject({
-      discountUsage: null,
       promotion: { applied: { promotionId: "promo_1", totalDiscountMinor: 1500 } },
     });
+  });
+
+  it("fails closed with the buyer-facing reason when the code does not apply", async () => {
+    discountMocks.quoteStorefrontDiscount.mockRejectedValueOnce(
+      new ValidationError("Your cart does not meet this discount's minimum subtotal."),
+    );
+    await expect(placeOrder({ inputOverrides: { discountCode: "SAVE20" } }))
+      .rejects.toThrow("minimum subtotal");
   });
 
   it("snapshots the actual resolved image asset in the checkout commit payload", async () => {
@@ -438,156 +452,6 @@ describe("createStorefrontOrder tax discount parity", () => {
     }));
   });
 
-  it("passes validated product scope into the same authoritative tax quote service", async () => {
-    vi.mocked(calculateStorefrontTaxQuote).mockClear();
-    await placeOrder({
-      inputOverrides: { discountCode: "PRODUCT50" },
-      discountValidation: {
-        valid: true,
-        discount: {
-          id: "discount_1",
-          revision: 3,
-          type: "amount_off_products",
-          valueType: "fixed_amount",
-          discountValue: 50,
-        },
-        applicableProductIds: new Set(["prod_standard"]),
-        hasProductRestrictions: true,
-      },
-      calculatedDiscountAmount: 50,
-    });
-
-    expect(calculateStorefrontTaxQuote).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        discountAmount: 50,
-        discountType: "amount_off_products",
-        applicableProductIds: ["prod_standard"],
-      }),
-    );
-  });
-
-  it("fails closed when validated product-discount scope is missing", async () => {
-    await expect(placeOrder({
-      inputOverrides: { discountCode: "PRODUCT50" },
-      discountValidation: {
-        valid: true,
-        discount: {
-          id: "discount_1",
-          revision: 3,
-          type: "amount_off_products",
-          valueType: "fixed_amount",
-          discountValue: 50,
-        },
-      },
-      calculatedDiscountAmount: 50,
-    })).rejects.toThrow("product discount scope could not be verified");
-  });
-
-  it("revalidates the code against authoritative merchandise, phone, and scope at checkout", async () => {
-    const validator = vi.fn<Parameters<typeof createStorefrontOrder>[3]>(async () => ({
-      valid: true,
-      discount: {
-        id: "discount_1",
-        revision: 3,
-        type: "amount_off_products",
-        valueType: "fixed_amount",
-        discountValue: 50,
-      },
-      applicableProductIds: new Set(["prod_standard"]),
-      hasProductRestrictions: true,
-    }));
-    const calculator = vi.fn<Parameters<typeof createStorefrontOrder>[4]>(async () => 50);
-
-    const result = await placeOrder({
-      inputOverrides: {
-        discountCode: " product50 ",
-        discountAmount: 9_999,
-        shippingCharge: 9_999,
-      },
-      customerIdentity: {
-        customerId: "customer_session_owner",
-        source: "authenticated",
-      },
-      discountValidator: validator,
-      discountCalculator: calculator,
-    });
-
-    expect(validator).toHaveBeenCalledWith(
-      expect.anything(),
-      "PRODUCT50",
-      125,
-      [{
-        id: "prod_standard",
-        price: 125,
-        quantity: 1,
-        variantId: "var_standard",
-      }],
-      "+8801700000000",
-      "customer_session_owner",
-    );
-    expect(calculator).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: "discount_1", type: "amount_off_products" }),
-      185,
-      expect.any(Array),
-      60,
-      new Set(["prod_standard"]),
-      true,
-    );
-    expect(result.commitPayload.discountUsage).toEqual({
-      discountId: "discount_1", revision: 3, amountDiscounted: 50,
-    });
-  });
-
-  it.each([undefined, null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    "rejects missing or invalid validated discount revision (%s)",
-    async (revision) => {
-      await expect(placeOrder({
-        inputOverrides: { discountCode: "SAVE20" },
-        discountValidation: {
-          valid: true,
-          discount: { id: "discount_1", revision, type: "amount_off_order" },
-        },
-        calculatedDiscountAmount: 20,
-      })).rejects.toThrow("discount configuration is invalid");
-    },
-  );
-
-  it("fails closed when the evaluator omits the authoritative discount identity", async () => {
-    await expect(placeOrder({
-      inputOverrides: { discountCode: "SAVE20" },
-      discountValidation: {
-        valid: true,
-        discount: {
-          type: "amount_off_order",
-          valueType: "percentage",
-          discountValue: 20,
-        },
-      },
-      calculatedDiscountAmount: 20,
-    })).rejects.toThrow("discount configuration is invalid");
-  });
-
-  it("preserves the evaluator's buyer-safe rejection reason at final checkout", async () => {
-    await expect(placeOrder({
-      inputOverrides: { discountCode: "SAVE20" },
-      discountValidation: {
-        valid: false,
-        error: "Minimum purchase amount of ৳500 not met",
-      },
-    })).rejects.toThrow("Minimum purchase amount of ৳500 not met");
-  });
-
-  it("falls back to a bounded generic discount error for malformed evaluator output", async () => {
-    await expect(placeOrder({
-      inputOverrides: { discountCode: "SAVE20" },
-      discountValidation: {
-        valid: false,
-        error: "x".repeat(201),
-      },
-    })).rejects.toThrow("Discount code SAVE20 is invalid or expired");
-  });
 });
 
 describe("createStorefrontOrder product availability verification", () => {
@@ -1422,8 +1286,6 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         db,
         createOrderInput(),
         "http://localhost:8787/api/v1/orders",
-        vi.fn(async () => null),
-        vi.fn(() => 0),
         undefined,
         {
           valid: true,
@@ -1464,8 +1326,6 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         db,
         createOrderInput(),
         "http://localhost:8787/api/v1/orders",
-        vi.fn(async () => null),
-        vi.fn(() => 0),
         undefined,
         undefined,
         {
@@ -1523,12 +1383,9 @@ describe("createStorefrontOrder prevalidated input trust", () => {
       orderDb,
       input,
       "http://localhost:8787/api/v1/orders",
-      vi.fn(async () => null),
-      vi.fn(() => 0),
       undefined,
       cartValidation,
       deliveryPreflight,
-      undefined,
       undefined,
       undefined,
       createTrustedStorefrontCheckoutPolicySnapshot({ partialPaymentEnabled: false }),

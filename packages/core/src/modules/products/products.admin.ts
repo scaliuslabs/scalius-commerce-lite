@@ -10,7 +10,6 @@ import {
     productAttributeValues,
     productAttributes,
     orderItems,
-    discountProducts,
     inventoryMovements,
     productLowStockAlerts,
     productOptionDefinitions,
@@ -1489,7 +1488,7 @@ async function assertNoVariantInventoryHistory(
 async function assertNoPermanentDeleteReferences(
     db: Database,
     productIds: string[],
-    messages: { orders: string; discounts: string; inventory: string },
+    messages: { orders: string; inventory: string },
 ): Promise<string[]> {
     const idSet = JSON.stringify(productIds);
     const orderCheck = await db
@@ -1507,12 +1506,6 @@ async function assertNoPermanentDeleteReferences(
         `);
     if ((orderCheck[0]?.count ?? 0) > 0) throw new ConflictError(messages.orders);
 
-    const discountCheck = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(discountProducts)
-        .where(inArray(discountProducts.productId, productIds));
-    if ((discountCheck[0]?.count ?? 0) > 0) throw new ConflictError(messages.discounts);
-
     const variantIds = await loadProductVariantIds(db, productIds);
     await assertNoVariantInventoryHistory(db, variantIds, messages.inventory);
     return variantIds;
@@ -1529,11 +1522,6 @@ function buildPermanentDeleteReferenceGuard(
     return buildBatchGuard(db, sql`NOT EXISTS (
             SELECT 1 FROM ${orderItems}
             WHERE ${orderItems.productId} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
-            )
-        ) AND NOT EXISTS (
-            SELECT 1 FROM ${discountProducts}
-            WHERE ${discountProducts.productId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
             )
         ) AND NOT EXISTS (
@@ -1603,7 +1591,6 @@ export async function permanentlyDeleteProduct(
 ): Promise<void> {
     const referenceMessages = {
         orders: "Cannot delete product. It is part of one or more existing orders.",
-        discounts: "Cannot delete product. It is linked to one or more discounts.",
         inventory:
             "Cannot permanently delete product. One or more SKUs have inventory history; move the product to trash instead.",
     };

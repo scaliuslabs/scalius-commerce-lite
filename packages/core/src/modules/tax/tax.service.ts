@@ -3,7 +3,7 @@ import { taxClasses, taxRates, taxSettings } from "@scalius/database/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getCurrencyConfig } from "../settings";
 import { calculateTaxQuote } from "./calculator";
-import { buildStorefrontDiscountAllocation, type StorefrontDiscountType } from "./discount-allocation";
+import { buildStorefrontDiscountAllocation } from "./discount-allocation";
 import { toMinorUnits } from "./money";
 import type {
     TaxDestination,
@@ -140,10 +140,9 @@ export interface StorefrontTaxQuoteInput {
     destination: TaxDestination;
     lines: StorefrontTaxQuoteLineInput[];
     shippingAmount: number;
-    discountAmount: number;
-    discountType: StorefrontDiscountType | null;
-    applicableProductIds?: readonly string[];
-    /** Exact evaluator allocation for typed promotions; mutually exclusive with legacy discount metadata. */
+    /** Manual order-level discount (admin orders). */
+    discountAmount?: number;
+    /** Exact allocation of the applied storefront discount. */
     promotionDiscountAllocation?: TaxDiscountAllocationInput;
     currency?: { code: string; decimalPlaces: number };
 }
@@ -193,11 +192,8 @@ export async function calculateStorefrontTaxQuote(
         taxClassId: line.taxClassId,
     }));
 
-    if (
-        input.promotionDiscountAllocation
-        && (input.discountType !== null || input.applicableProductIds !== undefined)
-    ) {
-        throw new ValidationError("Promotion allocations cannot be combined with legacy discount metadata.");
+    if (input.promotionDiscountAllocation && input.discountAmount) {
+        throw new ValidationError("A discount allocation cannot be combined with a manual discount.");
     }
     const discount = input.promotionDiscountAllocation
         ? {
@@ -209,11 +205,8 @@ export async function calculateStorefrontTaxQuote(
         }
         : buildStorefrontDiscountAllocation({
             decimalPlaces: currency.decimalPlaces,
-            discountAmount: input.discountAmount,
-            discountType: input.discountType,
-            applicableProductIds: input.applicableProductIds,
+            discountAmount: input.discountAmount ?? 0,
             lines: input.lines,
-            shippingAmount: input.shippingAmount,
         });
 
     return calculateTaxQuote({

@@ -97,8 +97,7 @@ describe("promotion aggregate service", () => {
             assumedActive: true,
             promotionRevision: 1,
             applied: {
-                promotionId: created.id,
-                promotionCode: "SAVE10",
+                discounts: [{ promotionId: created.id, promotionCode: "SAVE10", totalDiscountMinor: 1_000 }],
                 totalDiscountMinor: 1_000,
             },
         });

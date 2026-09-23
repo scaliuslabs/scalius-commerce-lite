@@ -1,6 +1,7 @@
-// Promotion authority introduced alongside the legacy discount-code tables.
-// Checkout cutover is intentionally separate: these rows are not buyer-visible
-// until the production evaluator and synchronous order commit share this model.
+// The one discount engine: code and automatic discounts, their conditions and
+// effects (line effects and conditions may be scoped to products/collections
+// through `productIds`/`collectionIds` in their JSON config), immutable order
+// allocations, and code redemption claims.
 
 import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
@@ -38,6 +39,10 @@ export const promotions = sqliteTable("promotions", {
     status: text("status", { enum: PROMOTION_STATUSES }).notNull().default("draft"),
     priority: integer("priority").notNull().default(100),
     conflictPolicy: text("conflict_policy", { enum: ["best"] }).notNull().default("best"),
+    /** Shopify-style combinations: both discounts must allow the other's class. */
+    combinesWithProductDiscounts: integer("combines_with_product_discounts", { mode: "boolean" }).notNull().default(false),
+    combinesWithOrderDiscounts: integer("combines_with_order_discounts", { mode: "boolean" }).notNull().default(false),
+    combinesWithShippingDiscounts: integer("combines_with_shipping_discounts", { mode: "boolean" }).notNull().default(false),
     startsAt: integer("starts_at", { mode: "timestamp" }),
     endsAt: integer("ends_at", { mode: "timestamp" }),
     timezone: text("timezone").notNull().default("Asia/Dhaka"),

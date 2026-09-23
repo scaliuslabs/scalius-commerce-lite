@@ -225,18 +225,7 @@ describe("calculateTaxQuote", () => {
     });
 
     it("allocates free-shipping discounts only to shipping", () => {
-        const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 20,
-            discountType: "free_shipping",
-            lines: [{
-                lineId: "line-1",
-                productId: "product-1",
-                unitPrice: 100,
-                quantity: 1,
-            }],
-            shippingAmount: 20,
-        });
+        const discount = { discountMinor: 2_000, allocation: { lines: [], shippingMinor: 2_000 } };
         const quote = calculateTaxQuote(input({
             shippingMinor: 2_000,
             discountMinor: discount.discountMinor,
@@ -261,18 +250,10 @@ describe("calculateTaxQuote", () => {
     });
 
     it("keeps product-scoped discounts away from unrelated tax classes", () => {
-        const lines = [
-            { lineId: "line-low", productId: "product-low", unitPrice: 100, quantity: 1 },
-            { lineId: "line-high", productId: "product-high", unitPrice: 100, quantity: 1 },
-        ];
-        const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 50,
-            discountType: "amount_off_products",
-            applicableProductIds: ["product-low"],
-            lines,
-            shippingAmount: 0,
-        });
+        const discount = {
+            discountMinor: 5_000,
+            allocation: { lines: [{ lineId: "line-low", amountMinor: 5_000 }], shippingMinor: 0 },
+        };
         const quote = calculateTaxQuote(input({
             classes: [
                 { id: "class-low", name: "Low", isExempt: false },
@@ -312,9 +293,7 @@ describe("calculateTaxQuote", () => {
         const discount = buildStorefrontDiscountAllocation({
             decimalPlaces: 2,
             discountAmount: 0.01,
-            discountType: "amount_off_order",
             lines: storefrontLines,
-            shippingAmount: 0,
         });
         const quoteInput = input({
             classes: [

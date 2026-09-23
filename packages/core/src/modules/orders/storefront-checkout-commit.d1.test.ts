@@ -115,7 +115,6 @@ function prepare(key: string, overrides: {
       taxableAmountMinor: 0,
       taxAmountMinor: 0,
     }],
-    discountUsage: null,
     requestUrl: "https://shop.example.com/api/v1/orders",
     taxQuote: {
       schemaVersion: 1, calculationVersion: "tax-v1", enabled: false, currencyCode: "BDT",

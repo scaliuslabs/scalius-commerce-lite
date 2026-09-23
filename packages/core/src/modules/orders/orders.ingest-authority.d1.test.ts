@@ -7,9 +7,16 @@ import { ConflictError } from "../../errors";
 import { createAtomicCheckoutAttempt } from "./checkout-attempts";
 import { commitStorefrontOrderPayload, type StorefrontOrderCheckoutCommit } from "./orders.ingest";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
-import { calculateDiscountAmount, isDiscountValid } from "../discounts/discounts.eligibility";
-import { createDiscount, deleteDiscount, permanentlyDeleteDiscount, restoreDiscounts, setDiscountActiveStatus, updateDiscount } from "../discounts/discounts.service";
-import { createDiscountSchema, updateDiscountSchema } from "../discounts/discounts.validation";
+import {
+  activatePromotion,
+  archivePromotionDraft,
+  createPromotionDraft,
+  createPromotionDraftSchema,
+  pausePromotion,
+  quoteStorefrontDiscount,
+  updatePromotionDraft,
+  type CreatePromotionDraftInput,
+} from "../promotions";
 import { prepareStockReservationBatch } from "../inventory";
 
 function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommitPayload {
@@ -76,7 +83,6 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
         taxAmountMinor: 0,
       },
     ],
-    discountUsage: null,
     requestUrl: "https://shop.example.com/api/v1/orders",
     taxQuote: {
       schemaVersion: 1,
@@ -173,33 +179,39 @@ describe("storefront checkout authority at the atomic commit", () => {
     return { payload, commit: { attempt, response: { orderId: attempt.orderId } } };
   }
 
-  async function discountedCheckout(overrides: Record<string, unknown> = {}) {
-    const rule = createDiscountSchema.parse({
-      code: "AUDIT50", type: "amount_off_order", valueType: "percentage",
-      discountValue: 50, isActive: true, startDate: new Date((databaseNow - 60) * 1000),
+  async function discountedCheckout(overrides: Partial<CreatePromotionDraftInput> = {}) {
+    const rule = createPromotionDraftSchema.parse({
+      name: "AUDIT50",
+      method: "code",
+      codes: [{ code: "AUDIT50" }],
+      effects: [{ kind: "percentage_off", target: "order", allocation: "once", config: { basisPoints: 5_000 } }],
       ...overrides,
     });
-    const discount = await createDiscount(db, rule, { canToggleStatus: true });
-    const cart = [{ id: "prod_1", price: 100, quantity: 2, variantId: "variant_1" }];
-    const validation = await isDiscountValid(db, rule.code, 200, cart, "+8801712345678", "", "BDT");
-    expect(validation.valid).toBe(true);
-    const amount = await calculateDiscountAmount(db, validation.discount!, 260, cart, 60, validation.applicableProductIds, "BDT", validation.hasProductRestrictions);
+    const created = await createPromotionDraft(db, rule);
+    const promotion = await activatePromotion(db, created.id, created.revision, databaseNow);
     const { payload, commit } = checkout();
-    Object.assign(payload.orderData, {
-      totalAmount: 260 - amount, totalAmountMinor: 26_000 - amount * 100,
-      discountAmount: amount, discountAmountMinor: amount * 100, balanceDue: 260 - amount,
+    const quote = await quoteStorefrontDiscount(db, {
+      code: "AUDIT50",
+      customerPhone: payload.orderData.customerPhone,
+      evaluatedAtEpochSeconds: databaseNow,
+      cart: {
+        currencyCode: "BDT",
+        lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
+        shippingAmountMinor: 6_000,
+      },
     });
-    payload.items[0]!.discountAmountMinor = amount * 100;
-    payload.taxQuote.discountMinor = amount * 100;
-    payload.taxQuote.totalMinor = 26_000 - amount * 100;
-    payload.taxQuote.lines[0]!.discountMinor = amount * 100;
-    payload.taxQuote.lines[0]!.totalMinor = 20_000 - amount * 100;
-    payload.discountUsage = {
-      discountId: validation.discount!.id,
-      revision: validation.discount!.revision,
-      amountDiscounted: amount,
-    };
-    return { payload, commit, discount, rule };
+    const minor = quote.applied!.totalDiscountMinor;
+    Object.assign(payload.orderData, {
+      totalAmount: 260 - minor / 100, totalAmountMinor: 26_000 - minor,
+      discountAmount: minor / 100, discountAmountMinor: minor, balanceDue: 260 - minor / 100,
+    });
+    payload.items[0]!.discountAmountMinor = minor;
+    payload.taxQuote.discountMinor = minor;
+    payload.taxQuote.totalMinor = 26_000 - minor;
+    payload.taxQuote.lines[0]!.discountMinor = minor;
+    payload.taxQuote.lines[0]!.totalMinor = 20_000 - minor;
+    payload.promotion = quote.snapshot;
+    return { payload, commit, promotion, rule };
   }
 
   function expectNoCheckoutWrites() {
@@ -207,7 +219,7 @@ describe("storefront checkout authority at the atomic commit", () => {
       "orders", "order_items", "checkout_attempts", "order_receipts", "customers",
       "customer_history", "inventory_movements", "order_tax_snapshots",
       "order_item_tax_snapshots", "order_notification_outbox", "meta_capi_purchase_outbox",
-      "discount_usage", "discount_customer_redemptions",
+      "order_discount_allocations", "promotion_redemptions",
     ]) {
       expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);
     }
@@ -215,79 +227,81 @@ describe("storefront checkout authority at the atomic commit", () => {
       .toEqual({ stock: 10, reserved_stock: 0 });
   }
 
-  it.each(["deactivate", "amount edit", "scope edit", "trash", "restore", "delete permanently"])(
-    "rejects a discount %s after validation and advisory reads without committing any checkout writes",
+  it.each(["pause", "amount edit", "scope edit", "archive"])(
+    "rejects a discount %s after the commit re-check without committing any checkout writes",
     async (change) => {
-      const { payload, commit, discount, rule } = await discountedCheckout();
+      const { payload, commit, promotion, rule } = await discountedCheckout();
       beforeWriteBatch = async () => {
-        if (change === "deactivate") {
-          await setDiscountActiveStatus(db, discount.id, false, discount.revision);
-        } else if (change === "amount edit" || change === "scope edit") {
-          await updateDiscount(db, discount.id, updateDiscountSchema.parse({
-            ...rule, id: discount.id, expectedRevision: discount.revision,
-            ...(change === "amount edit" ? { discountValue: 25 } : {
-              type: "amount_off_products", appliesToProducts: ["prod_1"],
-            }),
-          }));
+        if (change === "pause") {
+          await pausePromotion(db, promotion.id, promotion.revision);
+        } else if (change === "archive") {
+          await archivePromotionDraft(db, promotion.id, promotion.revision);
         } else {
-          await deleteDiscount(db, discount.id);
-          if (change === "restore") await restoreDiscounts(db, [discount.id]);
-          if (change === "delete permanently") await permanentlyDeleteDiscount(db, discount.id);
+          await updatePromotionDraft(db, promotion.id, {
+            ...rule,
+            expectedRevision: promotion.revision,
+            effects: [change === "amount edit"
+              ? { kind: "percentage_off", target: "order", allocation: "once", config: { basisPoints: 2_500 } }
+              : { kind: "percentage_off", target: "line", allocation: "across", config: { basisPoints: 5_000, productIds: ["prod_1"] } }],
+          });
         }
       };
       await expect(commitStorefrontOrderPayload(db, payload, commit))
-        .rejects.toThrow("Checkout details changed while the order was being placed");
+        .rejects.toThrow("This discount changed or expired during checkout");
       expect(revision()).toBe(payload.checkoutAuthorityRevision);
       expectNoCheckoutWrites();
     },
   );
 
-  it.each([-61, 0, 10, 11])("checks the discount schedule at database commit time (offset %s)", async (offset) => {
-    const { payload, commit } = await discountedCheckout({ endDate: new Date((databaseNow + 10) * 1000) });
+  it.each([0, 9, 10, 11])("checks the discount end time at database commit time (+%ss)", async (offset) => {
+    const { payload, commit } = await discountedCheckout({ endsAtEpochSeconds: databaseNow + 10 });
     beforeWriteBatch = () => { databaseNow += offset; };
-    if (offset < -60 || offset > 10) {
+    if (offset >= 10) {
       await expect(commitStorefrontOrderPayload(db, payload, commit))
-        .rejects.toThrow("Checkout details changed while the order was being placed");
+        .rejects.toThrow("This discount changed or expired during checkout");
       expectNoCheckoutWrites();
     } else {
       await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
     }
   });
 
-  it("ignores unrelated discount edits and replays committed money after deactivation", async () => {
-    const { payload, commit, discount, rule } = await discountedCheckout({ limitOnePerCustomer: true });
-    const other = await createDiscount(db, { ...rule, code: "OTHER50" }, { canToggleStatus: true });
-    beforeWriteBatch = async () => { await setDiscountActiveStatus(db, other.id, false, other.revision); };
+  it("ignores unrelated discount edits and replays committed money after the discount is paused", async () => {
+    const { payload, commit, promotion, rule } = await discountedCheckout({ maxRedemptionsPerCustomer: 1 });
+    const other = await createPromotionDraft(db, { ...rule, name: "OTHER50", codes: [{ code: "OTHER50", isActive: true }] });
+    const otherActive = await activatePromotion(db, other.id, other.revision, databaseNow);
+    beforeWriteBatch = async () => { await pausePromotion(db, other.id, otherActive.revision); };
     await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
     expect(revision()).toBe(payload.checkoutAuthorityRevision);
-    await setDiscountActiveStatus(db, discount.id, false, discount.revision);
-    delete (payload.discountUsage as Partial<NonNullable<typeof payload.discountUsage>>).revision;
+    await pausePromotion(db, promotion.id, promotion.revision);
     await expect(commitStorefrontOrderPayload(db, payload)).resolves.toMatchObject({ alreadyCommitted: true });
     expect(sqlite.prepare("SELECT discount_amount, total_amount FROM orders").all()).toEqual([{ discount_amount: 100, total_amount: 160 }]);
-    for (const table of ["discount_usage", "discount_customer_redemptions", "order_receipts", "inventory_movements"]) {
+    for (const table of ["promotion_redemptions", "order_discount_allocations", "order_receipts", "inventory_movements"]) {
       expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(1);
     }
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
   });
 
-  it.each(["maxUses", "limitOnePerCustomer"])("preserves atomic %s limits for two prepared checkouts", async (limit) => {
-    const { payload, commit } = await discountedCheckout({ [limit]: limit === "maxUses" ? 1 : true });
-    const second = checkout("b");
-    const nextPayload = structuredClone(payload);
-    nextPayload.orderData.id = second.payload.orderData.id;
-    nextPayload.checkoutToken = second.payload.checkoutToken;
-    nextPayload.items[0]!.id = "item_2";
-    // The first order lands after the second has read advisory usage limits.
-    beforeWriteBatch = async () => { await commitStorefrontOrderPayload(db, payload, commit); };
-    await expect(commitStorefrontOrderPayload(db, nextPayload, second.commit))
-      .rejects.toThrow(limit === "maxUses" ? "usage limit" : "already used by this customer");
-    expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: payload.orderData.id }]);
-    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM discount_usage").get()?.count).toBe(1);
-    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
-  });
+  it.each(["maxRedemptions", "maxRedemptionsPerCustomer"] as const)(
+    "preserves atomic %s limits for two prepared checkouts",
+    async (limit) => {
+      const { payload, commit } = await discountedCheckout({ [limit]: 1 });
+      const second = checkout("b");
+      const nextPayload = structuredClone(payload);
+      nextPayload.orderData.id = second.payload.orderData.id;
+      nextPayload.checkoutToken = second.payload.checkoutToken;
+      nextPayload.items[0]!.id = "item_2";
+      // The first order lands after the second has passed its own re-check.
+      beforeWriteBatch = async () => { await commitStorefrontOrderPayload(db, payload, commit); };
+      await expect(commitStorefrontOrderPayload(db, nextPayload, second.commit))
+        .rejects.toThrow(/usage limit/);
+      expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: payload.orderData.id }]);
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(1);
+      expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get()?.reserved_stock).toBe(2);
+    },
+  );
 
   it("rejects a discount change before the order-only replay batch and preserves the existing reservation", async () => {
-    const { payload, commit, discount } = await discountedCheckout();
+    const { payload, commit, promotion } = await discountedCheckout();
     const reservation = await prepareStockReservationBatch(db, [{
       variantId: "variant_1", quantity: 2, orderId: payload.orderData.id,
     }], "regular", {
@@ -304,15 +318,15 @@ describe("storefront checkout authority at the atomic commit", () => {
       // the discount only when the committer retries without inventory writes.
       beforeWriteBatch = async () => {
         commitBatches += 1;
-        await setDiscountActiveStatus(db, discount.id, false, discount.revision);
+        await pausePromotion(db, promotion.id, promotion.revision);
       };
     };
     await expect(commitStorefrontOrderPayload(db, payload, commit))
-      .rejects.toThrow("Checkout details changed while the order was being placed");
+      .rejects.toThrow("This discount changed or expired during checkout");
     expect(commitBatches).toBe(2);
     expect(sqlite.prepare("SELECT * FROM inventory_movements").all()).toEqual(movements);
     expect(sqlite.prepare("SELECT stock, reserved_stock, stock_version FROM product_variants WHERE id = 'variant_1'").get()).toEqual(stock);
-    for (const table of ["orders", "order_items", "order_receipts", "checkout_attempts", "discount_usage", "customers", "customer_history"]) {
+    for (const table of ["orders", "order_items", "order_receipts", "checkout_attempts", "promotion_redemptions", "customers", "customer_history"]) {
       expect(sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count, table).toBe(0);
     }
   });

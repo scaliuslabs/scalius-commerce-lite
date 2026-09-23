@@ -147,7 +147,6 @@ export function createPayload(
       taxableAmountMinor: totalAmountMinor,
       taxAmountMinor: 0,
     }],
-    discountUsage: null,
     promotion: null,
     requestUrl: "https://checkout-smoke.invalid/checkout",
     taxQuote: {

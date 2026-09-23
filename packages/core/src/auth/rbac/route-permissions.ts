@@ -408,45 +408,16 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     POST: { permission: PERMISSIONS.DISCOUNTS_CREATE },
   },
-  "/api/v1/admin/discounts/bulk-delete": {
-    POST: { permission: PERMISSIONS.DISCOUNTS_DELETE },
-    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
-  },
-  "/api/v1/admin/discounts/bulk-restore": {
-    POST: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-  "/api/v1/admin/discounts/*": {
-    GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
-    PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-    PATCH: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
-  },
-  "/api/v1/admin/discounts/*/toggle": {
-    POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
-  },
-  "/api/v1/admin/discounts/*/toggle-status": {
-    POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
-  },
-  "/api/v1/admin/discounts/*/restore": {
-    POST: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-  "/api/v1/admin/discounts/*/permanent": {
-    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
-  },
-  "/api/v1/admin/promotions": {
-    GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
-    POST: { permission: PERMISSIONS.DISCOUNTS_CREATE },
-  },
-  "/api/v1/admin/promotions/*/preview": {
+  "/api/v1/admin/discounts/*/preview": {
     POST: { permission: PERMISSIONS.DISCOUNTS_VIEW },
   },
-  "/api/v1/admin/promotions/*/activate": {
+  "/api/v1/admin/discounts/*/activate": {
     POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
   },
-  "/api/v1/admin/promotions/*/pause": {
+  "/api/v1/admin/discounts/*/pause": {
     POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
   },
-  "/api/v1/admin/promotions/*": {
+  "/api/v1/admin/discounts/*": {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },
     DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },

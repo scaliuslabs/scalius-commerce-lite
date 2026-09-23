@@ -101,9 +101,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/discounts/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
 
-  // Revisioned promotions (the canonical discount-management surface)
-  "/admin/promotions": { permission: PERMISSIONS.DISCOUNTS_VIEW },
-  "/admin/promotions/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
 
   // Customers
   "/admin/customers": { permission: PERMISSIONS.CUSTOMERS_VIEW },
@@ -190,16 +187,10 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
   },
 
-  // Discounts
+  // Discounts (one editor; saving still needs discounts.edit)
   {
-    pattern: /^\/admin\/discounts\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-
-  // Promotions
-  {
-    pattern: /^\/admin\/promotions\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+    pattern: /^\/admin\/discounts\/[^/]+$/,
+    config: { permission: PERMISSIONS.DISCOUNTS_VIEW },
   },
 
   // Pages

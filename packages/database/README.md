@@ -207,11 +207,6 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 
 | Table | Purpose |
 |-------|---------|
-| `discounts` | Discount codes, types, values, date range, usage limits, combination flags |
-| `discountProducts` | Discount-product junction. `applicationType` ("get") |
-| `discountCollections` | Discount-collection junction. `applicationType` ("get") |
-| `discountUsage` | Discount usage tracking. `orderId` FK, `customerId` FK, amount discounted |
-| `discountCustomerRedemptions` | Atomic one-use identity claims keyed by discount plus immutable checkout-phone or authenticated-account identity |
 | `metaConversionsLogs` | CAPI event log. Event identity, status, request/response JSON |
 
 ### `content.ts` -- Content Domain
@@ -277,10 +272,6 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | `cust_` | Customer | `customers` |
 | `hist_` | Customer history entry | `customerHistory` |
 | `aor_` | Auth OTP delivery receipt | `authOtpDeliveryReceipts` |
-| `disc_` | Discount | `discounts` |
-| `dp_` | Discount-product link | `discountProducts` |
-| `dc_` | Discount-collection link | `discountCollections` |
-| `du_` | Discount usage | `discountUsage` |
 | `item_` | Order item | `orderItems` |
 | `page_` | CMS page | `pages` |
 | `media_` | Media file | `media` |

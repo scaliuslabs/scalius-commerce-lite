@@ -135,6 +135,7 @@ function renderCartDom(): void {
         <button id="applyDiscountBtn" type="submit">Apply</button>
       </form><button id="removeDiscountBtn" type="button"></button>
       <div id="discountMessage"></div><div id="discountRow"></div><div id="discountAmount"></div>
+      <ul id="discountOffers" class="hidden"></ul>
       <span><span id="appliedDiscountCode"></span></span><span id="subtotal"></span>
       <span id="shippingCost"></span><span id="taxLabel"></span><span id="taxAmount"></span>
       <p id="taxStatus"></p><span id="totalLabel" data-final-label="Total"></span><span id="total"></span></div>
@@ -150,6 +151,7 @@ function taxQuote(): CheckoutTaxQuote {
   return {
     valid: true,
     quoteFingerprint: "taxq_1234567890123456789012",
+    discountOffers: [],
     displayLabel: "VAT",
     pricesIncludeTax: false,
     shippingTaxed: true,
@@ -247,6 +249,20 @@ describe("cart discount checkout handoff", () => {
     vi.unstubAllGlobals();
   });
 
+  it("tells the buyer how to claim an earned free item", async () => {
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => ({
+      ...taxQuote(),
+      discountOffers: ["Buy a tee, get a cap free"],
+    }));
+    await startCartPage();
+    const offers = document.getElementById("discountOffers")!;
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalled();
+    expect(offers.classList.contains("hidden")).toBe(false);
+    expect([...offers.children].map((item) => item.textContent)).toEqual([
+      formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.freeItemOfferText, { offer: "Buy a tee, get a cap free" }),
+    ]);
+  });
+
   it("holds native submit until a deferred Apply settles, then transfers the applied code", async () => {
     let resolveValidation!: (value: unknown) => void;
     apiMocks.validateDiscount.mockImplementation(
@@ -268,7 +284,7 @@ describe("cart discount checkout handoff", () => {
     resolveValidation({
       valid: true,
       discountAmount: 10,
-      discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", valueType: "fixed_amount", discountValue: 10 },
+      discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", discountValue: 10 },
     });
     await vi.advanceTimersByTimeAsync(0);
     await Promise.resolve();
@@ -327,7 +343,7 @@ describe("cart discount checkout handoff", () => {
     await Promise.resolve();
     expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
 
-    resolveDiscount({ valid: true, discountAmount: 10, discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", valueType: "fixed_amount", discountValue: 10 } });
+    resolveDiscount({ valid: true, discountAmount: 10, discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", discountValue: 10 } });
   });
 
   it("holds COD submit while Apply is pending, then permits the normal submit", async () => {
@@ -354,7 +370,7 @@ describe("cart discount checkout handoff", () => {
     resolveValidation({
       valid: true,
       discountAmount: 10,
-      discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", valueType: "fixed_amount", discountValue: 10 },
+      discount: { id: "disc_1", code: "SAVE10", type: "amount_off_order", discountValue: 10 },
     });
     await settleCheckout();
 

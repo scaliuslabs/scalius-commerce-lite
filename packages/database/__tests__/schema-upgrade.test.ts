@@ -209,6 +209,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 29,
         postgresStatements: 29,
       },
+      {
+        version: 68,
+        name: "0068_single_discount_engine",
+        sqliteStatements: 15,
+        postgresStatements: 21,
+      },
     ]);
   });
 
@@ -325,6 +331,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 65, name: "0065_single_checkout_commit" },
           { version: 66, name: "0066_payment_provider_refs" },
           { version: 67, name: "0067_settings_documents" },
+          { version: 68, name: "0068_single_discount_engine" },
         ],
       });
     } finally {

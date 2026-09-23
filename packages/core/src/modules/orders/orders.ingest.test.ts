@@ -98,7 +98,6 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         taxAmountMinor: 0,
       },
     ],
-    discountUsage: { discountId: "discount_1", revision: 1, amountDiscounted: 50 },
     requestUrl: "https://shop.example.com/api/v1/orders",
     taxQuote: {
       schemaVersion: 1,
@@ -239,15 +238,17 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     mocks.verifyPromotionCheckoutSnapshot.mockReset();
   });
 
-  it("maps max-uses trigger aborts while the atomic batch rolls inventory back", async () => {
+  it("maps usage-limit trigger aborts while the atomic batch rolls inventory back", async () => {
     const db = createDbMock();
-    mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: DISCOUNT_MAX_USES_EXCEEDED"));
+    mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR", {
+      cause: new Error("PROMOTION_REDEMPTION_TOTAL_LIMIT"),
+    }));
 
     const result = commitStorefrontOrderPayload(db, createPayload());
     await expect(result).rejects.toBeInstanceOf(ValidationError);
     await expect(result).rejects.toMatchObject({
       name: "ValidationError",
-      message: "Discount code has reached its usage limit",
+      message: "This discount has reached its usage limit.",
     });
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
@@ -260,7 +261,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       db,
       createPayload({
         existingCustomer: null,
-        discountUsage: null,
         orderData: {
           ...createPayload().orderData,
           inventoryAction: "none",
@@ -291,7 +291,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     mocks.safeBatch.mockResolvedValue([]);
 
     const result = await commitStorefrontOrderPayload(db, createPayload({
-      discountUsage: null,
       orderData: { ...createPayload().orderData, inventoryAction: "none" },
     }));
 
@@ -311,7 +310,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     mocks.safeBatch.mockResolvedValue([]);
 
     await commitStorefrontOrderPayload(db, createPayload({
-      discountUsage: null,
       orderData: {
         ...createPayload().orderData,
         paymentMethod: "cod",
@@ -341,7 +339,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     const result = await commitStorefrontOrderPayload(db, createPayload({
       existingCustomer: null,
-      discountUsage: null,
     }));
 
     expect(result).toMatchObject({
@@ -360,7 +357,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     await commitStorefrontOrderPayload(
       db,
       createPayload({
-        discountUsage: null,
         orderData: {
           ...createPayload().orderData,
           status: "pending",
@@ -397,13 +393,13 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
   it("maps one-per-customer trigger aborts even when D1 nests the cause", async () => {
     const db = createDbMock();
-    const cause = new Error("SQLITE_CONSTRAINT_TRIGGER: DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED");
+    const cause = new Error("SQLITE_CONSTRAINT_TRIGGER: PROMOTION_REDEMPTION_CUSTOMER_LIMIT");
     mocks.safeBatch.mockRejectedValue(Object.assign(new Error("D1 batch failed"), { cause }));
 
     await expect(commitStorefrontOrderPayload(db, createPayload()))
       .rejects.toMatchObject({
         name: "ValidationError",
-        message: "Discount already used by this customer",
+        message: "This discount has already reached your usage limit.",
       });
 
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
@@ -412,12 +408,16 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
   it("commits one typed redemption and immutable line allocation in the order batch", async () => {
     const db = createDbMock();
     const applied = {
-      promotionId: "promo_1",
-      promotionRevision: 2,
-      promotionName: "Typed promotion",
-      method: "code" as const,
-      promotionCode: "SAVE50",
       totalDiscountMinor: 5_000,
+      discounts: [{
+        promotionId: "promo_1",
+        promotionRevision: 2,
+        promotionName: "Typed promotion",
+        method: "code" as const,
+        promotionCode: "SAVE50",
+        discountClass: "order" as const,
+        totalDiscountMinor: 5_000,
+      }],
       allocations: [{
         promotionId: "promo_1",
         promotionRevision: 2,
@@ -438,7 +438,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     mocks.verifyPromotionCheckoutSnapshot.mockResolvedValue(applied);
     mocks.safeBatch.mockResolvedValue([]);
     const payload = createPayload({
-      discountUsage: null,
       promotion: {
         cart: {
           currencyCode: "BDT",
@@ -484,16 +483,19 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
   it("maps concurrent typed budget exhaustion from the all-or-nothing batch", async () => {
     const db = createDbMock();
     const payload = createPayload({
-      discountUsage: null,
       promotion: { cart: {} as never, applied: {} as never },
     });
     mocks.verifyPromotionCheckoutSnapshot.mockResolvedValue({
-      promotionId: "promo_1",
-      promotionRevision: 2,
-      promotionName: "Typed promotion",
-      method: "code",
-      promotionCode: "SAVE50",
       totalDiscountMinor: 5_000,
+      discounts: [{
+        promotionId: "promo_1",
+        promotionRevision: 2,
+        promotionName: "Typed promotion",
+        method: "code",
+        promotionCode: "SAVE50",
+        discountClass: "order",
+        totalDiscountMinor: 5_000,
+      }],
       allocations: [{
         promotionId: "promo_1",
         promotionRevision: 2,
@@ -529,7 +531,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     });
     const payload = createPayload({
       checkoutAuthorityRevision: null,
-      discountUsage: null,
       promotion: { cart: {} as never, applied: {} as never },
     });
 
@@ -543,16 +544,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
     expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
     expect(mocks.safeBatch).not.toHaveBeenCalled();
-  });
-
-  it("maps missing customer-key trigger aborts to a phone-specific validation error", async () => {
-    const db = createDbMock();
-    mocks.safeBatch.mockRejectedValue(new Error("D1_ERROR: DISCOUNT_CUSTOMER_KEY_REQUIRED"));
-
-    await expect(commitStorefrontOrderPayload(db, createPayload()))
-      .rejects.toThrow("A valid phone number is required to use this discount");
-
-    expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
 
   it("preserves unrelated atomic commit errors", async () => {
@@ -620,7 +611,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
 
     await commitStorefrontOrderPayload(db, createPayload({
       items,
-      discountUsage: null,
       taxQuote: { ...createPayload().taxQuote, lines },
       orderData: { ...createPayload().orderData, inventoryAction: "none" },
     }));
@@ -743,18 +733,6 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       .rejects.toThrow("Checkout details changed while the order was being placed");
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
   });
-
-  it.each([undefined, null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    "rejects invalid legacy discount revision (%s) before inventory work",
-    async (revision) => {
-      const payload = createPayload();
-      payload.discountUsage!.revision = revision as number;
-      await expect(commitStorefrontOrderPayload(createDbMock(), payload))
-        .rejects.toThrow("Discount revision is unavailable");
-      expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
-      expect(mocks.safeBatch).not.toHaveBeenCalled();
-    },
-  );
 
   it("guards the order-only batch after an idempotent inventory replay", async () => {
     mocks.prepareStockReservationBatch.mockResolvedValue({

@@ -46,7 +46,6 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
       }],
       shippingAmount: 0.001,
       discountAmount: 0,
-      discountType: null,
       currency: { code: "KWD", decimalPlaces: 3 },
     });
 
@@ -66,7 +65,6 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
       lines: [],
       shippingAmount: 0,
       discountAmount: 0,
-      discountType: null,
     });
 
     expect(mocks.getCurrencyConfig).toHaveBeenCalledOnce();

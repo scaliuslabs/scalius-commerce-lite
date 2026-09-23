@@ -253,7 +253,6 @@ export async function processOrder(
       productName: item.productName,
       variantLabel: item.variantLabel,
     }));
-    const subtotal = cartValidation.data.subtotal;
     const shippingCharge = cartValidation.data.delivery.shippingCharge;
     const cityName = cartValidation.data.delivery.cityName;
     const zoneName = cartValidation.data.delivery.zoneName;
@@ -275,7 +274,6 @@ export async function processOrder(
       const discountData = JSON.parse(discountJson);
       const validationResult = await validateDiscount(
         discountData.code,
-        subtotal,
         discountValidationItems,
         shippingCharge,
         customerPhone,

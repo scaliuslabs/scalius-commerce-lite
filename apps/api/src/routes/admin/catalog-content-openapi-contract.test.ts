@@ -155,53 +155,18 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
         ]);
     });
 
-    it("documents discount code conflicts, restore conflicts, and toggle not-found errors", () => {
+    it("documents discount code conflicts and revision-checked lifecycle commands", () => {
         const spec = buildAdminCatalogContentSpec();
 
-        expectResponseStatuses(spec, "/api/v1/admin/discounts", "post", [
-            "201",
-            "400",
-            "401",
-            "403",
-            "409",
-        ]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/bulk-restore", "post", [
-            "204",
-            "400",
-            "401",
-            "403",
-            "409",
-        ]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "put", [
-            "200",
-            "400",
-            "401",
-            "403",
-            "404",
-            "409",
-        ]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "delete", [
-            "204",
-            "401",
-            "403",
-        ]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}/toggle-status", "post", [
-            "200",
-            "400",
-            "401",
-            "403",
-            "404",
-            "409",
-        ]);
-        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}/restore", "post", [
-            "200",
-            "401",
-            "403",
-            "409",
-        ]);
+        expectResponseStatuses(spec, "/api/v1/admin/discounts", "post", ["201", "400", "401", "403", "409"]);
+        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "put", ["200", "400", "401", "403", "404", "409"]);
+        expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}", "delete", ["204", "401", "403", "409"]);
+        for (const command of ["activate", "pause"]) {
+            expectResponseStatuses(spec, `/api/v1/admin/discounts/{id}/${command}`, "post", ["200", "400", "401", "403", "404", "409"]);
+            expect(spec.paths?.[`/api/v1/admin/discounts/{id}/${command}`]?.post?.requestBody)
+                .toMatchObject({ required: true });
+        }
         expect(spec.paths?.["/api/v1/admin/discounts/{id}"]?.put?.requestBody)
-            .toMatchObject({ required: true });
-        expect(spec.paths?.["/api/v1/admin/discounts/{id}/toggle-status"]?.post?.requestBody)
             .toMatchObject({ required: true });
     });
 });

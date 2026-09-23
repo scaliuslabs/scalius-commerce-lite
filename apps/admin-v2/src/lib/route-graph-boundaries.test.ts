@@ -379,46 +379,6 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("queryKeys.dashboard.all");
   });
 
-  it("keeps create forms draft-first and lifecycle controls permission-gated", () => {
-    const pageForm = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "PageForm.tsx"),
-      "utf8",
-    );
-    const discountForm = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "discount",
-        "DiscountCodeBuilder.tsx",
-      ),
-      "utf8",
-    );
-    const discountModel = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "discount",
-        "discount-editor-model.ts",
-      ),
-      "utf8",
-    );
-    const permissionsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-permissions.ts"),
-      "utf8",
-    );
-
-    expect(pageForm).toContain('publicationMode: "draft"');
-    expect(pageForm).toContain("PERMISSIONS.PAGES_PUBLISH");
-    expect(pageForm).toContain("disabled={!canPublish}");
-    expect(discountModel).toContain("isActive: Boolean(defaults.isActive)");
-    expect(discountForm).toContain("disabled={!canToggleStatus}");
-    expect(permissionsSource).toContain(
-      'DISCOUNTS_TOGGLE_STATUS: "discounts.toggle_status"',
-    );
-  });
-
   it("keeps the hot login route off the generic Better Auth UI chunk", () => {
     const loginRouteSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "auth", "login.tsx"),
@@ -688,66 +648,6 @@ describe("admin route graph boundaries", () => {
     }
   });
 
-  it("keeps new-discount type selection off the decorative animation runtime", () => {
-    const selectorSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "discount",
-        "DiscountTypeSelector.tsx",
-      ),
-      "utf8",
-    );
-    const newRouteSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "discounts", "new.tsx"),
-      "utf8",
-    );
-    const combinedSource = `${selectorSource}\n${newRouteSource}`;
-    const forbiddenMarkers = [
-      ["motion", "react"].join("/"),
-      ["while", "Hover"].join(""),
-      ["while", "Tap"].join(""),
-    ];
-
-    expect(newRouteSource).toContain(
-      "<DiscountTypeSelector onSelect={selectType} />",
-    );
-    expect(newRouteSource).toContain(
-      "validateSearch: validateDiscountCreateSearch",
-    );
-    expect(newRouteSource).toContain("const DiscountCodeBuilder = lazy(");
-    for (const marker of forbiddenMarkers) {
-      expect(combinedSource).not.toContain(marker);
-    }
-  });
-
-  it("keeps admin discount form values out of native GET submissions", () => {
-    const discountForms = [
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "discount",
-        "DiscountCodeBuilder.tsx",
-      ),
-    ];
-
-    for (const path of discountForms) {
-      const source = readFileSync(path, "utf8");
-      const formTags = extractOpeningFormTags(source);
-      const noValidateCount = source.match(/noValidate/g)?.length ?? 0;
-
-      expect(source).toMatch(/name="(?:code|discountValue|isActive)"/);
-      expect(formTags.length).toBeGreaterThan(0);
-      expect(noValidateCount).toBe(formTags.length);
-      for (const formTag of formTags) {
-        expect(formTag).toContain('method="post"');
-        expect(formTag).toContain('action="/admin/discounts"');
-      }
-    }
-  });
-
   it("keeps admin navigation from doing focus refetch stampedes", () => {
     const routerSource = readFileSync(
       join(ADMIN_SRC_ROOT, "router.tsx"),
@@ -1011,17 +911,6 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps edit forms from blocking on secondary label hydration", () => {
-    const discountSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "discounts",
-        "$discountId",
-        "edit.tsx",
-      ),
-      "utf8",
-    );
     const collectionSource = readFileSync(
       join(
         ADMIN_SRC_ROOT,
@@ -1033,36 +922,16 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    const discountLoaderSource = discountSource.slice(
-      discountSource.indexOf("loader: async"),
-      discountSource.indexOf("head: ({ match })"),
-    );
     const collectionLoaderSource = collectionSource.slice(
       collectionSource.indexOf("loader: async"),
       collectionSource.indexOf("head: ()"),
     );
 
-    expect(discountLoaderSource).not.toContain(
-      "ensureQueryData(productsByIdsQueryOptions",
-    );
-    expect(discountLoaderSource).not.toContain(
-      "ensureQueryData(collectionsByIdsQueryOptions",
-    );
     expect(collectionLoaderSource).not.toContain(
       "ensureQueryData(productsByIdsQueryOptions",
     );
-    expect(discountSource).not.toContain(
-      "useSuspenseQuery(productsByIdsQueryOptions",
-    );
-    expect(discountSource).not.toContain(
-      "useSuspenseQuery(collectionsByIdsQueryOptions",
-    );
     expect(collectionSource).not.toContain(
       "useSuspenseQuery(productsByIdsQueryOptions",
-    );
-    expect(discountSource).toContain("Discount product label prefetch skipped");
-    expect(discountSource).toContain(
-      "Discount collection label prefetch skipped",
     );
     expect(collectionSource).toContain(
       "Collection product label prefetch skipped",

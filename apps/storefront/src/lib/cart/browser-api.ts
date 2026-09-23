@@ -18,7 +18,6 @@ interface DiscountValidationItem {
 
 export interface DiscountValidationBody {
   code: string;
-  total?: number;
   shippingCost?: number;
   customerPhone?: string;
   items?: DiscountValidationItem[];
@@ -26,13 +25,11 @@ export interface DiscountValidationBody {
 
 export function buildDiscountValidationBody(
   code: string,
-  total?: number,
   items?: CartItem[],
   shippingCost?: number,
   customerPhone?: string,
 ): DiscountValidationBody {
   const body: DiscountValidationBody = { code };
-  if (total !== undefined) body.total = total;
   if (shippingCost !== undefined) body.shippingCost = shippingCost;
   if (customerPhone) body.customerPhone = customerPhone;
   const apiItems = (items ?? []).flatMap((item): DiscountValidationItem[] => {
@@ -64,7 +61,6 @@ async function postJson(path: string, body: unknown): Promise<Response> {
 /** Non-2xx responses return the API error body, like the SDK's `error`. */
 export async function validateDiscountFromBrowser(
   code: string,
-  total?: number,
   items?: CartItem[],
   shippingCost?: number,
   customerPhone?: string,
@@ -72,7 +68,7 @@ export async function validateDiscountFromBrowser(
   if (!code.trim()) return null;
   const response = await postJson(
     "/discounts/validate",
-    buildDiscountValidationBody(code, total, items, shippingCost, customerPhone),
+    buildDiscountValidationBody(code, items, shippingCost, customerPhone),
   );
   const json = (await response.json().catch(() => null)) as
     | { data?: DiscountValidationResponse }

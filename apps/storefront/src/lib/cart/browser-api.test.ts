@@ -28,7 +28,6 @@ describe("validateDiscountFromBrowser", () => {
 
     const result = await validateDiscountFromBrowser(
       "SAVE10",
-      100,
       [{ id: "prod_1", name: "Rice", price: 100, quantity: 2, variantId: "var_1" }],
       60,
       "+8801712345678",
@@ -41,7 +40,6 @@ describe("validateDiscountFromBrowser", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       code: "SAVE10",
-      total: 100,
       shippingCost: 60,
       customerPhone: "+8801712345678",
       items: [{ id: "prod_1", price: 100, quantity: 2, variantId: "var_1" }],

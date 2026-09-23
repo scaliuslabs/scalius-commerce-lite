@@ -41,6 +41,7 @@ function validQuote(
       baseAmountMinor: 5_000,
       feeWaived: false,
     },
+    discountOffers: ["Buy 2 panjabi, get a cap free"],
     items: [{
       cartKey: "line:v2:prod_1:variant:var_1",
       productId: "prod_1",

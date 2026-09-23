@@ -319,17 +319,3 @@ export {
   type OrderFormValues,
 } from "@/components/admin/order-form/types";
 
-// ═══════════════════════════════════════════════════════════════════
-//  DISCOUNTS (re-export shared validation + per-type schemas)
-// ═══════════════════════════════════════════════════════════════════
-
-export {
-  discountCodeSchema,
-  sharedDiscountFields,
-  refineEndDateAfterStart,
-} from "@/components/admin/discount/shared-validation";
-
-export {
-  discountEditorSchema,
-  type DiscountEditorValues,
-} from "@/components/admin/discount/discount-editor-model";
