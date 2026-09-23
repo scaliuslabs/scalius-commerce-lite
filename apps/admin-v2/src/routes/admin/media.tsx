@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { translate } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
 import { PageLoadingSkeleton } from "~/components/admin/shared/LoadingFallback";
 import {
   mediaRouteSearchToWorkspaceState,
@@ -22,7 +24,7 @@ const MediaManagerPage = lazy(() =>
 
 export const Route = createFileRoute("/admin/media")({
   validateSearch: validateMediaSearch,
-  head: () => ({ meta: [{ title: "Media | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: translate(mediaMessages, "title") }] }),
   errorComponent: RouteErrorComponent,
   component: MediaPage,
 });

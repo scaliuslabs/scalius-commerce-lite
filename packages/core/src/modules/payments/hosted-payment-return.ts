@@ -64,8 +64,8 @@ type HostedReturnOrder = {
   status: string;
   paymentMethod: string;
   paymentStatus: string;
-  paidAmount: number;
-  balanceDue: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
   version: number;
   deletedAt: Date | null;
   shipmentClaimId: string | null;
@@ -118,13 +118,13 @@ export async function reconcileHostedPaymentReturn(
           ${OrderStatus.PARTIALLY_REFUNDED}
         )
         AND ${orders.paymentStatus} = ${PaymentStatus.PARTIAL}
-        AND ${orders.paidAmount} > 0
-        AND ${orders.balanceDue} > 0
+        AND ${orders.paidAmountMinor} > 0
+        AND ${orders.balanceDueMinor} > 0
       `
     : sql`
         ${orders.status} = ${OrderStatus.INCOMPLETE}
         AND ${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
-        AND ${orders.paidAmount} <= 0
+        AND ${orders.paidAmountMinor} <= 0
       `;
   const eligibility = sql`EXISTS (
     SELECT 1 FROM ${orders}
@@ -168,13 +168,13 @@ export async function reconcileHostedPaymentReturn(
             OrderStatus.PARTIALLY_REFUNDED,
           ]),
           eq(orders.paymentStatus, PaymentStatus.PARTIAL),
-          sql`${orders.paidAmount} > 0`,
-          sql`${orders.balanceDue} > 0`,
+          sql`${orders.paidAmountMinor} > 0`,
+          sql`${orders.balanceDueMinor} > 0`,
         ]
       : [
           eq(orders.status, OrderStatus.INCOMPLETE),
           inArray(orders.paymentStatus, [PaymentStatus.UNPAID, PaymentStatus.FAILED]),
-          sql`${orders.paidAmount} <= 0`,
+          sql`${orders.paidAmountMinor} <= 0`,
         ]),
   ];
   const orderUpdate = db
@@ -239,8 +239,8 @@ async function loadHostedReturnSnapshot(
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
+      paidAmountMinor: orders.paidAmountMinor,
+      balanceDueMinor: orders.balanceDueMinor,
       version: orders.version,
       deletedAt: orders.deletedAt,
       shipmentClaimId: orders.shipmentClaimId,
@@ -315,13 +315,13 @@ function classifyHostedReturnSnapshot(
     ? (
         !TERMINAL_ORDER_STATUSES.has(order.status) &&
         order.paymentStatus === PaymentStatus.PARTIAL &&
-        Number(order.paidAmount ?? 0) > 0 &&
-        Number(order.balanceDue ?? 0) > 0
+        order.paidAmountMinor > 0 &&
+        order.balanceDueMinor > 0
       )
     : (
         order.status === OrderStatus.INCOMPLETE &&
         (order.paymentStatus === PaymentStatus.UNPAID || order.paymentStatus === PaymentStatus.FAILED) &&
-        Number(order.paidAmount ?? 0) <= 0
+        order.paidAmountMinor <= 0
       );
 
   if (

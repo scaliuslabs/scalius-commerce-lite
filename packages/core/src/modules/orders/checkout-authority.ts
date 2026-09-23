@@ -312,7 +312,6 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             zone: input.zone,
                             area: input.area,
                             shippingMethodId: input.shippingMethodId,
-                            currencyCode: currency.currencyCode,
                         },
                         cartValidation,
                         locationRows,

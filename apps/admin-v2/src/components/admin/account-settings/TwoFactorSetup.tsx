@@ -1,644 +1,360 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { authClient } from "~/lib/auth-client";
+import { AlertCircle, Copy, Mail, Smartphone } from "lucide-react";
+import { toast } from "sonner";
+import { postApiV1AdminAuth2FaMethod, postApiV1AdminAuth2FaMethodChallenge } from "@scalius/api-client/sdk";
+import { Alert, AlertDescription } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Loader2,
-  Shield,
-  ShieldCheck,
-  ShieldOff,
-  AlertCircle,
-  Check,
-  Copy,
-  Smartphone,
-  Mail,
-} from "lucide-react";
-import { toast } from "sonner";
-import {
-  postApiV1AdminAuth2FaMethod,
-  postApiV1AdminAuth2FaMethodChallenge,
-} from "@scalius/api-client/sdk";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { Skeleton } from "~/components/ui/skeleton";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { authClient } from "~/lib/auth-client";
 import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
-import type { User } from "./AccountSettingsContainer";
-import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { useMessages } from "~/i18n";
+import { accountMessages } from "~/i18n/account";
+import type { User } from "./ProfileHeader";
 
-type TwoFactorStep = "method" | "password" | "qr" | "verify" | "backup";
-type TwoFactorMethod = "totp" | "email";
-type SetupMode = "enable" | "change";
+type Step = "method" | "password" | "qr" | "verify" | "codes";
+type Method = "totp" | "email";
+/** enable: first setup · change: switch method · codes: a new authenticator secret and new recovery codes. */
+type Mode = "enable" | "change" | "codes";
 
-interface TwoFactorSetupProps {
-  user: User;
+const errorText = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
+
+/** The key inside the otpauth:// link, for people who type it instead of scanning. */
+function manualKeyOf(totpUri: string | null): string | null {
+  try {
+    return totpUri ? new URL(totpUri).searchParams.get("secret") : null;
+  } catch {
+    return null;
+  }
 }
 
-export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
+/**
+ * Two-step verification card. Nothing here is put in a URL or a log: the
+ * password, the authenticator key and the codes live only in component state
+ * and are cleared when the flow closes.
+ */
+export function TwoFactorSetup({ user }: { user: User }) {
+  const t = useMessages(accountMessages);
   const router = useRouter();
   const [isEnabled, setIsEnabled] = useState(user.twoFactorEnabled ?? false);
-  const [currentMethod, setCurrentMethod] = useState<TwoFactorMethod>(
-    (user.twoFactorMethod as TwoFactorMethod) || "email"
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
-  const [setupMode, setSetupMode] = useState<SetupMode>("enable");
-  const [selectedMethod, setSelectedMethod] = useState<TwoFactorMethod>("email");
-  const [totpUri, setTotpUri] = useState<string | null>(null);
-  const [methodChallengeId, setMethodChallengeId] = useState<string | null>(null);
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [verificationCode, setVerificationCode] = useState("");
+  const [currentMethod, setCurrentMethod] = useState<Method>(user.twoFactorMethod === "totp" ? "totp" : "email");
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [step, setStep] = useState<Step>("method");
+  const [method, setMethod] = useState<Method>("totp");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<TwoFactorStep>("method");
-
-  const setVerifiedMethod = async (
-    method: TwoFactorMethod,
-    code: string,
-    challengeId?: string,
-  ) => {
-    await apiData(postApiV1AdminAuth2FaMethod({
-      body: challengeId
-        ? { method, challengeId, code }
-        : { method, code },
-    }));
-  };
-
-  const refreshAdminContext = () => {
-    void refreshAdminRouteContext(router);
-  };
-
-  const handleEnable2FA = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const result = await authClient.twoFactor.enable({ password, method: "totp" });
-
-      if (result.error) {
-        setError(result.error.message || "Failed to enable 2FA");
-        return;
-      }
-
-      if (result.data) {
-        if (result.data.method !== "totp") {
-          setError("Failed to create two-factor recovery codes");
-          return;
-        }
-        setTotpUri(result.data.totpURI);
-        setBackupCodes(result.data.backupCodes || []);
-
-        if (selectedMethod === "totp") {
-          setStep("qr");
-        } else {
-          const otpResult = await authClient.twoFactor.sendOtp();
-          if (otpResult?.error) {
-            setError(otpResult.error.message || "Failed to send verification code");
-            return;
-          }
-          setStep("verify");
-        }
-      }
-    } catch {
-      setError("Failed to enable 2FA");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerify2FA = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      if (setupMode === "change" && selectedMethod === "email" && !methodChallengeId) {
-        throw new Error("Email verification setup expired. Start again.");
-      }
-      await setVerifiedMethod(
-        selectedMethod,
-        verificationCode,
-        setupMode === "change" ? methodChallengeId ?? undefined : undefined,
-      );
-
-      setIsEnabled(true);
-      setCurrentMethod(selectedMethod);
-      if (backupCodes.length > 0) {
-        setStep("backup");
-      } else {
-        setShowSetup(false);
-        setStep("method");
-        setPassword("");
-        setVerificationCode("");
-      }
-      refreshAdminContext();
-      toast.success(
-        setupMode === "change"
-          ? "Verification method changed successfully"
-          : "Two-factor authentication enabled",
-      );
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetupTotpForChange = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({
-        body: { method: "totp", password },
-      }));
-      setMethodChallengeId(challenge.challengeId);
-      setTotpUri(challenge.totpUri);
-      setBackupCodes([]);
-      setStep("qr");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Authenticator setup could not be started",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyTotpForChange = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      if (!methodChallengeId) {
-        throw new Error("Authenticator setup expired. Start again.");
-      }
-      const result = await apiData(postApiV1AdminAuth2FaMethod({
-        body: {
-          method: "totp",
-          challengeId: methodChallengeId,
-          code: verificationCode,
-        },
-      }));
-      if (!result.backupCodes?.length) {
-        throw new Error("Recovery codes were not returned after setup.");
-      }
-
-      setCurrentMethod("totp");
-      setBackupCodes(result.backupCodes);
-      setStep("backup");
-      refreshAdminContext();
-      toast.success("Authenticator app configured successfully");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetupEmailForChange = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({
-        body: { method: "email", password },
-      }));
-      setMethodChallengeId(challenge.challengeId);
-      // Changing the delivery method must preserve the current authenticator
-      // secret and recovery codes. Only a verified email OTP changes method.
-      setBackupCodes([]);
-
-      const otpResult = await authClient.twoFactor.sendOtp();
-      if (otpResult?.error) {
-        setError(otpResult.error.message || "Failed to send verification code");
-        return;
-      }
-      setStep("verify");
-      toast.success("Verification code sent to your email");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to start email verification",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setIsLoading(true);
-    try {
-      const result = await authClient.twoFactor.sendOtp();
-      if (result?.error) {
-        toast.error(result.error.message || "Failed to send verification code");
-        return;
-      }
-      toast.success("Verification code sent to your email");
-    } catch {
-      toast.error("Failed to send verification code");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const copyBackupCodes = async () => {
-    try {
-      await navigator.clipboard.writeText(backupCodes.join("\n"));
-      toast.success("Recovery codes copied");
-    } catch {
-      toast.error("Could not copy recovery codes");
-    }
-  };
-
-  // Generate QR code locally as data URI after the TOTP setup flow needs it.
+  const [code, setCode] = useState("");
+  const [totpUri, setTotpUri] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isChange = mode === "change" || mode === "codes";
 
+  // The QR code is drawn locally; the key never leaves this page.
   useEffect(() => {
-    if (!totpUri) {
-      setQrDataUrl(null);
-      return;
-    }
-
-    let active = true;
     setQrDataUrl(null);
-
+    if (!totpUri) return;
+    let active = true;
     void import("qrcode")
-      .then(({ toDataURL }) => toDataURL(totpUri, { width: 200, margin: 2 }))
-      .then((dataUrl) => {
-        if (active) setQrDataUrl(dataUrl);
-      })
-      .catch(() => {
-        if (active) setQrDataUrl(null);
-      });
-
+      .then(({ toDataURL }) => toDataURL(totpUri, { width: 192, margin: 2 }))
+      .then((url) => active && setQrDataUrl(url))
+      .catch(() => undefined);
     return () => {
       active = false;
     };
   }, [totpUri]);
 
-  const resetState = () => {
+  const close = () => {
+    setMode(null);
     setStep("method");
     setPassword("");
-    setVerificationCode("");
+    setCode("");
     setTotpUri(null);
-    setMethodChallengeId(null);
-    setBackupCodes([]);
+    setChallengeId(null);
+    setRecoveryCodes([]);
     setError(null);
-    setSelectedMethod(currentMethod);
   };
 
-  const startSetup = (mode: SetupMode) => {
-    setSetupMode(mode);
-    setShowSetup(true);
-    if (mode === "change") {
-      setStep("method");
-      setSelectedMethod(currentMethod === "totp" ? "email" : "totp");
+  const start = (next: Mode) => {
+    close();
+    setMode(next);
+    if (next === "codes") {
+      setMethod("totp");
+      setStep("password");
     } else {
-      setStep("method");
+      setMethod(next === "change" ? (currentMethod === "totp" ? "email" : "totp") : "totp");
     }
   };
 
-  const hasSetupDraft =
-    showSetup &&
-    (step !== "method" ||
-      selectedMethod !== currentMethod ||
-      password.length > 0 ||
-      verificationCode.length > 0 ||
-      backupCodes.length > 0);
+  const run = async (task: () => Promise<void>, fallback: string) => {
+    setError(null);
+    setBusy(true);
+    try {
+      await task();
+    } catch (err) {
+      setError(errorText(err, fallback));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  if (showSetup) {
-    return (
+  const sendEmailCode = async () => {
+    const result = await authClient.twoFactor.sendOtp();
+    if (result?.error) throw new Error(result.error.message || t("codeNotSent"));
+  };
+
+  // Step 2: the password unlocks setup (first time) or a staged method change.
+  const confirmPassword = () =>
+    run(async () => {
+      if (!isChange) {
+        const result = await authClient.twoFactor.enable({ password, method: "totp" });
+        if (result.error) throw new Error(result.error.message || t("setupFailed"));
+        if (!result.data || result.data.method !== "totp") throw new Error(t("setupFailed"));
+        setTotpUri(result.data.totpURI);
+        setRecoveryCodes(result.data.backupCodes || []);
+        if (method === "totp") setStep("qr");
+        else {
+          await sendEmailCode();
+          setStep("verify");
+        }
+        return;
+      }
+      const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({ body: { method, password } }));
+      setChallengeId(challenge.challengeId);
+      // Changing how codes arrive keeps the current authenticator key and recovery codes.
+      setRecoveryCodes([]);
+      if (method === "totp") {
+        setTotpUri(challenge.totpUri);
+        setStep("qr");
+      } else {
+        await sendEmailCode();
+        setStep("verify");
+        toast.success(t("codeSent"));
+      }
+    }, t("setupFailed"));
+
+  // Step 3: the code proves the method works before anything changes.
+  const verify = () =>
+    run(async () => {
+      if (isChange && !challengeId) throw new Error(t("setupExpired"));
+      const result = await apiData(postApiV1AdminAuth2FaMethod({
+        body: isChange ? { method, challengeId: challengeId!, code } : { method, code },
+      }));
+      const issued = isChange && method === "totp" ? result.backupCodes ?? [] : recoveryCodes;
+      if (isChange && method === "totp" && !issued.length) throw new Error(t("setupFailed"));
+      setIsEnabled(true);
+      setCurrentMethod(method);
+      void refreshAdminRouteContext(router);
+      toast.success(t(mode === "enable" ? "turnedOn" : mode === "codes" ? "codesUpdated" : "methodChanged"));
+      if (issued.length) {
+        setRecoveryCodes(issued);
+        setPassword("");
+        setCode("");
+        setStep("codes");
+      } else close();
+    }, t("wrongCode"));
+
+  const resend = () => run(async () => {
+    await sendEmailCode();
+    toast.success(t("codeSent"));
+  }, t("codeNotSent"));
+
+  const copyCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(recoveryCodes.join("\n"));
+      toast.success(t("codesCopied"));
+    } catch {
+      toast.error(t("copyFailed"));
+    }
+  };
+
+  const dirty = mode !== null && (step !== "method" || password.length > 0 || code.length > 0);
+  const manualKey = manualKeyOf(totpUri);
+
+  let content: ReactNode;
+  let footer: ReactNode;
+  if (mode === null) {
+    content = isEnabled ? (
+      <div className="flex items-start gap-3">
+        <span className="flex h-lh items-center text-muted-foreground">
+          {currentMethod === "totp" ? <Smartphone className="size-4" aria-hidden="true" /> : <Mail className="size-4" aria-hidden="true" />}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-body font-medium">{t(currentMethod === "totp" ? "authenticatorApp" : "emailCode")}</span>
+          <span className="break-words text-body text-muted-foreground">
+            {currentMethod === "totp" ? t("authenticatorAppHelp") : t("emailCodeTo", { email: user.email })}
+          </span>
+        </div>
+        <Badge variant="success">{t("on")}</Badge>
+      </div>
+    ) : (
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-body text-muted-foreground">{t("offHelp")}</span>
+        <Badge>{t("off")}</Badge>
+      </div>
+    );
+    footer = isEnabled ? (
       <>
-      <UnsavedChangesGuard
-        isDirty={hasSetupDraft}
-        isSubmitting={isLoading}
-      />
-      <Card className="max-w-3xl rounded-xl shadow-none">
-        <CardHeader className="p-4 pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Shield className="h-4 w-4" />
-            {setupMode === "change"
-                ? "Change verification method"
-                : "Enable two-factor authentication"}
-          </CardTitle>
-          <CardDescription>
-            {setupMode === "change"
-                ? "Verify a replacement method before the current method changes."
-                : "Choose and verify the method used when you sign in."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          {error && (
-            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {step === "method" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label="Verification method">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMethod("totp")}
-                  aria-pressed={selectedMethod === "totp"}
-                  className={`min-h-16 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "totp"
-                    ? "border-foreground bg-muted/55"
-                    : "hover:border-muted-foreground/40 hover:bg-muted/30"
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Authenticator app</p>
-                      <p className="text-xs text-muted-foreground">Time-based code; works offline</p>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMethod("email")}
-                  aria-pressed={selectedMethod === "email"}
-                  className={`min-h-16 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "email"
-                    ? "border-foreground bg-muted/55"
-                    : "hover:border-muted-foreground/40 hover:bg-muted/30"
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Email code</p>
-                      <p className="break-all text-xs text-muted-foreground">Sent to {user.email}</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => {
-                    setStep("password");
-                  }}
-                  disabled={isLoading}
-                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
-                >
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Continue
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => { setShowSetup(false); resetState(); }}
-                  disabled={isLoading}
-                  className="min-h-11 sm:min-h-9"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {step === "password" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="2fa-password">Confirm your password</Label>
-                <Input
-                  id="2fa-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  disabled={isLoading}
-                  className="min-h-11 sm:min-h-9"
-                  autoFocus
-                />
-              </div>
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => {
-                    if (setupMode === "change" && selectedMethod === "totp") {
-                      handleSetupTotpForChange();
-                    } else if (setupMode === "change") {
-                      handleSetupEmailForChange();
-                    } else {
-                      handleEnable2FA();
-                    }
-                  }}
-                  disabled={isLoading || !password}
-                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
-                >
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Continue
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setStep("method");
-                  }}
-                  disabled={isLoading}
-                  className="min-h-11 sm:min-h-9"
-                >
-                  Back
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {step === "qr" && totpUri && (
-            <div className="space-y-4">
-              <div className="text-center space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Scan this QR code with your authenticator app
-                </p>
-                <div className="flex justify-center">
-                  <div className="rounded-lg bg-white p-3 shadow-sm">
-                    {qrDataUrl ? (
-                      <img
-                        src={qrDataUrl}
-                        alt="Authenticator setup QR code"
-                        className="w-48 h-48"
-                      />
-                    ) : (
-                      <div className="w-48 h-48 flex items-center justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <Button onClick={() => setStep("verify")} className="min-h-11 w-full sm:min-h-9">
-                I scanned the code
-              </Button>
-            </div>
-          )}
-
-          {step === "verify" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="verification-code">
-                  {selectedMethod === "email"
-                    ? "Enter the code sent to your email"
-                    : "Enter the 6-digit code from your app"}
-                </Label>
-                <Input
-                  id="verification-code"
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000000"
-                  className="text-center text-2xl tracking-[0.5em] font-mono h-14"
-                  maxLength={6}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  disabled={isLoading}
-                  autoFocus
-                />
-              </div>
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => {
-                    if (setupMode === "change" && selectedMethod === "totp") handleVerifyTotpForChange();
-                    else handleVerify2FA();
-                  }}
-                  disabled={isLoading || verificationCode.length !== 6}
-                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
-                >
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Verify
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setStep(selectedMethod === "totp" ? "qr" : "password")}
-                  className="min-h-11 sm:min-h-9"
-                >
-                  Back
-                </Button>
-              </div>
-              {selectedMethod === "email" && (
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={handleResendOtp}
-                  disabled={isLoading}
-                  className="min-h-11 w-full text-sm sm:min-h-9"
-                >
-                  Didn't receive the code? Resend
-                </Button>
-              )}
-            </div>
-          )}
-
-          {step === "backup" && backupCodes.length > 0 && (
-            <div className="space-y-4">
-              <div role="status" className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-foreground">
-                <Check className="h-4 w-4 flex-shrink-0" />
-                <span>Two-factor authentication is enabled.</span>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Recovery codes</Label>
-                  <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void copyBackupCodes()}>
-                    <Copy className="h-4 w-4 mr-1" />
-                    Copy
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Save these codes securely. Each code can only be used once.
-                </p>
-                <div className="bg-muted/50 p-4 rounded-lg border">
-                  <div className="grid grid-cols-1 gap-2 font-mono text-sm min-[420px]:grid-cols-2">
-                    {backupCodes.map((code) => (
-                      <div key={code} className="break-all rounded bg-background py-1 text-center">
-                        {code}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <Button onClick={() => { setShowSetup(false); resetState(); }} className="min-h-11 w-full sm:min-h-9">
-                Done
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {currentMethod === "totp" ? <Button type="button" variant="outline" onClick={() => start("codes")}>{t("newRecoveryCodes")}</Button> : null}
+        <Button type="button" variant="outline" onClick={() => start("change")}>{t("changeMethod")}</Button>
+      </>
+    ) : (
+      <Button type="button" onClick={() => start("enable")}>{t("turnOn")}</Button>
+    );
+  } else if (step === "method") {
+    content = (
+      <RadioGroup value={method} onValueChange={(value) => setMethod(value as Method)} aria-label={t("chooseMethod")}>
+        {(["totp", "email"] as const).map((option) => (
+          <label key={option} htmlFor={`two-step-${option}`} className="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 hover:bg-accent has-data-[state=checked]:border-ring">
+            <span className="flex h-lh items-center">
+              <RadioGroupItem id={`two-step-${option}`} value={option} />
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-body font-medium">{t(option === "totp" ? "authenticatorApp" : "emailCode")}</span>
+              <span className="break-words text-body text-muted-foreground">
+                {option === "totp" ? t("authenticatorAppHelp") : t("emailCodeTo", { email: user.email })}
+              </span>
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+    );
+    footer = (
+      <>
+        <Button type="button" variant="outline" onClick={close}>{t("cancel")}</Button>
+        <Button type="button" onClick={() => setStep("password")}>{t("continue")}</Button>
+      </>
+    );
+  } else if (step === "password") {
+    content = (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="two-step-password">{t("confirmYourPassword")}</Label>
+        <Input id="two-step-password" type="password" value={password} autoComplete="current-password" autoFocus disabled={busy} onChange={(event) => setPassword(event.target.value)} />
+      </div>
+    );
+    footer = (
+      <>
+        <Button type="button" variant="outline" disabled={busy} onClick={mode === "codes" ? close : () => setStep("method")}>
+          {t(mode === "codes" ? "cancel" : "back")}
+        </Button>
+        <Button type="submit" loading={busy} disabled={!password}>{t("continue")}</Button>
+      </>
+    );
+  } else if (step === "qr") {
+    content = (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-body text-muted-foreground">{t("scanQr")}</p>
+        {qrDataUrl ? (
+          // The QR code needs a light background in both themes to scan.
+          <img src={qrDataUrl} alt={t("qrAlt")} className="size-48 rounded-lg" />
+        ) : (
+          <Skeleton className="size-48" />
+        )}
+        {manualKey ? (
+          <p className="text-body text-muted-foreground">
+            {t("manualKey")} <code className="break-all text-foreground">{manualKey}</code>
+          </p>
+        ) : null}
+      </div>
+    );
+    footer = (
+      <>
+        <Button type="button" variant="outline" onClick={close}>{t("cancel")}</Button>
+        <Button type="button" onClick={() => setStep("verify")}>{t("continue")}</Button>
+      </>
+    );
+  } else if (step === "verify") {
+    content = (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="two-step-code">{t(method === "email" ? "enterEmailCode" : "enterAppCode")}</Label>
+        <Input
+          id="two-step-code"
+          value={code}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          autoFocus
+          disabled={busy}
+          // eslint-disable-next-line shadcn/no-restyle -- digits in a fixed-width face so the six-digit code lines up
+          className="max-w-40 font-mono"
+          onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+        />
+        {method === "email" ? (
+          <div>
+            <Button type="button" variant="link" size="sm" disabled={busy} onClick={() => void resend()}>{t("resendCode")}</Button>
+          </div>
+        ) : null}
+      </div>
+    );
+    footer = (
+      <>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => setStep(method === "totp" ? "qr" : "password")}>{t("back")}</Button>
+        <Button type="submit" loading={busy} disabled={code.length !== 6}>{t("verify")}</Button>
+      </>
+    );
+  } else {
+    content = (
+      <div className="flex flex-col gap-3">
+        <Alert variant="warning">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{t("saveCodesHelp")}</AlertDescription>
+        </Alert>
+        <ul className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-3 font-mono text-body" aria-label={t("recoveryCodes")}>
+          {recoveryCodes.map((item) => <li key={item} className="break-all text-center">{item}</li>)}
+        </ul>
+      </div>
+    );
+    footer = (
+      <>
+        <Button type="button" variant="outline" onClick={() => void copyCodes()}>
+          <Copy aria-hidden="true" />
+          {t("copyCodes")}
+        </Button>
+        <Button type="button" onClick={close}>{t("done")}</Button>
       </>
     );
   }
 
+  const title = mode === "enable" ? "turnOnTitle" : mode === "change" ? "changeMethod" : mode === "codes" ? "newRecoveryCodes" : "twoStep";
+  const description = step === "codes" ? "recoveryCodesTitle" : mode === "codes" ? "newCodesHelp" : "twoStepHelp";
+  const submits = step === "password" || step === "verify";
+
   return (
-    <Card className="max-w-3xl rounded-xl shadow-none">
-      <CardHeader className="p-4 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {isEnabled ? (
-            <ShieldCheck className="h-4 w-4 text-primary" />
-          ) : (
-            <ShieldOff className="h-4 w-4 text-muted-foreground" />
-          )}
-          Two-factor authentication
-        </CardTitle>
-        <CardDescription>
-          {isEnabled
-            ? "A verified second step is required when this account signs in."
-            : "Admin accounts must verify a second sign-in method."}
-        </CardDescription>
+    <Card>
+      <UnsavedChangesGuard isDirty={dirty && step !== "codes"} isSubmitting={busy} />
+      <CardHeader>
+        <CardTitle>{t(title)}</CardTitle>
+        <CardDescription>{t(description)}</CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
-        {isEnabled ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background">
-                {currentMethod === "totp" ? (
-                  <Smartphone className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground">
-                  {currentMethod === "totp" ? "Authenticator app" : "Email verification"}
-                </p>
-                <p className="break-words text-sm text-muted-foreground">
-                  {currentMethod === "totp"
-                    ? "Time-based codes from an authenticator app"
-                    : `Codes sent to ${user.email}`}
-                </p>
-              </div>
-              <span className="shrink-0 text-xs font-medium text-muted-foreground">On</span>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="outline" onClick={() => startSetup("change")} className="min-h-11 flex-1 sm:min-h-9">
-                Change method
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-destructive/25 bg-background">
-                <AlertCircle className="h-4 w-4 text-destructive" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Setup required</p>
-                <p className="text-sm text-muted-foreground">
-                  Verify a method before this account is considered ready.
-                </p>
-              </div>
-            </div>
-            <Button onClick={() => startSetup("enable")} className="min-h-11 shrink-0 sm:min-h-9">
-              Set up two-factor
-            </Button>
-          </div>
-        )}
-      </CardContent>
+      <form
+        method="post"
+        action="/admin/account"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!submits || busy) return;
+          void (step === "password" ? confirmPassword() : verify());
+        }}
+      >
+        <CardContent className="flex flex-col gap-4">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertCircle aria-hidden="true" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {content}
+        </CardContent>
+        <CardFooter className="justify-end">{footer}</CardFooter>
+      </form>
     </Card>
   );
 }

@@ -477,6 +477,20 @@
       "when": 1790189925256,
       "tag": "0067_settings_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1790290000000,
+      "tag": "0068_single_discount_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1790300000000,
+      "tag": "0069_integer_money",
+      "breakpoints": true
     }
   ]
 }

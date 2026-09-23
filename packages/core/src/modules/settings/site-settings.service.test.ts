@@ -125,10 +125,12 @@ describe("site currency settings", () => {
 
   it("locks the code once money-bearing rows exist but still accepts symbol and rate updates", async () => {
     const { db, sqlite } = createSqliteD1Database();
-    sqlite.exec("INSERT INTO products (id, name, price, slug) VALUES ('p1', 'Product', 10, 'product')");
+    sqlite.exec("INSERT INTO products (id, name, price_minor, slug) VALUES ('p1', 'Product', 1000, 'product')");
 
     await expect(saveCurrencySettings(db, { currencyCode: "USD" })).rejects.toBeInstanceOf(ConflictError);
     await saveCurrencySettings(db, { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "120" });
+    sqlite.exec("DELETE FROM product_variants; DELETE FROM products; INSERT INTO shipping_methods (id, name, fee_minor) VALUES ('ship', 'Standard', 6000)");
+    await expect(saveCurrencySettings(db, { currencyCode: "JPY" })).rejects.toBeInstanceOf(ConflictError);
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",
       currencySymbol: "Tk",
@@ -141,41 +143,50 @@ describe("site SEO settings", () => {
   it("returns default-on discovery settings when nothing is saved", async () => {
     const { db } = createSqliteD1Database();
     await expect(getSeoSettings(db)).resolves.toMatchObject({
-      siteTitle: "",
+      homepageTitle: "",
+      socialImage: "",
       discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
       returnPolicy: { enabled: false },
     });
   });
 
-  it("merges saved discovery settings with safe defaults", async () => {
+  it("merges saved discovery settings with safe defaults and drops removed fields", async () => {
     const { db, sqlite } = createSqliteD1Database();
     storeDocument(sqlite, "seo", JSON.stringify({
-      siteTitle: "Store",
+      homepageTitle: "Store",
+      siteTitle: "Old",
+      robotsTxt: "User-agent: *",
       discovery: { sitemap: { products: false }, feeds: { variantStrategy: "bogus" } },
     }));
 
     const seo = await getSeoSettings(db);
-    expect(seo.siteTitle).toBe("Store");
-    expect(seo.discovery.sitemap).toEqual({ ...DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap, products: false });
-    expect(seo.discovery.feeds.variantStrategy).toBe(DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.variantStrategy);
+    expect(seo.homepageTitle).toBe("Store");
+    expect(seo).not.toHaveProperty("siteTitle");
+    expect(seo).not.toHaveProperty("robotsTxt");
+    expect(seo.discovery).toEqual(DEFAULT_SEO_DISCOVERY_SETTINGS);
   });
 
   it("preserves existing nested discovery and return policy details on partial saves", async () => {
     const { db } = createSqliteD1Database();
     await saveSeoSettings(db, {
-      siteTitle: "Store",
-      discovery: { sitemap: { products: false }, feeds: { title: "Catalog" } },
+      homepageTitle: "Store",
+      socialImage: "https://cdn.example.com/social.jpg",
+      discovery: { feeds: { title: "Catalog", productCatalogEnabled: false } },
       returnPolicy: { enabled: true, category: "finite", returnWindowDays: 14 },
     });
     await saveSeoSettings(db, {
-      discovery: { sitemap: { categories: false } },
+      discovery: { feeds: { variantStrategy: "products" } },
       returnPolicy: { returnWindowDays: 30 },
     });
 
     const seo = await getSeoSettings(db);
-    expect(seo.siteTitle).toBe("Store");
-    expect(seo.discovery.sitemap).toMatchObject({ products: false, categories: false });
-    expect(seo.discovery.feeds.title).toBe("Catalog");
+    expect(seo.homepageTitle).toBe("Store");
+    expect(seo.socialImage).toBe("https://cdn.example.com/social.jpg");
+    expect(seo.discovery.feeds).toMatchObject({
+      title: "Catalog",
+      productCatalogEnabled: false,
+      variantStrategy: "products",
+    });
     expect(seo.returnPolicy).toMatchObject({ enabled: true, category: "finite", returnWindowDays: 30 });
   });
 });

@@ -468,21 +468,19 @@ export const OPERATIONS = {
     limits: { response: 16_384 },
   },
 
-  "dashboard.discounts.bulk_delete": {
+  "dashboard.discounts.activate": { revision: "required" },
+  "dashboard.discounts.archive": {
     risk: "destructive",
-    batch: "forbidden",
+    revision: "required",
   },
-  "dashboard.discounts.bulk_restore": { batch: "forbidden" },
   "dashboard.discounts.create": {},
-  "dashboard.discounts.delete": { risk: "destructive" },
-  "dashboard.discounts.delete_permanently": {
-    risk: "destructive",
-    batch: "forbidden",
-  },
   "dashboard.discounts.get": {},
   "dashboard.discounts.list": {},
-  "dashboard.discounts.restore": {},
-  "dashboard.discounts.set_active": { revision: "required" },
+  "dashboard.discounts.pause": { revision: "required" },
+  "dashboard.discounts.preview": {
+    risk: "read",
+    revision: "required",
+  },
   "dashboard.discounts.update": { revision: "required" },
 
   "dashboard.fraud_lookup.run": {
@@ -917,21 +915,6 @@ export const OPERATIONS = {
     revision: "required",
     limits: { request: 16_384, response: 16_384 },
   },
-
-  "dashboard.promotions.activate": { revision: "required" },
-  "dashboard.promotions.archive": {
-    risk: "destructive",
-    revision: "required",
-  },
-  "dashboard.promotions.create": {},
-  "dashboard.promotions.get": {},
-  "dashboard.promotions.list": {},
-  "dashboard.promotions.pause": { revision: "required" },
-  "dashboard.promotions.preview": {
-    risk: "read",
-    revision: "required",
-  },
-  "dashboard.promotions.update": { revision: "required" },
 
   "dashboard.scanner_device.create_link": {
     exposure: "device",

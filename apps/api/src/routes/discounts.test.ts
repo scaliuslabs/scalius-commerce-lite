@@ -1,29 +1,20 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DiscountType } from "@scalius/database/schema";
+import { ValidationError } from "@scalius/core/errors";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
-  isDiscountValid: vi.fn(),
-  calculateDiscountAmount: vi.fn(),
-  evaluateStorefrontPromotionCode: vi.fn(),
-  resolvePromotionCustomerIdByPhone: vi.fn(),
+  quoteStorefrontDiscount: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("@scalius/core/modules/discounts/discounts.eligibility", () => ({
-  isDiscountValid: mocks.isDiscountValid,
-  calculateDiscountAmount: mocks.calculateDiscountAmount,
-}));
-
 vi.mock("@scalius/core/modules/promotions", () => ({
-  evaluateStorefrontPromotionCode: mocks.evaluateStorefrontPromotionCode,
-  resolvePromotionCustomerIdByPhone: mocks.resolvePromotionCustomerIdByPhone,
+  quoteStorefrontDiscount: mocks.quoteStorefrontDiscount,
 }));
 
 import { discountRoutes } from "./discounts";
@@ -43,186 +34,79 @@ function createTestApp() {
   return { app, db };
 }
 
-describe("public discount routes", () => {
+const post = (app: OpenAPIHono<{ Bindings: Env }>, body: unknown) => app.request("/api/v1/discounts/validate", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+describe("public discount validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.evaluateStorefrontPromotionCode.mockResolvedValue({ matched: false });
-    mocks.resolvePromotionCustomerIdByPhone.mockResolvedValue(null);
+    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", decimalPlaces: 2 });
   });
 
-  it("validates discount codes through a JSON POST body", async () => {
+  it("quotes the code with the cart in minor units and returns the total savings", async () => {
     const { app, db } = createTestApp();
-    const cartItems = [
-      { id: "prod_1", variantId: "var_1", price: 1200, quantity: 2 },
-      { id: "prod_2", price: 500, quantity: 1 },
-    ];
-    const discount = {
-      id: "disc_1",
-      code: "SAVE10",
-      type: DiscountType.AMOUNT_OFF_ORDER,
-      discountValue: 10,
-      combineWithProductDiscounts: false,
-      combineWithOrderDiscounts: false,
-      combineWithShippingDiscounts: true,
-    };
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳", decimalPlaces: 2 });
-    mocks.isDiscountValid.mockResolvedValue({
-      valid: true,
-      discount,
-      applicableProductIds: ["prod_1"],
+    mocks.quoteStorefrontDiscount.mockResolvedValue({
+      applied: {
+        totalDiscountMinor: 36_000,
+        discounts: [
+          { promotionId: "promo_code", promotionCode: "SAVE10", totalDiscountMinor: 30_000 },
+          { promotionId: "promo_auto", promotionCode: null, totalDiscountMinor: 6_000 },
+        ],
+        allocations: [],
+      },
     });
-    mocks.calculateDiscountAmount.mockResolvedValue(250);
 
-    const response = await app.request("/api/v1/discounts/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code: "SAVE10",
-        total: 2900,
-        shippingCost: 80,
-        customerPhone: "+8801711111111",
-        items: cartItems,
-      }),
+    const response = await post(app, {
+      code: "save10",
+      items: [{ id: "prod_1", variantId: "var_1", price: 1500, quantity: 2 }],
+      shippingCost: 60,
+      customerPhone: "+8801712345678",
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.isDiscountValid).toHaveBeenCalledWith(
-      db,
-      "SAVE10",
-      2900,
-      cartItems,
-      "+8801711111111",
-      "৳",
-      "BDT",
-    );
-    expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
-      db,
-      discount,
-      2980,
-      cartItems,
-      80,
-      ["prod_1"],
-      "BDT",
-      undefined,
-    );
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(response.json()).resolves.toEqual({
       success: true,
       data: {
         valid: true,
-        discountAmount: 250,
-        discount: {
-          id: "disc_1",
-          code: "SAVE10",
-        },
+        discount: { id: "promo_code", code: "SAVE10", type: "code", discountValue: 360 },
+        discountAmount: 360,
+      },
+    });
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(db, {
+      code: "save10",
+      customerPhone: "+8801712345678",
+      cart: {
+        currencyCode: "BDT",
+        lines: [{ id: "cart:0:var_1", productId: "prod_1", variantId: "var_1", unitPriceMinor: 150_000, quantity: 2 }],
+        shippingAmountMinor: 6_000,
       },
     });
   });
 
-  it("preserves the structured phone requirement for one-use codes", async () => {
+  it("returns the buyer-facing reason when the code does not apply", async () => {
     const { app } = createTestApp();
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳", decimalPlaces: 2 });
-    mocks.isDiscountValid.mockResolvedValue({
-      valid: false,
-      error: "Enter your phone number to check this one-use discount",
-      requiresCustomerPhone: true,
-    });
-
-    const response = await app.request("/api/v1/discounts/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "ONCE" }),
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      success: true,
-      data: {
-        valid: false,
-        requiresCustomerPhone: true,
-      },
-    });
+    mocks.quoteStorefrontDiscount.mockRejectedValue(new ValidationError("This discount has expired."));
+    const response = await post(app, { code: "OLD", items: [{ id: "prod_1", variantId: "var_1", price: 10, quantity: 1 }] });
+    await expect(response.json()).resolves.toEqual({ success: true, data: { valid: false, error: "This discount has expired." } });
   });
 
-  it("uses typed promotion authority without consulting the legacy evaluator", async () => {
+  it("asks for a cart refresh instead of guessing when variants are missing", async () => {
     const { app } = createTestApp();
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳", decimalPlaces: 2 });
-    mocks.evaluateStorefrontPromotionCode.mockResolvedValue({
-      matched: true,
-      valid: true,
-      promotion: { id: "promo_1" },
-      evaluation: {
-        evaluatorVersion: 1,
-        applied: {
-          promotionId: "promo_1",
-          promotionRevision: 2,
-          promotionName: "Typed discount",
-          method: "code",
-          promotionCode: "SAVE10",
-          totalDiscountMinor: 2500,
-          allocations: [],
-        },
-        rejected: [],
-        unmatchedCodes: [],
-      },
-    });
-
-    const response = await app.request("/api/v1/discounts/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code: " save10 ",
-        total: 250,
-        customerPhone: "+8801711111111",
-        items: [{ id: "prod_1", variantId: "var_1", price: 250, quantity: 1 }],
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.isDiscountValid).not.toHaveBeenCalled();
-    await expect(response.json()).resolves.toMatchObject({
+    const response = await post(app, { code: "SAVE10", items: [{ id: "prod_1", price: 10, quantity: 1 }] });
+    await expect(response.json()).resolves.toEqual({
       success: true,
-      data: {
-        valid: true,
-        discountAmount: 25,
-        discount: { id: "promo_1", code: "SAVE10", type: "promotion" },
-      },
+      data: { valid: false, error: "Refresh the cart before applying this discount." },
     });
+    expect(mocks.quoteStorefrontDiscount).not.toHaveBeenCalled();
   });
 
   it("does not validate discounts from query-string GET requests", async () => {
     const { app } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/discounts/validate?code=SAVE10&customerPhone=%2B8801711111111",
-    );
-
+    const response = await app.request("/api/v1/discounts/validate?code=SAVE10&customerPhone=%2B8801712345678");
     expect(response.status).toBe(404);
-    expect(mocks.isDiscountValid).not.toHaveBeenCalled();
-    expect(mocks.calculateDiscountAmount).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    { total: -1 },
-    { shippingCost: -1 },
-    { items: [{ id: "prod_1", price: -1, quantity: 1 }] },
-    { items: [{ id: "prod_1", price: 10, quantity: 0 }] },
-    { items: [{ id: "prod_1", price: 10, quantity: 1.5 }] },
-    { total: null },
-    { items: [{ id: "prod_1", price: null, quantity: 1 }] },
-    { items: [{ id: "prod_1", price: 10, quantity: "1" }] },
-    { total: 1_000_000_000_001 },
-    { shippingCost: 1_000_000_000_001 },
-    { items: [{ id: "prod_1", price: 1_000_000_000_001, quantity: 1 }] },
-  ])("rejects invalid or unbounded cart facts: %o", async (invalid) => {
-    const { app } = createTestApp();
-    const response = await app.request("/api/v1/discounts/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "SAVE10", ...invalid }),
-    });
-
-    expect(response.status).toBe(400);
-    expect(mocks.isDiscountValid).not.toHaveBeenCalled();
-    expect(mocks.calculateDiscountAmount).not.toHaveBeenCalled();
+    expect(mocks.quoteStorefrontDiscount).not.toHaveBeenCalled();
   });
 });

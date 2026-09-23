@@ -1,119 +1,194 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckSquare2, FolderInput, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
+import { FolderInput, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { capabilityAccept, type MediaCapability, type MediaFilterOptions, type MediaFolder, type MediaLibraryView } from "../types";
-import { MEDIA_SORTS } from "../route-state";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
+import { resourceMessages } from "~/i18n/resource";
+import type { MediaCapability, MediaFilterOptions, MediaFolder, MediaLibraryView } from "../types";
+import { MEDIA_SORTS, type MediaSortKey } from "../route-state";
+import { FolderBrowser } from "./FolderBrowser";
 
 interface MediaFilterBarProps {
   capability: MediaCapability;
   filters: MediaFilterOptions;
   view: MediaLibraryView;
   selectedCount: number;
-  visibleCount: number;
   selectableCount: number;
   selectionMode: boolean;
   folders: MediaFolder[];
+  currentFolderId: string | null | "all";
   isMutating: boolean;
   allowSelection?: boolean;
   allowManagement: boolean;
   onSearch: (value: string) => void;
   onFiltersChange: (updates: Partial<MediaFilterOptions>) => void;
-  onUpload: (files: FileList | null) => Promise<void>;
+  /** Opens the file chooser; omitted where uploads don't apply (Trash). */
+  onUploadClick?: () => void;
+  onFolderSelect: (id: string | null | "all") => void;
+  onFolderCreate: (name: string) => Promise<MediaFolder>;
+  onFolderRename: (folder: MediaFolder, name: string) => Promise<void>;
+  onFolderDelete: (folder: MediaFolder) => Promise<void>;
   onBeginSelection: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onCancelSelection?: () => void;
   onMove: (folderId: string | null) => void;
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
-  onAddSelected?: () => void;
 }
 
+const SORT_LABELS: Record<MediaSortKey, "sortNewest" | "sortOldest" | "sortLargest" | "sortSmallest" | "sortNameAsc" | "sortNameDesc"> = {
+  newest: "sortNewest",
+  oldest: "sortOldest",
+  largest: "sortLargest",
+  smallest: "sortSmallest",
+  "name-asc": "sortNameAsc",
+  "name-desc": "sortNameDesc",
+};
+
+/** Search, folder, type, sort, Select and Upload in one row; the bulk bar below it while selecting. */
 export function MediaFilterBar(props: MediaFilterBarProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const t = useMessages(mediaMessages);
+  const r = useMessages(resourceMessages);
   const selectTriggerRef = useRef<HTMLButtonElement>(null);
   const wasSelectingRef = useRef(props.selectionMode);
   const [search, setSearch] = useState(props.filters.search);
-  const [targetFolder, setTargetFolder] = useState("");
-  const sortValue = Object.entries(MEDIA_SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
-
-  useEffect(() => {
-    if (props.selectedCount === 0) setTargetFolder("");
-  }, [props.selectedCount]);
+  const sortValue = (Object.entries(MEDIA_SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest") as MediaSortKey;
+  const selecting = props.allowSelection !== false && props.selectionMode;
+  const canAct = props.allowManagement && props.selectedCount > 0;
 
   useEffect(() => {
     setSearch(props.filters.search);
   }, [props.filters.search]);
 
   useEffect(() => {
-    if (wasSelectingRef.current && !props.selectionMode) {
-      selectTriggerRef.current?.focus();
-    }
+    if (wasSelectingRef.current && !props.selectionMode) selectTriggerRef.current?.focus();
     wasSelectingRef.current = props.selectionMode;
   }, [props.selectionMode]);
 
   return (
-    <div className="border-b bg-background px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {props.view === "ready" && (
-          <>
-            <input ref={inputRef} className="sr-only" type="file" multiple accept={capabilityAccept(props.capability)} onChange={(event) => { void props.onUpload(event.target.files); event.currentTarget.value = ""; }} />
-            <Button type="button" size="sm" className="h-11 sm:h-8" onClick={() => inputRef.current?.click()}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
-          </>
-        )}
-        <div className="relative min-w-44 flex-1 basis-52 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input aria-label="Search media assets" className="h-11 pl-8 text-[13px] sm:h-8" value={search} placeholder="Search assets" onChange={(event) => { setSearch(event.target.value); props.onSearch(event.target.value); }} />
+    <div className="border-b">
+      <div className="flex flex-wrap items-center gap-2 p-2">
+        <div className="relative min-w-48 flex-1 basis-56">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            type="search"
+            aria-label={t("searchFiles")}
+            placeholder={t("searchFiles")}
+            value={search}
+            // eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon
+            className="pl-8"
+            onChange={(event) => {
+              setSearch(event.target.value);
+              props.onSearch(event.target.value);
+            }}
+          />
         </div>
-        {props.capability === "both" && (
-          <Select value={props.filters.kind ?? "all"} onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : value as "image" | "video" })}>
-            <SelectTrigger aria-label="Filter by media type" className="h-11 w-28 text-xs sm:h-8"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="image">Images</SelectItem><SelectItem value="video">Videos</SelectItem></SelectContent>
+        <FolderBrowser
+          folders={props.folders}
+          currentFolderId={props.currentFolderId}
+          onFolderSelect={props.onFolderSelect}
+          onFolderCreate={props.onFolderCreate}
+          onFolderRename={props.onFolderRename}
+          onFolderDelete={props.onFolderDelete}
+        />
+        {props.capability === "both" ? (
+          <Select value={props.filters.kind ?? "all"} onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : (value as "image" | "video") })}>
+            <SelectTrigger aria-label={t("fileType")} className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allTypes")}</SelectItem>
+              <SelectItem value="image">{t("images")}</SelectItem>
+              <SelectItem value="video">{t("videos")}</SelectItem>
+            </SelectContent>
           </Select>
-        )}
-        <Select value={sortValue} onValueChange={(value) => { const sort = MEDIA_SORTS[value as keyof typeof MEDIA_SORTS]; props.onFiltersChange({ sortBy: sort[0], sortOrder: sort[1] }); }}>
-          <SelectTrigger aria-label="Sort media assets" className="h-11 w-28 text-xs sm:h-8"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="largest">Largest</SelectItem><SelectItem value="smallest">Smallest</SelectItem><SelectItem value="name-asc">Name A–Z</SelectItem><SelectItem value="name-desc">Name Z–A</SelectItem></SelectContent>
+        ) : null}
+        <Select
+          value={sortValue}
+          onValueChange={(value) => {
+            const [sortBy, sortOrder] = MEDIA_SORTS[value as MediaSortKey];
+            props.onFiltersChange({ sortBy, sortOrder });
+          }}
+        >
+          <SelectTrigger aria-label={t("sortBy")} className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(SORT_LABELS) as MediaSortKey[]).map((key) => (
+              <SelectItem key={key} value={key}>{t(SORT_LABELS[key])}</SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-
-        {!props.selectionMode && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.visibleCount} shown</span>}
-        {props.allowSelection !== false && !props.selectionMode && <Button ref={selectTriggerRef} type="button" variant="outline" size="sm" className="h-11 text-xs sm:h-8" onClick={props.onBeginSelection}>Select</Button>}
+        {props.allowSelection !== false && !props.selectionMode ? (
+          <Button ref={selectTriggerRef} type="button" variant="outline" onClick={props.onBeginSelection}>
+            {t("select")}
+          </Button>
+        ) : null}
+        {props.onUploadClick ? (
+          <Button type="button" variant={props.allowManagement ? "default" : "outline"} onClick={props.onUploadClick}>
+            <Upload aria-hidden="true" />
+            {t("upload")}
+          </Button>
+        ) : null}
       </div>
 
-      {props.allowSelection !== false && props.selectionMode && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-md border bg-muted/35 p-1.5" role="toolbar" aria-label="Selected asset actions" aria-busy={props.isMutating || undefined}>
-          <div className="mr-auto flex min-h-11 items-center gap-2 px-1.5 text-xs sm:min-h-7" aria-live="polite" aria-atomic="true">
-            <CheckSquare2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="font-medium tabular-nums">{props.selectedCount} selected</span>
-            <span className="hidden text-muted-foreground sm:inline">Shift-click for a range{props.onCancelSelection ? " · Esc to cancel" : ""}</span>
-          </div>
-
-          {props.selectableCount > 0 && props.selectedCount < props.selectableCount && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onSelectAll}>Select all shown</Button>}
-          {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
-          {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-11 px-2 text-xs sm:h-7" onClick={props.onCancelSelection}>Cancel</Button>}
-
-          {props.allowManagement && props.selectedCount > 0 && props.view === "ready" && (
+      {selecting ? (
+        <div
+          role="toolbar"
+          aria-label={t("bulkActions")}
+          aria-busy={props.isMutating || undefined}
+          className="flex flex-wrap items-center gap-2 border-t bg-muted px-3 py-1.5"
+        >
+          <span className="mr-auto text-body font-medium tabular-nums" aria-live="polite" aria-atomic="true">
+            {r("selected", { count: props.selectedCount })}
+          </span>
+          {props.selectableCount > 0 && props.selectedCount < props.selectableCount ? (
+            <Button type="button" variant="ghost" size="sm" onClick={props.onSelectAll}>{t("selectAllShown")}</Button>
+          ) : null}
+          {props.selectedCount > 0 ? (
+            <Button type="button" variant="ghost" size="sm" onClick={props.onClearSelection}>{r("clearSelection")}</Button>
+          ) : null}
+          {canAct && props.view === "ready" ? (
             <>
-              <div className="flex items-center">
-                <Select value={targetFolder} onValueChange={setTargetFolder}>
-                  <SelectTrigger aria-label="Destination folder" className="h-11 w-32 rounded-r-none text-xs sm:h-7"><SelectValue placeholder="Move to folder" /></SelectTrigger>
-                  <SelectContent><SelectItem value="root">Unfiled</SelectItem>{props.folders.map((folder) => <SelectItem value={folder.id} key={folder.id}>{folder.name}</SelectItem>)}</SelectContent>
-                </Select>
-                <Button type="button" variant="outline" size="sm" className="h-11 rounded-l-none border-l-0 px-2 text-xs sm:h-7" disabled={!targetFolder || props.isMutating} onClick={() => props.onMove(targetFolder === "root" ? null : targetFolder)}><FolderInput className="mr-1 h-3.5 w-3.5" />Move</Button>
-              </div>
-              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1 h-3.5 w-3.5" />Move to trash</Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="sm" disabled={props.isMutating}>
+                    <FolderInput aria-hidden="true" />
+                    {t("moveToFolder")}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => props.onMove(null)}>{t("unfiled")}</DropdownMenuItem>
+                  {props.folders.map((folder) => (
+                    <DropdownMenuItem key={folder.id} onSelect={() => props.onMove(folder.id)}>{folder.name}</DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}>
+                <Trash2 aria-hidden="true" />
+                {r("moveToTrash")}
+              </Button>
             </>
-          )}
-          {props.allowManagement && props.selectedCount > 0 && props.view === "trash" && (
+          ) : null}
+          {canAct && props.view === "trash" ? (
             <>
-              <Button type="button" variant="outline" size="sm" className="h-11 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1 h-3.5 w-3.5" />Restore</Button>
-              <Button type="button" variant="destructive" size="sm" className="h-11 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete permanently</Button>
+              <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}>
+                <RotateCcw aria-hidden="true" />
+                {r("restore")}
+              </Button>
+              <Button type="button" variant="destructive" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}>
+                {r("deletePermanently")}
+              </Button>
             </>
-          )}
-          {props.onAddSelected && <Button type="button" size="sm" className="h-11 px-2.5 text-xs sm:h-7" disabled={!props.selectedCount || props.isMutating} onClick={props.onAddSelected}>Add {props.selectedCount}</Button>}
+          ) : null}
+          {props.onCancelSelection ? (
+            <Button type="button" variant="ghost" size="sm" onClick={props.onCancelSelection}>{r("cancel")}</Button>
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

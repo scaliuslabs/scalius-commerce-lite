@@ -1,36 +1,9 @@
 import type { ReadinessStatus } from "@scalius/shared/readiness";
-import { Truck, Package } from "lucide-react";
+import { Package } from "lucide-react";
 import {
   OfficialProviderMark,
   type ProviderMarkId,
 } from "~/components/admin/settings/provider-marks";
-
-/** Visual config for each provider type: icon, color scheme, description */
-export const PROVIDER_VISUAL: Record<
-  string,
-  {
-    icon: typeof Truck;
-    bgClass: string;
-    iconClass: string;
-    badgeClass: string;
-    description: string;
-  }
-> = {
-  pathao: {
-    icon: Truck,
-    bgClass: "bg-orange-100 dark:bg-orange-950/40",
-    iconClass: "text-orange-600 dark:text-orange-400",
-    badgeClass: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 border-orange-200 dark:border-orange-900",
-    description: "Ride-sharing & delivery platform",
-  },
-  steadfast: {
-    icon: Package,
-    bgClass: "bg-blue-100 dark:bg-blue-950/40",
-    iconClass: "text-blue-600 dark:text-blue-400",
-    badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border-blue-200 dark:border-blue-900",
-    description: "Courier & logistics service",
-  },
-};
 
 /** Provider type options */
 export type DeliveryProviderType = "pathao" | "steadfast";
@@ -40,16 +13,11 @@ const DELIVERY_PROVIDER_MARKS: Record<DeliveryProviderType, ProviderMarkId> = {
   steadfast: "steadfast",
 };
 
-export function getDeliveryProviderMarkId(type: string): ProviderMarkId | null {
+function getDeliveryProviderMarkId(type: string): ProviderMarkId | null {
   return type in DELIVERY_PROVIDER_MARKS
     ? DELIVERY_PROVIDER_MARKS[type as DeliveryProviderType]
     : null;
 }
-
-export const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
-  { value: "pathao", label: "Pathao" },
-  { value: "steadfast", label: "Steadfast" },
-];
 
 /** Setup lifecycle position. The readiness verdict is the shared `status`. */
 export type DeliveryProviderLifecycle =
@@ -154,24 +122,6 @@ export function getProviderReadinessLabel(
   readiness: Pick<DeliveryProviderReadiness, "lifecycle">,
 ) {
   return LIFECYCLE_LABELS[readiness.lifecycle] ?? "Draft";
-}
-
-export function getProviderReadinessBadgeClass(
-  readiness: Pick<DeliveryProviderReadiness, "lifecycle" | "canCreateShipment">,
-) {
-  if (!readiness.canCreateShipment || readiness.lifecycle === "blocked") {
-    return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
-  }
-  if (readiness.lifecycle === "active") {
-    return "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300";
-  }
-  if (readiness.lifecycle === "tested") {
-    return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
-  }
-  if (readiness.lifecycle === "configured") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-  }
-  return "text-muted-foreground";
 }
 
 export function getProviderReadinessMessage(

@@ -2,26 +2,14 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
-import {
-    DEFAULT_CURRENCY,
-    getDecimalPlaces,
-    normalizeSupportedCurrencyCode,
-} from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import {
     buildStorefrontTaxAllocationLineId,
     calculateStorefrontTaxQuote,
-    fromMinorUnits,
-    toMinorUnits,
-    type StorefrontDiscountType,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
-import {
-    evaluateStorefrontPromotionCode,
-    resolvePromotionCustomerIdByPhone,
-    type AppliedPromotion,
-    type PromotionCheckoutSnapshot,
-} from "../promotions";
+import { quoteStorefrontDiscount } from "../promotions";
 import {
     shippingMethods,
     PaymentMethod,
@@ -58,7 +46,7 @@ export interface StorefrontShippingMethodRow {
     id: string;
     name: string;
     description: string | null;
-    fee: number;
+    feeMinor: number;
     isActive: boolean;
     deletedAt: Date | number | null;
 }
@@ -68,11 +56,10 @@ export interface StorefrontDeliveryPreflightInput {
     zone: string;
     area?: string | null;
     shippingMethodId?: string | null;
-    currencyCode?: string | null;
 }
 
 export interface StorefrontDeliveryPreflightResult {
-    shippingCharge: number;
+    shippingMinor: number;
     shippingMethod: StorefrontOrderShippingMethodSnapshot;
     cityName: string;
     zoneName: string;
@@ -97,28 +84,6 @@ function markTrustedStorefrontDeliveryPreflightResult(
         enumerable: false,
     });
     return result;
-}
-
-function buildPromotionTaxAllocation(applied: AppliedPromotion) {
-    const lineAmounts = new Map<string, number>();
-    let shippingMinor = 0;
-    for (const allocation of applied.allocations) {
-        if (allocation.target === "shipping") {
-            shippingMinor += allocation.discountAmountMinor;
-            continue;
-        }
-        if (!allocation.lineId) {
-            throw new ValidationError("Promotion line allocation is missing its checkout line.");
-        }
-        lineAmounts.set(
-            allocation.lineId,
-            (lineAmounts.get(allocation.lineId) ?? 0) + allocation.discountAmountMinor,
-        );
-    }
-    return {
-        lines: [...lineAmounts.entries()].map(([lineId, amountMinor]) => ({ lineId, amountMinor })),
-        shippingMinor,
-    };
 }
 
 export function isTrustedStorefrontDeliveryPreflightResult(
@@ -166,7 +131,7 @@ export function selectActiveStorefrontShippingMethodRowsByIds(
             id: shippingMethods.id,
             name: shippingMethods.name,
             description: shippingMethods.description,
-            fee: shippingMethods.fee,
+            feeMinor: shippingMethods.feeMinor,
             isActive: shippingMethods.isActive,
             deletedAt: shippingMethods.deletedAt,
         })
@@ -187,7 +152,6 @@ export function resolveStorefrontDeliveryPreflightFromRows(
     locationRows: readonly ActiveDeliveryLocationRow[],
     shippingMethodRows: readonly StorefrontShippingMethodRow[],
 ): StorefrontDeliveryPreflightResult {
-    const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode) ?? DEFAULT_CURRENCY.code;
     const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
 
     const shippingMethod = shippingMethodRows[0] ?? null;
@@ -201,7 +165,7 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         throw new ValidationError("A valid active shipping method is required for this order.");
     }
 
-    const methodFee = Number(shippingMethod.fee);
+    const methodFeeMinor = shippingMethod.feeMinor;
     const methodName = typeof shippingMethod.name === "string"
         ? shippingMethod.name.trim()
         : "";
@@ -211,28 +175,23 @@ export function resolveStorefrontDeliveryPreflightFromRows(
             ? shippingMethod.description.trim() || null
             : null;
     if (
-        !Number.isFinite(methodFee)
-        || methodFee < 0
+        !Number.isSafeInteger(methodFeeMinor)
+        || methodFeeMinor < 0
         || !methodName
         || methodName.length > 100
         || (methodDescription?.length ?? 0) > 255
     ) {
         throw new ValidationError("Selected shipping method is misconfigured.");
     }
-    const roundedMethodFee = roundPrice(methodFee, currencyCode);
     const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct;
-    const shippingCharge = shippingFeeWaived ? 0 : roundedMethodFee;
 
     return markTrustedStorefrontDeliveryPreflightResult({
-        shippingCharge,
+        shippingMinor: shippingFeeWaived ? 0 : methodFeeMinor,
         shippingMethod: {
             id: shippingMethod.id,
             name: methodName,
             description: methodDescription,
-            baseAmountMinor: toMinorUnits(
-                roundedMethodFee,
-                getDecimalPlaces(currencyCode),
-            ),
+            baseAmountMinor: methodFeeMinor,
             feeWaived: shippingFeeWaived,
         },
         cityName: locationNames.cityName,
@@ -270,30 +229,11 @@ export async function validateStorefrontDeliveryPreflight(
  * @param storefrontDb - The D1 database instance (from c.get("db"))
  * @param data - Parsed and validated order input
  * @param requestUrl - The original request URL
- * @param isDiscountValid - Discount validation function (from discounts route)
- * @param calculateDiscountAmount - Discount calculation function (from discounts route)
  */
 export async function createStorefrontOrder(
     storefrontDb: Database,
     data: CreateStorefrontOrderInput,
     requestUrl: string,
-    isDiscountValid: (
-        db: Database,
-        code: string,
-        total: number,
-        items: unknown[],
-        customerPhone: string,
-        customerId?: string,
-    ) => Promise<unknown>,
-    calculateDiscountAmount: (
-        db: Database,
-        discount: unknown,
-        total: number,
-        items: unknown[],
-        shippingCost: number,
-        applicableProductIds?: Set<string>,
-        hasProductRestrictions?: boolean,
-    ) => number | Promise<number>,
     identity?: CreateStorefrontOrderIdentity,
     prevalidatedCart?: StorefrontCartValidationResult,
     prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
@@ -301,13 +241,6 @@ export async function createStorefrontOrder(
     requestCurrency: { code: string; decimalPlaces: number } = {
         code: DEFAULT_CURRENCY.code,
         decimalPlaces: DEFAULT_CURRENCY.decimalPlaces,
-    },
-    promotionAuthority: {
-        evaluateCode: typeof evaluateStorefrontPromotionCode;
-        resolveCustomerIdByPhone: typeof resolvePromotionCustomerIdByPhone;
-    } = {
-        evaluateCode: evaluateStorefrontPromotionCode,
-        resolveCustomerIdByPhone: resolvePromotionCustomerIdByPhone,
     },
     checkoutPolicySnapshot?: StorefrontCheckoutPolicySnapshot,
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
@@ -351,7 +284,6 @@ export async function createStorefrontOrder(
     // ------------------------------------------------------------------
     // 1. Batched Reads
     // ------------------------------------------------------------------
-    const normalizedDiscountCode = data.discountCode?.trim().toUpperCase();
     if (prevalidatedDelivery && !isTrustedStorefrontDeliveryPreflightResult(prevalidatedDelivery)) {
         throw new ValidationError("Checkout delivery validation could not be trusted. Please retry checkout.");
     }
@@ -382,9 +314,8 @@ export async function createStorefrontOrder(
 
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
-    const serverItemTotal = cartValidation.subtotal;
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
-    const verifiedShippingCharge = deliveryPreflight.shippingCharge;
+    const verifiedShippingMinor = deliveryPreflight.shippingMinor;
 
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
@@ -397,7 +328,7 @@ export async function createStorefrontOrder(
             productId: validatedItem.productId,
             variantId: validatedItem.variantId,
             quantity: validatedItem.quantity,
-            price: validatedItem.unitPrice,
+            unitPriceMinor: validatedItem.unitPriceMinor,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,
             inventoryTracked: validatedItem.inventoryTracked,
@@ -407,120 +338,24 @@ export async function createStorefrontOrder(
     });
 
     // ------------------------------------------------------------------
-    // DISCOUNTS VERIFICATION
+    // DISCOUNT: the typed code (fails closed) against active automatic ones
     // ------------------------------------------------------------------
-    let verifiedDiscountAmount = 0;
-    let appliedDiscount: { discountId: string; revision: number } | null = null;
-    let discountType: StorefrontDiscountType | null = null;
-    let applicableProductIds: Set<string> | undefined;
-    let promotionSnapshot: PromotionCheckoutSnapshot | null = null;
-    if (normalizedDiscountCode) {
-        const discountItems = cartValidation.items.map((item) => ({
-            id: item.productId,
-            price: item.unitPrice,
-            quantity: item.quantity,
-            variantId: item.variantId,
-        }));
-        const promotionCustomerId = accountOwnerCustomer?.id
-            ?? await promotionAuthority.resolveCustomerIdByPhone(storefrontDb, data.customerPhone);
-        const promotionCart = {
+    const discount = await quoteStorefrontDiscount(storefrontDb, {
+        code: data.discountCode,
+        customerId: accountOwnerCustomer?.id,
+        customerPhone: data.customerPhone,
+        cart: {
             currencyCode: requestCurrency.code,
             lines: preparedItems.map((item) => ({
                 id: item.taxAllocationLineId,
                 productId: item.productId,
                 variantId: item.variantId,
-                unitPriceMinor: toMinorUnits(item.price, requestCurrency.decimalPlaces),
+                unitPriceMinor: item.unitPriceMinor,
                 quantity: item.quantity,
             })),
-            shippingAmountMinor: toMinorUnits(verifiedShippingCharge, requestCurrency.decimalPlaces),
-            evaluatedAtEpochSeconds: Math.floor(Date.now() / 1_000),
-        };
-        const promotionResolution = await promotionAuthority.evaluateCode(storefrontDb, {
-            code: normalizedDiscountCode,
-            cart: promotionCart,
-            customerId: promotionCustomerId,
-        });
-        if (promotionResolution.matched) {
-            if (!promotionResolution.valid) {
-                throw new ValidationError(promotionResolution.message);
-            }
-            verifiedDiscountAmount = fromMinorUnits(
-                promotionResolution.evaluation.applied.totalDiscountMinor,
-                requestCurrency.decimalPlaces,
-            );
-            const { evaluatedAtEpochSeconds: _evaluatedAtEpochSeconds, ...commitCart } = promotionCart;
-            promotionSnapshot = {
-                cart: {
-                    ...commitCart,
-                    submittedCodes: [normalizedDiscountCode],
-                },
-                applied: promotionResolution.evaluation.applied,
-            };
-        } else {
-            // Explicit compatibility boundary: globally unique typed codes are
-            // always handled above; only an unknown typed code may fall back to
-            // the legacy discount authority.
-            const validationResponse = await isDiscountValid(
-                storefrontDb,
-                normalizedDiscountCode,
-                serverItemTotal,
-                discountItems,
-                data.customerPhone,
-                accountOwnerCustomer?.id,
-            );
-
-            const validResult = validationResponse as Record<string, unknown> | null;
-            if (validResult && validResult.valid && validResult.discount) {
-            const validatedDiscount = validResult.discount as {
-                id?: string;
-                revision?: number;
-                type?: StorefrontDiscountType;
-            };
-            if (
-                typeof validatedDiscount.id !== "string" ||
-                !validatedDiscount.id.trim() ||
-                typeof validatedDiscount.revision !== "number" ||
-                !Number.isSafeInteger(validatedDiscount.revision) ||
-                validatedDiscount.revision < 1 ||
-                !["amount_off_products", "amount_off_order", "free_shipping"].includes(
-                    validatedDiscount.type ?? "",
-                )
-            ) {
-                throw new ValidationError("The discount configuration is invalid.");
-            }
-            appliedDiscount = { discountId: validatedDiscount.id, revision: validatedDiscount.revision };
-            discountType = validatedDiscount.type!;
-            let hasProductRestrictions = false;
-            if (validatedDiscount.type === "amount_off_products") {
-                hasProductRestrictions = validResult.hasProductRestrictions === true;
-                if (
-                    !hasProductRestrictions ||
-                    !(validResult.applicableProductIds instanceof Set)
-                ) {
-                    throw new ValidationError("The product discount scope could not be verified.");
-                }
-                applicableProductIds = validResult.applicableProductIds as Set<string>;
-            }
-            verifiedDiscountAmount = await calculateDiscountAmount(
-                storefrontDb,
-                validResult.discount,
-                serverItemTotal + verifiedShippingCharge,
-                discountItems,
-                verifiedShippingCharge,
-                applicableProductIds,
-                hasProductRestrictions,
-            );
-            } else {
-                const rejectionReason =
-                    typeof validResult?.error === "string" &&
-                    validResult.error.length > 0 &&
-                    validResult.error.length <= 200
-                        ? validResult.error
-                        : `Discount code ${normalizedDiscountCode} is invalid or expired.`;
-                throw new ValidationError(rejectionReason);
-            }
-        }
-    }
+            shippingAmountMinor: verifiedShippingMinor,
+        },
+    });
     const taxQuoteInput = {
         destination: {
             city: data.city,
@@ -534,24 +369,17 @@ export async function createStorefrontOrder(
             lineId: item.taxAllocationLineId,
             productId: item.productId,
             variantId: item.variantId,
-            unitPrice: item.price,
+            unitPriceMinor: item.unitPriceMinor,
             quantity: item.quantity,
             taxClassId: item.taxClassId,
         })),
-        shippingAmount: verifiedShippingCharge,
-        discountAmount: verifiedDiscountAmount,
-        discountType,
-        applicableProductIds: applicableProductIds ? [...applicableProductIds] : undefined,
-        promotionDiscountAllocation: promotionSnapshot
-            ? buildPromotionTaxAllocation(promotionSnapshot.applied)
-            : undefined,
+        shippingMinor: verifiedShippingMinor,
+        promotionDiscountAllocation: discount.taxAllocation,
         currency: requestCurrency,
     };
     const taxQuote = taxAuthoritySnapshot
         ? await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput, taxAuthoritySnapshot)
         : await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput);
-    const normalizedDiscountAmount = fromMinorUnits(taxQuote.discountMinor, taxQuote.decimalPlaces);
-    const totalAmount = fromMinorUnits(taxQuote.totalMinor, taxQuote.decimalPlaces);
 
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
@@ -591,14 +419,11 @@ export async function createStorefrontOrder(
             zoneName: deliveryPreflight.zoneName,
             areaName: deliveryPreflight.areaName,
             notes: data.notes,
-            totalAmount,
-            shippingCharge: verifiedShippingCharge,
             shippingMethodId: deliveryPreflight.shippingMethod.id,
             shippingMethodName: deliveryPreflight.shippingMethod.name,
             shippingMethodDescription: deliveryPreflight.shippingMethod.description,
             shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod.baseAmountMinor,
             shippingFeeWaived: deliveryPreflight.shippingMethod.feeWaived,
-            discountAmount: normalizedDiscountAmount,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
@@ -611,8 +436,8 @@ export async function createStorefrontOrder(
             status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
             paymentMethod: data.paymentMethod,
             paymentStatus: PaymentStatus.UNPAID,
-            paidAmount: 0,
-            balanceDue: totalAmount,
+            paidAmountMinor: 0,
+            balanceDueMinor: taxQuote.totalMinor,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: cartValidation.items.some(item => item.inventoryTracked) ? "reserved" : "none",
@@ -631,7 +456,6 @@ export async function createStorefrontOrder(
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
-                price: item.price,
                 productName: item.productName,
                 variantLabel: item.variantLabel,
                 inventoryTracked: item.inventoryTracked,
@@ -643,11 +467,7 @@ export async function createStorefrontOrder(
                 taxAmountMinor: lineTax.taxMinor,
             };
         }),
-        discountUsage: appliedDiscount && normalizedDiscountAmount > 0 ? {
-            ...appliedDiscount,
-            amountDiscounted: normalizedDiscountAmount,
-        } : null,
-        promotion: promotionSnapshot,
+        promotion: discount.snapshot,
         requestUrl,
         taxQuote,
     };
@@ -656,8 +476,16 @@ export async function createStorefrontOrder(
         checkoutToken,
         orderId,
         paymentMethod: data.paymentMethod,
-        totalAmount,
         taxQuote,
         commitPayload,
     };
+}
+
+/** Delivery preflight in the decimal HTTP contract. */
+export function presentStorefrontDeliveryPreflight(
+    delivery: StorefrontDeliveryPreflightResult,
+    decimalPlaces: number,
+) {
+    const { shippingMinor, ...rest } = delivery;
+    return { ...rest, shippingCharge: fromMinor(shippingMinor, decimalPlaces) };
 }

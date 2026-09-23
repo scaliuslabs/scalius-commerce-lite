@@ -2,7 +2,7 @@ import * as React from "react";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
-import { Button } from "./button";
+import { fieldClassName } from "./input";
 import {
   Popover,
   PopoverContent,
@@ -29,7 +29,6 @@ interface SearchableSelectProps {
   id?: string;
   ariaLabel?: string;
   triggerClassName?: string;
-  contentClassName?: string;
 }
 
 /**
@@ -49,7 +48,6 @@ export function SearchableSelect({
   id,
   ariaLabel,
   triggerClassName,
-  contentClassName,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -136,10 +134,9 @@ export function SearchableSelect({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
+        <button
           id={id}
           type="button"
-          variant="outline"
           role="combobox"
           aria-label={ariaLabel}
           aria-controls={listId}
@@ -147,16 +144,13 @@ export function SearchableSelect({
           aria-haspopup="listbox"
           aria-required={required || undefined}
           disabled={disabled}
-          className={cn(
-            "h-11 min-w-0 justify-between gap-2 px-3 text-sm font-normal sm:h-9",
-            triggerClassName,
-          )}
+          className={cn(fieldClassName, "flex h-11 items-center justify-between gap-2 text-left sm:h-9", triggerClassName)}
         >
           <span className={cn("truncate", !selectedOption && "text-muted-foreground")}>
             {selectedOption?.label ?? placeholder}
           </span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent
         data-slot="searchable-select-content"
@@ -167,12 +161,9 @@ export function SearchableSelect({
           event.preventDefault();
           focusSearch();
         }}
-        className={cn(
-          "w-[var(--radix-popover-trigger-width)] overflow-hidden p-0",
-          contentClassName,
-        )}
+        className="w-(--radix-popover-trigger-width) min-w-60 overflow-hidden p-0"
       >
-        <div className="bg-popover text-popover-foreground">
+        <div>
           <div className="flex h-11 items-center gap-2 border-b px-3 sm:h-9">
             <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             <input
@@ -209,7 +200,7 @@ export function SearchableSelect({
               aria-controls={listId}
               aria-expanded={open}
               aria-activedescendant={activeOption ? `${listId}-option-${safeActiveIndex}` : undefined}
-              className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-full min-w-0 flex-1 bg-transparent text-body-lg outline-none placeholder:text-muted-foreground sm:text-body"
             />
           </div>
           <div
@@ -217,10 +208,10 @@ export function SearchableSelect({
             role="listbox"
             aria-label="Options"
             data-slot="searchable-select-list"
-            className="max-h-60 overflow-y-auto overscroll-contain p-1"
+            className="max-h-60 overflow-y-auto overscroll-contain p-1.5"
           >
             {visibleOptions.length === 0 ? (
-              <p className="px-3 py-5 text-center text-sm text-muted-foreground">
+              <p className="px-3 py-5 text-center text-body text-muted-foreground">
                 {emptyMessage}
               </p>
             ) : visibleOptions.map((option, index) => (
@@ -237,7 +228,7 @@ export function SearchableSelect({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectOption(option)}
                 className={cn(
-                  "flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none sm:min-h-8",
+                  "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body outline-none sm:min-h-8",
                   index === safeActiveIndex && "bg-accent text-accent-foreground",
                   "focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
                 )}
@@ -255,7 +246,7 @@ export function SearchableSelect({
             {hiddenOptionCount > 0 ? (
               <p
                 data-slot="searchable-select-overflow-hint"
-                className="border-t px-3 py-2 text-xs text-muted-foreground"
+                className="border-t px-3 py-2 text-body text-muted-foreground"
               >
                 Showing {visibleOptions.length} of {filteredOptions.length}. Search to narrow results.
               </p>

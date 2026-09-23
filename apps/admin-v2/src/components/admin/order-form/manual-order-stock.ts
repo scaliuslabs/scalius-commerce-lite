@@ -1,3 +1,5 @@
+import { translate } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
 import type { OrderItem, Product } from "./types";
 
 type ProductVariant = Product["variants"][number];
@@ -38,18 +40,14 @@ export function remainingStockMessage(
   remaining: number,
   alreadyStaged = 0,
 ): string {
-  if (remaining === 0) {
-    return "Out of stock. This SKU cannot be added to a confirmed order.";
-  }
-
-  const suffix = alreadyStaged > 0
-    ? ` (${alreadyStaged} already staged).`
-    : ".";
-  return `${remaining}${alreadyStaged > 0 ? " more" : ""} available for this order${suffix}`;
+  if (remaining === 0) return translate(orderFormMessages, "outOfStock");
+  return alreadyStaged > 0
+    ? translate(orderFormMessages, "availableMore", { count: remaining, staged: alreadyStaged })
+    : translate(orderFormMessages, "available", { count: remaining });
 }
 
 export function exceededStockMessage(remaining: number): string {
   return remaining === 0
-    ? "This SKU is out of stock."
-    : `Only ${remaining} ${remaining === 1 ? "unit is" : "units are"} available for this order.`;
+    ? translate(orderFormMessages, "outOfStock")
+    : translate(orderFormMessages, "onlyAvailable", { count: remaining });
 }

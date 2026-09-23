@@ -1,21 +1,15 @@
-// src/components/admin/product-form/AttributesSection.tsx
 import type { UseFormReturn } from "react-hook-form";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 import { AttributeManager } from "./AttributeManager";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
-interface AttributesSectionProps {
-  form: UseFormReturn<ProductFormValues>;
-}
-
-export function AttributesSection({ form }: AttributesSectionProps) {
+export function AttributesSection({ form, defaultOpen }: { form: UseFormReturn<ProductFormValues>; defaultOpen: boolean }) {
+  const t = useMessages(productMessages);
   return (
-    <CollapsibleCard
-      title="Attributes"
-      description="Brand, material, warranty, and catalog facts"
-      defaultOpen={false}
-    >
+    <CollapsibleCard title={t("attributes")} description={t("attributesHint")} defaultOpen={defaultOpen}>
       <FormField
         control={form.control}
         name="attributes"
@@ -23,12 +17,9 @@ export function AttributesSection({ form }: AttributesSectionProps) {
           <FormItem>
             <AttributeManager
               initialAttributes={field.value || []}
-              onAttributesChange={(newAttributes) => {
-                form.setValue("attributes", newAttributes, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-              }}
+              onAttributesChange={(next) =>
+                form.setValue("attributes", next, { shouldDirty: true, shouldValidate: true })
+              }
             />
             <FormMessage />
           </FormItem>

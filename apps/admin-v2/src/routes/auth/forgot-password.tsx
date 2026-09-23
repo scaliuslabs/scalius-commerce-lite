@@ -1,142 +1,21 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ForgotPasswordForm } from "~/components/auth/ForgotPasswordForm";
+import { translate } from "~/i18n";
+import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
-import { useState } from "react";
-import { Mail } from "lucide-react";
-import { useHydrated } from "~/hooks/use-hydrated";
-import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 export const Route = createFileRoute("/auth/forgot-password")({
   beforeLoad: async () => {
     // A signed-in user only lands here to finish a required password change.
     const { session } = await readDashboardSession();
     if (session && !session.user.mustChangePassword) throw redirect({ to: "/admin" });
+    return { signedInEmail: session?.user.email };
   },
-  head: () => ({
-    meta: [{ title: "Forgot Password - Scalius Admin" }],
-  }),
+  head: () => ({ meta: [{ title: `${translate(authMessages, "forgotTitle")} · Scalius` }] }),
   component: ForgotPasswordPage,
 });
 
 function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const isHydrated = useHydrated();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-
-    if (!email.trim()) {
-      setError("Please enter your email address.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(withDashboardBasePath("/api/auth/request-password-reset"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, redirectTo: withDashboardBasePath("/auth/reset-password") }),
-      });
-      if (!response.ok) {
-        throw new Error("Password recovery is unavailable");
-      }
-      setSubmitted(true);
-    } catch {
-      setError("We couldn't send a reset link. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  if (submitted) {
-    return (
-      <div className="space-y-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Mail className="h-8 w-8 text-primary" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold">Check your email</h2>
-          <p className="text-sm text-muted-foreground">
-            If an account exists for <span className="font-medium text-foreground">{email}</span>,
-            we've sent a password reset link. It will expire in 1 hour.
-          </p>
-        </div>
-        <div className="space-y-3 pt-2">
-          <p className="text-xs text-muted-foreground">
-            Didn't receive the email? Check your spam folder or try again.
-          </p>
-          <button
-            type="button"
-            onClick={() => { setSubmitted(false); setEmail(""); }}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            Try a different email
-          </button>
-        </div>
-        <a
-          href="/auth/login"
-          className="mt-4 block text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to sign in
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-2 text-center">
-        <h2 className="text-xl font-semibold">Forgot your password?</h2>
-        <p className="text-sm text-muted-foreground">
-          Enter your email address and we'll send you a reset link.
-        </p>
-      </div>
-      <form
-        method="post"
-        action="/auth/forgot-password"
-        onSubmit={handleSubmit}
-        className="space-y-4"
-        noValidate
-      >
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            autoComplete="email"
-            autoFocus
-            disabled={!isHydrated || isLoading}
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        {error && (
-          <p role="alert" className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
-            {error}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={!isHydrated || isLoading}
-          className="inline-flex h-11 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-        >
-          {isLoading ? "Sending..." : "Send reset link"}
-        </button>
-      </form>
-      <a
-        href="/auth/login"
-        className="block text-center text-sm text-muted-foreground hover:text-foreground"
-      >
-        Back to sign in
-      </a>
-    </div>
-  );
+  const { signedInEmail } = Route.useRouteContext();
+  return <ForgotPasswordForm signedInEmail={signedInEmail} />;
 }

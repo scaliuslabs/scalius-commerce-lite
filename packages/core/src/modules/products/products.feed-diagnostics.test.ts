@@ -369,42 +369,6 @@ describe("product feed diagnostics", () => {
         });
     });
 
-    it("reports exponent-form legacy prices as non-positive feed money", () => {
-        const report = buildProductFeedDiagnosticsFromScan({
-            products: [product("exponent_price", { price: 1e21 })],
-            primaryImageUrls: new Map([
-                ["exponent_price", "/exponent-price.jpg"],
-            ]),
-            variants: new Map([
-                [
-                    "exponent_price",
-                    [
-                        variant("var_exponent_price", "exponent_price", {
-                            isDefault: true,
-                            price: 1e21,
-                        }),
-                    ],
-                ],
-            ]),
-            feedsPolicy: { ...baseFeedsPolicy, variantStrategy: "products" },
-            scanLimit: 500,
-            truncated: false,
-            sampleLimitPerReason: 5,
-            storefrontBaseUrl: "https://store.example.test",
-            currencyCode: "BDT",
-        });
-
-        expect(report.totals).toMatchObject({
-            emittedRows: 0,
-            productsWithIssues: 1,
-            skippedRows: 1,
-        });
-        expect(reasonCount(report, "non_positive_price")).toMatchObject({
-            products: 1,
-            rows: 1,
-        });
-    });
-
     it("counts only non-positive effective variant rows as skipped", () => {
         const report = buildProductFeedDiagnosticsFromScan({
             products: [product("variant_prices", { price: 100 })],

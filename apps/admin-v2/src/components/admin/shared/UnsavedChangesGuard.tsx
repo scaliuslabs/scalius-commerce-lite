@@ -11,6 +11,8 @@ import {
   AlertDialogTitle,
 } from "../../ui/alert-dialog";
 import { dispatchAdminNavigationCancelled } from "./admin-navigation-events";
+import { useMessages } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
 
 interface UnsavedChangesGuardProps {
   isDirty: boolean;
@@ -35,6 +37,7 @@ export function UnsavedChangesGuard({
   isSubmitting,
   allowSamePathStateNavigation = false,
 }: UnsavedChangesGuardProps) {
+  const t = useMessages(saveBarMessages);
   const { proceed, reset, status } = useBlocker({
     shouldBlockFn: ({ current, next }) => {
       if (!isDirty || isSubmitting) return false;
@@ -81,19 +84,16 @@ export function UnsavedChangesGuard({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-          <AlertDialogDescription>
-            You have unsaved changes that will be lost. Are you sure you want to
-            leave this page?
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t("leaveTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("leaveDescription")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={keepEditing}>Keep Editing</AlertDialogCancel>
+          <AlertDialogCancel onClick={keepEditing}>{t("stay")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={proceed}
             variant="destructive"
           >
-            Discard Changes
+            {t("leavePage")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

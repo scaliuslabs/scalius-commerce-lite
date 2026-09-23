@@ -78,8 +78,8 @@ describe("category bulk trash D1 boundaries", () => {
     const { db } = createDatabase({
       beforeCategoryUpdate: () => {
         sqlite!.prepare(`
-          INSERT INTO products (id, name, slug, price, category_id)
-          VALUES ('prod_race', 'Concurrent product', 'prod-race', 100, 'cat_1')
+          INSERT INTO products (id, name, slug, price_minor, category_id)
+          VALUES ('prod_race', 'Concurrent product', 'prod-race', 10000, 'cat_1')
         `).run();
       },
     });

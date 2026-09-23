@@ -541,7 +541,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         orderId: "order-balance",
         provider: "sslcommerz",
         paymentType: "balance",
-        amount: 750,
+        amountMinor: 75_000,
       }),
     );
     expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
@@ -588,7 +588,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         orderId: "order-stripe-balance",
         provider: "stripe",
         paymentType: "balance",
-        amount: 65,
+        amountMinor: 6_500,
       }),
     );
     expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
@@ -1037,7 +1037,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         orderId: "order-balance",
         provider: "stripe",
         paymentType: "balance",
-        amount: 65,
+        amountMinor: 6_500,
       }),
     );
     expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();

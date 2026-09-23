@@ -1,354 +1,237 @@
-// src/server/routes/admin/discounts.ts
-// Admin OpenAPI routes for discounts.
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import {
+    archivePromotionDraft,
+    activatePromotion,
+    createPromotionDraft,
+    createPromotionDraftSchema,
+    getPromotionAggregate,
+    getPromotionOrderUsage,
+    listPromotionDrafts,
+    previewPersistedPromotion,
+    pausePromotion,
+    promotionEvaluationCartSchema,
+    updatePromotionDraft,
+    updatePromotionDraftSchema,
+} from "@scalius/core/modules/promotions";
 
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, setDiscountActiveStatus, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { DiscountType } from "@scalius/database/schema";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
-
-import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../schemas/responses";
-import { discountSchema } from "../../schemas/entities";
+import { NotFoundError } from "../../utils/api-error";
+import { created, noContent, ok } from "../../utils/api-response";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
+import {
+    conflictResponse,
+    errorResponses,
+    noContentResponse,
+    successEnvelope,
+} from "../../schemas/responses";
+
+// The one discount engine: code and automatic discounts (promotions tables).
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const TAG = "Admin - Discounts";
+const idParam = z.object({ id: z.string().trim().min(1).max(180) });
+const revisionBody = z.object({ expectedRevision: z.number().int().positive() }).strict();
 
-type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
-type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
-
-const adminMutationErrorResponses = {
-    401: errorResponses[401],
-    403: errorResponses[403],
-} as const;
-
-const adminValidationMutationErrorResponses = {
-    400: errorResponses[400],
-    ...adminMutationErrorResponses,
-} as const;
-
-const discountConflictMutationErrorResponses = {
-    ...adminValidationMutationErrorResponses,
-    409: conflictResponse,
-} as const;
-
-const discountMutationResultSchema = z.object({
+const discountSchema = z.object({
     id: z.string(),
-    revision: z.number().int().min(1),
+    revision: z.number().int().positive(),
+    name: z.string(),
+    title: z.string().nullable(),
+    method: z.enum(["automatic", "code"]),
+    status: z.enum(["draft", "active", "paused", "archived"]),
+    priority: z.number().int(),
+    conflictPolicy: z.literal("best"),
+    combinesWith: z.object({ product: z.boolean(), order: z.boolean(), shipping: z.boolean() }),
+    startsAtEpochSeconds: z.number().int().nullable(),
+    endsAtEpochSeconds: z.number().int().nullable(),
+    timezone: z.string(),
+    maxRedemptions: z.number().int().positive().nullable(),
+    maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
+    maxDiscountSpendMinor: z.number().int().positive().nullable(),
+    budgetCurrencyCode: z.string().nullable(),
+    redemptionCount: z.number().int().nonnegative().openapi({ description: "Orders that used this discount." }),
+    customerRedemptionCount: z.number().int().nonnegative(),
+    discountSpendMinor: z.number().int().nonnegative().openapi({ description: "Total savings given, in minor units." }),
+    createdAtEpochSeconds: z.number().int(),
+    updatedAtEpochSeconds: z.number().int(),
+    deletedAtEpochSeconds: z.number().int().nullable(),
+    codes: z.array(z.object({ code: z.string(), isActive: z.boolean() })),
+    conditions: z.array(z.object({
+        id: z.string(),
+        kind: z.enum(["minimum_merchandise_subtotal", "minimum_item_quantity"]),
+        config: z.record(z.string(), z.unknown()),
+    })),
+    effects: z.array(z.object({
+        id: z.string(),
+        kind: z.enum(["percentage_off", "fixed_amount_off", "free"]),
+        target: z.enum(["line", "order", "shipping"]),
+        allocation: z.enum(["across", "once"]),
+        config: z.record(z.string(), z.unknown()),
+    })),
 });
 
-// ── List Discounts ──
+const mutationSchema = z.object({
+    id: z.string(),
+    revision: z.number().int().positive(),
+    status: z.enum(["draft", "active", "paused", "archived"]),
+});
+const mutationResponse = (description: string) => ({
+    description,
+    content: { "application/json": { schema: successEnvelope(mutationSchema) } },
+});
 
-const listRoute = createRoute({
+app.openapi(createRoute({
     operationId: "dashboard.discounts.list",
     method: "get",
     path: "/",
-    tags: ["Admin - Discounts"],
-    summary: "List all discounts",
+    tags: [TAG],
+    summary: "List code and automatic discounts",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
-            search: z.string().optional().default("").openapi({ description: "Search term" }),
-            type: z.enum([
-                DiscountType.AMOUNT_OFF_PRODUCTS,
-                DiscountType.AMOUNT_OFF_ORDER,
-                DiscountType.FREE_SHIPPING,
-            ]).optional().openapi({ description: "Filter by discount type" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
-        })
+            limit: z.coerce.number().int().min(1).max(90).default(90),
+            includeDeleted: z.string().optional(),
+        }),
     },
     responses: {
-        200: { description: "Discount list with pagination", content: { "application/json": { schema: paginatedEnvelope("discounts", discountSchema) } } },
+        200: {
+            description: "Discounts, most recently updated first",
+            content: { "application/json": { schema: successEnvelope(z.object({ discounts: z.array(discountSchema) })) } },
+        },
         ...errorResponses,
-    }
-});
-
-app.openapi(listRoute, async (c) => {
-    const db = c.get("db");
+    },
+}), async (c) => {
     const query = c.req.valid("query");
-    const result = await listDiscounts(db, {
-        page: query.page,
+    const discounts = await listPromotionDrafts(c.get("db"), {
         limit: query.limit,
-        search: query.search || "",
-        showTrashed: query.trashed === "true",
-        type: query.type,
-        sort: query.sort || "updatedAt",
-        order: (query.order || "desc") as "asc" | "desc"
+        includeDeleted: query.includeDeleted === "true",
     });
-    return ok(c, result);
+    return ok(c, { discounts });
 });
 
-// ── Create Discount ──
-
-const createDiscountRoute = createRoute({
+app.openapi(createRoute({
     operationId: "dashboard.discounts.create",
     method: "post",
     path: "/",
-    tags: ["Admin - Discounts"],
-    summary: "Create a discount",
-    request: {
-        body: { content: { "application/json": { schema: createDiscountSchema } } }
-    },
-    responses: {
-        201: { description: "Discount created", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema) } } },
-        ...errorResponses,
-        409: conflictResponse,
-    }
-});
+    tags: [TAG],
+    summary: "Create a draft discount",
+    request: { body: { required: true, content: { "application/json": { schema: createPromotionDraftSchema } } } },
+    responses: { 201: mutationResponse("Draft discount created"), 409: conflictResponse, ...errorResponses },
+}), async (c) => created(c, await createPromotionDraft(c.get("db"), c.req.valid("json"))));
 
-app.openapi(createDiscountRoute, (async (c: AdminRouteContext<typeof createDiscountRoute>) => {
-    const db = c.get("db");
-    const data = c.req.valid("json");
-    const result = await createDiscount(db, data, {
-        canToggleStatus: c.get("adminPermissions").has(
-            PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
-        ),
-    });
-    await bumpCacheGeneration(c);
-    return created(c, result);
-}) as unknown as AdminRouteHandler<typeof createDiscountRoute>);
-
-// ── Bulk Delete Discounts ──
-
-const bulkDeleteRoute = createRoute({
-    operationId: "dashboard.discounts.bulk_delete",
-    method: "post",
-    path: "/bulk-delete",
-    tags: ["Admin - Discounts"],
-    summary: "Bulk delete discounts",
-    request: {
-        body: {
-            content: {
-                "application/json": {
-                    schema: z.object({
-                        discountIds: z.array(z.string()),
-                        permanent: z.boolean().default(false)
-                    })
-                }
-            }
-        }
-    },
-    responses: {
-        204: noContentResponse,
-        ...adminValidationMutationErrorResponses,
-    }
-});
-
-app.openapi(bulkDeleteRoute, async (c) => {
-    const db = c.get("db");
-    const { discountIds, permanent } = c.req.valid("json");
-    if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
-    await bulkDeleteDiscounts(db, discountIds, permanent);
-    await bumpCacheGeneration(c);
-    return noContent(c);
-});
-
-// ── Bulk Restore Discounts ──
-
-const bulkRestoreRoute = createRoute({
-    operationId: "dashboard.discounts.bulk_restore",
-    method: "post",
-    path: "/bulk-restore",
-    tags: ["Admin - Discounts"],
-    summary: "Bulk restore discounts",
-    request: {
-        body: {
-            content: {
-                "application/json": {
-                    schema: z.object({ discountIds: z.array(z.string()) })
-                }
-            }
-        }
-    },
-    responses: {
-        204: noContentResponse,
-        ...discountConflictMutationErrorResponses,
-    }
-});
-
-app.openapi(bulkRestoreRoute, async (c) => {
-    const db = c.get("db");
-    const { discountIds } = c.req.valid("json");
-    if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
-    await restoreDiscounts(db, discountIds);
-    await bumpCacheGeneration(c);
-    return noContent(c);
-});
-
-// ── Get Discount By ID ──
-
-const getByIdRoute = createRoute({
+app.openapi(createRoute({
     operationId: "dashboard.discounts.get",
     method: "get",
     path: "/{id}",
-    tags: ["Admin - Discounts"],
-    summary: "Get a discount by ID",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
+    tags: [TAG],
+    summary: "Get a discount",
+    request: { params: idParam },
     responses: {
-        200: { description: "Discount details", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        200: { description: "Discount", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
         ...errorResponses,
-    }
+    },
+}), async (c) => {
+    const db = c.get("db");
+    const discount = await getPromotionAggregate(db, c.req.valid("param").id);
+    if (!discount) throw new NotFoundError("Discount not found");
+    return ok(c, { ...discount, ...await getPromotionOrderUsage(db, discount.id) });
 });
 
-app.openapi(getByIdRoute, (async (c: AdminRouteContext<typeof getByIdRoute>) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const discount = await getDiscountById(db, id);
-    if (!discount) throw new NotFoundError("Discount not found");
-    return ok(c, discount);
-}) as unknown as AdminRouteHandler<typeof getByIdRoute>);
-
-// ── Update Discount ──
-
-const updateDiscountRoute = createRoute({
+app.openapi(createRoute({
     operationId: "dashboard.discounts.update",
     method: "put",
     path: "/{id}",
-    tags: ["Admin - Discounts"],
-    summary: "Update a discount",
+    tags: [TAG],
+    summary: "Replace a discount's rules (revision-checked)",
     request: {
-        params: z.object({ id: z.string() }),
-        body: {
-            required: true,
-            content: { "application/json": { schema: updateDiscountSchema } },
-        }
+        params: idParam,
+        body: { required: true, content: { "application/json": { schema: updatePromotionDraftSchema } } },
     },
-    responses: {
-        200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema) } } },
-        ...errorResponses,
-        409: conflictResponse,
-    }
-});
-
-app.openapi(updateDiscountRoute, (async (c: AdminRouteContext<typeof updateDiscountRoute>) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const result = await updateDiscount(db, id, data, {
-        canToggleStatus: c.get("adminPermissions").has(
-            PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
-        ),
-    });
+    responses: { 200: mutationResponse("Discount updated"), 409: conflictResponse, ...errorResponses },
+}), async (c) => {
+    const result = await updatePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
     await bumpCacheGeneration(c);
     return ok(c, result);
-}) as unknown as AdminRouteHandler<typeof updateDiscountRoute>);
-
-// ── Delete Discount ──
-
-const deleteDiscountRoute = createRoute({
-    operationId: "dashboard.discounts.delete",
-    method: "delete",
-    path: "/{id}",
-    tags: ["Admin - Discounts"],
-    summary: "Soft-delete a discount",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        204: noContentResponse,
-        ...adminMutationErrorResponses,
-    }
 });
 
-app.openapi(deleteDiscountRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    await deleteDiscount(db, id);
-    await bumpCacheGeneration(c);
-    return noContent(c);
-});
-
-// ── Permanent Delete Discount ──
-
-const permanentDeleteRoute = createRoute({
-    operationId: "dashboard.discounts.delete_permanently",
-    method: "delete",
-    path: "/{id}/permanent",
-    tags: ["Admin - Discounts"],
-    summary: "Permanently delete a discount",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        204: noContentResponse,
-        ...adminMutationErrorResponses,
-    }
-});
-
-app.openapi(permanentDeleteRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    await permanentlyDeleteDiscount(db, id);
-    await bumpCacheGeneration(c);
-    return noContent(c);
-});
-
-// ── Toggle Discount Status ──
-
-const toggleStatusRoute = createRoute({
-    operationId: "dashboard.discounts.set_active",
+app.openapi(createRoute({
+    operationId: "dashboard.discounts.preview",
     method: "post",
-    path: "/{id}/toggle-status",
-    tags: ["Admin - Discounts"],
-    summary: "Toggle a discount's active status",
+    path: "/{id}/preview",
+    tags: [TAG],
+    summary: "Preview a saved discount against a cart",
     request: {
-        params: z.object({ id: z.string() }),
+        params: idParam,
         body: {
             required: true,
             content: {
                 "application/json": {
                     schema: z.object({
-                        isActive: z.boolean(),
-                        expectedRevision: z.number().int().min(1),
-                    })
-                }
-            }
-        }
+                        expectedRevision: z.number().int().positive(),
+                        customerId: z.string().trim().min(1).max(180).nullable().optional(),
+                        cart: promotionEvaluationCartSchema,
+                    }).strict(),
+                },
+            },
+        },
     },
     responses: {
-        200: { description: "Discount status toggled", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema.extend({ isActive: z.boolean() })) } } },
-        ...discountConflictMutationErrorResponses,
-        404: errorResponses[404],
-    }
-});
-
-app.openapi(toggleStatusRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const { isActive, expectedRevision } = c.req.valid("json");
-    const result = await setDiscountActiveStatus(db, id, isActive, expectedRevision);
-    await bumpCacheGeneration(c);
-    return ok(c, result);
-});
-
-// ── Restore Discount ──
-
-const restoreDiscountRoute = createRoute({
-    operationId: "dashboard.discounts.restore",
-    method: "post",
-    path: "/{id}/restore",
-    tags: ["Admin - Discounts"],
-    summary: "Restore a soft-deleted discount",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        200: { description: "Discount restored", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
-        ...errorResponses,
+        200: {
+            description: "Deterministic evaluation",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        evaluatorVersion: z.number().int().positive(),
+                        applied: z.unknown().nullable(),
+                        rejected: z.array(z.unknown()),
+                        unmatchedCodes: z.array(z.string()),
+                        assumedActive: z.boolean(),
+                        promotionRevision: z.number().int().positive(),
+                    })),
+                },
+            },
+        },
         409: conflictResponse,
-    }
+        ...errorResponses,
+    },
+}), async (c) => {
+    const body = c.req.valid("json");
+    return ok(c, await previewPersistedPromotion(c.get("db"), {
+        promotionId: c.req.valid("param").id,
+        expectedRevision: body.expectedRevision,
+        customerId: body.customerId ?? null,
+        cart: body.cart,
+    }));
 });
 
-app.openapi(restoreDiscountRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    await restoreDiscounts(db, [id]);
+for (const [command, summary, run] of [
+    ["activate", "Activate a discount", activatePromotion],
+    ["pause", "Deactivate a discount", pausePromotion],
+] as const) {
+    app.openapi(createRoute({
+        operationId: `dashboard.discounts.${command}`,
+        method: "post",
+        path: `/{id}/${command}`,
+        tags: [TAG],
+        summary,
+        request: { params: idParam, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
+        responses: { 200: mutationResponse(summary), 409: conflictResponse, ...errorResponses },
+    }), async (c) => {
+        const result = await run(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
+        await bumpCacheGeneration(c);
+        return ok(c, result);
+    });
+}
+
+app.openapi(createRoute({
+    operationId: "dashboard.discounts.archive",
+    method: "delete",
+    path: "/{id}",
+    tags: [TAG],
+    summary: "Delete a discount (kept for order history)",
+    request: { params: idParam, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
+    responses: { 204: noContentResponse, 409: conflictResponse, ...errorResponses },
+}), async (c) => {
+    await archivePromotionDraft(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedRevision);
     await bumpCacheGeneration(c);
-    return ok(c, {});
+    return noContent(c);
 });
 
 export { app as adminDiscountRoutes };

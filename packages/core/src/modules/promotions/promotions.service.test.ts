@@ -14,11 +14,11 @@ import {
 
 function orderSql(orderId: string, itemId: string): string {
     return `
-        INSERT OR IGNORE INTO products (id, name, slug, price) VALUES ('product_promo', 'Promo product', 'promo-product', 100);
-        INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount, shipping_charge)
-        VALUES ('${orderId}', 'Buyer', '+8801700000009', 'Address', 'city', 'zone', 100, 0);
-        INSERT INTO order_items (id, order_id, product_id, quantity, price)
-        VALUES ('${itemId}', '${orderId}', 'product_promo', 1, 100);
+        INSERT OR IGNORE INTO products (id, name, slug, price_minor) VALUES ('product_promo', 'Promo product', 'promo-product', 10000);
+        INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor)
+        VALUES ('${orderId}', 'Buyer', '+8801700000009', 'Address', 'city', 'zone', 10000, 0);
+        INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor)
+        VALUES ('${itemId}', '${orderId}', 'product_promo', 1, 10000);
     `;
 }
 
@@ -97,8 +97,7 @@ describe("promotion aggregate service", () => {
             assumedActive: true,
             promotionRevision: 1,
             applied: {
-                promotionId: created.id,
-                promotionCode: "SAVE10",
+                discounts: [{ promotionId: created.id, promotionCode: "SAVE10", totalDiscountMinor: 1_000 }],
                 totalDiscountMinor: 1_000,
             },
         });

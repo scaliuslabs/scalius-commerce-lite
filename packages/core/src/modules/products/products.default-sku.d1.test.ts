@@ -268,7 +268,7 @@ describe("option matrix quantity edits on D1 storage", () => {
   }
 
   function skuState(sku: string) {
-    return sqlite.prepare("SELECT stock, price FROM product_variants WHERE sku = ?").get(sku);
+    return sqlite.prepare("SELECT stock, price_minor / 100.0 AS price FROM product_variants WHERE sku = ?").get(sku);
   }
 
   it("keeps a concurrent sale when saving an unrelated change and rejects a stale quantity", async () => {

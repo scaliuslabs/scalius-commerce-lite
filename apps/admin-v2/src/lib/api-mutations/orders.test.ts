@@ -46,7 +46,12 @@ const sdk = vi.hoisted(() => ({
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("../api", () => ({ apiData: (call: unknown) => call }));
 
+import { translate } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
 import { queryKeys } from "../query-keys";
+
+const msg = (key: keyof typeof orderDetailMessages.en, vars?: Record<string, string | number>) =>
+  translate(orderDetailMessages, key, vars);
 import {
   useBulkShipOrders,
   useCreateFulfillmentShipment,
@@ -235,9 +240,9 @@ describe("bulk ship order mutations", () => {
       });
     }
     expectInventoryProjectionInvalidations();
-    expect(toastMocks.success).toHaveBeenCalledWith(
-      "2 shipments created successfully.",
-    );
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.bulkShipped"), {
+      description: msg("toast.bulkShippedDetail", { count: 2 }),
+    });
   });
 
   it("keeps partial failures visible while invalidating every selected order", () => {
@@ -271,13 +276,11 @@ describe("bulk ship order mutations", () => {
         queryKey: queryKeys.orders.shipments(orderId),
       });
     }
-    expect(toastMocks.warning).toHaveBeenCalledWith(
-      "1 of 2 shipments created.",
-      {
-        description:
-          "1 failed. First issue: Order has an active refund operation.",
-      },
-    );
+    expect(toastMocks.warning).toHaveBeenCalledWith(msg("toast.bulkShippedSome"), {
+      description: msg("toast.bulkShipFirstIssue", {
+        done: 1, total: 2, count: 1, reason: "Order has an active refund operation.",
+      }),
+    });
   });
 
   it("reports aggregate total failure with the first safe failure reason", () => {
@@ -309,7 +312,7 @@ describe("bulk ship order mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.dashboard.all,
     });
-    expect(toastMocks.error).toHaveBeenCalledWith("Shipment failed", {
+    expect(toastMocks.error).toHaveBeenCalledWith(msg("toast.bulkShipFailed"), {
       description: "Delivery provider is not active.",
     });
   });
@@ -327,7 +330,7 @@ describe("order notification mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.notifications("ord_123"),
     });
-    expect(toastMocks.success).toHaveBeenCalledWith("Notification retry queued");
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.messageQueued"));
   });
 
   it("passes a fresh resend request id through the resend mutation and invalidates history", () => {
@@ -348,7 +351,7 @@ describe("order notification mutations", () => {
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.notifications("ord_123"),
     });
-    expect(toastMocks.success).toHaveBeenCalledWith("Notification resend queued");
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.messageQueued"));
   });
 });
 
@@ -392,14 +395,10 @@ describe("order refund recovery mutations", () => {
       queryKey: queryKeys.orders.payments("ord_123"),
     });
     expectInventoryProjectionInvalidations();
-    expect(toastMocks.success).toHaveBeenCalledWith("Refund processed");
-    expect(toastMocks.warning).toHaveBeenCalledWith(
-      "Refund saved; follow-up needs attention",
-      {
-        description:
-          "The financial refund is complete, but cache refresh or customer notification should be checked.",
-      },
-    );
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.refunded"));
+    expect(toastMocks.warning).toHaveBeenCalledWith(msg("toast.refundFollowUp"), {
+      description: msg("toast.refundFollowUpDetail"),
+    });
   });
 
   it("does not refresh stock projections for a partial refund", () => {
@@ -442,8 +441,8 @@ describe("order refund recovery mutations", () => {
       } as never,
     );
 
-    expect(toastMocks.success).toHaveBeenCalledWith("Manual cash refund recorded");
-    expect(toastMocks.success).not.toHaveBeenCalledWith("Refund processed");
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.cashRefundRecorded"));
+    expect(toastMocks.success).not.toHaveBeenCalledWith(msg("toast.refunded"));
   });
 
   it("invalidates order state and payments after a manual recovery check", () => {
@@ -467,7 +466,7 @@ describe("order refund recovery mutations", () => {
       queryKey: queryKeys.orders.payments("ord_123"),
     });
     expectInventoryProjectionInvalidations();
-    expect(toastMocks.success).toHaveBeenCalledWith("Refund recovery finalized");
+    expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.refundCheckDone"));
   });
 
   it("does not refresh stock projections while refund recovery is deferred", () => {

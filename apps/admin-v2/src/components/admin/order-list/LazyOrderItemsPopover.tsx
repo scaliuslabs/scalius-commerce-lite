@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
-import { cn } from "@scalius/shared/utils";
-import { badgeVariants } from "../../ui/badge";
+import { Button } from "../../ui/button";
+import { useMessages } from "~/i18n";
+import { itemCountLabel, orderListMessages } from "~/i18n/order-list";
 
 const OrderItemsPopover = lazy(() =>
   import("./OrderItemsPopover").then((module) => ({
@@ -8,67 +9,39 @@ const OrderItemsPopover = lazy(() =>
   })),
 );
 
-interface LazyOrderItemsPopoverProps {
-  orderId: string;
-  itemCount: number;
-}
-
-interface OrderItemsTriggerShellProps {
-  itemCount: number;
-  isLoading?: boolean;
-  onActivate?: () => void;
-}
-
-function OrderItemsTriggerShell({
+function ItemsTrigger({
   itemCount,
   isLoading = false,
   onActivate,
-}: OrderItemsTriggerShellProps) {
-  const label = `${itemCount.toLocaleString()} ${
-    itemCount === 1 ? "item" : "items"
-  }`;
-
+}: {
+  itemCount: number;
+  isLoading?: boolean;
+  onActivate?: () => void;
+}) {
+  const t = useMessages(orderListMessages);
   return (
-    <button
+    <Button
       type="button"
-      className={cn(
-        badgeVariants({ variant: "secondary" }),
-        "cursor-pointer text-xs font-medium transition-all duration-200 hover:scale-105 hover:bg-[var(--muted)]",
-      )}
+      variant="ghost"
+      size="sm"
       disabled={isLoading}
       aria-busy={isLoading || undefined}
-      aria-label={`View ${label}`}
       onClick={onActivate}
     >
-      {label}
-    </button>
+      {itemCountLabel(t, itemCount)}
+    </Button>
   );
 }
 
-export function LazyOrderItemsPopover({
-  orderId,
-  itemCount,
-}: LazyOrderItemsPopoverProps) {
+/** "3 items" button; loads the item list the first time it is opened. */
+export function LazyOrderItemsPopover({ orderId, itemCount }: { orderId: string; itemCount: number }) {
   const [shouldLoad, setShouldLoad] = useState(false);
-
   if (!shouldLoad) {
-    return (
-      <OrderItemsTriggerShell
-        itemCount={itemCount}
-        onActivate={() => setShouldLoad(true)}
-      />
-    );
+    return <ItemsTrigger itemCount={itemCount} onActivate={() => setShouldLoad(true)} />;
   }
-
   return (
-    <Suspense
-      fallback={<OrderItemsTriggerShell itemCount={itemCount} isLoading />}
-    >
-      <OrderItemsPopover
-        orderId={orderId}
-        itemCount={itemCount}
-        initialOpen
-      />
+    <Suspense fallback={<ItemsTrigger itemCount={itemCount} isLoading />}>
+      <OrderItemsPopover orderId={orderId} trigger={<ItemsTrigger itemCount={itemCount} />} />
     </Suspense>
   );
 }

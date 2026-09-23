@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import {
+  compiledMigrationSql,
   createMigratedSqlite,
   createSqliteD1Database,
   createSqliteTursoDatabase,
@@ -32,9 +33,9 @@ afterEach(() => sqlite?.close());
 function openStore(provider: Provider, stock = 3): Database {
   sqlite = createMigratedSqlite({ provider });
   sqlite.exec(`
-    INSERT INTO products (id, name, slug, price, is_active) VALUES ('prod_1', 'Tee', 'tee', 100, 1);
-    INSERT INTO product_variants (id, product_id, sku, price, stock, is_default, track_inventory)
-    VALUES ('var_1', 'prod_1', 'TEE-1', 100, ${stock}, 1, 1);
+    INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tee', 'tee', 10000, 1);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+    VALUES ('var_1', 'prod_1', 'TEE-1', 10000, ${stock}, 1, 1);
   `);
   return provider === "d1"
     ? createSqliteD1Database({ sqlite }).db
@@ -115,7 +116,6 @@ function prepare(key: string, overrides: {
       taxableAmountMinor: 0,
       taxAmountMinor: 0,
     }],
-    discountUsage: null,
     requestUrl: "https://shop.example.com/api/v1/orders",
     taxQuote: {
       schemaVersion: 1, calculationVersion: "tax-v1", enabled: false, currencyCode: "BDT",
@@ -301,6 +301,7 @@ describe("orders migrated from checkout lanes", () => {
     laneOrder("lane_cancel", 2, 0);
     laneOrder("lane_ship", 1, 1);
     sqlite.exec(compileSqliteMigrationForProvider(migrationSql, "d1"));
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0066_"));
     const db = createSqliteD1Database({ sqlite }).db;
     expect(counters()).toMatchObject({ stock: 10, reserved_stock: 3 });
 

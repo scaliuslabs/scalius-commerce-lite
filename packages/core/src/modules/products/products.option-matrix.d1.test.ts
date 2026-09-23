@@ -14,15 +14,15 @@ function setup() {
         },
     });
     harness.sqlite.exec(`
-        INSERT INTO products (id, name, price, slug) VALUES ('prod_1', 'Tee', 10, 'tee');
+        INSERT INTO products (id, name, price_minor, slug) VALUES ('prod_1', 'Tee', 1000, 'tee');
         INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping)
         VALUES ('popt_size', 'prod_1', 'Size', 'size', 0, 'size');
         INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES
             ('pval_s', 'popt_size', 'S', 's', 0),
             ('pval_m', 'popt_size', 'M', 'm', 1);
-        INSERT INTO product_variants (id, product_id, option_combination_key, sku, price, stock, reserved_stock, is_default, track_inventory) VALUES
-            ('var_s', 'prod_1', 'pval_s', 'TEE-S', 10, 4, 0, 0, 1),
-            ('var_m', 'prod_1', 'pval_m', 'TEE-M', 10, 2, 0, 0, 1);
+        INSERT INTO product_variants (id, product_id, option_combination_key, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+            ('var_s', 'prod_1', 'pval_s', 'TEE-S', 1000, 4, 0, 0, 1),
+            ('var_m', 'prod_1', 'pval_m', 'TEE-M', 1000, 2, 0, 0, 1);
         INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES
             ('var_s', 'popt_size', 'pval_s'),
             ('var_m', 'popt_size', 'pval_m');

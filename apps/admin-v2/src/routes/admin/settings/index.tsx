@@ -1,81 +1,28 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
-import GeneralSettingsPage from "~/components/admin/settings/GeneralSettingsPage";
-import { generalSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import { RouteErrorComponent } from "~/lib/route-error";
-import type { HeaderConfig } from "~/components/admin/header-builder/types";
-import type { FooterConfig } from "~/components/admin/footer-builder/types";
-import type { GeneralSettingsPayload } from "~/lib/api-query-options/settings";
-import {
-  normalizeGeneralSettingsPanel,
-  normalizeGeneralSettingsSection,
-  type GeneralSettingsPanel,
-  type GeneralSettingsSection,
-} from "~/components/admin/settings/general-settings-sections";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { SETTINGS_NAV } from "~/components/admin/settings/settings-nav";
+import { SettingsNav } from "~/components/admin/settings/SettingsNav";
+import { canAccessAdminPath } from "~/lib/admin-access";
+import { translate, useMessages } from "~/i18n";
+import { settingsNavMessages } from "~/i18n/settings";
 
-export function validateGeneralSettingsSearch(search: Record<string, unknown>) {
-  const section = normalizeGeneralSettingsSection(search.section);
-  const panel = normalizeGeneralSettingsPanel(section, search.panel);
-  return panel ? { section, panel } : { section };
-}
-
+// Shopify: on a desktop the settings list is the panel's left column, so the
+// first page opens directly; on a phone this route is the list itself.
 export const Route = createFileRoute("/admin/settings/")({
-  validateSearch: validateGeneralSettingsSearch,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(generalSettingsQueryOptions());
+  beforeLoad: ({ context }) => {
+    if (typeof window === "undefined" || !window.matchMedia("(min-width: 1024px)").matches) return;
+    const first = SETTINGS_NAV.find((item) => canAccessAdminPath(item.to, context));
+    if (first) throw redirect({ to: first.to, replace: true });
   },
-  head: () => ({ meta: [{ title: "General settings | Scalius Admin" }] }),
-  component: SettingsPage,
-  errorComponent: RouteErrorComponent,
+  head: () => ({ meta: [{ title: `${translate(settingsNavMessages, "settings")} | Scalius Admin` }] }),
+  component: SettingsIndex,
 });
 
-function SettingsPage() {
-  const search = Route.useSearch();
-  const navigate = useNavigate();
-  const { data } = useSuspenseQuery(generalSettingsQueryOptions());
-  const result = data as unknown as GeneralSettingsPayload & {
-    headerConfig?: HeaderConfig | null;
-    footerConfig?: FooterConfig | null;
-  };
-  const handleSectionChange = useCallback(
-    (section: GeneralSettingsSection) => {
-      void navigate({
-        resetScroll: false,
-        search: ((previous: Record<string, unknown>) => ({
-          ...previous,
-          section,
-          panel: normalizeGeneralSettingsPanel(section, undefined),
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-  const handlePanelChange = useCallback(
-    (panel: GeneralSettingsPanel) => {
-      void navigate({
-        resetScroll: false,
-        search: ((previous: Record<string, unknown>) => ({
-          ...previous,
-          panel,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
+function SettingsIndex() {
+  const t = useMessages(settingsNavMessages);
   return (
-    <GeneralSettingsPage
-      headerConfig={result.headerConfig ?? null}
-      footerConfig={result.footerConfig ?? null}
-      headerRevision={result.revisions.header}
-      footerRevision={result.revisions.footer}
-      headerReadiness={result.navigationReadiness?.header}
-      footerReadiness={result.navigationReadiness?.footer}
-      panel={search.panel}
-      section={search.section}
-      onPanelChange={handlePanelChange}
-      onSectionChange={handleSectionChange}
-    />
+    <div className="space-y-4 lg:hidden">
+      <h1 className="flex min-h-11 items-center pr-10 text-heading-lg">{t("settings")}</h1>
+      <SettingsNav variant="rows" />
+    </div>
   );
 }

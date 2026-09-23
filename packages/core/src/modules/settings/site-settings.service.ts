@@ -6,6 +6,7 @@
 import {
   orders,
   products,
+  shippingMethods,
   themePreviewSessions,
   themeSettings,
   themeSettingsDrafts,
@@ -216,7 +217,7 @@ async function hashThemePreviewToken(token: string): Promise<string> {
 }
 
 type PartialSeoDiscoverySettings = {
-  [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
+  feeds?: Partial<SeoDiscoverySettings["feeds"]>;
 };
 type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 
@@ -240,13 +241,15 @@ function normalizeUsdExchangeRate(value: string): string {
   return String(rate);
 }
 
+/** Catalog, shipping and order amounts are minor units of this currency, so it locks once any exist. */
 export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
-  const [productRows, orderRows] = await safeBatch(db, [
+  const [productRows, orderRows, shippingRows] = await safeBatch(db, [
     db.select({ id: products.id }).from(products).limit(1),
     db.select({ id: orders.id }).from(orders).limit(1),
+    db.select({ id: shippingMethods.id }).from(shippingMethods).limit(1),
   ]);
 
-  return Boolean(productRows?.length || orderRows?.length);
+  return Boolean(productRows?.length || orderRows?.length || shippingRows?.length);
 }
 
 export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
@@ -1066,10 +1069,9 @@ export async function getSeoSettings(db: Database) {
 export async function saveSeoSettings(
   db: Database,
   data: {
-    siteTitle?: string;
     homepageTitle?: string;
     homepageMetaDescription?: string;
-    robotsTxt?: string;
+    socialImage?: string;
     discovery?: PartialSeoDiscoverySettings;
     returnPolicy?: PartialSeoReturnPolicySettings;
   },
@@ -1078,10 +1080,9 @@ export async function saveSeoSettings(
     ? await getSeoSettings(db)
     : null;
   await seoDocument.write(db, {
-    siteTitle: data.siteTitle,
     homepageTitle: data.homepageTitle,
     homepageMetaDescription: data.homepageMetaDescription,
-    robotsTxt: data.robotsTxt,
+    socialImage: data.socialImage,
     discovery: current && data.discovery !== undefined
       ? mergeSeoDiscoverySettings(current.discovery, data.discovery)
       : undefined,

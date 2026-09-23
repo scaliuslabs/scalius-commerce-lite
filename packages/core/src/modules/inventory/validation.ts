@@ -3,7 +3,6 @@
 // Prevents data corruption by validating invariants at the service layer.
 
 import { ValidationError } from "@scalius/core/errors";
-import { roundPrice } from "@scalius/shared/price-utils";
 
 /**
  * Validate that stock value is non-negative.
@@ -101,61 +100,4 @@ export function validateAbsoluteStockCount(
   if (stock < 0) {
     throw new ValidationError(`${label} must be greater than or equal to zero`);
   }
-}
-
-/**
- * Calculate the final price after applying a discount.
- * Validates that the result is non-negative.
- *
- * @param price - Original price (must be >= 0)
- * @param discountType - "percentage" or "flat"
- * @param discountPercentage - Percentage discount (0-100), used when type is "percentage"
- * @param discountAmount - Flat discount amount, used when type is "flat"
- * @returns The final price after discount
- * @throws ValidationError if the result would be negative
- */
-export function calculateFinalPrice(
-  price: number,
-  discountType: "percentage" | "flat" | null | undefined,
-  discountPercentage: number | null | undefined,
-  discountAmount: number | null | undefined
-): number {
-  if (price < 0) {
-    throw new ValidationError(`Base price must be >= 0, got ${price}`);
-  }
-
-  if (!discountType) {
-    return price;
-  }
-
-  let finalPrice: number;
-
-  if (discountType === "percentage") {
-    const pct = discountPercentage ?? 0;
-    if (pct < 0 || pct > 100) {
-      throw new ValidationError(
-        `discountPercentage must be between 0 and 100, got ${pct}`
-      );
-    }
-    finalPrice = roundPrice(price * (1 - pct / 100));
-  } else if (discountType === "flat") {
-    const amount = discountAmount ?? 0;
-    if (amount < 0) {
-      throw new ValidationError(
-        `discountAmount must be >= 0, got ${amount}`
-      );
-    }
-    finalPrice = roundPrice(price - amount);
-  } else {
-    return price;
-  }
-
-  if (finalPrice < 0) {
-    throw new ValidationError(
-      `Final price after discount would be negative (${finalPrice}). ` +
-        `Price: ${price}, discount: ${discountType === "percentage" ? `${discountPercentage}%` : `${discountAmount} flat`}`
-    );
-  }
-
-  return finalPrice;
 }

@@ -6,13 +6,13 @@ function setup(onQuery?: () => void) {
   const harness = createSqliteD1Database({ onQuery });
   harness.sqlite.exec(`
     INSERT INTO categories (id, name, slug, status) VALUES ('cat_1', 'Runner Shoes', 'runner-shoes', 'published');
-    INSERT INTO products (id, name, price, slug, category_id, is_active) VALUES
-      ('p_runner', 'Trail Runner', 100, 'trail-runner', 'cat_1', 1),
-      ('p_hidden', 'Hidden Runner', 20, 'hidden-runner', 'cat_1', 0),
-      ('p_no_sku', 'Skuless Runner', 20, 'skuless-runner', 'cat_1', 1);
-    INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory) VALUES
-      ('v_runner', 'p_runner', 'RUN-1', 20, 0, 0, 1, 0),
-      ('v_hidden', 'p_hidden', 'HID-1', 20, 0, 0, 1, 0);
+    INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
+      ('p_runner', 'Trail Runner', 10000, 'trail-runner', 'cat_1', 1),
+      ('p_hidden', 'Hidden Runner', 2000, 'hidden-runner', 'cat_1', 0),
+      ('p_no_sku', 'Skuless Runner', 2000, 'skuless-runner', 'cat_1', 1);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+      ('v_runner', 'p_runner', 'RUN-1', 2000, 0, 0, 1, 0),
+      ('v_hidden', 'p_hidden', 'HID-1', 2000, 0, 0, 1, 0);
     INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
       ('media_runner', 'runner.webp', 'image', 'media/runner.webp', 1, 'image/webp', 'ready');
     INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)

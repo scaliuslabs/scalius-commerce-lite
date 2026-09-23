@@ -1,285 +1,145 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Check,
-  Loader2,
-  Pencil,
-  Trash2,
-  Upload,
-  UserRound,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
-import { MediaManager, type MediaFile } from "../media-manager";
-import type { User } from "./AccountSettingsContainer";
 import { useRouter } from "@tanstack/react-router";
-import { getServerFnError } from "~/lib/api-helpers";
+import { ImagePlus } from "lucide-react";
 import { postApiV1AdminAuthUpdateProfile } from "@scalius/api-client/sdk";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { useSaveBar, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { useMessages } from "~/i18n";
+import { accountMessages } from "~/i18n/account";
+import { MediaManager, type MediaFile } from "../media-manager";
 
-function getInitials(nameStr: string): string {
-  return nameStr
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+/** The signed-in staff member shown on the account page. */
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  role?: string | null;
+  twoFactorEnabled?: boolean | null;
+  twoFactorMethod?: string | null;
 }
 
-interface ProfileHeaderProps {
-  user: User;
+function initials(name: string): string {
+  return Array.from(name.trim().split(/\s+/), (part) => Array.from(part)[0] ?? "").join("").slice(0, 2).toUpperCase();
 }
 
-export function ProfileHeader({ user }: ProfileHeaderProps) {
+/** Profile card: photo, name and sign-in email. Edits go through the page's save bar. */
+export function ProfileHeader({ user }: { user: User }) {
+  const t = useMessages(accountMessages);
   const router = useRouter();
-  const currentUserIdRef = useRef(user.id);
-  const isEditingRef = useRef(false);
-  const [savedName, setSavedName] = useState(user.name);
-  const [savedImage, setSavedImage] = useState(user.image || "");
+  const [saved, setSaved] = useState({ name: user.name, image: user.image || "" });
   const [name, setName] = useState(user.name);
   const [image, setImage] = useState(user.image || "");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Pressing Save with a short name reveals its message even before the field is left.
+  const { revealed } = useServerFieldError("profile-name");
 
+  const trimmed = name.trim();
+  const hasChanges = trimmed !== saved.name || image !== saved.image;
+  const nameTooShort = trimmed.length < 2;
+  const nameInvalid = (touched || revealed) && nameTooShort;
+
+  // A fresh route context (another tab, a refresh) updates the saved values;
+  // it replaces the fields only when there is nothing unsaved in them.
+  const userIdRef = useRef(user.id);
+  const dirtyRef = useRef(hasChanges);
+  dirtyRef.current = hasChanges;
   useEffect(() => {
-    isEditingRef.current = isEditing;
-  }, [isEditing]);
-
-  useEffect(() => {
-    const nextSavedName = user.name;
-    const nextSavedImage = user.image || "";
-    const isDifferentUser = currentUserIdRef.current !== user.id;
-
-    currentUserIdRef.current = user.id;
-    setSavedName(nextSavedName);
-    setSavedImage(nextSavedImage);
-
-    if (isDifferentUser || !isEditingRef.current) {
-      setName(nextSavedName);
-      setImage(nextSavedImage);
-      if (isDifferentUser) setIsEditing(false);
+    const next = { name: user.name, image: user.image || "" };
+    setSaved(next);
+    if (userIdRef.current !== user.id || !dirtyRef.current) {
+      setName(next.name);
+      setImage(next.image);
     }
+    userIdRef.current = user.id;
   }, [user.id, user.name, user.image]);
 
-  const normalizedName = name.trim();
-  const hasChanges = normalizedName !== savedName || image !== savedImage;
-
-  const handleImageSelect = (file: MediaFile) => {
-    setImage(file.url);
-    setIsEditing(true);
+  const discard = () => {
+    setName(saved.name);
+    setImage(saved.image);
+    setTouched(false);
   };
 
-  const removeImage = () => {
-    setImage("");
-    setIsEditing(true);
-  };
-
-  const handleSave = async () => {
-    if (normalizedName.length < 2) {
-      toast.error("Name must be at least 2 characters");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const save = async () => {
+    setSaving(true);
     try {
-      const result = await apiData(postApiV1AdminAuthUpdateProfile({
-        body: { name: normalizedName, image: image || null },
-      }));
-      const updatedName = result.user?.name ?? normalizedName;
-      const updatedImage =
-        result.user?.image === undefined ? image || "" : result.user.image || "";
-
-      toast.success("Profile saved");
-      setSavedName(updatedName);
-      setSavedImage(updatedImage);
-      setName(updatedName);
-      setImage(updatedImage);
-      setIsEditing(false);
+      const result = await apiData(postApiV1AdminAuthUpdateProfile({ body: { name: trimmed, image: image || null } }));
+      const next = {
+        name: result.user?.name ?? trimmed,
+        image: result.user?.image === undefined ? image : result.user.image || "",
+      };
+      setSaved(next);
+      setName(next.name);
+      setImage(next.image);
+      setTouched(false);
       void refreshAdminRouteContext(router);
-    } catch (err) {
-      toast.error(getServerFnError(err, "Failed to update profile"));
     } finally {
-      setIsLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setName(savedName);
-    setImage(savedImage);
-    setIsEditing(false);
-  };
+  useSaveBar({ dirty: hasChanges, saving, invalid: nameTooShort, label: t("profile"), save, discard });
 
   return (
-    <>
-      <UnsavedChangesGuard
-        isDirty={isEditing && hasChanges}
-        isSubmitting={isLoading}
-      />
-    <Card className="max-w-4xl rounded-xl shadow-none">
-      <CardHeader className="border-b p-4">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <UserRound className="h-4 w-4" aria-hidden="true" />
-          Profile
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("profile")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4">
-        <div className="grid gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-center">
-          <div className="relative h-12 w-12">
-            <div className="h-12 w-12 overflow-hidden rounded-full border bg-muted">
-              {image ? (
-                <img
-                  src={mediaImageUrl(image, 160)}
-                  alt={name}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-muted">
-                  <span className="text-sm font-semibold text-foreground">
-                    {getInitials(name)}
-                  </span>
-                </div>
-              )}
-            </div>
-            {image && isEditing && (
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                className="absolute -bottom-1 -right-1 h-11 w-11 rounded-full sm:h-8 sm:w-8"
-                onClick={removeImage}
-                title="Remove photo"
-                aria-label="Remove profile photo"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
-
-          <div className="min-w-0 space-y-2.5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0 flex-1 space-y-1.5">
-                {isEditing ? (
-                  <Input
-                    id="profile-display-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !isLoading && hasChanges) {
-                        event.preventDefault();
-                        void handleSave();
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        handleCancel();
-                      }
-                    }}
-                    className="min-h-11 max-w-xl text-base font-semibold sm:min-h-9"
-                    placeholder="Display name"
-                    aria-label="Display name"
-                    autoFocus
-                  />
-                ) : (
-                  <h2 className="truncate text-base font-semibold">{name}</h2>
-                )}
-                <p className="break-words text-sm text-muted-foreground">{user.email}</p>
-              </div>
-
-              <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 sm:min-h-9 sm:justify-end">
-                <div
-                  className="flex min-h-11 flex-wrap items-center gap-2 sm:min-h-9"
-                  data-profile-edit-actions
-                >
-                  {!isEditing ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-11 sm:min-h-9"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit profile
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-11 sm:min-h-9"
-                        onClick={handleCancel}
-                        disabled={isLoading}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="min-h-11 sm:min-h-9"
-                        onClick={handleSave}
-                        disabled={isLoading || !hasChanges}
-                      >
-                        {isLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5" />
-                        )}
-                        Save profile
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex min-h-11 flex-wrap items-center gap-2 border-t pt-2.5 sm:min-h-9 sm:border-t-0 sm:pt-0">
-              <MediaManager
-                capability="image"
-                onSelect={handleImageSelect}
-                trigger={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 shrink-0 shadow-none after:shadow-none sm:min-h-9"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    {image ? "Change photo" : "Add photo"}
-                  </Button>
-                }
-              />
-              {image && isEditing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-11 text-destructive hover:text-destructive sm:min-h-9"
-                  onClick={removeImage}
-                  disabled={isLoading}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Remove
+      <form
+        method="post"
+        action="/admin/account"
+        noValidate
+        // Saving happens from the save bar; Enter in the name field never submits.
+        onSubmit={(event) => event.preventDefault()}
+      >
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-body font-medium text-muted-foreground">
+              {image ? <img src={mediaImageUrl(image, 160)} alt="" className="size-full object-cover" loading="lazy" decoding="async" /> : initials(trimmed || user.email)}
+            </span>
+            <MediaManager
+              capability="image"
+              onSelect={(file: MediaFile) => setImage(file.url)}
+              trigger={
+                <Button type="button" variant="outline" size="sm">
+                  <ImagePlus aria-hidden="true" />
+                  {t(image ? "changePhoto" : "addPhoto")}
                 </Button>
-              )}
-            </div>
+              }
+            />
+            {image ? (
+              <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setImage("")}>
+                {t("removePhoto")}
+              </Button>
+            ) : null}
           </div>
-        </div>
-      </CardContent>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="profile-name">{t("name")}</Label>
+            <Input
+              id="profile-name"
+              value={name}
+              autoComplete="name"
+              maxLength={100}
+              aria-invalid={nameInvalid || undefined}
+              aria-describedby={nameInvalid ? "profile-name-error" : undefined}
+              onBlur={() => setTouched(true)}
+              onChange={(event) => setName(event.target.value)}
+            />
+            {nameInvalid ? <p id="profile-name-error" className="text-body text-destructive">{t("nameTooShort")}</p> : null}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-body font-medium">{t("email")}</span>
+            <span className="break-words text-body text-muted-foreground">{user.email}</span>
+          </div>
+        </CardContent>
+      </form>
     </Card>
-    </>
   );
 }

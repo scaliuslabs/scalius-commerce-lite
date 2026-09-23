@@ -101,7 +101,7 @@ function createDbMock({
                   if (table === codTracking) return selectedCodTracking ?? null;
                   if (table === deliveryShipments) return selectedShipment ?? null;
                   if (table === refundAttempts) return selectedRefundAttempt ?? null;
-                  return selectedOrder;
+                  return selectedOrder && { currencyCode: "BDT", currencyDecimalPlaces: 2, ...selectedOrder };
                 },
                 all: async () => {
                   if (table === paymentSessionAttempts) return selectedPaymentSessionAttemptRows ?? [];
@@ -164,10 +164,9 @@ describe("orders fulfillment side-effect ordering", () => {
     mocks.recordCODFailure.mockResolvedValue({ success: true });
     mocks.validateCODCollectionDetails.mockReturnValue({
       collectedBy: "Courier A",
-      collectedAmount: 100,
-      expectedAmount: 100,
-      newPaidAmount: 100,
-      newBalanceDue: 0,
+      collectedAmountMinor: 10_000,
+      newPaidAmountMinor: 10_000,
+      newBalanceDueMinor: 0,
     });
     mocks.listOrderReturns.mockResolvedValue([]);
     mocks.createOrderReturn.mockResolvedValue({ returnId: "ret_1" });
@@ -503,9 +502,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       updateResults: [[]],
     });
@@ -527,9 +526,9 @@ describe("orders fulfillment side-effect ordering", () => {
         selectedOrder: {
           status,
           version: 3,
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
+          totalAmountMinor: 10_000,
+          paidAmountMinor: 0,
+          balanceDueMinor: 10_000,
         },
         updateResults: [],
       });
@@ -552,9 +551,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.CANCELLED,
         version: 4,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       updateResults: [],
     });
@@ -572,9 +571,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "processing" },
       updateResults: [],
@@ -597,9 +596,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "processing" },
       updateResults: [],
@@ -619,9 +618,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         inventoryAction: "reserved",
       },
       updateResults: [[{ id: "order_1" }]],
@@ -656,9 +655,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         inventoryAction: "reserved",
       },
       updateResults: [[{ id: "order_1" }]],
@@ -683,9 +682,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.CONFIRMED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         inventoryAction: "reserved",
       },
       updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
@@ -711,9 +710,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         inventoryAction: "reserved",
       },
       updateResults: [[{ id: "order_1" }]],
@@ -738,14 +737,15 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.CONFIRMED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
         inventoryAction: "reserved",
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 10_000,
+        currency: "BDT",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
         collectedBy: "Courier A",
@@ -770,7 +770,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
       orderId: "order_1",
       collectedBy: "Courier A",
-      collectedAmount: 100,
+      collectedAmountMinor: 10_000,
       receiptUrl: undefined,
     });
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
@@ -784,14 +784,15 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
         inventoryAction: "reserved",
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 10_000,
+        currency: "BDT",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
         collectedBy: "Courier A",
@@ -814,7 +815,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
       orderId: "order_1",
       collectedBy: "Courier A",
-      collectedAmount: 100,
+      collectedAmountMinor: 10_000,
       receiptUrl: undefined,
     });
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
@@ -826,14 +827,15 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
         inventoryAction: "reserved",
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 10_000,
+        currency: "BDT",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
         collectedBy: "Courier A",
@@ -862,16 +864,16 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.DELIVERED,
         version: 4,
-        totalAmount: 1.235,
-        paidAmount: 1.235,
-        balanceDue: 0,
+        totalAmountMinor: 1_235,
+        paidAmountMinor: 1_235,
+        balanceDueMinor: 0,
         inventoryAction: "deducted",
         currencyCode: "KWD",
         currencyDecimalPlaces: 3,
       },
       selectedPayment: {
         id: "pay_kwd",
-        amount: 1.235,
+        amountMinor: 1_235,
         currency: "KWD",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
@@ -898,7 +900,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
       orderId: "order_1",
       collectedBy: "Courier A",
-      collectedAmount: 1.235,
+      collectedAmountMinor: 1_235,
       receiptUrl: undefined,
     });
   });
@@ -908,9 +910,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.DELIVERED,
         version: 4,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       updateResults: [],
     });
@@ -940,9 +942,9 @@ describe("orders fulfillment side-effect ordering", () => {
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 4,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         inventoryAction: "deducted",
       },
       selectedRows: [{ id: "item_1", quantity: 1 }],
@@ -1252,8 +1254,8 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 100,
-        balanceDue: 0,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
       },
       selectedPayment: null,
       updateResults: [[{ id: "order_1" }]],
@@ -1276,12 +1278,13 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 100,
-        balanceDue: 0,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 10_000,
+        currency: "BDT",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
       },
@@ -1306,12 +1309,13 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 100,
-        balanceDue: 0,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
       },
       selectedPayment: {
         id: "pay_1",
-        amount: 100,
+        amountMinor: 10_000,
+        currency: "BDT",
         paymentMethod: PaymentMethod.COD,
         status: PaymentRecordStatus.SUCCEEDED,
         collectedBy: "Courier A",
@@ -1342,9 +1346,9 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.STRIPE,
         paymentStatus: PaymentStatus.PAID,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 10_000,
+        balanceDueMinor: 0,
       },
       selectedPayment: null,
       selectedCodTracking: null,
@@ -1369,9 +1373,9 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.SSLCOMMERZ,
         paymentStatus: PaymentStatus.PARTIAL,
-        totalAmount: 2500,
-        paidAmount: 500,
-        balanceDue: 2000,
+        totalAmountMinor: 250_000,
+        paidAmountMinor: 50_000,
+        balanceDueMinor: 200_000,
       },
       selectedPayment: null,
       selectedCodTracking: null,
@@ -1395,9 +1399,9 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.STRIPE,
         paymentStatus: PaymentStatus.PARTIAL,
-        totalAmount: 2500,
-        paidAmount: 500,
-        balanceDue: 2000,
+        totalAmountMinor: 250_000,
+        paidAmountMinor: 50_000,
+        balanceDueMinor: 200_000,
       },
       selectedPayment: null,
       selectedCodTracking: null,
@@ -1456,9 +1460,9 @@ describe("orders fulfillment side-effect ordering", () => {
           customerEmail: "customer@example.com",
           paymentMethod: PaymentMethod.COD,
           paymentStatus: PaymentStatus.UNPAID,
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
+          totalAmountMinor: 10_000,
+          paidAmountMinor: 0,
+          balanceDueMinor: 10_000,
         },
         updateResults: [[{ id: "order_1" }]],
       });
@@ -1472,14 +1476,13 @@ describe("orders fulfillment side-effect ordering", () => {
   );
 
   it.each([
-    { paymentStatus: PaymentStatus.PAID, paidAmount: 100 },
-    { paymentStatus: PaymentStatus.PARTIAL, paidAmount: 40 },
-    { paymentStatus: PaymentStatus.UNPAID, paidAmount: 1 },
-    { paymentStatus: PaymentStatus.UNPAID, paidAmount: null },
-    { paymentStatus: PaymentStatus.UNPAID, paidAmount: -1 },
+    { paymentStatus: PaymentStatus.PAID, paidAmountMinor: 10_000 },
+    { paymentStatus: PaymentStatus.PARTIAL, paidAmountMinor: 4_000 },
+    { paymentStatus: PaymentStatus.UNPAID, paidAmountMinor: 100 },
+    { paymentStatus: PaymentStatus.UNPAID, paidAmountMinor: -100 },
   ])(
     "rejects generic cancellation with captured or uncertain payment state %# before writes or inventory work",
-    async ({ paymentStatus, paidAmount }) => {
+    async ({ paymentStatus, paidAmountMinor }) => {
       const { db, updates } = createDbMock({
         selectedOrder: {
           status: OrderStatus.PENDING,
@@ -1489,9 +1492,9 @@ describe("orders fulfillment side-effect ordering", () => {
           customerEmail: "customer@example.com",
           paymentMethod: PaymentMethod.STRIPE,
           paymentStatus,
-          totalAmount: 100,
-          paidAmount,
-          balanceDue: Math.max(0, 100 - (paidAmount ?? 0)),
+          totalAmountMinor: 10_000,
+          paidAmountMinor,
+          balanceDueMinor: Math.max(0, 10_000 - paidAmountMinor),
         },
         updateResults: [[{ id: "order_1" }]],
       });
@@ -1520,9 +1523,9 @@ describe("orders fulfillment side-effect ordering", () => {
           customerEmail: "customer@example.com",
           paymentMethod: PaymentMethod.STRIPE,
           paymentStatus: PaymentStatus.UNPAID,
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
+          totalAmountMinor: 10_000,
+          paidAmountMinor: 0,
+          balanceDueMinor: 10_000,
         },
         selectedPayment: {
           id: "payment_1",
@@ -1549,9 +1552,9 @@ describe("orders fulfillment side-effect ordering", () => {
         customerEmail: "customer@example.com",
         paymentMethod: PaymentMethod.COD,
         paymentStatus: PaymentStatus.UNPAID,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
       },
       selectedPayment: null,
       updateResults: [[{ id: "order_1" }]],

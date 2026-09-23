@@ -210,7 +210,6 @@ describe("cart store", () => {
       id: "disc_1",
       code: "SAVE10",
       type: "percentage",
-      valueType: "percentage",
       discountValue: 10,
       discountAmount: 250,
     });

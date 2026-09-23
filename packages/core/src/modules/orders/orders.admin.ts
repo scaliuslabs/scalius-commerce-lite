@@ -66,7 +66,7 @@ import {
 } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
-import { calculateDiscountedPriceAtPrecision } from "@scalius/shared/price-utils";
+import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
@@ -97,16 +97,14 @@ import { createCODTrackingInsertValues } from "../payments/cod";
 import {
     createOrderCurrencySnapshot,
     resolveOrderCurrencySnapshot,
-    roundOrderMoney,
     type OrderCurrencySnapshot,
 } from "../payments/order-currency";
+import { orderMoneyAmounts, orderMoneySelection } from "./order-money";
 import { getCurrencySettings } from "../settings/site-settings.service";
 import { validateCustomerPhoneCountry } from "../settings/phone-country-policy";
 import {
     buildStorefrontTaxAllocationLineId,
     calculateStorefrontTaxQuote,
-    fromMinorUnits,
-    toMinorUnits,
     type TaxQuote,
 } from "../tax";
 import {
@@ -168,13 +166,13 @@ import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ORDER_LIST_LIMIT = 100;
 const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 7;
 const ORDER_AMENDMENT_GUARD_MARKER = "ORDER_AMENDMENT_CONFLICT";
 
 export interface AdminOrderFullEditSource {
     status: string;
     paymentStatus: string | null;
-    paidAmount: number | null;
+    paidAmountMinor: number;
     fulfillmentStatus: string | null;
     shipmentClaimId: string | null;
     shipmentClaimExpiresAt: Date | number | string | null;
@@ -203,7 +201,7 @@ export function buildAdminOrderFullEditReadiness(
     }
     if (
         order.paymentStatus !== PaymentStatus.UNPAID
-        || (order.paidAmount ?? 0) !== 0
+        || order.paidAmountMinor !== 0
         || Boolean(order.hasPaymentHistory)
         || Boolean(order.hasRefundHistory)
     ) {
@@ -304,7 +302,7 @@ export async function getAdminOrderFullEditReadiness(
         .select({
             status: orders.status,
             paymentStatus: orders.paymentStatus,
-            paidAmount: orders.paidAmount,
+            paidAmountMinor: orders.paidAmountMinor,
             fulfillmentStatus: orders.fulfillmentStatus,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -321,7 +319,7 @@ export interface AdminOrderAmendmentSource {
     status: string;
     paymentMethod: string | null;
     paymentStatus: string | null;
-    paidAmount: number | null;
+    paidAmountMinor: number;
     fulfillmentStatus: string | null;
     inventoryAction: string | null;
     shipmentClaimId: string | null;
@@ -360,7 +358,7 @@ export function buildAdminOrderAmendmentReadiness(
     }
     if (
         order.paymentStatus !== PaymentStatus.UNPAID
-        || (order.paidAmount ?? 0) !== 0
+        || order.paidAmountMinor !== 0
         || Boolean(order.hasPaymentHistory)
         || Boolean(order.hasPaymentSessionHistory)
         || Boolean(order.hasPaymentPlan)
@@ -413,7 +411,7 @@ function adminOrderAmendmentSelection(orderId: string) {
         status: orders.status,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
-        paidAmount: orders.paidAmount,
+        paidAmountMinor: orders.paidAmountMinor,
         fulfillmentStatus: orders.fulfillmentStatus,
         inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
@@ -441,7 +439,7 @@ function adminOrderAmendmentSelection(orderId: string) {
             WHERE ${codTracking.orderId} = ${orderId}
               AND ${codTracking.codStatus} = 'pending'
               AND ${codTracking.collectedAt} IS NULL
-              AND COALESCE(${codTracking.collectedAmount}, 0) = 0
+              AND COALESCE(${codTracking.collectedAmountMinor}, 0) = 0
         )`,
     };
 }
@@ -478,7 +476,6 @@ type OrderListPaymentAttemptRow = {
     orderId: string;
     gateway: string;
     paymentType: string;
-    amount?: number;
     status: string;
     attempts: number;
     claimExpiresAt: number | null;
@@ -521,7 +518,7 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantLabel: string | null;
     productImageMediaId: string | null;
     taxClassId: string | null;
-    catalogUnitPrice: number | null;
+    catalogUnitPriceMinor: number;
 };
 type AdminOrderSkuIssueCode =
     | "SKU_REQUIRED"
@@ -533,55 +530,36 @@ interface ManualOrderMoneyItem {
     productId: string;
     variantId: string | null;
     quantity: number;
-    price: number;
+    unitPriceMinor: number;
 }
 
+/** Order totals in integer minor units: total = subtotal + shipping − discount. */
 function calculateManualOrderMoney(
     items: ManualOrderMoneyItem[],
-    shippingCharge: number,
-    discountAmount: number | null,
+    shippingMinor: number,
+    discountMinor: number,
     currency: OrderCurrencySnapshot,
 ) {
-    const normalizedItems = items.map((item) => ({
-        ...item,
-        price: roundOrderMoney(item.price, currency),
-    }));
-    const subtotal = normalizedItems.reduce(
-        (sum, item) => roundOrderMoney(
-            sum + roundOrderMoney(item.price * item.quantity, currency),
-            currency,
-        ),
+    const subtotalAmountMinor = items.reduce(
+        (sum, item) => sum + item.unitPriceMinor * item.quantity,
         0,
     );
-    const normalizedShipping = roundOrderMoney(shippingCharge, currency);
-    const normalizedDiscount = roundOrderMoney(discountAmount ?? 0, currency);
-    if (normalizedDiscount > subtotal) {
+    if (discountMinor > subtotalAmountMinor) {
         throw new ValidationError(
             "Discount amount cannot exceed the manual order subtotal.",
             {
                 reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
-                maximumDiscountAmountMinor: toMinorUnits(
-                    subtotal,
-                    currency.decimalPlaces,
-                ),
+                maximumDiscountAmountMinor: subtotalAmountMinor,
                 currencyCode: currency.code,
                 decimalPlaces: currency.decimalPlaces,
             },
         );
     }
-    const grossAmount = roundOrderMoney(subtotal + normalizedShipping, currency);
-    const totalAmount = roundOrderMoney(grossAmount - normalizedDiscount, currency);
-
     return {
-        normalizedItems,
-        subtotal,
-        shippingCharge: normalizedShipping,
-        discountAmount: normalizedDiscount,
-        totalAmount,
-        subtotalAmountMinor: toMinorUnits(subtotal, currency.decimalPlaces),
-        shippingAmountMinor: toMinorUnits(normalizedShipping, currency.decimalPlaces),
-        discountAmountMinor: toMinorUnits(normalizedDiscount, currency.decimalPlaces),
-        totalAmountMinor: toMinorUnits(totalAmount, currency.decimalPlaces),
+        subtotalAmountMinor,
+        shippingAmountMinor: shippingMinor,
+        discountAmountMinor: discountMinor,
+        totalAmountMinor: subtotalAmountMinor + shippingMinor - discountMinor,
     };
 }
 
@@ -624,15 +602,15 @@ function projectManualOrderQuote(
     taxQuote: TaxQuote,
     trackedItems: PreparedManualOrderQuote["trackedItems"],
 ): ManualOrderQuote {
-    const fromMinor = (value: number) => fromMinorUnits(value, taxQuote.decimalPlaces);
+    const amount = (value: number) => fromMinor(value, taxQuote.decimalPlaces);
     return {
         currencyCode: taxQuote.currencyCode,
         decimalPlaces: taxQuote.decimalPlaces,
-        subtotalAmount: fromMinor(taxQuote.subtotalMinor),
-        shippingAmount: fromMinor(taxQuote.shippingMinor),
-        discountAmount: fromMinor(taxQuote.discountMinor),
-        taxAmount: fromMinor(taxQuote.taxMinor),
-        totalAmount: fromMinor(taxQuote.totalMinor),
+        subtotalAmount: amount(taxQuote.subtotalMinor),
+        shippingAmount: amount(taxQuote.shippingMinor),
+        discountAmount: amount(taxQuote.discountMinor),
+        taxAmount: amount(taxQuote.taxMinor),
+        totalAmount: amount(taxQuote.totalMinor),
         taxLabel: taxQuote.displayLabel,
         pricesIncludeTax: taxQuote.pricesIncludeTax,
         taxEnabled: taxQuote.enabled,
@@ -642,8 +620,8 @@ function projectManualOrderQuote(
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
-            unitPrice: item.price,
-            lineSubtotal: fromMinor(taxQuote.lines[index]?.grossAmountMinor ?? 0),
+            unitPrice: amount(item.unitPriceMinor),
+            lineSubtotal: amount(taxQuote.lines[index]?.grossAmountMinor ?? 0),
         })),
     };
 }
@@ -659,26 +637,17 @@ async function prepareManualOrderQuote(
     // Keep location validation first so a stale/cross-parent destination fails
     // before catalog or tax reads do unnecessary work.
     const locationNames = await resolveActiveDeliveryLocationNames(db, data);
-    const resolvedItems = await resolveAdminOrderItemInventory(
-        db,
-        data.items,
-        { catalogPricePrecision: currency.decimalPlaces },
-    );
+    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items);
+    const trackedItems = resolvedItems.map((item) => ({
+        ...item,
+        unitPriceMinor: item.catalogUnitPriceMinor,
+    }));
     const money = calculateManualOrderMoney(
-        resolvedItems.map((item) => ({
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.catalogUnitPrice!,
-        })),
-        data.shippingCharge,
-        data.discountAmount,
+        trackedItems,
+        toMinor(data.shippingCharge, currency.decimalPlaces),
+        toMinor(data.discountAmount ?? 0, currency.decimalPlaces),
         currency,
     );
-    const trackedItems = resolvedItems.map((item, index) => ({
-        ...item,
-        price: money.normalizedItems[index]!.price,
-    }));
     const allocationLineIds = trackedItems.map((item, index) =>
         buildStorefrontTaxAllocationLineId(index, item.variantId),
     );
@@ -693,13 +662,12 @@ async function prepareManualOrderQuote(
             lineId: allocationLineIds[index]!,
             productId: item.productId,
             variantId: item.variantId,
-            unitPrice: item.price,
+            unitPriceMinor: item.unitPriceMinor,
             quantity: item.quantity,
             taxClassId: item.taxClassId,
         })),
-        shippingAmount: money.shippingCharge,
-        discountAmount: money.discountAmount,
-        discountType: money.discountAmount > 0 ? "amount_off_order" : null,
+        shippingMinor: money.shippingAmountMinor,
+        discountMinor: money.discountAmountMinor,
         currency: {
             code: currency.code,
             decimalPlaces: currency.decimalPlaces,
@@ -840,7 +808,7 @@ function paymentRecoveryLifecycleCondition() {
     return sql<number>`CASE
         WHEN NOT ${inArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES])} THEN 1
         WHEN ${inArray(orders.status, [OrderStatus.CANCELLED, OrderStatus.RETURNED])}
-            AND ${orders.paidAmount} > 0 THEN 1
+            AND ${orders.paidAmountMinor} > 0 THEN 1
         WHEN EXISTS (
             SELECT 1 FROM ${paymentSessionAttempts}
             WHERE ${paymentSessionAttempts.orderId} = ${orderIdSql}
@@ -1145,8 +1113,7 @@ function buildGuardedCustomerInsert(
 ): SQLiteBatchItem {
     // INSERT ... SELECT binds every customers column positionally in schema
     // order: identity/contact/location, six account timestamps, total_orders,
-    // total_spent (paid amounts only; recomputed after commit), last_order_at,
-    // created_at, updated_at, deleted_at.
+    // last_order_at, created_at, updated_at, deleted_at.
     return db.insert(customers).select(sql`
         SELECT
             ${customerId},
@@ -1167,7 +1134,6 @@ function buildGuardedCustomerInsert(
             NULL,
             NULL,
             1,
-            0,
             unixepoch(),
             unixepoch(),
             unixepoch(),
@@ -1180,9 +1146,10 @@ function buildGuardedOrderItemInsert(
     db: Database,
     orderId: string,
     committedOrderVersion: number,
-    item: AdminOrderItemWithInventory<UpdateOrderData["items"][number]>,
+    item: AdminOrderItemWithInventory<UpdateOrderData["items"][number] & { unitPriceMinor: number }>,
 ): SQLiteBatchItem {
     const itemId = "item_" + nanoid();
+    const lineSubtotalMinor = item.unitPriceMinor * item.quantity;
     return db.insert(orderItems).select(sql`
         SELECT
             ${itemId},
@@ -1191,14 +1158,13 @@ function buildGuardedOrderItemInsert(
             ${item.variantId},
             ${item.productImageMediaId},
             ${item.quantity},
-            ${item.price},
             ${item.productName},
             ${item.variantLabel},
             ${item.inventoryTracked ? 1 : 0},
-            NULL,
-            NULL,
-            NULL,
-            NULL,
+            ${item.unitPriceMinor},
+            ${lineSubtotalMinor},
+            0,
+            ${lineSubtotalMinor},
             0,
             ${ItemFulfillmentStatus.PENDING},
             unixepoch()
@@ -1244,7 +1210,6 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
 export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(
     db: Database,
     items: T[],
-    options: { catalogPricePrecision?: number } = {},
 ): Promise<Array<AdminOrderItemWithInventory<T>>> {
     assertAdminOrderItemsUseSkus(items);
 
@@ -1259,12 +1224,12 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             imageId: productVariants.imageId,
             productName: products.name,
             productDiscountType: products.discountType,
-            productDiscountPercentage: products.discountPercentage,
-            productDiscountAmount: products.discountAmount,
-            variantPrice: productVariants.price,
+            productDiscountBps: products.discountBps,
+            productDiscountAmountMinor: products.discountAmountMinor,
+            variantPriceMinor: productVariants.priceMinor,
             variantDiscountType: productVariants.discountType,
-            variantDiscountPercentage: productVariants.discountPercentage,
-            variantDiscountAmount: productVariants.discountAmount,
+            variantDiscountBps: productVariants.discountBps,
+            variantDiscountAmountMinor: productVariants.discountAmountMinor,
             taxClassId: sql<string | null>`coalesce(${productVariants.taxClassId}, ${products.taxClassId})`,
             variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
@@ -1328,18 +1293,20 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
         }
 
         const variantHasDiscount =
-            (sku.variantDiscountType === "percentage" && (sku.variantDiscountPercentage ?? 0) > 0)
-            || (sku.variantDiscountType === "flat" && (sku.variantDiscountAmount ?? 0) > 0);
-        const catalogUnitPrice = options.catalogPricePrecision == null
-            ? null
-            : calculateDiscountedPriceAtPrecision(
-                sku.variantPrice,
-                variantHasDiscount ? sku.variantDiscountType : sku.productDiscountType,
-                variantHasDiscount
-                    ? sku.variantDiscountPercentage
-                    : sku.productDiscountPercentage,
-                variantHasDiscount ? sku.variantDiscountAmount : sku.productDiscountAmount,
-                options.catalogPricePrecision,
+            (sku.variantDiscountType === "percentage" && sku.variantDiscountBps > 0)
+            || (sku.variantDiscountType === "flat" && sku.variantDiscountAmountMinor > 0);
+        const catalogUnitPriceMinor = variantHasDiscount
+            ? discountedPriceMinor(
+                sku.variantPriceMinor,
+                sku.variantDiscountType,
+                sku.variantDiscountBps,
+                sku.variantDiscountAmountMinor,
+            )
+            : discountedPriceMinor(
+                sku.variantPriceMinor,
+                sku.productDiscountType,
+                sku.productDiscountBps,
+                sku.productDiscountAmountMinor,
             );
 
         resolvedItems.push({
@@ -1353,7 +1320,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 sku.imageId,
             )?.mediaId ?? null,
             taxClassId: sku.taxClassId,
-            catalogUnitPrice,
+            catalogUnitPriceMinor,
         });
     });
 
@@ -1448,31 +1415,29 @@ export async function listOrders(db: Database, options: {
     const trimmedSearch = search?.trim();
     if (trimmedSearch) {
         const phoneSearchTerms = buildPhoneSearchTerms(trimmedSearch);
-        const phoneCondition = buildPhoneSearchCondition(phoneSearchTerms);
+        const phoneCondition = isLikelyPhoneSearch(trimmedSearch)
+            ? buildPhoneSearchCondition(phoneSearchTerms)
+            : undefined;
         const ftsCondition = ftsMatch(db, "orders_fts", "orders", trimmedSearch);
-
-        if (isLikelyPhoneSearch(trimmedSearch) && phoneCondition) {
-            whereConditions.push(ftsCondition ? sql`(${ftsCondition} OR ${phoneCondition})` : phoneCondition);
-            if (isFts5SearchEnabled(db)) {
-                const sanitized = sanitizeFtsQuery(trimmedSearch);
-                rankExpression = sql`
-                    COALESCE(
-                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                        999999
-                    ) ASC
-                `;
-            }
-        } else if (ftsCondition) {
-            whereConditions.push(ftsCondition);
-            if (isFts5SearchEnabled(db)) {
-                const sanitized = sanitizeFtsQuery(trimmedSearch);
-                rankExpression = sql`
-                    COALESCE(
-                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                        999999
-                    ) ASC
-                `;
-            }
+        // Merchants also look orders up by the courier's consignment or tracking id.
+        const courierIdCondition = sql`EXISTS (
+            SELECT 1 FROM ${deliveryShipments}
+            WHERE ${deliveryShipments.orderId} = ${orders.id}
+              AND (lower(${deliveryShipments.trackingId}) = lower(${trimmedSearch})
+                OR lower(${deliveryShipments.externalId}) = lower(${trimmedSearch}))
+        )`;
+        const matches = [ftsCondition, phoneCondition, courierIdCondition].filter(
+            (condition): condition is SQL => condition !== undefined,
+        );
+        whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
+        if (ftsCondition && isFts5SearchEnabled(db)) {
+            const sanitized = sanitizeFtsQuery(trimmedSearch);
+            rankExpression = sql`
+                COALESCE(
+                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                    999999
+                ) ASC
+            `;
         }
     }
 
@@ -1531,7 +1496,7 @@ export async function listOrders(db: Database, options: {
                 case "customerName":
                     return orders.customerName;
                 case "totalAmount":
-                    return orders.totalAmount;
+                    return orders.totalAmountMinor;
                 case "status":
                     return orders.status;
                 case "createdAt":
@@ -1556,16 +1521,10 @@ export async function listOrders(db: Database, options: {
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
             customerId: orders.customerId,
-            totalAmount: orders.totalAmount,
-            shippingCharge: orders.shippingCharge,
-            discountAmount: orders.discountAmount,
+            ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
-            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
-            shippingAmountMinor: orders.shippingAmountMinor,
-            discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
-            totalAmountMinor: orders.totalAmountMinor,
             taxLabel: orders.taxLabel,
             pricesIncludeTax: orders.pricesIncludeTax,
             status: orders.status,
@@ -1583,7 +1542,6 @@ export async function listOrders(db: Database, options: {
             areaName: orders.areaName,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-            paidAmount: orders.paidAmount,
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...adminOrderFullEditEvidenceSelection(),
         })
@@ -1599,13 +1557,14 @@ export async function listOrders(db: Database, options: {
     const countArr = batchResult[0] as { count: number }[];
     const results = batchResult[1] as {
         id: string; customerName: string; customerPhone: string; customerEmail: string | null;
-        customerId: string | null; totalAmount: number; shippingCharge: number; discountAmount: number;
+        customerId: string | null;
+        currencyDecimalPlaces: number; totalAmountMinor: number; shippingAmountMinor: number;
+        discountAmountMinor: number; paidAmountMinor: number; balanceDueMinor: number;
         status: string; paymentStatus: string; paymentMethod: string | null; fulfillmentStatus: string;
         createdAt: number; updatedAt: number; version: number;
         city: string | null; zone: string | null; area: string | null;
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
-        paidAmount: number | null;
         paymentRecoveryApplicable: number;
         hasTaxSnapshot: number; hasPaymentHistory: number; hasShipmentHistory: number;
         hasRefundHistory: number; hasReturnHistory: number; hasInvoiceHistory: number;
@@ -1743,6 +1702,7 @@ export async function listOrders(db: Database, options: {
         const { paymentRecoveryApplicable: _paymentRecoveryApplicable, ...publicOrder } = omitAdminOrderFullEditEvidence(order);
         return {
             ...publicOrder,
+            ...orderMoneyAmounts(order),
             createdAt: new Date(order.createdAt * 1000),
             updatedAt: new Date(order.updatedAt * 1000),
             itemCount: itemCountMap.get(order.id)?.count || 0,
@@ -1782,8 +1742,8 @@ async function resolveOrderPaymentRecoveryPreview(
             status: orders.status,
             paymentStatus: orders.paymentStatus,
             paymentMethod: orders.paymentMethod,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
+            paidAmountMinor: orders.paidAmountMinor,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             deletedAt: orders.deletedAt,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -1811,7 +1771,7 @@ async function resolveOrderPaymentRecoveryPreview(
     ) {
         throw new ValidationError("Order payment state is not eligible for hosted payment recovery.");
     }
-    if (Number(order.paidAmount ?? 0) > 0) {
+    if (order.paidAmountMinor > 0) {
         throw new ValidationError("Order already has payment recorded and cannot receive a receipt recovery link.");
     }
 
@@ -1821,7 +1781,6 @@ async function resolveOrderPaymentRecoveryPreview(
                 orderId: paymentSessionAttempts.orderId,
                 gateway: paymentSessionAttempts.gateway,
                 paymentType: paymentSessionAttempts.paymentType,
-                amount: paymentSessionAttempts.amount,
                 status: paymentSessionAttempts.status,
                 attempts: paymentSessionAttempts.attempts,
                 claimExpiresAt: paymentSessionAttempts.claimExpiresAt,
@@ -1841,7 +1800,7 @@ async function resolveOrderPaymentRecoveryPreview(
         db
             .select({
                 status: paymentPlans.status,
-                depositAmount: paymentPlans.depositAmount,
+                depositAmountMinor: paymentPlans.depositAmountMinor,
             })
             .from(paymentPlans)
             .where(eq(paymentPlans.orderId, orderId))
@@ -1892,9 +1851,8 @@ async function resolveOrderPaymentRecoveryPreview(
             : null;
     const depositAmount = paymentType === "deposit" &&
         paymentPlan?.status === PaymentPlanStatus.PENDING &&
-        Number.isFinite(Number(paymentPlan.depositAmount)) &&
-        Number(paymentPlan.depositAmount) > 0
-        ? Number(paymentPlan.depositAmount)
+        paymentPlan.depositAmountMinor > 0
+        ? fromMinor(paymentPlan.depositAmountMinor, order.currencyDecimalPlaces)
         : null;
 
     return {
@@ -1963,21 +1921,15 @@ async function getOrderDetailsOnce(
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
             customerId: orders.customerId,
-            totalAmount: orders.totalAmount,
-            shippingCharge: orders.shippingCharge,
-            discountAmount: orders.discountAmount,
+            ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
-            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
-            shippingAmountMinor: orders.shippingAmountMinor,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodName: orders.shippingMethodName,
             shippingMethodDescription: orders.shippingMethodDescription,
             shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
             shippingFeeWaived: orders.shippingFeeWaived,
-            discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
-            totalAmountMinor: orders.totalAmountMinor,
             taxLabel: orders.taxLabel,
             pricesIncludeTax: orders.pricesIncludeTax,
             status: orders.status,
@@ -1992,8 +1944,6 @@ async function getOrderDetailsOnce(
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
             version: orders.version,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
@@ -2019,7 +1969,6 @@ async function getOrderDetailsOnce(
                 productId: orderItems.productId,
                 variantId: orderItems.variantId,
                 quantity: orderItems.quantity,
-                price: orderItems.price,
                 productName: orderItems.productName,
                 productImageObjectKey: publishedMediaObjectKey(),
                 productImageStatus: media.status,
@@ -2080,7 +2029,7 @@ async function getOrderDetailsOnce(
         productId: item.productId,
         variantId: item.variantId,
         quantity: item.quantity,
-        price: item.price,
+        price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
         productName: item.productName || null,
         productImage:
             item.productImageObjectKey &&
@@ -2117,6 +2066,7 @@ async function getOrderDetailsOnce(
 
     return {
         ...publicOrder,
+        ...orderMoneyAmounts(order),
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
@@ -2176,18 +2126,15 @@ export async function createOrder(
     const prepared = await (async () => {
         const manualQuote = await prepareManualOrderQuote(db, data);
         const {
-            currency,
             locationNames: { cityName, zoneName, areaName },
             trackedItems,
             allocationLineIds,
             taxQuote,
             quote,
         } = manualQuote;
-        const totalAmount = quote.totalAmount;
         const initialPaymentState = computeOrderPaymentState({
-            totalAmount,
-            paidAmount: 0,
-            currency,
+            totalAmountMinor: taxQuote.totalMinor,
+            paidAmountMinor: 0,
         });
         const existingCustomer = await db
             .select()
@@ -2218,7 +2165,6 @@ export async function createOrder(
         }
 
         return {
-            totalAmount,
             initialPaymentState,
             cityName,
             zoneName,
@@ -2236,7 +2182,6 @@ export async function createOrder(
         throw error;
     });
     const {
-        totalAmount,
         initialPaymentState,
         cityName,
         zoneName,
@@ -2272,7 +2217,6 @@ export async function createOrder(
                 zone: data.zone,
                 area: data.area,
                 totalOrders: 1,
-                totalSpent: initialPaymentState.paidAmount,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
@@ -2297,7 +2241,6 @@ export async function createOrder(
         writeBatch.push(
             db.update(customers).set({
                 totalOrders: sql`${customers.totalOrders} + 1`,
-                totalSpent: sql`${customers.totalSpent} + ${initialPaymentState.paidAmount}`,
                 lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             }).where(eq(customers.id, existingCustomer.id)),
@@ -2332,9 +2275,6 @@ export async function createOrder(
             zoneName,
             areaName,
             notes: data.notes,
-            totalAmount,
-            shippingCharge: quote.shippingAmount,
-            discountAmount: quote.discountAmount,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
@@ -2344,8 +2284,8 @@ export async function createOrder(
             totalAmountMinor: taxQuote.totalMinor,
             taxLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
-            paidAmount: initialPaymentState.paidAmount,
-            balanceDue: initialPaymentState.balanceDue,
+            paidAmountMinor: initialPaymentState.paidAmountMinor,
+            balanceDueMinor: initialPaymentState.balanceDueMinor,
             paymentStatus: initialPaymentState.paymentStatus,
             paymentMethod: PaymentMethod.COD,
             fulfillmentStatus: FulfillmentStatus.PENDING,
@@ -2374,7 +2314,6 @@ export async function createOrder(
             variantId: item.variantId,
             productImageMediaId: item.productImageMediaId,
             quantity: item.quantity,
-            price: item.price,
             productName: item.productName,
             variantLabel: item.variantLabel,
             inventoryTracked: item.inventoryTracked,
@@ -2398,12 +2337,6 @@ export async function createOrder(
             orderId,
             taxClassId: lineTax.taxClassId,
             taxClassName: lineTax.taxClassName,
-            unitPriceMinor: lineTax.unitPriceMinor,
-            quantity: lineTax.quantity,
-            grossAmountMinor: lineTax.grossAmountMinor,
-            discountMinor: lineTax.discountMinor,
-            taxableAmountMinor: lineTax.taxableAmountMinor,
-            taxMinor: lineTax.taxMinor,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
             rateSnapshot: JSON.stringify(lineTax.components),
             createdAt: sql`unixepoch()`,
@@ -2424,12 +2357,6 @@ export async function createOrder(
             displayLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
             shippingTaxed: taxQuote.shippingTaxed,
-            subtotalMinor: taxQuote.subtotalMinor,
-            shippingMinor: taxQuote.shippingMinor,
-            discountMinor: taxQuote.discountMinor,
-            taxableMinor: taxQuote.taxableMinor,
-            taxMinor: taxQuote.taxMinor,
-            totalMinor: taxQuote.totalMinor,
             settingsVersion: taxQuote.settingsVersion,
             calculationVersion: taxQuote.calculationVersion,
             destinationSnapshot: JSON.stringify(taxQuote.destination),
@@ -2596,7 +2523,7 @@ function amendmentCommitGuard(orderId: string, expectedVersion: number) {
           AND ${orders.archivedAt} IS NULL
           AND ${orders.paymentMethod} = ${PaymentMethod.COD}
           AND ${orders.paymentStatus} = ${PaymentStatus.UNPAID}
-          AND ${orders.paidAmount} = 0
+          AND ${orders.paidAmountMinor} = 0
           AND ${orders.fulfillmentStatus} = ${FulfillmentStatus.PENDING}
           AND ${orders.status} IN (${OrderStatus.PENDING}, ${OrderStatus.PROCESSING}, ${OrderStatus.CONFIRMED})
           AND ${orders.shipmentClaimId} IS NULL
@@ -2615,7 +2542,7 @@ function amendmentCommitGuard(orderId: string, expectedVersion: number) {
             WHERE ${codTracking.orderId} = ${orderId}
               AND ${codTracking.codStatus} = 'pending'
               AND ${codTracking.collectedAt} IS NULL
-              AND COALESCE(${codTracking.collectedAmount}, 0) = 0
+              AND COALESCE(${codTracking.collectedAmountMinor}, 0) = 0
           )
           AND NOT EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.orderId} = ${orderId})
           AND NOT EXISTS (SELECT 1 FROM ${paymentSessionAttempts} WHERE ${paymentSessionAttempts.orderId} = ${orderId})
@@ -2790,7 +2717,7 @@ export async function confirmManualOrderAmendment(
             discountAmountMinor: prepared.taxQuote.discountMinor,
             taxAmountMinor: prepared.taxQuote.taxMinor,
             totalAmountMinor: prepared.taxQuote.totalMinor,
-            balanceDue: totalAmount,
+            balanceDueMinor: prepared.taxQuote.totalMinor,
         },
         items: preparedItems.map(({ id, item, lineTax }) => ({ id, ...item, lineTax })),
     });
@@ -2818,7 +2745,6 @@ export async function confirmManualOrderAmendment(
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
             totalOrders: 1,
-            totalSpent: 0,
             lastOrderAt: sql`unixepoch()`,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -2866,9 +2792,6 @@ export async function confirmManualOrderAmendment(
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
             notes: data.notes,
-            totalAmount,
-            shippingCharge: prepared.quote.shippingAmount,
-            discountAmount: prepared.quote.discountAmount,
             currencyCode: prepared.taxQuote.currencyCode,
             currencyDecimalPlaces: prepared.taxQuote.decimalPlaces,
             subtotalAmountMinor: prepared.taxQuote.subtotalMinor,
@@ -2878,8 +2801,8 @@ export async function confirmManualOrderAmendment(
             totalAmountMinor: prepared.taxQuote.totalMinor,
             taxLabel: prepared.taxQuote.displayLabel,
             pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
-            paidAmount: 0,
-            balanceDue: totalAmount,
+            paidAmountMinor: 0,
+            balanceDueMinor: prepared.taxQuote.totalMinor,
             paymentStatus: PaymentStatus.UNPAID,
             customerId,
             inventoryAction: newEntries.length > 0 ? "reserved" : "none",
@@ -2898,7 +2821,6 @@ export async function confirmManualOrderAmendment(
             variantId: preparedItem.item.variantId,
             productImageMediaId: preparedItem.item.productImageMediaId,
             quantity: preparedItem.item.quantity,
-            price: preparedItem.item.price,
             productName: preparedItem.item.productName,
             variantLabel: preparedItem.item.variantLabel,
             inventoryTracked: preparedItem.item.inventoryTracked,
@@ -2918,12 +2840,6 @@ export async function confirmManualOrderAmendment(
                 db.update(orderItemTaxSnapshots).set({
                     taxClassId: preparedItem.lineTax.taxClassId,
                     taxClassName: preparedItem.lineTax.taxClassName,
-                    unitPriceMinor: preparedItem.lineTax.unitPriceMinor,
-                    quantity: preparedItem.lineTax.quantity,
-                    grossAmountMinor: preparedItem.lineTax.grossAmountMinor,
-                    discountMinor: preparedItem.lineTax.discountMinor,
-                    taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
-                    taxMinor: preparedItem.lineTax.taxMinor,
                     pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
                     rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
                     createdAt: sql`unixepoch()`,
@@ -2945,12 +2861,6 @@ export async function confirmManualOrderAmendment(
                     orderId,
                     taxClassId: preparedItem.lineTax.taxClassId,
                     taxClassName: preparedItem.lineTax.taxClassName,
-                    unitPriceMinor: preparedItem.lineTax.unitPriceMinor,
-                    quantity: preparedItem.lineTax.quantity,
-                    grossAmountMinor: preparedItem.lineTax.grossAmountMinor,
-                    discountMinor: preparedItem.lineTax.discountMinor,
-                    taxableAmountMinor: preparedItem.lineTax.taxableAmountMinor,
-                    taxMinor: preparedItem.lineTax.taxMinor,
                     pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
                     rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
                     createdAt: sql`unixepoch()`,
@@ -2974,12 +2884,6 @@ export async function confirmManualOrderAmendment(
             displayLabel: prepared.taxQuote.displayLabel,
             pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
             shippingTaxed: prepared.taxQuote.shippingTaxed,
-            subtotalMinor: prepared.taxQuote.subtotalMinor,
-            shippingMinor: prepared.taxQuote.shippingMinor,
-            discountMinor: prepared.taxQuote.discountMinor,
-            taxableMinor: prepared.taxQuote.taxableMinor,
-            taxMinor: prepared.taxQuote.taxMinor,
-            totalMinor: prepared.taxQuote.totalMinor,
             settingsVersion: prepared.taxQuote.settingsVersion,
             calculationVersion: prepared.taxQuote.calculationVersion,
             destinationSnapshot: JSON.stringify(prepared.taxQuote.destination),
@@ -3318,7 +3222,7 @@ export async function updateOrder(
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
-            paidAmount: orders.paidAmount,
+            paidAmountMinor: orders.paidAmountMinor,
             paymentStatus: orders.paymentStatus,
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
@@ -3368,15 +3272,19 @@ export async function updateOrder(
     await assertOrderHasNoIssuedInvoice(db, id);
 
     const currency = resolveOrderCurrencySnapshot(existingOrder);
+    const items = data.items.map((item) => ({
+        ...item,
+        unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
+    }));
     const money = calculateManualOrderMoney(
-        data.items,
-        data.shippingCharge,
-        data.discountAmount,
+        items,
+        toMinor(data.shippingCharge, currency.decimalPlaces),
+        toMinor(data.discountAmount ?? 0, currency.decimalPlaces),
         currency,
     );
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
-    const trackedNewItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
+    const trackedNewItems = await resolveAdminOrderItemInventory(db, items);
     const pool = (existingOrder.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
     const existingInventoryAction = existingOrder.inventoryAction as string;
     const targetRestoresStock = isStockRestoreStatus(nextStatus);
@@ -3385,16 +3293,14 @@ export async function updateOrder(
     const newEntries = buildInventoryEntries(trackedNewItems, pool);
     const { positiveEntries, negativeEntries } = computeInventoryDeltas(oldEntries, newEntries, pool);
 
-    const totalAmount = money.totalAmount;
     const nextPaymentState = computeOrderPaymentState({
-        totalAmount,
-        paidAmount: existingOrder.paidAmount,
+        totalAmountMinor: money.totalAmountMinor,
+        paidAmountMinor: existingOrder.paidAmountMinor,
         paymentStatus: existingOrder.paymentStatus === PaymentStatus.REFUNDED
             ? PaymentStatus.REFUNDED
             : existingOrder.paymentStatus === PaymentStatus.FAILED
                 ? PaymentStatus.FAILED
                 : undefined,
-        currency,
     });
     let customerId = existingOrder.customerId;
     let newCustomerId: string | null = null;
@@ -3561,9 +3467,6 @@ export async function updateOrder(
                 zoneName,
                 areaName,
                 notes: data.notes,
-                totalAmount,
-                shippingCharge: money.shippingCharge,
-                discountAmount: money.discountAmount,
                 currencyCode: currency.code,
                 currencyDecimalPlaces: currency.decimalPlaces,
                 subtotalAmountMinor: money.subtotalAmountMinor,
@@ -3573,8 +3476,8 @@ export async function updateOrder(
                 totalAmountMinor: money.totalAmountMinor,
                 taxLabel: null,
                 pricesIncludeTax: false,
-                paidAmount: nextPaymentState.paidAmount,
-                balanceDue: nextPaymentState.balanceDue,
+                paidAmountMinor: nextPaymentState.paidAmountMinor,
+                balanceDueMinor: nextPaymentState.balanceDueMinor,
                 paymentStatus: nextPaymentState.paymentStatus,
                 status: nextStatus,
                 customerId,
@@ -3650,7 +3553,7 @@ export async function updateOrder(
 }
 
 async function updateCustomerStatsService(db: Database, customerId: string) {
-    const customerOrders = await db.select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
+    const customerOrders = await db.select({ createdAt: orders.createdAt })
         .from(orders).where(and(
             eq(orders.customerId, customerId),
             isNull(orders.deletedAt),
@@ -3658,7 +3561,6 @@ async function updateCustomerStatsService(db: Database, customerId: string) {
     const stats = calculateCustomerStats(customerOrders);
     await db.update(customers).set({
         totalOrders: stats.totalOrders,
-        totalSpent: stats.totalSpent,
         lastOrderAt: stats.lastOrderAt ? sql`${Math.floor(stats.lastOrderAt.getTime() / 1000)}` : null,
         updatedAt: sql`unixepoch()`,
     }).where(eq(customers.id, customerId));

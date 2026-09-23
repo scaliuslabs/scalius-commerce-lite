@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { mediaText as t } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
 import {
@@ -29,6 +30,7 @@ interface UseMediaManagerOptions {
 }
 
 const EMPTY_FILE_IDS: string[] = [];
+const reason = (error: unknown) => (error instanceof Error ? error.message : undefined);
 
 function folderFilter(folderId: string | null | "all"): string | null | undefined {
   return folderId === "all" ? undefined : folderId;
@@ -213,6 +215,19 @@ export function useMediaManager({
     }
   }, [currentFolderId, folders, onWorkspaceStateChange, routeControlled]);
 
+  /** Clears search, type and folder in one step (one route write). */
+  const clearFilters = useCallback(() => {
+    setSelectedFileIds([]);
+    setSelectionMode(!!onSelectMultiple);
+    selectionAnchorId.current = null;
+    if (routeControlled) {
+      onWorkspaceStateChange?.({ search: "", kind: undefined, folderId: "all" });
+      return;
+    }
+    folders.moveToFolder("all");
+    void media.loadFiles(undefined, { ...media.filters, ...baseFilters, search: "", folderId: undefined });
+  }, [baseFilters, folders, media, onSelectMultiple, onWorkspaceStateChange, routeControlled]);
+
   const replaceSelection = useCallback((ids: string[]) => {
     selectionAnchorId.current = null;
     setSelectedFileIds([...new Set(ids.filter((id) => !isFileUnavailable(id)))]);
@@ -303,10 +318,10 @@ export function useMediaManager({
       else await MediaApiClient.permanentlyDeleteFile(file);
       setSelectedFileIds((current) => current.filter((id) => id !== file.id));
       if (selectionAnchorId.current === file.id) selectionAnchorId.current = null;
-      toast.success(action === "trash" ? "Moved to trash" : action === "restore" ? "Restored" : "Permanently deleted");
+      toast.success(t(action === "trash" ? "fileTrashed" : action === "restore" ? "fileRestored" : "fileDeleted"));
       await load();
     } catch (error) {
-      toast.error("Media was not changed", { description: error instanceof Error ? error.message : "Refresh and try again." });
+      toast.error(t("changeFailed"), { description: reason(error) });
     } finally {
       setIsMutating(false);
     }
@@ -326,15 +341,17 @@ export function useMediaManager({
         succeeded += 1;
       } catch (error) {
         failedIds.push(file.id);
-        failures.push(`${file.filename}: ${error instanceof Error ? error.message : "failed"}`);
+        failures.push(reason(error) ? `${file.filename}: ${reason(error)}` : file.filename);
       }
     });
     setSelectedFileIds(failedIds);
     selectionAnchorId.current = null;
     await load();
     setIsMutating(false);
-    if (succeeded) toast.success(`${succeeded} asset${succeeded === 1 ? "" : "s"} updated`);
-    if (failures.length) toast.error(`${failures.length} asset${failures.length === 1 ? "" : "s"} not changed`, { description: failures.slice(0, 3).join("\n") });
+    if (succeeded) toast.success(succeeded === 1 ? t("updatedOne") : t("updatedMany", { count: succeeded }));
+    if (failures.length) {
+      toast.error(failures.length === 1 ? t("notChangedOne") : t("notChangedMany", { count: failures.length }), { description: failures.slice(0, 3).join("\n") });
+    }
   }, [load, selectedLibraryFiles]);
 
   const moveSelected = useCallback(async (folderId: string | null) => {
@@ -344,10 +361,10 @@ export function useMediaManager({
       await MediaApiClient.moveFiles(selectedLibraryFiles, folderId);
       setSelectedFileIds([]);
       selectionAnchorId.current = null;
-      toast.success("Assets moved");
+      toast.success(t("filesMoved"));
       await load();
     } catch (error) {
-      toast.error("Assets were not moved", { description: error instanceof Error ? error.message : "Refresh and try again." });
+      toast.error(t("moveFailed"), { description: reason(error) });
     } finally {
       setIsMutating(false);
     }
@@ -358,10 +375,10 @@ export function useMediaManager({
       const updated = await MediaApiClient.updateFile(file, updates);
       media.setFiles((current) => current.map((item) => item.id === updated.id ? updated : item));
       setPreviewFile((current) => current?.id === updated.id ? updated : current);
-      toast.success("Details saved");
+      toast.success(t("fileSaved"));
       return updated;
     } catch (error) {
-      toast.error("Details were not saved", { description: error instanceof Error ? error.message : "Refresh and try again." });
+      toast.error(t("saveFailed"), { description: reason(error) });
       throw error;
     }
   }, [media]);
@@ -381,6 +398,7 @@ export function useMediaManager({
     currentFolderId,
     moveToFolder,
     deleteFolder,
+    clearFilters,
     selectedFileIds,
     selectableFileCount,
     isFileUnavailable,

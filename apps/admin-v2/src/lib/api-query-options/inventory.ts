@@ -9,14 +9,11 @@ import { queryKeys } from "../query-keys";
 
 const FAST_STALE_TIME_MS = 1000 * 30;
 
-export type InventoryQuery = ApiQuery<typeof getApiV1AdminInventory>;
+type InventoryQuery = ApiQuery<typeof getApiV1AdminInventory>;
 type InventoryOverviewPayload = ApiResult<typeof getApiV1AdminInventory>;
 export type InventoryVariant = NonNullable<InventoryOverviewPayload["variants"]>[number];
 export type InventoryMovement = NonNullable<InventoryOverviewPayload["movements"]>[number];
 export type InventoryAlert = NonNullable<InventoryOverviewPayload["alerts"]>[number];
-export type InventoryPagination = NonNullable<InventoryOverviewPayload["pagination"]>;
-export type InventoryStats = NonNullable<InventoryOverviewPayload["stats"]>;
-export type InventoryMovementPageInfo = NonNullable<InventoryOverviewPayload["pageInfo"]>;
 export type InventoryAdjustmentReason =
   ApiBody<typeof postApiV1AdminInventoryByVariantIdAdjust>["reason"];
 export type InventoryLabelVariant =

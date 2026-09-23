@@ -9,8 +9,8 @@ import {
 } from "@scalius/database/schema";
 import { and, asc, eq, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
+import { fromMinor } from "@scalius/shared/money";
 
-import { getCurrencyConfig } from "../../modules/settings/settings.service";
 import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
 
 type PurchaseOutboxRow = typeof metaCapiPurchaseOutbox.$inferSelect;
@@ -25,16 +25,18 @@ type PurchaseOrder = Pick<
     | "customerEmail"
     | "city"
     | "cityName"
-    | "totalAmount"
+    | "currencyCode"
+    | "currencyDecimalPlaces"
+    | "totalAmountMinor"
     | "status"
     | "paymentMethod"
     | "paymentStatus"
-    | "paidAmount"
+    | "paidAmountMinor"
     | "deletedAt"
 >;
 type PurchaseOrderItem = Pick<
     typeof orderItems.$inferSelect,
-    "productId" | "variantId" | "quantity" | "price"
+    "productId" | "variantId" | "quantity" | "unitPriceMinor"
 >;
 
 export type MetaCapiPurchaseOutboxStatus =
@@ -54,7 +56,6 @@ interface BuildMetaPurchaseEventOptions {
     order: PurchaseOrder;
     items: PurchaseOrderItem[];
     storefrontUrl: string;
-    currency: string;
     eventTime?: number;
 }
 
@@ -99,12 +100,13 @@ export function isOrderEligibleForMetaPurchase(order: PurchaseOrder): boolean {
     return (
         order.paymentStatus === PaymentStatus.PAID ||
         order.paymentStatus === PaymentStatus.PARTIAL ||
-        Number(order.paidAmount) > 0
+        order.paidAmountMinor > 0
     );
 }
 
 export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
-    const { order, items, currency } = options;
+    const { order, items } = options;
+    const toAmount = (minor: number) => fromMinor(minor, order.currencyDecimalPlaces);
     const contentIds = items.map((item) => item.variantId || item.productId);
     const userData: Record<string, unknown> = {
         ph: order.customerPhone,
@@ -129,13 +131,13 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
         action_source: "website" as const,
         user_data: userData,
         custom_data: {
-            value: order.totalAmount,
-            currency,
+            value: toAmount(order.totalAmountMinor),
+            currency: order.currencyCode,
             content_ids: contentIds,
             contents: items.map((item) => ({
                 id: item.variantId || item.productId,
                 quantity: item.quantity,
-                item_price: item.price,
+                item_price: toAmount(item.unitPriceMinor),
                 delivery_category: "home_delivery" as const,
             })),
             content_type: "product_group" as const,
@@ -438,14 +440,12 @@ async function buildMetaPurchasePayloadForOutbox(
         return { sendable: false, reason: "Order has no items." };
     }
 
-    const currency = await getCurrencyConfig(db);
     return {
         sendable: true,
         event: buildMetaPurchaseEvent({
             order,
             items,
             storefrontUrl: baseUrl,
-            currency: currency.code,
         }),
     };
 }

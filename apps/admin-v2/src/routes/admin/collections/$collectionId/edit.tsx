@@ -7,6 +7,8 @@ import {
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import type { Category } from "~/components/admin/collection-form/types";
+import { translate } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
 import { RouteErrorComponent } from "~/lib/route-error";
 import {
   collectionProductIdsForLookup,
@@ -36,7 +38,7 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
         });
     }
   },
-  head: () => ({ meta: [{ title: "Edit Collection | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: translate(catalogMessages, "collection") }] }),
   errorComponent: RouteErrorComponent,
   component: EditCollectionPage,
 });
@@ -65,27 +67,26 @@ function EditCollectionPage() {
     enabled: selectedProductIds.length > 0,
   });
   return (
-    <div className="container max-w-7xl py-4 pb-8">
-      <CollectionForm
-        categories={fo.categories || []}
-        products={productLookup?.products ?? []}
-        defaultValues={{
-          id: c.id,
-          version: c.version,
-          name: c.name,
-          description: c.description,
-          content: c.content,
-          presentation: c.presentation,
-          isActive: c.isActive,
-          canonicalPath: c.canonicalPath,
-          noIndex: c.noIndex,
-          excludeFromSitemap: c.excludeFromSitemap,
-          metaTitle: c.metaTitle,
-          metaDescription: c.metaDescription,
-          config,
-        }}
-        isEdit
-      />
-    </div>
+    <CollectionForm
+      key={collectionId}
+      categories={fo.categories || []}
+      products={productLookup?.products ?? []}
+      defaultValues={{
+        id: c.id,
+        version: c.version,
+        name: c.name,
+        description: c.description,
+        content: c.content,
+        presentation: c.presentation,
+        isActive: c.isActive,
+        canonicalPath: c.canonicalPath,
+        noIndex: c.noIndex,
+        excludeFromSitemap: c.excludeFromSitemap,
+        metaTitle: c.metaTitle,
+        metaDescription: c.metaDescription,
+        config,
+      }}
+      isEdit
+    />
   );
 }

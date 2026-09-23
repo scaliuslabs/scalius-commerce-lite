@@ -3,72 +3,43 @@ import { toast } from "sonner";
 import { useRouter } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
+import { useMessages } from "~/i18n";
+import { orderListMessages, shipmentStatusLabel } from "~/i18n/order-list";
 
-/**
- * Clean an orderId to remove any path-like prefixes
- */
-function cleanOrderId(orderId: string): string {
-  // Remove any URL path segments that might be present in the orderId
-  if (orderId.includes("/")) {
-    const parts = orderId.split("/");
-    orderId = parts[parts.length - 1]; // Get the last segment
-  }
-
-  // Also explicitly remove "orders/" prefix if present
-  orderId = orderId.replace(/^orders\//, "");
-
-  return orderId;
-}
-
-/**
- * Custom hook for refreshing shipment status
- */
+/** Asks the courier for the latest delivery status of one shipment. */
 export function useShipmentStatus() {
+  const t = useMessages(orderListMessages);
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState<Record<string, boolean>>({});
 
-  const refreshStatus = async (orderId: string, shipmentId: string) => {
+  const refreshShipmentStatus = async (orderId: string, shipmentId: string) => {
     if (isRefreshing[shipmentId]) return;
-
-    // Clean the orderId to ensure it doesn't contain path segments
-    const cleanedOrderId = cleanOrderId(orderId);
-
     setIsRefreshing((prev) => ({ ...prev, [shipmentId]: true }));
     try {
-      const updatedShipment = await apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh({
-        path: { id: cleanedOrderId, shipmentId },
+      const updated = await apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh({
+        path: { id: orderId, shipmentId },
       }));
-
-      if (updatedShipment.statusChanged) {
-        toast.success(`Status updated to: ${updatedShipment.status}`);
-
-        // If the order status might have changed, reload the page
+      if (updated.statusChanged) {
+        toast.success(t("shipmentUpdated", { status: shipmentStatusLabel(t, String(updated.status)) }));
         if (
-          ["delivered", "returned", "cancelled", "failed"].includes(
-            updatedShipment.status as string,
-          ) ||
-          updatedShipment.orderStatusUpdate
+          ["delivered", "returned", "cancelled", "failed"].includes(String(updated.status))
+          || updated.orderStatusUpdate
         ) {
-          router.invalidate();
+          void router.invalidate();
         }
       } else {
-        toast.info("Shipment status is up to date");
+        toast.info(t("shipmentUpToDate"));
       }
-
-      return updatedShipment;
+      return updated;
     } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error refreshing status:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to refresh status",
-      );
+      toast.error(t("shipmentRefreshFailed"), {
+        description: error instanceof Error && error.message ? error.message : undefined,
+      });
       return null;
     } finally {
       setIsRefreshing((prev) => ({ ...prev, [shipmentId]: false }));
     }
   };
 
-  return {
-    isRefreshing,
-    refreshShipmentStatus: refreshStatus,
-  };
+  return { isRefreshing, refreshShipmentStatus };
 }

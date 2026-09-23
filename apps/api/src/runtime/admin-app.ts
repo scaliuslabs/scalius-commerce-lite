@@ -11,7 +11,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
   if (["categories", "collections", "media", "inventory", "products", "attributes"].includes(segment)) {
     return "catalog";
   }
-  if (["customers", "discounts", "promotions", "shipments", "orders", "taxes"].includes(segment)) {
+  if (["customers", "discounts", "shipments", "orders", "taxes"].includes(segment)) {
     return "sales";
   }
   if (["pages", "navigation", "settings"].includes(segment)) return "content";

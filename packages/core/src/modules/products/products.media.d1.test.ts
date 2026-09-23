@@ -11,7 +11,7 @@ import {
 it("preserves joined media fields through object-shaped D1 batch results", async () => {
     const { sqlite: database, db } = createSqliteD1Database();
     database.exec(`
-        INSERT INTO products (id, name, slug, price) VALUES ('product_1', 'Product 1', 'product-1', 100);
+        INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Product 1', 'product-1', 10000);
         INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, width, height, variant_width, duration_ms, poster_media_id, status) VALUES
             ('media_image', 'image.webp', 'image', 'media/image.webp', 1, 'image/webp', 'Image alt', 800, 800, NULL, NULL, NULL, 'ready'),
             ('media_poster', 'poster.webp', 'image', 'media/poster.webp', 1, 'image/webp', 'Poster alt', 800, 800, 800, NULL, NULL, 'ready'),
@@ -19,7 +19,7 @@ it("preserves joined media fields through object-shaped D1 batch results", async
         INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order) VALUES
             ('pmed_video', 'product_1', 'media_video', 'Context video', 1, 0),
             ('pmed_image', 'product_1', 'media_image', 'Context image', 0, 1);
-        INSERT INTO product_variants (id, product_id, sku, price, is_default, image_id) VALUES ('variant_1', 'product_1', 'SKU-1', 100, 1, 'pmed_image');
+        INSERT INTO product_variants (id, product_id, sku, price_minor, is_default, image_id) VALUES ('variant_1', 'product_1', 'SKU-1', 10000, 1, 'pmed_image');
     `);
 
     const [rows] = await db.batch([
@@ -63,7 +63,7 @@ describe("product media section commands", () => {
     function setup() {
         const harness = createSqliteD1Database();
         harness.sqlite.exec(`
-            INSERT INTO products (id, name, slug, price) VALUES ('product_1', 'Product 1', 'product-1', 100);
+            INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Product 1', 'product-1', 10000);
             INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
                 ('media_a', 'a.webp', 'image', 'media/a.webp', 1, 'image/webp', 'ready'),
                 ('media_b', 'b.webp', 'image', 'media/b.webp', 1, 'image/webp', 'ready'),
@@ -72,7 +72,7 @@ describe("product media section commands", () => {
                 ('pmed_aaaaa', 'product_1', 'media_a', 1, 0),
                 ('pmed_bbbbb', 'product_1', 'media_b', 0, 1),
                 ('pmed_ccccc', 'product_1', 'media_c', 0, 2);
-            INSERT INTO product_variants (id, product_id, sku, price, is_default, image_id) VALUES ('variant_1', 'product_1', 'SKU-1', 100, 1, 'pmed_bbbbb');
+            INSERT INTO product_variants (id, product_id, sku, price_minor, is_default, image_id) VALUES ('variant_1', 'product_1', 'SKU-1', 10000, 1, 'pmed_bbbbb');
         `);
         const gallery = () => harness.sqlite.prepare(
             "SELECT id, is_primary AS isPrimary FROM product_media ORDER BY sort_order",

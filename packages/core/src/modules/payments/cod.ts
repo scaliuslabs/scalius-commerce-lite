@@ -27,28 +27,23 @@ import type {
   RecordCODFailureParams,
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { fromMinor } from "@scalius/shared/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
-import {
-  assertOrderPaymentCurrency,
-  orderMoneyEqual,
-  resolveOrderCurrencySnapshot,
-  roundOrderMoney,
-} from "./order-currency";
+import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
 interface CodCollectionOrderSnapshot {
-  totalAmount: number;
-  paidAmount: number | null;
-  balanceDue: number | null;
-  currencyCode?: string | null;
-  currencyDecimalPlaces?: number | null;
+  totalAmountMinor: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
+  currencyCode: string;
+  currencyDecimalPlaces: number;
 }
 
 interface NormalizedCodCollection {
   collectedBy: string;
-  collectedAmount: number;
-  expectedAmount: number;
-  newPaidAmount: number;
-  newBalanceDue: number;
+  collectedAmountMinor: number;
+  newPaidAmountMinor: number;
+  newBalanceDueMinor: number;
 }
 
 const COD_COLLECTION_BATCH_GUARD = "COD_COLLECTION_STATE_CHANGED";
@@ -58,9 +53,15 @@ function codCollectionPaymentId(orderId: string): string {
   return `cod_collection:${orderId}`;
 }
 
+function assertPositiveMinor(amountMinor: number): void {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    throw new ValidationError("COD collected amount must be a positive finite number.");
+  }
+}
+
 export function validateCODCollectionDetails(
   order: CodCollectionOrderSnapshot,
-  params: Pick<RecordCODCollectionParams, "collectedBy" | "collectedAmount">,
+  params: Pick<RecordCODCollectionParams, "collectedBy" | "collectedAmountMinor">,
 ): NormalizedCodCollection {
   const currency = resolveOrderCurrencySnapshot(order);
   if (typeof params.collectedBy !== "string") {
@@ -72,48 +73,30 @@ export function validateCODCollectionDetails(
     throw new ValidationError("Collector name is required for COD collection.");
   }
 
-  if (!Number.isFinite(params.collectedAmount) || params.collectedAmount <= 0) {
-    throw new ValidationError("COD collected amount must be a positive finite number.");
-  }
+  assertPositiveMinor(params.collectedAmountMinor);
 
-  const currentPaidAmount = roundOrderMoney(order.paidAmount ?? 0, currency);
-  const computedBalanceDue = roundOrderMoney(Math.max(0, order.totalAmount - currentPaidAmount), currency);
-  const storedBalanceDue = Number.isFinite(order.balanceDue)
-    ? roundOrderMoney(Number(order.balanceDue), currency)
-    : null;
-  const expectedAmount = roundOrderMoney(Math.max(
-    0,
-    storedBalanceDue !== null && orderMoneyEqual(storedBalanceDue, computedBalanceDue, currency)
-      ? storedBalanceDue
-      : computedBalanceDue,
-  ), currency);
-  const collectedAmount = roundOrderMoney(params.collectedAmount, currency);
-
-  if (expectedAmount <= 0) {
+  const expectedAmountMinor = Math.max(0, order.totalAmountMinor - order.paidAmountMinor);
+  if (expectedAmountMinor <= 0) {
     throw new ValidationError("This order has no outstanding COD balance to collect.");
   }
-
-  if (!orderMoneyEqual(collectedAmount, expectedAmount, currency)) {
+  if (params.collectedAmountMinor !== expectedAmountMinor) {
+    const expectedAmount = fromMinor(expectedAmountMinor, currency.decimalPlaces);
     throw new ValidationError(
       `COD collected amount must match the outstanding balance (${expectedAmount}).`,
-      { expectedAmount, collectedAmount },
+      { expectedAmount, collectedAmount: fromMinor(params.collectedAmountMinor, currency.decimalPlaces) },
     );
   }
 
-  const newPaidAmount = roundOrderMoney(currentPaidAmount + collectedAmount, currency);
-  const newBalanceDue = computePaymentStateAfterPayment({
-    totalAmount: order.totalAmount,
-    currentPaidAmount,
-    paymentAmount: collectedAmount,
-    currency,
-  }).balanceDue;
-
+  const next = computePaymentStateAfterPayment({
+    totalAmountMinor: order.totalAmountMinor,
+    currentPaidAmountMinor: order.paidAmountMinor,
+    paymentAmountMinor: params.collectedAmountMinor,
+  });
   return {
     collectedBy,
-    collectedAmount,
-    expectedAmount,
-    newPaidAmount,
-    newBalanceDue,
+    collectedAmountMinor: params.collectedAmountMinor,
+    newPaidAmountMinor: next.paidAmountMinor,
+    newBalanceDueMinor: next.balanceDueMinor,
   };
 }
 
@@ -159,9 +142,9 @@ export async function recordCODCollection(
     const order = await db
       .select({
         id: orders.id,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
+        totalAmountMinor: orders.totalAmountMinor,
+        paidAmountMinor: orders.paidAmountMinor,
+        balanceDueMinor: orders.balanceDueMinor,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
         version: orders.version,
@@ -181,7 +164,7 @@ export async function recordCODCollection(
       .select({
         id: paymentPlans.id,
         status: paymentPlans.status,
-        balanceDue: paymentPlans.balanceDue,
+        balanceDueMinor: paymentPlans.balanceDueMinor,
       })
       .from(paymentPlans)
       .where(eq(paymentPlans.orderId, params.orderId))
@@ -192,7 +175,7 @@ export async function recordCODCollection(
     const existingPayment = await db
       .select({
         id: orderPayments.id,
-        amount: orderPayments.amount,
+        amountMinor: orderPayments.amountMinor,
         currency: orderPayments.currency,
         paymentType: orderPayments.paymentType,
         codCollectedBy: orderPayments.codCollectedBy,
@@ -211,7 +194,7 @@ export async function recordCODCollection(
         id: codTracking.id,
         codStatus: codTracking.codStatus,
         collectedBy: codTracking.collectedBy,
-        collectedAmount: codTracking.collectedAmount,
+        collectedAmountMinor: codTracking.collectedAmountMinor,
       })
       .from(codTracking)
       .where(eq(codTracking.orderId, params.orderId))
@@ -219,14 +202,12 @@ export async function recordCODCollection(
 
     if (existingPayment) {
       assertOrderPaymentCurrency(existingPayment.currency, currency, "Existing COD payment");
-      const collectedAmount = roundOrderMoney(params.collectedAmount, currency);
-      if (!Number.isFinite(params.collectedAmount) || params.collectedAmount <= 0) {
-        throw new ValidationError("COD collected amount must be a positive finite number.");
-      }
-      if (!orderMoneyEqual(existingPayment.amount, collectedAmount, currency)) {
+      const collectedAmountMinor = params.collectedAmountMinor;
+      assertPositiveMinor(collectedAmountMinor);
+      if (existingPayment.amountMinor !== collectedAmountMinor) {
         throw new ValidationError("COD collection was already recorded with a different amount.", {
-          recordedAmount: existingPayment.amount,
-          collectedAmount,
+          recordedAmount: fromMinor(existingPayment.amountMinor, currency.decimalPlaces),
+          collectedAmount: fromMinor(collectedAmountMinor, currency.decimalPlaces),
         });
       }
       const collectedBy = typeof params.collectedBy === "string"
@@ -241,11 +222,10 @@ export async function recordCODCollection(
         existingPayment.codCollectedBy === collectedBy &&
         tracking?.codStatus === CodStatus.COLLECTED &&
         tracking.collectedBy === collectedBy &&
-        tracking.collectedAmount !== null &&
-        orderMoneyEqual(tracking.collectedAmount, collectedAmount, currency) &&
+        tracking.collectedAmountMinor === collectedAmountMinor &&
         order.paymentStatus === PaymentStatus.PAID &&
-        orderMoneyEqual(order.paidAmount ?? 0, order.totalAmount, currency) &&
-        orderMoneyEqual(order.balanceDue ?? 0, 0, currency) &&
+        order.paidAmountMinor === order.totalAmountMinor &&
+        order.balanceDueMinor === 0 &&
         (!paymentPlan || paymentPlan.status === PaymentPlanStatus.COMPLETED);
       if (!hasCompleteEvidence) {
         throw new ValidationError(
@@ -269,12 +249,12 @@ export async function recordCODCollection(
           "The online deposit must be paid before collecting the cash balance on delivery.",
         );
       }
-      if (!orderMoneyEqual(paymentPlan.balanceDue, collection.collectedAmount, currency)) {
+      if (paymentPlan.balanceDueMinor !== collection.collectedAmountMinor) {
         throw new ValidationError(
           "Cash collected must match the remaining balance in the payment plan.",
           {
-            expectedAmount: roundOrderMoney(paymentPlan.balanceDue, currency),
-            collectedAmount: collection.collectedAmount,
+            expectedAmount: fromMinor(paymentPlan.balanceDueMinor, currency.decimalPlaces),
+            collectedAmount: fromMinor(collection.collectedAmountMinor, currency.decimalPlaces),
           },
         );
       }
@@ -292,7 +272,7 @@ export async function recordCODCollection(
           SELECT 1 FROM ${paymentPlans}
           WHERE ${paymentPlans.orderId} = ${params.orderId}
             AND ${paymentPlans.status} = ${PaymentPlanStatus.DEPOSIT_PAID}
-            AND round(${paymentPlans.balanceDue}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+            AND ${paymentPlans.balanceDueMinor} = ${collection.collectedAmountMinor}
         )`
       : sql`1 = 1`;
 
@@ -309,8 +289,8 @@ export async function recordCODCollection(
         .update(orders)
         .set({
           paymentStatus: PaymentStatus.PAID,
-          paidAmount: collection.newPaidAmount,
-          balanceDue: collection.newBalanceDue,
+          paidAmountMinor: collection.newPaidAmountMinor,
+          balanceDueMinor: collection.newBalanceDueMinor,
           version: nextVersion,
           updatedAt: sql`unixepoch()`,
         })
@@ -318,8 +298,8 @@ export async function recordCODCollection(
           eq(orders.id, params.orderId),
           eq(orders.version, order.version),
           eq(orders.paymentStatus, order.paymentStatus),
-          sql`round(${orders.paidAmount}, ${currency.decimalPlaces}) = round(${order.paidAmount ?? 0}, ${currency.decimalPlaces})`,
-          sql`round(${orders.balanceDue}, ${currency.decimalPlaces}) = round(${order.balanceDue ?? 0}, ${currency.decimalPlaces})`,
+          eq(orders.paidAmountMinor, order.paidAmountMinor),
+          eq(orders.balanceDueMinor, order.balanceDueMinor),
           sql`${orders.deletedAt} IS NULL`,
           planReadyCondition,
         ))
@@ -330,7 +310,7 @@ export async function recordCODCollection(
         .values({
           id: paymentId,
           orderId: params.orderId,
-          amount: collection.collectedAmount,
+          amountMinor: collection.collectedAmountMinor,
           currency: currency.code,
           paymentMethod: PaymentMethod.COD,
           paymentType,
@@ -348,7 +328,7 @@ export async function recordCODCollection(
         .set({
           codStatus: CodStatus.COLLECTED,
           collectedBy: collection.collectedBy,
-          collectedAmount: collection.collectedAmount,
+          collectedAmountMinor: collection.collectedAmountMinor,
           collectedAt: sql`unixepoch()`,
           receiptUrl: params.receiptUrl ?? null,
           deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
@@ -403,8 +383,8 @@ export async function recordCODCollection(
         WHERE ${orders.id} = ${params.orderId}
           AND ${orders.version} = ${nextVersion}
           AND ${orders.paymentStatus} = ${PaymentStatus.PAID}
-          AND round(${orders.paidAmount}, ${currency.decimalPlaces}) = round(${collection.newPaidAmount}, ${currency.decimalPlaces})
-          AND round(${orders.balanceDue}, ${currency.decimalPlaces}) = 0
+          AND ${orders.paidAmountMinor} = ${collection.newPaidAmountMinor}
+          AND ${orders.balanceDueMinor} = 0
       )
       AND EXISTS (
         SELECT 1 FROM ${orderPayments}
@@ -415,14 +395,14 @@ export async function recordCODCollection(
           AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
           AND ${orderPayments.currency} = ${currency.code}
           AND ${orderPayments.codCollectedBy} = ${collection.collectedBy}
-          AND round(${orderPayments.amount}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+          AND ${orderPayments.amountMinor} = ${collection.collectedAmountMinor}
       )
       AND EXISTS (
         SELECT 1 FROM ${codTracking}
         WHERE ${codTracking.orderId} = ${params.orderId}
           AND ${codTracking.codStatus} = ${CodStatus.COLLECTED}
           AND ${codTracking.collectedBy} = ${collection.collectedBy}
-          AND round(${codTracking.collectedAmount}, ${currency.decimalPlaces}) = round(${collection.collectedAmount}, ${currency.decimalPlaces})
+          AND ${codTracking.collectedAmountMinor} = ${collection.collectedAmountMinor}
       )
       AND ${completedPlanCondition}
     `, COD_COLLECTION_BATCH_GUARD));

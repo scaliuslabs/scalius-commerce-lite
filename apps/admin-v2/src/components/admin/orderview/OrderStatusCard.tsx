@@ -1,180 +1,95 @@
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { AlertTriangle, Receipt, Loader2 } from "lucide-react";
-import type { Order } from "./types";
-import { useUpdateOrderStatus } from "@/lib/api-mutations/orders";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
-import { ConfirmDialog } from "@/components/admin/shared/ConfirmDialog";
+} from "~/components/ui/select";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { resourceMessages } from "~/i18n/resource";
+import { useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import {
   getAdminOrderCancellationBlockedReason,
   getAdminOrderStatusTransitions,
   isAdminOrderStatus,
-} from "@/lib/admin-order-status-policy";
+} from "~/lib/admin-order-status-policy";
+import { formatOrderTimestamp } from "./formatters";
+import type { Order } from "./types";
 
-interface OrderStatusCardProps {
-  order: Order;
-}
-
-export function OrderStatusCard({ order }: OrderStatusCardProps) {
-  const orderActions = useOrderActionPermissions();
-  const canChangeStatus = orderActions.canChangeOrderStatus;
-
+export function OrderStatusCard({ order }: { order: Order }) {
+  const t = useMessages(orderDetailMessages);
+  const o = useMessages(orderMessages);
+  const r = useMessages(resourceMessages);
+  const canChangeStatus = useOrderActionPermissions().canChangeOrderStatus;
   const statusMutation = useUpdateOrderStatus();
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const activeRefundOperation = order.activeRefundOperation;
-  const refundLocked = Boolean(activeRefundOperation?.active);
+  const status = order.status.toLowerCase();
+  const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const paymentState = {
-    paymentStatus: order.paymentStatus,
-    paidAmount: order.paidAmount,
-  };
-  const availableTransitions = getAdminOrderStatusTransitions(order.status, paymentState);
-  const cancellationBlockedReason = getAdminOrderCancellationBlockedReason(
-    order.status,
-    paymentState,
-  );
-  const isTerminalStatus = availableTransitions.length === 0;
+  const transitions = getAdminOrderStatusTransitions(status, order);
+  const cancelBlocked = getAdminOrderCancellationBlockedReason(status, order) !== null;
+  const placedAt = formatOrderTimestamp(order.createdAt);
 
-  const handleStatusChange = (newStatus: string) => {
-    if (!isAdminOrderStatus(newStatus)) {
-      toast.error("Invalid order status");
-      return;
-    }
-    if (!canChangeStatus) {
-      toast.error("Status change unavailable", {
-        description: "Your role can view orders but cannot change order status.",
-      });
-      return;
-    }
-    if (refundLocked) {
-      toast.error("Order locked", { description: "Complete or reconcile the active refund before changing order status." });
-      return;
-    }
-    if (shipmentLocked) {
-      toast.error("Shipment recovery active", {
-        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before changing order status.",
-      });
-      return;
-    }
-    if (newStatus === "cancelled") {
-      setConfirmCancel(true);
-      return;
-    }
-    statusMutation.mutate({ orderId: order.id, status: newStatus });
+  const handleStatusChange = (next: string) => {
+    if (!isAdminOrderStatus(next)) return void toast.error(r("actionFailed"));
+    if (!canChangeStatus) return void toast.error(r("readOnly"));
+    if (refundLocked) return void toast.error(t("locked.refund"));
+    if (shipmentLocked) return void toast.error(t("locked.shipment"));
+    if (next === "cancelled") return setConfirmCancel(true);
+    statusMutation.mutate({ orderId: order.id, status: next });
   };
+
+  const help = !canChangeStatus
+    ? r("readOnly")
+    : refundLocked
+      ? t("locked.refund")
+      : shipmentLocked
+        ? t("locked.shipment")
+        : transitions.length === 0
+          ? status === "cancelled" ? t("status.cancelledFinal") : t("status.final")
+          : cancelBlocked
+            ? t("status.refundToCancel")
+            : null;
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Receipt className="h-4 w-4" />
-          Order Status
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("status.title")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4 space-y-4">
-        <div className="space-y-2">
-          <Select
-            value={order.status.toLowerCase()}
-            onValueChange={handleStatusChange}
-            disabled={
-              statusMutation.isPending
-              || refundLocked
-              || shipmentLocked
-              || !canChangeStatus
-              || isTerminalStatus
-            }
-          >
-            <SelectTrigger
-              aria-label="Order status"
-              className="h-11 border-border bg-background text-sm text-foreground sm:h-9"
-            >
-              {statusMutation.isPending ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Updating...</span>
-                </div>
-              ) : (
-                <SelectValue placeholder="Change status" />
-              )}
-            </SelectTrigger>
-            <SelectContent className="border-border bg-card text-foreground">
-              {/* Current status (always shown, selected) */}
-              <SelectItem
-                value={order.status.toLowerCase()}
-                className="capitalize text-foreground"
-              >
-                {order.status.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+      <CardContent className="space-y-2">
+        <Select
+          value={status}
+          onValueChange={handleStatusChange}
+          disabled={statusMutation.isPending || refundLocked || shipmentLocked || !canChangeStatus || transitions.length === 0}
+        >
+          <SelectTrigger aria-label={t("status.title")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[status, ...transitions].map((value) => (
+              <SelectItem key={value} value={value}>
+                {orderStatusLabel(o, value)}
               </SelectItem>
-              {/* Valid transitions from current status */}
-              {availableTransitions.map((status) => (
-                <SelectItem
-                  key={status}
-                  value={status}
-                  className="capitalize text-foreground"
-                >
-                  {status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!canChangeStatus && (
-            <p className="text-sm text-muted-foreground">
-              Status changes require order status permission.
-            </p>
-          )}
-          {canChangeStatus && isTerminalStatus && (
-            <p className="text-sm text-muted-foreground">
-              {order.status.toLowerCase() === "cancelled"
-                ? "Cancelled orders cannot be reopened. Create a new order if the sale should continue."
-                : "This order status is terminal. Use a dedicated return or refund action when available."}
-            </p>
-          )}
-          {canChangeStatus && cancellationBlockedReason && (
-            <p className="text-sm text-muted-foreground">
-              {cancellationBlockedReason} Use <span className="font-medium">Issue Refund</span> in the Payment card; a successful full pre-fulfillment refund cancels the order safely.
-            </p>
-          )}
-        </div>
-
-        {activeRefundOperation && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <div>
-                <p className="font-medium">Order actions locked</p>
-                <p className="mt-1">{activeRefundOperation.message}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {shipmentLocked && order.shipmentRecovery && (
-          <p className="text-sm text-muted-foreground">
-            Status changes are locked. Review the shipment details below.
-          </p>
-        )}
-
+            ))}
+          </SelectContent>
+        </Select>
+        {help ? <p className="text-muted-foreground">{help}</p> : null}
+        {placedAt ? <p className="text-muted-foreground">{t("status.placedAt", { date: placedAt })}</p> : null}
       </CardContent>
       <ConfirmDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
-        title={`Cancel order #${order.id}?`}
-        description="Stock is released and the customer is notified."
-        confirmLabel="Cancel order"
-        cancelLabel="Keep order"
+        title={t("cancel.title", { id: order.id })}
+        description={t("cancel.body", { count: order.items.reduce((sum, item) => sum + item.quantity, 0) })}
+        confirmLabel={t("cancel.confirm")}
+        cancelLabel={t("cancel.keep")}
         onConfirm={() => statusMutation.mutate({ orderId: order.id, status: "cancelled" })}
       />
     </Card>

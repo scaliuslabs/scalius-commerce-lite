@@ -1,10 +1,10 @@
 import React from "react";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Form } from "../ui/form";
-import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
-import { ProductActionBar } from "./product-form/ProductStickyHeader";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,60 +15,70 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { useStorefrontUrl } from "@/hooks/use-storefront-url";
+import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
+import { ConfirmDialog } from "./shared/ConfirmDialog";
+import { PageHeader } from "./resource/PageHeader";
+import { ProductStatusBadge } from "./product-list/product-columns";
+import { ProductActionBar } from "./product-form/ProductStickyHeader";
+import { ProductPager } from "./product-form/ProductPager";
 import {
-  ProductImagesSection,
+  AdditionalSectionsCard,
   TitleDescriptionSection,
-  SeoSection,
-  AttributesSection,
-  PricingCard,
-  StatusCard,
-  OrganizationCard,
-  useProductSubmit,
-  productFormSchema,
-  generateSlug,
+} from "./product-form/TitleDescriptionSection";
+import { ProductImagesSection } from "./product-form/ProductImagesSection";
+import { PricingCard } from "./product-form/PricingCard";
+import { AttributesSection } from "./product-form/AttributesSection";
+import { ProductSearchListing } from "./product-form/ProductSearchListing";
+import { StatusCard } from "./product-form/StatusCard";
+import { OrganizationCard } from "./product-form/OrganizationCard";
+import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
+import { generateSlug } from "./product-form/utils";
+import {
   DEFAULT_PRODUCT_CONDITION,
-  type ProductFormValues,
+  productFormSchema,
   type Category,
-} from "./product-form";
-import type { ProductSeoDiagnosticVariant } from "@/lib/product-seo-diagnostics";
+  type ProductFormValues,
+} from "./product-form/types";
+import { getProductEditorSaveStep } from "./product-form/save-orchestration";
+import { useStorefrontUrl } from "@/hooks/use-storefront-url";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import type { ProductCreateComposition } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
-import { getProductEditorSaveStep } from "./product-form/save-orchestration";
 
 interface ProductFormProps {
   categories: Category[];
-  defaultValues?: Partial<
-    ProductFormValues & { attributes?: Array<{ attributeId: string; value: string }>; additionalInfo?: Array<{ id: string; title: string; content: string }> }
-  >;
+  defaultValues?: Partial<ProductFormValues>;
   isEdit?: boolean;
   aggregateRevision?: number;
-  editorVariants?: ProductSeoDiagnosticVariant[];
   revisionConflict?: ProductRevisionConflict | null;
   onAggregateRevisionChange?: (revision: number) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
-  optionManager?: React.ReactNode | ((context: {
+  optionManager: (context: {
     skuImages: ProductSkuImageChoice[];
     productName: string;
     productPrice: number;
-    requestSave: () => void;
-    productSaving: boolean;
-  }) => React.ReactNode);
+  }) => React.ReactNode;
   createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
   optionMatrixSaving?: boolean;
   onOptionMatrixSave?: () => void;
+  /** Throws away the product and variant drafts (the route remounts them from the last save). */
+  onDiscard: () => void;
 }
+
+/** The one product page: add, edit, or view (without products.edit). */
 export function ProductForm({
   categories,
   defaultValues,
   isEdit = false,
   aggregateRevision,
-  editorVariants = [],
   revisionConflict = null,
   onAggregateRevisionChange,
   onRevisionConflict,
@@ -80,13 +90,20 @@ export function ProductForm({
   optionMatrixDirty = false,
   optionMatrixSaving = false,
   onOptionMatrixSave,
+  onDiscard,
 }: ProductFormProps) {
-  const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
+  const { getStorefrontPath } = useStorefrontUrl();
+  const { products: can } = useCatalogActionPermissions();
+  // Server checks stay authoritative; this only keeps viewers from editing.
+  const readOnly = isEdit ? !can.canEdit : !can.canCreate;
+  const [discardOpen, setDiscardOpen] = React.useState(false);
 
-  const variants = editorVariants;
-  // Initialize form
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
+    // Check a field when the merchant leaves it, not while they type.
+    mode: "onBlur",
     defaultValues: {
       name: "",
       description: null,
@@ -112,7 +129,6 @@ export function ProductForm({
     },
   });
 
-  // Set up form submission handler
   const {
     isSubmitting,
     showAlert,
@@ -122,20 +138,19 @@ export function ProductForm({
     mediaRemovalConflict,
     confirmMediaRemoval,
     cancelMediaRemoval,
-  } =
-    useProductSubmit({
-      isEdit,
-      productId: defaultValues?.id,
-      form,
-      aggregateRevision,
-      revisionConflict,
-      onAggregateRevisionChange,
-      onRevisionConflict,
-      onOpenRevisionConflict,
-      onProductSaved,
-      createComposition,
-      optionMatrixIssue,
-    });
+  } = useProductSubmit({
+    isEdit,
+    productId: defaultValues?.id,
+    form,
+    aggregateRevision,
+    revisionConflict,
+    onAggregateRevisionChange,
+    onRevisionConflict,
+    onOpenRevisionConflict,
+    onProductSaved,
+    createComposition,
+    optionMatrixIssue,
+  });
   const productFormDirty = form.formState.isDirty;
   const hasUnsavedChanges = productFormDirty || optionMatrixDirty;
   const isSaving = isSubmitting || optionMatrixSaving;
@@ -149,150 +164,109 @@ export function ProductForm({
       onOpenRevisionConflict?.();
       return;
     }
-    if (step === "save-product") {
+    // A variant draft with a problem goes through handleSubmit, which explains it instead of saving.
+    if (step === "save-product" || optionMatrixIssue) {
       void form.handleSubmit(handleSubmit)();
       return;
     }
     onOptionMatrixSave?.();
-  }, [form, handleSubmit, isEdit, onOpenRevisionConflict, onOptionMatrixSave, productFormDirty, revisionConflict]);
+  }, [form, handleSubmit, isEdit, onOpenRevisionConflict, onOptionMatrixSave, optionMatrixIssue, productFormDirty, revisionConflict]);
 
-  // Auto-generate slug from name - ONLY for new products
+  // New products take their web address from the title until it is edited.
   React.useEffect(() => {
-    if (!isEdit) {
-      const subscription = form.watch((value, { name }) => {
-        if (
-          name === "name" &&
-          value.name &&
-          !form.getValues("slugEdited")
-        ) {
-          const slug = generateSlug(value.name);
-          form.setValue("slug", slug, {
-            shouldValidate: true,
-          });
-        }
-      });
-      return () => subscription.unsubscribe();
-    }
+    if (isEdit) return;
+    const subscription = form.watch((value, { name }) => {
+      if (name === "name" && value.name && !form.getValues("slugEdited")) {
+        // Re-check only to clear an existing error; never flag the address while the title is typed.
+        form.setValue("slug", generateSlug(value.name), { shouldValidate: Boolean(form.getFieldState("slug").error) });
+      }
+    });
+    return () => subscription.unsubscribe();
   }, [form, isEdit]);
 
+  const slug = form.watch("slug");
+  const affectedCount = mediaRemovalConflict?.affectedCount ?? 0;
+
   return (
-    <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the product form. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
-    <>
-      <UnsavedChangesGuard
-        isDirty={hasUnsavedChanges}
-        isSubmitting={isSaving}
+    <ErrorBoundary
+      fallback={
+        <p className="p-4 text-center text-body text-muted-foreground">
+          {r("loadFailed")}{" "}
+          <Button type="button" variant="link" onClick={() => window.location.reload()}>
+            {r("retry")}
+          </Button>
+        </p>
+      }
+    >
+      <UnsavedChangesGuard isDirty={hasUnsavedChanges} isSubmitting={isSaving} />
+      <PageHeader
+        title={isEdit ? defaultValues?.name : t("addProduct")}
+        backTo="/admin/products"
+        badge={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
+        actions={isEdit && defaultValues?.id ? <ProductPager productId={defaultValues.id} /> : null}
       />
+      {readOnly ? <p className="mb-4 text-body text-muted-foreground">{r("readOnly")}</p> : null}
       <Form {...form}>
-        <form
-          method="post"
-          onSubmit={form.handleSubmit(handleSubmit)}
-          className="-mt-3 pb-5"
-          noValidate
-        >
-          <div className="mb-3">
-            <h1
-              id="product-form-heading"
-              tabIndex={-1}
-              className="text-xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              {isEdit ? "Edit product" : "Create product"}
-            </h1>
-          </div>
-          {/* Two-Column Layout */}
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
-            {/* Left Column - Main Content (2/3 width on large screens) */}
-            <div className="space-y-3 lg:col-span-2">
-              {/* Title & Description */}
-              <TitleDescriptionSection form={form} />
-
-              {/* Product Images */}
+        <form method="post" onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+          <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
+            <div className="min-w-0 space-y-4 lg:col-span-2">
+              <TitleDescriptionSection form={form} readOnly={readOnly} />
               <ProductImagesSection form={form} />
-
-              {/* Product composition belongs in the main reading flow. */}
               <PricingCard form={form} />
-
-              <AttributesSection form={form} />
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t("variants")}</CardTitle>
+                </CardHeader>
+                <CardContent
+                  onKeyDownCapture={(event) => {
+                    // Enter inside the variant table must not submit the product form.
+                    if (
+                      event.key === "Enter" &&
+                      event.target instanceof HTMLElement &&
+                      event.target.closest("[data-variant-editor]") &&
+                      !event.target.closest("[data-option-value-composer]")
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
+                >
+                  {optionManager({
+                    skuImages: form.watch("media")
+                      .filter((item) => item.kind === "image")
+                      .map((item) => ({
+                        id: item.id,
+                        url: item.url,
+                        altText: item.effectiveAltText,
+                        isPrimary: item.isPrimary,
+                        sortOrder: item.sortOrder,
+                        status: item.status,
+                      })),
+                    productName: form.watch("name"),
+                    productPrice: form.watch("price"),
+                  })}
+                </CardContent>
+              </Card>
+              <AdditionalSectionsCard form={form} readOnly={readOnly} />
+              <AttributesSection form={form} defaultOpen={readOnly} />
+              <ProductSearchListing form={form} disabled={readOnly} />
             </div>
-
-            {/* Right Column - Settings & Metadata (1/3 width on large screens) */}
-            <div className="space-y-3">
-              {/* Status */}
+            <div className="min-w-0 space-y-4">
               <StatusCard
                 form={form}
-                isEdit={isEdit}
-                storefrontUrl={
-                  isEdit && form.watch("slug")
-                    ? getStorefrontPath(`/products/${form.watch("slug")}`)
-                    : undefined
-                }
+                storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
               />
-
-              {/* Organization */}
-              <OrganizationCard
-                form={form}
-                categories={categories}
-              />
-
-              <SeoSection
-                form={form}
-                variants={variants}
-                variantState={isEdit ? "loaded" : "unavailable"}
-                storefrontUrl={storefrontUrl}
-                defaultOpen={false}
-              />
+              <OrganizationCard form={form} categories={categories} />
             </div>
-          </div>
-
-          <div id="product-options" className="mt-3">
-            {optionManager ? (
-              <div
-                onKeyDownCapture={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    event.target instanceof HTMLElement &&
-                    event.target.closest("[data-variant-editor]") &&
-                    !event.target.closest("[data-option-value-composer]")
-                  ) {
-                    event.preventDefault();
-                  }
-                }}
-              >
-                {typeof optionManager === "function"
-                  ? optionManager({
-                      skuImages: form.watch("media")
-                        .filter((item) => item.kind === "image")
-                        .map((item) => ({
-                          id: item.id,
-                          url: item.url,
-                          altText: item.effectiveAltText,
-                          isPrimary: item.isPrimary,
-                          sortOrder: item.sortOrder,
-                          status: item.status,
-                        })),
-                      productName: form.watch("name"),
-                      productPrice: form.watch("price"),
-                      requestSave,
-                      productSaving: isSubmitting,
-                    })
-                  : optionManager}
-              </div>
-            ) : (
-              <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-                Customer options are unavailable for this product.
-              </div>
-            )}
-          </div>
+          </fieldset>
 
           <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
-            <AlertDialogContent aria-describedby="alert-description">
+            <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Validation Error</AlertDialogTitle>
-                <AlertDialogDescription id="alert-description">
-                  {alertMessage || "Please check the form for errors."}
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t("cantSaveYet")}</AlertDialogTitle>
+                <AlertDialogDescription>{alertMessage || r("fixFields")}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogAction>OK</AlertDialogAction>
+                <AlertDialogAction>{t("ok")}</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -300,28 +274,25 @@ export function ProductForm({
             open={mediaRemovalConflict !== null}
             onOpenChange={(open) => { if (!open) cancelMediaRemoval(); }}
           >
-            <AlertDialogContent aria-describedby="sku-media-removal-description">
+            <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Remove SKU images?</AlertDialogTitle>
-                <AlertDialogDescription id="sku-media-removal-description">
-                  {mediaRemovalConflict?.affectedCount ?? 0} active {mediaRemovalConflict?.affectedCount === 1 ? "SKU uses" : "SKUs use"} media being removed. Confirming clears only those exact assignments; each SKU will use its automatic product image.
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t("removeVariantPhotosTitle", { count: affectedCount })}</AlertDialogTitle>
+                <AlertDialogDescription>{t("removeVariantPhotosBody")}</AlertDialogDescription>
               </AlertDialogHeader>
               {mediaRemovalConflict?.affectedSkus.length ? (
-                <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border bg-muted/20 p-2 text-xs">
+                <ul className="max-h-40 space-y-1 overflow-y-auto text-body">
                   {mediaRemovalConflict.affectedSkus.map((sku) => (
-                    <li key={sku.id} className="flex items-center justify-between gap-3">
-                      <span className="truncate font-medium">{sku.sku}</span>
-                      <span className="shrink-0 text-muted-foreground">Automatic product image</span>
-                    </li>
+                    <li key={sku.id} className="truncate">{sku.sku}</li>
                   ))}
-                  {mediaRemovalConflict.affectedCount > mediaRemovalConflict.affectedSkus.length ? (
-                    <li className="text-muted-foreground">+{mediaRemovalConflict.affectedCount - mediaRemovalConflict.affectedSkus.length} more</li>
+                  {affectedCount > mediaRemovalConflict.affectedSkus.length ? (
+                    <li className="text-muted-foreground">
+                      {t("andMore", { count: affectedCount - mediaRemovalConflict.affectedSkus.length })}
+                    </li>
                   ) : null}
                 </ul>
               ) : null}
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={cancelMediaRemoval}>Keep media</AlertDialogCancel>
+                <AlertDialogCancel onClick={cancelMediaRemoval}>{t("keepPhotos")}</AlertDialogCancel>
                 <AlertDialogAction
                   disabled={isSubmitting}
                   variant="destructive"
@@ -330,21 +301,31 @@ export function ProductForm({
                     void confirmMediaRemoval();
                   }}
                 >
-                  {isSubmitting ? "Removing…" : "Remove media"}
+                  {t("removePhotos")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </form>
       </Form>
-      <ProductActionBar
-        isEdit={isEdit}
-        isSubmitting={isSaving}
-        isDirty={hasUnsavedChanges}
-        hasRevisionConflict={revisionConflict !== null}
-        onSave={requestSave}
+      {!readOnly && (hasUnsavedChanges || revisionConflict !== null) ? (
+        <ProductActionBar
+          isEdit={isEdit}
+          isSubmitting={isSaving}
+          hasRevisionConflict={revisionConflict !== null}
+          onDiscard={() => setDiscardOpen(true)}
+          onSave={requestSave}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        title={t("discardTitle")}
+        description={t("discardBody")}
+        confirmLabel={t("discardChanges")}
+        cancelLabel={t("continueEditing")}
+        onConfirm={onDiscard}
       />
-    </>
     </ErrorBoundary>
   );
 }

@@ -188,7 +188,7 @@ export function publicCollectionProductConditions(...extraConditions: SQL[]): SQ
     ];
 }
 
-export function defaultProductSkuValues(productId: string, price: number) {
+export function defaultProductSkuValues(productId: string, priceMinor: number) {
     const variantId = `var_default_${productId}`;
     return {
         id: variantId,
@@ -197,7 +197,7 @@ export function defaultProductSkuValues(productId: string, price: number) {
         imageId: null,
         weight: null,
         sku: `SIMPLE-${productId}`,
-        price,
+        priceMinor,
         stock: 0,
         reservedStock: 0,
         preorderStock: 0,
@@ -208,9 +208,9 @@ export function defaultProductSkuValues(productId: string, price: number) {
         allowPreorder: false,
         allowBackorder: false,
         backorderLimit: 0,
-        discountPercentage: 0,
+        discountBps: 0,
         discountType: "percentage" as const,
-        discountAmount: 0,
+        discountAmountMinor: 0,
         barcode: generateInternalCode128Barcode(variantId),
         barcodeType: "code128" as const,
         createdAt: sql`unixepoch()`,

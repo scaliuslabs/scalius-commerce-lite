@@ -22,7 +22,8 @@ import {
 import { sql, isNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
-import { addPrices, roundPrice } from "@scalius/shared/price-utils";
+import { fromMinor } from "@scalius/shared/money";
+import { orderMoneyAmounts, orderMoneySelection } from "../orders/order-money";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -81,26 +82,17 @@ export interface CustomerOrderShipmentSummary {
     createdAt: string | null;
 }
 
-/**
- * Some one-shot database adapters map batched query rows positionally. Keep
- * the second projection of the legacy `price` column explicitly aliased so a
- * duplicate SQL column name cannot collapse and shift the immutable
- * minor-unit fields that follow it. The query stays provider-neutral.
- */
 export function buildCustomerOrderItemDetailProjection() {
     return {
         id: orderItems.id,
         productId: orderItems.productId,
         variantId: orderItems.variantId,
         quantity: orderItems.quantity,
-        price: orderItems.price,
         productName: orderItems.productName,
         productSlug: products.slug,
         productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
         variantLabel: orderItems.variantLabel,
-        unitPrice: sql<number>`${orderItems.price}`.as("unitPrice"),
-        lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
         fulfillmentStatus: orderItems.fulfillmentStatus,
         unitPriceMinor: orderItems.unitPriceMinor,
         lineSubtotalMinor: orderItems.lineSubtotalMinor,
@@ -116,7 +108,7 @@ type CustomerOrderListItem = {
     productId: string;
     variantId: string | null;
     quantity: number;
-    price: number;
+    unitPriceMinor: number;
     productName: string | null;
     productSlug: string | null;
     productImage: string | null;
@@ -216,9 +208,7 @@ const CUSTOMER_PENDING_ORDER_STATUS_SET = new Set<string>(CUSTOMER_PENDING_ORDER
 type CustomerOrderMoneyState = {
     status: string;
     paymentStatus: string;
-    totalAmount: number | null | undefined;
-    paidAmount: number | null | undefined;
-    balanceDue?: number | null | undefined;
+    balanceDueMinor: number;
 };
 
 export type CustomerAccountOrderSummary = {
@@ -277,7 +267,8 @@ function normalizeCustomerOrdersLimit(limit: number | undefined): number {
     return Math.min(Math.max(Math.floor(Number(limit)), 1), CUSTOMER_ORDERS_MAX_LIMIT);
 }
 
-export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): number {
+/** The balance a buyer still owes, in minor units; closed or failed orders owe nothing. */
+export function getCustomerVisibleBalanceDueMinor(order: CustomerOrderMoneyState): number {
     if (
         CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
         CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus) ||
@@ -289,35 +280,28 @@ export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): nu
         return 0;
     }
 
-    const storedBalance = order.balanceDue === null || order.balanceDue === undefined
-        ? Number.NaN
-        : Number(order.balanceDue);
-    if (Number.isFinite(storedBalance)) {
-        return roundPrice(Math.max(0, storedBalance));
-    }
-
-    const totalAmount = roundPrice(Math.max(0, Number(order.totalAmount ?? 0)));
-    const paidAmount = roundPrice(Math.max(0, Number(order.paidAmount ?? 0)));
-    return roundPrice(Math.max(0, totalAmount - paidAmount));
+    return Math.max(0, order.balanceDueMinor);
 }
 
-export function getCustomerSpendContribution(order: CustomerOrderMoneyState): number {
-    return roundPrice(Math.max(0, Number(order.paidAmount ?? 0)));
-}
-
-export function summarizeCustomerAccountOrders(rows: CustomerOrderMoneyState[]): CustomerAccountOrderSummary {
+/**
+ * Paid spend summed exactly in minor units. A store has one currency (it is
+ * locked once orders exist), so the orders' own decimal places convert it.
+ */
+function paidSpendProjection() {
     return {
-        totalOrders: rows.length,
-        totalSpent: addPrices(...rows.map(getCustomerSpendContribution)),
-        completedOrders: rows.filter((order) => CUSTOMER_COMPLETED_ORDER_STATUS_SET.has(order.status)).length,
-        pendingOrders: rows.filter((order) => CUSTOMER_PENDING_ORDER_STATUS_SET.has(order.status)).length,
+        totalSpentMinor: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmountMinor} > 0 THEN ${orders.paidAmountMinor} ELSE 0 END), 0)`,
+        spendDecimalPlaces: sql<number>`COALESCE(MAX(${orders.currencyDecimalPlaces}), 2)`,
     };
+}
+
+export function paidSpendAmount(row: { totalSpentMinor: number; spendDecimalPlaces: number }): number {
+    return fromMinor(Number(row.totalSpentMinor), Number(row.spendDecimalPlaces));
 }
 
 export function buildCustomerOrderMetricsProjection() {
     return {
         totalOrders: sql<number>`CAST(count(${orders.id}) AS INTEGER)`,
-        totalSpent: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END), 0)`,
+        ...paidSpendProjection(),
         lastOrderAt: sql<number | null>`max(CAST(${orders.createdAt} AS INTEGER))`,
     };
 }
@@ -442,7 +426,7 @@ export async function listCustomers(
         switch (sort) {
             case "name": return customers.name;
             case "totalOrders": return metrics.totalOrders;
-            case "totalSpent": return metrics.totalSpent;
+            case "totalSpent": return metrics.totalSpentMinor;
             case "lastOrderAt": return metrics.lastOrderAt;
             case "createdAt": return customers.createdAt;
             default: return customers.updatedAt;
@@ -469,7 +453,8 @@ export async function listCustomers(
             areaName: sql<string | null>`COALESCE(${customerAreaLocation.name}, ${customers.area})`,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             totalOrders: metrics.totalOrders,
-            totalSpent: metrics.totalSpent,
+            totalSpentMinor: metrics.totalSpentMinor,
+            spendDecimalPlaces: metrics.spendDecimalPlaces,
             lastOrderAt: metrics.lastOrderAt,
             createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
@@ -507,12 +492,13 @@ export async function listCustomers(
         resultsQuery,
     ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpent: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
     ];
     const count = countArr[0]?.count ?? 0;
 
-    const formattedCustomers = results.map((c) => ({
+    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, ...c }) => ({
         ...c,
+        totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: c.accountClaimedAt ? new Date(c.accountClaimedAt * 1000).toISOString() : null,
         lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,
         createdAt: new Date(c.createdAt * 1000).toISOString(),
@@ -571,7 +557,6 @@ export async function createCustomer(
             zoneName,
             areaName,
             totalOrders: 0,
-            totalSpent: 0,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
@@ -598,6 +583,18 @@ export async function createCustomer(
 
 export async function getCustomerById(db: Database, id: string) {
     return db.select().from(customers).where(eq(customers.id, id)).get() ?? null;
+}
+
+/** The customer row plus its paid spend, derived from its orders. */
+export async function getCustomerDetail(db: Database, id: string) {
+    const [customer, spend] = await Promise.all([
+        getCustomerById(db, id),
+        db.select(paidSpendProjection()).from(orders)
+            .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
+            .get(),
+    ]);
+    if (!customer) return null;
+    return { ...customer, totalSpent: spend ? paidSpendAmount(spend) : 0 };
 }
 
 export async function updateCustomer(
@@ -778,7 +775,7 @@ export async function getCustomerOrders(
     const accountSummaryQuery = db
         .select({
             totalOrders: sql<number>`CAST(count(*) AS INTEGER)`,
-            totalSpent: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END), 0)`,
+            ...paidSpendProjection(),
             completedOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_COMPLETED_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
             pendingOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_PENDING_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
         })
@@ -805,23 +802,15 @@ export async function getCustomerOrders(
             id: orders.id,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
-            totalAmount: orders.totalAmount,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
-            shippingCharge: orders.shippingCharge,
-            discountAmount: orders.discountAmount,
+            ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
-            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
-            shippingAmountMinor: orders.shippingAmountMinor,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodName: orders.shippingMethodName,
             shippingMethodDescription: orders.shippingMethodDescription,
             shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
             shippingFeeWaived: orders.shippingFeeWaived,
-            discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
-            totalAmountMinor: orders.totalAmountMinor,
             taxLabel: orders.taxLabel,
             pricesIncludeTax: orders.pricesIncludeTax,
             paymentStatus: orders.paymentStatus,
@@ -844,21 +833,25 @@ export async function getCustomerOrders(
         accountSummaryQuery,
         customerOrdersQuery,
     ] as Parameters<Database["batch"]>[0]) as [
-        Array<CustomerAccountOrderSummary>,
+        Array<Omit<CustomerAccountOrderSummary, "totalSpent"> & {
+            totalSpentMinor: number;
+            spendDecimalPlaces: number;
+        }>,
         Array<{
             id: string;
             invoiceNumber: number | null;
             status: string;
-            totalAmount: number;
-            paidAmount: number;
-            balanceDue: number;
-            shippingCharge: number;
+            currencyDecimalPlaces: number;
+            totalAmountMinor: number;
+            shippingAmountMinor: number;
+            discountAmountMinor: number;
+            paidAmountMinor: number;
+            balanceDueMinor: number;
             shippingMethodId: string | null;
             shippingMethodName: string | null;
             shippingMethodDescription: string | null;
             shippingMethodBaseAmountMinor: number | null;
             shippingFeeWaived: boolean | null;
-            discountAmount: number | null;
             paymentStatus: string;
             paymentMethod: string;
             fulfillmentStatus: string;
@@ -879,7 +872,7 @@ export async function getCustomerOrders(
     const summary: CustomerAccountOrderSummary = accountSummary
         ? {
             totalOrders: Number(accountSummary.totalOrders ?? 0),
-            totalSpent: roundPrice(Number(accountSummary.totalSpent ?? 0)),
+            totalSpent: paidSpendAmount(accountSummary),
             completedOrders: Number(accountSummary.completedOrders ?? 0),
             pendingOrders: Number(accountSummary.pendingOrders ?? 0),
         }
@@ -903,7 +896,7 @@ export async function getCustomerOrders(
                     productId: orderItems.productId,
                     variantId: orderItems.variantId,
                     quantity: orderItems.quantity,
-                    price: orderItems.price,
+                    unitPriceMinor: orderItems.unitPriceMinor,
                     productName: orderItems.productName,
                     productSlug: products.slug,
                     productImageObjectKey: publishedMediaObjectKey(),
@@ -987,12 +980,16 @@ export async function getCustomerOrders(
     // Format response
     const formattedOrders = customerOrders.map((order) => ({
         ...order,
-        balanceDue: getCustomerVisibleBalanceDue(order),
+        ...orderMoneyAmounts(order),
+        balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
             : null,
         latestShipment: latestShipmentByOrder.get(order.id) ?? null,
-        items: itemsByOrder.get(order.id) || []
+        items: (itemsByOrder.get(order.id) || []).map(({ unitPriceMinor, ...item }) => ({
+            ...item,
+            price: fromMinor(unitPriceMinor, order.currencyDecimalPlaces),
+        })),
     }));
 
     return {
@@ -1018,23 +1015,15 @@ export async function getCustomerOwnedOrderForDetail(
             id: orders.id,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
-            totalAmount: orders.totalAmount,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
-            shippingCharge: orders.shippingCharge,
-            discountAmount: orders.discountAmount,
+            ...orderMoneySelection(orders),
             currencyCode: orders.currencyCode,
-            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             subtotalAmountMinor: orders.subtotalAmountMinor,
-            shippingAmountMinor: orders.shippingAmountMinor,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodName: orders.shippingMethodName,
             shippingMethodDescription: orders.shippingMethodDescription,
             shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
             shippingFeeWaived: orders.shippingFeeWaived,
-            discountAmountMinor: orders.discountAmountMinor,
             taxAmountMinor: orders.taxAmountMinor,
-            totalAmountMinor: orders.totalAmountMinor,
             taxLabel: orders.taxLabel,
             pricesIncludeTax: orders.pricesIncludeTax,
             paymentStatus: orders.paymentStatus,
@@ -1074,14 +1063,13 @@ export type CustomerOwnedOrderForDetail = Awaited<ReturnType<typeof getCustomerO
 export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrderForDetail) {
     return {
         id: order.id,
-        totalAmount: order.totalAmount,
         totalAmountMinor: order.totalAmountMinor,
         currencyCode: order.currencyCode,
         currencyDecimalPlaces: order.currencyDecimalPlaces,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        paidAmount: order.paidAmount,
-        balanceDue: order.balanceDue,
+        paidAmountMinor: order.paidAmountMinor,
+        balanceDueMinor: order.balanceDueMinor,
         deletedAt: order.deletedAt,
         paymentMethod: order.paymentMethod,
         shipmentClaimId: order.shipmentClaimId,
@@ -1123,7 +1111,7 @@ export async function getCustomerOrderDetailForOrder(
                 trackingUrl: deliveryShipments.trackingUrl,
                 courierName: deliveryShipments.courierName,
                 note: deliveryShipments.note,
-                shipmentAmount: deliveryShipments.shipmentAmount,
+                shipmentAmountMinor: deliveryShipments.shipmentAmountMinor,
                 isFinalShipment: deliveryShipments.isFinalShipment,
                 lastChecked: sql<number>`CAST(${deliveryShipments.lastChecked} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${deliveryShipments.updatedAt} AS INTEGER)`,
@@ -1136,7 +1124,7 @@ export async function getCustomerOrderDetailForOrder(
         db
             .select({
                 id: orderPayments.id,
-                amount: orderPayments.amount,
+                amountMinor: orderPayments.amountMinor,
                 currency: orderPayments.currency,
                 paymentMethod: orderPayments.paymentMethod,
                 paymentType: orderPayments.paymentType,
@@ -1150,9 +1138,9 @@ export async function getCustomerOrderDetailForOrder(
             .orderBy(desc(orderPayments.createdAt)),
         db
             .select({
-                totalAmount: paymentPlans.totalAmount,
-                depositAmount: paymentPlans.depositAmount,
-                balanceDue: paymentPlans.balanceDue,
+                totalAmountMinor: paymentPlans.totalAmountMinor,
+                depositAmountMinor: paymentPlans.depositAmountMinor,
+                balanceDueMinor: paymentPlans.balanceDueMinor,
                 balanceDueDate: paymentPlans.balanceDueDate,
                 status: paymentPlans.status,
                 depositPaidAt: sql<number>`CAST(${paymentPlans.depositPaidAt} AS INTEGER)`,
@@ -1168,7 +1156,7 @@ export async function getCustomerOrderDetailForOrder(
                 codStatus: codTracking.codStatus,
                 deliveryAttempts: codTracking.deliveryAttempts,
                 failureReason: codTracking.failureReason,
-                collectedAmount: codTracking.collectedAmount,
+                collectedAmountMinor: codTracking.collectedAmountMinor,
                 receiptUrl: codTracking.receiptUrl,
                 lastAttemptAt: sql<number>`CAST(${codTracking.lastAttemptAt} AS INTEGER)`,
                 collectedAt: sql<number>`CAST(${codTracking.collectedAt} AS INTEGER)`,
@@ -1210,19 +1198,16 @@ export async function getCustomerOrderDetailForOrder(
             productId: string;
             variantId: string | null;
             quantity: number;
-            price: number;
             productName: string | null;
             productSlug: string | null;
             productImageObjectKey: string | null;
             productImageStatus: string | null;
             variantLabel: string | null;
-            unitPrice: number;
-            lineTotal: number;
             fulfillmentStatus: string;
-            unitPriceMinor: number | null;
-            lineSubtotalMinor: number | null;
-            discountAmountMinor: number | null;
-            taxableAmountMinor: number | null;
+            unitPriceMinor: number;
+            lineSubtotalMinor: number;
+            discountAmountMinor: number;
+            taxableAmountMinor: number;
             taxAmountMinor: number;
             createdAt: number | null;
         }>,
@@ -1236,7 +1221,7 @@ export async function getCustomerOrderDetailForOrder(
             trackingUrl: string | null;
             courierName: string | null;
             note: string | null;
-            shipmentAmount: number | null;
+            shipmentAmountMinor: number | null;
             isFinalShipment: boolean;
             lastChecked: number | null;
             updatedAt: number | null;
@@ -1244,7 +1229,7 @@ export async function getCustomerOrderDetailForOrder(
         }>,
         Array<{
             id: string;
-            amount: number;
+            amountMinor: number;
             currency: string;
             paymentMethod: string;
             paymentType: string;
@@ -1254,9 +1239,9 @@ export async function getCustomerOrderDetailForOrder(
             updatedAt: number | null;
         }>,
         Array<{
-            totalAmount: number;
-            depositAmount: number;
-            balanceDue: number;
+            totalAmountMinor: number;
+            depositAmountMinor: number;
+            balanceDueMinor: number;
             balanceDueDate: string | null;
             status: string;
             depositPaidAt: number | null;
@@ -1268,7 +1253,7 @@ export async function getCustomerOrderDetailForOrder(
             codStatus: string;
             deliveryAttempts: number;
             failureReason: string | null;
-            collectedAmount: number | null;
+            collectedAmountMinor: number | null;
             receiptUrl: string | null;
             lastAttemptAt: number | null;
             collectedAt: number | null;
@@ -1277,45 +1262,62 @@ export async function getCustomerOrderDetailForOrder(
         CustomerOrderNotificationReceiptRow[],
     ];
 
+    const amount = (minor: number) => fromMinor(minor, order.currencyDecimalPlaces);
+    const optionalAmount = (minor: number | null) => minor === null ? null : amount(minor);
     const formattedItems = items.map(({
         productImageObjectKey,
         productImageStatus,
         ...item
     }) => ({
         ...item,
+        price: amount(item.unitPriceMinor),
+        unitPrice: amount(item.unitPriceMinor),
+        lineTotal: amount(item.unitPriceMinor * item.quantity),
         productImage: historicalOrderImageUrl(productImageObjectKey, productImageStatus),
         createdAt: timestampToIso(item.createdAt),
     }));
 
-    const formattedShipments = shipments.map((shipment) => ({
+    const formattedShipments = shipments.map(({ shipmentAmountMinor, ...shipment }) => ({
         ...shipment,
+        shipmentAmount: optionalAmount(shipmentAmountMinor),
         lastChecked: timestampToIso(shipment.lastChecked),
         updatedAt: timestampToIso(shipment.updatedAt),
         createdAt: timestampToIso(shipment.createdAt),
     }));
 
-    const formattedPayments = payments.map((payment) => ({
+    const formattedPayments = payments.map(({ amountMinor, ...payment }) => ({
         ...payment,
+        amount: amount(amountMinor),
         createdAt: timestampToIso(payment.createdAt),
         updatedAt: timestampToIso(payment.updatedAt),
     }));
 
-    const paymentPlan = plans[0]
+    const plan = plans[0];
+    const paymentPlan = plan
         ? {
-            ...plans[0],
-            depositPaidAt: timestampToIso(plans[0].depositPaidAt),
-            balancePaidAt: timestampToIso(plans[0].balancePaidAt),
-            createdAt: timestampToIso(plans[0].createdAt),
-            updatedAt: timestampToIso(plans[0].updatedAt),
+            totalAmount: amount(plan.totalAmountMinor),
+            depositAmount: amount(plan.depositAmountMinor),
+            balanceDue: amount(plan.balanceDueMinor),
+            balanceDueDate: plan.balanceDueDate,
+            status: plan.status,
+            depositPaidAt: timestampToIso(plan.depositPaidAt),
+            balancePaidAt: timestampToIso(plan.balancePaidAt),
+            createdAt: timestampToIso(plan.createdAt),
+            updatedAt: timestampToIso(plan.updatedAt),
         }
         : null;
 
-    const cod = codRows[0]
+    const codRow = codRows[0];
+    const cod = codRow
         ? {
-            ...codRows[0],
-            lastAttemptAt: timestampToIso(codRows[0].lastAttemptAt),
-            collectedAt: timestampToIso(codRows[0].collectedAt),
-            updatedAt: timestampToIso(codRows[0].updatedAt),
+            codStatus: codRow.codStatus,
+            deliveryAttempts: codRow.deliveryAttempts,
+            failureReason: codRow.failureReason,
+            collectedAmount: optionalAmount(codRow.collectedAmountMinor),
+            receiptUrl: codRow.receiptUrl,
+            lastAttemptAt: timestampToIso(codRow.lastAttemptAt),
+            collectedAt: timestampToIso(codRow.collectedAt),
+            updatedAt: timestampToIso(codRow.updatedAt),
         }
         : null;
 
@@ -1390,11 +1392,8 @@ export async function getCustomerOrderDetailForOrder(
             id: order.id,
             invoiceNumber: order.invoiceNumber,
             status: order.status,
-            totalAmount: order.totalAmount,
-            paidAmount: order.paidAmount,
-            balanceDue: getCustomerVisibleBalanceDue(order),
-            shippingCharge: order.shippingCharge,
-            discountAmount: order.discountAmount,
+            ...orderMoneyAmounts(order),
+            balanceDue: amount(getCustomerVisibleBalanceDueMinor(order)),
             currencyCode: order.currencyCode,
             currencyDecimalPlaces: order.currencyDecimalPlaces,
             subtotalAmountMinor: order.subtotalAmountMinor,

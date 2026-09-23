@@ -21,6 +21,14 @@ import {
     stringifyCollectionConfig,
 } from "./collection-config";
 import { ftsMatch } from "../../search/fts5";
+import { fromMinor } from "@scalius/shared/money";
+import {
+    buyerPricingSelection,
+    presentBuyerPricing,
+    storeCurrencyCodeSql,
+    storeDecimalPlacesFromCode,
+    type BuyerPricingMinor,
+} from "../products/products.money";
 import { getStorefrontCollectionProducts } from "../products/products.storefront";
 import type { StorefrontProductFilterInput } from "../products/products.types";
 import {
@@ -377,14 +385,14 @@ export async function listCollectionProductOptions(
     const whereClause = and(...whereConditions);
 
     const countQuery = db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(whereClause);
     const optionsQuery = db
         .select({
             id: products.id,
             name: products.name,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             categoryName: sql<string | null>`${categories.name}`.as(
                 "collection_product_category_name",
@@ -406,28 +414,30 @@ export async function listCollectionProductOptions(
         .limit(limit)
         .offset(offset);
 
-    const [countRows = [], productOptions = []] = await safeBatch(db, [
+    const [countRows = [], productOptions = []] = await (safeBatch(db, [
         countQuery,
         optionsQuery,
-    ]) as unknown as [
-        Array<{ count: number }>,
+    ]) as unknown as Promise<[
+        Array<{ count: number; storeCurrencyCode: string | null }>,
         Array<{
             id: string;
             name: string;
-            price: number;
+            priceMinor: number;
             categoryId: string | null;
             categoryName: string | null;
             isActive: boolean;
         }>,
-    ];
+    ]>);
     const total = Number(countRows[0]?.count ?? 0);
+    const decimalPlaces = storeDecimalPlacesFromCode(countRows[0]?.storeCurrencyCode);
     const mediaMap = productOptions.length > 0
         ? await loadProductMediaProjections(db, productOptions.map((product) => product.id))
         : new Map();
 
     return {
-        products: productOptions.map((product) => ({
+        products: productOptions.map(({ priceMinor, ...product }) => ({
             ...product,
+            price: fromMinor(priceMinor, decimalPlaces),
             primaryImage:
                 resolveProductImageRepresentation(mediaMap.get(product.id) ?? [])?.url ?? null,
         })),
@@ -814,35 +824,36 @@ const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjectio
     id: products.id,
     name: products.name,
     slug: products.slug,
-    price: buyerPricing.basePrice,
-    discountType: buyerPricing.discountType,
-    discountPercentage: buyerPricing.discountPercentage,
-    discountAmount: buyerPricing.discountAmount,
-    discountedPrice: buyerPricing.effectivePrice,
-    maxBuyerPrice: buyerPricing.maxBuyerPrice,
+    ...buyerPricingSelection(buyerPricing),
     availableForSale: buyerPricing.availableForSale,
     freeDelivery: products.freeDelivery,
     categoryId: products.categoryId,
     hasVariants: buyerPricing.hasCustomerOptions,
+    storeCurrencyCode: storeCurrencyCodeSql().as("collection_store_currency_code"),
 });
 
-type RawProduct = {
+type RawProduct = BuyerPricingMinor & {
+    id: string;
+    name: string;
+    slug: string;
+    availableForSale: number;
+    freeDelivery: boolean;
+    categoryId: string | null;
+    hasVariants: number;
+    storeCurrencyCode?: string | null;
+};
+
+export type ResolvedProduct = {
     id: string;
     name: string;
     slug: string;
     price: number;
     discountType: string | null;
-    discountPercentage: number | null;
-    discountAmount: number | null;
+    discountPercentage: number;
+    discountAmount: number;
     discountedPrice: number;
-    maxBuyerPrice: number;
-    availableForSale: number;
     freeDelivery: boolean;
     categoryId: string | null;
-    hasVariants: number;
-};
-
-export type ResolvedProduct = Omit<RawProduct, "hasVariants" | "availableForSale" | "maxBuyerPrice"> & {
     hasVariants: boolean;
     availableForSale: boolean;
     priceVaries: boolean;
@@ -854,13 +865,13 @@ export type ResolvedProduct = Omit<RawProduct, "hasVariants" | "availableForSale
 function enrichProduct(
     p: RawProduct,
     image: ProductImageRepresentation,
+    decimalPlaces: number,
 ): ResolvedProduct {
-    const { hasVariants, availableForSale, maxBuyerPrice, ...product } = p;
+    const { hasVariants, availableForSale, storeCurrencyCode: _storeCurrencyCode, ...product } = p;
     return {
-        ...product,
+        ...presentBuyerPricing(product, decimalPlaces),
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
-        priceVaries: maxBuyerPrice > p.discountedPrice,
         imageUrl: image?.url ?? null,
         imageMediaId: image?.mediaId ?? null,
         imageAlt: image?.altText ?? null,
@@ -872,11 +883,13 @@ async function enrichProductsWithMedia(
     rows: readonly RawProduct[],
 ): Promise<Map<string, ResolvedProduct>> {
     const mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return new Map(rows.map((row) => [
         row.id,
         enrichProduct(
             row,
             resolveProductImageRepresentation(mediaMap.get(row.id) ?? []),
+            decimalPlaces,
         ),
     ]));
 }

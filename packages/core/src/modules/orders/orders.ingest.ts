@@ -9,9 +9,6 @@ import {
     checkoutAuthority,
     customers,
     customerHistory,
-    discounts,
-    discountCustomerRedemptions,
-    discountUsage,
     orderItems,
     orderDiscountAllocations,
     orderItemTaxSnapshots,
@@ -21,7 +18,7 @@ import {
     codTracking,
     promotionRedemptions,
 } from "@scalius/database/schema";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
@@ -45,7 +42,6 @@ import {
     recordAndEnqueueOrderNotification,
     type OrderNotificationQueue,
 } from "../notifications/order-notification-outbox";
-import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
 import type { StorefrontCartItemIssue } from "./cart-validation";
@@ -330,72 +326,6 @@ async function resolveCustomerForOrder(
     };
 }
 
-function getCustomerSpendContributionForCommittedOrder(
-    order: StorefrontOrderCommitPayload["orderData"],
-): number {
-    if (
-        ["cancelled", "refunded", "returned", "partially_refunded"].includes(order.status)
-        || ["failed", "refunded"].includes(order.paymentStatus)
-    ) {
-        return 0;
-    }
-    return Math.max(0, order.paidAmount);
-}
-
-async function assertDiscountUsageStillAvailable(
-    db: Database,
-    payload: StorefrontOrderCommitPayload,
-): Promise<void> {
-    if (!payload.discountUsage) return;
-
-    const { discountId } = payload.discountUsage;
-    const customerPhone = payload.orderData.customerPhone;
-    const discount = await db
-        .select({
-            maxUses: discounts.maxUses,
-            limitOnePerCustomer: discounts.limitOnePerCustomer,
-        })
-        .from(discounts)
-        .where(eq(discounts.id, discountId))
-        .get();
-
-    if (discount?.limitOnePerCustomer && customerPhone) {
-        const customerKeys = [
-            `phone:${customerPhone.trim()}`,
-            ...(payload.existingCustomer?.id
-                ? [`customer:${payload.existingCustomer.id}`]
-                : []),
-        ];
-        const customerUsage = await db
-            .select({ orderId: discountCustomerRedemptions.orderId })
-            .from(discountCustomerRedemptions)
-            .where(
-                and(
-                    eq(discountCustomerRedemptions.discountId, discountId),
-                    inArray(discountCustomerRedemptions.customerKey, customerKeys),
-                ),
-            )
-            .limit(1)
-            .get();
-
-        if (customerUsage) {
-            throw new ValidationError("Discount already used by this customer");
-        }
-    }
-
-    if (discount?.maxUses) {
-        const totalUsage = await db
-            .select({ count: sql<number>`COUNT(*)` })
-            .from(discountUsage)
-            .where(eq(discountUsage.discountId, discountId))
-            .get();
-
-        if ((totalUsage?.count ?? 0) >= discount.maxUses) {
-            throw new ValidationError("Discount code has reached its usage limit");
-        }
-    }
-}
-
 function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
     if (payload.orderData.inventoryAction !== "reserved") return [];
     return payload.items
@@ -489,7 +419,6 @@ function buildOrderWriteBatch(
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
-    const customerSpendContribution = getCustomerSpendContributionForCommittedOrder(od);
 
     if (customer.createProfile) {
         writes.push(
@@ -506,7 +435,6 @@ function buildOrderWriteBatch(
                 zoneName: od.zoneName,
                 areaName: od.areaName,
                 totalOrders: 1,
-                totalSpent: customerSpendContribution,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
@@ -550,7 +478,6 @@ function buildOrderWriteBatch(
             .set({
                 ...guestProfileUpdates,
                 totalOrders: sql`${customers.totalOrders} + 1`,
-                totalSpent: sql`${customers.totalSpent} + ${customerSpendContribution}`,
                 lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
                 deletedAt: null,
@@ -593,9 +520,6 @@ function buildOrderWriteBatch(
             zoneName: od.zoneName,
             areaName: od.areaName,
             notes: od.notes,
-            totalAmount: od.totalAmount,
-            shippingCharge: od.shippingCharge,
-            discountAmount: od.discountAmount,
             currencyCode: od.currencyCode,
             currencyDecimalPlaces: od.currencyDecimalPlaces,
             subtotalAmountMinor: od.subtotalAmountMinor,
@@ -613,8 +537,8 @@ function buildOrderWriteBatch(
             status: od.status,
             paymentMethod: od.paymentMethod,
             paymentStatus: od.paymentStatus,
-            paidAmount: od.paidAmount,
-            balanceDue: od.balanceDue,
+            paidAmountMinor: od.paidAmountMinor,
+            balanceDueMinor: od.balanceDueMinor,
             fulfillmentStatus: od.fulfillmentStatus,
             inventoryPool: od.inventoryPool,
             inventoryAction: od.inventoryAction,
@@ -639,7 +563,6 @@ function buildOrderWriteBatch(
             variantId: item.variantId,
             productImageMediaId: item.productImageMediaId,
             quantity: item.quantity,
-            price: item.price,
             productName: item.productName,
             variantLabel: item.variantLabel,
             inventoryTracked: item.variantId !== null && item.inventoryTracked !== false,
@@ -670,12 +593,6 @@ function buildOrderWriteBatch(
                 orderId: od.id,
                 taxClassId: line.taxClassId,
                 taxClassName: line.taxClassName,
-                unitPriceMinor: line.unitPriceMinor,
-                quantity: line.quantity,
-                grossAmountMinor: line.grossAmountMinor,
-                discountMinor: line.discountMinor,
-                taxableAmountMinor: line.taxableAmountMinor,
-                taxMinor: line.taxMinor,
                 pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
                 rateSnapshot: JSON.stringify(line.components),
                 createdAt: sql`unixepoch()`,
@@ -696,12 +613,6 @@ function buildOrderWriteBatch(
         displayLabel: payload.taxQuote.displayLabel,
         pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
         shippingTaxed: payload.taxQuote.shippingTaxed,
-        subtotalMinor: payload.taxQuote.subtotalMinor,
-        shippingMinor: payload.taxQuote.shippingMinor,
-        discountMinor: payload.taxQuote.discountMinor,
-        taxableMinor: payload.taxQuote.taxableMinor,
-        taxMinor: payload.taxQuote.taxMinor,
-        totalMinor: payload.taxQuote.totalMinor,
         settingsVersion: payload.taxQuote.settingsVersion,
         calculationVersion: payload.taxQuote.calculationVersion,
         destinationSnapshot: JSON.stringify(payload.taxQuote.destination),
@@ -730,22 +641,8 @@ function buildOrderWriteBatch(
         );
     }
 
-    if (payload.discountUsage) {
-        writes.push(
-            db.insert(discountUsage).values({
-                id: "du_" + nanoid(),
-                discountId: payload.discountUsage.discountId,
-                orderId: od.id,
-                customerId: customer.id,
-                amountDiscounted: payload.discountUsage.amountDiscounted,
-                createdAt: sql`unixepoch()`,
-            }),
-        );
-    }
-
     if (appliedPromotion) {
-        const promotionCode = appliedPromotion.promotionCode;
-        if (appliedPromotion.method !== "code" || !promotionCode) {
+        if (appliedPromotion.discounts.some(({ method, promotionCode }) => (method === "code") !== Boolean(promotionCode))) {
             throw new ValidationError("Committed promotion authority is invalid.");
         }
         const allocationTotal = appliedPromotion.allocations.reduce(
@@ -819,17 +716,22 @@ function buildOrderWriteBatch(
         }
         // The immutable allocations precede the claim so the D1 claim trigger
         // can prove their exact sum and identity in this same atomic batch.
-        writes.push(db.insert(promotionRedemptions).values({
-            id: `pred_${nanoid()}`,
-            promotionId: appliedPromotion.promotionId,
-            orderId: od.id,
-            customerId: customer.id,
-            promotionRevision: appliedPromotion.promotionRevision,
-            promotionCode,
-            currencyCode: od.currencyCode,
-            discountAmountMinor: appliedPromotion.totalDiscountMinor,
-            createdAt: sql`unixepoch()`,
-        }));
+        // Only the (single) code discount carries usage limits and a claim;
+        // automatic allocations still fail on a concurrent rule edit (revision).
+        for (const discount of appliedPromotion.discounts) {
+            if (!discount.promotionCode) continue;
+            writes.push(db.insert(promotionRedemptions).values({
+                id: `pred_${nanoid()}`,
+                promotionId: discount.promotionId,
+                orderId: od.id,
+                customerId: customer.id,
+                promotionRevision: discount.promotionRevision,
+                promotionCode: discount.promotionCode,
+                currencyCode: od.currencyCode,
+                discountAmountMinor: discount.totalDiscountMinor,
+                createdAt: sql`unixepoch()`,
+            }));
+        }
     }
 
     if (
@@ -868,11 +770,13 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
         customerEmail: od.customerEmail,
         city: od.city,
         cityName: od.cityName,
-        totalAmount: od.totalAmount,
+        currencyCode: od.currencyCode,
+        currencyDecimalPlaces: od.currencyDecimalPlaces,
+        totalAmountMinor: od.totalAmountMinor,
         status: od.status,
         paymentMethod: od.paymentMethod,
         paymentStatus: od.paymentStatus,
-        paidAmount: od.paidAmount,
+        paidAmountMinor: od.paidAmountMinor,
         deletedAt: null,
     });
 }
@@ -927,26 +831,11 @@ export async function commitStorefrontOrderPayload(
         ) {
             throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
         }
-        if (payload.discountUsage && (
-            !Number.isSafeInteger(payload.discountUsage.revision)
-            || payload.discountUsage.revision < 1
-        )) {
-            throw new ValidationError("Discount revision is unavailable. Return to your cart and apply the code again.");
-        }
-        const discountAuthority = payload.discountUsage ? sql`EXISTS (
-            SELECT 1 FROM ${discounts}
-            WHERE ${discounts.id} = ${payload.discountUsage.discountId}
-              AND ${discounts.revision} = ${payload.discountUsage.revision}
-              AND ${discounts.isActive} = 1
-              AND ${discounts.deletedAt} IS NULL
-              AND ${discounts.startDate} <= unixepoch()
-              AND (${discounts.endDate} IS NULL OR ${discounts.endDate} >= unixepoch())
-        )` : sql`1 = 1`;
         const authorityGuard = buildBatchGuard(db, sql`EXISTS (
             SELECT 1 FROM ${checkoutAuthority}
             WHERE ${checkoutAuthority.id} = 'default'
               AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
-        ) AND ${discountAuthority}`, CHECKOUT_AUTHORITY_CHANGED);
+        )`, CHECKOUT_AUTHORITY_CHANGED);
 
         const [customer, inventoryPlan] = await Promise.all([
             resolveCustomerForOrder(db, payload, reads),
@@ -958,18 +847,14 @@ export async function commitStorefrontOrderPayload(
             ),
         ]);
         reads = undefined;
-        if (payload.discountUsage && payload.promotion) {
-            throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
-        }
         const appliedPromotion = payload.promotion
             ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, customer.id)
             : null;
-        await assertDiscountUsageStillAvailable(db, payload);
 
         const checkoutAttemptPlan = checkoutCommit
             ? await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
                 paymentMethod: payload.orderData.paymentMethod,
-                totalAmount: payload.orderData.totalAmount,
+                totalAmountMinor: payload.orderData.totalAmountMinor,
                 response: checkoutCommit.response,
             })
             : null;
@@ -1008,8 +893,7 @@ export async function commitStorefrontOrderPayload(
             const guardError = checkoutGuardError(error);
             if (guardError) throw guardError;
 
-            const discountConstraintError = getDiscountUsageConstraintError(error)
-                ?? getPromotionRedemptionConstraintError(error);
+            const discountConstraintError = getPromotionRedemptionConstraintError(error);
             if (discountConstraintError) throw discountConstraintError;
 
             if (
@@ -1037,7 +921,9 @@ export async function commitStorefrontOrderPayload(
                         ...(agentContextPlan?.writesAfterOrder ?? []),
                     ] as SQLiteBatchItem[]);
                 } catch (replayError) {
-                    throw checkoutGuardError(replayError) ?? replayError;
+                    throw checkoutGuardError(replayError)
+                        ?? getPromotionRedemptionConstraintError(replayError)
+                        ?? replayError;
                 }
                 return {
                     orderId: payload.orderData.id,
@@ -1161,7 +1047,7 @@ async function finalizeCheckoutAttemptForExistingOrder(
 
     const plan = await prepareAtomicCheckoutAttemptCommit(db, checkoutCommit.attempt, {
         paymentMethod: payload.orderData.paymentMethod,
-        totalAmount: payload.orderData.totalAmount,
+        totalAmountMinor: payload.orderData.totalAmountMinor,
         response: checkoutCommit.response,
     });
     try {

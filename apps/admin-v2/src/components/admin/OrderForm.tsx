@@ -1,11 +1,11 @@
-// src/components/admin/OrderForm.tsx
 import React, { useCallback, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SubmitHandler } from "react-hook-form";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Form } from "@/components/ui/form";
-import { formatSavedMajorAmount } from "~/lib/order-tax-presentation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,17 +16,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import { OrderStatus } from "@/lib/admin-order-status-policy";
 import { FormActionBar } from "@/components/admin/FormStickyHeader";
-import { useNavigate } from "@tanstack/react-router";
+import { PageHeader } from "@/components/admin/resource/PageHeader";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import {
-  updateOrderItems,
-  updateShippingCharge,
-  updateDiscountAmount,
-} from "@/store/orderStore";
-import { getDeliveryLocations } from "@/lib/api-query-options/delivery";
+  deliveryLocationsQueryOptions,
+  getDeliveryLocations,
+} from "@/lib/api-query-options/delivery";
 import {
   useConfirmManualOrderAmendment,
   useCreateOrder,
@@ -39,14 +36,6 @@ import {
   type putApiV1AdminOrdersById,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody } from "@/lib/api";
-
-type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
-type UpdateOrderInput = { id: string } & ApiBody<typeof putApiV1AdminOrdersById>;
-type QuoteManualOrderInput = ApiBody<typeof postApiV1AdminOrdersQuote>;
-type ManualOrderAmendmentInput = { id: string } &
-  ApiBody<typeof postApiV1AdminOrdersByIdAmendmentsPreview>;
-
-// Imports for our new, refactored components and types
 import {
   orderFormSchema,
   type OrderFormInput,
@@ -79,6 +68,15 @@ import {
   calculateManualOrderDiscountLimit,
   resolveManualOrderDiscountGuidance,
 } from "./order-form/manual-order-discount";
+import { translate, useMessages } from "@/i18n";
+import { orderFormMessages } from "@/i18n/order-form";
+import { resourceMessages } from "@/i18n/resource";
+
+type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
+type UpdateOrderInput = { id: string } & ApiBody<typeof putApiV1AdminOrdersById>;
+type QuoteManualOrderInput = ApiBody<typeof postApiV1AdminOrdersQuote>;
+type ManualOrderAmendmentInput = { id: string } &
+  ApiBody<typeof postApiV1AdminOrdersByIdAmendmentsPreview>;
 
 function toOrderBaseContentInput(values: OrderFormValues) {
   return {
@@ -98,14 +96,6 @@ function toOrderBaseContentInput(values: OrderFormValues) {
   };
 }
 
-function toSellableLines(values: OrderFormValues) {
-  return values.items.map(({ productId, variantId, quantity }) => ({
-    productId,
-    variantId,
-    quantity,
-  }));
-}
-
 function toCreateOrderInput(
   values: OrderFormValues,
   requestKey: string,
@@ -113,22 +103,25 @@ function toCreateOrderInput(
   return {
     requestKey,
     ...toOrderBaseContentInput(values),
-    items: toSellableLines(values),
+    items: values.items.map(({ productId, variantId, quantity }) => ({
+      productId,
+      variantId,
+      quantity,
+    })),
   };
 }
 
-function toUpdateOrderInput(
-  values: OrderFormValues,
-  id: string,
-): UpdateOrderInput {
-  if (!values.version) {
-    throw new Error("Order version is missing. Reload the editor before saving.");
-  }
+function requireVersion(values: OrderFormValues): number {
+  if (!values.version) throw new Error(translate(orderFormMessages, "reloadToSave"));
+  return values.version;
+}
+
+function toUpdateOrderInput(values: OrderFormValues, id: string): UpdateOrderInput {
   return {
     ...toOrderBaseContentInput(values),
     items: values.items,
     id,
-    expectedVersion: values.version,
+    expectedVersion: requireVersion(values),
     status: values.status ?? OrderStatus.PENDING,
   };
 }
@@ -137,12 +130,9 @@ function toManualOrderAmendmentInput(
   values: OrderFormValues,
   id: string,
 ): ManualOrderAmendmentInput {
-  if (!values.version) {
-    throw new Error("Order version is missing. Reload the amendment before confirming.");
-  }
   return {
     id,
-    expectedVersion: values.version,
+    expectedVersion: requireVersion(values),
     ...toOrderBaseContentInput(values),
     items: values.items.map(({ orderItemId, productId, variantId, quantity }) => ({
       orderItemId,
@@ -153,22 +143,24 @@ function toManualOrderAmendmentInput(
   };
 }
 
-export function OrderForm({
-  products,
-  defaultValues,
-  isEdit = false,
-  isAmend = false,
-}: OrderFormProps) {
+export function OrderForm({ mode, products = [], defaultValues }: OrderFormProps) {
+  const isEdit = mode !== "create";
+  const isAmend = mode === "amend";
+  // Create and amend save against a current server quote; full edit has none.
+  const usesQuote = mode !== "edit";
+  const t = useMessages(orderFormMessages);
+  const r = useMessages(resourceMessages);
   const navigate = useNavigate();
-  const { code: currencyCode } = useCurrency();
+  const queryClient = useQueryClient();
+  const { code: currencyCode, fmt } = useCurrency();
   const orderActions = useOrderActionPermissions();
-  const canSave = isEdit
-    ? orderActions.canEditOrders
-    : orderActions.canCreateOrders;
+  const canSave = isEdit ? orderActions.canEditOrders : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
   const updateMutation = useUpdateOrder();
   const amendMutation = useConfirmManualOrderAmendment();
   const amendmentRequest = React.useRef<{ key: string; payload: string } | null>(null);
+  // The dialog stays mounted; the last amendment is kept while it animates closed.
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [pendingAmendment, setPendingAmendment] = React.useState<{
     input: ManualOrderAmendmentInput;
     orderId: string;
@@ -197,6 +189,9 @@ export function OrderForm({
       ...defaultValues,
     },
   });
+  const orderId = defaultValues?.id;
+  const pageTitle = isEdit ? t("editOrder", { id: String(orderId ?? "") }) : t("createOrder");
+  const backTo = isEdit && orderId ? `/admin/orders/${orderId}` : "/admin/orders";
 
   const [
     quoteCity,
@@ -216,6 +211,12 @@ export function OrderForm({
       "discountAmount",
     ],
   });
+  const localTotals = React.useMemo(() => {
+    const subtotal = quoteItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shipping = quoteShipping || 0;
+    const discount = quoteDiscount || 0;
+    return { subtotal, shipping, discount, total: subtotal + shipping - discount };
+  }, [quoteDiscount, quoteItems, quoteShipping]);
   const quoteInput = React.useMemo<QuoteManualOrderInput>(
     () => ({
       city: quoteCity,
@@ -233,35 +234,30 @@ export function OrderForm({
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
-    () => isEdit && !isAmend
-      ? null
-      : calculateManualOrderDiscountLimit(
-          quoteItems,
-          quoteDiscount,
-          currencyDecimalPlaces,
-        ),
-    [currencyDecimalPlaces, isAmend, isEdit, quoteDiscount, quoteItems],
+    () => usesQuote
+      ? calculateManualOrderDiscountLimit(quoteItems, quoteDiscount, currencyDecimalPlaces)
+      : null,
+    [currencyDecimalPlaces, quoteDiscount, quoteItems, usesQuote],
   );
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
-  const hasQuotePrerequisites = (!isEdit || isAmend)
+  const hasQuotePrerequisites = usesQuote
     && Boolean(quoteInput.city && quoteInput.zone)
     && quoteInput.items.length > 0
     && quoteInput.items.every((item) => Boolean(item.variantId));
-  const canRequestQuote = hasQuotePrerequisites
-    && quoteInputIsCurrent;
+  const canRequestQuote = hasQuotePrerequisites && quoteInputIsCurrent;
   const quoteQuery = useQuery({
     queryKey: [
       ...queryKeys.orders.manualQuote(debouncedQuoteInput),
-      isAmend ? `amend:${String(defaultValues?.id)}:${String(defaultValues?.version)}` : "create",
+      isAmend ? `amend:${String(orderId)}:${String(defaultValues?.version)}` : "create",
     ],
     queryFn: () => {
       if (!isAmend) return apiData(postApiV1AdminOrdersQuote({ body: debouncedQuoteInput }));
-      const orderId = String(defaultValues?.id ?? "");
-      const { id: _id, ...amendment } = toManualOrderAmendmentInput(form.getValues(), orderId);
+      const id = String(orderId ?? "");
+      const { id: _id, ...amendment } = toManualOrderAmendmentInput(form.getValues(), id);
       return apiData(postApiV1AdminOrdersByIdAmendmentsPreview({
-        path: { id: orderId },
+        path: { id },
         body: { ...amendment, ...debouncedQuoteInput },
       }));
     },
@@ -273,139 +269,89 @@ export function OrderForm({
   const authoritativeDiscountLimit = currentQuoteError
     ? readManualOrderDiscountLimitError(currentQuoteError)
     : null;
-  const manualQuote = React.useMemo(
-    () => {
-      const discountLimit = resolveManualOrderDiscountGuidance({
-        discountAmount: quoteDiscount,
-        authoritativeErrorLimit: authoritativeDiscountLimit,
-        successfulQuote: quoteInputIsCurrent
-          && quoteQuery.isSuccess
-          && quoteQuery.data
-          ? quoteQuery.data
-          : null,
-        localLimit: localDiscountLimit,
-        localCurrencyCode: currencyCode,
-        localDecimalPlaces: currencyDecimalPlaces,
-      });
-
-      return {
-        data: quoteQuery.data ?? null,
-        isCurrent:
-          (isEdit && !isAmend) ||
-          (canRequestQuote && quoteInputIsCurrent && quoteQuery.isSuccess),
-        isLoading:
-          (!isEdit || isAmend) &&
-          hasQuotePrerequisites &&
-          (!quoteInputIsCurrent || quoteQuery.isFetching),
-        discountLimit,
-        errorMessage: currentQuoteError && !authoritativeDiscountLimit
-          ? getServerFnError(
-              currentQuoteError,
-              "Could not calculate the order total",
-            )
-          : null,
-        canRetry: currentQuoteError
-          ? isAdminApiRetryableReadError(currentQuoteError)
-          : false,
-        retry: () => {
-          void quoteQuery.refetch();
-        },
-      };
+  const manualQuote = {
+    data: quoteQuery.data ?? null,
+    isCurrent: !usesQuote || (canRequestQuote && quoteQuery.isSuccess),
+    isLoading: hasQuotePrerequisites && (!quoteInputIsCurrent || quoteQuery.isFetching),
+    discountLimit: resolveManualOrderDiscountGuidance({
+      discountAmount: quoteDiscount,
+      authoritativeErrorLimit: authoritativeDiscountLimit,
+      successfulQuote: quoteInputIsCurrent && quoteQuery.isSuccess && quoteQuery.data
+        ? quoteQuery.data
+        : null,
+      localLimit: localDiscountLimit,
+      localCurrencyCode: currencyCode,
+      localDecimalPlaces: currencyDecimalPlaces,
+    }),
+    errorMessage: currentQuoteError && !authoritativeDiscountLimit
+      ? getServerFnError(currentQuoteError, t("totalFailed"))
+      : null,
+    canRetry: currentQuoteError ? isAdminApiRetryableReadError(currentQuoteError) : false,
+    retry: () => {
+      void quoteQuery.refetch();
     },
-    [
-      authoritativeDiscountLimit,
-      canRequestQuote,
-      currencyCode,
-      currencyDecimalPlaces,
-      currentQuoteError,
-      hasQuotePrerequisites,
-      isEdit,
-      isAmend,
-      localDiscountLimit,
-      quoteDiscount,
-      quoteInputIsCurrent,
-      quoteQuery,
-    ],
-  );
+  };
 
   const isSubmitting = createMutation.isPending
     || updateMutation.isPending
     || amendMutation.isPending;
-  const isInteractionLocked = isSubmitting || pendingAmendment !== null;
+  const isInteractionLocked = isSubmitting || confirmOpen;
   const [locations, setLocations] = React.useState<{
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
     areas: DeliveryLocation[];
   }>({ cities: [], zones: [], areas: [] });
-  const [isLoading, setIsLoading] = React.useState({
-    zones: false,
-    areas: false,
-  });
+  const [isLoading, setIsLoading] = React.useState({ zones: false, areas: false });
 
-  // --- API CALLS ---
+  // --- DELIVERY AREAS ---
 
   const loadCities = useCallback(async () => {
     try {
-      const data = await getDeliveryLocations({ type: "city" });
+      const data = await queryClient.ensureQueryData(
+        deliveryLocationsQueryOptions({ type: "city" }),
+      );
       setLocations((prev) => ({ ...prev, cities: data.locations as DeliveryLocation[] }));
-    } catch (error: unknown) {
-      console.error("Error loading cities:", error);
-      toast.error("Could not load city list. Please refresh the page.");
+    } catch {
+      toast.error(translate(orderFormMessages, "locationsFailed"));
     }
-  }, []);
+  }, [queryClient]);
 
+  // Pickers reset the child selections themselves, so these only load lists
+  // (an edit must keep its saved area while zones and areas load together).
   const loadZones = useCallback(async (cityId: string) => {
-    if (!cityId) {
-      setLocations((prev) => ({ ...prev, zones: [], areas: [] }));
-      form.setValue("zone", "");
-      form.setValue("area", null);
-      return;
-    }
     setIsLoading((prev) => ({ ...prev, zones: true }));
     try {
       const data = await getDeliveryLocations({ type: "zone", parentId: cityId });
-      setLocations((prev) => ({ ...prev, zones: data.locations as DeliveryLocation[], areas: [] }));
-      form.setValue("area", null);
-    } catch (error: unknown) {
-      console.error("Error loading zones:", error);
-      toast.error("Could not load zone list. Please refresh the page.");
+      setLocations((prev) => ({ ...prev, zones: data.locations as DeliveryLocation[] }));
+    } catch {
+      toast.error(translate(orderFormMessages, "locationsFailed"));
     } finally {
       setIsLoading((prev) => ({ ...prev, zones: false }));
     }
-  }, [form]);
+  }, []);
 
   const loadAreas = useCallback(async (zoneId: string) => {
-    if (!zoneId) {
-      setLocations((prev) => ({ ...prev, areas: [] }));
-      form.setValue("area", null);
-      return;
-    }
     setIsLoading((prev) => ({ ...prev, areas: true }));
     try {
       const data = await getDeliveryLocations({ type: "area", parentId: zoneId });
       setLocations((prev) => ({ ...prev, areas: data.locations as DeliveryLocation[] }));
-    } catch (error: unknown) {
-      console.error("Error loading areas:", error);
-      toast.error("Could not load area list. Please refresh the page.");
+    } catch {
+      toast.error(translate(orderFormMessages, "locationsFailed"));
     } finally {
       setIsLoading((prev) => ({ ...prev, areas: false }));
     }
-  }, [form]);
+  }, []);
 
-  // --- FORM SUBMISSION ---
+  // --- SUBMIT ---
 
-  const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>(async (values) => {
-    if ((!isEdit || isAmend) && !manualQuote.isCurrent) {
-      toast.error("Wait for the authoritative tax and total before continuing.");
+  const handleSubmit: SubmitHandler<OrderFormValues> = async (values) => {
+    if (usesQuote && !manualQuote.isCurrent) {
+      toast.info(t("calculating"));
       return;
     }
-    // Find the location objects from state based on the selected IDs
     const city = locations.cities.find((c) => c.id === values.city);
     const zone = locations.zones.find((z) => z.id === values.zone);
-    const area = values.area
-      ? locations.areas.find((a) => a.id === values.area)
-      : null;
-
+    const area = values.area ? locations.areas.find((a) => a.id === values.area) : null;
     const enrichedValues: OrderFormValues = {
       ...values,
       cityName: city?.name,
@@ -413,153 +359,122 @@ export function OrderForm({
       areaName: area?.name ?? null,
     };
 
-    if (isAmend) {
-      const orderId = enrichedValues.id || defaultValues?.id;
-      if (!orderId) {
-        toast.error("Missing order ID. Please reload the amendment.");
-        return;
-      }
-      const input = toManualOrderAmendmentInput(enrichedValues, orderId);
-      const quote = manualQuote.data;
-      if (!quote || !("quoteFingerprint" in quote) || typeof quote.quoteFingerprint !== "string" || !quote.quoteFingerprint) {
-        toast.error("Refresh the authoritative quote before confirming this amendment.");
-        return;
-      }
-      const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
-      if (amendmentRequest.current?.payload !== payload) {
-        amendmentRequest.current = { key: crypto.randomUUID(), payload };
-      }
-      setPendingAmendment({
-        input,
-        orderId,
-        quoteFingerprint: quote.quoteFingerprint,
-        requestKey: amendmentRequest.current.key,
-        formattedTotal: formatSavedMajorAmount(quote.totalAmount, quote),
-      });
-    } else if (isEdit) {
-      const orderId = enrichedValues.id || defaultValues?.id;
-      if (!orderId) {
-        toast.error("Missing order ID. Please refresh and try again.");
+    if (isEdit) {
+      const id = enrichedValues.id || orderId;
+      if (!id) {
+        toast.error(t("reloadToSave"));
         return;
       }
       try {
-        updateMutation.mutate(toUpdateOrderInput(enrichedValues, orderId), {
+        if (isAmend) {
+          const input = toManualOrderAmendmentInput(enrichedValues, id);
+          const quote = manualQuote.data;
+          if (!quote || !("quoteFingerprint" in quote) || typeof quote.quoteFingerprint !== "string" || !quote.quoteFingerprint) {
+            toast.error(t("totalChanged"));
+            return;
+          }
+          const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
+          if (amendmentRequest.current?.payload !== payload) {
+            amendmentRequest.current = { key: crypto.randomUUID(), payload };
+          }
+          setPendingAmendment({
+            input,
+            orderId: id,
+            quoteFingerprint: quote.quoteFingerprint,
+            requestKey: amendmentRequest.current.key,
+            formattedTotal: fmt(quote.totalAmount),
+          });
+          setConfirmOpen(true);
+          return;
+        }
+        updateMutation.mutate(toUpdateOrderInput(enrichedValues, id), {
           onSuccess: () => {
-            void navigate({ to: "/admin/orders" });
+            void navigate({ to: "/admin/orders/$orderId", params: { orderId: id } });
           },
         });
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Reload the editor before saving this order.",
-        );
+        toast.error(error instanceof Error ? error.message : t("reloadToSave"));
       }
-    } else {
-      const requestKey = createRequestKey.current ?? getOrCreateAdminOrderRequestKey();
-      createRequestKey.current = requestKey;
-      const result = await executeManualOrderCreateWithRecovery({
-        requestKey,
-        submit: (submittedRequestKey) => {
-          rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
-          return createMutation.mutateAsync(
-            toCreateOrderInput(enrichedValues, submittedRequestKey),
-          );
-        },
-        replaceRequestKey: replaceSubmittedAdminOrderRequestKey,
-      });
-      createRequestKey.current = result.requestKey;
-
-      if (result.outcome === "created") {
-        clearAdminOrderRequestKey(result.requestKey);
-        void navigate({
-          to: "/admin/orders/$orderId",
-          params: { orderId: result.order.id },
-        });
-        return;
-      }
-      if (result.outcome === "open-existing") {
-        clearAdminOrderRequestKey(result.requestKey);
-        toast.info("Your earlier submission already created this order.", {
-          description: "Opening it instead of risking a duplicate order.",
-        });
-        void navigate({
-          to: "/admin/orders/$orderId",
-          params: { orderId: result.orderId },
-        });
-        return;
-      }
-      if (result.outcome === "wait") {
-        toast.warning("Your earlier submission is still finishing.", {
-          description:
-            "Your changes are preserved. Wait a moment, then create the order again.",
-        });
-        return;
-      }
-      toast.error(getServerFnError(result.error, "Failed to create order"));
+      return;
     }
-  }, [createMutation, defaultValues?.id, isAmend, isEdit, locations, manualQuote.data, manualQuote.isCurrent, navigate, updateMutation]);
 
-  const handleConfirmAmendment = useCallback(async () => {
+    const requestKey = createRequestKey.current ?? getOrCreateAdminOrderRequestKey();
+    createRequestKey.current = requestKey;
+    const result = await executeManualOrderCreateWithRecovery({
+      requestKey,
+      submit: (submittedRequestKey) => {
+        rememberSubmittedAdminOrderRequestKey(submittedRequestKey);
+        return createMutation.mutateAsync(
+          toCreateOrderInput(enrichedValues, submittedRequestKey),
+        );
+      },
+      replaceRequestKey: replaceSubmittedAdminOrderRequestKey,
+    });
+    createRequestKey.current = result.requestKey;
+
+    if (result.outcome === "created" || result.outcome === "open-existing") {
+      clearAdminOrderRequestKey(result.requestKey);
+      if (result.outcome === "open-existing") {
+        toast.info(t("alreadyCreated"), { description: t("alreadyCreatedHint") });
+      }
+      void navigate({
+        to: "/admin/orders/$orderId",
+        params: {
+          orderId: result.outcome === "created" ? result.order.id : result.orderId,
+        },
+      });
+      return;
+    }
+    if (result.outcome === "wait") {
+      toast.warning(t("stillCreating"), { description: t("stillCreatingHint") });
+      return;
+    }
+    toast.error(getServerFnError(result.error, t("createFailed")));
+  };
+
+  const handleConfirmAmendment = async () => {
     const pending = pendingAmendment;
-    if (!pending || amendMutation.isPending) return;
+    if (!confirmOpen || !pending || amendMutation.isPending) return;
     try {
       await amendMutation.mutateAsync({
         ...pending.input,
         requestKey: pending.requestKey,
         quoteFingerprint: pending.quoteFingerprint,
       });
-      setPendingAmendment(null);
+      setConfirmOpen(false);
       void navigate({
         to: "/admin/orders/$orderId",
         params: { orderId: pending.orderId },
       });
     } catch {
-      // Mutation feedback is shown by the shared hook; retain the key for safe retry.
+      // The mutation hook shows the error; the request key is kept for a safe retry.
     }
-  }, [amendMutation, navigate, pendingAmendment]);
-
-  // --- DATA LOADING AND SIDE EFFECTS ---
+  };
 
   useEffect(() => {
-    // Sync default values with nanostore on initial load
-    if (defaultValues) {
-      updateOrderItems(defaultValues.items || []);
-      updateShippingCharge(defaultValues.shippingCharge || 0);
-      updateDiscountAmount(defaultValues.discountAmount || null);
-    }
-
-    // Load initial data
     void loadCities();
-    if (isEdit && defaultValues?.city) {
-      void loadZones(defaultValues.city);
-    }
-    if (isEdit && defaultValues?.zone) {
-      void loadAreas(defaultValues.zone);
-    }
+    if (isEdit && defaultValues?.city) void loadZones(defaultValues.city);
+    if (isEdit && defaultValues?.zone) void loadAreas(defaultValues.zone);
   }, [defaultValues, isEdit, loadAreas, loadCities, loadZones]);
 
-  // Effect to handle Ctrl+Enter for form submission
+  const canSubmit = canSave && manualQuote.isCurrent && !isInteractionLocked;
+
+  // Ctrl/Cmd+Enter saves.
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (
-          canSave &&
-          manualQuote.isCurrent &&
-          !isSubmitting &&
-          pendingAmendment === null &&
-          form.getValues("items").length > 0
-        ) {
-          e.preventDefault();
-          void form.handleSubmit(handleSubmit)();
-        }
+      if (
+        (e.ctrlKey || e.metaKey)
+        && e.key === "Enter"
+        && canSubmit
+        && form.getValues("items").length > 0
+      ) {
+        e.preventDefault();
+        void form.handleSubmit(handleSubmit)();
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [canSave, form, handleSubmit, isSubmitting, manualQuote.isCurrent, pendingAmendment]);
-
-  const canSubmit = canSave && manualQuote.isCurrent && !isInteractionLocked;
+  });
 
   return (
     <>
@@ -567,71 +482,54 @@ export function OrderForm({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
+      <PageHeader title={pageTitle} backTo={backTo} />
       <Form {...form}>
         <form
           method="post"
           onSubmit={canSubmit && form.formState.isDirty
             ? form.handleSubmit(handleSubmit)
             : (event) => event.preventDefault()}
-          className="-mt-4 pb-6 space-y-4"
           noValidate
         >
-          <div className="flex min-h-8 items-center px-1">
-            <h1 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              {isEdit ? (
-                <>
-                  {isAmend ? "Amend order" : "Edit order"}
-                  {defaultValues?.id ? (
-                    <>
-                      {" "}
-                      <span className="ml-2 font-mono text-sm font-medium text-muted-foreground">
-                        #{defaultValues.id}
-                      </span>
-                    </>
-                  ) : null}
-                </>
-              ) : "New order"}
-            </h1>
-          </div>
           <OrderFormProvider
             form={form}
             products={products}
             isEdit={isEdit}
-            isAmend={isAmend}
+            usesQuote={usesQuote}
             locations={locations}
-            setLocations={setLocations}
             isLoading={isLoading}
-            setIsLoading={setIsLoading}
             loadZones={loadZones}
             loadAreas={loadAreas}
-            isSubmitting={isInteractionLocked}
+            localTotals={localTotals}
             manualQuote={manualQuote}
           >
-            <CustomerInfoSection />
-            <OrderItemsSection />
-            <SummarySection />
-
-            <input type="hidden" {...form.register("cityName")} />
-            <input type="hidden" {...form.register("zoneName")} />
-            <input type="hidden" {...form.register("areaName")} />
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="min-w-0 space-y-4 lg:col-span-2">
+                <OrderItemsSection />
+                <SummarySection />
+              </div>
+              <div className="min-w-0 space-y-4">
+                <CustomerInfoSection />
+              </div>
+            </div>
           </OrderFormProvider>
         </form>
       </Form>
       <AlertDialog
-        open={pendingAmendment !== null}
+        open={confirmOpen}
         onOpenChange={(open) => {
-          if (!open && !amendMutation.isPending) setPendingAmendment(null);
+          if (!open && !amendMutation.isPending) setConfirmOpen(false);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm order amendment?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Revised order total and COD balance due: {pendingAmendment?.formattedTotal}
+              {t("confirmBody", { total: pendingAmendment?.formattedTotal ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={amendMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={amendMutation.isPending}>{r("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={amendMutation.isPending}
               onClick={(event) => {
@@ -639,31 +537,20 @@ export function OrderForm({
                 void handleConfirmAmendment();
               }}
             >
-              {amendMutation.isPending ? "Saving…" : "Confirm amendment"}
+              {t("confirmSave")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <FormActionBar
-        title="Orders"
+        title={pageTitle}
         isEdit={isEdit}
         isSubmitting={isSubmitting}
         isDirty={form.formState.isDirty}
-        cancelUrl="/admin/orders"
-        newUrl="/admin/orders/new"
-        newLabel="New order"
-        canCreateNew={orderActions.canCreateOrders}
+        cancelUrl={backTo}
         canSave={canSubmit}
-        saveLabel={isAmend
-          ? "Review and confirm amendment"
-          : isEdit
-            ? undefined
-            : "Create confirmed order"}
-        saveDisabledReason={!canSave
-          ? isEdit
-            ? "You do not have permission to edit orders."
-            : "You do not have permission to create orders."
-          : "Add an item and choose its delivery destination to calculate the final total."}
+        saveLabel={isAmend ? t("reviewChanges") : isEdit ? r("save") : t("createOrder")}
+        saveDisabledReason={canSave ? t("needsTotal") : r("readOnly")}
         onDiscard={isEdit
           ? undefined
           : () => {

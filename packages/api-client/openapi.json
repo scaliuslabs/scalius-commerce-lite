@@ -7839,7 +7839,8 @@
         "tags": [
           "Discounts"
         ],
-        "summary": "Validate a discount code",
+        "summary": "Validate a discount code against the cart",
+        "description": "Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.",
         "requestBody": {
           "required": true,
           "content": {
@@ -7853,12 +7854,6 @@
                     "maxLength": 50,
                     "description": "Discount code to validate"
                   },
-                  "total": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1000000000000,
-                    "description": "Merchandise subtotal before delivery"
-                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -7867,7 +7862,8 @@
                         "id": {
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 100
+                          "maxLength": 100,
+                          "description": "Product id"
                         },
                         "price": {
                           "type": "number",
@@ -7892,7 +7888,7 @@
                         "quantity"
                       ]
                     },
-                    "maxItems": 250,
+                    "maxItems": 99,
                     "description": "Cart items"
                   },
                   "shippingCost": {
@@ -7900,7 +7896,7 @@
                     "minimum": 0,
                     "maximum": 1000000000000,
                     "default": 0,
-                    "description": "Shipping cost"
+                    "description": "Delivery charge"
                   },
                   "customerPhone": {
                     "type": "string",
@@ -7946,7 +7942,10 @@
                               "type": "string"
                             },
                             "type": {
-                              "type": "string"
+                              "type": "string",
+                              "enum": [
+                                "code"
+                              ]
                             },
                             "discountValue": {
                               "type": "number"
@@ -7957,23 +7956,22 @@
                             "code",
                             "type",
                             "discountValue"
-                          ],
-                          "additionalProperties": {}
+                          ]
                         },
                         "discountAmount": {
                           "type": "number"
                         },
-                        "message": {
+                        "error": {
                           "type": "string"
                         },
                         "requiresCustomerPhone": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "The code has a per-customer limit: ask for the phone number."
                         }
                       },
                       "required": [
                         "valid"
-                      ],
-                      "additionalProperties": {}
+                      ]
                     }
                   },
                   "required": [
@@ -8608,10 +8606,6 @@
                         "seo": {
                           "type": "object",
                           "properties": {
-                            "siteTitle": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "homepageTitle": {
                               "type": "string",
                               "nullable": true
@@ -8622,7 +8616,6 @@
                             }
                           },
                           "required": [
-                            "siteTitle",
                             "homepageTitle",
                             "homepageMetaDescription"
                           ]
@@ -10123,41 +10116,6 @@
                             "discovery": {
                               "type": "object",
                               "properties": {
-                                "sitemap": {
-                                  "type": "object",
-                                  "properties": {
-                                    "enabled": {
-                                      "type": "boolean"
-                                    },
-                                    "staticPages": {
-                                      "type": "boolean"
-                                    },
-                                    "products": {
-                                      "type": "boolean"
-                                    },
-                                    "categories": {
-                                      "type": "boolean"
-                                    },
-                                    "collections": {
-                                      "type": "boolean"
-                                    },
-                                    "pages": {
-                                      "type": "boolean"
-                                    },
-                                    "articles": {
-                                      "type": "boolean"
-                                    }
-                                  },
-                                  "required": [
-                                    "enabled",
-                                    "staticPages",
-                                    "products",
-                                    "categories",
-                                    "collections",
-                                    "pages",
-                                    "articles"
-                                  ]
-                                },
                                 "feeds": {
                                   "type": "object",
                                   "properties": {
@@ -10188,63 +10146,10 @@
                                     "title",
                                     "description"
                                   ]
-                                },
-                                "robots": {
-                                  "type": "object",
-                                  "properties": {
-                                    "advertiseSitemap": {
-                                      "type": "boolean"
-                                    }
-                                  },
-                                  "required": [
-                                    "advertiseSitemap"
-                                  ]
-                                },
-                                "structuredData": {
-                                  "type": "object",
-                                  "properties": {
-                                    "organization": {
-                                      "type": "boolean"
-                                    },
-                                    "websiteSearch": {
-                                      "type": "boolean"
-                                    },
-                                    "products": {
-                                      "type": "boolean"
-                                    },
-                                    "productGroups": {
-                                      "type": "boolean"
-                                    },
-                                    "offerShippingDetails": {
-                                      "type": "boolean"
-                                    },
-                                    "breadcrumbs": {
-                                      "type": "boolean"
-                                    },
-                                    "collections": {
-                                      "type": "boolean"
-                                    },
-                                    "articles": {
-                                      "type": "boolean"
-                                    }
-                                  },
-                                  "required": [
-                                    "organization",
-                                    "websiteSearch",
-                                    "products",
-                                    "productGroups",
-                                    "offerShippingDetails",
-                                    "breadcrumbs",
-                                    "collections",
-                                    "articles"
-                                  ]
                                 }
                               },
                               "required": [
-                                "sitemap",
-                                "feeds",
-                                "robots",
-                                "structuredData"
+                                "feeds"
                               ]
                             },
                             "returnPolicy": {
@@ -10298,11 +10203,15 @@
                                 "returnMethod",
                                 "policyUrl"
                               ]
+                            },
+                            "socialImage": {
+                              "type": "string"
                             }
                           },
                           "required": [
                             "discovery",
-                            "returnPolicy"
+                            "returnPolicy",
+                            "socialImage"
                           ]
                         },
                         "platform": {
@@ -34398,60 +34307,18 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "siteTitle": {
-                          "type": "string",
-                          "nullable": true
-                        },
                         "homepageTitle": {
-                          "type": "string",
-                          "nullable": true
+                          "type": "string"
                         },
                         "homepageMetaDescription": {
-                          "type": "string",
-                          "nullable": true
+                          "type": "string"
                         },
-                        "robotsTxt": {
-                          "type": "string",
-                          "nullable": true
+                        "socialImage": {
+                          "type": "string"
                         },
                         "discovery": {
                           "type": "object",
                           "properties": {
-                            "sitemap": {
-                              "type": "object",
-                              "properties": {
-                                "enabled": {
-                                  "type": "boolean"
-                                },
-                                "staticPages": {
-                                  "type": "boolean"
-                                },
-                                "products": {
-                                  "type": "boolean"
-                                },
-                                "categories": {
-                                  "type": "boolean"
-                                },
-                                "collections": {
-                                  "type": "boolean"
-                                },
-                                "pages": {
-                                  "type": "boolean"
-                                },
-                                "articles": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "enabled",
-                                "staticPages",
-                                "products",
-                                "categories",
-                                "collections",
-                                "pages",
-                                "articles"
-                              ]
-                            },
                             "feeds": {
                               "type": "object",
                               "properties": {
@@ -34482,63 +34349,10 @@
                                 "title",
                                 "description"
                               ]
-                            },
-                            "robots": {
-                              "type": "object",
-                              "properties": {
-                                "advertiseSitemap": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "advertiseSitemap"
-                              ]
-                            },
-                            "structuredData": {
-                              "type": "object",
-                              "properties": {
-                                "organization": {
-                                  "type": "boolean"
-                                },
-                                "websiteSearch": {
-                                  "type": "boolean"
-                                },
-                                "products": {
-                                  "type": "boolean"
-                                },
-                                "productGroups": {
-                                  "type": "boolean"
-                                },
-                                "offerShippingDetails": {
-                                  "type": "boolean"
-                                },
-                                "breadcrumbs": {
-                                  "type": "boolean"
-                                },
-                                "collections": {
-                                  "type": "boolean"
-                                },
-                                "articles": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "organization",
-                                "websiteSearch",
-                                "products",
-                                "productGroups",
-                                "offerShippingDetails",
-                                "breadcrumbs",
-                                "collections",
-                                "articles"
-                              ]
                             }
                           },
                           "required": [
-                            "sitemap",
-                            "feeds",
-                            "robots",
-                            "structuredData"
+                            "feeds"
                           ]
                         },
                         "returnPolicy": {
@@ -34595,10 +34409,9 @@
                         }
                       },
                       "required": [
-                        "siteTitle",
                         "homepageTitle",
                         "homepageMetaDescription",
-                        "robotsTxt",
+                        "socialImage",
                         "discovery",
                         "returnPolicy"
                       ]
@@ -43555,6 +43368,15 @@
                             "feeWaived"
                           ]
                         },
+                        "discountOffers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "maxItems": 3,
+                          "description": "Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet."
+                        },
                         "items": {
                           "type": "array",
                           "items": {
@@ -43615,6 +43437,7 @@
                         "totalMinor",
                         "totalAmount",
                         "shippingMethod",
+                        "discountOffers",
                         "items"
                       ]
                     }
@@ -62810,95 +62633,31 @@
         "tags": [
           "Admin - Discounts"
         ],
-        "summary": "List all discounts",
+        "summary": "List code and automatic discounts",
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
-              "default": 1,
-              "description": "Page number"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "default": 90
             },
             "required": false,
-            "description": "Page number",
-            "name": "page",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "number",
-              "nullable": true,
-              "maximum": 100,
-              "default": 10,
-              "description": "Items per page"
-            },
-            "required": false,
-            "description": "Items per page",
             "name": "limit",
             "in": "query"
           },
           {
             "schema": {
-              "type": "string",
-              "default": "",
-              "description": "Search term"
+              "type": "string"
             },
             "required": false,
-            "description": "Search term",
-            "name": "search",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "amount_off_products",
-                "amount_off_order",
-                "free_shipping"
-              ],
-              "description": "Filter by discount type"
-            },
-            "required": false,
-            "description": "Filter by discount type",
-            "name": "type",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Show trashed items"
-            },
-            "required": false,
-            "description": "Show trashed items",
-            "name": "trashed",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "default": "updatedAt",
-              "description": "Sort field"
-            },
-            "required": false,
-            "description": "Sort field",
-            "name": "sort",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "default": "desc",
-              "description": "Sort order"
-            },
-            "required": false,
-            "description": "Sort order",
-            "name": "order",
+            "name": "includeDeleted",
             "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Discount list with pagination",
+            "description": "Discounts, most recently updated first",
             "content": {
               "application/json": {
                 "schema": {
@@ -62921,134 +62680,242 @@
                               "id": {
                                 "type": "string"
                               },
-                              "code": {
-                                "type": "string"
-                              },
                               "revision": {
                                 "type": "integer",
-                                "minimum": 1
+                                "minimum": 0,
+                                "exclusiveMinimum": true
                               },
-                              "type": {
+                              "name": {
                                 "type": "string"
                               },
-                              "valueType": {
-                                "type": "string"
-                              },
-                              "discountValue": {
-                                "type": "number"
-                              },
-                              "minPurchaseAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "minQuantity": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "maxUsesPerOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "maxUses": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "limitOnePerCustomer": {
-                                "type": "boolean"
-                              },
-                              "customerSegment": {
+                              "title": {
                                 "type": "string",
                                 "nullable": true
                               },
-                              "startDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
+                              "method": {
+                                "type": "string",
+                                "enum": [
+                                  "automatic",
+                                  "code"
                                 ]
                               },
-                              "endDate": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
-                              },
-                              "isActive": {
-                                "type": "boolean"
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "draft",
+                                  "active",
+                                  "paused",
+                                  "archived"
                                 ]
                               },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
+                              "priority": {
+                                "type": "integer"
+                              },
+                              "conflictPolicy": {
+                                "type": "string",
+                                "enum": [
+                                  "best"
                                 ]
                               },
-                              "deletedAt": {
-                                "$ref": "#/components/schemas/NullableTimestamp"
+                              "combinesWith": {
+                                "type": "object",
+                                "properties": {
+                                  "product": {
+                                    "type": "boolean"
+                                  },
+                                  "order": {
+                                    "type": "boolean"
+                                  },
+                                  "shipping": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "product",
+                                  "order",
+                                  "shipping"
+                                ]
+                              },
+                              "startsAtEpochSeconds": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "endsAtEpochSeconds": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "timezone": {
+                                "type": "string"
+                              },
+                              "maxRedemptions": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "maxRedemptionsPerCustomer": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "maxDiscountSpendMinor": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "budgetCurrencyCode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "redemptionCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Orders that used this discount."
+                              },
+                              "customerRedemptionCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "discountSpendMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Total savings given, in minor units."
+                              },
+                              "createdAtEpochSeconds": {
+                                "type": "integer"
+                              },
+                              "updatedAtEpochSeconds": {
+                                "type": "integer"
+                              },
+                              "deletedAtEpochSeconds": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "codes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string"
+                                    },
+                                    "isActive": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "isActive"
+                                  ]
+                                }
+                              },
+                              "conditions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "minimum_merchandise_subtotal",
+                                        "minimum_item_quantity"
+                                      ]
+                                    },
+                                    "config": {
+                                      "type": "object",
+                                      "additionalProperties": {}
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "kind",
+                                    "config"
+                                  ]
+                                }
+                              },
+                              "effects": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "percentage_off",
+                                        "fixed_amount_off",
+                                        "free"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": "string",
+                                      "enum": [
+                                        "line",
+                                        "order",
+                                        "shipping"
+                                      ]
+                                    },
+                                    "allocation": {
+                                      "type": "string",
+                                      "enum": [
+                                        "across",
+                                        "once"
+                                      ]
+                                    },
+                                    "config": {
+                                      "type": "object",
+                                      "additionalProperties": {}
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "kind",
+                                    "target",
+                                    "allocation",
+                                    "config"
+                                  ]
+                                }
                               }
                             },
                             "required": [
                               "id",
-                              "code",
                               "revision",
-                              "type",
-                              "valueType",
-                              "discountValue",
-                              "minPurchaseAmount",
-                              "minQuantity",
-                              "maxUsesPerOrder",
-                              "maxUses",
-                              "limitOnePerCustomer",
-                              "customerSegment",
-                              "startDate",
-                              "endDate",
-                              "isActive",
-                              "createdAt",
-                              "updatedAt",
-                              "deletedAt"
+                              "name",
+                              "title",
+                              "method",
+                              "status",
+                              "priority",
+                              "conflictPolicy",
+                              "combinesWith",
+                              "startsAtEpochSeconds",
+                              "endsAtEpochSeconds",
+                              "timezone",
+                              "maxRedemptions",
+                              "maxRedemptionsPerCustomer",
+                              "maxDiscountSpendMinor",
+                              "budgetCurrencyCode",
+                              "redemptionCount",
+                              "customerRedemptionCount",
+                              "discountSpendMinor",
+                              "createdAtEpochSeconds",
+                              "updatedAtEpochSeconds",
+                              "deletedAtEpochSeconds",
+                              "codes",
+                              "conditions",
+                              "effects"
                             ]
                           }
-                        },
-                        "pagination": {
-                          "type": "object",
-                          "properties": {
-                            "page": {
-                              "type": "number"
-                            },
-                            "limit": {
-                              "type": "number"
-                            },
-                            "total": {
-                              "type": "number"
-                            },
-                            "totalPages": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "page",
-                            "limit",
-                            "total",
-                            "totalPages"
-                          ]
                         }
                       },
                       "required": [
-                        "discounts",
-                        "pagination"
+                        "discounts"
                       ]
                     }
                   },
@@ -63324,3230 +63191,7 @@
         "tags": [
           "Admin - Discounts"
         ],
-        "summary": "Create a discount",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 50,
-                    "pattern": "^[a-zA-Z0-9_-]+$"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "amount_off_products",
-                      "amount_off_order",
-                      "free_shipping"
-                    ]
-                  },
-                  "valueType": {
-                    "type": "string",
-                    "enum": [
-                      "percentage",
-                      "fixed_amount",
-                      "free"
-                    ]
-                  },
-                  "discountValue": {
-                    "type": "number",
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "minPurchaseAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "minQuantity": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "maxUsesPerOrder": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true,
-                    "maximum": 1
-                  },
-                  "maxUses": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "limitOnePerCustomer": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithProductDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithOrderDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithShippingDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "customerSegment": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "startDate": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  },
-                  "endDate": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "appliesToProducts": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "maxItems": 90
-                  },
-                  "appliesToCollections": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "maxItems": 90
-                  }
-                },
-                "required": [
-                  "code",
-                  "type",
-                  "valueType",
-                  "discountValue",
-                  "startDate"
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Discount created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "revision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.create"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/bulk-delete": {
-      "post": {
-        "operationId": "dashboard.discounts.bulk_delete",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Bulk delete discounts",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "discountIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "permanent": {
-                    "type": "boolean",
-                    "default": false
-                  }
-                },
-                "required": [
-                  "discountIds"
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.delete"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/bulk-restore": {
-      "post": {
-        "operationId": "dashboard.discounts.bulk_restore",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Bulk restore discounts",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "discountIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "discountIds"
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.edit"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/{id}": {
-      "get": {
-        "operationId": "dashboard.discounts.get",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Get a discount by ID",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Discount details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "code": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 1
-                        },
-                        "type": {
-                          "type": "string"
-                        },
-                        "valueType": {
-                          "type": "string"
-                        },
-                        "discountValue": {
-                          "type": "number"
-                        },
-                        "minPurchaseAmount": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "minQuantity": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUsesPerOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUses": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "limitOnePerCustomer": {
-                          "type": "boolean"
-                        },
-                        "customerSegment": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "startDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "endDate": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "deletedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "code",
-                        "revision",
-                        "type",
-                        "valueType",
-                        "discountValue",
-                        "minPurchaseAmount",
-                        "minQuantity",
-                        "maxUsesPerOrder",
-                        "maxUses",
-                        "limitOnePerCustomer",
-                        "customerSegment",
-                        "startDate",
-                        "endDate",
-                        "isActive",
-                        "createdAt",
-                        "updatedAt",
-                        "deletedAt"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.view"
-        }
-      },
-      "put": {
-        "operationId": "dashboard.discounts.update",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Update a discount",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 50,
-                    "pattern": "^[a-zA-Z0-9_-]+$"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "amount_off_products",
-                      "amount_off_order",
-                      "free_shipping"
-                    ]
-                  },
-                  "valueType": {
-                    "type": "string",
-                    "enum": [
-                      "percentage",
-                      "fixed_amount",
-                      "free"
-                    ]
-                  },
-                  "discountValue": {
-                    "type": "number",
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "minPurchaseAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "minQuantity": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "maxUsesPerOrder": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true,
-                    "maximum": 1
-                  },
-                  "maxUses": {
-                    "type": "integer",
-                    "nullable": true,
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "limitOnePerCustomer": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithProductDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithOrderDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "combineWithShippingDiscounts": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "customerSegment": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "startDate": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  },
-                  "endDate": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {}
-                    ]
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "appliesToProducts": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "maxItems": 90
-                  },
-                  "appliesToCollections": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "maxItems": 90
-                  },
-                  "id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1
-                  }
-                },
-                "required": [
-                  "code",
-                  "type",
-                  "valueType",
-                  "discountValue",
-                  "startDate",
-                  "id",
-                  "expectedRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Discount updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "revision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "required",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.edit"
-        }
-      },
-      "delete": {
-        "operationId": "dashboard.discounts.delete",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Soft-delete a discount",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.delete"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/{id}/permanent": {
-      "delete": {
-        "operationId": "dashboard.discounts.delete_permanently",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Permanently delete a discount",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No content"
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.delete"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/{id}/toggle-status": {
-      "post": {
-        "operationId": "dashboard.discounts.set_active",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Toggle a discount's active status",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "isActive": {
-                    "type": "boolean"
-                  },
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1
-                  }
-                },
-                "required": [
-                  "isActive",
-                  "expectedRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Discount status toggled",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 1
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "revision",
-                        "isActive"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "required",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.toggle_status"
-        }
-      }
-    },
-    "/api/v1/admin/discounts/{id}/restore": {
-      "post": {
-        "operationId": "dashboard.discounts.restore",
-        "tags": [
-          "Admin - Discounts"
-        ],
-        "summary": "Restore a soft-deleted discount",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Discount restored",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {}
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "sequential",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.edit"
-        }
-      }
-    },
-    "/api/v1/admin/promotions": {
-      "get": {
-        "operationId": "dashboard.promotions.list",
-        "tags": [
-          "Admin - Promotions"
-        ],
-        "summary": "List revisioned promotions",
-        "parameters": [
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 90,
-              "default": 50
-            },
-            "required": false,
-            "name": "limit",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": false,
-            "name": "includeDeleted",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Promotions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "promotions": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "revision": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "exclusiveMinimum": true
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "title": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "method": {
-                                "type": "string",
-                                "enum": [
-                                  "automatic",
-                                  "code"
-                                ]
-                              },
-                              "status": {
-                                "type": "string",
-                                "enum": [
-                                  "draft",
-                                  "active",
-                                  "paused",
-                                  "archived"
-                                ]
-                              },
-                              "priority": {
-                                "type": "integer"
-                              },
-                              "conflictPolicy": {
-                                "type": "string",
-                                "enum": [
-                                  "best"
-                                ]
-                              },
-                              "startsAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "endsAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "timezone": {
-                                "type": "string"
-                              },
-                              "maxRedemptions": {
-                                "type": "integer",
-                                "nullable": true,
-                                "minimum": 0,
-                                "exclusiveMinimum": true
-                              },
-                              "maxRedemptionsPerCustomer": {
-                                "type": "integer",
-                                "nullable": true,
-                                "minimum": 0,
-                                "exclusiveMinimum": true
-                              },
-                              "maxDiscountSpendMinor": {
-                                "type": "integer",
-                                "nullable": true,
-                                "minimum": 0,
-                                "exclusiveMinimum": true
-                              },
-                              "budgetCurrencyCode": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "redemptionCount": {
-                                "type": "integer",
-                                "minimum": 0
-                              },
-                              "customerRedemptionCount": {
-                                "type": "integer",
-                                "minimum": 0
-                              },
-                              "discountSpendMinor": {
-                                "type": "integer",
-                                "minimum": 0
-                              },
-                              "redemptionBudgetPolicy": {
-                                "type": "string",
-                                "enum": [
-                                  "committed_orders_never_released"
-                                ],
-                                "description": "Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them."
-                              },
-                              "createdAtEpochSeconds": {
-                                "type": "integer"
-                              },
-                              "updatedAtEpochSeconds": {
-                                "type": "integer"
-                              },
-                              "deletedAtEpochSeconds": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "codes": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "code": {
-                                      "type": "string"
-                                    },
-                                    "isActive": {
-                                      "type": "boolean"
-                                    }
-                                  },
-                                  "required": [
-                                    "code",
-                                    "isActive"
-                                  ]
-                                }
-                              },
-                              "conditions": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "kind": {
-                                      "type": "string"
-                                    },
-                                    "config": {
-                                      "type": "object",
-                                      "additionalProperties": {}
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "kind",
-                                    "config"
-                                  ]
-                                }
-                              },
-                              "effects": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "kind": {
-                                      "type": "string"
-                                    },
-                                    "target": {
-                                      "type": "string"
-                                    },
-                                    "allocation": {
-                                      "type": "string"
-                                    },
-                                    "config": {
-                                      "type": "object",
-                                      "additionalProperties": {}
-                                    }
-                                  },
-                                  "required": [
-                                    "id",
-                                    "kind",
-                                    "target",
-                                    "allocation",
-                                    "config"
-                                  ]
-                                }
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "revision",
-                              "name",
-                              "title",
-                              "method",
-                              "status",
-                              "priority",
-                              "conflictPolicy",
-                              "startsAtEpochSeconds",
-                              "endsAtEpochSeconds",
-                              "timezone",
-                              "maxRedemptions",
-                              "maxRedemptionsPerCustomer",
-                              "maxDiscountSpendMinor",
-                              "budgetCurrencyCode",
-                              "redemptionCount",
-                              "customerRedemptionCount",
-                              "discountSpendMinor",
-                              "redemptionBudgetPolicy",
-                              "createdAtEpochSeconds",
-                              "updatedAtEpochSeconds",
-                              "deletedAtEpochSeconds",
-                              "codes",
-                              "conditions",
-                              "effects"
-                            ]
-                          }
-                        }
-                      },
-                      "required": [
-                        "promotions"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "discounts.view"
-        }
-      },
-      "post": {
-        "operationId": "dashboard.promotions.create",
-        "tags": [
-          "Admin - Promotions"
-        ],
-        "summary": "Create a revisioned code-promotion draft",
+        "summary": "Create a draft discount",
         "requestBody": {
           "required": true,
           "content": {
@@ -66585,6 +63229,31 @@
                       "best"
                     ],
                     "default": "best"
+                  },
+                  "combinesWith": {
+                    "type": "object",
+                    "properties": {
+                      "product": {
+                        "type": "boolean"
+                      },
+                      "order": {
+                        "type": "boolean"
+                      },
+                      "shipping": {
+                        "type": "boolean"
+                      }
+                    },
+                    "default": {
+                      "product": false,
+                      "order": false,
+                      "shipping": false
+                    },
+                    "required": [
+                      "product",
+                      "order",
+                      "shipping"
+                    ],
+                    "additionalProperties": false
                   },
                   "startsAtEpochSeconds": {
                     "type": "integer",
@@ -66681,6 +63350,27 @@
                                 "currencyCode": {
                                   "type": "string",
                                   "pattern": "^[A-Z]{3}$/u"
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "shippingOnly": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -66713,6 +63403,24 @@
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
                                   "maximum": 1000000
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
                                 }
                               },
                               "required": [
@@ -66767,6 +63475,76 @@
                                   "type": "integer",
                                   "minimum": 1,
                                   "maximum": 10000
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "buy": {
+                                  "type": "object",
+                                  "properties": {
+                                    "quantity": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 10000
+                                    },
+                                    "amountMinor": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "currencyCode": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z]{3}$/u"
+                                    },
+                                    "productIds": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160
+                                      },
+                                      "maxItems": 90
+                                    },
+                                    "collectionIds": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160
+                                      },
+                                      "maxItems": 90
+                                    }
+                                  },
+                                  "additionalProperties": false
+                                },
+                                "getQuantity": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 10000
+                                },
+                                "maxUsesPerOrder": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 10000
                                 }
                               },
                               "required": [
@@ -66819,6 +63597,27 @@
                                 "currencyCode": {
                                   "type": "string",
                                   "pattern": "^[A-Z]{3}$/u"
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "eachItem": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -66874,7 +63673,7 @@
                       ]
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 2
                   }
                 },
                 "required": [
@@ -66889,7 +63688,7 @@
         },
         "responses": {
           "201": {
-            "description": "Promotion draft created",
+            "description": "Draft discount created",
             "content": {
               "application/json": {
                 "schema": {
@@ -67235,13 +64034,13 @@
         }
       }
     },
-    "/api/v1/admin/promotions/{id}": {
+    "/api/v1/admin/discounts/{id}": {
       "get": {
-        "operationId": "dashboard.promotions.get",
+        "operationId": "dashboard.discounts.get",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Get a revisioned promotion",
+        "summary": "Get a discount",
         "parameters": [
           {
             "schema": {
@@ -67256,7 +64055,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Promotion",
+            "description": "Discount",
             "content": {
               "application/json": {
                 "schema": {
@@ -67311,6 +64110,25 @@
                             "best"
                           ]
                         },
+                        "combinesWith": {
+                          "type": "object",
+                          "properties": {
+                            "product": {
+                              "type": "boolean"
+                            },
+                            "order": {
+                              "type": "boolean"
+                            },
+                            "shipping": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "product",
+                            "order",
+                            "shipping"
+                          ]
+                        },
                         "startsAtEpochSeconds": {
                           "type": "integer",
                           "nullable": true
@@ -67346,7 +64164,8 @@
                         },
                         "redemptionCount": {
                           "type": "integer",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "Orders that used this discount."
                         },
                         "customerRedemptionCount": {
                           "type": "integer",
@@ -67354,14 +64173,8 @@
                         },
                         "discountSpendMinor": {
                           "type": "integer",
-                          "minimum": 0
-                        },
-                        "redemptionBudgetPolicy": {
-                          "type": "string",
-                          "enum": [
-                            "committed_orders_never_released"
-                          ],
-                          "description": "Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them."
+                          "minimum": 0,
+                          "description": "Total savings given, in minor units."
                         },
                         "createdAtEpochSeconds": {
                           "type": "integer"
@@ -67400,7 +64213,11 @@
                                 "type": "string"
                               },
                               "kind": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "minimum_merchandise_subtotal",
+                                  "minimum_item_quantity"
+                                ]
                               },
                               "config": {
                                 "type": "object",
@@ -67423,13 +64240,27 @@
                                 "type": "string"
                               },
                               "kind": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "percentage_off",
+                                  "fixed_amount_off",
+                                  "free"
+                                ]
                               },
                               "target": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "line",
+                                  "order",
+                                  "shipping"
+                                ]
                               },
                               "allocation": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "across",
+                                  "once"
+                                ]
                               },
                               "config": {
                                 "type": "object",
@@ -67455,6 +64286,7 @@
                         "status",
                         "priority",
                         "conflictPolicy",
+                        "combinesWith",
                         "startsAtEpochSeconds",
                         "endsAtEpochSeconds",
                         "timezone",
@@ -67465,7 +64297,6 @@
                         "redemptionCount",
                         "customerRedemptionCount",
                         "discountSpendMinor",
-                        "redemptionBudgetPolicy",
                         "createdAtEpochSeconds",
                         "updatedAtEpochSeconds",
                         "deletedAtEpochSeconds",
@@ -67743,11 +64574,11 @@
         }
       },
       "put": {
-        "operationId": "dashboard.promotions.update",
+        "operationId": "dashboard.discounts.update",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Replace a promotion draft with revision protection",
+        "summary": "Replace a discount's rules (revision-checked)",
         "parameters": [
           {
             "schema": {
@@ -67802,6 +64633,31 @@
                       "best"
                     ],
                     "default": "best"
+                  },
+                  "combinesWith": {
+                    "type": "object",
+                    "properties": {
+                      "product": {
+                        "type": "boolean"
+                      },
+                      "order": {
+                        "type": "boolean"
+                      },
+                      "shipping": {
+                        "type": "boolean"
+                      }
+                    },
+                    "default": {
+                      "product": false,
+                      "order": false,
+                      "shipping": false
+                    },
+                    "required": [
+                      "product",
+                      "order",
+                      "shipping"
+                    ],
+                    "additionalProperties": false
                   },
                   "startsAtEpochSeconds": {
                     "type": "integer",
@@ -67898,6 +64754,27 @@
                                 "currencyCode": {
                                   "type": "string",
                                   "pattern": "^[A-Z]{3}$/u"
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "shippingOnly": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -67930,6 +64807,24 @@
                                   "minimum": 0,
                                   "exclusiveMinimum": true,
                                   "maximum": 1000000
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
                                 }
                               },
                               "required": [
@@ -67984,6 +64879,76 @@
                                   "type": "integer",
                                   "minimum": 1,
                                   "maximum": 10000
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "buy": {
+                                  "type": "object",
+                                  "properties": {
+                                    "quantity": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 10000
+                                    },
+                                    "amountMinor": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "currencyCode": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z]{3}$/u"
+                                    },
+                                    "productIds": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160
+                                      },
+                                      "maxItems": 90
+                                    },
+                                    "collectionIds": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160
+                                      },
+                                      "maxItems": 90
+                                    }
+                                  },
+                                  "additionalProperties": false
+                                },
+                                "getQuantity": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 10000
+                                },
+                                "maxUsesPerOrder": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 10000
                                 }
                               },
                               "required": [
@@ -68036,6 +65001,27 @@
                                 "currencyCode": {
                                   "type": "string",
                                   "pattern": "^[A-Z]{3}$/u"
+                                },
+                                "productIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "collectionIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "maxItems": 90
+                                },
+                                "eachItem": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -68091,7 +65077,7 @@
                       ]
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 2
                   }
                 },
                 "required": [
@@ -68107,7 +65093,7 @@
         },
         "responses": {
           "200": {
-            "description": "Promotion draft updated",
+            "description": "Discount updated",
             "content": {
               "application/json": {
                 "schema": {
@@ -68453,11 +65439,11 @@
         }
       },
       "delete": {
-        "operationId": "dashboard.promotions.archive",
+        "operationId": "dashboard.discounts.archive",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Archive a promotion draft",
+        "summary": "Delete a discount (kept for order history)",
         "parameters": [
           {
             "schema": {
@@ -68793,13 +65779,13 @@
         }
       }
     },
-    "/api/v1/admin/promotions/{id}/preview": {
+    "/api/v1/admin/discounts/{id}/preview": {
       "post": {
-        "operationId": "dashboard.promotions.preview",
+        "operationId": "dashboard.discounts.preview",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Preview a saved promotion with the production evaluator",
+        "summary": "Preview a saved discount against a cart",
         "parameters": [
           {
             "schema": {
@@ -68866,6 +65852,16 @@
                               "type": "integer",
                               "minimum": 1,
                               "maximum": 10000
+                            },
+                            "collectionIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
+                              },
+                              "maxItems": 90,
+                              "default": []
                             }
                           },
                           "required": [
@@ -68917,7 +65913,7 @@
         },
         "responses": {
           "200": {
-            "description": "Deterministic promotion evaluation",
+            "description": "Deterministic evaluation",
             "content": {
               "application/json": {
                 "schema": {
@@ -69272,13 +66268,13 @@
         }
       }
     },
-    "/api/v1/admin/promotions/{id}/activate": {
+    "/api/v1/admin/discounts/{id}/activate": {
       "post": {
-        "operationId": "dashboard.promotions.activate",
+        "operationId": "dashboard.discounts.activate",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Activate an eligible code promotion",
+        "summary": "Activate a discount",
         "parameters": [
           {
             "schema": {
@@ -69314,7 +66310,7 @@
         },
         "responses": {
           "200": {
-            "description": "Promotion activated",
+            "description": "Activate a discount",
             "content": {
               "application/json": {
                 "schema": {
@@ -69660,13 +66656,13 @@
         }
       }
     },
-    "/api/v1/admin/promotions/{id}/pause": {
+    "/api/v1/admin/discounts/{id}/pause": {
       "post": {
-        "operationId": "dashboard.promotions.pause",
+        "operationId": "dashboard.discounts.pause",
         "tags": [
-          "Admin - Promotions"
+          "Admin - Discounts"
         ],
-        "summary": "Pause an active promotion",
+        "summary": "Deactivate a discount",
         "parameters": [
           {
             "schema": {
@@ -69702,7 +66698,7 @@
         },
         "responses": {
           "200": {
-            "description": "Promotion paused",
+            "description": "Deactivate a discount",
             "content": {
               "application/json": {
                 "schema": {
@@ -111555,10 +108551,6 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "siteTitle": {
-                          "type": "string",
-                          "maxLength": 200
-                        },
                         "homepageTitle": {
                           "type": "string",
                           "maxLength": 200
@@ -111567,48 +108559,13 @@
                           "type": "string",
                           "maxLength": 1000
                         },
-                        "robotsTxt": {
+                        "socialImage": {
                           "type": "string",
-                          "maxLength": 32768
+                          "maxLength": 2048
                         },
                         "discovery": {
                           "type": "object",
                           "properties": {
-                            "sitemap": {
-                              "type": "object",
-                              "properties": {
-                                "enabled": {
-                                  "type": "boolean"
-                                },
-                                "staticPages": {
-                                  "type": "boolean"
-                                },
-                                "products": {
-                                  "type": "boolean"
-                                },
-                                "categories": {
-                                  "type": "boolean"
-                                },
-                                "collections": {
-                                  "type": "boolean"
-                                },
-                                "pages": {
-                                  "type": "boolean"
-                                },
-                                "articles": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "enabled",
-                                "staticPages",
-                                "products",
-                                "categories",
-                                "collections",
-                                "pages",
-                                "articles"
-                              ]
-                            },
                             "feeds": {
                               "type": "object",
                               "properties": {
@@ -111641,63 +108598,10 @@
                                 "title",
                                 "description"
                               ]
-                            },
-                            "robots": {
-                              "type": "object",
-                              "properties": {
-                                "advertiseSitemap": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "advertiseSitemap"
-                              ]
-                            },
-                            "structuredData": {
-                              "type": "object",
-                              "properties": {
-                                "organization": {
-                                  "type": "boolean"
-                                },
-                                "websiteSearch": {
-                                  "type": "boolean"
-                                },
-                                "products": {
-                                  "type": "boolean"
-                                },
-                                "productGroups": {
-                                  "type": "boolean"
-                                },
-                                "offerShippingDetails": {
-                                  "type": "boolean"
-                                },
-                                "breadcrumbs": {
-                                  "type": "boolean"
-                                },
-                                "collections": {
-                                  "type": "boolean"
-                                },
-                                "articles": {
-                                  "type": "boolean"
-                                }
-                              },
-                              "required": [
-                                "organization",
-                                "websiteSearch",
-                                "products",
-                                "productGroups",
-                                "offerShippingDetails",
-                                "breadcrumbs",
-                                "collections",
-                                "articles"
-                              ]
                             }
                           },
                           "required": [
-                            "sitemap",
-                            "feeds",
-                            "robots",
-                            "structuredData"
+                            "feeds"
                           ]
                         },
                         "returnPolicy": {
@@ -111755,10 +108659,9 @@
                         }
                       },
                       "required": [
-                        "siteTitle",
                         "homepageTitle",
                         "homepageMetaDescription",
-                        "robotsTxt",
+                        "socialImage",
                         "discovery",
                         "returnPolicy"
                       ]
@@ -112044,10 +108947,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "siteTitle": {
-                    "type": "string",
-                    "maxLength": 200
-                  },
                   "homepageTitle": {
                     "type": "string",
                     "maxLength": 200
@@ -112056,39 +108955,13 @@
                     "type": "string",
                     "maxLength": 1000
                   },
-                  "robotsTxt": {
+                  "socialImage": {
                     "type": "string",
-                    "maxLength": 32768
+                    "maxLength": 2048
                   },
                   "discovery": {
                     "type": "object",
                     "properties": {
-                      "sitemap": {
-                        "type": "object",
-                        "properties": {
-                          "enabled": {
-                            "type": "boolean"
-                          },
-                          "staticPages": {
-                            "type": "boolean"
-                          },
-                          "products": {
-                            "type": "boolean"
-                          },
-                          "categories": {
-                            "type": "boolean"
-                          },
-                          "collections": {
-                            "type": "boolean"
-                          },
-                          "pages": {
-                            "type": "boolean"
-                          },
-                          "articles": {
-                            "type": "boolean"
-                          }
-                        }
-                      },
                       "feeds": {
                         "type": "object",
                         "properties": {
@@ -112112,43 +108985,6 @@
                           "description": {
                             "type": "string",
                             "maxLength": 2000
-                          }
-                        }
-                      },
-                      "robots": {
-                        "type": "object",
-                        "properties": {
-                          "advertiseSitemap": {
-                            "type": "boolean"
-                          }
-                        }
-                      },
-                      "structuredData": {
-                        "type": "object",
-                        "properties": {
-                          "organization": {
-                            "type": "boolean"
-                          },
-                          "websiteSearch": {
-                            "type": "boolean"
-                          },
-                          "products": {
-                            "type": "boolean"
-                          },
-                          "productGroups": {
-                            "type": "boolean"
-                          },
-                          "offerShippingDetails": {
-                            "type": "boolean"
-                          },
-                          "breadcrumbs": {
-                            "type": "boolean"
-                          },
-                          "collections": {
-                            "type": "boolean"
-                          },
-                          "articles": {
-                            "type": "boolean"
                           }
                         }
                       }
@@ -159352,6 +156188,20 @@
             "schema": {
               "type": "string",
               "enum": [
+                "active",
+                "draft"
+              ],
+              "description": "Active (on sale) or draft products only"
+            },
+            "required": false,
+            "description": "Active (on sale) or draft products only",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "full",
                 "compact"
               ],
@@ -204493,11 +201343,41 @@
         ]
       },
       {
+        "id": "dashboard.discount-lifecycle",
+        "surface": "dashboard",
+        "kind": "write",
+        "title": "Create and activate a discount",
+        "summary": "Create a draft code or automatic discount, preview it, activate it when eligible, and verify it.",
+        "examples": [
+          "Create a 10% code for the Summer collection, preview a cart, and activate it only if eligible."
+        ],
+        "tags": [
+          "discounts",
+          "codes",
+          "automatic",
+          "activation"
+        ],
+        "operationIds": [
+          "dashboard.discounts.create",
+          "dashboard.discounts.preview",
+          "dashboard.discounts.activate",
+          "dashboard.discounts.get"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "Create a draft from complete merchant-supplied discount facts.",
+          "Use the production preview and stop on eligibility errors.",
+          "Confirm activation with the current revision, then verify the discount."
+        ]
+      },
+      {
         "id": "dashboard.discount-toggle",
         "surface": "dashboard",
         "kind": "write",
-        "title": "Toggle a discount code",
-        "summary": "Resolve one discount code, change its active state, and verify the result.",
+        "title": "Turn a discount on or off",
+        "summary": "Resolve one discount, activate or deactivate it, and verify the result.",
         "examples": [
           "Find the SAVE10 discount and deactivate it without deleting it."
         ],
@@ -204508,7 +201388,8 @@
         ],
         "operationIds": [
           "dashboard.discounts.list",
-          "dashboard.discounts.set_active",
+          "dashboard.discounts.activate",
+          "dashboard.discounts.pause",
           "dashboard.discounts.get"
         ],
         "requiresFacts": true,
@@ -204516,8 +201397,8 @@
         "requiresVerification": true,
         "rules": [
           "Resolve exactly one matching discount before mutation.",
-          "Toggle active state without deleting or rewriting the discount.",
-          "Confirm the change and verify the resulting discount record."
+          "Change only its active state, using the current revision.",
+          "Confirm the change and verify the resulting discount."
         ]
       },
       {
@@ -205087,35 +201968,6 @@
           "Read the current semantic section and revision first.",
           "Write only the requested section and preserve unrelated product data.",
           "Confirm the write and verify the returned section state."
-        ]
-      },
-      {
-        "id": "dashboard.promotion-lifecycle",
-        "surface": "dashboard",
-        "kind": "write",
-        "title": "Create and activate a promotion",
-        "summary": "Create a draft promotion, preview it, activate it when eligible, and verify it.",
-        "examples": [
-          "Create a code promotion, preview the real evaluator result, and activate it only if eligible."
-        ],
-        "tags": [
-          "promotions",
-          "discounts",
-          "activation"
-        ],
-        "operationIds": [
-          "dashboard.promotions.create",
-          "dashboard.promotions.preview",
-          "dashboard.promotions.activate",
-          "dashboard.promotions.get"
-        ],
-        "requiresFacts": true,
-        "requiresConfirmation": true,
-        "requiresVerification": true,
-        "rules": [
-          "Create a draft from complete merchant-supplied promotion facts.",
-          "Use the production preview and stop on eligibility errors.",
-          "Confirm activation with the current revision, then verify the promotion."
         ]
       },
       {
@@ -208889,43 +205741,28 @@
           ]
         },
         {
-          "operationId": "dashboard.discounts.bulk_delete",
+          "operationId": "dashboard.discounts.activate",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.discounts.bulk_delete"
+            "dashboard.discount-lifecycle",
+            "dashboard.discount-toggle"
           ]
         },
         {
-          "operationId": "dashboard.discounts.bulk_restore",
+          "operationId": "dashboard.discounts.archive",
           "surface": "dashboard",
           "mode": "operation-fallback",
           "workflowIds": [
-            "operation.dashboard.discounts.bulk_restore"
+            "operation.dashboard.discounts.archive"
           ]
         },
         {
           "operationId": "dashboard.discounts.create",
           "surface": "dashboard",
-          "mode": "operation-fallback",
+          "mode": "curated",
           "workflowIds": [
-            "operation.dashboard.discounts.create"
-          ]
-        },
-        {
-          "operationId": "dashboard.discounts.delete",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.discounts.delete"
-          ]
-        },
-        {
-          "operationId": "dashboard.discounts.delete_permanently",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.discounts.delete_permanently"
+            "dashboard.discount-lifecycle"
           ]
         },
         {
@@ -208933,6 +205770,7 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
+            "dashboard.discount-lifecycle",
             "dashboard.discount-toggle"
           ]
         },
@@ -208945,19 +205783,19 @@
           ]
         },
         {
-          "operationId": "dashboard.discounts.restore",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.discounts.restore"
-          ]
-        },
-        {
-          "operationId": "dashboard.discounts.set_active",
+          "operationId": "dashboard.discounts.pause",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
             "dashboard.discount-toggle"
+          ]
+        },
+        {
+          "operationId": "dashboard.discounts.preview",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.discount-lifecycle"
           ]
         },
         {
@@ -210146,70 +206984,6 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.product-section-update"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.activate",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.promotion-lifecycle"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.archive",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.promotions.archive"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.create",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.promotion-lifecycle"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.get",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.promotion-lifecycle"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.list",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.promotions.list"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.pause",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.promotions.pause"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.preview",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.promotion-lifecycle"
-          ]
-        },
-        {
-          "operationId": "dashboard.promotions.update",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.promotions.update"
           ]
         },
         {

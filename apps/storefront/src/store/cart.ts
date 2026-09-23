@@ -26,12 +26,8 @@ export type Discount = {
   id: string;
   code: string;
   type: string;
-  valueType: string;
   discountValue: number;
   discountAmount: number;
-  combineWithProductDiscounts?: boolean;
-  combineWithOrderDiscounts?: boolean;
-  combineWithShippingDiscounts?: boolean;
 };
 
 export type CartStore = {
@@ -185,8 +181,7 @@ function normalizeStoredDiscount(value: unknown): Discount | null {
   if (
     typeof value.id !== "string" ||
     typeof value.code !== "string" ||
-    typeof value.type !== "string" ||
-    typeof value.valueType !== "string"
+    typeof value.type !== "string"
   ) {
     return null;
   }
@@ -195,21 +190,8 @@ function normalizeStoredDiscount(value: unknown): Discount | null {
     id: value.id,
     code: value.code,
     type: value.type,
-    valueType: value.valueType,
     discountValue: toNumber(value.discountValue),
     discountAmount: toNumber(value.discountAmount),
-    combineWithProductDiscounts:
-      typeof value.combineWithProductDiscounts === "boolean"
-        ? value.combineWithProductDiscounts
-        : undefined,
-    combineWithOrderDiscounts:
-      typeof value.combineWithOrderDiscounts === "boolean"
-        ? value.combineWithOrderDiscounts
-        : undefined,
-    combineWithShippingDiscounts:
-      typeof value.combineWithShippingDiscounts === "boolean"
-        ? value.combineWithShippingDiscounts
-        : undefined,
   };
 }
 

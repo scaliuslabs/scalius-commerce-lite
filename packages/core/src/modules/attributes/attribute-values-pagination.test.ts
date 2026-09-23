@@ -34,7 +34,7 @@ function insertValue(
 ): void {
     const productId = `product_${attributeId}_${productIndex}`;
     sqlite.prepare(
-        "INSERT INTO products (id, name, slug, price) VALUES (?, ?, ?, 100)",
+        "INSERT INTO products (id, name, slug, price_minor) VALUES (?, ?, ?, 10000)",
     ).run(productId, `Product ${productIndex}`, productId);
     sqlite.prepare(`
         INSERT INTO product_attribute_values (

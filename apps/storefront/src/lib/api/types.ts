@@ -406,11 +406,10 @@ export interface FooterData {
 }
 
 export interface SeoSettings {
-  siteTitle: string | null;
-  homepageTitle: string | null;
-  homepageMetaDescription: string | null;
-  robotsTxt: string | null;
-  discovery?: SeoDiscoverySettings;
+  homepageTitle: string;
+  homepageMetaDescription: string;
+  socialImage: string;
+  discovery: SeoDiscoverySettings;
 }
 
 // ---------------------------------------------------------------------------
@@ -532,12 +531,7 @@ export interface Discount {
   id: string;
   code: string;
   type: string;
-  valueType: string;
   discountValue: number;
-  minPurchaseAmount?: number | null;
-  combineWithProductDiscounts?: boolean;
-  combineWithOrderDiscounts?: boolean;
-  combineWithShippingDiscounts?: boolean;
 }
 
 export interface DiscountValidationResponse {
@@ -545,8 +539,6 @@ export interface DiscountValidationResponse {
   error?: string;
   discount?: Discount;
   discountAmount?: number;
-  minPurchaseAmount?: number;
-  minQuantity?: number;
   requiresCustomerPhone?: boolean;
 }
 

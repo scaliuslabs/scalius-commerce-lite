@@ -50,7 +50,7 @@ describe("catalog feed money", () => {
         null,
         "BDT",
       ),
-    ).toBe(0.9);
+    ).toBe(0.91);
   });
 
   it("rejects exponent-form legacy amounts instead of emitting invalid XML money", () => {

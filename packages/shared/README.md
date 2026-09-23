@@ -19,7 +19,7 @@ This means every file in `src/` is importable by name:
 ```typescript
 import { cn } from "@scalius/shared/utils";
 import { formatPrice, getDecimalPlaces } from "@scalius/shared/currency";
-import { roundPrice, pricesEqual } from "@scalius/shared/price-utils";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { mediaImageSrcSet, mediaImageUrl } from "@scalius/shared/media-variants";
 import { resolveMediaUrl } from "@scalius/shared/media-url";
 import { getClientIp } from "@scalius/shared/rate-limit";
@@ -41,7 +41,8 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `utils.ts` | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
 | `status-badges.ts` | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
 | `currency.ts` | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
-| `price-utils.ts` | Float-safe price arithmetic via `currency.js` | `roundPrice()`, `addPrices()`, `subtractPrice()`, `pricesEqual()`, `calculatePercentageDiscount()` |
+| `money.ts` | Integer minor-unit money: the one decimal/minor boundary pair and exact catalog discount rounding | `toMinor()`, `fromMinor()`, `percentToBps()`, `bpsToPercent()`, `discountedPriceMinor()` |
+| `price-utils.ts` | Display rounding for decimal prices already converted from minor units | `roundPrice()`, `roundPriceToPrecision()`, `calculateDiscountedPriceAtPrecision()` |
 | `media-variants.ts` | Pre-generated WebP rendition ladder and URL helpers | `mediaVariantWidths()`, `mediaImageUrl()`, `mediaImageSrcSet()`, `mediaOriginalUrl()` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
 | `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |

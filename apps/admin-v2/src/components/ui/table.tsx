@@ -1,120 +1,88 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@scalius/shared/utils"
+import { cn } from "@scalius/shared/utils";
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
+/**
+ * Polaris IndexTable density: subdued header row, 14px rows, tabular numbers.
+ *
+ * The header row is sticky. While the table fits its width, the wrapper does
+ * not scroll, so the header sticks to the page's scroll container, just
+ * under the top bar, as the page scrolls (Polaris). When the columns are
+ * wider than the card, the wrapper scrolls both ways inside a viewport-high
+ * box and the header sticks to that box, so horizontal scrolling never
+ * breaks it. Ancestors between the table and the page must use
+ * `overflow-clip`, never `overflow-hidden`, or sticky stops working.
+ */
+const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(({ className, ...props }, ref) => {
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const [scrolls, setScrolls] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    const table = wrapper?.firstElementChild;
+    if (!wrapper || !table || typeof ResizeObserver === "undefined") return;
+    const measure = () => setScrolls(table.scrollWidth > wrapper.clientWidth + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    observer.observe(table);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={wrapperRef}
+      data-scrolls={scrolls || undefined}
+      className="relative w-full data-[scrolls]:max-h-[calc(100svh-8rem)] data-[scrolls]:overflow-auto"
+    >
+      <table ref={ref} className={cn("w-full caption-bottom text-body", className)} {...props} />
+    </div>
+  );
+});
+Table.displayName = "Table";
+
+const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  ({ className, ...props }, ref) => <thead ref={ref} className={cn("bg-muted [&_tr]:border-b", className)} {...props} />,
+);
+TableHeader.displayName = "TableHeader";
+
+const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  ({ className, ...props }, ref) => <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />,
+);
+TableBody.displayName = "TableBody";
+
+const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
+  ({ className, ...props }, ref) => (
+    <tr
       ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
+      className={cn("border-b hover:bg-muted data-[state=selected]:bg-accent data-[state=selected]:hover:bg-secondary", className)}
       {...props}
     />
-  </div>
-))
-Table.displayName = "Table"
+  ),
+);
+TableRow.displayName = "TableRow";
 
-const TableHeader = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
-))
-TableHeader.displayName = "TableHeader"
+const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
+  ({ className, ...props }, ref) => (
+    <th
+      ref={ref}
+      className={cn(
+        // Sticky with its own 1px bottom rule: a collapsed `border-b` would scroll away.
+        // eslint-disable-next-line no-restricted-syntax -- the ::after line is the sticky border
+        "sticky top-0 z-10 h-9 whitespace-nowrap bg-muted px-3 text-left align-middle text-caption font-medium text-muted-foreground after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border has-[[role=checkbox]]:w-10 has-[[role=checkbox]]:pr-0",
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
+TableHead.displayName = "TableHead";
 
-const TableBody = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tbody
-    ref={ref}
-    className={cn("[&_tr:last-child]:border-0", className)}
-    {...props}
-  />
-))
-TableBody.displayName = "TableBody"
+const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
+  ({ className, ...props }, ref) => (
+    <td ref={ref} className={cn("px-3 py-1.5 align-middle has-[[role=checkbox]]:pr-0", className)} {...props} />
+  ),
+);
+TableCell.displayName = "TableCell";
 
-const TableFooter = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tfoot
-    ref={ref}
-    className={cn(
-      "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
-      className
-    )}
-    {...props}
-  />
-))
-TableFooter.displayName = "TableFooter"
-
-const TableRow = React.forwardRef<
-  HTMLTableRowElement,
-  React.HTMLAttributes<HTMLTableRowElement>
->(({ className, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
-      className
-    )}
-    {...props}
-  />
-))
-TableRow.displayName = "TableRow"
-
-const TableHead = React.forwardRef<
-  HTMLTableCellElement,
-  React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <th
-    ref={ref}
-    className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-      className
-    )}
-    {...props}
-  />
-))
-TableHead.displayName = "TableHead"
-
-const TableCell = React.forwardRef<
-  HTMLTableCellElement,
-  React.TdHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <td
-    ref={ref}
-    className={cn(
-      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
-      className
-    )}
-    {...props}
-  />
-))
-TableCell.displayName = "TableCell"
-
-const TableCaption = React.forwardRef<
-  HTMLTableCaptionElement,
-  React.HTMLAttributes<HTMLTableCaptionElement>
->(({ className, ...props }, ref) => (
-  <caption
-    ref={ref}
-    className={cn("mt-4 text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
-TableCaption.displayName = "TableCaption"
-
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-}
+export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell };

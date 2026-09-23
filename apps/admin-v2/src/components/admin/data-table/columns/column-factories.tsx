@@ -20,6 +20,9 @@ interface SelectColumnOptions {
   getLabel?: (row: unknown) => string;
 }
 
+// Last checkbox clicked per table, for Shift-click range selection.
+const selectionAnchor = new WeakMap<object, number>();
+
 export function createSelectColumn<T extends TableRowData>(
   opts?: SelectColumnOptions,
 ): ColumnDef<T, unknown> {
@@ -42,9 +45,21 @@ export function createSelectColumn<T extends TableRowData>(
         />
       );
     },
-    cell: ({ row }) => (
+    cell: ({ row, table }) => (
       <Checkbox
         checked={row.getIsSelected()}
+        onClick={(event) => {
+          const anchor = selectionAnchor.get(table);
+          selectionAnchor.set(table, row.index);
+          if (!event.shiftKey || anchor === undefined || anchor === row.index) return;
+          // Shift-click: apply this box's new state to every row in between.
+          event.preventDefault();
+          const select = !row.getIsSelected();
+          const [from, to] = anchor < row.index ? [anchor, row.index] : [row.index, anchor];
+          for (const target of table.getRowModel().rows.slice(from, to + 1)) {
+            if (target.getCanSelect()) target.toggleSelected(select);
+          }
+        }}
         onCheckedChange={(v) => row.toggleSelected(!!v)}
         aria-label={`Select ${getLabel(row.original)}`}
         disabled={!row.getCanSelect()}
@@ -75,9 +90,9 @@ export function createDateColumn<T extends TableRowData>(
     accessorKey: field,
     header: sortable
       ? ({ column }) => <DataTableColumnHeader column={column} title={title} />
-      : () => <span className="text-xs">{title}</span>,
+      : () => <span className="text-caption">{title}</span>,
     cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground" suppressHydrationWarning>
+      <span className="text-body text-muted-foreground" suppressHydrationWarning>
         {formatDate((row.original as Record<string, unknown>)[field] as string | Date | null)}
       </span>
     ),
@@ -99,6 +114,8 @@ interface ActionsColumnCallbacks<T> {
   canPermanentDelete?: (row: T) => boolean;
   /** Dynamic extra actions per row. */
   getExtraActions?: (row: T) => ExtraAction[] | undefined;
+  /** Accessible name of the row's "…" button, naming the row. */
+  getMenuLabel?: (row: T) => string;
   /** Column width (default 70). */
   size?: number;
 }
@@ -128,6 +145,7 @@ export function createActionsColumn<T extends TableRowData>(
               : undefined
           }
           extraActions={callbacks.getExtraActions?.(entity)}
+          menuLabel={callbacks.getMenuLabel?.(entity)}
         />
       );
     },

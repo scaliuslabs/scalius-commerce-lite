@@ -50,13 +50,13 @@ describe("registry currency and limit policy", () => {
 
   it("checks the first online charge against provider limits before an order commits", () => {
     const input = { paymentMethod: "sslcommerz", currencyCode: "BDT", partialPaymentEnabled: false, partialPaymentAmount: 0 };
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmount: 10 })).toBeNull();
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmount: 9.99 }))
+    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 1_000 })).toBeNull();
+    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 999 }))
       .toBe("SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.");
     // A configured advance below the total is the first charge.
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmount: 600_000, partialPaymentEnabled: true, partialPaymentAmount: 500 }))
+    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 60_000_000, partialPaymentEnabled: true, partialPaymentAmount: 500 }))
       .toBeNull();
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, paymentMethod: "cod", totalAmount: 1 })).toBeNull();
+    expect(getCheckoutGatewayPrecommitIssue({ ...input, paymentMethod: "cod", totalAmountMinor: 100 })).toBeNull();
   });
 });
 
@@ -193,9 +193,8 @@ describe("gateway kernel with a newly registered adapter", () => {
       shippingAddress: "Dhaka",
       city: "dhaka",
       zone: "zone_1",
-      totalAmount: 100,
-      shippingCharge: 0,
-      balanceDue: 100,
+      totalAmountMinor: 10_000,
+      balanceDueMinor: 10_000,
       paymentMethod: "fakepay",
       status: OrderStatus.INCOMPLETE,
       currencyCode: "BDT",
@@ -208,16 +207,16 @@ describe("gateway kernel with a newly registered adapter", () => {
     sqlite.close();
   });
 
-  async function capture(providerRef: string, amount: number, paymentType: "full" | "deposit" | "balance" = "full") {
+  async function capture(providerRef: string, amountMinor: number, paymentType: "full" | "deposit" | "balance" = "full") {
     const result = await processPaymentConfirmed(db, {
-      orderId: "order_1", provider: "fakepay", amount, currency: "BDT", paymentType, providerRef, secondaryRef: `txn_${providerRef}`,
+      orderId: "order_1", provider: "fakepay", amountMinor, currency: "BDT", paymentType, providerRef, secondaryRef: `txn_${providerRef}`,
     });
     expect(result).toMatchObject({ success: true });
     sqlite.prepare("UPDATE orders SET status = ? WHERE id = 'order_1'").run(OrderStatus.DELIVERED);
   }
 
   function orderState() {
-    return sqlite.prepare("SELECT status, payment_status, paid_amount FROM orders WHERE id = 'order_1'").get();
+    return sqlite.prepare("SELECT status, payment_status, paid_amount_minor FROM orders WHERE id = 'order_1'").get();
   }
 
   function attemptStatuses() {
@@ -226,17 +225,17 @@ describe("gateway kernel with a newly registered adapter", () => {
   }
 
   it("refunds through the adapter in integer minor units, once, and never beyond the paid amount", async () => {
-    await capture("pay_1", 100);
+    await capture("pay_1", 10_000);
 
     const refund = await processRefund(db, { orderId: "order_1", amount: 40.5, reason: "damaged" });
     expect(refund).toMatchObject({ success: true, gateway: "fakepay", amount: 40.5, isFullRefund: false, refundId: "fr_1" });
     expect(state.refunds).toEqual([expect.objectContaining({ amountMinor: 4_050, currency: "BDT", secondaryRef: "txn_pay_1" })]);
-    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount: 59.5 });
+    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount_minor: 5_950 });
 
     await expect(processRefund(db, { orderId: "order_1", amount: 60, reason: "again" })).rejects.toThrow(/exceeds paid amount/);
     await processRefund(db, { orderId: "order_1", reason: "rest" });
     expect(state.refunds.map((entry) => entry.amountMinor)).toEqual([4_050, 5_950]);
-    expect(orderState()).toMatchObject({ status: OrderStatus.REFUNDED, payment_status: PaymentStatus.REFUNDED, paid_amount: 0 });
+    expect(orderState()).toMatchObject({ status: OrderStatus.REFUNDED, payment_status: PaymentStatus.REFUNDED, paid_amount_minor: 0 });
     await expect(processRefund(db, { orderId: "order_1", reason: "third" })).rejects.toThrow();
     expect(state.refunds).toHaveLength(2);
     // Refund rows never take a provider reference: UNIQUE(provider, provider_ref) belongs to captures.
@@ -245,10 +244,10 @@ describe("gateway kernel with a newly registered adapter", () => {
   });
 
   it("allocates across deposit and balance captures with distinct idempotency keys", async () => {
-    sqlite.prepare(`INSERT INTO payment_plans (id, order_id, total_amount, deposit_amount, balance_due, status)
-      VALUES ('plan_1', 'order_1', 100, 25, 75, 'pending')`).run();
-    await processPaymentConfirmed(db, { orderId: "order_1", provider: "fakepay", amount: 25, currency: "BDT", paymentType: "deposit", providerRef: "dep", secondaryRef: "txn_dep" });
-    await capture("bal", 75, "balance");
+    sqlite.prepare(`INSERT INTO payment_plans (id, order_id, total_amount_minor, deposit_amount_minor, balance_due_minor, status)
+      VALUES ('plan_1', 'order_1', 10000, 2500, 7500, 'pending')`).run();
+    await processPaymentConfirmed(db, { orderId: "order_1", provider: "fakepay", amountMinor: 2_500, currency: "BDT", paymentType: "deposit", providerRef: "dep", secondaryRef: "txn_dep" });
+    await capture("bal", 7_500, "balance");
 
     await processRefund(db, { orderId: "order_1", reason: "cancelled" });
 
@@ -258,7 +257,7 @@ describe("gateway kernel with a newly registered adapter", () => {
   });
 
   it("keeps an unknown provider outcome pending, blocks a duplicate refund, and settles it by reconciliation", async () => {
-    await capture("pay_1", 100);
+    await capture("pay_1", 10_000);
     state.refundError = new Error("socket hang up");
 
     await expect(processRefund(db, { orderId: "order_1", reason: "retry me" })).rejects.toThrow(/unknown/i);
@@ -277,12 +276,12 @@ describe("gateway kernel with a newly registered adapter", () => {
     const settled = await reconcileDueRefundAttempts(db, { nowSeconds: Math.floor(Date.now() / 1000) + 60 });
     expect(settled).toMatchObject({ finalized: 1 });
     expect(attemptStatuses()).toEqual(["refunded"]);
-    expect(orderState()).toMatchObject({ payment_status: PaymentStatus.REFUNDED, paid_amount: 0 });
+    expect(orderState()).toMatchObject({ payment_status: PaymentStatus.REFUNDED, paid_amount_minor: 0 });
     expect(state.refunds).toHaveLength(1);
   });
 
   it("fails a refund before dispatch when the gateway settings are not readable", async () => {
-    await capture("pay_1", 100);
+    await capture("pay_1", 10_000);
     state.settings = { enabled: true, apiKey: "live_key", credentialErrors: ["cannot decrypt"] };
 
     await expect(processRefund(db, { orderId: "order_1", reason: "x" })).rejects.toThrow(/not readable/);
@@ -292,7 +291,7 @@ describe("gateway kernel with a newly registered adapter", () => {
   });
 
   it("imports a refund made in the provider dashboard exactly once", async () => {
-    await capture("pay_1", 100);
+    await capture("pay_1", 10_000);
     state.providerRefunds = [
       { id: "ext_1", succeeded: true, amountMinor: 3_000, currency: "BDT", sourceRef: "txn_pay_1", status: "succeeded" },
     ];
@@ -307,20 +306,20 @@ describe("gateway kernel with a newly registered adapter", () => {
 
     const first = await reconcileExternalRefundWebhooks(db);
     expect(first).toMatchObject({ imported: 1, finalized: 1, deferred: 0 });
-    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount: 70 });
+    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount_minor: 7_000 });
     expect(sqlite.prepare("SELECT status FROM webhook_events").get()).toEqual({ status: "processed" });
 
     sqlite.prepare("UPDATE webhook_events SET status = 'manual_reconciliation'").run();
     await expect(reconcileExternalRefundWebhooks(db)).resolves.toMatchObject({ imported: 0, skipped: 1 });
-    expect(orderState()).toMatchObject({ paid_amount: 70 });
+    expect(orderState()).toMatchObject({ paid_amount_minor: 7_000 });
     expect(state.refunds).toEqual([]);
   });
 
   it("records a COD refund only as a confirmed manual settlement", async () => {
-    sqlite.prepare("UPDATE orders SET payment_method = 'cod', status = ?, payment_status = 'paid', paid_amount = 100, balance_due = 0 WHERE id = 'order_1'")
+    sqlite.prepare("UPDATE orders SET payment_method = 'cod', status = ?, payment_status = 'paid', paid_amount_minor = 10000, balance_due_minor = 0 WHERE id = 'order_1'")
       .run(OrderStatus.DELIVERED);
-    sqlite.prepare(`INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status)
-      VALUES ('cod_1', 'order_1', 100, 'BDT', 'cod', 'full', 'succeeded')`).run();
+    sqlite.prepare(`INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
+      VALUES ('cod_1', 'order_1', 10000, 'BDT', 'cod', 'full', 'succeeded')`).run();
 
     await expect(processRefund(db, { orderId: "order_1", reason: "x" })).rejects.toThrow(/manual COD refund/);
     await expect(processRefund(db, { orderId: "order_1", reason: "x", manualSettlementConfirmed: true }))

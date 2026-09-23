@@ -3,31 +3,15 @@ import { ValidationError } from "@scalius/core/errors";
 import {
   assertOrderPaymentCurrency,
   createOrderCurrencySnapshot,
-  orderMoneyEqual,
   resolveOrderCurrencySnapshot,
-  roundOrderMoney,
 } from "./order-currency";
 
 describe("immutable order currency snapshots", () => {
-  it("uses BDT only when both legacy snapshot columns are null", () => {
-    expect(resolveOrderCurrencySnapshot({ currencyCode: null, currencyDecimalPlaces: null }))
-      .toEqual({ code: "BDT", decimalPlaces: 2, legacyFallback: true });
-  });
-
-  it("honors saved JPY and KWD precision instead of current settings", () => {
-    expect(roundOrderMoney(100.49, resolveOrderCurrencySnapshot({
-      currencyCode: "JPY",
-      currencyDecimalPlaces: 0,
-    }))).toBe(100);
-    expect(roundOrderMoney(1.2346, resolveOrderCurrencySnapshot({
-      currencyCode: "KWD",
-      currencyDecimalPlaces: 3,
-    }))).toBe(1.235);
-  });
-
-  it("derives precision from a saved code only for partial legacy snapshots", () => {
-    expect(resolveOrderCurrencySnapshot({ currencyCode: "kwd", currencyDecimalPlaces: null }))
-      .toEqual({ code: "KWD", decimalPlaces: 3, legacyFallback: false });
+  it("honors the saved JPY and KWD precision instead of current settings", () => {
+    expect(resolveOrderCurrencySnapshot({ currencyCode: "jpy", currencyDecimalPlaces: 0 }))
+      .toEqual({ code: "JPY", decimalPlaces: 0 });
+    expect(resolveOrderCurrencySnapshot({ currencyCode: "KWD", currencyDecimalPlaces: 3 }))
+      .toEqual({ code: "KWD", decimalPlaces: 3 });
   });
 
   it("fails closed for corrupt snapshots instead of silently switching currencies", () => {
@@ -35,23 +19,14 @@ describe("immutable order currency snapshots", () => {
       .toThrow(ValidationError);
     expect(() => resolveOrderCurrencySnapshot({ currencyCode: "ZZZ", currencyDecimalPlaces: 2 }))
       .toThrow(ValidationError);
+    expect(() => resolveOrderCurrencySnapshot({ currencyCode: "BDT", currencyDecimalPlaces: 4 }))
+      .toThrow(ValidationError);
   });
 
-  it("compares amounts at the immutable precision", () => {
-    const kwd = createOrderCurrencySnapshot("KWD");
-    expect(orderMoneyEqual(1.2346, 1.235, kwd)).toBe(true);
-    expect(orderMoneyEqual(1.234, 1.235, kwd)).toBe(false);
-  });
-
-  it("rejects payment rows from a different currency", () => {
+  it("rejects payment rows from a different or missing currency", () => {
     const jpy = createOrderCurrencySnapshot("JPY");
     expect(() => assertOrderPaymentCurrency("JPY", jpy)).not.toThrow();
     expect(() => assertOrderPaymentCurrency("BDT", jpy)).toThrow(ValidationError);
-  });
-
-  it("allows a missing payment currency only for a truly legacy BDT order", () => {
-    const legacy = resolveOrderCurrencySnapshot({ currencyCode: null, currencyDecimalPlaces: null });
-    expect(() => assertOrderPaymentCurrency(null, legacy)).not.toThrow();
     expect(() => assertOrderPaymentCurrency(null, createOrderCurrencySnapshot("BDT")))
       .toThrow(ValidationError);
   });

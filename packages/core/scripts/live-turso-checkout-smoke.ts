@@ -88,7 +88,6 @@ export function createPayload(
 ): StorefrontOrderCommitPayload {
   const unitPriceMinor = 125_000;
   const totalAmountMinor = unitPriceMinor * quantity;
-  const totalAmount = totalAmountMinor / 100;
   const lineId = `line_${variantId}`;
 
   return {
@@ -108,9 +107,6 @@ export function createPayload(
       zoneName: "Test Zone",
       areaName: null,
       notes: "Disposable database checkout smoke",
-      totalAmount,
-      shippingCharge: 0,
-      discountAmount: 0,
       currencyCode: "BDT",
       currencyDecimalPlaces: 2,
       subtotalAmountMinor: totalAmountMinor,
@@ -123,8 +119,8 @@ export function createPayload(
       status: "incomplete",
       paymentMethod: "cod",
       paymentStatus: "unpaid",
-      paidAmount: 0,
-      balanceDue: totalAmount,
+      paidAmountMinor: 0,
+      balanceDueMinor: totalAmountMinor,
       fulfillmentStatus: "pending",
       inventoryPool: "regular",
       inventoryAction: "reserved",
@@ -136,7 +132,6 @@ export function createPayload(
       productId,
       variantId,
       quantity,
-      price: unitPriceMinor / 100,
       productName: "Disposable Turso Product",
       variantLabel: "Default",
       inventoryTracked: true,
@@ -147,7 +142,6 @@ export function createPayload(
       taxableAmountMinor: totalAmountMinor,
       taxAmountMinor: 0,
     }],
-    discountUsage: null,
     promotion: null,
     requestUrl: "https://checkout-smoke.invalid/checkout",
     taxQuote: {
@@ -282,7 +276,7 @@ async function main(): Promise<void> {
     id: testCase.productId,
     name: "Disposable Turso Product",
     description: "Created only in a disposable live-test database.",
-    price: 1_250,
+    priceMinor: 125_000,
     slug: testCase.slug,
     isActive: true,
   })));
@@ -291,7 +285,7 @@ async function main(): Promise<void> {
     productId: testCase.productId,
     optionCombinationKey: null,
     sku: testCase.sku,
-    price: 1_250,
+    priceMinor: 125_000,
     stock: 10,
     reservedStock: 0,
     preorderStock: 0,

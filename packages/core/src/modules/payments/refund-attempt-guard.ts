@@ -22,7 +22,7 @@ export interface ActiveRefundAttemptSnapshot {
   id: string;
   orderId: string;
   status: string;
-  amount: number;
+  amountMinor: number;
   providerRefundId: string | null;
 }
 
@@ -83,7 +83,7 @@ export async function findActiveRefundAttempt(
       id: refundAttempts.id,
       orderId: refundAttempts.orderId,
       status: refundAttempts.status,
-      amount: refundAttempts.amount,
+      amountMinor: refundAttempts.amountMinor,
       providerRefundId: refundAttempts.providerRefundId,
     })
     .from(refundAttempts)
@@ -105,7 +105,7 @@ export async function findActiveRefundAttemptsForOrders(
       id: refundAttempts.id,
       orderId: refundAttempts.orderId,
       status: refundAttempts.status,
-      amount: refundAttempts.amount,
+      amountMinor: refundAttempts.amountMinor,
       providerRefundId: refundAttempts.providerRefundId,
     })
     .from(refundAttempts)

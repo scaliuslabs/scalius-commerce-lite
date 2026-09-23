@@ -22,6 +22,8 @@ vi.mock("~/components/ui/tiptap/DeferredTiptapEditor", () => ({
   ),
 }));
 
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 import { AdditionalInfoManager, type RichContentItem } from "./AdditionalInfoManager";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -55,18 +57,18 @@ describe("AdditionalInfoManager", () => {
     await act(async () => root.render(<Harness />));
 
     const addButton = [...host.querySelectorAll("button")]
-      .find((button) => button.textContent?.includes("Add section"));
+      .find((button) => button.textContent?.includes(translate(productMessages, "addSection")));
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());
 
     const titleInput = host.querySelector<HTMLInputElement>(
-      'input[placeholder="Section title (e.g., Specifications)"]',
+      `input[placeholder="${translate(productMessages, "sectionTitlePlaceholder")}"]`,
     );
     expect(titleInput).toBeTruthy();
     await changeInput(titleInput!, "Compatibility and setup");
 
     const contentInput = host.querySelector<HTMLTextAreaElement>(
-      'textarea[aria-label="Add content for this section..."]',
+      `textarea[aria-label="${translate(productMessages, "sectionContentPlaceholder")}"]`,
     );
     expect(contentInput).toBeTruthy();
     await changeInput(

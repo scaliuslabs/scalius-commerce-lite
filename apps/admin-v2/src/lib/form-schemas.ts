@@ -22,20 +22,35 @@ import {
   normalizeCanonicalPathInput,
   type CanonicalResourceKind,
 } from "@scalius/shared/seo-canonical";
+import { translate } from "~/i18n";
+import { formMessages } from "~/i18n/forms";
 
-const canonicalPathFormSchema = (
-  kind: CanonicalResourceKind,
-  example: string,
-) =>
+type FormMessage = keyof (typeof formMessages)["en"];
+
+/** A field error in the merchant's language, resolved when validation runs. */
+const says = (key: FormMessage) => ({
+  error: () => translate(formMessages, key),
+});
+
+const ADDRESS_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const addressSchema = z
+  .string()
+  .min(3, says("addressLength"))
+  .max(100, says("addressLength"))
+  .regex(ADDRESS_PATTERN, says("addressFormat"));
+
+/**
+ * Until address aliases exist, a canonical address may only repeat the
+ * item's own public address; the object-level check enforces that.
+ */
+const canonicalPathFormSchema = (kind: CanonicalResourceKind) =>
   z
     .string()
     .nullable()
     .transform((value) => normalizeCanonicalPathInput(value))
     .refine(
       (value) => value === null || isValidResourceCanonicalPath(kind, value),
-      {
-        message: `Use a reachable same-store route such as ${example}.`,
-      },
+      says("ownAddressOnly"),
     );
 
 const mediaFileFormSchema = z.object({
@@ -64,38 +79,31 @@ export const categoryFormSchema = z
     name: z
       .string()
       .trim()
-      .min(3, "Category name must be at least 3 characters")
-      .max(100, "Category name must be less than 100 characters"),
+      .min(3, says("nameLength"))
+      .max(100, says("nameLength")),
     description: z
       .string()
       .trim()
-      .max(100_000, "Description is too long")
+      .max(100_000, says("textTooLong"))
       .nullable(),
     content: z
       .string()
       .trim()
-      .max(100_000, "Content is too long")
+      .max(100_000, says("textTooLong"))
       .nullable()
       .default(null),
-    slug: z
-      .string()
-      .min(3, "Slug must be at least 3 characters")
-      .max(100, "Slug must be less than 100 characters")
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
+    slug: addressSchema,
     metaTitle: z
       .string()
       .trim()
-      .max(70, "Meta title must be 70 characters or fewer")
+      .max(70, says("searchTitleTooLong"))
       .nullable(),
     metaDescription: z
       .string()
       .trim()
-      .max(200, "Meta description must be 200 characters or fewer")
+      .max(200, says("searchDescriptionTooLong"))
       .nullable(),
-    canonicalPath: canonicalPathFormSchema(
-      "category",
-      "/categories/summer-shoes",
-    ),
+    canonicalPath: canonicalPathFormSchema("category"),
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     image: mediaFileFormSchema.nullable(),
@@ -109,8 +117,7 @@ export const categoryFormSchema = z
       context.addIssue({
         code: "custom",
         path: ["canonicalPath"],
-        message:
-          "Use this category's current URL until URL aliases are supported.",
+        message: translate(formMessages, "ownAddressOnly"),
       });
     }
   });
@@ -129,37 +136,41 @@ export const pageFormSchema = z
     contentType: z.enum(["page", "article"]).default("page"),
     title: z
       .string()
-      .min(3, "Page title must be at least 3 characters")
-      .max(100, "Page title must be less than 100 characters"),
-    slug: z
-      .string()
-      .min(3, "Slug must be at least 3 characters")
-      .max(100, "Slug must be less than 100 characters")
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
+      .min(3, says("nameLength"))
+      .max(100, says("nameLength")),
+    slug: addressSchema,
     content: z
       .string()
-      .min(1, "Content is required")
-      .max(100_000, "Content is too long"),
+      .min(1, says("contentRequired"))
+      .max(100_000, says("textTooLong")),
     excerpt: z
       .string()
       .trim()
-      .max(500, "Excerpt must be 500 characters or fewer")
+      .max(500, says("excerptTooLong"))
       .nullable(),
     author: z
       .string()
       .trim()
-      .max(100, "Author must be 100 characters or fewer")
+      .max(100, says("authorTooLong"))
       .nullable(),
-    tags: z.array(z.string().trim().min(1).max(60)).max(20),
+    tags: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, says("tagsInvalid"))
+          .max(60, says("tagsInvalid")),
+      )
+      .max(20, says("tagsInvalid")),
     metaTitle: z
       .string()
       .trim()
-      .max(70, "Meta title must be 70 characters or fewer")
+      .max(70, says("searchTitleTooLong"))
       .nullable(),
     metaDescription: z
       .string()
       .trim()
-      .max(200, "Meta description must be 200 characters or fewer")
+      .max(200, says("searchDescriptionTooLong"))
       .nullable(),
     canonicalPath: z
       .string()
@@ -184,23 +195,17 @@ export const pageFormSchema = z
       context.addIssue({
         code: "custom",
         path: ["slug"],
-        message:
-          value.contentType === "article"
-            ? "Choose a valid article URL."
-            : "This URL is reserved by the storefront. Choose another slug.",
+        message: translate(
+          formMessages,
+          value.contentType === "article" ? "addressFormat" : "addressReserved",
+        ),
       });
     }
-    if (
-      value.canonicalPath !== null &&
-      !isValidResourceCanonicalPath(resourceKind, value.canonicalPath)
-    ) {
+    if (value.canonicalPath !== null && value.canonicalPath !== publicPath) {
       context.addIssue({
         code: "custom",
         path: ["canonicalPath"],
-        message:
-          value.contentType === "article"
-            ? "Use an article route such as /blog/running-shoe-guide."
-            : "Use a page route such as /returns.",
+        message: translate(formMessages, "ownAddressOnly"),
       });
     }
     if (
@@ -210,7 +215,7 @@ export const pageFormSchema = z
       context.addIssue({
         code: "custom",
         path: ["contentType"],
-        message: "Static pages cannot contain article metadata.",
+        message: translate(formMessages, "pageHasBlogFields"),
       });
     }
     if (
@@ -220,7 +225,7 @@ export const pageFormSchema = z
       context.addIssue({
         code: "custom",
         path: ["publishedAt"],
-        message: "Choose a future publication time.",
+        message: translate(formMessages, "futureTime"),
       });
     }
   });
@@ -234,15 +239,12 @@ export type PageFormValues = z.output<typeof pageFormSchema>;
 
 export const customerFormSchema = z.object({
   id: z.string().optional(),
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(100, "Name must be less than 100 characters"),
-  email: z.email().nullable(),
+  name: z.string().min(3, says("nameLength")).max(100, says("nameLength")),
+  email: z.email(says("emailInvalid")).nullable(),
   phone: phoneNumberSchema,
   address: z
     .string()
-    .max(500, "Address must be less than 500 characters")
+    .max(500, says("addressTooLong"))
     .nullable(),
   city: z.string().nullable(),
   zone: z.string().nullable(),
@@ -319,17 +321,3 @@ export {
   type OrderFormValues,
 } from "@/components/admin/order-form/types";
 
-// ═══════════════════════════════════════════════════════════════════
-//  DISCOUNTS (re-export shared validation + per-type schemas)
-// ═══════════════════════════════════════════════════════════════════
-
-export {
-  discountCodeSchema,
-  sharedDiscountFields,
-  refineEndDateAfterStart,
-} from "@/components/admin/discount/shared-validation";
-
-export {
-  discountEditorSchema,
-  type DiscountEditorValues,
-} from "@/components/admin/discount/discount-editor-model";

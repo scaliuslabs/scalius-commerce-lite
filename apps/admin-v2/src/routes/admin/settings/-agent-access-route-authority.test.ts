@@ -9,19 +9,13 @@ vi.mock("~/lib/admin-route-context", () => ({
   getFreshAdminRouteContext: mocks.getFreshAdminRouteContext,
 }));
 vi.mock("~/components/admin/agent-access", () => ({
-  AgentAccessSettingsPage: () => null,
+  AccessPage: () => null,
   AuthorizationApprovalPage: () => null,
-}));
-vi.mock("~/components/admin/agent-access/api", () => ({
-  agentConnectionsQueryOptions: () => ({
-    queryKey: ["agent-access", "connections", 1, 20],
-    queryFn: vi.fn(),
-  }),
 }));
 vi.mock("~/lib/route-error", () => ({ RouteErrorComponent: () => null }));
 
-import { requireFreshAgentAccessViewAuthority } from "./agent-access";
 import { requireFreshAgentApprovalAuthority } from "./agent-access.authorize.$requestId";
+import { requireFreshBrowserHandoffAuthority } from "./agent-access.continue.$handoffId";
 
 function context(input: { isSuperAdmin: boolean; permissions: string[] }) {
   return {
@@ -32,42 +26,35 @@ function context(input: { isSuperAdmin: boolean; permissions: string[] }) {
   };
 }
 
-describe("Agent Access route authority", () => {
+async function outcome(guard: () => Promise<unknown>) {
+  return guard().catch((error: unknown) => error);
+}
+
+describe("AI access route authority", () => {
   beforeEach(() => mocks.getFreshAdminRouteContext.mockReset());
 
-  it("requires a fresh Agent Access view permission", async () => {
-    mocks.getFreshAdminRouteContext.mockResolvedValue(
-      context({ isSuperAdmin: false, permissions: ["dashboard.view"] }),
-    );
+  it("reserves app approval for a fresh Super Admin who can manage access", async () => {
+    for (const denied of [
+      context({ isSuperAdmin: false, permissions: ["agent_access.view", "agent_access.manage"] }),
+      context({ isSuperAdmin: true, permissions: ["agent_access.view"] }),
+    ]) {
+      mocks.getFreshAdminRouteContext.mockResolvedValue(denied);
+      expect(isRedirect(await outcome(requireFreshAgentApprovalAuthority))).toBe(true);
+    }
 
-    const outcome = await requireFreshAgentAccessViewAuthority().catch(
-      (error: unknown) => error,
-    );
-    expect(isRedirect(outcome)).toBe(true);
+    const superAdmin = context({ isSuperAdmin: true, permissions: ["agent_access.manage"] });
+    mocks.getFreshAdminRouteContext.mockResolvedValue(superAdmin);
+    await expect(requireFreshAgentApprovalAuthority()).resolves.toBe(superAdmin);
   });
 
-  it.each([
-    context({ isSuperAdmin: true, permissions: [] }),
-    context({ isSuperAdmin: false, permissions: ["agent_access.view"] }),
-  ])("allows a fresh view authority snapshot", async (access) => {
-    mocks.getFreshAdminRouteContext.mockResolvedValue(access);
-    await expect(requireFreshAgentAccessViewAuthority()).resolves.toBe(access);
-  });
-
-  it("reserves OAuth approval for a fresh Super Admin session", async () => {
+  it("keeps the secure browser handoff to a fresh Super Admin session", async () => {
     mocks.getFreshAdminRouteContext.mockResolvedValue(
-      context({
-        isSuperAdmin: false,
-        permissions: ["agent_access.view", "agent_access.manage"],
-      }),
+      context({ isSuperAdmin: false, permissions: ["agent_access.view", "agent_access.manage"] }),
     );
-    const denied = await requireFreshAgentApprovalAuthority().catch(
-      (error: unknown) => error,
-    );
-    expect(isRedirect(denied)).toBe(true);
+    expect(isRedirect(await outcome(requireFreshBrowserHandoffAuthority))).toBe(true);
 
     const superAdmin = context({ isSuperAdmin: true, permissions: [] });
     mocks.getFreshAdminRouteContext.mockResolvedValue(superAdmin);
-    await expect(requireFreshAgentApprovalAuthority()).resolves.toBe(superAdmin);
+    await expect(requireFreshBrowserHandoffAuthority()).resolves.toBe(superAdmin);
   });
 });

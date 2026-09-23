@@ -12,6 +12,12 @@ import type {
   ProductOptionStandardMapping,
   ProductVariant,
 } from "../../../../lib/api-query-options/products";
+import { translate } from "../../../../i18n";
+import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
+
+/** Merchant-facing reason the draft can't be saved yet. */
+const issue = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
+  translate(productMessages, key, vars);
 
 export type DraftOption = {
   id: string;
@@ -31,12 +37,12 @@ export type SimpleSkuDraft = { sku: string; trackInventory: boolean; stock: numb
 
 export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean): string | null {
   const sku = draft.sku.trim();
-  if ((skuRequired || sku) && sku.length < 3) return "SKU must be at least 3 characters.";
+  if ((skuRequired || sku) && sku.length < 3) return issue("issueSkuShort");
   if (!draft.trackInventory) {
-    return committed > 0 ? "Release committed stock before turning off quantity tracking." : null;
+    return committed > 0 ? issue("issueUntrackCommitted") : null;
   }
-  if (!Number.isInteger(draft.stock) || draft.stock < 0) return "Quantity must be a whole number of zero or greater.";
-  if (draft.stock < committed) return "Quantity cannot be lower than committed stock.";
+  if (!Number.isInteger(draft.stock) || draft.stock < 0) return issue("issueQuantityWhole");
+  if (draft.stock < committed) return issue("issueBelowCommitted");
   return null;
 }
 
@@ -50,6 +56,24 @@ export function draftId(prefix: string) {
 
 function slugPart(value: string) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
+}
+
+/** SKU for a new variant: TITLE-VALUE-VALUE, or SKU-n while that is too short. */
+function generatedSku(
+  productName: string,
+  valueLabel: ReadonlyMap<string, string>,
+  selectedOptionValueIds: readonly string[],
+  index: number,
+) {
+  const sku = [slugPart(productName), ...selectedOptionValueIds.map((id) => slugPart(valueLabel.get(id) ?? ""))]
+    .filter(Boolean)
+    .join("-")
+    .slice(0, 100);
+  return sku.length >= 3 ? sku : `SKU-${index + 1}`;
+}
+
+function optionValueLabels(options: readonly DraftOption[]) {
+  return new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
 }
 
 export function combinationKey(valueIds: readonly string[]) {
@@ -119,7 +143,7 @@ export function materializeVariants(
   simpleStock: number,
 ): DraftVariant[] {
   const previousByKey = new Map(previous.map((variant) => [combinationKey(variant.selectedOptionValueIds), variant]));
-  const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
+  const valueLabel = optionValueLabels(options);
   const projectedUseCount = new Map<string, number>();
   return optionCombinations(options).map((selectedOptionValueIds, index) => {
     const exact = previousByKey.get(combinationKey(selectedOptionValueIds));
@@ -141,15 +165,11 @@ export function materializeVariants(
       const value = sourceRows[0]![field];
       return sourceRows.every((row) => row[field] === value) ? value : undefined;
     };
-    const generatedSku = [slugPart(productName), ...selectedOptionValueIds.map((id) => slugPart(valueLabel.get(id) ?? ""))]
-      .filter(Boolean)
-      .join("-")
-      .slice(0, 100);
     return {
       id: draftId(`sku_${index}`),
       selectedOptionValueIds,
       imageId: shared("imageId") ?? null,
-      sku: generatedSku.length >= 3 ? generatedSku : `SKU-${index + 1}`,
+      sku: generatedSku(productName, valueLabel, selectedOptionValueIds, index),
       price: shared("price") ?? productPrice,
       stock: expandingFrom.length === 1
         ? (firstProjection ? inherited?.stock ?? 0 : 0)
@@ -163,6 +183,32 @@ export function materializeVariants(
       discountType: shared("discountType") ?? "percentage",
       discountPercentage: shared("discountPercentage") ?? null,
       discountAmount: shared("discountAmount") ?? null,
+    };
+  });
+}
+
+/**
+ * New (unsaved) variants keep following the product title and price until the
+ * merchant edits their SKU or price. Saved variants never change here.
+ */
+export function followProductDefaults(
+  options: DraftOption[],
+  variants: DraftVariant[],
+  previous: { name: string; price: number },
+  next: { name: string; price: number },
+): DraftVariant[] {
+  const valueLabel = optionValueLabels(options);
+  const indexByKey = new Map(optionCombinations(options).map((ids, index) => [combinationKey(ids), index]));
+  return variants.map((variant) => {
+    if (!variant.id.startsWith("draft_")) return variant;
+    const index = indexByKey.get(combinationKey(variant.selectedOptionValueIds)) ?? 0;
+    const followsSku = variant.sku === generatedSku(previous.name, valueLabel, variant.selectedOptionValueIds, index);
+    const followsPrice = variant.price === previous.price;
+    if (!followsSku && !followsPrice) return variant;
+    return {
+      ...variant,
+      ...(followsSku ? { sku: generatedSku(next.name, valueLabel, variant.selectedOptionValueIds, index) } : {}),
+      ...(followsPrice ? { price: next.price } : {}),
     };
   });
 }
@@ -209,7 +255,36 @@ export function materializeCombination(
 }
 
 export function normalized(value: string) {
-  return value.trim().toLocaleLowerCase("en-US");
+  return value.trim().toLowerCase();
+}
+
+const OPTION_TYPES_BY_NAME: Record<string, ProductOptionStandardMapping> = {
+  size: "size", "সাইজ": "size",
+  color: "color", colour: "color", "রং": "color", "রঙ": "color",
+  material: "material", "ম্যাটেরিয়াল": "material", "উপাদান": "material",
+  pattern: "pattern", "প্যাটার্ন": "pattern", "নকশা": "pattern",
+};
+
+export function guessOptionType(name: string): ProductOptionStandardMapping {
+  return OPTION_TYPES_BY_NAME[normalized(name)] ?? "none";
+}
+
+/**
+ * Renaming an option to Size, Color, Material or Pattern picks that type,
+ * unless the merchant chose another type or another option already uses it.
+ */
+export function withGuessedOptionType(
+  previous: DraftOption,
+  next: DraftOption,
+  options: readonly DraftOption[],
+): DraftOption {
+  if (next.name === previous.name) return next;
+  const merchantChose = previous.standardMapping !== "none"
+    && previous.standardMapping !== guessOptionType(previous.name);
+  if (merchantChose) return next;
+  const guess = guessOptionType(next.name);
+  const taken = options.some((option) => option.id !== next.id && option.standardMapping === guess);
+  return { ...next, standardMapping: guess !== "none" && !taken ? guess : "none" };
 }
 
 export function optionTopologySignature(options: readonly DraftOption[]): string {
@@ -228,19 +303,19 @@ export function getOptionMatrixIssue(
 ): string | null {
   if (options.length === 0) {
     return variants.length > 0 || combinationsPending
-      ? "Keep at least one option. Converting an optioned product to a simple product is a separate inventory operation."
+      ? issue("issueKeepOneOption")
       : null;
   }
-  if (options.length > MAX_PRODUCT_OPTION_AXES) return `Use ${MAX_PRODUCT_OPTION_AXES} options or fewer.`;
-  if (options.some((option) => !option.name.trim())) return "Name every option before saving.";
-  if (options.some((option) => option.values.length === 0)) return "Add at least one value to every option.";
-  if (new Set(options.map((option) => normalized(option.name))).size !== options.length) return "Option names must be unique.";
+  if (options.length > MAX_PRODUCT_OPTION_AXES) return issue("issueTooManyOptions", { max: MAX_PRODUCT_OPTION_AXES });
+  if (options.some((option) => !option.name.trim())) return issue("issueNameOptions");
+  if (options.some((option) => option.values.length === 0)) return issue("addOptionValues");
+  if (new Set(options.map((option) => normalized(option.name))).size !== options.length) return issue("issueOptionNamesUnique");
   const mapped = options.map((option) => option.standardMapping).filter((mapping) => mapping !== "none");
-  if (new Set(mapped).size !== mapped.length) return "Each catalog feed mapping can be used by only one option.";
+  if (new Set(mapped).size !== mapped.length) return issue("issueOptionTypeUnique");
   const combinationCount = options.reduce((total, option) => total * option.values.length, 1);
-  if (combinationCount > MAX_PRODUCT_OPTION_COMBINATIONS) return `Reduce the option set to ${MAX_PRODUCT_OPTION_COMBINATIONS} combinations or fewer.`;
-  if (combinationsPending) return "Update combinations to apply the option changes to the SKU matrix.";
-  if (variants.length === 0) return "Keep at least one sellable SKU combination.";
+  if (combinationCount > MAX_PRODUCT_OPTION_COMBINATIONS) return issue("issueTooManyVariants", { max: MAX_PRODUCT_OPTION_COMBINATIONS });
+  if (combinationsPending) return issue("issueUpdatePending");
+  if (variants.length === 0) return issue("keepOneVariant");
   const validValueIdsByOption = options.map((option) => new Set(option.values.map((value) => value.id)));
   const combinationKeys = new Set<string>();
   const usedValueIds = new Set<string>();
@@ -248,36 +323,36 @@ export function getOptionMatrixIssue(
     if (
       variant.selectedOptionValueIds.length !== options.length
       || validValueIdsByOption.some((ids, index) => !ids.has(variant.selectedOptionValueIds[index]!))
-    ) return "Every SKU must select one current value from every option.";
+    ) return issue("issueVariantValues");
     const key = combinationKey(variant.selectedOptionValueIds);
-    if (combinationKeys.has(key)) return "Every option combination must be unique.";
+    if (combinationKeys.has(key)) return issue("issueDuplicateVariant");
     combinationKeys.add(key);
     variant.selectedOptionValueIds.forEach((id) => usedValueIds.add(id));
   }
   if (options.some((option) => option.values.some((value) => !usedValueIds.has(value.id)))) {
-    return "Every option value needs at least one sellable SKU. Remove any unused option values.";
+    return issue("issueUnusedValue");
   }
   const skuKeys = variants.map((variant) => normalized(variant.sku));
-  if (skuKeys.some((sku) => sku.length < 3)) return "Every combination needs a SKU of at least 3 characters.";
-  if (new Set(skuKeys).size !== skuKeys.length) return "Every SKU must be unique.";
+  if (skuKeys.some((sku) => sku.length < 3)) return issue("issueSkuShort");
+  if (new Set(skuKeys).size !== skuKeys.length) return issue("issueSkuUnique");
   const imageIds = new Set(images.map((image) => image.id));
   const barcodeKeys = variants.map((variant) => normalized(variant.barcode ?? "")).filter(Boolean);
-  if (new Set(barcodeKeys).size !== barcodeKeys.length) return "Every barcode must be unique.";
+  if (new Set(barcodeKeys).size !== barcodeKeys.length) return issue("issueBarcodeUnique");
   for (const variant of variants) {
-    if (!Number.isFinite(variant.price) || variant.price < 0) return "Prices must be zero or greater.";
-    if (!Number.isInteger(variant.stock) || variant.stock < 0) return "Stock must be a whole number of zero or greater.";
-    if (variant.stock < (committedByVariantId.get(variant.id) ?? 0)) return "On-hand stock cannot be lower than committed stock.";
-    if ((variant.barcode === null) !== (variant.barcodeType === null)) return "Barcode and barcode type must be supplied together.";
+    if (!Number.isFinite(variant.price) || variant.price < 0) return issue("issuePriceNegative");
+    if (!Number.isInteger(variant.stock) || variant.stock < 0) return issue("issueQuantityWhole");
+    if (variant.stock < (committedByVariantId.get(variant.id) ?? 0)) return issue("issueBelowCommitted");
+    if ((variant.barcode === null) !== (variant.barcodeType === null)) return issue("issueBarcodePair");
     if (variant.imageId && !imageIds.has(variant.imageId) && !allowSavedImageRemovalConfirmation) {
-      return "A SKU image is no longer in this product's media.";
+      return issue("issuePhotoRemoved");
     }
-    if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) return "Percentage discounts must be between 0 and 100.";
-    if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) return "A flat SKU discount cannot exceed its price.";
+    if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) return issue("issuePercentRange");
+    if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) return issue("issueDiscountOverPrice");
   }
-  if (blockedCommittedStock > 0) return "Release committed stock before converting this simple product to options.";
+  if (blockedCommittedStock > 0) return issue("issueOptionsCommitted");
   if (requiredStockAllocation > 0) {
     const allocated = variants.reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
-    if (allocated !== requiredStockAllocation) return `Allocate exactly ${requiredStockAllocation} on-hand units across the combinations. Currently allocated: ${allocated}.`;
+    if (allocated !== requiredStockAllocation) return issue("issueAllocateStock", { required: requiredStockAllocation, allocated });
   }
   return null;
 }

@@ -8,21 +8,15 @@ interface CharacterCounterProps {
   label?: string;
 }
 
-export function CharacterCounter({
-  current,
-  recommended,
-  max,
-  className,
-  label = "characters",
-}: CharacterCounterProps) {
+export function CharacterCounter({ current, recommended, max, className, label = "characters" }: CharacterCounterProps) {
   const limit = max ?? recommended;
 
   return (
     <div
       aria-live="polite"
       className={cn(
-        "text-right text-xs tabular-nums text-muted-foreground",
-        current > recommended && "text-amber-700 dark:text-amber-400",
+        "text-right text-body tabular-nums text-muted-foreground",
+        current > recommended && "text-warning",
         max && current >= max && "text-destructive",
         className,
       )}

@@ -9,10 +9,10 @@ function setup() {
     INSERT INTO categories (id, name, slug, status, description, content) VALUES
       ('cat_a', 'A', 'a', 'published', '${"d".repeat(500)}', '${"c".repeat(300)}'),
       ('cat_b', 'B', 'b', 'draft', NULL, NULL);
-    INSERT INTO products (id, name, price, slug, category_id, is_active, deleted_at) VALUES
-      ('p_active', 'Active', 10, 'active', 'cat_a', 1, NULL),
-      ('p_inactive', 'Inactive', 10, 'inactive', 'cat_a', 0, NULL),
-      ('p_trashed', 'Trashed', 10, 'trashed', 'cat_a', 1, 1700000000);
+    INSERT INTO products (id, name, price_minor, slug, category_id, is_active, deleted_at) VALUES
+      ('p_active', 'Active', 1000, 'active', 'cat_a', 1, NULL),
+      ('p_inactive', 'Inactive', 1000, 'inactive', 'cat_a', 0, NULL),
+      ('p_trashed', 'Trashed', 1000, 'trashed', 'cat_a', 1, 1700000000);
   `);
   return harness;
 }

@@ -1,14 +1,31 @@
 import { z } from "zod";
 
-export const PROMOTION_EVALUATOR_VERSION = 1;
+export const PROMOTION_EVALUATOR_VERSION = 2;
 
 const MAX_LINES = 250;
 const MAX_CANDIDATES = 100;
 const MAX_SUBMITTED_CODES = 10;
 const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
+/** Buy X get Y repetitions evaluated per order (bounds the work per checkout). */
+const MAX_BUY_GET_APPLICATIONS = 10_000;
+/** Products + collections one rule may target (keeps config JSON small). */
+export const PROMOTION_SCOPE_LIMIT = 90;
+
+export const DISCOUNT_CLASSES = ["product", "order", "shipping"] as const;
+export type DiscountClass = (typeof DISCOUNT_CLASSES)[number];
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
 const minorAmountSchema = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
+const positiveMinorSchema = z.number().int().positive().max(MAX_MINOR_AMOUNT);
+const scopeIdsSchema = z.array(z.string().trim().min(1).max(160)).max(PROMOTION_SCOPE_LIMIT);
+/**
+ * Optional product/collection scope. Empty or absent means every line;
+ * otherwise a line matches its product or any active collection containing it.
+ */
+const scopeShape = {
+    productIds: scopeIdsSchema.optional(),
+    collectionIds: scopeIdsSchema.optional(),
+};
 
 const cartLineSchema = z.object({
     id: z.string().trim().min(1).max(160),
@@ -16,6 +33,8 @@ const cartLineSchema = z.object({
     variantId: z.string().trim().min(1).max(160),
     unitPriceMinor: minorAmountSchema,
     quantity: z.number().int().min(1).max(10_000),
+    /** Active collections containing the product, resolved by the caller. */
+    collectionIds: scopeIdsSchema.default([]),
 });
 
 const cartSchema = z.object({
@@ -27,58 +46,54 @@ const cartSchema = z.object({
 }).superRefine((cart, context) => {
     const seenLineIds = new Set<string>();
     let merchandiseSubtotal = 0n;
-
     cart.lines.forEach((line, index) => {
         if (seenLineIds.has(line.id)) {
-            context.addIssue({
-                code: "custom",
-                path: ["lines", index, "id"],
-                message: "Cart line IDs must be unique.",
-            });
+            context.addIssue({ code: "custom", path: ["lines", index, "id"], message: "Cart line IDs must be unique." });
         }
         seenLineIds.add(line.id);
-
         const lineBase = BigInt(line.unitPriceMinor) * BigInt(line.quantity);
         merchandiseSubtotal += lineBase;
         if (lineBase > BigInt(MAX_MINOR_AMOUNT)) {
-            context.addIssue({
-                code: "custom",
-                path: ["lines", index],
-                message: "Cart line total exceeds the supported range.",
-            });
+            context.addIssue({ code: "custom", path: ["lines", index], message: "Cart line total exceeds the supported range." });
         }
     });
-
     if (merchandiseSubtotal + BigInt(cart.shippingAmountMinor) > BigInt(MAX_MINOR_AMOUNT)) {
-        context.addIssue({
-            code: "custom",
-            path: ["lines"],
-            message: "Cart total exceeds the supported range.",
-        });
+        context.addIssue({ code: "custom", path: ["lines"], message: "Cart total exceeds the supported range." });
     }
 });
 
 export const promotionEvaluationCartSchema = cartSchema;
 
-const minimumSubtotalConditionSchema = z.object({
-    id: z.string().trim().min(1).max(160),
-    kind: z.literal("minimum_merchandise_subtotal"),
-    config: z.object({
-        amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT),
-        currencyCode: currencyCodeSchema,
+const conditionSchema = z.discriminatedUnion("kind", [
+    z.object({
+        id: z.string().trim().min(1).max(160),
+        kind: z.literal("minimum_merchandise_subtotal"),
+        config: z.object({
+            amountMinor: positiveMinorSchema,
+            currencyCode: currencyCodeSchema,
+            ...scopeShape,
+            /** Gates only the discount's bundled free shipping, checked after its savings. */
+            shippingOnly: z.boolean().optional(),
+        }),
     }),
-});
-
-const minimumQuantityConditionSchema = z.object({
-    id: z.string().trim().min(1).max(160),
-    kind: z.literal("minimum_item_quantity"),
-    config: z.object({ quantity: z.number().int().positive().max(1_000_000) }),
-});
-
-const promotionConditionSchema = z.discriminatedUnion("kind", [
-    minimumSubtotalConditionSchema,
-    minimumQuantityConditionSchema,
+    z.object({
+        id: z.string().trim().min(1).max(160),
+        kind: z.literal("minimum_item_quantity"),
+        config: z.object({ quantity: z.number().int().positive().max(1_000_000), ...scopeShape }),
+    }),
 ]);
+
+/** Buy X get Y: what the customer must buy for each application. */
+const buyRuleSchema = z.object({
+    quantity: z.number().int().positive().max(10_000).optional(),
+    amountMinor: positiveMinorSchema.optional(),
+    currencyCode: currencyCodeSchema.optional(),
+    ...scopeShape,
+}).refine(
+    (buy) => (buy.quantity === undefined) !== (buy.amountMinor === undefined)
+        && (buy.amountMinor === undefined) === (buy.currencyCode === undefined),
+    "Buy rules need either a quantity or an amount with its currency.",
+);
 
 const effectBaseSchema = z.object({
     id: z.string().trim().min(1).max(160),
@@ -86,16 +101,26 @@ const effectBaseSchema = z.object({
     allocation: z.enum(["across", "once"]),
 });
 
-const promotionEffectSchema = z.discriminatedUnion("kind", [
+const effectSchema = z.discriminatedUnion("kind", [
     effectBaseSchema.extend({
         kind: z.literal("percentage_off"),
-        config: z.object({ basisPoints: z.number().int().min(1).max(10_000) }),
+        config: z.object({
+            basisPoints: z.number().int().min(1).max(10_000),
+            ...scopeShape,
+            /** Present only on Buy X get Y: the scope above is what the customer gets. */
+            buy: buyRuleSchema.optional(),
+            getQuantity: z.number().int().positive().max(10_000).optional(),
+            maxUsesPerOrder: z.number().int().positive().max(MAX_BUY_GET_APPLICATIONS).optional(),
+        }),
     }),
     effectBaseSchema.extend({
         kind: z.literal("fixed_amount_off"),
         config: z.object({
-            amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT),
+            amountMinor: positiveMinorSchema,
             currencyCode: currencyCodeSchema,
+            ...scopeShape,
+            /** Line effects only: take the amount off every eligible unit instead of once per order. */
+            eachItem: z.boolean().optional(),
         }),
     }),
     effectBaseSchema.extend({
@@ -106,6 +131,127 @@ const promotionEffectSchema = z.discriminatedUnion("kind", [
     }),
 ]);
 
+const combinesWithSchema = z.object({
+    product: z.boolean(),
+    order: z.boolean(),
+    shipping: z.boolean(),
+});
+
+export type PromotionScope = { productIds?: string[]; collectionIds?: string[] };
+
+export function hasScope(scope: PromotionScope | null | undefined): boolean {
+    return (scope?.productIds?.length ?? 0) + (scope?.collectionIds?.length ?? 0) > 0;
+}
+
+export function discountClassOf(target: "line" | "order" | "shipping"): DiscountClass {
+    return target === "line" ? "product" : target;
+}
+
+type WithoutId<T> = T extends unknown ? Omit<T, "id"> : never;
+type ConditionShape = WithoutId<z.infer<typeof conditionSchema>>;
+type EffectShape = WithoutId<z.infer<typeof effectSchema>>;
+
+/** Shared business rules for stored rules (input validation) and evaluator candidates. */
+export function checkPromotionRule(
+    rule: {
+        method: "automatic" | "code";
+        codes: Array<{ code: string }>;
+        startsAtEpochSeconds: number | null;
+        endsAtEpochSeconds: number | null;
+        maxRedemptions: number | null;
+        maxRedemptionsPerCustomer: number | null;
+        maxDiscountSpendMinor: number | null;
+        budgetCurrencyCode: string | null;
+        conditions: ConditionShape[];
+        effects: EffectShape[];
+    },
+    context: z.RefinementCtx,
+): void {
+    const issue = (path: (string | number)[], message: string) =>
+        context.addIssue({ code: "custom", path, message });
+    if (rule.method === "code" && rule.codes.length === 0) issue(["codes"], "Code discounts need a code.");
+    if (rule.method === "automatic" && rule.codes.length > 0) issue(["codes"], "Automatic discounts cannot have codes.");
+    if (new Set(rule.codes.map(({ code }) => code)).size !== rule.codes.length) {
+        issue(["codes"], "Discount codes must be unique.");
+    }
+    if (
+        rule.method === "automatic"
+        && (rule.maxRedemptions !== null || rule.maxRedemptionsPerCustomer !== null || rule.maxDiscountSpendMinor !== null)
+    ) {
+        issue(["maxRedemptions"], "Usage limits apply to discount codes only.");
+    }
+    if (
+        rule.startsAtEpochSeconds !== null
+        && rule.endsAtEpochSeconds !== null
+        && rule.endsAtEpochSeconds <= rule.startsAtEpochSeconds
+    ) {
+        issue(["endsAtEpochSeconds"], "The end date must be after the start date.");
+    }
+    if (
+        rule.maxRedemptions !== null
+        && rule.maxRedemptionsPerCustomer !== null
+        && rule.maxRedemptionsPerCustomer > rule.maxRedemptions
+    ) {
+        issue(["maxRedemptionsPerCustomer"], "Uses per customer cannot exceed total uses.");
+    }
+    if ((rule.maxDiscountSpendMinor === null) !== (rule.budgetCurrencyCode === null)) {
+        issue(["maxDiscountSpendMinor"], "A spend budget needs both an amount and a currency.");
+    }
+    // One value per discount; a product or order value may also bundle free shipping.
+    const bundlesShipping = rule.effects.length === 2
+        && rule.effects[0]!.target !== "shipping"
+        && rule.effects[1]!.target === "shipping"
+        && rule.effects[1]!.kind === "free";
+    if (rule.effects.length !== 1 && !bundlesShipping) {
+        issue(["effects"], "A discount has one value, optionally with free shipping.");
+    }
+    rule.conditions.forEach((condition, index) => {
+        if (condition.kind === "minimum_merchandise_subtotal" && condition.config.shippingOnly && !bundlesShipping) {
+            issue(["conditions", index, "config"], "A free-shipping minimum needs bundled free shipping.");
+        }
+    });
+    const currencies = new Set<string>();
+    if (rule.budgetCurrencyCode) currencies.add(rule.budgetCurrencyCode);
+    const scopes: Array<{ path: (string | number)[]; scope: PromotionScope }> = [];
+    rule.conditions.forEach((condition, index) => {
+        if (condition.kind === "minimum_merchandise_subtotal") currencies.add(condition.config.currencyCode);
+        scopes.push({ path: ["conditions", index, "config"], scope: condition.config });
+    });
+    rule.effects.forEach((effect, index) => {
+        const path = ["effects", index, "config"];
+        const expectedAllocation = effect.target === "line" ? "across" : "once";
+        if (effect.allocation !== expectedAllocation) {
+            issue(["effects", index, "allocation"], "Line effects allocate across lines; order and shipping effects allocate once.");
+        }
+        if (effect.kind === "free") return;
+        scopes.push({ path, scope: effect.config });
+        if (effect.kind === "fixed_amount_off") {
+            currencies.add(effect.config.currencyCode);
+            if (effect.config.eachItem && effect.target !== "line") issue(path, "Only product discounts apply to each item.");
+        } else {
+            const { buy, getQuantity, maxUsesPerOrder } = effect.config;
+            if (buy) {
+                scopes.push({ path: [...path, "buy"], scope: buy });
+                if (buy.currencyCode) currencies.add(buy.currencyCode);
+                if (effect.target !== "line" || !getQuantity || !hasScope(effect.config) || !hasScope(buy)) {
+                    issue(path, "Buy X get Y needs products to buy, products to get, and a quantity to get.");
+                }
+            } else if (getQuantity !== undefined || maxUsesPerOrder !== undefined) {
+                issue(path, "Quantities to get apply to Buy X get Y only.");
+            }
+        }
+        if (effect.target !== "line" && hasScope(effect.config)) {
+            issue(path, "Only product discounts can target products or collections.");
+        }
+    });
+    for (const { path, scope } of scopes) {
+        if ((scope.productIds?.length ?? 0) + (scope.collectionIds?.length ?? 0) > PROMOTION_SCOPE_LIMIT) {
+            issue(path, `A discount can target at most ${PROMOTION_SCOPE_LIMIT} products and collections.`);
+        }
+    }
+    if (currencies.size > 1) issue(["budgetCurrencyCode"], "All amounts in a discount must use one currency.");
+}
+
 export const promotionCandidateSchema = z.object({
     id: z.string().trim().min(1).max(160),
     revision: z.number().int().min(1),
@@ -114,11 +260,12 @@ export const promotionCandidateSchema = z.object({
     status: z.enum(["draft", "active", "paused", "archived"]),
     priority: z.number().int().min(0).max(10_000),
     conflictPolicy: z.literal("best"),
+    combinesWith: combinesWithSchema,
     startsAtEpochSeconds: z.number().int().min(0).nullable(),
     endsAtEpochSeconds: z.number().int().min(0).nullable(),
     maxRedemptions: z.number().int().positive().nullable().default(null),
     maxRedemptionsPerCustomer: z.number().int().positive().nullable().default(null),
-    maxDiscountSpendMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().default(null),
+    maxDiscountSpendMinor: positiveMinorSchema.nullable().default(null),
     budgetCurrencyCode: currencyCodeSchema.nullable().default(null),
     redemptionCount: z.number().int().nonnegative().default(0),
     customerRedemptionCount: z.number().int().nonnegative().default(0),
@@ -127,118 +274,13 @@ export const promotionCandidateSchema = z.object({
         code: z.string().regex(/^[A-Z0-9_-]{3,50}$/u),
         isActive: z.boolean(),
     })).max(1_000),
-    conditions: z.array(promotionConditionSchema).max(20),
-    effects: z.array(promotionEffectSchema).min(1).max(3),
+    conditions: z.array(conditionSchema).max(20),
+    effects: z.array(effectSchema).min(1).max(2),
 }).superRefine((candidate, context) => {
-    if (candidate.method === "code" && candidate.codes.length === 0) {
-        context.addIssue({
-            code: "custom",
-            path: ["codes"],
-            message: "Code promotions require at least one code.",
-        });
-    }
-    if (candidate.method === "automatic" && candidate.codes.length > 0) {
-        context.addIssue({
-            code: "custom",
-            path: ["codes"],
-            message: "Automatic promotions cannot own checkout codes.",
-        });
-    }
-    if (
-        candidate.startsAtEpochSeconds !== null
-        && candidate.endsAtEpochSeconds !== null
-        && candidate.endsAtEpochSeconds <= candidate.startsAtEpochSeconds
-    ) {
-        context.addIssue({
-            code: "custom",
-            path: ["endsAtEpochSeconds"],
-            message: "Promotion end must be after its start.",
-        });
-    }
-    if (
-        candidate.maxRedemptions !== null
-        && candidate.maxRedemptionsPerCustomer !== null
-        && candidate.maxRedemptionsPerCustomer > candidate.maxRedemptions
-    ) {
-        context.addIssue({
-            code: "custom",
-            path: ["maxRedemptionsPerCustomer"],
-            message: "Per-customer redemptions cannot exceed the total redemption limit.",
-        });
-    }
-    if ((candidate.maxDiscountSpendMinor === null) !== (candidate.budgetCurrencyCode === null)) {
-        context.addIssue({
-            code: "custom",
-            path: ["maxDiscountSpendMinor"],
-            message: "Discount spend budgets require both an amount and currency.",
-        });
-    }
-    const configuredCurrencies = new Set<string>();
-    if (candidate.budgetCurrencyCode) configuredCurrencies.add(candidate.budgetCurrencyCode);
-    for (const condition of candidate.conditions) {
-        if (condition.kind === "minimum_merchandise_subtotal") {
-            configuredCurrencies.add(condition.config.currencyCode);
-        }
-    }
-    for (const effect of candidate.effects) {
-        if (effect.kind === "fixed_amount_off") {
-            configuredCurrencies.add(effect.config.currencyCode);
-        }
-    }
-    if (configuredCurrencies.size > 1) {
-        context.addIssue({
-            code: "custom",
-            path: ["budgetCurrencyCode"],
-            message: "All currency-specific promotion rules and budgets must use one currency.",
-        });
-    }
-
-    const targets = candidate.effects.map((effect) => effect.target);
-    if (new Set(targets).size !== targets.length) {
-        context.addIssue({
-            code: "custom",
-            path: ["effects"],
-            message: "A promotion can define only one effect per target class.",
-        });
-    }
-    candidate.effects.forEach((effect, index) => {
-        const allocationMatches = effect.target === "line"
-            ? effect.allocation === "across"
-            : effect.allocation === "once";
-        if (!allocationMatches) {
-            context.addIssue({
-                code: "custom",
-                path: ["effects", index, "allocation"],
-                message: "Line effects allocate across lines; order and shipping effects allocate once.",
-            });
-        }
-    });
-
-    const uniqueCodes = new Set(candidate.codes.map(({ code }) => code));
-    if (uniqueCodes.size !== candidate.codes.length) {
-        context.addIssue({
-            code: "custom",
-            path: ["codes"],
-            message: "Promotion codes must be unique.",
-        });
-    }
-
-    const conditionIds = candidate.conditions.map(({ id }) => id);
-    if (new Set(conditionIds).size !== conditionIds.length) {
-        context.addIssue({
-            code: "custom",
-            path: ["conditions"],
-            message: "Promotion condition IDs must be unique.",
-        });
-    }
-
-    const effectIds = candidate.effects.map(({ id }) => id);
-    if (new Set(effectIds).size !== effectIds.length) {
-        context.addIssue({
-            code: "custom",
-            path: ["effects"],
-            message: "Promotion effect IDs must be unique.",
-        });
+    checkPromotionRule(candidate, context);
+    const ids = [...candidate.conditions, ...candidate.effects].map(({ id }) => id);
+    if (new Set(ids).size !== ids.length) {
+        context.addIssue({ code: "custom", path: ["conditions"], message: "Rule IDs must be unique." });
     }
 });
 
@@ -251,6 +293,7 @@ export type PromotionCandidate = z.infer<typeof promotionCandidateSchema>;
 export type PromotionEvaluationCart = z.infer<typeof cartSchema>;
 export type PromotionEffect = PromotionCandidate["effects"][number];
 export type PromotionEffectTarget = PromotionEffect["target"];
+type CartLine = PromotionEvaluationCart["lines"][number];
 
 export type PromotionRejectionReason =
     | "invalid_configuration"
@@ -266,6 +309,8 @@ export type PromotionRejectionReason =
     | "condition_currency_mismatch"
     | "minimum_subtotal_not_met"
     | "minimum_quantity_not_met"
+    | "buy_requirement_not_met"
+    | "get_items_missing"
     | "effect_currency_mismatch"
     | "no_savings"
     | "lower_savings";
@@ -287,15 +332,22 @@ export interface PromotionAllocationPlan {
     discountAmountMinor: number;
 }
 
+export interface AppliedDiscount {
+    promotionId: string;
+    promotionRevision: number;
+    promotionName: string;
+    method: "automatic" | "code";
+    promotionCode: string | null;
+    discountClass: DiscountClass;
+    totalDiscountMinor: number;
+}
+
 export interface PromotionEvaluationResult {
     evaluatorVersion: number;
+    /** The best combinable set: at most one discount per class, product → order → shipping. */
     applied: null | {
-        promotionId: string;
-        promotionRevision: number;
-        promotionName: string;
-        method: "automatic" | "code";
-        promotionCode: string | null;
         totalDiscountMinor: number;
+        discounts: AppliedDiscount[];
         allocations: PromotionAllocationPlan[];
     };
     rejected: Array<{
@@ -316,12 +368,27 @@ export class PromotionEvaluationInputError extends Error {
     }
 }
 
-interface EvaluatedCandidate {
+interface Eligible {
     candidate: PromotionCandidate;
+    /** The discount's value (product, order or shipping class). */
+    effect: PromotionEffect;
+    discountClass: DiscountClass;
     promotionCode: string | null;
-    allocations: PromotionAllocationPlan[];
-    totalDiscountMinor: number;
+    /** Free shipping bundled with a product or order value. */
+    bundledShipping: PromotionEffect | null;
+    /** Merchandise subtotal, after the order's other savings, that shipping savings need. */
+    shippingMinimumMinor: number;
 }
+
+/** One effect's savings: per line id, or under SHIPPING_KEY. */
+interface Computed {
+    eligible: Eligible;
+    effect: PromotionEffect;
+    amounts: Map<string, number>;
+    total: number;
+}
+
+const SHIPPING_KEY = "\u0000shipping";
 
 function toSafeNumber(value: bigint, label: string): number {
     if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -330,443 +397,477 @@ function toSafeNumber(value: bigint, label: string): number {
     return Number(value);
 }
 
-function lineBaseMinor(line: PromotionEvaluationCart["lines"][number]): number {
-    return toSafeNumber(
-        BigInt(line.unitPriceMinor) * BigInt(line.quantity),
-        `Cart line ${line.id}`,
-    );
+/** Half-up rounding of `base × basisPoints / 10000`, never above the base. */
+function percentOf(baseMinor: number, basisPoints: number): number {
+    const value = toSafeNumber((BigInt(baseMinor) * BigInt(basisPoints) + 5_000n) / 10_000n, "Percentage discount");
+    return Math.min(baseMinor, value);
 }
 
-function percentageDiscount(baseMinor: number, basisPoints: number): number {
-    const numerator = BigInt(baseMinor) * BigInt(basisPoints);
-    return toSafeNumber((numerator + 5_000n) / 10_000n, "Percentage discount");
-}
-
-function fixedAcrossLineBases(
-    totalDiscountMinor: number,
-    bases: Array<{ id: string; baseMinor: number }>,
-): Map<string, number> {
+/**
+ * Splits a fixed amount across weights by largest remainder (ties by id), so
+ * the parts always sum to the amount and never exceed their weight.
+ */
+function splitAcross(totalMinor: number, weights: Array<{ id: string; baseMinor: number }>): Map<string, number> {
     const result = new Map<string, number>();
-    const totalBase = bases.reduce((total, item) => total + BigInt(item.baseMinor), 0n);
-    if (totalBase === 0n || totalDiscountMinor === 0) return result;
-
-    const totalDiscount = BigInt(totalDiscountMinor);
-    const shares = bases.map((item) => {
-        const numerator = totalDiscount * BigInt(item.baseMinor);
-        return {
-            ...item,
-            amount: numerator / totalBase,
-            remainder: numerator % totalBase,
-        };
+    const totalBase = weights.reduce((total, item) => total + BigInt(item.baseMinor), 0n);
+    if (totalBase === 0n || totalMinor <= 0) return result;
+    const amount = BigInt(Math.min(totalMinor, toSafeNumber(totalBase, "Split base")));
+    const shares = weights.map((item) => {
+        const numerator = amount * BigInt(item.baseMinor);
+        return { ...item, part: numerator / totalBase, remainder: numerator % totalBase };
     });
-    let allocated = shares.reduce((total, item) => total + item.amount, 0n);
-    shares.sort((left, right) => {
-        if (left.remainder !== right.remainder) {
-            return left.remainder > right.remainder ? -1 : 1;
-        }
-        return left.id.localeCompare(right.id);
-    });
-    for (const share of shares) {
-        if (allocated >= totalDiscount) break;
-        share.amount += 1n;
+    let allocated = shares.reduce((total, item) => total + item.part, 0n);
+    const byRemainder = [...shares].sort((left, right) =>
+        left.remainder === right.remainder ? left.id.localeCompare(right.id) : left.remainder > right.remainder ? -1 : 1);
+    for (const share of byRemainder) {
+        if (allocated >= amount) break;
+        share.part += 1n;
         allocated += 1n;
     }
     for (const share of shares) {
-        const amount = toSafeNumber(share.amount, "Line allocation");
-        if (amount > 0) result.set(share.id, amount);
+        if (share.part > 0n) result.set(share.id, toSafeNumber(share.part, "Line allocation"));
     }
     return result;
 }
 
-function allocationFor(
-    candidate: PromotionCandidate,
-    promotionCode: string | null,
-    effect: PromotionEffect,
-    cart: PromotionEvaluationCart,
-    input: {
-        baseAmountMinor: number;
-        discountAmountMinor: number;
-        lineId?: string;
-        quantity?: number;
-    },
-): PromotionAllocationPlan {
-    return {
-        promotionId: candidate.id,
-        promotionRevision: candidate.revision,
-        evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
-        promotionName: candidate.name,
-        promotionCode,
-        method: candidate.method,
-        effectId: effect.id,
-        effectKind: effect.kind,
-        target: effect.target,
-        lineId: input.lineId ?? null,
-        quantity: input.quantity ?? null,
-        currencyCode: cart.currencyCode,
-        baseAmountMinor: input.baseAmountMinor,
-        discountAmountMinor: input.discountAmountMinor,
-    };
+function lineInScope(line: CartLine, scope: PromotionScope): boolean {
+    if (!hasScope(scope)) return true;
+    return Boolean(scope.productIds?.includes(line.productId)
+        || scope.collectionIds?.some((id) => line.collectionIds.includes(id)));
 }
 
-function effectDiscount(effect: PromotionEffect, baseAmountMinor: number): number {
-    if (baseAmountMinor <= 0) return 0;
-    if (effect.kind === "free") return baseAmountMinor;
+type BuyGetConfig = Extract<PromotionEffect, { kind: "percentage_off" }>["config"];
+
+/**
+ * Buy X get Y over unit counts. Each application first takes the "buy" units
+ * (units the customer cannot get free first, then the most expensive), then
+ * the cheapest remaining "get" units, like Shopify. Applications repeat until
+ * the cart runs out or the per-order cap is reached. `buyMet` says the
+ * customer bought enough but has not added the items they get.
+ */
+function buyGetUnits(lines: CartLine[], config: BuyGetConfig): { got: Map<string, number>; buyMet: boolean } {
+    const buy = config.buy!;
+    const getQuantity = config.getQuantity!;
+    const inGet = (line: CartLine) => lineInScope(line, config);
+    const buyLines = lines.filter((line) => lineInScope(line, buy)).sort((left, right) =>
+        Number(inGet(left)) - Number(inGet(right))
+        || right.unitPriceMinor - left.unitPriceMinor
+        || left.id.localeCompare(right.id));
+    const getLines = lines.filter(inGet).sort((left, right) =>
+        left.unitPriceMinor - right.unitPriceMinor || left.id.localeCompare(right.id));
+    const available = new Map(lines.map((line) => [line.id, line.quantity]));
+    const got = new Map<string, number>();
+    let buyMet = false;
+    const maxUses = Math.min(config.maxUsesPerOrder ?? MAX_BUY_GET_APPLICATIONS, MAX_BUY_GET_APPLICATIONS);
+    for (let uses = 0; uses < maxUses; uses += 1) {
+        const draft = new Map(available);
+        let needUnits = buy.quantity ?? 0;
+        let needAmount = buy.amountMinor ?? 0;
+        for (const line of buyLines) {
+            if (needUnits <= 0 && needAmount <= 0) break;
+            const left = draft.get(line.id) ?? 0;
+            const take = buy.quantity !== undefined
+                ? Math.min(left, needUnits)
+                : Math.min(left, line.unitPriceMinor > 0 ? Math.ceil(needAmount / line.unitPriceMinor) : 0);
+            draft.set(line.id, left - take);
+            needUnits -= take;
+            needAmount -= take * line.unitPriceMinor;
+        }
+        if (needUnits > 0 || needAmount > 0) break;
+        buyMet = true;
+        let needGet = getQuantity;
+        const takes: Array<[string, number]> = [];
+        for (const line of getLines) {
+            if (needGet <= 0) break;
+            const take = Math.min(draft.get(line.id) ?? 0, needGet);
+            if (take <= 0) continue;
+            draft.set(line.id, (draft.get(line.id) ?? 0) - take);
+            takes.push([line.id, take]);
+            needGet -= take;
+        }
+        if (needGet > 0) break;
+        for (const [lineId, take] of takes) got.set(lineId, (got.get(lineId) ?? 0) + take);
+        for (const [lineId, left] of draft) available.set(lineId, left);
+    }
+    return { got, buyMet };
+}
+
+function finish(eligible: Eligible, effect: PromotionEffect, amounts: Map<string, number>): Computed {
+    for (const [key, amount] of amounts) if (amount <= 0) amounts.delete(key);
+    const total = toSafeNumber([...amounts.values()].reduce((sum, amount) => sum + BigInt(amount), 0n), "Discount total");
+    return { eligible, effect, amounts, total };
+}
+
+function computeProduct(eligible: Eligible, lines: CartLine[]): Computed & { getMissing: boolean } {
+    const { effect } = eligible;
+    const amounts = new Map<string, number>();
+    const scoped = lines.filter((line) => effect.kind !== "free" && lineInScope(line, effect.config));
+    const base = (line: CartLine) => line.unitPriceMinor * line.quantity;
+    let getMissing = false;
     if (effect.kind === "fixed_amount_off") {
-        return Math.min(baseAmountMinor, effect.config.amountMinor);
+        if (effect.config.eachItem) {
+            for (const line of scoped) {
+                amounts.set(line.id, Math.min(line.unitPriceMinor, effect.config.amountMinor) * line.quantity);
+            }
+        } else {
+            const split = splitAcross(effect.config.amountMinor, scoped.map((line) => ({ id: line.id, baseMinor: base(line) })));
+            split.forEach((amount, lineId) => amounts.set(lineId, amount));
+        }
+    } else if (effect.kind === "percentage_off" && effect.config.buy) {
+        const byId = new Map(lines.map((line) => [line.id, line]));
+        const { got, buyMet } = buyGetUnits(lines, effect.config);
+        getMissing = buyMet && got.size === 0;
+        for (const [lineId, units] of got) {
+            amounts.set(lineId, percentOf(byId.get(lineId)!.unitPriceMinor * units, effect.config.basisPoints));
+        }
+    } else if (effect.kind === "percentage_off") {
+        for (const line of scoped) amounts.set(line.id, percentOf(base(line), effect.config.basisPoints));
     }
-    return Math.min(
-        baseAmountMinor,
-        percentageDiscount(baseAmountMinor, effect.config.basisPoints),
+    return { ...finish(eligible, effect, amounts), getMissing };
+}
+
+function computeOrder(eligible: Eligible, remaining: Map<string, number>): Computed {
+    const { effect } = eligible;
+    const weights = [...remaining].filter(([, baseMinor]) => baseMinor > 0).map(([id, baseMinor]) => ({ id, baseMinor }));
+    const subtotal = weights.reduce((total, { baseMinor }) => total + baseMinor, 0);
+    const amount = effect.kind === "percentage_off"
+        ? percentOf(subtotal, effect.config.basisPoints)
+        : effect.kind === "fixed_amount_off" ? Math.min(subtotal, effect.config.amountMinor) : 0;
+    return finish(eligible, effect, splitAcross(amount, weights));
+}
+
+function computeShipping(eligible: Eligible, effect: PromotionEffect, shippingMinor: number): Computed {
+    const amount = effect.kind === "free"
+        ? shippingMinor
+        : effect.kind === "percentage_off"
+            ? percentOf(shippingMinor, effect.config.basisPoints)
+            : Math.min(shippingMinor, effect.config.amountMinor);
+    return finish(eligible, effect, amount > 0 ? new Map([[SHIPPING_KEY, amount]]) : new Map());
+}
+
+function withinBudget(candidate: PromotionCandidate, total: number): boolean {
+    return candidate.maxDiscountSpendMinor === null
+        || candidate.discountSpendMinor + total <= candidate.maxDiscountSpendMinor;
+}
+
+/**
+ * Symmetric: one discount allowing the other's class is enough, so a single
+ * checkbox decides and merchants never have to tick both sides.
+ */
+export function discountsCombine(
+    left: { discountClass: DiscountClass; combinesWith: Record<DiscountClass, boolean> },
+    right: { discountClass: DiscountClass; combinesWith: Record<DiscountClass, boolean> },
+): boolean {
+    return left.discountClass !== right.discountClass
+        && (left.combinesWith[right.discountClass] || right.combinesWith[left.discountClass]);
+}
+
+function combines(left: Eligible, right: Eligible): boolean {
+    return discountsCombine(
+        { discountClass: left.discountClass, combinesWith: left.candidate.combinesWith },
+        { discountClass: right.discountClass, combinesWith: right.candidate.combinesWith },
     );
 }
 
-function calculateCandidate(
-    candidate: PromotionCandidate,
-    promotionCode: string | null,
-    cart: PromotionEvaluationCart,
-    lineBases: Array<{
-        line: PromotionEvaluationCart["lines"][number];
-        baseMinor: number;
-    }>,
-    merchandiseSubtotalMinor: number,
-): EvaluatedCandidate | { reason: PromotionRejectionReason } {
-    for (const effect of candidate.effects) {
-        if (
-            effect.kind === "fixed_amount_off"
-            && effect.config.currencyCode !== cart.currencyCode
-        ) {
-            return { reason: "effect_currency_mismatch" };
-        }
-    }
-
-    const allocations: PromotionAllocationPlan[] = [];
-    const remainingLineBases = new Map(
-        lineBases.map(({ line, baseMinor }) => [line.id, baseMinor]),
-    );
-    const orderedEffects = [...candidate.effects].sort((left, right) => {
-        const rank = { line: 0, order: 1, shipping: 2 } as const;
-        return rank[left.target] - rank[right.target] || left.id.localeCompare(right.id);
-    });
-
-    for (const effect of orderedEffects) {
-        if (effect.target === "line") {
-            if (effect.kind === "fixed_amount_off") {
-                const totalDiscount = Math.min(
-                    merchandiseSubtotalMinor,
-                    effect.config.amountMinor,
-                );
-                const shares = fixedAcrossLineBases(
-                    totalDiscount,
-                    lineBases.map(({ line, baseMinor }) => ({ id: line.id, baseMinor })),
-                );
-                for (const { line, baseMinor } of lineBases) {
-                    const amount = shares.get(line.id) ?? 0;
-                    if (amount <= 0) continue;
-                    allocations.push(allocationFor(candidate, promotionCode, effect, cart, {
-                        baseAmountMinor: baseMinor,
-                        discountAmountMinor: amount,
-                        lineId: line.id,
-                        quantity: line.quantity,
-                    }));
-                    remainingLineBases.set(line.id, baseMinor - amount);
-                }
-            } else {
-                for (const { line, baseMinor } of lineBases) {
-                    const amount = effectDiscount(effect, baseMinor);
-                    if (amount <= 0) continue;
-                    allocations.push(allocationFor(candidate, promotionCode, effect, cart, {
-                        baseAmountMinor: baseMinor,
-                        discountAmountMinor: amount,
-                        lineId: line.id,
-                        quantity: line.quantity,
-                    }));
-                    remainingLineBases.set(line.id, baseMinor - amount);
-                }
-            }
-            continue;
-        }
-
-        if (effect.target === "order") {
-            const orderBases = lineBases
-                .map(({ line }) => ({
-                    line,
-                    baseMinor: remainingLineBases.get(line.id) ?? 0,
-                }))
-                .filter(({ baseMinor }) => baseMinor > 0);
-            const baseAmountMinor = toSafeNumber(
-                orderBases.reduce((total, item) => total + BigInt(item.baseMinor), 0n),
-                "Order effect base",
-            );
-            const amount = effectDiscount(effect, baseAmountMinor);
-            const shares = fixedAcrossLineBases(
-                amount,
-                orderBases.map(({ line, baseMinor }) => ({ id: line.id, baseMinor })),
-            );
-            for (const { line, baseMinor } of orderBases) {
-                const lineAmount = shares.get(line.id) ?? 0;
-                if (lineAmount <= 0) continue;
-                allocations.push(allocationFor(candidate, promotionCode, effect, cart, {
-                    baseAmountMinor: baseMinor,
-                    discountAmountMinor: lineAmount,
-                    lineId: line.id,
-                    quantity: line.quantity,
-                }));
-            }
-            continue;
-        }
-
-        const amount = effectDiscount(effect, cart.shippingAmountMinor);
-        if (amount <= 0) continue;
-        allocations.push(allocationFor(candidate, promotionCode, effect, cart, {
-            baseAmountMinor: cart.shippingAmountMinor,
-            discountAmountMinor: amount,
-        }));
-    }
-
-    const totalDiscountMinor = toSafeNumber(
-        allocations.reduce(
-            (total, allocation) => total + BigInt(allocation.discountAmountMinor),
-            0n,
-        ),
-        "Promotion discount total",
-    );
-    return { candidate, promotionCode, allocations, totalDiscountMinor };
-}
-
-function rejectForLifecycle(
-    candidate: PromotionCandidate,
-    evaluatedAtEpochSeconds: number,
-): PromotionRejectionReason | null {
+function rejectForLifecycle(candidate: PromotionCandidate, now: number): PromotionRejectionReason | null {
     if (candidate.status !== "active") return "inactive";
-    if (
-        candidate.startsAtEpochSeconds !== null
-        && evaluatedAtEpochSeconds < candidate.startsAtEpochSeconds
-    ) {
-        return "not_started";
-    }
-    if (
-        candidate.endsAtEpochSeconds !== null
-        && evaluatedAtEpochSeconds >= candidate.endsAtEpochSeconds
-    ) {
-        return "expired";
-    }
+    if (candidate.startsAtEpochSeconds !== null && now < candidate.startsAtEpochSeconds) return "not_started";
+    if (candidate.endsAtEpochSeconds !== null && now >= candidate.endsAtEpochSeconds) return "expired";
     return null;
 }
 
 /**
- * Deterministic best-candidate evaluator for the first promotion authority
- * slice. It supports submitted-code and internal automatic candidates, AND
- * conditions, line/order/shipping effects, redemption/spend limits, and
- * immutable allocation-plan output. Storefront resolution currently exposes
- * one code promotion only; stacking, audience/target selectors, and automatic
- * activation remain deliberately unavailable until their authorities exist.
+ * Limits and requirements known before any savings. An unscoped minimum
+ * purchase on a shipping discount (or the minimum for bundled free shipping)
+ * is checked later against the subtotal after the order's other savings.
+ */
+function rejectForRules(
+    candidate: PromotionCandidate,
+    effect: PromotionEffect,
+    cart: PromotionEvaluationCart,
+): PromotionRejectionReason | null {
+    if (candidate.maxRedemptions !== null && candidate.redemptionCount >= candidate.maxRedemptions) {
+        return "redemption_limit_reached";
+    }
+    if (
+        candidate.maxRedemptionsPerCustomer !== null
+        && candidate.customerRedemptionCount >= candidate.maxRedemptionsPerCustomer
+    ) {
+        return "customer_redemption_limit_reached";
+    }
+    if (candidate.maxDiscountSpendMinor !== null) {
+        if (candidate.budgetCurrencyCode !== cart.currencyCode) return "budget_currency_mismatch";
+        if (candidate.discountSpendMinor >= candidate.maxDiscountSpendMinor) return "discount_budget_exhausted";
+    }
+    for (const condition of candidate.conditions) {
+        const scoped = cart.lines.filter((line) => lineInScope(line, condition.config));
+        if (condition.kind === "minimum_merchandise_subtotal") {
+            if (condition.config.currencyCode !== cart.currencyCode) return "condition_currency_mismatch";
+            if (condition.config.shippingOnly) continue;
+            const subtotal = scoped.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
+            if (subtotal < condition.config.amountMinor) return "minimum_subtotal_not_met";
+        } else if (scoped.reduce((total, line) => total + line.quantity, 0) < condition.config.quantity) {
+            return "minimum_quantity_not_met";
+        }
+    }
+    if (effect.kind === "fixed_amount_off" && effect.config.currencyCode !== cart.currencyCode) {
+        return "effect_currency_mismatch";
+    }
+    if (effect.kind === "percentage_off" && effect.config.buy?.currencyCode
+        && effect.config.buy.currencyCode !== cart.currencyCode) {
+        return "effect_currency_mismatch";
+    }
+    return null;
+}
+
+function shippingMinimum(candidate: PromotionCandidate, shippingClass: boolean): number {
+    return Math.max(0, ...candidate.conditions.flatMap((condition) =>
+        condition.kind === "minimum_merchandise_subtotal"
+        && (condition.config.shippingOnly || (shippingClass && !hasScope(condition.config)))
+            ? [condition.config.amountMinor]
+            : []));
+}
+
+function toAllocations(computed: Computed, lines: Map<string, CartLine>, cart: PromotionEvaluationCart): PromotionAllocationPlan[] {
+    const { candidate, promotionCode } = computed.eligible;
+    const { effect } = computed;
+    return [...computed.amounts]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, discountAmountMinor]) => {
+            const line = key === SHIPPING_KEY ? null : lines.get(key)!;
+            return {
+                promotionId: candidate.id,
+                promotionRevision: candidate.revision,
+                evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
+                promotionName: candidate.name,
+                promotionCode,
+                method: candidate.method,
+                effectId: effect.id,
+                effectKind: effect.kind,
+                target: effect.target,
+                lineId: line?.id ?? null,
+                quantity: line?.quantity ?? null,
+                currencyCode: cart.currencyCode,
+                baseAmountMinor: line ? line.unitPriceMinor * line.quantity : cart.shippingAmountMinor,
+                discountAmountMinor,
+            };
+        });
+}
+
+function promotionsOf(selection: Computed[]): PromotionCandidate[] {
+    return [...new Map(selection.map(({ eligible }) => [eligible.candidate.id, eligible.candidate])).values()];
+}
+
+/** Deterministic preference between equal-savings selections. */
+function selectionKey(selection: Computed[]): string {
+    return promotionsOf(selection)
+        .map((candidate) => `${String(candidate.priority).padStart(5, "0")}:${candidate.id}`)
+        .join("|");
+}
+
+/**
+ * Deterministic discount evaluator. Each candidate has one value in one class
+ * (product, order, shipping); a product or order value may bundle free
+ * shipping. Discounts of different classes combine when either of them
+ * allows the other's class; at most one discount per class applies, and at
+ * most one shipping saving. Product discounts apply first, order discounts to
+ * the remaining subtotal, then shipping, whose minimum purchase is checked
+ * against the subtotal after those savings. The selection with the most
+ * savings wins (ties: fewer discounts, then lower priority, then id).
  */
 export function evaluatePromotionCandidates(input: unknown): PromotionEvaluationResult {
     const parsedInput = evaluationInputSchema.safeParse(input);
     if (!parsedInput.success) {
-        throw new PromotionEvaluationInputError(
-            "Promotion evaluation input is invalid.",
-            parsedInput.error.issues,
-        );
+        throw new PromotionEvaluationInputError("Promotion evaluation input is invalid.", parsedInput.error.issues);
     }
-    const cart = {
+    const cart: PromotionEvaluationCart = {
         ...parsedInput.data.cart,
+        lines: [...parsedInput.data.cart.lines].sort((left, right) => left.id.localeCompare(right.id)),
         submittedCodes: Array.from(new Set(
             parsedInput.data.cart.submittedCodes.map((code) => code.trim().toUpperCase()),
         )).sort((left, right) => left.localeCompare(right)),
     };
-    const lineBases = cart.lines
-        .map((line) => ({ line, baseMinor: lineBaseMinor(line) }))
-        .sort((left, right) => left.line.id.localeCompare(right.line.id));
-    const merchandiseSubtotalMinor = toSafeNumber(
-        lineBases.reduce((total, line) => total + BigInt(line.baseMinor), 0n),
-        "Merchandise subtotal",
-    );
-    const merchandiseQuantity = cart.lines.reduce(
-        (total, line) => total + line.quantity,
-        0,
-    );
-    const submittedCodeSet = new Set(cart.submittedCodes);
-    const knownCodeSet = new Set<string>();
+    const linesById = new Map(cart.lines.map((line) => [line.id, line]));
+    const submitted = new Set(cart.submittedCodes);
+    const knownCodes = new Set<string>();
     const rejected: PromotionEvaluationResult["rejected"] = [];
-    const eligible: EvaluatedCandidate[] = [];
-    const candidateInputs = parsedInput.data.candidates.map((rawCandidate, index) => {
-        const explicitId = rawCandidate
-            && typeof rawCandidate === "object"
-            && "id" in rawCandidate
-            && typeof rawCandidate.id === "string"
-            && rawCandidate.id.trim().length > 0
-            ? rawCandidate.id.trim()
-            : null;
-        return {
-            explicitId,
-            fallbackId: `invalid:${index}`,
-            parsed: promotionCandidateSchema.safeParse(rawCandidate),
-        };
+    const reject = (promotionId: string, reason: PromotionRejectionReason, evaluatedSavingsMinor?: number) =>
+        rejected.push({ promotionId, reason, ...(evaluatedSavingsMinor === undefined ? {} : { evaluatedSavingsMinor }) });
+
+    const rawCandidates = parsedInput.data.candidates.map((raw, index) => {
+        const id = raw && typeof raw === "object" && "id" in raw && typeof raw.id === "string" && raw.id.trim()
+            ? raw.id.trim()
+            : `invalid:${index}`;
+        return { id, parsed: promotionCandidateSchema.safeParse(raw) };
     });
-    const candidateIdCounts = new Map<string, number>();
-    const rejectedDuplicateIds = new Set<string>();
+    const idCounts = new Map<string, number>();
+    rawCandidates.forEach(({ id }) => idCounts.set(id, (idCounts.get(id) ?? 0) + 1));
 
-    for (const { explicitId } of candidateInputs) {
-        if (explicitId !== null) {
-            candidateIdCounts.set(
-                explicitId,
-                (candidateIdCounts.get(explicitId) ?? 0) + 1,
-            );
+    const merchandiseMinor = cart.lines.reduce((total, line) => total + line.unitPriceMinor * line.quantity, 0);
+    const byClass: Record<DiscountClass, Eligible[]> = { product: [], order: [], shipping: [] };
+    const duplicateReported = new Set<string>();
+    for (const { id, parsed } of rawCandidates) {
+        if ((idCounts.get(id) ?? 0) > 1 || !parsed.success) {
+            if (!duplicateReported.has(id)) reject(id, "invalid_configuration");
+            duplicateReported.add(id);
+            continue;
         }
-    }
-
-    candidateInputs.forEach(({ explicitId, fallbackId, parsed: parsedCandidate }) => {
-        if (explicitId !== null && (candidateIdCounts.get(explicitId) ?? 0) > 1) {
-            if (!rejectedDuplicateIds.has(explicitId)) {
-                rejected.push({
-                    promotionId: explicitId,
-                    reason: "invalid_configuration",
-                });
-                rejectedDuplicateIds.add(explicitId);
-            }
-            return;
+        const candidate = parsed.data;
+        candidate.codes.forEach(({ code }) => knownCodes.add(code));
+        const lifecycle = rejectForLifecycle(candidate, cart.evaluatedAtEpochSeconds);
+        if (lifecycle) {
+            reject(candidate.id, lifecycle);
+            continue;
         }
-        if (!parsedCandidate.success) {
-            rejected.push({
-                promotionId: explicitId ?? fallbackId,
-                reason: "invalid_configuration",
-            });
-            return;
-        }
-        const candidate = parsedCandidate.data;
-        candidate.codes.forEach(({ code }) => knownCodeSet.add(code));
-
-        const lifecycleReason = rejectForLifecycle(candidate, cart.evaluatedAtEpochSeconds);
-        if (lifecycleReason) {
-            rejected.push({ promotionId: candidate.id, reason: lifecycleReason });
-            return;
-        }
-
         const promotionCode = candidate.method === "code"
-            ? candidate.codes
-                .filter(({ code, isActive }) => isActive && submittedCodeSet.has(code))
-                .map(({ code }) => code)
-                .sort((left, right) => left.localeCompare(right))[0] ?? null
+            ? candidate.codes.filter(({ code, isActive }) => isActive && submitted.has(code)).map(({ code }) => code).sort()[0] ?? null
             : null;
         if (candidate.method === "code" && promotionCode === null) {
-            rejected.push({ promotionId: candidate.id, reason: "code_not_submitted" });
-            return;
+            reject(candidate.id, "code_not_submitted");
+            continue;
         }
-
-        if (
-            candidate.maxRedemptions !== null
-            && candidate.redemptionCount >= candidate.maxRedemptions
-        ) {
-            rejected.push({ promotionId: candidate.id, reason: "redemption_limit_reached" });
-            return;
+        const effect = candidate.effects[0]!;
+        const reason = rejectForRules(candidate, effect, cart);
+        if (reason) {
+            reject(candidate.id, reason);
+            continue;
         }
-        if (
-            candidate.maxRedemptionsPerCustomer !== null
-            && candidate.customerRedemptionCount >= candidate.maxRedemptionsPerCustomer
-        ) {
-            rejected.push({ promotionId: candidate.id, reason: "customer_redemption_limit_reached" });
-            return;
-        }
-        if (
-            candidate.maxDiscountSpendMinor !== null
-            && candidate.budgetCurrencyCode !== cart.currencyCode
-        ) {
-            rejected.push({ promotionId: candidate.id, reason: "budget_currency_mismatch" });
-            return;
-        }
-        if (
-            candidate.maxDiscountSpendMinor !== null
-            && candidate.discountSpendMinor >= candidate.maxDiscountSpendMinor
-        ) {
-            rejected.push({ promotionId: candidate.id, reason: "discount_budget_exhausted" });
-            return;
-        }
-
-        for (const condition of candidate.conditions) {
-            if (condition.kind === "minimum_merchandise_subtotal") {
-                if (condition.config.currencyCode !== cart.currencyCode) {
-                    rejected.push({
-                        promotionId: candidate.id,
-                        reason: "condition_currency_mismatch",
-                    });
-                    return;
-                }
-                if (merchandiseSubtotalMinor < condition.config.amountMinor) {
-                    rejected.push({
-                        promotionId: candidate.id,
-                        reason: "minimum_subtotal_not_met",
-                    });
-                    return;
-                }
-            } else if (merchandiseQuantity < condition.config.quantity) {
-                rejected.push({
-                    promotionId: candidate.id,
-                    reason: "minimum_quantity_not_met",
-                });
-                return;
-            }
-        }
-
-        const calculated = calculateCandidate(
+        const discountClass = discountClassOf(effect.target);
+        const eligible: Eligible = {
             candidate,
+            effect,
+            discountClass,
             promotionCode,
-            cart,
-            lineBases,
-            merchandiseSubtotalMinor,
-        );
-        if ("reason" in calculated) {
-            rejected.push({ promotionId: candidate.id, reason: calculated.reason });
-            return;
+            bundledShipping: candidate.effects[1] ?? null,
+            shippingMinimumMinor: shippingMinimum(candidate, discountClass === "shipping"),
+        };
+        if (discountClass === "shipping" && merchandiseMinor < eligible.shippingMinimumMinor) {
+            reject(candidate.id, "minimum_subtotal_not_met");
+            continue;
         }
-        if (calculated.totalDiscountMinor <= 0) {
-            rejected.push({ promotionId: candidate.id, reason: "no_savings" });
-            return;
+        byClass[discountClass].push(eligible);
+    }
+
+    const productOptions = byClass.product.flatMap((eligible) => {
+        const computed = computeProduct(eligible, cart.lines);
+        if (computed.total <= 0) {
+            const buyGet = eligible.effect.kind === "percentage_off" && eligible.effect.config.buy;
+            reject(eligible.candidate.id, computed.getMissing ? "get_items_missing" : buyGet ? "buy_requirement_not_met" : "no_savings");
+            return [];
         }
-        if (
-            candidate.maxDiscountSpendMinor !== null
-            && candidate.discountSpendMinor + calculated.totalDiscountMinor > candidate.maxDiscountSpendMinor
-        ) {
-            rejected.push({
-                promotionId: candidate.id,
-                reason: "discount_budget_insufficient",
-                evaluatedSavingsMinor: calculated.totalDiscountMinor,
-            });
-            return;
+        if (!withinBudget(eligible.candidate, computed.total)) {
+            reject(eligible.candidate.id, "discount_budget_insufficient", computed.total);
+            return [];
         }
-        eligible.push(calculated);
+        return [computed];
+    });
+    const shippingOptions = byClass.shipping.flatMap((eligible) => {
+        const computed = computeShipping(eligible, eligible.effect, cart.shippingAmountMinor);
+        if (computed.total <= 0) {
+            reject(eligible.candidate.id, "no_savings");
+            return [];
+        }
+        if (!withinBudget(eligible.candidate, computed.total)) {
+            reject(eligible.candidate.id, "discount_budget_insufficient", computed.total);
+            return [];
+        }
+        return [computed];
+    });
+    const fullBases = new Map(cart.lines.map((line) => [line.id, line.unitPriceMinor * line.quantity]));
+    const orderOptions = byClass.order.filter((eligible) => {
+        const computed = computeOrder(eligible, fullBases);
+        if (computed.total <= 0) reject(eligible.candidate.id, "no_savings");
+        return computed.total > 0;
     });
 
-    eligible.sort((left, right) => (
-        right.totalDiscountMinor - left.totalDiscountMinor
-        || left.candidate.priority - right.candidate.priority
-        || left.candidate.id.localeCompare(right.candidate.id)
-    ));
-    const winner = eligible[0] ?? null;
-    for (const losingCandidate of eligible.slice(1)) {
-        rejected.push({
-            promotionId: losingCandidate.candidate.id,
-            reason: "lower_savings",
-            evaluatedSavingsMinor: losingCandidate.totalDiscountMinor,
-        });
+    type Selection = { parts: Computed[]; total: number; merchandiseAfterMinor: number };
+    let best: Selection | null = null;
+    const consider = (parts: Computed[], merchandiseAfterMinor: number) => {
+        const total = parts.reduce((sum, part) => sum + part.total, 0);
+        if (total <= 0) return;
+        const count = promotionsOf(parts).length;
+        const current = best as Selection | null;
+        if (
+            !current
+            || total > current.total
+            || (total === current.total && (
+                count < promotionsOf(current.parts).length
+                || (count === promotionsOf(current.parts).length && selectionKey(parts) < selectionKey(current.parts))
+            ))
+        ) {
+            best = { parts, total, merchandiseAfterMinor };
+        }
+    };
+    /** Bundled free shipping of a chosen discount, when its minimum is met and its budget allows. */
+    const bundledPart = (primary: Computed | null, merchandiseAfterMinor: number): Computed | null => {
+        const eligible = primary?.eligible;
+        if (!eligible?.bundledShipping || merchandiseAfterMinor < eligible.shippingMinimumMinor) return null;
+        const part = computeShipping(eligible, eligible.bundledShipping, cart.shippingAmountMinor);
+        return part.total > 0 && withinBudget(eligible.candidate, primary!.total + part.total) ? part : null;
+    };
+    for (const product of [null, ...productOptions]) {
+        const remaining = new Map(fullBases);
+        product?.amounts.forEach((amount, lineId) => remaining.set(lineId, (remaining.get(lineId) ?? 0) - amount));
+        for (const orderEligible of [null, ...orderOptions]) {
+            if (product && orderEligible && !combines(product.eligible, orderEligible)) continue;
+            const order = orderEligible ? computeOrder(orderEligible, remaining) : null;
+            if (order && (order.total <= 0 || !withinBudget(order.eligible.candidate, order.total))) continue;
+            const merchandiseAfterMinor = merchandiseMinor - (product?.total ?? 0) - (order?.total ?? 0);
+            const primaries = [product, order].filter((part): part is Computed => part !== null);
+            const bundled = bundledPart(product, merchandiseAfterMinor) ?? bundledPart(order, merchandiseAfterMinor);
+            if (bundled) {
+                consider([...primaries, bundled], merchandiseAfterMinor);
+                continue;
+            }
+            for (const shipping of [null, ...shippingOptions]) {
+                if (shipping && merchandiseAfterMinor < shipping.eligible.shippingMinimumMinor) continue;
+                const parts = shipping ? [...primaries, shipping] : primaries;
+                const compatible = parts.every((left, index) =>
+                    parts.slice(index + 1).every((right) => combines(left.eligible, right.eligible)));
+                if (compatible) consider(parts, merchandiseAfterMinor);
+            }
+        }
     }
-    rejected.sort((left, right) => (
-        left.promotionId.localeCompare(right.promotionId)
-        || left.reason.localeCompare(right.reason)
-    ));
+
+    const winner = best as Selection | null;
+    const appliedIds = new Set(winner?.parts.map(({ eligible }) => eligible.candidate.id) ?? []);
+    for (const computed of productOptions) {
+        if (!appliedIds.has(computed.eligible.candidate.id)) {
+            reject(computed.eligible.candidate.id, "lower_savings", computed.total);
+        }
+    }
+    for (const computed of shippingOptions) {
+        if (appliedIds.has(computed.eligible.candidate.id)) continue;
+        const shortOfMinimum = (winner?.merchandiseAfterMinor ?? merchandiseMinor) < computed.eligible.shippingMinimumMinor;
+        reject(computed.eligible.candidate.id, shortOfMinimum ? "minimum_subtotal_not_met" : "lower_savings", computed.total);
+    }
+    for (const eligible of orderOptions) {
+        if (!appliedIds.has(eligible.candidate.id)) {
+            reject(eligible.candidate.id, "lower_savings", computeOrder(eligible, fullBases).total);
+        }
+    }
+    rejected.sort((left, right) => left.promotionId.localeCompare(right.promotionId) || left.reason.localeCompare(right.reason));
 
     return {
         evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
         applied: winner ? {
-            promotionId: winner.candidate.id,
-            promotionRevision: winner.candidate.revision,
-            promotionName: winner.candidate.name,
-            method: winner.candidate.method,
-            promotionCode: winner.promotionCode,
-            totalDiscountMinor: winner.totalDiscountMinor,
-            allocations: winner.allocations,
+            totalDiscountMinor: winner.total,
+            discounts: promotionsOf(winner.parts).map((candidate) => {
+                const parts = winner.parts.filter(({ eligible }) => eligible.candidate.id === candidate.id);
+                const { eligible } = parts[0]!;
+                return {
+                    promotionId: candidate.id,
+                    promotionRevision: candidate.revision,
+                    promotionName: candidate.name,
+                    method: candidate.method,
+                    promotionCode: eligible.promotionCode,
+                    discountClass: eligible.discountClass,
+                    totalDiscountMinor: parts.reduce((sum, part) => sum + part.total, 0),
+                };
+            }),
+            allocations: winner.parts.flatMap((computed) => toAllocations(computed, linesById, cart)),
         } : null,
         rejected,
-        unmatchedCodes: cart.submittedCodes.filter((code) => !knownCodeSet.has(code)),
+        unmatchedCodes: cart.submittedCodes.filter((code) => !knownCodes.has(code)),
     };
 }

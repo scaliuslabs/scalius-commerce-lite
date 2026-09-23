@@ -184,11 +184,9 @@ export async function getHomepageData(db: Database) {
     homepageDocument.fromRows(rows),
   ]);
   const seoSettings = seo.stored ? {
-    siteTitle: seo.value.siteTitle,
     homepageTitle: seo.value.homepageTitle,
     homepageMetaDescription: seo.value.homepageMetaDescription,
   } : {
-    siteTitle: "Scalius Commerce",
     homepageTitle: "Welcome to Scalius Commerce",
     homepageMetaDescription: "Your one-stop shop for everything amazing.",
   };
@@ -588,6 +586,7 @@ export async function getLayoutData(
     seo: {
       discovery: seo.value.discovery,
       returnPolicy: seo.value.returnPolicy,
+      socialImage: seo.value.socialImage,
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),

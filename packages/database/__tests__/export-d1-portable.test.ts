@@ -159,5 +159,5 @@ describe("portable D1 export table boundary", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });

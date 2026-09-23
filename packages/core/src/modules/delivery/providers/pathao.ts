@@ -1,4 +1,5 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
+import { fromMinor } from "@scalius/shared/money";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import type {
   PathaoCredentials,
@@ -195,7 +196,7 @@ export class PathaoProvider implements DeliveryProviderInterface {
       const amountToCollect =
         options?.codAmount !== undefined
           ? options.codAmount
-          : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
+          : fromMinor(Math.max(0, order.balanceDueMinor), order.currencyDecimalPlaces);
       if (!Number.isSafeInteger(amountToCollect) || amountToCollect < 0) {
         return {
           success: false,

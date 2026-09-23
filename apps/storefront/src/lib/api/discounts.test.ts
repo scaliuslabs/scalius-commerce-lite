@@ -22,7 +22,6 @@ describe("validateDiscount", () => {
   it("sends the code, cart, and buyer phone only in a POST body", async () => {
     const result = await validateDiscount(
       "SAVE10",
-      1200,
       [{ id: "prod_1", variantId: "var_1", price: 600, quantity: 2 } as never],
       60,
       "+8801712345678",
@@ -36,7 +35,6 @@ describe("validateDiscount", () => {
     expect(request!.url).not.toMatch(/SAVE10|8801712345678|prod_1/);
     expect(await request!.json()).toEqual({
       code: "SAVE10",
-      total: 1200,
       shippingCost: 60,
       customerPhone: "+8801712345678",
       items: [{ id: "prod_1", variantId: "var_1", price: 600, quantity: 2 }],

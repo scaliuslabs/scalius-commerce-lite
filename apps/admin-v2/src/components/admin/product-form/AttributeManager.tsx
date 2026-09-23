@@ -1,4 +1,3 @@
-// src/components/admin/product-form/AttributeManager.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +19,9 @@ import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "@/lib/api-helpers";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
+import { translate, useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import {
   getApiV1AdminAttributes,
   postApiV1AdminAttributes,
@@ -73,6 +75,7 @@ export function AttributeManager({
   initialAttributes,
   onAttributesChange,
 }: AttributeManagerProps) {
+  const t = useMessages(productMessages);
   const { attributes: attributeActions } = useCatalogActionPermissions();
   const [assignedAttributes, setAssignedAttributes] = useState<AssignedAttribute[]>(
     () => initialAttributes.map((attribute) => ({ ...attribute })),
@@ -153,7 +156,7 @@ export function AttributeManager({
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
     if (slug.length < 2) {
-      toast.error("Use at least two letters or numbers for the attribute name");
+      toast.error(t("attributeNameShort"));
       return false;
     }
 
@@ -174,10 +177,10 @@ export function AttributeManager({
         ...assignedAttributes,
         { attributeId: created.id, value: "", name: created.name, slug: created.slug },
       ]);
-      toast.success("Attribute created. Choose a value to finish the assignment.");
+      toast.success(t("attributeCreated"));
       return true;
     } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to create attribute"));
+      toast.error(getServerFnError(error, translate(resourceMessages, "actionFailed")));
       return false;
     } finally {
       setIsCreating(false);
@@ -187,7 +190,7 @@ export function AttributeManager({
   const handleAddAttribute = (definition: AttributeDefinition) => {
     if (assignedAttributes.some((item) => item.attributeId === definition.id)) return;
     if (assignedAttributes.length >= 90) {
-      toast.error("A product can have at most 90 attributes");
+      toast.error(t("attributeLimit", { max: 90 }));
       return;
     }
     rememberDefinitions([definition]);
@@ -204,30 +207,24 @@ export function AttributeManager({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-2">
+      <div className="divide-y">
         {assignedAttributes.map((attribute, index) => {
           const definition = definitions.get(attribute.attributeId);
           const unavailable = !definitionLookupLoading && !definitionLookupFailed && !definition;
-          const label = definition?.name ?? attribute.name ?? (
-            definitionLookupLoading ? "Loading attribute…" : "Unavailable attribute"
+          const label = definition?.name ?? attribute.name ?? t(
+            definitionLookupLoading ? "loading" : "attributeRemoved",
           );
           const needsValue = attribute.value.trim().length === 0;
 
           return (
-            <div
-              key={attribute.attributeId}
-              className={cn(
-                "grid grid-cols-[minmax(0,1fr)_2rem] gap-x-2 gap-y-1 rounded-md border bg-card p-2 sm:grid-cols-[9rem_minmax(0,1fr)_2rem]",
-                (needsValue || unavailable) && "border-amber-300/80",
-              )}
-            >
-              <div className="min-w-0 self-center sm:row-span-2">
-                <div className="truncate text-sm font-medium" title={label}>{label}</div>
-                {unavailable && (
-                  <div className="text-xs text-amber-700">Removed or in trash</div>
-                )}
+            <div key={attribute.attributeId} className="flex flex-wrap items-start gap-2 py-2 sm:flex-nowrap">
+              <div className="min-w-0 flex-1 text-body font-medium sm:w-36 sm:flex-none sm:pt-2" title={label}>
+                <span className="block truncate">{label}</span>
+                {unavailable && attribute.name ? (
+                  <span className="block font-normal text-destructive">{t("attributeRemoved")}</span>
+                ) : null}
               </div>
-              <div className="min-w-0 sm:col-start-2">
+              <div className="order-last w-full space-y-1 sm:order-none sm:w-auto sm:flex-1">
                 <AttributeValueSelector
                   attributeId={attribute.attributeId}
                   attributeName={label}
@@ -236,24 +233,21 @@ export function AttributeManager({
                   disabled={unavailable}
                   onChange={(value) => handleValueChange(index, value)}
                 />
+                {needsValue && !unavailable ? (
+                  <p className="text-body text-destructive">{t("attributeNeedsValue")}</p>
+                ) : null}
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={`Remove ${label}`}
+                aria-label={t("removeAttribute", { name: label })}
                 onClick={() => commitAssignments(
                   assignedAttributes.filter((_, itemIndex) => itemIndex !== index),
                 )}
-                className="col-start-2 row-start-1 h-8 w-8 text-muted-foreground hover:text-destructive sm:col-start-3"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              {needsValue && !unavailable && (
-                <p className="col-span-2 text-xs text-amber-700 sm:col-start-2 sm:col-span-1">
-                  Choose or enter a value before saving.
-                </p>
-              )}
             </div>
           );
         })}
@@ -270,15 +264,10 @@ export function AttributeManager({
       />
 
       {definitionLookupFailed && assignedAttributes.length > 0 && (
-        <p className="flex items-center gap-1.5 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5" />
-          Attribute names could not be refreshed. Existing values are preserved.
+        <p className="flex items-start gap-2 text-body text-destructive">
+          <span className="flex h-5 shrink-0 items-center"><AlertCircle className="h-4 w-4" /></span>
+          {t("attributeNamesFailed")}
         </p>
-      )}
-      {assignedAttributes.length === 0 && (
-        <div className="rounded-md border border-dashed bg-muted/10 px-3 py-4 text-center text-sm text-muted-foreground">
-          Add facts such as brand, material, warranty, or care instructions.
-        </div>
       )}
     </div>
   );
@@ -301,6 +290,8 @@ function AttributeDefinitionCombobox({
   onSelect: (definition: AttributeDefinition) => void;
   onCreate: (name: string) => Promise<boolean>;
 }) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<AttributeDefinition[]>([]);
@@ -333,7 +324,7 @@ function AttributeDefinitionCombobox({
       onDefinitionsLoaded(data.attributes);
     } catch (loadError: unknown) {
       if (requestId === requestSequence.current) {
-        setError(getServerFnError(loadError, "Could not load attributes"));
+        setError(getServerFnError(loadError, translate(resourceMessages, "loadFailed")));
       }
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
@@ -363,42 +354,35 @@ function AttributeDefinitionCombobox({
           variant="outline"
           disabled={disabled}
           aria-expanded={open}
-          className="h-9 w-full justify-start px-3 font-normal text-muted-foreground"
+          className="w-full justify-start"
         >
           <Plus className="mr-2 h-4 w-4" />
-          {disabled ? "Attribute limit reached" : "Add attribute"}
+          {t("addAttribute")}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        collisionPadding={12}
-        className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] max-w-[calc(100vw-1.5rem)] p-0"
-      >
+      <PopoverContent align="start" sideOffset={4} collisionPadding={12} className="w-80 p-0">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search attributes…"
+            placeholder={t("searchAttributes")}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
             {loading && items.length === 0 && (
-              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading attributes…
+              <div className="flex items-center justify-center gap-2 py-6 text-body text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> {t("loading")}
               </div>
             )}
             {error && (
-              <div className="space-y-2 p-3 text-center text-sm text-destructive">
+              <div className="space-y-2 p-3 text-center text-body text-destructive">
                 <p>{error}</p>
                 <Button type="button" size="sm" variant="outline" onClick={() => void loadDefinitions(1, true)}>
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" /> Retry
+                  <RotateCcw className="mr-2 h-4 w-4" /> {r("retry")}
                 </Button>
               </div>
             )}
             {!loading && !error && items.length === 0 && (
-              <CommandEmpty className="px-3 py-5 text-center text-sm text-muted-foreground">
-                No matching attributes.
-              </CommandEmpty>
+              <CommandEmpty>{r("noResults")}</CommandEmpty>
             )}
             <CommandGroup>
               {items.map((item) => (
@@ -410,11 +394,9 @@ function AttributeDefinitionCombobox({
                     onSelect(item);
                     setOpen(false);
                   }}
-                  className="text-sm"
                 >
                   <Check className={cn("mr-2 h-4 w-4", assignedIds.has(item.id) ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  <span className="ml-3 truncate text-xs text-muted-foreground">{item.slug}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -424,12 +406,12 @@ function AttributeDefinitionCombobox({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-full text-sm"
+                  className="w-full"
                   disabled={loading}
                   onClick={() => void loadDefinitions(page + 1, false)}
                 >
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Load more
+                  {t("loadMore")}
                 </Button>
               </div>
             )}
@@ -442,12 +424,11 @@ function AttributeDefinitionCombobox({
                     onSelect={() => void onCreate(search).then((created) => {
                       if (created) setOpen(false);
                     })}
-                    className="text-sm"
                   >
                     {isCreating
                       ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       : <Plus className="mr-2 h-4 w-4" />}
-                    Create “{search.trim()}”
+                    {t("createNamed", { name: search.trim() })}
                   </CommandItem>
                 </CommandGroup>
               </>
@@ -479,6 +460,8 @@ function AttributeValueSelector({
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<FetchedValue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -509,7 +492,7 @@ function AttributeValueSelector({
       setTotalPages(data.totalPages);
     } catch (loadError: unknown) {
       if (requestId === requestSequence.current) {
-        setError(getServerFnError(loadError, "Could not load values"));
+        setError(getServerFnError(loadError, translate(resourceMessages, "loadFailed")));
       }
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
@@ -541,9 +524,9 @@ function AttributeValueSelector({
       setItems((current) => mergeAttributeValuePages(current, [{ value: nextValue, isPreset: true }]));
       onChange(nextValue);
       setOpen(false);
-      toast.success(`Saved “${nextValue}” as a reusable ${attributeName} value`);
+      toast.success(t("valueSaved"));
     } catch (saveError: unknown) {
-      toast.error(getServerFnError(saveError, "Could not save preset value"));
+      toast.error(getServerFnError(saveError, translate(resourceMessages, "actionFailed")));
     } finally {
       setSavingPreset(false);
     }
@@ -562,47 +545,40 @@ function AttributeValueSelector({
           type="button"
           variant="outline"
           role="combobox"
-          aria-label={`${attributeName} value`}
+          aria-label={t("valueOf", { name: attributeName })}
           aria-expanded={open}
           aria-invalid={!value.trim()}
           disabled={disabled}
-          className="h-8 w-full justify-between px-2.5 text-left text-sm font-normal"
+          className="w-full justify-between"
         >
           <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value || "Choose or enter a value…"}
+            {value || t("chooseValue")}
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        collisionPadding={12}
-        className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] max-w-[calc(100vw-1.5rem)] p-0"
-      >
+      <PopoverContent align="start" sideOffset={4} collisionPadding={12} className="w-72 p-0">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={`Search ${attributeName.toLowerCase()} values…`}
+            placeholder={t("searchValues")}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
             {loading && items.length === 0 && (
-              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading values…
+              <div className="flex items-center justify-center gap-2 py-6 text-body text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> {t("loading")}
               </div>
             )}
             {error && (
-              <div className="space-y-2 p-3 text-center text-sm text-destructive">
+              <div className="space-y-2 p-3 text-center text-body text-destructive">
                 <p>{error}</p>
                 <Button type="button" size="sm" variant="outline" onClick={() => void loadValues(1, true)}>
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" /> Retry
+                  <RotateCcw className="mr-2 h-4 w-4" /> {r("retry")}
                 </Button>
               </div>
             )}
             {!loading && !error && items.length === 0 && !normalizedSearch && (
-              <CommandEmpty className="px-3 py-5 text-center text-sm text-muted-foreground">
-                No saved values yet. Type a value to use it for this product.
-              </CommandEmpty>
+              <CommandEmpty>{t("noSavedValues")}</CommandEmpty>
             )}
             <CommandGroup>
               {items.map((item) => (
@@ -613,11 +589,10 @@ function AttributeValueSelector({
                     onChange(item.value);
                     setOpen(false);
                   }}
-                  className="text-sm"
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === item.value ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{item.value}</span>
-                  {item.isPreset && <span className="ml-2 text-xs text-muted-foreground">Preset</span>}
+                  {item.isPreset && <span className="ml-2 text-body text-muted-foreground">{t("savedValue")}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -627,12 +602,12 @@ function AttributeValueSelector({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-full text-sm"
+                  className="w-full"
                   disabled={loading}
                   onClick={() => void loadValues(page + 1, false)}
                 >
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Load more
+                  {t("loadMore")}
                 </Button>
               </div>
             )}
@@ -640,15 +615,15 @@ function AttributeValueSelector({
               <>
                 <CommandSeparator />
                 <CommandGroup>
-                  <CommandItem onSelect={useCustomValue} className="text-sm">
-                    <Plus className="mr-2 h-4 w-4" /> Use “{search.trim()}” for this product
+                  <CommandItem onSelect={useCustomValue}>
+                    <Plus className="mr-2 h-4 w-4" /> {t("useValue", { value: search.trim() })}
                   </CommandItem>
                   {canSavePreset && (
-                    <CommandItem disabled={savingPreset} onSelect={() => void savePresetAndUse()} className="text-sm">
+                    <CommandItem disabled={savingPreset} onSelect={() => void savePresetAndUse()}>
                       {savingPreset
                         ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         : <Plus className="mr-2 h-4 w-4" />}
-                      Save as preset and use
+                      {t("saveAndUseValue")}
                     </CommandItem>
                   )}
                 </CommandGroup>

@@ -20,6 +20,17 @@ import {
 } from "@tanstack/react-table";
 
 /**
+ * Per-column hints. `mobile` places the cell in the automatic phone card:
+ * "primary" (title line), "secondary" (muted second line) or "status" (right).
+ * Columns without it are left out of the card.
+ */
+export interface ServerColumnMeta {
+  mobile?: "primary" | "secondary" | "status";
+  /** Money, counts and quantities: right-aligned with tabular figures. */
+  numeric?: boolean;
+}
+
+/**
  * The dashboard tables page, sort, and filter on the server. Register only the
  * client capabilities the shared renderer actually invokes so Table v9 can
  * tree-shake the unused client row-model and interaction machinery.
@@ -30,6 +41,7 @@ export const serverTableFeatures = tableFeatures({
   rowSortingFeature,
   columnVisibilityFeature,
   columnSizingFeature,
+  columnMeta: {} as ServerColumnMeta,
 });
 
 export type ServerTableFeatures = typeof serverTableFeatures;

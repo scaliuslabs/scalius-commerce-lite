@@ -7,14 +7,15 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
 import { FormLabel } from "~/components/ui/form";
 import { Plus } from "lucide-react";
 import type { Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "~/hooks/use-currency";
+import { useMessages } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
-import { orderItemVariantLabel } from "./order-item-presentation";
+import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
 import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
@@ -29,10 +30,12 @@ interface ItemSelectionProps {
   quantity: number;
   setQuantity: (quantity: number) => void;
   handleAddItem: () => void;
-  calculateDiscountedPrice: (product: Product, variantId: string | null) => string;
-  isLoadingVariants?: boolean;
 }
 
+/**
+ * Variant + quantity row for a product with several variants (single-variant
+ * products are added straight from search).
+ */
 export function ItemSelection({
   selectedProduct,
   selectedVariant,
@@ -40,129 +43,65 @@ export function ItemSelection({
   quantity,
   setQuantity,
   handleAddItem,
-  calculateDiscountedPrice,
-  isLoadingVariants = false,
 }: ItemSelectionProps) {
   const { refs, form, isEdit } = useOrderForm();
-  const { symbol } = useCurrency();
+  const { fmt } = useCurrency();
+  const t = useMessages(orderFormMessages);
   const items = form.watch("items");
   const [isQuantityDraftValid, setIsQuantityDraftValid] = React.useState(true);
-  const hasSkus = selectedProduct.variants.length > 0;
-  const needsSkuSelection = selectedProduct.variants.length > 1 && !selectedVariant;
-  const effectiveVariant = selectedVariant
-    ? selectedProduct.variants.find((variant) => variant.id === selectedVariant)
-    : selectedProduct.variants.length === 1
-      ? selectedProduct.variants[0]
-      : null;
-  const remainingStock = isEdit
-    ? null
-    : remainingStockForNewOrderLine(effectiveVariant, items);
-  const alreadyStaged = effectiveVariant
-    ? stagedVariantQuantity(items, effectiveVariant.id)
-    : 0;
+  const variants = selectedProduct.variants;
+  const variant = variants.find((candidate) => candidate.id === selectedVariant);
+  const remainingStock = isEdit ? null : remainingStockForNewOrderLine(variant, items);
+  const alreadyStaged = variant ? stagedVariantQuantity(items, variant.id) : 0;
   const stockGuidanceId = "new-order-item-stock-guidance";
-  const addDisabled = isLoadingVariants
-    || !hasSkus
-    || needsSkuSelection
-    || !isQuantityDraftValid
-    || remainingStock === 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 border rounded-md bg-muted/20 items-end">
-      <div className="col-span-full mb-2">
-        <h3 className="text-lg font-medium">{selectedProduct.name}</h3>
-        {selectedProduct.discountPercentage ? (
-          <div className="flex items-center gap-2 mt-1 text-sm">
-            <span className="line-through text-muted-foreground">
-              {symbol}{selectedProduct.price.toLocaleString()}
-            </span>
-            <span className="text-green-600 font-medium">
-              {symbol}
-              {parseFloat(
-                calculateDiscountedPrice(selectedProduct, null)
-              ).toLocaleString()}
-            </span>
-            <Badge variant="secondary">
-              {selectedProduct.discountPercentage}% OFF
-            </Badge>
-          </div>
-        ) : (
-          <div className="mt-1 text-sm">
-            {symbol}{selectedProduct.price.toLocaleString()}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <FormLabel htmlFor="variant-select-trigger" className="mb-2 block">
-          SKU
-        </FormLabel>
-        {!isLoadingVariants && selectedProduct.variants.length === 1 ? (
-          <output id="variant-select-trigger" className="block min-h-9 content-center break-words text-sm font-medium">
-            {orderItemVariantLabel(selectedProduct.variants[0])}
-          </output>
-        ) : (
-          <Select
-            value={selectedVariant}
-            disabled={isLoadingVariants || selectedProduct.variants.length <= 1}
-            onValueChange={(value) => {
-              setSelectedVariant(value);
-              setTimeout(
-                () => document.getElementById("quantity-input")?.focus(),
-                0
-              );
+    <div className="grid items-start gap-4 sm:grid-cols-3">
+      <div className="space-y-2">
+        <FormLabel htmlFor="variant-select-trigger">{t("variant")}</FormLabel>
+        <Select
+          value={selectedVariant}
+          disabled={variants.length === 0}
+          onValueChange={(value) => {
+            setSelectedVariant(value);
+            setTimeout(() => document.getElementById("quantity-input")?.focus(), 0);
+          }}
+        >
+          <SelectTrigger
+            id="variant-select-trigger"
+            className="w-full"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                document.getElementById("quantity-input")?.focus();
+              }
             }}
           >
-            <SelectTrigger
-              id="variant-select-trigger"
-              className="w-full"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  document.getElementById("quantity-input")?.focus();
-                }
-              }}
-            >
-              <SelectValue placeholder={isLoadingVariants ? "Loading SKUs..." : hasSkus ? "Select SKU" : "No active SKU"} />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {selectedProduct.variants
-                .filter((variant) => variant.id)
-                .map((variant) => {
-                  const available = (variant.stock ?? 0) - (variant.reservedStock ?? 0);
-
-                  return (
-                    <SelectItem key={variant.id} value={variant.id}>
-                      <div className="flex flex-col w-full">
-                        <span className="font-medium">{orderItemVariantLabel(variant)}</span>
-                        <div className="flex justify-between text-xs text-muted-foreground mt-1 w-full">
-                          <span>{variant.trackInventory === false ? "No stock limit" : `Available: ${available}`}</span>
-                          <span className="ml-4">
-                            {selectedProduct.discountPercentage ? (
-                              <span className="text-green-600">
-                                {symbol}
-                                {parseFloat(
-                                  calculateDiscountedPrice(selectedProduct, variant.id)
-                                ).toLocaleString()}
-                              </span>
-                            ) : (
-                              <span>{symbol}{variant.price.toLocaleString()}</span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-            </SelectContent>
-          </Select>
-        )}
+            <SelectValue
+              placeholder={variants.length > 0 ? t("chooseVariant") : t("noVariantForSale")}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {variants.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                <div className="flex flex-col">
+                  <span className="font-medium">{orderItemVariantLabel(option)}</span>
+                  <span className="text-body text-muted-foreground">
+                    {option.trackInventory === false
+                      ? t("noStockLimit")
+                      : t("inStock", { count: (option.stock ?? 0) - (option.reservedStock ?? 0) })}
+                    {" · "}
+                    {fmt(discountedUnitPrice(selectedProduct, option))}
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <div>
-        <FormLabel htmlFor="quantity-input" className="mb-2 block">
-          Quantity
-        </FormLabel>
+      <div className="space-y-2">
+        <FormLabel htmlFor="quantity-input">{t("quantity")}</FormLabel>
         <OrderItemQuantityInput
           id="quantity-input"
           quantity={quantity}
@@ -171,12 +110,11 @@ export function ItemSelection({
           onValidityChange={setIsQuantityDraftValid}
           onEnter={() => {
             refs.addItemButtonRef.current?.focus();
-            // A slight delay ensures the focus-then-click works reliably.
+            // Let focus settle before adding.
             setTimeout(() => {
               handleAddItem();
             }, 100);
           }}
-          placeholder="Quantity"
           maxQuantity={remainingStock ?? undefined}
           maximumExceededMessage={remainingStock === null
             ? undefined
@@ -189,24 +127,26 @@ export function ItemSelection({
           <p
             id={stockGuidanceId}
             className={remainingStock === 0
-              ? "mt-1 text-xs text-destructive"
-              : "mt-1 text-xs text-muted-foreground"}
+              ? "text-body text-destructive"
+              : "text-body text-muted-foreground"}
           >
             {remainingStockMessage(remainingStock, alreadyStaged)}
           </p>
         ) : null}
       </div>
 
-      <div className="self-end">
+      <div className="space-y-2">
+        {/* Keeps the button on the fields' line under their labels. */}
+        <FormLabel aria-hidden className="invisible hidden sm:block">{t("add")}</FormLabel>
         <Button
           type="button"
           onClick={handleAddItem}
-          disabled={addDisabled}
+          disabled={!variant || !isQuantityDraftValid || remainingStock === 0}
           className="w-full"
           ref={refs.addItemButtonRef}
         >
-          <Plus className="mr-2 h-4 w-4" />
-          {isLoadingVariants ? "Loading SKUs..." : "Add Item"}
+          <Plus className="h-4 w-4" />
+          {t("add")}
         </Button>
       </div>
     </div>

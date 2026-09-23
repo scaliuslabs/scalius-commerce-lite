@@ -7,8 +7,13 @@ import {
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { loadPromotionRuntimeCandidate } from "./promotions.checkout";
 import { executePromotionRuleMutationBatch } from "./promotions.revision";
+import { getPromotionAggregate, getPromotionUsageStats } from "./promotions.service";
+
+async function loadWithUsage(db: Database, promotionId: string) {
+    const aggregate = await getPromotionAggregate(db, promotionId);
+    return aggregate ? { ...aggregate, ...await getPromotionUsageStats(db, promotionId, null) } : null;
+}
 
 export type PromotionLifecycleStatus = "active" | "paused";
 
@@ -26,9 +31,6 @@ export async function activatePromotion(
     if (!parent) throw new NotFoundError("Promotion not found");
     if (parent.status === "archived") throw new ConflictError("Archived promotions cannot be activated.");
     if (parent.status === "active") throw new ConflictError("Promotion is already active.");
-    if (parent.method !== "code") {
-        throw new ValidationError("Automatic promotions are not available for activation yet.");
-    }
     const [activeCode, activeEffect] = await db.batch([
         db.select({ id: promotionCodes.id }).from(promotionCodes).where(and(
             eq(promotionCodes.promotionId, promotionId),
@@ -39,14 +41,14 @@ export async function activatePromotion(
             isNull(promotionEffects.deletedAt),
         )).limit(1),
     ]);
-    if (!activeCode[0]) {
-        throw new ValidationError("Activate at least one promotion code before activation.");
+    if (parent.method === "code" && !activeCode[0]) {
+        throw new ValidationError("Add a discount code before activating.");
     }
     if (!activeEffect[0]) {
-        throw new ValidationError("Add at least one promotion effect before activation.");
+        throw new ValidationError("Add a discount value before activating.");
     }
 
-    const promotion = await loadPromotionRuntimeCandidate(db, promotionId, null);
+    const promotion = await loadWithUsage(db, promotionId);
     if (!promotion) throw new NotFoundError("Promotion not found");
     if (promotion.endsAtEpochSeconds !== null && promotion.endsAtEpochSeconds <= evaluatedAtEpochSeconds) {
         throw new ValidationError("A promotion whose schedule has ended cannot be activated.");
@@ -78,7 +80,7 @@ export async function pausePromotion(
     promotionId: string,
     expectedRevision: number,
 ): Promise<{ id: string; revision: number; status: "paused" }> {
-    const promotion = await loadPromotionRuntimeCandidate(db, promotionId, null);
+    const promotion = await getPromotionAggregate(db, promotionId);
     if (!promotion) throw new NotFoundError("Promotion not found");
     if (promotion.status !== "active") {
         throw new ConflictError("Only an active promotion can be paused.");

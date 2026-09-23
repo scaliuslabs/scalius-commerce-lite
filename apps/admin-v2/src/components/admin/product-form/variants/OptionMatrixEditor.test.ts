@@ -1,12 +1,17 @@
+import { translate } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { describe, expect, it } from "vitest";
 import {
   combinationKey,
   getOptionMatrixIssue,
+  followProductDefaults,
   getSimpleSkuIssue,
+  guessOptionType,
   materializeCombination,
   materializeVariants,
   materializeVariantsExcluding,
   missingOptionCombinations,
+  withGuessedOptionType,
   type DraftOption,
   type DraftVariant,
 } from "./option-matrix-editor-model";
@@ -42,6 +47,8 @@ const variant = (
   discountPercentage: 0,
   discountAmount: 0,
 });
+
+const issue = (key: ProductMessageKey, vars?: Record<string, number>) => translate(productMessages, key, vars);
 
 describe("option matrix editor model", () => {
   it("accepts the persisted internal Code 128 barcode type", () => {
@@ -172,9 +179,9 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, [
       variant("one", ["white"]),
       variant("two", ["white"]),
-    ], [], false)).toBe("Every option combination must be unique.");
+    ], [], false)).toBe(issue("issueDuplicateVariant"));
     expect(getOptionMatrixIssue(options, [variant("one", ["white"])], [], false))
-      .toContain("unused option values");
+      .toBe(issue("issueUnusedValue"));
   });
 
   it("blocks pending topology and normalized duplicate identities", () => {
@@ -182,45 +189,74 @@ describe("option matrix editor model", () => {
       option("one", "Finish", [["matte", "Matte"]], "material"),
       option("two", " finish ", [["gloss", "Gloss"]], "material"),
     ];
-    expect(getOptionMatrixIssue(options, [], [], true)).toBe("Option names must be unique.");
+    expect(getOptionMatrixIssue(options, [], [], true)).toBe(issue("issueOptionNamesUnique"));
   });
 
   it("blocks duplicate SKUs, barcodes, invalid images, and excessive flat discounts", () => {
     const options = [option("format", "Format", [["print", "Print"], ["digital", "Digital"]])];
     const rows = [variant("one", ["print"]), variant("two", ["digital"])];
     rows[1]!.sku = rows[0]!.sku.toLowerCase();
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe("Every SKU must be unique.");
+    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueSkuUnique"));
 
     rows[1]!.sku = "SKU-two";
     rows[0]!.barcode = "123";
     rows[0]!.barcodeType = "custom";
     rows[1]!.barcode = "123";
     rows[1]!.barcodeType = "custom";
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe("Every barcode must be unique.");
+    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueBarcodeUnique"));
 
     rows[1]!.barcode = "456";
     rows[0]!.imageId = "missing";
-    expect(getOptionMatrixIssue(options, rows, [], false)).toContain("no longer in this product");
+    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issuePhotoRemoved"));
     expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 0, 0, true)).toBeNull();
 
     rows[0]!.imageId = null;
     rows[0]!.discountType = "flat";
     rows[0]!.discountAmount = 101;
-    expect(getOptionMatrixIssue(options, rows, [], false)).toContain("cannot exceed its price");
+    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueDiscountOverPrice"));
   });
 
   it("requires exact simple-stock allocation and protects committed units", () => {
     const options = [option("format", "Format", [["print", "Print"]])];
     const rows = [variant("one", ["print"], 4)];
-    expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 7, 0)).toContain("Allocate exactly 7");
-    expect(getOptionMatrixIssue(options, rows, [], false, new Map([["one", 5]]), 0, 0)).toContain("lower than committed");
+    expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 7, 0)).toBe(issue("issueAllocateStock", { required: 7, allocated: 4 }));
+    expect(getOptionMatrixIssue(options, rows, [], false, new Map([["one", 5]]), 0, 0)).toBe(issue("issueBelowCommitted"));
   });
 
   it("validates simple product inventory", () => {
     expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, false)).toBeNull();
-    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, true)).toContain("at least 3");
-    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: true, stock: 1 }, 2, true)).toContain("lower than committed");
-    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 2, true)).toContain("Release committed");
+    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, true)).toBe(issue("issueSkuShort"));
+    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: true, stock: 1 }, 2, true)).toBe(issue("issueBelowCommitted"));
+    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 2, true)).toBe(issue("issueUntrackCommitted"));
     expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 0, true)).toBeNull();
+  });
+
+  it("picks the option type from a known name unless the merchant chose one", () => {
+    expect(guessOptionType(" Colour ")).toBe("color");
+    expect(guessOptionType("রঙ")).toBe("color");
+    expect(guessOptionType("Fit")).toBe("none");
+
+    const blank = option("one", "", []);
+    const named = withGuessedOptionType(blank, { ...blank, name: "Size" }, [blank]);
+    expect(named.standardMapping).toBe("size");
+
+    const chosen = { ...option("one", "Fit", []), standardMapping: "material" as const };
+    expect(withGuessedOptionType(chosen, { ...chosen, name: "Size" }, [chosen]).standardMapping).toBe("material");
+
+    const sizeTaken = option("two", "Size", [], "size");
+    expect(withGuessedOptionType(blank, { ...blank, name: "size" }, [blank, sizeTaken]).standardMapping).toBe("none");
+  });
+
+  it("keeps new variants on the product title and price until the merchant edits them", () => {
+    const options = [option("size", "Size", [["s", "S"], ["m", "M"]])];
+    const [small, medium] = materializeVariants(options, [], "", 0, 0);
+    expect(small!.sku).toBe("SKU-1");
+
+    const edited = { ...medium!, sku: "MY-OWN", price: 99 };
+    const saved = { ...small!, id: "var_saved" };
+    const followed = followProductDefaults(options, [small!, edited, saved], { name: "", price: 0 }, { name: "Polo", price: 500 });
+    expect(followed[0]).toMatchObject({ sku: "POLO-S", price: 500 });
+    expect(followed[1]).toMatchObject({ sku: "MY-OWN", price: 99 });
+    expect(followed[2]).toBe(saved);
   });
 });

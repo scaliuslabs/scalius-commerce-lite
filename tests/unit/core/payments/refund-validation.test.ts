@@ -318,8 +318,10 @@ async function importRefundServiceWithMocks(options: {
 function createRefundDbWithLostStatusCas() {
   const order = {
     id: "ord_refund_cas",
-    totalAmount: 100,
-    paidAmount: 100,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
+    totalAmountMinor: 10_000,
+    paidAmountMinor: 10000,
     paymentStatus: PaymentStatus.PAID,
     paymentMethod: "cod",
     status: OrderStatus.CONFIRMED,
@@ -328,7 +330,8 @@ function createRefundDbWithLostStatusCas() {
   const payment = {
     id: "pay_1",
     orderId: order.id,
-    amount: 100,
+    amountMinor: 10_000,
+    currency: "BDT",
     paymentMethod: "cod",
     paymentType: "full",
     status: "succeeded",
@@ -342,11 +345,14 @@ function createRefundDbWithLostStatusCas() {
     orderId: order.id,
     refundPaymentId: "refund_ord_refund_cas_7_1",
     providerRefundId: "refund_gateway_1",
+    amountMinor: 10_000,
+    currency: "BDT",
   };
   const refundPayment = {
     paymentType: "refund",
     status: "refunded",
-    amount: 100,
+    amountMinor: 10_000,
+    currency: "BDT",
   };
   const selectResults = [order, [], null, null, [payment], [refundAttempt], order, [payment, refundPayment]];
   let selectIndex = 0;
@@ -370,8 +376,10 @@ function createRefundDbWithLostStatusCas() {
 function createAlreadyRefundedCancelledDb() {
   const order = {
     id: "ord_refund_cas",
-    totalAmount: 100,
-    paidAmount: 0,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
+    totalAmountMinor: 10_000,
+    paidAmountMinor: 0,
     paymentStatus: PaymentStatus.REFUNDED,
     paymentMethod: "cod",
     status: OrderStatus.CANCELLED,
@@ -389,8 +397,10 @@ function createAlreadyRefundedCancelledDb() {
 function createAlreadyRefundedCancelledDeductedDb() {
   const order = {
     id: "ord_refund_cas",
-    totalAmount: 100,
-    paidAmount: 0,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
+    totalAmountMinor: 10_000,
+    paidAmountMinor: 0,
     paymentStatus: PaymentStatus.REFUNDED,
     paymentMethod: "cod",
     status: OrderStatus.CANCELLED,

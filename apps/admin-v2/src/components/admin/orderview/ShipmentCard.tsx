@@ -1,19 +1,10 @@
-import React from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
@@ -25,13 +16,26 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
-import { toast } from "sonner";
-import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
-import type { Order, OrderShipment } from "./types";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+  getProviderReadinessLabel,
+  getProviderReadinessMessage,
+  resolveProviderReadiness,
+} from "~/components/admin/delivery-providers/ProviderIcon";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { fulfillmentStatusLabel, orderMessages } from "~/i18n/orders";
+import { resourceMessages } from "~/i18n/resource";
 import {
   useCreateOrderShipment,
   useLookupUnknownShipment,
@@ -39,247 +43,67 @@ import {
   useResolveUnknownShipment,
 } from "~/lib/api-mutations/orders";
 import { queryKeys } from "~/lib/query-keys";
-import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
-import { formatOrderDate } from "./formatters";
-import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { canTransitionTo } from "@scalius/shared/order-state";
-import {
-  getProviderReadinessLabel,
-  getProviderReadinessMessage,
-  resolveProviderReadiness,
-} from "~/components/admin/delivery-providers/ProviderIcon";
+import { cn } from "@scalius/shared/utils";
+import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
+import { OperationalReadNotice } from "./OperationalReadNotice";
+import { formatOrderDate } from "./formatters";
+import { statusBadgeVariant } from "./status-badges";
+import type { Order, OrderShipment } from "./types";
 
-interface ShipmentCardProps {
-  order: Order;
+type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
+type EvidenceSource = "courier_portal" | "courier_support";
+const OUTCOMES: Outcome[] = ["confirmed_existing", "confirmed_not_created", "confirmed_cancelled"];
+const EVIDENCE_SOURCES: EvidenceSource[] = ["courier_portal", "courier_support"];
+
+function courierName(providerType: string | null | undefined): string {
+  const name = providerType?.trim() || "courier";
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-const CreateShipmentForm = ({
-  order,
-}: {
-  order: Order;
-}) => {
-  const queryClient = useQueryClient();
-  const [selectedProviderId, setSelectedProviderId] = React.useState("");
-  const shipmentMutation = useCreateOrderShipment();
-  const refundLocked = Boolean(order.activeRefundOperation?.active);
-  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const deliveryProviders = order.deliveryProviders ?? [];
-  const selectedProvider = deliveryProviders.find(
-    (provider) => provider.id === selectedProviderId,
-  );
-  const selectedReadiness = selectedProvider
-    ? resolveProviderReadiness(selectedProvider)
-    : null;
-  const selectedProviderBlocker = selectedReadiness &&
-    !selectedReadiness.canCreateShipment
-      ? getProviderReadinessMessage(selectedReadiness)
-      : "";
-  const readyProviderCount = deliveryProviders.filter(
-    (provider) => resolveProviderReadiness(provider).canCreateShipment,
-  ).length;
-  const providersRead = order.operationalReads?.deliveryProviders ?? {
-    status: "ready" as const,
-    refreshing: false,
-  };
+function trackingUrlFor(shipment: OrderShipment): string | null {
+  if (!shipment.trackingId) return null;
+  if (shipment.trackingUrl) return shipment.trackingUrl;
+  const id = encodeURIComponent(shipment.trackingId);
+  if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${id}`;
+  if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${id}`;
+  return null;
+}
 
-  const retryProviders = () => {
-    void queryClient.refetchQueries({
-      queryKey: queryKeys.settings.deliveryProviders(),
-      type: "active",
-    });
-  };
+function toIsoTimestamp(value: OrderShipment["lastChecked"]): string | undefined {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return new Date(value).toISOString();
+  return undefined;
+}
 
-  const handleCreateShipment = () => {
-    if (refundLocked) {
-      toast.error("Order locked", { description: "Complete or reconcile the active refund before creating shipments." });
-      return;
-    }
-    if (shipmentLocked) {
-      toast.error("Shipment recovery active", { description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before creating another shipment." });
-      return;
-    }
-    if (!selectedProviderId) {
-      toast.error("Error", { description: "Please select a delivery provider." });
-      return;
-    }
-    if (!selectedProvider || !selectedReadiness?.canCreateShipment) {
-      toast.error("Provider cannot create shipments", {
-        description: selectedProviderBlocker ||
-          "Complete provider setup before creating shipments.",
-      });
-      return;
-    }
-    shipmentMutation.mutate({
-      orderId: order.id,
-      providerId: selectedProviderId,
-      options: {},
-    });
-  };
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Truck className="h-4 w-4" />
-          Create shipment
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 p-4">
-        {order.activeRefundOperation && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{order.activeRefundOperation.message}</span>
-            </div>
-          </div>
-        )}
-        <div className="space-y-3">
-          {providersRead.status === "loading" ? (
-            <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading delivery providers…
-            </div>
-          ) : providersRead.status === "unavailable" ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">Delivery providers unavailable</p>
-                  <p className="mt-1 text-xs opacity-90">Provider shipment creation is paused until setup can be verified.</p>
-                </div>
-                <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryProviders} disabled={providersRead.refreshing}>
-                  {providersRead.refreshing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
-                  Retry
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {providersRead.status === "stale" ? (
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1">Showing the last loaded provider setup. Retry before creating a shipment.</span>
-                  <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryProviders} disabled={providersRead.refreshing}>
-                    {providersRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                    Retry
-                  </Button>
-                </div>
-              ) : null}
-              {deliveryProviders.length > 0 ? (
-                <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Delivery provider
-                </label>
-                <Select
-                  value={selectedProviderId}
-                  onValueChange={setSelectedProviderId}
-                  disabled={
-                    providersRead.status !== "ready" ||
-                    shipmentMutation.isPending ||
-                    refundLocked ||
-                    shipmentLocked
-                  }
-                >
-                  <SelectTrigger
-                    aria-label="Delivery provider"
-                    className="h-11 border-border bg-background text-sm text-foreground sm:h-9"
-                  >
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent className="border-border bg-card text-foreground">
-                    {deliveryProviders.map((provider) => (
-                      <SelectItem
-                        key={provider.id}
-                        value={provider.id}
-                        disabled={!resolveProviderReadiness(provider).canCreateShipment}
-                        className="text-foreground"
-                      >
-                        {provider.name} - {getProviderReadinessLabel(resolveProviderReadiness(provider))}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedProviderBlocker && (
-                  <p className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-                    {selectedProviderBlocker}
-                  </p>
-                )}
-                {readyProviderCount === 0 && (
-                  <p className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-                    No shipment-ready providers.{" "}
-                    {getProviderReadinessMessage(resolveProviderReadiness(deliveryProviders[0]!))}
-                  </p>
-                )}
-              </div>
-              <Button
-                className="min-h-11 w-full sm:min-h-10"
-                disabled={
-                  shipmentMutation.isPending ||
-                  !selectedProviderId ||
-                  selectedReadiness?.canCreateShipment === false ||
-                  providersRead.status !== "ready" ||
-                  refundLocked ||
-                  shipmentLocked
-                }
-                onClick={handleCreateShipment}
-              >
-                {shipmentMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                {shipmentMutation.isPending ? "Creating..." : "Create shipment"}
-              </Button>
-                </>
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 p-3 text-sm">
-                  <div>
-                    <p className="font-medium">No delivery providers configured</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Add a provider for tracked courier shipments.</p>
-                  </div>
-                  <Button asChild type="button" variant="outline" size="sm" className="h-11 sm:h-8">
-                    <Link to="/admin/settings/delivery-providers">Configure providers</Link>
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-          <ManualFulfillmentDialog order={order} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-const SHIPMENT_RECOVERY_CLASS = {
-  info: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200",
-  warning: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
-  danger: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200",
-} as const;
-
-function UnknownShipmentResolutionDialog({
+/**
+ * The courier may or may not have booked this order. The merchant must check
+ * the courier account and confirm before anything can be booked again.
+ */
+function CourierCheckDialog({
   order,
   shipmentId,
   open,
   onOpenChange,
-  focusReturnRef,
 }: {
   order: Order;
   shipmentId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  focusReturnRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   const mutation = useResolveUnknownShipment();
-  const [outcome, setOutcome] = React.useState<
-    "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled"
-  >("confirmed_existing");
-  const [evidenceSource, setEvidenceSource] = React.useState<"courier_portal" | "courier_support">("courier_portal");
-  const [evidenceNote, setEvidenceNote] = React.useState("");
-  const [externalId, setExternalId] = React.useState("");
-  const [trackingId, setTrackingId] = React.useState("");
-  const [confirmed, setConfirmed] = React.useState(false);
-  const operationKey = React.useRef<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome>("confirmed_existing");
+  const [evidenceSource, setEvidenceSource] = useState<EvidenceSource>("courier_portal");
+  const [evidenceNote, setEvidenceNote] = useState("");
+  const [externalId, setExternalId] = useState("");
+  const [trackingId, setTrackingId] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const operationKey = useRef<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return;
     setOutcome("confirmed_existing");
     setEvidenceSource("courier_portal");
@@ -290,7 +114,8 @@ function UnknownShipmentResolutionDialog({
     operationKey.current = null;
   }, [open]);
 
-  const invalidateAttestation = () => {
+  // Any edit after ticking the box needs a fresh confirmation and key.
+  const edited = () => {
     setConfirmed(false);
     operationKey.current = null;
   };
@@ -298,9 +123,11 @@ function UnknownShipmentResolutionDialog({
     operationKey.current = null;
     onOpenChange(false);
   };
+  const ready = confirmed
+    && evidenceNote.trim().length >= 8
+    && (outcome !== "confirmed_existing" || externalId.trim().length > 0);
   const submit = () => {
-    if (!confirmed || evidenceNote.trim().length < 8 ||
-      (outcome === "confirmed_existing" && !externalId.trim())) return;
+    if (!ready) return;
     operationKey.current ??= crypto.randomUUID();
     mutation.mutate({
       orderId: order.id,
@@ -312,110 +139,71 @@ function UnknownShipmentResolutionDialog({
       evidenceNote: evidenceNote.trim(),
       confirmationAccepted: true,
       ...(outcome === "confirmed_existing"
-        ? {
-            externalId: externalId.trim(),
-            ...(trackingId.trim() ? { trackingId: trackingId.trim() } : {}),
-          }
+        ? { externalId: externalId.trim(), ...(trackingId.trim() ? { trackingId: trackingId.trim() } : {}) }
         : {}),
     }, { onSuccess: close });
   };
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      if (!mutation.isPending) onOpenChange(nextOpen);
-    }}>
-      <DialogContent
-        className="sm:max-w-lg"
-        aria-describedby="unknown-shipment-resolution-description"
-        onCloseAutoFocus={(event) => {
-          if (focusReturnRef.current?.isConnected) {
-            event.preventDefault();
-            focusReturnRef.current.focus();
-          }
-        }}
-      >
+    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Record courier confirmation</DialogTitle>
-          <DialogDescription id="unknown-shipment-resolution-description">
-            Use the original order number and provider account to confirm what happened. A failed lookup or missing result is not proof that no booking exists.
-          </DialogDescription>
+          <DialogTitle>{t("courier.checkTitle")}</DialogTitle>
+          <DialogDescription>{t("courier.checkHelp", { courier: courierName(order.shipmentRecovery?.providerType) })}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="unknown-shipment-outcome">Confirmed outcome</Label>
-            <Select value={outcome} onValueChange={(value) => {
-              setOutcome(value as typeof outcome);
-              invalidateAttestation();
-            }}>
-              <SelectTrigger id="unknown-shipment-outcome" className="h-11" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
+            <Label htmlFor="courier-outcome">{t("courier.outcome")}</Label>
+            <Select value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
+              <SelectTrigger id="courier-outcome" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="confirmed_existing">Booking exists</SelectItem>
-                <SelectItem value="confirmed_not_created">Booking was not created</SelectItem>
-                <SelectItem value="confirmed_cancelled">Booking was cancelled</SelectItem>
+                {OUTCOMES.map((value) => <SelectItem key={value} value={value}>{t(`courier.outcome.${value}`)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          {outcome === "confirmed_existing" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+          {outcome === "confirmed_existing" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="unknown-shipment-consignment">Consignment ID</Label>
-                <Input id="unknown-shipment-consignment" value={externalId} onChange={(event) => {
-                  setExternalId(event.target.value);
-                  invalidateAttestation();
-                }} maxLength={180} disabled={mutation.isPending} />
+                <Label htmlFor="courier-consignment">{t("courier.consignmentId")}</Label>
+                <Input id="courier-consignment" value={externalId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setExternalId(e.target.value); edited(); }} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="unknown-shipment-tracking">Tracking ID (optional)</Label>
-                <Input id="unknown-shipment-tracking" value={trackingId} onChange={(event) => {
-                  setTrackingId(event.target.value);
-                  invalidateAttestation();
-                }} maxLength={180} disabled={mutation.isPending} />
+                <Label htmlFor="courier-tracking">{t("shipments.trackingId")}</Label>
+                <Input id="courier-tracking" value={trackingId} maxLength={180} disabled={mutation.isPending} onChange={(e) => { setTrackingId(e.target.value); edited(); }} />
               </div>
             </div>
-          )}
+          ) : null}
           <div className="space-y-2">
-            <Label htmlFor="unknown-shipment-source">Confirmation source</Label>
-            <Select value={evidenceSource} onValueChange={(value) => {
-              setEvidenceSource(value as typeof evidenceSource);
-              invalidateAttestation();
-            }}>
-              <SelectTrigger id="unknown-shipment-source" className="h-11" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
+            <Label htmlFor="courier-source">{t("courier.source")}</Label>
+            <Select value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
+              <SelectTrigger id="courier-source" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="courier_portal">Courier portal</SelectItem>
-                <SelectItem value="courier_support">Courier support</SelectItem>
+                {EVIDENCE_SOURCES.map((value) => <SelectItem key={value} value={value}>{t(`courier.source.${value}`)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="unknown-shipment-evidence">Confirmation details</Label>
+            <Label htmlFor="courier-evidence">{t("courier.details")}</Label>
             <Textarea
-              id="unknown-shipment-evidence"
+              id="courier-evidence"
               value={evidenceNote}
-              onChange={(event) => {
-                setEvidenceNote(event.target.value);
-                invalidateAttestation();
-              }}
               maxLength={500}
               disabled={mutation.isPending}
-              placeholder="Where and when you confirmed the outcome; include a support reference when available."
+              placeholder={t("courier.detailsPlaceholder")}
+              onChange={(e) => { setEvidenceNote(e.target.value); edited(); }}
             />
           </div>
-          <div className="flex items-start gap-2 rounded-md border p-3">
-            <Checkbox id="unknown-shipment-confirmation" checked={confirmed} disabled={mutation.isPending} onCheckedChange={(value) => setConfirmed(value === true)} />
-            <Label htmlFor="unknown-shipment-confirmation" className="text-sm font-normal leading-5">
-              I confirmed this exact order and provider outcome. If a booking exists, the consignment above belongs to this order.
-            </Label>
+          <div className="flex items-start gap-3">
+            <span className="flex h-5 items-center">
+              <Checkbox id="courier-confirmed" checked={confirmed} disabled={mutation.isPending} onCheckedChange={(value) => setConfirmed(value === true)} />
+            </span>
+            <Label htmlFor="courier-confirmed">{t("courier.confirm")}</Label>
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={close} disabled={mutation.isPending}>Cancel</Button>
-          <Button
-            type="button"
-            onClick={submit}
-            disabled={mutation.isPending || !confirmed || evidenceNote.trim().length < 8 || (outcome === "confirmed_existing" && !externalId.trim())}
-          >
-            {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Record confirmation
+          <Button type="button" variant="outline" onClick={close} disabled={mutation.isPending}>{r("cancel")}</Button>
+          <Button type="button" onClick={submit} disabled={mutation.isPending || !ready}>
+            {r("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -423,347 +211,290 @@ function UnknownShipmentResolutionDialog({
   );
 }
 
-function ShipmentRecoveryNotice({
-  order,
-  canManageShipments,
-  focusReturnRef,
-}: {
+function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   order: Order;
-  canManageShipments: boolean;
-  focusReturnRef: React.RefObject<HTMLDivElement | null>;
+  canManage: boolean;
+  onCourierCheck: () => void;
 }) {
+  const t = useMessages(orderDetailMessages);
   const recovery = order.shipmentRecovery;
-  const reconcileMutation = useReconcileShipment();
+  const repairMutation = useReconcileShipment();
   const lookupMutation = useLookupUnknownShipment();
-  const [resolutionOpen, setResolutionOpen] = React.useState(false);
-  const lookupOperationKey = React.useRef<string | null>(null);
+  const lookupKey = useRef<string | null>(null);
   if (!recovery || recovery.state === "none") return null;
-  const canRepair =
-    canManageShipments &&
-    recovery.canRepair &&
-    recovery.state === "needs_attention" &&
-    recovery.activeLock &&
-    Boolean(recovery.shipmentId);
-  const canResolveUnknown =
-    canManageShipments &&
-    recovery.state === "needs_attention" &&
-    recovery.activeLock &&
-    recovery.status === "reconcile_required" &&
-    !recovery.canRepair &&
-    recovery.unknownOutcome;
 
-  const handleRepair = () => {
-    if (!canRepair || !recovery.shipmentId) return;
-    reconcileMutation.mutate({
-      orderId: order.id,
-      shipmentId: recovery.shipmentId,
-    });
-  };
-  const handleLookup = () => {
-    if (!recovery.shipmentId) return;
-    lookupOperationKey.current ??= crypto.randomUUID();
-    lookupMutation.mutate({
-      orderId: order.id,
-      shipmentId: recovery.shipmentId,
-      expectedOrderVersion: order.version,
-      operationKey: lookupOperationKey.current,
-    }, { onSuccess: () => { lookupOperationKey.current = null; } });
+  const blocking = recovery.state === "needs_attention" && recovery.activeLock && Boolean(recovery.shipmentId);
+  const canRepair = canManage && blocking && recovery.canRepair;
+  const needsCourierCheck = canManage && blocking && recovery.status === "reconcile_required"
+    && !recovery.canRepair && recovery.unknownOutcome === true;
+  const shipmentId = recovery.shipmentId ?? "";
+
+  const lookup = () => {
+    lookupKey.current ??= crypto.randomUUID();
+    lookupMutation.mutate(
+      { orderId: order.id, shipmentId, expectedOrderVersion: order.version, operationKey: lookupKey.current },
+      { onSuccess: () => { lookupKey.current = null; } },
+    );
   };
 
   return (
-    <div className={`mt-6 rounded-lg border p-3 text-sm ${SHIPMENT_RECOVERY_CLASS[recovery.severity]}`}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div className="min-w-0">
-          <p className="font-medium">{recovery.label}</p>
-          {recovery.message && <p className="mt-1 text-xs opacity-90">{recovery.message}</p>}
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs opacity-80">
-            {recovery.status && <span>Status: {recovery.status.replaceAll("_", " ")}</span>}
-            {recovery.providerType && <span>Provider: {recovery.providerType}</span>}
-            {recovery.canRetryCreate && <span>Retry: create a new shipment after fixing setup.</span>}
-            {recovery.canRefresh && <span>Refresh can retry provider status sync.</span>}
-          </div>
-        </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {canResolveUnknown && recovery.providerType === "steadfast" && (
-            <Button type="button" size="sm" variant="outline" className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background" disabled={lookupMutation.isPending} onClick={handleLookup}>
-              {lookupMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-              Check Steadfast
+    <div role="status" className="space-y-2">
+      <p className={cn("font-medium", recovery.severity === "danger" && "text-destructive")}>{recovery.label}</p>
+      {recovery.message ? <p className="text-muted-foreground">{recovery.message}</p> : null}
+      {needsCourierCheck || canRepair ? (
+        <div className="flex flex-wrap gap-2">
+          {needsCourierCheck && recovery.providerType === "steadfast" ? (
+            <Button type="button" size="sm" variant="outline" disabled={lookupMutation.isPending} onClick={lookup}>
+              {t("courier.checkSteadfast")}
             </Button>
-          )}
-          {canResolveUnknown && recovery.shipmentId && (
-            <Button type="button" size="sm" variant="outline" className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background" onClick={() => setResolutionOpen(true)}>
-              Record confirmation
+          ) : null}
+          {needsCourierCheck ? (
+            <Button type="button" size="sm" variant="outline" onClick={onCourierCheck}>
+              {t("courier.checkTitle")}
             </Button>
-          )}
-          {canRepair && (
+          ) : null}
+          {canRepair ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 border-current/30 bg-background/70 px-3 text-xs hover:bg-background"
-              disabled={reconcileMutation.isPending}
-              onClick={handleRepair}
+              disabled={repairMutation.isPending}
+              onClick={() => repairMutation.mutate({ orderId: order.id, shipmentId })}
             >
-              {reconcileMutation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-              {reconcileMutation.isPending ? "Repairing..." : "Repair shipment"}
+              {t("shipments.repair")}
             </Button>
-          )}
+          ) : null}
         </div>
-      </div>
-      {canResolveUnknown && recovery.shipmentId && (
-        <UnknownShipmentResolutionDialog
-          order={order}
-          shipmentId={recovery.shipmentId}
-          open={resolutionOpen}
-          onOpenChange={setResolutionOpen}
-          focusReturnRef={focusReturnRef}
-        />
-      )}
+      ) : null}
     </div>
   );
 }
 
-const ShipmentHistoryItem = ({
+function ShipmentRow({
   shipment,
-  orderId,
-  onStatusUpdated,
-  canManageShipments,
-  refreshDisabledReason,
+  canManage,
+  refreshBlockedReason,
+  onUpdated,
 }: {
   shipment: OrderShipment;
-  orderId: string;
-  onStatusUpdated: () => void;
-  canManageShipments: boolean;
-  refreshDisabledReason?: string;
-}) => {
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const hasRefreshableProvider = Boolean(shipment.providerId);
-  const canRefreshShipment =
-    canManageShipments && hasRefreshableProvider && !refreshDisabledReason;
+  canManage: boolean;
+  refreshBlockedReason?: string;
+  onUpdated: () => void;
+}) {
+  const t = useMessages(orderDetailMessages);
+  const [expanded, setExpanded] = useState(false);
+  const refreshable = Boolean(shipment.providerId);
+  const trackingUrl = trackingUrlFor(shipment);
+  const provider = shipment.providerType === "manual"
+    ? shipment.courierName || t("fulfill.defaultCourier")
+    : shipment.providerName ?? shipment.courierName ?? shipment.providerType;
 
   return (
-    <div key={shipment.id} className="p-4">
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col">
-          <span className="mb-1 text-xs text-muted-foreground">
-            {formatOrderDate(shipment.createdAt) ?? "N/A"}
-          </span>
-          <ShipmentStatusIndicator
-            shipment={{
-              id: shipment.id,
-              status: shipment.status,
-              orderId: orderId,
-              lastChecked:
-                shipment.lastChecked instanceof Date
-                  ? shipment.lastChecked.toISOString()
-                  : typeof shipment.lastChecked === "string"
-                    ? shipment.lastChecked
-                    : typeof shipment.lastChecked === "number"
-                      ? new Date(shipment.lastChecked).toISOString()
-                    : undefined,
-            }}
-            onStatusUpdated={onStatusUpdated}
-            canRefresh={canRefreshShipment}
-            showLastChecked={hasRefreshableProvider}
-            refreshDisabledReason={
-              canManageShipments && hasRefreshableProvider
-                ? refreshDisabledReason
-                : undefined
-            }
-          />
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="h-8 w-8 p-0 text-foreground hover:bg-muted/50 hover:text-primary"
-        >
-          {isExpanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </Button>
+    <li className="space-y-1 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ShipmentStatusIndicator
+          shipment={{ id: shipment.id, status: shipment.status, orderId: shipment.orderId, lastChecked: toIsoTimestamp(shipment.lastChecked) }}
+          onStatusUpdated={onUpdated}
+          canRefresh={canManage && refreshable && !refreshBlockedReason}
+          showLastChecked={refreshable}
+          refreshDisabledReason={canManage && refreshable ? refreshBlockedReason : undefined}
+        />
+        <span className="text-muted-foreground">{formatOrderDate(shipment.createdAt)}</span>
       </div>
-
-      <div className="mt-3 space-y-1 border-t border-border pt-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Provider:</span>
-          <span className="text-foreground">
-            {shipment.providerName ?? shipment.courierName ?? shipment.providerType}
-          </span>
-        </div>
-        {shipment.courierName && shipment.courierName !== shipment.providerName && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Courier:</span>
-            <span className="text-foreground">{shipment.courierName}</span>
-          </div>
-        )}
-        {shipment.trackingId && (() => {
-          const trackingUrl = shipment.trackingUrl ?? (shipment.providerType === "pathao"
-            ? `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`
-            : shipment.providerType === "steadfast"
-              ? `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`
-              : null);
-
-          return (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Tracking ID:</span>
-              <div className="flex flex-col items-end gap-1">
-                <span className="font-mono text-xs">{shipment.trackingId}</span>
-                {trackingUrl && (
-                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
-                    <a href={trackingUrl} target="_blank" rel="noopener noreferrer">
-                      View Courier Tracking <ExternalLink className="h-3 w-3 ml-1" />
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-        {shipment.note && (
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Note:</span>
-            <span className="text-right text-foreground">{shipment.note}</span>
-          </div>
-        )}
-      </div>
-
-      {isExpanded && shipment.metadata && (
-        <div className="mt-3 border-t border-border pt-3">
-          <h4 className="mb-2 text-sm font-medium text-foreground">
-            Detailed Information
-          </h4>
-          <ShipmentMetadataDisplay metadata={shipment.metadata} />
-        </div>
-      )}
-    </div>
+      <p>
+        {provider}
+        {shipment.providerType !== "manual" && shipment.courierName && shipment.courierName !== shipment.providerName ? ` · ${shipment.courierName}` : ""}
+      </p>
+      {shipment.trackingId ? (
+        <p className="text-muted-foreground">
+          {t("shipments.trackingId")}: <span className="font-mono">{shipment.trackingId}</span>
+          {trackingUrl ? (
+            <>
+              {" · "}
+              <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                {t("shipments.track")}
+              </a>
+            </>
+          ) : null}
+        </p>
+      ) : null}
+      {shipment.note ? <p className="text-muted-foreground">{shipment.note}</p> : null}
+      {shipment.metadata ? (
+        <>
+          <Button type="button" variant="link" size="sm" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+            {expanded ? t("shipments.hideDetails") : t("shipments.showDetails")}
+          </Button>
+          {expanded ? <ShipmentMetadataDisplay metadata={shipment.metadata} /> : null}
+        </>
+      ) : null}
+    </li>
   );
-};
+}
 
-export function ShipmentCard({ order }: ShipmentCardProps) {
+function BookCourier({ order, focusRequest }: { order: Order; focusRequest?: number }) {
+  const t = useMessages(orderDetailMessages);
   const queryClient = useQueryClient();
-  const shipmentHistoryHeadingRef = React.useRef<HTMLDivElement>(null);
-  const orderActions = useOrderActionPermissions();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [providerId, setProviderId] = useState("");
+  const mutation = useCreateOrderShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
+  const providers = order.deliveryProviders ?? [];
+  const selected = providers.find((provider) => provider.id === providerId);
+  const readiness = selected ? resolveProviderReadiness(selected) : null;
+  const noneReady = providers.length > 0 && providers.every((provider) => !resolveProviderReadiness(provider).canCreateShipment);
+  const blocker = readiness && !readiness.canCreateShipment
+    ? getProviderReadinessMessage(readiness)
+    : noneReady ? getProviderReadinessMessage(resolveProviderReadiness(providers[0]!)) : "";
+  const read = order.operationalReads?.deliveryProviders ?? { status: "ready" as const, refreshing: false };
+  const locked = refundLocked || shipmentLocked;
+  // Pathao books by City → Zone (→ Area); without them the courier rejects the booking.
+  const missingArea = selected?.type === "pathao" && (!order.city || !order.zone);
+  const canEditOrder = useOrderActionPermissions().canEditOrders
+    && (order.fullEditReadiness.allowed || order.amendmentReadiness?.allowed === true);
+
+  useEffect(() => {
+    if (focusRequest) triggerRef.current?.focus();
+  }, [focusRequest]);
+
+  const book = () => {
+    if (refundLocked) return void toast.error(t("locked.refund"));
+    if (shipmentLocked) return void toast.error(t("locked.shipment"));
+    if (!providerId) return void toast.error(t("shipments.chooseCourier"));
+    if (!selected || !readiness?.canCreateShipment) return void toast.error(blocker || t("shipments.courierNotReady"));
+    if (missingArea) return void toast.error(t("shipments.needsArea"));
+    mutation.mutate({ orderId: order.id, providerId, options: {} });
   };
 
-  const hasCreateShipmentActions =
-    orderActions.canManageOrderShipments
+  return (
+    <section className="space-y-2 border-t pt-4">
+      <OperationalReadNotice
+        read={read}
+        label={t("shipments.couriersFailed")}
+        onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.settings.deliveryProviders(), type: "active" })}
+      />
+      {read.status !== "loading" && read.status !== "unavailable" ? (
+        providers.length > 0 ? (
+          <>
+            <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Select value={providerId} onValueChange={setProviderId} disabled={read.status !== "ready" || mutation.isPending || locked}>
+                <SelectTrigger id="book-courier" ref={triggerRef}>
+                  <SelectValue placeholder={t("shipments.chooseCourier")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map((provider) => {
+                    const providerReadiness = resolveProviderReadiness(provider);
+                    return (
+                      <SelectItem key={provider.id} value={provider.id} disabled={!providerReadiness.canCreateShipment}>
+                        {provider.name} · {getProviderReadinessLabel(providerReadiness)}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <Button
+                className="shrink-0"
+                onClick={book}
+                disabled={mutation.isPending || !providerId || readiness?.canCreateShipment === false || read.status !== "ready" || locked || missingArea}
+              >
+                {t("shipments.book")}
+              </Button>
+            </div>
+            {blocker ? <p className="text-muted-foreground">{blocker}</p> : null}
+            {missingArea ? (
+              <p className="text-muted-foreground">
+                {t("shipments.needsArea")}
+                {canEditOrder ? (
+                  <>
+                    {" "}
+                    <Link to="/admin/orders/$orderId/edit" params={{ orderId: order.id }} className="text-primary hover:underline">
+                      {t("edit")}
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-muted-foreground">{t("shipments.noCouriers")}</p>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/settings/shipping">{t("shipments.connectCourier")}</Link>
+            </Button>
+          </div>
+        )
+      ) : null}
+      <ManualFulfillmentDialog order={order} />
+    </section>
+  );
+}
+
+export function ShipmentCard({ order, bookRequest }: { order: Order; bookRequest?: number }) {
+  const t = useMessages(orderDetailMessages);
+  const o = useMessages(orderMessages);
+  const queryClient = useQueryClient();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [courierCheckOpen, setCourierCheckOpen] = useState(false);
+  const canManage = useOrderActionPermissions().canManageOrderShipments;
+  const read = order.operationalReads?.shipments ?? { status: "ready" as const, refreshing: false };
+  const shipments = order.shipments ?? [];
+  const canBook = canManage
     && order.items.length > 0
     && order.fulfillmentStatus !== "complete"
     && canTransitionTo("order", order.status, "shipped");
-  const hasShipments = order.shipments && order.shipments.length > 0;
-  const shipmentsRead = order.operationalReads?.shipments ?? {
-    status: "ready" as const,
-    refreshing: false,
+  const refreshBlockedReason = order.activeRefundOperation?.active
+    ? t("locked.refund")
+    : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
   };
-  const retryShipments = () => {
-    void queryClient.refetchQueries({
-      queryKey: queryKeys.orders.shipments(order.id),
-      type: "active",
-    });
-  };
-  const shipmentRefreshDisabledReason = refundLocked
-    ? "Shipment refresh is locked while refund recovery is active."
-    : shipmentLocked
-      ? order.shipmentRecovery?.message ?? "Shipment refresh is locked while shipment recovery is active."
-    : undefined;
+
+  useEffect(() => {
+    if (bookRequest) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [bookRequest]);
 
   return (
-    <>
-      <ShipmentRecoveryNotice
-        order={order}
-        canManageShipments={orderActions.canManageOrderShipments}
-        focusReturnRef={shipmentHistoryHeadingRef}
-      />
-
-      {hasCreateShipmentActions && (
-        <CreateShipmentForm order={order} />
-      )}
-
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-          <CardTitle ref={shipmentHistoryHeadingRef} tabIndex={-1} className="flex items-center gap-2 text-base">
-            <Truck className="h-4 w-4" />
-            Shipment history
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {shipmentsRead.status === "loading" ? (
-            <div className="flex min-h-24 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading shipment history…
-            </div>
-          ) : shipmentsRead.status === "unavailable" ? (
-            <div className="flex min-h-28 flex-col items-center justify-center gap-3 p-4 text-center">
-              <div>
-                <p className="text-sm font-medium text-destructive">Shipment history unavailable</p>
-                <p className="mt-1 text-xs text-muted-foreground">Existing shipments were not assumed empty.</p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="min-h-11 sm:min-h-9"
-                onClick={retryShipments}
-                disabled={shipmentsRead.refreshing}
-              >
-                {shipmentsRead.refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                Retry
-              </Button>
-            </div>
-          ) : (
-            <>
-              {shipmentsRead.status === "stale" ? (
-                <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1">Showing the last loaded shipment data. Refresh failed.</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-11 shrink-0 px-2 text-xs sm:h-7"
-                    onClick={retryShipments}
-                    disabled={shipmentsRead.refreshing}
-                  >
-                    {shipmentsRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                    Retry
-                  </Button>
-                </div>
-              ) : null}
-              {hasShipments ? (
-                <div className="divide-y divide-border">
-              {order.shipments?.map((shipment) => (
-                <ShipmentHistoryItem
+    <Card ref={cardRef} id="order-shipments" className="scroll-mt-4">
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle>{t("shipments.title")}</CardTitle>
+        {order.fulfillmentStatus ? (
+          <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>{fulfillmentStatusLabel(o, order.fulfillmentStatus)}</Badge>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ShipmentRecoveryNotice order={order} canManage={canManage} onCourierCheck={() => setCourierCheckOpen(true)} />
+        <OperationalReadNotice
+          read={read}
+          label={t("shipments.loadFailed")}
+          onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.orders.shipments(order.id), type: "active" })}
+        />
+        {read.status === "ready" || read.status === "stale" ? (
+          shipments.length > 0 ? (
+            <ul className="divide-y">
+              {shipments.map((shipment) => (
+                <ShipmentRow
                   key={shipment.id}
                   shipment={shipment}
-                  orderId={order.id}
-                  onStatusUpdated={handleRefresh}
-                  canManageShipments={orderActions.canManageOrderShipments}
-                  refreshDisabledReason={shipmentRefreshDisabledReason}
+                  canManage={canManage}
+                  refreshBlockedReason={refreshBlockedReason}
+                  onUpdated={refresh}
                 />
               ))}
-                </div>
-              ) : (
-                <div className="p-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">No shipments yet</p>
-                  {hasCreateShipmentActions ? (
-                    <p className="mt-1">Create a provider shipment above or record an own-courier fulfillment.</p>
-                  ) : null}
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </>
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">{t("shipments.empty")}</p>
+          )
+        ) : null}
+        {canBook ? <BookCourier order={order} focusRequest={bookRequest} /> : null}
+      </CardContent>
+      <CourierCheckDialog
+        order={order}
+        shipmentId={order.shipmentRecovery?.shipmentId ?? ""}
+        open={courierCheckOpen && Boolean(order.shipmentRecovery?.shipmentId)}
+        onOpenChange={setCourierCheckOpen}
+      />
+    </Card>
   );
 }

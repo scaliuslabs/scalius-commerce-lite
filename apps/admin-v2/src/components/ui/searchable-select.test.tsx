@@ -72,7 +72,7 @@ describe("SearchableSelect", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(
       document.body.querySelector('[data-slot="searchable-select-content"]')?.className,
-    ).toContain("w-[var(--radix-popover-trigger-width)]");
+    ).toContain("w-(--radix-popover-trigger-width)");
     expect(
       document.body.querySelector('[data-slot="searchable-select-list"]')?.className,
     ).toContain("max-h-60");

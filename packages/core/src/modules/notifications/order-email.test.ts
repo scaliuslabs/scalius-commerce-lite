@@ -38,15 +38,13 @@ describe("customer order email composition and delivery", () => {
     setting("company_name", "River & Loom", "business_info");
     setting("email", "support@example.test", "business_info");
     setting("phone", "+880 1700-000000", "business_info");
-    sqlite.exec(`INSERT INTO products (id, name, price, slug) VALUES ('product', 'Current catalog name', 999, 'email-product');
-      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone,
-        total_amount, shipping_charge, discount_amount, currency_code, currency_decimal_places,
+    sqlite.exec(`INSERT INTO products (id, name, price_minor, slug) VALUES ('product', 'Current catalog name', 99900, 'email-product');
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, currency_code, currency_decimal_places,
         subtotal_amount_minor, shipping_amount_minor, discount_amount_minor, tax_amount_minor, total_amount_minor,
-        tax_label, prices_include_tax, status, payment_method, payment_status, paid_amount, balance_due)
-      VALUES ('order_email', 'Email Buyer', '+8801700000000', 'Synthetic address', 'city', 'zone',
-        258, 60, 20, 'BDT', 2, 20000, 6000, 2000, 1800, 25800, 'VAT', 0, 'confirmed', 'cod', 'unpaid', 0, 258);
-      INSERT INTO order_items (id, order_id, product_id, quantity, price, product_name, variant_label, unit_price_minor, line_subtotal_minor)
-      VALUES ('item', 'order_email', 'product', 2, 100, 'Saved cotton shirt', 'Indigo / M', 10000, 20000);
+        tax_label, prices_include_tax, status, payment_method, payment_status, paid_amount_minor, balance_due_minor)
+      VALUES ('order_email', 'Email Buyer', '+8801700000000', 'Synthetic address', 'city', 'zone', 'BDT', 2, 20000, 6000, 2000, 1800, 25800, 'VAT', 0, 'confirmed', 'cod', 'unpaid', 0, 25800);
+      INSERT INTO order_items (id, order_id, product_id, quantity, product_name, variant_label, unit_price_minor, line_subtotal_minor)
+      VALUES ('item', 'order_email', 'product', 2, 'Saved cotton shirt', 'Indigo / M', 10000, 20000);
       INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload)
       VALUES ('outbox_email', 'email-test', 'order_email', 'order_confirmed', 'test', '{}');`);
   });
@@ -121,15 +119,15 @@ describe("customer order email composition and delivery", () => {
   });
 
   it("keeps item facts and money in the same snapshot when an amendment follows the order read", async () => {
-    afterOrderRead = () => sqlite.exec(`UPDATE orders SET subtotal_amount_minor = 100000, total_amount_minor = 105800, total_amount = 1058, balance_due = 1058;
-      UPDATE order_items SET product_name = 'Amended shirt', unit_price_minor = 50000, line_subtotal_minor = 100000, price = 500;`);
+    afterOrderRead = () => sqlite.exec(`UPDATE orders SET subtotal_amount_minor = 100000, total_amount_minor = 105800, balance_due_minor = 105800;
+      UPDATE order_items SET product_name = 'Amended shirt', unit_price_minor = 50000, line_subtotal_minor = 100000;`);
     await send();
     const email = message();
     expect(email.text).toContain("Saved cotton shirt");
     expect(email.text).toContain("2 × BDT 100.00 — BDT 200.00");
     expect(email.text).toContain("Total: BDT 258.00");
     expect(email.text).not.toContain("Amended shirt");
-    expect(sqlite.prepare("SELECT total_amount FROM orders").get()).toMatchObject({ total_amount: 1058 });
+    expect(sqlite.prepare("SELECT total_amount_minor FROM orders").get()).toMatchObject({ total_amount_minor: 105800 });
   });
 
   it("keeps a failed projection retryable without accepting a contentless email", async () => {
@@ -165,7 +163,8 @@ describe("customer order email composition and delivery", () => {
     ["refunded", "stripe", "refunded", 0, 0, "Refunded"],
     ["partially_refunded", "stripe", "partial", 100, 158, "Partially refunded"],
   ])("uses saved %s/%s/%s payment meaning", async (status, method, payment, paid, balance, expected) => {
-    sqlite.prepare("UPDATE orders SET status = ?, payment_method = ?, payment_status = ?, paid_amount = ?, balance_due = ?").run(status, method, payment, paid, balance);
+    sqlite.prepare("UPDATE orders SET status = ?, payment_method = ?, payment_status = ?, paid_amount_minor = ?, balance_due_minor = ?")
+      .run(status, method, payment, Number(paid) * 100, Number(balance) * 100);
     await send();
     const email = message();
     expect(email.visible).toContain(expected);
@@ -178,14 +177,14 @@ describe("customer order email composition and delivery", () => {
   });
 
   it("renders completed refunds without promising a future refund", async () => {
-    sqlite.exec("UPDATE orders SET status = 'refunded', payment_status = 'refunded', balance_due = 0");
+    sqlite.exec("UPDATE orders SET status = 'refunded', payment_status = 'refunded', balance_due_minor = 0");
     await send("order_refunded");
     expect(message().visible).not.toContain("will be processed");
     expect(message().text).not.toContain("will be processed");
   });
 
   it("marks inclusive tax and uses saved precision instead of current currency defaults", async () => {
-    sqlite.exec("UPDATE orders SET currency_code = 'KWD', currency_decimal_places = 3, prices_include_tax = 1, total_amount_minor = 24000, total_amount = 24, shipping_charge = 6, discount_amount = 2, balance_due = 24; UPDATE order_items SET price = 10");
+    sqlite.exec("UPDATE orders SET currency_code = 'KWD', currency_decimal_places = 3, prices_include_tax = 1, total_amount_minor = 24000, shipping_amount_minor = 6000, discount_amount_minor = 2000, balance_due_minor = 24000; UPDATE order_items SET unit_price_minor = 10000");
     await send();
     const email = message();
     expect(email.visible).toContain("VAT (included)");
@@ -193,22 +192,7 @@ describe("customer order email composition and delivery", () => {
     expect(email.text).toContain("KWD 20.000");
   });
 
-  it("uses historical decimal money and stored labels when minor snapshots are absent", async () => {
-    sqlite.exec("UPDATE orders SET currency_code = 'JPY', currency_decimal_places = 0, subtotal_amount_minor = NULL, shipping_amount_minor = NULL, discount_amount_minor = NULL, total_amount_minor = NULL, tax_amount_minor = 0, total_amount = 240; UPDATE order_items SET unit_price_minor = NULL, line_subtotal_minor = NULL");
-    await send();
-    expect(message().visible).toContain("2 × JPY 100");
-    expect(message().text).toContain("Total: JPY 240");
-  });
-
-  it("derives a missing line subtotal from its saved unit price before legacy decimals", async () => {
-    sqlite.exec("UPDATE order_items SET line_subtotal_minor = NULL, price = 999");
-    await send();
-    const email = message();
-    expect(email.text).toContain("2 × BDT 100.00 — BDT 200.00");
-    expect(email.visible).not.toContain("1,998");
-  });
-
-  it.each([[null, null], ["BDT", null], ["INVALID", 2]])("omits money rather than inventing currency for %s/%s", async (code, precision) => {
+  it.each([["INVALID", 2], ["BDT", 7]])("omits money rather than inventing currency for %s/%s", async (code, precision) => {
     sqlite.prepare("UPDATE orders SET currency_code = ?, currency_decimal_places = ?").run(code, precision);
     await send();
     const email = message();

@@ -32,7 +32,6 @@ import {
 import { shouldShowCatalogControls } from "@/lib/catalog-control-visibility";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
   hasRenderableHtmlContent,
   htmlToPlainText,
@@ -151,9 +150,6 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   `/categories/${slug}`,
   category?.canonicalPath,
 );
-const discoverySettings = normalizeSeoDiscoverySettings(
-  layoutData?.seo?.discovery,
-);
 
 // OG image from category image (per OG-02, OG-05)
 const ogImageUrl = category?.imageUrl
@@ -169,7 +165,6 @@ const categorySchemaDescription = category
   : null;
 
 const categoryBreadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs &&
   category &&
   !category.noIndex &&
   canonicalUrl &&
@@ -196,7 +191,6 @@ const categoryBreadcrumbJsonLd =
 
 // CollectionPage JSON-LD for category listings (per SEO-03, SEO-04)
 const collectionJsonLd =
-  discoverySettings.structuredData.collections &&
   category &&
   !category.noIndex &&
   !hasListingQuery &&

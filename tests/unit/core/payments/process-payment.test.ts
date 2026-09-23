@@ -298,9 +298,9 @@ function createPaymentDb(options: {
   existingPayment?: { id: string; amount: number; status: string } | null;
   orders: Array<{
     id: string;
-    totalAmount: number;
-    paidAmount: number;
-    balanceDue: number;
+    totalAmountMinor: number;
+    paidAmountMinor: number;
+    balanceDueMinor: number;
     paymentStatus: string;
     status: string;
     inventoryPool: string;
@@ -317,8 +317,8 @@ function createPaymentDb(options: {
         id: firstOrder.id,
         shipmentClaimId: null,
         shipmentClaimExpiresAt: null,
-        currencyCode: firstOrder.currencyCode ?? null,
-        currencyDecimalPlaces: firstOrder.currencyDecimalPlaces ?? null,
+        currencyCode: firstOrder.currencyCode ?? "BDT",
+        currencyDecimalPlaces: firstOrder.currencyDecimalPlaces ?? 2,
       }
     : null;
   const selectValues: unknown[] = [
@@ -328,7 +328,7 @@ function createPaymentDb(options: {
         ? null
         : { ...defaultShipmentClaim, ...options.shipmentClaim },
     options.existingPayment ?? null,
-    ...options.orders,
+    ...options.orders.map((order) => ({ currencyCode: "BDT", currencyDecimalPlaces: 2, paymentMethod: "stripe", ...order })),
     ...(options.extraSelects ?? []),
   ];
   let updateCount = 0;
@@ -365,9 +365,9 @@ describe("processPaymentConfirmed atomic persistence", () => {
     const db = createPaymentDb({
       orders: [{
         id: "ord_test",
-        totalAmount: 2500,
-        paidAmount: 0,
-        balanceDue: 2500,
+        totalAmountMinor: 250_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 250_000,
         paymentStatus: PaymentStatus.UNPAID,
         status: OrderStatus.PENDING,
         inventoryPool: "regular",
@@ -375,8 +375,8 @@ describe("processPaymentConfirmed atomic persistence", () => {
       }],
       extraSelects: [{
         status: "pending",
-        depositAmount: 1000,
-        balanceDue: 1500,
+        depositAmountMinor: 100_000,
+        balanceDueMinor: 150_000,
       }],
       batchResults: [[[{ id: "ord_test" }], [{ id: "pay_test" }], [{ id: "plan_test" }]]],
     });
@@ -384,10 +384,11 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     const result = await processPaymentConfirmed(db as never, {
       orderId: "ord_test",
-      amount: 1000,
-      paymentGateway: "stripe",
+      provider: "stripe",
+      amountMinor: 100_000,
+      currency: "BDT",
       paymentType: "deposit",
-      stripePaymentIntentId: "pi_test",
+      providerRef: "pi_test",
     });
 
     expect(result).toEqual({ success: true, paymentType: "deposit" });
@@ -401,9 +402,9 @@ describe("processPaymentConfirmed atomic persistence", () => {
       orders: [
         {
           id: "ord_test",
-          totalAmount: 2500,
-          paidAmount: 0,
-          balanceDue: 2500,
+          totalAmountMinor: 250_000,
+          paidAmountMinor: 0,
+          balanceDueMinor: 250_000,
           paymentStatus: PaymentStatus.UNPAID,
           status: OrderStatus.PENDING,
           inventoryPool: "regular",
@@ -411,9 +412,9 @@ describe("processPaymentConfirmed atomic persistence", () => {
         },
         {
           id: "ord_test",
-          totalAmount: 2500,
-          paidAmount: 0,
-          balanceDue: 2500,
+          totalAmountMinor: 250_000,
+          paidAmountMinor: 0,
+          balanceDueMinor: 250_000,
           paymentStatus: PaymentStatus.UNPAID,
           status: OrderStatus.PENDING,
           inventoryPool: "regular",
@@ -429,10 +430,11 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     const result = await processPaymentConfirmed(db as never, {
       orderId: "ord_test",
-      amount: 2500,
-      paymentGateway: "stripe",
+      provider: "stripe",
+      amountMinor: 250_000,
+      currency: "BDT",
       paymentType: "full",
-      stripePaymentIntentId: "pi_test",
+      providerRef: "pi_test",
     });
 
     expect(result).toEqual({ success: true, paymentType: "full" });
@@ -443,9 +445,9 @@ describe("processPaymentConfirmed atomic persistence", () => {
     const db = createPaymentDb({
       orders: [{
         id: "ord_test",
-        totalAmount: 2500,
-        paidAmount: 0,
-        balanceDue: 2500,
+        totalAmountMinor: 250_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 250_000,
         paymentStatus: PaymentStatus.UNPAID,
         status: OrderStatus.PENDING,
         inventoryPool: "regular",
@@ -457,10 +459,11 @@ describe("processPaymentConfirmed atomic persistence", () => {
 
     const result = await processPaymentConfirmed(db as never, {
       orderId: "ord_test",
-      amount: 2500,
-      paymentGateway: "stripe",
+      provider: "stripe",
+      amountMinor: 250_000,
+      currency: "BDT",
       paymentType: "full",
-      stripePaymentIntentId: "pi_test",
+      providerRef: "pi_test",
     });
 
     expect(result).toEqual({

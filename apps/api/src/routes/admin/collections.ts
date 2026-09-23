@@ -22,6 +22,8 @@ import {
 } from "@scalius/core/modules/collections";
 import { categories, products } from "@scalius/database/schema";
 import { isNull } from "drizzle-orm";
+import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
@@ -109,7 +111,7 @@ const formOptionsRoute = createRoute({
 
 app.openapi(formOptionsRoute, async (c) => {
     const db = c.get("db");
-    const [allCategories, allProducts] = await Promise.all([
+    const [allCategories, allProducts, currency] = await Promise.all([
         db.select({ id: categories.id, name: categories.name, status: categories.status })
             .from(categories)
             .where(isNull(categories.deletedAt))
@@ -117,14 +119,21 @@ app.openapi(formOptionsRoute, async (c) => {
         db.select({
             id: products.id,
             name: products.name,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
         })
             .from(products)
             .where(isNull(products.deletedAt))
             .limit(500),
+        getCurrencyConfig(db),
     ]);
-    return ok(c, { categories: allCategories, products: allProducts });
+    return ok(c, {
+        categories: allCategories,
+        products: allProducts.map(({ priceMinor, ...product }) => ({
+            ...product,
+            price: fromMinor(priceMinor, currency.decimalPlaces),
+        })),
+    });
 });
 
 // ── Category Options (lightweight collection form options) ──

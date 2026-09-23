@@ -27,18 +27,18 @@ describe("admin order recovery lifecycle", () => {
   function order(id: string, status = "cancelled", paymentStatus = "failed", paidAmount = 0) {
     sqlite.prepare(`INSERT INTO orders (
       id, customer_name, customer_phone, shipping_address, city, zone,
-      total_amount, shipping_charge, payment_method, status, payment_status,
-      paid_amount, balance_due, currency_code, currency_decimal_places
+      total_amount_minor, shipping_amount_minor, payment_method, status, payment_status,
+      paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places
     ) VALUES (?, 'Recovery buyer', '+8801700000000', 'Test address', 'city', 'zone',
-      100, 0, 'sslcommerz', ?, ?, ?, ?, 'BDT', 2)`)
+      10000, 0, 'sslcommerz', ?, ?, ?, ?, 'BDT', 2)`)
       .run(id, status, paymentStatus, paidAmount, 100 - paidAmount);
   }
 
   function attempt(orderId: string, status = "failed", claimExpiresAt: number | null = null) {
     sqlite.prepare(`INSERT INTO payment_session_attempts (
-      id, attempt_key, order_id, gateway, payment_type, amount, currency,
+      id, attempt_key, order_id, gateway, payment_type, amount_minor, currency,
       request_hash, status, attempts, claim_expires_at, created_at, updated_at
-    ) VALUES (?, ?, ?, 'sslcommerz', 'full', 100, 'BDT', 'test-hash', ?, 1, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, 'sslcommerz', 'full', 10000, 'BDT', 'test-hash', ?, 1, ?, ?, ?)`)
       .run(`attempt_${orderId}`, `key_${orderId}`, orderId, status, claimExpiresAt, now - 300, now - 100);
   }
 
@@ -98,7 +98,7 @@ describe("admin order recovery lifecycle", () => {
   function payment(orderId: string, status: string, paymentType = "full", amount = 100) {
     const id = `payment_${orderId}_${paymentType}`;
     sqlite.prepare(`INSERT INTO order_payments
-      (id, order_id, amount, currency, payment_method, payment_type, status)
+      (id, order_id, amount_minor, currency, payment_method, payment_type, status)
       VALUES (?, ?, ?, 'BDT', 'sslcommerz', ?, ?)`).run(id, orderId, amount, paymentType, status);
     return id;
   }
@@ -108,7 +108,7 @@ describe("admin order recovery lifecycle", () => {
     const target = payment(orderId, status === "refunded" ? "refunded" : "pending", "refund", amount);
     sqlite.prepare(`INSERT INTO refund_attempts (
       id, attempt_key, refund_group_id, order_id, source_payment_id, refund_payment_id,
-      gateway, amount, currency, reason, request_hash, provider_idempotency_key,
+      gateway, amount_minor, currency, reason, request_hash, provider_idempotency_key,
       refund_reference, status
     ) VALUES (?, ?, ?, ?, ?, ?, 'sslcommerz', ?, 'BDT', 'test', 'test-hash', ?, ?, ?)`)
       .run(`refund_${orderId}`, `refund_key_${orderId}`, `group_${orderId}`, orderId,
@@ -250,14 +250,14 @@ describe("admin order recovery lifecycle", () => {
   it("shows the image snapshotted on the order line, not the product's current media", async () => {
     order("history", "completed", "paid", 100);
     sqlite.exec(`
-      INSERT INTO products (id, name, slug, price) VALUES ('product_h', 'Renamed product', 'renamed', 100);
+      INSERT INTO products (id, name, slug, price_minor) VALUES ('product_h', 'Renamed product', 'renamed', 10000);
       INSERT INTO media (id, filename, kind, object_key, size, mime_type) VALUES
         ('med_snapshot0001', 'old.webp', 'image', 'media/med_snapshot0001.webp', 1, 'image/webp'),
         ('med_current00001', 'new.webp', 'image', 'media/med_current00001.webp', 1, 'image/webp');
       INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order)
         VALUES ('pmed_current01', 'product_h', 'med_current00001', 1, 0);
-      INSERT INTO order_items (id, order_id, product_id, quantity, price, product_name, product_image_media_id)
-        VALUES ('item_h', 'history', 'product_h', 1, 100, 'Original name', 'med_snapshot0001');
+      INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, product_name, product_image_media_id)
+        VALUES ('item_h', 'history', 'product_h', 1, 10000, 'Original name', 'med_snapshot0001');
     `);
     const detail = await withPublicMediaUrl("https://media.example", () => getOrderDetails(db, "history"));
     expect(detail?.items).toEqual([expect.objectContaining({

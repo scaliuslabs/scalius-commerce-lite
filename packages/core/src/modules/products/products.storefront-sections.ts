@@ -12,7 +12,14 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import {
+    buyerPricingSelection,
+    catalogDiscountedPrice,
+    presentBuyerPricing,
+    presentCatalogPrice,
+    storeCurrencyCodeSql,
+    storeDecimalPlacesFromCode,
+} from "./products.money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -290,7 +297,7 @@ async function readPublicProductIdentity(db: Database, slug: string) {
     return db.select({
         id: products.id,
         name: products.name,
-        price: products.price,
+        priceMinor: products.priceMinor,
         categoryId: products.categoryId,
         slug: products.slug,
         descriptionCharacters: sql<number>`length(coalesce(${products.description}, ''))`,
@@ -300,9 +307,10 @@ async function readPublicProductIdentity(db: Database, slug: string) {
         productCondition: products.productCondition,
         noIndex: products.noIndex,
         discountType: products.discountType,
-        discountPercentage: products.discountPercentage,
-        discountAmount: products.discountAmount,
+        discountBps: products.discountBps,
+        discountAmountMinor: products.discountAmountMinor,
         freeDelivery: products.freeDelivery,
+        storeCurrencyCode: storeCurrencyCodeSql(),
         createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
         updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         category: {
@@ -401,7 +409,11 @@ async function readMediaPage(
     };
 }
 
-async function readSummary(db: Database, identity: NonNullable<Awaited<ReturnType<typeof readPublicProductIdentity>>>) {
+async function readSummary(
+    db: Database,
+    identity: NonNullable<Awaited<ReturnType<typeof readPublicProductIdentity>>>,
+    decimalPlaces: number,
+) {
     const [counts, primaryProjectionRows, relatedRows] = await Promise.all([
         db.select({
             media: sql<number>`(SELECT count(*) FROM product_media WHERE product_id = ${identity.id})`,
@@ -425,24 +437,22 @@ async function readSummary(db: Database, identity: NonNullable<Awaited<ReturnTyp
         primaryProjectionRows as unknown as ProductMediaProjectionRow[],
     ).get(identity.id) ?? [];
     const primaryImage = resolveProductImageRepresentation(mediaProjection);
-    const discountType = identity.discountType || "percentage";
-    const discountPercentage = identity.discountPercentage || 0;
-    const discountAmount = identity.discountAmount || 0;
+    const price = presentCatalogPrice(identity, decimalPlaces);
     return {
         section: "summary" as const,
         product: {
             id: identity.id,
             name: identity.name,
-            price: identity.price,
+            price: price.price,
             categoryId: identity.category ? identity.categoryId : null,
             slug: identity.slug,
             canonicalPath: identity.canonicalPath,
             productCondition: identity.productCondition,
             noIndex: identity.noIndex,
-            discountType,
-            discountPercentage,
-            discountAmount,
-            discountedPrice: calculateDiscountedPrice(identity.price, discountType, discountPercentage, discountAmount),
+            discountType: identity.discountType || "percentage",
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
+            discountedPrice: catalogDiscountedPrice(identity, decimalPlaces),
             freeDelivery: identity.freeDelivery || false,
             hasVariants: Number(counts?.variants ?? 0) > 1,
             imageUrl: primaryImage?.url ?? null,
@@ -476,9 +486,10 @@ export async function getStorefrontProductSection(
 ) {
     const identity = await readPublicProductIdentity(db, slug);
     if (!identity) return null;
+    const decimalPlaces = storeDecimalPlacesFromCode(identity.storeCurrencyCode);
 
     if (section === "summary") {
-        return assertBoundedResult(await readSummary(db, identity));
+        return assertBoundedResult(await readSummary(db, identity, decimalPlaces));
     }
 
     if (section === "text") {
@@ -674,7 +685,7 @@ export async function getStorefrontProductSection(
                 imageId: productVariants.imageId,
                 weight: productVariants.weight,
                 sku: productVariants.sku,
-                price: productVariants.price,
+                priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
@@ -683,8 +694,8 @@ export async function getStorefrontProductSection(
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
                 discountType: productVariants.discountType,
-                discountPercentage: productVariants.discountPercentage,
-                discountAmount: productVariants.discountAmount,
+                discountBps: productVariants.discountBps,
+                discountAmountMinor: productVariants.discountAmountMinor,
                 createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
             }).from(productVariants).where(and(
@@ -705,6 +716,7 @@ export async function getStorefrontProductSection(
             mediaRows as unknown as ProductMediaProjectionRow[],
         ).get(identity.id) ?? [];
         const items = rows.map((row) => {
+            const price = presentCatalogPrice(row, decimalPlaces);
             const masked = maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
                 ...row,
                 selectedOptions: selectedOptionMap.get(row.id) ?? [],
@@ -720,12 +732,12 @@ export async function getStorefrontProductSection(
                 selectedOptions: selectedOptionMap.get(row.id) ?? [],
                 weight: row.weight,
                 sku: row.sku,
-                price: row.price,
+                price: price.price,
                 availabilityBand: masked.availabilityBand,
                 isDefault: row.isDefault,
                 discountType: row.discountType,
-                discountPercentage: row.discountPercentage,
-                discountAmount: row.discountAmount,
+                discountPercentage: price.discountPercentage,
+                discountAmount: price.discountAmount,
                 barcode: row.barcode,
                 barcodeType: row.barcodeType,
                 createdAt: unixToDate(row.createdAt)?.toISOString() ?? null,
@@ -752,13 +764,8 @@ export async function getStorefrontProductSection(
         ? await Promise.all([db.select({
             id: products.id,
             name: products.name,
-            price: pricing.basePrice,
+            ...buyerPricingSelection(pricing),
             slug: products.slug,
-            discountType: pricing.discountType,
-            discountPercentage: pricing.discountPercentage,
-            discountAmount: pricing.discountAmount,
-            discountedPrice: pricing.effectivePrice,
-            maxBuyerPrice: pricing.maxBuyerPrice,
             hasVariants: pricing.hasCustomerOptions,
             availableForSale: pricing.availableForSale,
             freeDelivery: products.freeDelivery,
@@ -773,13 +780,12 @@ export async function getStorefrontProductSection(
     const mediaMap = resolveProductMediaProjectionRows(
         mediaRows as unknown as ProductMediaProjectionRow[],
     );
-    const items = rows.map(({ maxBuyerPrice, ...row }) => {
+    const items = rows.map((row) => {
         const image = resolveProductImageRepresentation(mediaMap.get(row.id) ?? []);
         return {
-            ...row,
+            ...presentBuyerPricing(row, decimalPlaces),
             hasVariants: Boolean(row.hasVariants),
             availableForSale: Boolean(row.availableForSale),
-            priceVaries: maxBuyerPrice > row.discountedPrice,
             imageUrl: image?.url ?? null,
             imageMediaId: image?.mediaId ?? null,
             imageAlt: image?.altText ?? null,

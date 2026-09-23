@@ -1,51 +1,43 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products/products.types";
-import {
-  evaluateStorefrontPromotionCode,
-  resolvePromotionCustomerIdByPhone,
-} from "@scalius/core/modules/promotions";
-import { fromMinorUnits, toMinorUnits } from "@scalius/core/modules/tax";
+import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
 import { ok } from "../utils/api-response";
-import { roundPrice } from "@scalius/shared/price-utils";
 import { successEnvelope, errorResponses } from "../schemas/responses";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // The storefront API client serializes numeric cart facts as JSON numbers.
 // Reject null/empty/string coercion so crafted requests cannot turn them into 0.
 const cartItemSchema = z.object({
-  id: z.string().trim().min(1).max(100),
+  id: z.string().trim().min(1).max(100).openapi({ description: "Product id" }),
   price: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE),
   quantity: z.number().int().positive().max(10_000),
-  variantId: z.string().trim().min(1).max(100).optional()
+  variantId: z.string().trim().min(1).max(100).optional(),
 });
 
-// Schema for validating discount code
 const validateDiscountSchema = z.object({
   code: z.string().trim().min(1).max(50).openapi({ description: "Discount code to validate" }),
-  total: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({ description: "Merchandise subtotal before delivery" }),
-  items: z.array(cartItemSchema).max(250).optional().openapi({ description: "Cart items" }),
-  shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().default(0).openapi({ description: "Shipping cost" }),
-  customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" })
+  items: z.array(cartItemSchema).max(99).optional().openapi({ description: "Cart items" }),
+  shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().default(0).openapi({ description: "Delivery charge" }),
+  customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
 });
 
-// POST /discounts/validate — validate a discount code without leaking buyer/cart data into URLs.
+// POST /discounts/validate — buyer/cart data stays in the body, never the URL.
 const validateDiscountRoute = createRoute({
   method: "post",
   path: "/validate",
   tags: ["Discounts"],
-  summary: "Validate a discount code",
+  summary: "Validate a discount code against the cart",
+  description: "Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.",
   request: {
     body: {
       required: true,
-      content: {
-        "application/json": {
-          schema: validateDiscountSchema,
-        },
-      },
+      content: { "application/json": { schema: validateDiscountSchema } },
     },
   },
   responses: {
@@ -53,113 +45,66 @@ const validateDiscountRoute = createRoute({
       description: "Discount validation result",
       content: { "application/json": { schema: successEnvelope(z.object({
         valid: z.boolean(),
-        discount: z.object({ id: z.string(), code: z.string(), type: z.string(), discountValue: z.number() }).passthrough().optional(),
+        discount: z.object({
+          id: z.string(),
+          code: z.string(),
+          type: z.literal("code"),
+          discountValue: z.number(),
+        }).optional(),
         discountAmount: z.number().optional(),
-        message: z.string().optional(),
-        requiresCustomerPhone: z.boolean().optional(),
-      }).passthrough()) } },
+        error: z.string().optional(),
+        requiresCustomerPhone: z.boolean().optional().openapi({ description: "The code has a per-customer limit: ask for the phone number." }),
+      })) } },
     },
     400: errorResponses[400],
     500: errorResponses[500],
-  }
+  },
 });
 
 app.openapi(validateDiscountRoute, async (c) => {
   const db = c.get("db");
-  const params = c.req.valid("json");
-  const { code, total, items, shippingCost, customerPhone } = params;
-  const cartItems = items ?? [];
-
-  // Fetch currency config for dynamic symbol
-  const currencyConfig = await getCurrencyConfig(db);
-
-  const normalizedCode = code.trim().toUpperCase();
-  const promotionCustomerId = customerPhone
-    ? await resolvePromotionCustomerIdByPhone(db, customerPhone)
-    : null;
-  const typedItemsReady = cartItems.length > 0
-    && cartItems.every((item) => typeof item.variantId === "string" && item.variantId.trim().length > 0);
-  const promotionResolution = await evaluateStorefrontPromotionCode(db, {
-    code: normalizedCode,
-    customerId: promotionCustomerId,
-    cart: {
-      currencyCode: currencyConfig.code,
-      lines: typedItemsReady
-        ? cartItems.map((item, index) => ({
-          id: `cart:${index}:${item.variantId!}`,
+  const { code, items = [], shippingCost, customerPhone } = c.req.valid("json");
+  const lines = items.flatMap((item, index) => item.variantId ? [{ item, index, variantId: item.variantId }] : []);
+  if (lines.length === 0 || lines.length !== items.length) {
+    return ok(c, { valid: false, error: "Refresh the cart before applying this discount." });
+  }
+  const currency = await getCurrencyConfig(db);
+  try {
+    const quote = await quoteStorefrontDiscount(db, {
+      code,
+      customerPhone,
+      cart: {
+        currencyCode: currency.code,
+        lines: lines.map(({ item, index, variantId }) => ({
+          id: `cart:${index}:${variantId}`,
           productId: item.id,
-          variantId: item.variantId!,
-          unitPriceMinor: toMinorUnits(item.price, currencyConfig.decimalPlaces),
+          variantId,
+          unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
           quantity: item.quantity,
-        }))
-        : [],
-      shippingAmountMinor: toMinorUnits(shippingCost, currencyConfig.decimalPlaces),
-      evaluatedAtEpochSeconds: Math.floor(Date.now() / 1_000),
-    },
-  });
-  if (promotionResolution.matched) {
-    if (!typedItemsReady) {
-      return ok(c, {
-        valid: false,
-        error: "Refresh the cart before applying this discount.",
-      });
-    }
-    if (!promotionResolution.valid) {
-      return ok(c, {
-        valid: false,
-        error: promotionResolution.message,
-      });
-    }
-    const discountAmount = fromMinorUnits(
-      promotionResolution.evaluation.applied.totalDiscountMinor,
-      currencyConfig.decimalPlaces,
-    );
+        })),
+        shippingAmountMinor: toMinor(shippingCost, currency.decimalPlaces),
+      },
+    });
+    const codeDiscount = quote.applied?.discounts.find(({ promotionCode }) => promotionCode !== null);
+    if (!quote.applied || !codeDiscount) throw new ValidationError("This discount code is not valid.");
+    const discountAmount = fromMinor(quote.applied.totalDiscountMinor, currency.decimalPlaces);
     return ok(c, {
       valid: true,
       discount: {
-        id: promotionResolution.evaluation.applied.promotionId,
-        code: normalizedCode,
-        type: "promotion",
-        discountValue: roundPrice(discountAmount, currencyConfig.code),
+        id: codeDiscount.promotionId,
+        code: codeDiscount.promotionCode!,
+        type: "code" as const,
+        discountValue: discountAmount,
       },
-      discountAmount: roundPrice(discountAmount, currencyConfig.code),
+      discountAmount,
     });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      const requiresCustomerPhone = (error.details as { requiresCustomerPhone?: boolean } | undefined)?.requiresCustomerPhone;
+      return ok(c, { valid: false, error: error.message, ...(requiresCustomerPhone ? { requiresCustomerPhone } : {}) });
+    }
+    throw error;
   }
-
-  // Validate the discount code
-  const validationResult = await isDiscountValid(
-    db,
-    code,
-    total !== undefined ? Number(total) : undefined,
-    cartItems,
-    customerPhone,
-    currencyConfig.symbol,
-    currencyConfig.code,
-  );
-
-  // If valid, calculate the discount amount
-  if (validationResult.valid && validationResult.discount) {
-    const discountAmount = await calculateDiscountAmount(
-      db,
-      validationResult.discount,
-      (total ?? 0) + shippingCost,
-      cartItems,
-      shippingCost || 0,
-      validationResult.applicableProductIds,
-      currencyConfig.code,
-      validationResult.hasProductRestrictions,
-    );
-
-    return ok(c, {
-      valid: true,
-      discount: validationResult.discount,
-      discountAmount: roundPrice(discountAmount, currencyConfig.code)
-    });
-  }
-
-  // Strip internal applicableProductIds before sending to client
-  const { applicableProductIds: _, ...clientResult } = validationResult;
-  return ok(c, clientResult);
 });
 
 export { app as discountRoutes };

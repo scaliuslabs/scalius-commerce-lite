@@ -45,7 +45,7 @@ describe("navigation authority D1 commands", () => {
   it("pages beyond the old 100-resource cap and hydrates unavailable selections", async () => {
     const db = createDatabase();
     const insertProduct = sqlite!.prepare(
-      "INSERT INTO products (id, name, slug, price, is_active, deleted_at) VALUES (?, ?, ?, 100, ?, ?)",
+      "INSERT INTO products (id, name, slug, price_minor, is_active, deleted_at) VALUES (?, ?, ?, 10000, ?, ?)",
     );
     for (let index = 1; index <= 125; index += 1) {
       const suffix = String(index).padStart(3, "0");
@@ -286,6 +286,15 @@ describe("navigation authority D1 commands", () => {
     })).rejects.toThrow("Menu item not found");
     expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
       .toEqual({ revision: 8 });
+  });
+
+  it("refuses a second active menu with the same name as a conflict, not a server error", async () => {
+    const db = createDatabase();
+    await createNavigationMenu(db, { name: "Main menu" });
+    await expect(createNavigationMenu(db, { name: "Main menu" })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Another menu already has this name. Use a different name.",
+    });
   });
 
   it("deletes a bounded menu subtree without recursive SQL", async () => {

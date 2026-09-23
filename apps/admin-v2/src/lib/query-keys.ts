@@ -106,13 +106,6 @@ export const queryKeys = {
     detail: (id: string) => ["discounts", "detail", id] as const,
   },
 
-  // ── Promotions ───────────────────────────────────────────────────
-  promotions: {
-    all: ["promotions"] as const,
-    list: (params?: Record<string, unknown>) => listKey("promotions", params),
-    detail: (id: string) => ["promotions", "detail", id] as const,
-  },
-
   // ── Pages ────────────────────────────────────────────────────────
   pages: {
     all: ["pages"] as const,
@@ -155,7 +148,6 @@ export const queryKeys = {
   // ── Navigation ───────────────────────────────────────────────────
   navigation: {
     all: ["navigation"] as const,
-    items: () => ["navigation", "items"] as const,
     resources: (params: {
       type: "page" | "category" | "collection" | "product";
       query: string;
@@ -166,11 +158,7 @@ export const queryKeys = {
     menu: (menuId: string) => ["navigation", "menus", menuId] as const,
     menuItems: (menuId: string, parentId: string | null) =>
       ["navigation", "menus", menuId, "items", parentId ?? "root"] as const,
-    publications: (menuId: string) =>
-      ["navigation", "menus", menuId, "publications"] as const,
     placements: () => ["navigation", "placements"] as const,
-    previewProducts: (params: Record<string, string>) =>
-      ["navigation", "preview-products", params] as const,
   },
 
   // ── Fraud Checker ────────────────────────────────────────────────
@@ -215,9 +203,6 @@ export const queryKeys = {
     platform: () => ["settings", "platform"] as const,
     homepagePresentation: () =>
       ["settings", "homepage-presentation"] as const,
-    seoDiscoveryLiveProbe: () =>
-      ["settings", "seo-discovery-live-probe"] as const,
-    seoFeedDiagnostics: () => ["settings", "seo-feed-diagnostics"] as const,
     currency: () => ["settings", "currency"] as const,
     seo: () => ["settings", "seo"] as const,
     security: () => ["settings", "security"] as const,
@@ -234,6 +219,8 @@ export const queryKeys = {
         ? (["settings", "tax-classifications", params] as const)
         : (["settings", "tax-classifications"] as const),
     theme: () => ["settings", "theme"] as const,
+    header: () => ["settings", "header"] as const,
+    footer: () => ["settings", "footer"] as const,
     media: () => ["settings", "media"] as const,
     sms: () => ["settings", "sms"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,

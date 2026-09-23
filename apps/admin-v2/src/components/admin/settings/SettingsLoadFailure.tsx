@@ -1,39 +1,26 @@
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { getSettingsLoadErrorMessage } from "~/hooks/use-settings-form";
+import { useMessages } from "~/i18n";
+import { settingsMessages } from "~/i18n/settings";
 
-interface SettingsLoadFailureProps {
-  title: string;
-  error: unknown;
-  fallback: string;
-  onRetry: () => void | Promise<unknown>;
-}
-
+/** Load failure for one card. Saving stays locked until it loads. */
 export function SettingsLoadFailure({
   title,
-  error,
-  fallback,
   onRetry,
-}: SettingsLoadFailureProps) {
+}: {
+  title: string;
+  onRetry: () => void | Promise<unknown>;
+}) {
+  const t = useMessages(settingsMessages);
   return (
-    <Alert variant="destructive" className="max-w-2xl" role="alert">
-      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+    <Alert variant="destructive" role="alert">
+      <AlertTriangle className="size-4" aria-hidden="true" />
       <AlertTitle>{title}</AlertTitle>
-      <AlertDescription className="space-y-3">
-        <p>{getSettingsLoadErrorMessage(error, fallback)}</p>
-        <p className="text-xs">
-          No defaults were assumed and saving stays locked until the current
-          settings load.
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void onRetry()}
-        >
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          Retry
+      <AlertDescription>
+        <p>{t("loadFailed")}</p>
+        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void onRetry()}>
+          {t("retry")}
         </Button>
       </AlertDescription>
     </Alert>

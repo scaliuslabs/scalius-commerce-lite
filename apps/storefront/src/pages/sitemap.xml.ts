@@ -11,9 +11,7 @@ import {
   xmlDataUnavailableResponse,
 } from "@/lib/sitemap-utils";
 import { getSitemapProducts } from "@/lib/api/products";
-import { getSeoSettings } from "@/lib/api";
 import type { APIContext } from "astro";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 export const prerender = false;
 
@@ -23,61 +21,13 @@ const PRODUCTS_PER_SITEMAP = 5000;
 export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
-    const seo = await getSeoSettings();
-    if (!seo) {
-      return xmlDataUnavailableResponse(
-        "Sitemap index is temporarily unavailable",
-      );
-    }
-
-    const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
-    if (!sitemapPolicy.enabled) {
-      return new Response(generateSitemapIndex([], baseUrl), {
-        status: 200,
-        headers: getSitemapHeaders(),
-      });
-    }
-
-    // Generate sitemap index with all sub-sitemaps
-    const sitemaps = [];
-
-    if (sitemapPolicy.staticPages) {
-      sitemaps.push({
-        loc: `${baseUrl}/sitemap-static.xml`,
-      });
-    }
-
-    if (sitemapPolicy.categories) {
-      sitemaps.push({
-        loc: `${baseUrl}/sitemap-categories.xml`,
-      });
-    }
-
-    if (sitemapPolicy.collections) {
-      sitemaps.push({
-        loc: `${baseUrl}/sitemap-collections.xml`,
-      });
-    }
-
-    if (sitemapPolicy.pages) {
-      sitemaps.push({
-        loc: `${baseUrl}/sitemap-pages.xml`,
-      });
-    }
-
-    if (sitemapPolicy.articles) {
-      sitemaps.push({
-        loc: `${baseUrl}/sitemap-articles.xml`,
-      });
-    }
-
-    if (!sitemapPolicy.products) {
-      const xml = generateSitemapIndex(sitemaps, baseUrl);
-      return new Response(xml, {
-        status: 200,
-        headers: getSitemapHeaders(),
-      });
-    }
+    const sitemaps = [
+      "sitemap-static.xml",
+      "sitemap-categories.xml",
+      "sitemap-collections.xml",
+      "sitemap-pages.xml",
+      "sitemap-articles.xml",
+    ].map((path) => ({ loc: `${baseUrl}/${path}` }));
 
     // Fetch just 1 product to get the total count for pagination
     const productsResponse = await getSitemapProducts({ limit: 1 });

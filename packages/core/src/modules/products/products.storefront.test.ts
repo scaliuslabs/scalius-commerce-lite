@@ -6,15 +6,15 @@ function setup() {
     const harness = createSqliteD1Database();
     harness.sqlite.exec(`
         INSERT INTO categories (id, name, slug, status) VALUES ('cat_draft', 'Draft', 'draft', 'draft');
-        INSERT INTO products (id, name, price, slug, category_id, is_active) VALUES
-            ('p_z', 'Discounted', 100, 'discounted', 'cat_draft', 1),
-            ('p_a', 'Plain', 90.4, 'plain', NULL, 1),
-            ('p_no_sku', 'No SKU', 1, 'no-sku', NULL, 1),
-            ('p_inactive', 'Inactive', 1, 'inactive', NULL, 0);
-        INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory, discount_type, discount_percentage, low_stock_threshold) VALUES
-            ('v_z', 'p_z', 'Z-1', 100, 7, 0, 1, 1, 'percentage', 10, 3),
-            ('v_a', 'p_a', 'A-1', 90.4, 0, 0, 1, 0, 'percentage', 0, NULL),
-            ('v_inactive', 'p_inactive', 'I-1', 1, 0, 0, 1, 0, 'percentage', 0, NULL);
+        INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
+            ('p_z', 'Discounted', 10000, 'discounted', 'cat_draft', 1),
+            ('p_a', 'Plain', 9040, 'plain', NULL, 1),
+            ('p_no_sku', 'No SKU', 100, 'no-sku', NULL, 1),
+            ('p_inactive', 'Inactive', 100, 'inactive', NULL, 0);
+        INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory, discount_type, discount_bps, low_stock_threshold) VALUES
+            ('v_z', 'p_z', 'Z-1', 10000, 7, 0, 1, 1, 'percentage', 1000, 3),
+            ('v_a', 'p_a', 'A-1', 9040, 0, 0, 1, 0, 'percentage', 0, NULL),
+            ('v_inactive', 'p_inactive', 'I-1', 100, 0, 0, 1, 0, 'percentage', 0, NULL);
         INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, status)
             VALUES ('media_z', 'z.webp', 'image', 'media/z.webp', 1, 'image/webp', 'Library alt', 'ready');
         INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)

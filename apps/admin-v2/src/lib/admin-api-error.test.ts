@@ -6,13 +6,10 @@ import {
   nullForAdminApiNotFound,
   readAdminOrderCreateRequestMismatch,
   readCheckoutFlowRevisionConflict,
-  readDiscountRevisionConflict,
   readPromotionRevisionConflict,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
-  readHeroSliderRevisionConflict,
   readManualOrderDiscountLimitError,
-  readSitePresentationRevisionConflict,
 } from "./admin-api-error";
 
 describe("admin API detail-loader errors", () => {
@@ -157,28 +154,6 @@ describe("admin API detail-loader errors", () => {
     ).toBeNull();
   });
 
-  it("extracts only a typed discount revision conflict with valid details", () => {
-    expect(readDiscountRevisionConflict(new AdminApiResponseError(
-      "Discount changed",
-      409,
-      "DISCOUNT_REVISION_CONFLICT",
-      { expectedRevision: 2, currentRevision: 3 },
-    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
-
-    expect(readDiscountRevisionConflict(new AdminApiResponseError(
-      "Wrong conflict",
-      409,
-      "CONFLICT",
-      { expectedRevision: 2, currentRevision: 3 },
-    ))).toBeNull();
-    expect(readDiscountRevisionConflict(new AdminApiResponseError(
-      "Bad revision",
-      409,
-      "DISCOUNT_REVISION_CONFLICT",
-      { expectedRevision: 0, currentRevision: "3" },
-    ))).toBeNull();
-  });
-
   it("does not mistake a promotion code collision for a revision conflict", () => {
     expect(readPromotionRevisionConflict(new AdminApiResponseError(
       "Promotion changed",
@@ -250,50 +225,12 @@ describe("admin API detail-loader errors", () => {
     ))).toBeNull();
   });
 
-  it("extracts only the matching header or footer revision conflict", () => {
-    const conflict = new AdminApiResponseError(
-      "Header changed",
-      409,
-      "SITE_PRESENTATION_REVISION_CONFLICT",
-      { section: "header", expectedRevision: 0, currentRevision: 2 },
-    );
-
-    expect(readSitePresentationRevisionConflict(conflict, "header")).toEqual({
-      section: "header",
-      expectedRevision: 0,
-      currentRevision: 2,
-    });
-    expect(readSitePresentationRevisionConflict(conflict, "footer")).toBeNull();
-    expect(readSitePresentationRevisionConflict(new AdminApiResponseError(
-      "Bad section",
-      409,
-      "SITE_PRESENTATION_REVISION_CONFLICT",
-      { section: "sidebar", expectedRevision: 1, currentRevision: 2 },
-    ))).toBeNull();
-  });
-
   it("fails closed for cyclic causes", () => {
     const first: { cause?: unknown } = {};
     const second: { cause?: unknown } = { cause: first };
     first.cause = second;
 
     expect(isAdminApiNotFoundError(first)).toBe(false);
-  });
-
-  it("extracts only a typed hero slider revision conflict", () => {
-    expect(readHeroSliderRevisionConflict(new AdminApiResponseError(
-      "Hero changed",
-      409,
-      "HERO_SLIDER_REVISION_CONFLICT",
-      { expectedRevision: 2, currentRevision: 3 },
-    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
-
-    expect(readHeroSliderRevisionConflict(new AdminApiResponseError(
-      "Wrong shape",
-      409,
-      "HERO_SLIDER_REVISION_CONFLICT",
-      { expectedRevision: 2, currentRevision: null },
-    ))).toBeNull();
   });
 
   it("accepts only bounded typed product-media SKU conflicts", () => {

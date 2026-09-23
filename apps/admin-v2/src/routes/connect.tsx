@@ -29,12 +29,9 @@ export const Route = createFileRoute("/connect")({
 });
 
 function ConnectRoute() {
-  const context = Route.useRouteContext();
   return (
     <ThemeProvider>
-      <DevicePairingPage
-        availablePermissions={[...context.permissions].sort()}
-      />
+      <DevicePairingPage />
       <DeferredToaster />
     </ThemeProvider>
   );

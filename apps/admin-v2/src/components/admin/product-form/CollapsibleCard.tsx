@@ -1,4 +1,3 @@
-// src/components/admin/product-form/CollapsibleCard.tsx
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader } from "../../ui/card";
@@ -13,6 +12,7 @@ interface CollapsibleCardProps {
   className?: string;
 }
 
+/** A card whose body opens from its title row (Attributes, Extra sections, Search engine listing). */
 export function CollapsibleCard({
   title,
   description,
@@ -22,42 +22,33 @@ export function CollapsibleCard({
   className,
 }: CollapsibleCardProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  const contentId = React.useId();
 
   return (
     <Card className={className}>
-      <CardHeader className="px-4 py-0 md:py-3">
+      <CardHeader>
         <button
           type="button"
-          className="group flex min-h-11 w-full items-center justify-between text-left md:min-h-0"
+          className="flex w-full items-start justify-between gap-3 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-expanded={isOpen}
-          onClick={() => setIsOpen(!isOpen)}
+          aria-controls={contentId}
+          onClick={() => setIsOpen((open) => !open)}
         >
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold leading-none transition-colors group-hover:text-primary">
-              {title}
-            </h3>
-            {description && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {description}
-              </p>
-            )}
-          </div>
-          <ChevronDown
-            className={cn(
-              "ml-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
-              isOpen && "rotate-180"
-            )}
-          />
+          <span className="min-w-0 space-y-1">
+            <span className="block text-heading-md font-semibold">{title}</span>
+            {description ? <span className="block text-body text-muted-foreground">{description}</span> : null}
+          </span>
+          <span className="flex h-6 shrink-0 items-center">
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground", isOpen && "rotate-180")} />
+          </span>
         </button>
       </CardHeader>
-      {!isOpen && summary ? (
-        <div className="px-4 pb-3">{summary}</div>
-      ) : null}
-      {isOpen && (
-        <CardContent className="space-y-3 px-4 pb-4 pt-0 animate-in fade-in-50 duration-150">
+      {!isOpen && summary ? <CardContent>{summary}</CardContent> : null}
+      {isOpen ? (
+        <CardContent id={contentId} className="space-y-4">
           {children}
         </CardContent>
-      )}
+      ) : null}
     </Card>
   );
 }

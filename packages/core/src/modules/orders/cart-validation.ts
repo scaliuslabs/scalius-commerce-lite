@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
-import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import {
@@ -56,7 +56,7 @@ export interface StorefrontCartValidatedItem {
     productId: string;
     variantId: string;
     quantity: number;
-    unitPrice: number;
+    unitPriceMinor: number;
     productName: string;
     variantLabel: string | null;
     freeDelivery: boolean;
@@ -73,7 +73,7 @@ export interface StorefrontCartValidationResult {
     valid: boolean;
     issues: StorefrontCartItemIssue[];
     items: StorefrontCartValidatedItem[];
-    subtotal: number;
+    subtotalMinor: number;
     hasFreeDeliveryProduct: boolean;
 }
 
@@ -101,10 +101,10 @@ export interface StorefrontCartProductRow {
     id: string;
     name: string;
     isActive: boolean;
-    price: number;
-    discountPercentage: number | null;
+    priceMinor: number;
+    discountBps: number;
     discountType: string | null;
-    discountAmount: number | null;
+    discountAmountMinor: number;
     freeDelivery: boolean;
     taxClassId: string | null;
 }
@@ -122,10 +122,10 @@ export interface StorefrontCartVariantRow {
     allowPreorder: boolean;
     allowBackorder: boolean;
     backorderLimit: number;
-    price: number;
-    discountPercentage: number | null;
+    priceMinor: number;
+    discountBps: number;
     discountType: string | null;
-    discountAmount: number | null;
+    discountAmountMinor: number;
     taxClassId: string | null;
     imageId: string | null;
 }
@@ -156,32 +156,21 @@ function displayVariantLabel(item: StorefrontCartValidationItem, variant?: Store
     return variantLabel(variant) ?? item.variantLabel ?? null;
 }
 
-function calculateUnitPrice(
+/** A SKU's own discount wins; otherwise the product discount applies to the SKU price. */
+function calculateUnitPriceMinor(
     product: StorefrontCartProductRow,
-    variant: StorefrontCartVariantRow | null,
-    currencyCode: string,
+    variant: StorefrontCartVariantRow,
 ): number {
-    let unitPrice = variant?.price ?? product.price;
     const variantHasDiscount =
-        variant &&
-        (
-            (variant.discountType === "percentage" && (variant.discountPercentage ?? 0) > 0) ||
-            (variant.discountType === "flat" && (variant.discountAmount ?? 0) > 0)
-        );
-
-    if (variant && variantHasDiscount) {
-        if (variant.discountType === "percentage") {
-            unitPrice = unitPrice * (1 - (variant.discountPercentage ?? 0) / 100);
-        } else if (variant.discountType === "flat") {
-            unitPrice = Math.max(0, unitPrice - (variant.discountAmount ?? 0));
-        }
-    } else if (product.discountType === "percentage" && (product.discountPercentage ?? 0) > 0) {
-        unitPrice = unitPrice * (1 - (product.discountPercentage ?? 0) / 100);
-    } else if (product.discountType === "flat" && (product.discountAmount ?? 0) > 0) {
-        unitPrice = Math.max(0, unitPrice - (product.discountAmount ?? 0));
-    }
-
-    return roundPrice(unitPrice, currencyCode);
+        (variant.discountType === "percentage" && variant.discountBps > 0) ||
+        (variant.discountType === "flat" && variant.discountAmountMinor > 0);
+    const discount = variantHasDiscount ? variant : product;
+    return discountedPriceMinor(
+        variant.priceMinor,
+        discount.discountType,
+        discount.discountBps,
+        discount.discountAmountMinor,
+    );
 }
 
 function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryPool): number {
@@ -229,10 +218,10 @@ export function selectStorefrontCartProductRows(
             id: products.id,
             name: products.name,
             isActive: products.isActive,
-            price: products.price,
-            discountPercentage: products.discountPercentage,
+            priceMinor: products.priceMinor,
+            discountBps: products.discountBps,
             discountType: products.discountType,
-            discountAmount: products.discountAmount,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             taxClassId: products.taxClassId,
         })
@@ -269,10 +258,10 @@ export function selectStorefrontCartVariantRows(
             allowPreorder: productVariants.allowPreorder,
             allowBackorder: productVariants.allowBackorder,
             backorderLimit: productVariants.backorderLimit,
-            price: productVariants.price,
-            discountPercentage: productVariants.discountPercentage,
+            priceMinor: productVariants.priceMinor,
+            discountBps: productVariants.discountBps,
             discountType: productVariants.discountType,
-            discountAmount: productVariants.discountAmount,
+            discountAmountMinor: productVariants.discountAmountMinor,
             taxClassId: productVariants.taxClassId,
             imageId: productVariants.imageId,
         })
@@ -302,14 +291,16 @@ export function resolveStorefrontCartValidationFromRows(
 ): StorefrontCartValidationResult {
     // API callers pass the normalized merchant setting. Direct Core callers
     // intentionally retain the historical BDT checkout authority fallback.
-    const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
+    const decimalPlaces = getDecimalPlaces(
+        normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code,
+    );
 
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
             valid: true,
             issues: [],
             items: [],
-            subtotal: 0,
+            subtotalMinor: 0,
             hasFreeDeliveryProduct: false,
         });
     }
@@ -331,7 +322,7 @@ export function resolveStorefrontCartValidationFromRows(
             valid: false,
             issues: malformedVariantIssues,
             items: [],
-            subtotal: 0,
+            subtotalMinor: 0,
             hasFreeDeliveryProduct: false,
         });
     }
@@ -354,7 +345,7 @@ export function resolveStorefrontCartValidationFromRows(
 
     const issues: StorefrontCartItemIssue[] = [];
     const validatedItems: StorefrontCartValidatedItem[] = [];
-    let subtotal = 0;
+    let subtotalMinor = 0;
     let hasFreeDeliveryProduct = false;
 
     items.forEach((item, index) => {
@@ -441,29 +432,28 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
-        const unitPrice = calculateUnitPrice(product, variant, currencyCode);
-        const submittedPrice = typeof item.price === "number"
-            ? roundPrice(item.price, currencyCode)
+        const unitPriceMinor = calculateUnitPriceMinor(product, variant);
+        const submittedPriceMinor = typeof item.price === "number"
+            ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;
-        if (submittedPrice !== undefined && submittedPrice !== unitPrice) {
+        if (submittedPriceMinor !== undefined && submittedPriceMinor !== unitPriceMinor) {
             addIssue(issues, item, index, {
                 code: "PRICE_CHANGED",
                 action: "refresh_item",
                 message: `The price for ${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} changed. Please review the updated cart total.`,
                 productName: product.name,
                 variantLabel: requestedVariantLabel,
-                submittedPrice,
-                currentPrice: unitPrice,
+                submittedPrice: item.price,
+                currentPrice: fromMinor(unitPriceMinor, decimalPlaces),
             });
             return;
         }
 
-        const lineTotal = roundPrice(unitPrice * item.quantity, currencyCode);
         const image = resolveSkuImageRepresentation(
             mediaByProduct.get(product.id) ?? [],
             variant.imageId,
         );
-        subtotal = roundPrice(subtotal + lineTotal, currencyCode);
+        subtotalMinor += unitPriceMinor * item.quantity;
         hasFreeDeliveryProduct ||= product.freeDelivery === true;
         validatedItems.push({
             index,
@@ -471,7 +461,7 @@ export function resolveStorefrontCartValidationFromRows(
             productId: product.id,
             variantId: variant.id,
             quantity: item.quantity,
-            unitPrice,
+            unitPriceMinor,
             productName: product.name,
             variantLabel: requestedVariantLabel,
             freeDelivery: product.freeDelivery,
@@ -487,7 +477,7 @@ export function resolveStorefrontCartValidationFromRows(
         valid: issues.length === 0,
         issues,
         items: validatedItems,
-        subtotal: roundPrice(subtotal, currencyCode),
+        subtotalMinor,
         hasFreeDeliveryProduct,
     });
 }
@@ -518,4 +508,20 @@ export async function validateStorefrontCartItems(
         variantRows as StorefrontCartVariantRow[],
         mediaByProduct,
     );
+}
+
+/** Cart validation in the decimal HTTP contract (prices in major units). */
+export function presentStorefrontCartValidation(
+    result: StorefrontCartValidationResult,
+    decimalPlaces: number,
+) {
+    const { subtotalMinor, items, ...rest } = result;
+    return {
+        ...rest,
+        items: items.map(({ unitPriceMinor, ...item }) => ({
+            ...item,
+            unitPrice: fromMinor(unitPriceMinor, decimalPlaces),
+        })),
+        subtotal: fromMinor(subtotalMinor, decimalPlaces),
+    };
 }

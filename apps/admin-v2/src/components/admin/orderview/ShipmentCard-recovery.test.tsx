@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Order, ShipmentRecovery } from "./types";
 import { ShipmentCard } from "./ShipmentCard";
+import { orderDetailMessages } from "~/i18n/order-detail";
+
+const en = orderDetailMessages.en;
 
 const mocks = vi.hoisted(() => ({ canManage: true, repair: vi.fn() }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({
@@ -18,7 +21,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
   useResolveUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("./ManualFulfillmentDialog", () => ({
-  ManualFulfillmentDialog: () => <button type="button">Own Courier</button>,
+  ManualFulfillmentDialog: () => <button type="button">own-courier</button>,
 }));
 vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({ default: () => null }));
 
@@ -70,7 +73,7 @@ describe("ShipmentCard recovery authority", () => {
 
   function repairButton() {
     return Array.from(host.querySelectorAll("button"))
-      .find((button) => button.textContent?.trim() === "Repair shipment");
+      .find((button) => button.textContent?.trim() === en["shipments.repair"]);
   }
 
   it.each(["ready", "loading", "unavailable", "stale"] as const)(
@@ -82,7 +85,7 @@ describe("ShipmentCard recovery authority", () => {
       } });
       expect(host.textContent).toContain("Courier confirmation needed");
       expect(host.textContent).toContain(recovery.message);
-      expect(host.textContent).not.toMatch(/Refresh can retry|Retry: create a new shipment/);
+      expect(host.textContent).toContain(en["courier.checkTitle"]);
       expect(repairButton()).toBeUndefined();
       expect(mocks.repair).not.toHaveBeenCalled();
     },
@@ -118,8 +121,8 @@ describe("ShipmentCard recovery authority", () => {
       shipments: [],
     });
 
-    expect(host.textContent).toContain("Shipment history");
-    expect(host.textContent).not.toContain("Create shipment");
-    expect(host.textContent).not.toContain("Own Courier");
+    expect(host.textContent).toContain(en["shipments.empty"]);
+    expect(host.textContent).not.toContain(en["shipments.book"]);
+    expect(host.textContent).not.toContain("own-courier");
   });
 });

@@ -79,10 +79,10 @@ async function createSourceExport(directory: string): Promise<string> {
   const database = await createProviderSchemaDatabase("d1", databasePath);
   try {
     database.exec(`
-      INSERT INTO products (id, name, price, slug)
-      VALUES ('product_upload_test', 'Upload test product', 1250, 'upload-test-product');
-      INSERT INTO product_variants (id, product_id, sku, price, stock, is_default)
-      VALUES ('variant_upload_test', 'product_upload_test', 'UPLOAD-TEST-1', 1250, 25, 1);
+      INSERT INTO products (id, name, price_minor, slug)
+      VALUES ('product_upload_test', 'Upload test product', 125000, 'upload-test-product');
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default)
+      VALUES ('variant_upload_test', 'product_upload_test', 'UPLOAD-TEST-1', 125000, 25, 1);
       INSERT INTO settings (id, key, value, type, category, updated_at)
       VALUES (
         'legacy_timestamp_setting',

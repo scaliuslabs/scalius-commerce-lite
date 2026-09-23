@@ -1,3 +1,5 @@
+import { translate } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
 import {
   formatSavedMinorAmount,
   type SavedOrderMoneySummary,
@@ -15,10 +17,10 @@ export interface DeliveryMethodPresentation {
   details: string;
 }
 
+/** The delivery method saved on the order, including a waived fee. */
 export function resolveDeliveryMethodPresentation(
   order: DeliveryMethodSnapshotFields,
   savedSummary: SavedOrderMoneySummary | null,
-  fallbackLabel = "Delivery",
 ): DeliveryMethodPresentation {
   const methodName = order.shippingMethodName?.trim() || null;
   const methodDescription = order.shippingMethodDescription?.trim() || null;
@@ -29,14 +31,14 @@ export function resolveDeliveryMethodPresentation(
     : null;
   const waiverDetails = order.shippingFeeWaived === true
     ? baseAmount
-      ? `Configured fee ${baseAmount} was waived.`
-      : "Delivery fee was waived."
+      ? translate(orderDetailMessages, "delivery.feeWaivedAmount", { amount: baseAmount })
+      : translate(orderDetailMessages, "delivery.feeWaived")
     : null;
 
   return {
-    label: methodName ? `Delivery · ${methodName}` : fallbackLabel,
-    details: [methodDescription, waiverDetails]
-      .filter((value): value is string => Boolean(value))
-      .join(" "),
+    label: methodName
+      ? translate(orderDetailMessages, "delivery.method", { name: methodName })
+      : translate(orderDetailMessages, "delivery.label"),
+    details: [methodDescription, waiverDetails].filter(Boolean).join(" "),
   };
 }

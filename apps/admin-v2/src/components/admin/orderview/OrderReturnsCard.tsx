@@ -1,125 +1,90 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus, RefreshCw, RotateCcw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
-import { orderReturnsQueryOptions } from "@/lib/api-query-options/orders";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useHydrated } from "~/hooks/use-hydrated";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { resourceMessages } from "~/i18n/resource";
+import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import {
   getRemainingReturnableQuantities,
   type OrderReturnDto,
-} from "@/lib/order-return-workflow";
+} from "~/lib/order-return-workflow";
 import type { Order } from "./types";
 import { ApproveReturnDialog } from "./order-returns/ApproveReturnDialog";
 import { CancelReturnDialog } from "./order-returns/CancelReturnDialog";
 import { CreateReturnDialog } from "./order-returns/CreateReturnDialog";
-import {
-  OrderReturnRow,
-  type ReturnDialogAction,
-} from "./order-returns/OrderReturnRow";
+import { OrderReturnRow, type ReturnDialogAction } from "./order-returns/OrderReturnRow";
 import { ReceiveReturnDialog } from "./order-returns/ReceiveReturnDialog";
 
-type DialogState = { type: "create" } | ReturnDialogAction | null;
+type DialogType = "create" | ReturnDialogAction["type"];
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
+const RETURNABLE_ORDER_STATUSES = new Set(["shipped", "delivered", "completed"]);
 
 export function OrderReturnsCard({ order }: { order: Order }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   const hydrated = useHydrated();
-  const actions = useOrderActionPermissions();
-  const [dialog, setDialog] = useState<DialogState>(null);
-  const query = useQuery({
-    ...orderReturnsQueryOptions(order.id),
-    enabled: hydrated,
-    refetchInterval: 30_000,
-  });
+  const canManage = useOrderActionPermissions().canChangeOrderStatus;
+  const [dialog, setDialog] = useState<DialogType | null>(null);
+  // The return a dialog acts on; kept after closing so the dialog can animate out.
+  const [target, setTarget] = useState<OrderReturnDto | null>(null);
+  const targetKey = target ? `${target.id}:${target.version}` : "none";
+  const query = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, refetchInterval: 30_000 });
   const returns = query.data?.returns ?? EMPTY_RETURNS;
-  const itemsById = useMemo(
-    () => new Map(order.items.map((item) => [item.id, item])),
-    [order.items],
-  );
-  const remaining = useMemo(
-    () => getRemainingReturnableQuantities(order.items, returns),
-    [order.items, returns],
-  );
-  const normalizedStatus = order.status.toLowerCase();
-  const orderCanHaveReturns = ["shipped", "delivered", "completed"].includes(normalizedStatus);
-  const hasReturnableItems = [...remaining.values()].some((value) => value > 0);
-  const canRequest =
-    actions.canChangeOrderStatus &&
-    orderCanHaveReturns &&
-    hasReturnableItems;
-  const emptyMessage = !actions.canChangeOrderStatus
-    ? "No returns have been created for this order."
-    : ["pending", "processing", "confirmed"].includes(normalizedStatus)
-      ? "Returns can be created after an item ships."
-      : orderCanHaveReturns && !hasReturnableItems
-        ? "There are no remaining items available to return."
-        : "This order has no returnable items.";
+  const itemsById = useMemo(() => new Map(order.items.map((item) => [item.id, item])), [order.items]);
+  const remaining = useMemo(() => getRemainingReturnableQuantities(order.items, returns), [order.items, returns]);
+  const canRequest = canManage
+    && RETURNABLE_ORDER_STATUSES.has(order.status.toLowerCase())
+    && [...remaining.values()].some((value) => value > 0);
+  const close = (open: boolean) => !open && setDialog(null);
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border bg-muted/5 px-4 py-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <RotateCcw className="h-4 w-4" />
-          Returns
-          {returns.length > 0 ? <Badge variant="secondary" className="text-sm">{returns.length}</Badge> : null}
-        </CardTitle>
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle>{t("returns.title")}</CardTitle>
         {canRequest && query.isSuccess ? (
-          <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => setDialog({ type: "create" })}>
-            <Plus className="mr-2 h-4 w-4" />
-            New return
+          <Button type="button" size="sm" variant="outline" onClick={() => setDialog("create")}>
+            {t("returns.new")}
           </Button>
         ) : null}
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent>
         {!hydrated || query.isLoading ? (
-          <div className="flex min-h-24 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading returns…
-          </div>
+          <p className="text-muted-foreground">{t("read.loading")}</p>
         ) : query.isError ? (
-          <div className="flex min-h-28 flex-col items-center justify-center gap-3 p-4 text-center">
-            <p className="text-sm font-medium text-destructive">Returns could not be loaded.</p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="min-h-11 sm:min-h-9"
-              onClick={() => query.refetch()}
-              disabled={query.isFetching}
-            >
-              {query.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Try again
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-muted-foreground">{t("returns.loadFailed")}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
+              {r("retry")}
             </Button>
           </div>
         ) : returns.length === 0 ? (
-          <div className="p-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">No returns yet</p>
-            <p className="mt-1">
-              {canRequest
-                ? "Create a return for items sent back by the customer. Refunds are handled separately."
-                : emptyMessage}
-            </p>
-          </div>
+          <p className="text-muted-foreground">{t(canRequest ? "returns.emptyCanRequest" : "returns.empty")}</p>
         ) : (
-          <div className="divide-y divide-border">
+          <ul className="divide-y">
             {returns.map((orderReturn) => (
               <OrderReturnRow
                 key={orderReturn.id}
                 orderReturn={orderReturn}
                 itemsById={itemsById}
-                canManage={actions.canChangeOrderStatus}
-                onAction={setDialog}
+                canManage={canManage}
+                onAction={(action) => {
+                  setTarget(action.orderReturn);
+                  setDialog(action.type);
+                }}
               />
             ))}
-          </div>
+          </ul>
         )}
       </CardContent>
 
-      <CreateReturnDialog order={order} returns={returns} open={dialog?.type === "create"} onOpenChange={(open) => !open && setDialog(null)} />
-      {dialog?.type === "approve" ? <ApproveReturnDialog key={`${dialog.orderReturn.id}:${dialog.orderReturn.version}`} orderReturn={dialog.orderReturn} itemsById={itemsById} open onOpenChange={(open) => !open && setDialog(null)} /> : null}
-      {dialog?.type === "receive" ? <ReceiveReturnDialog key={`${dialog.orderReturn.id}:${dialog.orderReturn.version}`} orderReturn={dialog.orderReturn} itemsById={itemsById} open onOpenChange={(open) => !open && setDialog(null)} /> : null}
-      {dialog?.type === "cancel" ? <CancelReturnDialog key={`${dialog.orderReturn.id}:${dialog.orderReturn.version}`} orderReturn={dialog.orderReturn} open onOpenChange={(open) => !open && setDialog(null)} /> : null}
+      <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />
+      <ApproveReturnDialog key={`approve:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "approve"} onOpenChange={close} />
+      <ReceiveReturnDialog key={`receive:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "receive"} onOpenChange={close} />
+      <CancelReturnDialog key={`cancel:${targetKey}`} orderReturn={target} open={dialog === "cancel"} onOpenChange={close} />
     </Card>
   );
 }

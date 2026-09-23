@@ -5,6 +5,7 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
+import { fromMinor } from "@scalius/shared/money";
 import {
     COMMERCE_UTC_OFFSET_SECONDS,
     commerceCalendarDateKey,
@@ -67,20 +68,20 @@ async function runDashboardQuery<T>(
 }
 
 type CountRow = { count: number };
-type CurrentMonthRow = {
+/** Revenue is summed exactly in minor units; a store's orders share one currency. */
+type RevenueMinor = { revenueMinor: number | null; currencyDecimalPlaces: number };
+type CurrentMonthRow = RevenueMinor & {
     count: number;
-    revenue: number | null;
     delivered: number;
     processing: number;
     shipping: number;
     cancelled: number;
 };
-type MonthComparisonRow = { count: number; revenue: number | null };
-type TotalRevenueRow = { total: number | null };
-type DailyOrderRow = {
+type MonthComparisonRow = RevenueMinor & { count: number };
+type TotalRevenueRow = RevenueMinor;
+type DailyOrderRow = RevenueMinor & {
     day: number;
     orderCount: number;
-    totalRevenue: number;
 };
 type DailyCustomerRow = {
     day: number;
@@ -89,10 +90,18 @@ type DailyCustomerRow = {
 type RecentOrderRow = {
     id: string;
     customerName: string;
-    totalAmount: number;
+    totalAmountMinor: number;
+    currencyDecimalPlaces: number;
     status: string;
     createdAt: Date | string;
 };
+
+const recognizedRevenueMinor = sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalAmountMinor} else 0 end)`;
+const revenueDecimalPlaces = sql<number>`coalesce(max(${orders.currencyDecimalPlaces}), 2)`;
+
+function revenueAmount(row: RevenueMinor | undefined): number {
+    return row ? fromMinor(Number(row.revenueMinor ?? 0), Number(row.currencyDecimalPlaces)) : 0;
+}
 
 function calculateGrowth(current: number, previous: number): number | null {
     if (previous === 0) return current === 0 ? 0 : null;
@@ -127,7 +136,8 @@ function getDashboardSummaryQueries(
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
+                revenueMinor: recognizedRevenueMinor,
+                currencyDecimalPlaces: revenueDecimalPlaces,
                 delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
                 processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
                 shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
@@ -140,7 +150,8 @@ function getDashboardSummaryQueries(
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenue: sql<number>`sum(case when status NOT IN ('cancelled', 'returned') then total_amount else 0 end)`,
+                revenueMinor: recognizedRevenueMinor,
+                currencyDecimalPlaces: revenueDecimalPlaces,
             })
             .from(orders)
             .where(
@@ -152,7 +163,8 @@ function getDashboardSummaryQueries(
 function getDashboardTotalRevenueQuery(db: Database) {
     return db
         .select({
-            total: sql<number>`sum(total_amount)`,
+            revenueMinor: sql<number>`sum(${orders.totalAmountMinor})`,
+            currencyDecimalPlaces: revenueDecimalPlaces,
         })
         .from(orders)
         .where(
@@ -165,7 +177,8 @@ function getRecentOrdersQuery(db: Database, limit: number) {
         .select({
             id: orders.id,
             customerName: orders.customerName,
-            totalAmount: orders.totalAmount,
+            totalAmountMinor: orders.totalAmountMinor,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             status: orders.status,
             createdAt: orders.createdAt,
         })
@@ -176,8 +189,9 @@ function getRecentOrdersQuery(db: Database, limit: number) {
 }
 
 function mapRecentOrders(recentOrders: RecentOrderRow[]) {
-    return recentOrders.map((order) => ({
+    return recentOrders.map(({ totalAmountMinor, currencyDecimalPlaces, ...order }) => ({
         ...order,
+        totalAmount: fromMinor(totalAmountMinor, currencyDecimalPlaces),
         createdAt: new Date(order.createdAt),
     }));
 }
@@ -197,17 +211,16 @@ function mapDashboardSummaryStats([
         currentMonthStats?.count ?? 0,
         lastMonthStats?.count ?? 0,
     );
-    const revenueGrowth = calculateGrowth(
-        currentMonthStats?.revenue ?? 0,
-        lastMonthStats?.revenue ?? 0,
-    );
+    const currentRevenue = revenueAmount(currentMonthStats);
+    const lastRevenue = revenueAmount(lastMonthStats);
+    const revenueGrowth = calculateGrowth(currentRevenue, lastRevenue);
 
     return {
         totalProducts,
         totalCustomers,
         currentMonth: {
             orders: currentMonthStats?.count ?? 0,
-            revenue: currentMonthStats?.revenue ?? 0,
+            revenue: currentRevenue,
             orderGrowth,
             revenueGrowth,
             orderStatus: {
@@ -219,7 +232,7 @@ function mapDashboardSummaryStats([
         },
         lastMonth: {
             orders: lastMonthStats?.count ?? 0,
-            revenue: lastMonthStats?.revenue ?? 0,
+            revenue: lastRevenue,
         },
     };
 }
@@ -306,11 +319,9 @@ export async function getDashboardStats(db: Database) {
         currentMonthArr,
         lastMonthArr,
     ]);
-    const totalRevenue = totalRevenueArr[0]?.total ?? 0;
-
     return {
         ...summaryStats,
-        totalRevenue: totalRevenue || 0,
+        totalRevenue: revenueAmount(totalRevenueArr[0]),
     };
 }
 
@@ -350,7 +361,8 @@ export async function getDailyActivityData(db: Database, days: number) {
                 .select({
                     day: orderDay.mapWith(Number),
                     orderCount: sql<number>`count(*)`.mapWith(Number),
-                    totalRevenue: sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalAmount} else 0 end)`.mapWith(Number),
+                    revenueMinor: recognizedRevenueMinor.mapWith(Number),
+                    currencyDecimalPlaces: revenueDecimalPlaces.mapWith(Number),
                 })
                 .from(orders)
                 .where(
@@ -394,7 +406,7 @@ export async function getDailyActivityData(db: Database, days: number) {
         result.push({
             date: dateStr,
             orders: orderEntry ? orderEntry.orderCount : 0,
-            revenue: orderEntry ? orderEntry.totalRevenue : 0,
+            revenue: revenueAmount(orderEntry),
             newCustomers: customerEntry ? customerEntry.customerCount : 0,
         });
     }

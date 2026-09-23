@@ -37,7 +37,7 @@ function createDb(existingMethod: { id: string; isActive?: boolean; deletedAt?: 
         returning: async () => [{
           id: "sm_1",
           name: "Inside Dhaka",
-          fee: 60,
+          feeMinor: 6_000,
           description: null,
           isActive: true,
           sortOrder: 0,

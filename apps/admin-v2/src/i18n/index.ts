@@ -100,14 +100,20 @@ export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key:
   return (key, vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars);
 }
 
-function intlLocale(): string {
+// Bangladesh groups digits in lakhs (12,34,567) in both languages; "en-IN"
+// is the English locale that does so.
+function numberLocale(): string {
+  return current === "bn" ? "bn-BD" : "en-IN";
+}
+
+function dateLocale(): string {
   return current === "bn" ? "bn-BD" : "en-BD";
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(intlLocale(), options).format(value);
+  return new Intl.NumberFormat(numberLocale(), options).format(value);
 }
 
 export function formatDateTime(date: Date, options?: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(intlLocale(), { timeZone: "Asia/Dhaka", ...options }).format(date);
+  return new Intl.DateTimeFormat(dateLocale(), { timeZone: "Asia/Dhaka", ...options }).format(date);
 }

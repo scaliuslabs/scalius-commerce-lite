@@ -1,4 +1,5 @@
 import type { DeliveryProviderType, Order } from "@scalius/database/schema";
+import { fromMinor } from "@scalius/shared/money";
 import type {
   SteadfastCredentials,
   SteadfastConfig,
@@ -97,7 +98,7 @@ export class SteadfastProvider implements DeliveryProviderInterface {
       const codAmount =
         options?.codAmount !== undefined
           ? options.codAmount
-          : (order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)));
+          : fromMinor(Math.max(0, order.balanceDueMinor), order.currencyDecimalPlaces);
 
       // Construct the full address
       const addressParts = [

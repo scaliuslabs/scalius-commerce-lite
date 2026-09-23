@@ -347,7 +347,6 @@ describe("reconcileValidatedCartSnapshot", () => {
         id: "disc_1",
         code: "SAVE",
         type: "percentage",
-        valueType: "percentage",
         discountValue: 10,
         discountAmount: 30,
       },
@@ -376,7 +375,6 @@ describe("reconcileValidatedCartSnapshot", () => {
       id: "disc_1",
       code: "SAVE",
       type: "percentage",
-      valueType: "percentage",
       discountValue: 10,
       discountAmount: 30,
     };

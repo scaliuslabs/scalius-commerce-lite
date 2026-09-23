@@ -1,14 +1,8 @@
-// src/components/admin/product-form/StatusCard.tsx
 import { memo } from "react";
-import { useWatch, type UseFormReturn } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
+import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -18,85 +12,81 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  PRODUCT_CONDITION_LABELS,
-  PRODUCT_CONDITION_VALUES,
-} from "@scalius/shared/product-condition";
+import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared/product-condition";
+import { useMessages } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+
+const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
+  new: "conditionNew",
+  refurbished: "conditionRefurbished",
+  used: "conditionUsed",
+};
 
 interface StatusCardProps {
   form: UseFormReturn<ProductFormValues>;
-  isEdit?: boolean;
+  /** Saved products only. */
   storefrontUrl?: string;
 }
 
-export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl }: StatusCardProps) {
-  const isActive = useWatch({ control: form.control, name: "isActive" });
+export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: StatusCardProps) {
+  const t = useMessages(productMessages);
 
   return (
     <Card>
-      <CardHeader className="px-4 py-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Status</CardTitle>
-          <Badge variant={isActive ? "default" : "secondary"} className="text-xs">
-            {isActive ? "Active" : "Draft"}
-          </Badge>
-        </div>
+      <CardHeader>
+        <CardTitle>{t("status")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 px-4 pb-4 pt-0">
-        <div className="divide-y rounded-lg border">
-          <FormField
-            control={form.control}
-            name="isActive"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
-                <FormLabel className="text-xs font-medium">Published</FormLabel>
+      <CardContent className="space-y-4">
+        <FormField
+          control={form.control}
+          name="isActive"
+          render={({ field }) => (
+            <FormItem>
+              <Select value={field.value ? "active" : "draft"} onValueChange={(value) => field.onChange(value === "active")}>
                 <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
-                  />
+                  <SelectTrigger aria-label={t("status")}>
+                    <SelectValue>{t(field.value ? "statusActive" : "statusDraft")}</SelectValue>
+                  </SelectTrigger>
                 </FormControl>
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  <SelectItem value="active">{t("statusActive")}</SelectItem>
+                  <SelectItem value="draft">{t("statusDraft")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormItem>
+          )}
+        />
 
-          <FormField
-            control={form.control}
-            name="freeDelivery"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
-                <FormLabel className="text-xs font-medium">Free delivery</FormLabel>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
+        <FormField
+          control={form.control}
+          name="freeDelivery"
+          render={({ field }) => (
+            <FormItem className="flex items-center justify-between">
+              <FormLabel>{t("freeDelivery")}</FormLabel>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
           name="productCondition"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium">Condition</FormLabel>
+              <FormLabel>{t("condition")}</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="min-h-11 md:min-h-9">
-                    <SelectValue placeholder="Select condition" />
+                  <SelectTrigger>
+                    <SelectValue>{t(CONDITION_LABELS[field.value])}</SelectValue>
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {PRODUCT_CONDITION_VALUES.map((condition) => (
                     <SelectItem key={condition} value={condition}>
-                      {PRODUCT_CONDITION_LABELS[condition]}
+                      {t(CONDITION_LABELS[condition])}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -105,18 +95,14 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
           )}
         />
 
-        {isEdit && storefrontUrl && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11 w-full text-xs md:h-8 md:min-h-8"
-            onClick={() => window.open(storefrontUrl, "_blank")}
-          >
-            <ExternalLink className="h-3 w-3 mr-1.5" />
-            View on storefront
+        {storefrontUrl ? (
+          <Button variant="outline" asChild className="w-full">
+            <a href={storefrontUrl} target="_blank" rel="noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              {t("viewOnStorefront")}
+            </a>
           </Button>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

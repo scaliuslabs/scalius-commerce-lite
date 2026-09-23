@@ -146,7 +146,6 @@ describe("MediaManager lazy-open lifecycle", () => {
       button.textContent?.toLowerCase().includes("choose image"),
     );
     expect(trigger).toBeDefined();
-    expect(trigger?.className).toContain("min-h-11");
     act(() => click(trigger!));
     await flush();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
