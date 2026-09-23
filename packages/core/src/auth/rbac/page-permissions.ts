@@ -13,6 +13,31 @@ export interface PagePermissionConfig {
   allowAnyAdmin?: boolean;
 }
 
+const TEAM_PAGE_PERMISSIONS = [
+  PERMISSIONS.TEAM_VIEW,
+  PERMISSIONS.TEAM_MANAGE,
+  PERMISSIONS.TEAM_MANAGE_ROLES,
+] as const;
+const SHIPPING_PAGE_PERMISSIONS = [
+  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+  PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
+  PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+] as const;
+const APPS_PAGE_PERMISSIONS = [
+  PERMISSIONS.ANALYTICS_VIEW,
+  PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
+  PERMISSIONS.AGENT_ACCESS_VIEW,
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+] as const;
+const SETTINGS_PAGE_PERMISSIONS = [
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+  PERMISSIONS.TAXES_VIEW,
+  ...TEAM_PAGE_PERMISSIONS,
+  ...SHIPPING_PAGE_PERMISSIONS,
+  ...APPS_PAGE_PERMISSIONS,
+] as const;
+
 // Admin page route to permission mapping.
 // Routes are matched from most specific to least specific.
 // Routes not listed here should be treated as unmapped and denied by the admin shell.
@@ -80,33 +105,33 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/promotions": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/promotions/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
 
-  // Analytics
-  "/admin/analytics": { permission: PERMISSIONS.ANALYTICS_VIEW },
-  "/admin/analytics/new": { permission: PERMISSIONS.ANALYTICS_CREATE },
-
   // Customers
   "/admin/customers": { permission: PERMISSIONS.CUSTOMERS_VIEW },
   "/admin/customers/new": { permission: PERMISSIONS.CUSTOMERS_CREATE },
 
   // Settings - Account is always accessible (own account management)
   "/admin/settings/account": { allowAnyAdmin: true },
-  "/admin/settings/agent-access": {
-    permission: PERMISSIONS.AGENT_ACCESS_VIEW,
-  },
-  "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/notifications": {
-    permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-  },
+
+  // Settings list: each page is gated by the permission its cards read with.
+  "/admin/settings": { anyOf: [...SETTINGS_PAGE_PERMISSIONS] },
+  "/admin/settings/store": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/users": { anyOf: [...TEAM_PAGE_PERMISSIONS] },
+  "/admin/settings/payments": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/delivery-providers": {
-    permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-  },
-  "/admin/settings/fraud-checker": {
-    permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-  },
-  "/admin/settings/meta-conversion": { permission: PERMISSIONS.ANALYTICS_VIEW },
-  "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  "/admin/settings/shipping": { anyOf: [...SHIPPING_PAGE_PERMISSIONS] },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
+  "/admin/settings/notifications": {
+    anyOf: [
+      PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+      PERMISSIONS.SETTINGS_GENERAL_VIEW,
+    ],
+  },
+  "/admin/settings/policies": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/apps": { anyOf: [...APPS_PAGE_PERMISSIONS] },
+  "/admin/settings/customer-accounts": {
+    permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  },
+  "/admin/settings/advanced": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
 };
 
 // Dynamic route patterns for pages with parameters (e.g., /admin/products/[id]/edit)
@@ -175,12 +200,6 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/promotions\/[^/]+\/edit$/,
     config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-
-  // Analytics
-  {
-    pattern: /^\/admin\/analytics\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
 
   // Pages

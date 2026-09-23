@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { AccessPage } from "~/components/admin/agent-access";
+import { SettingsCard } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useMessages } from "~/i18n";
+import { aiAccessMessages } from "~/i18n/settings-ai-access";
 import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
 import {
   getApiV1Platform,
@@ -72,6 +74,7 @@ export function isSafeBrowserAction(
   }
 }
 
+/** The handoff runs inside a fresh Super Admin session. */
 export async function requireFreshBrowserHandoffAuthority() {
   const context = await getFreshAdminRouteContext();
   if (!context.isSuperAdmin) {
@@ -99,6 +102,7 @@ export const Route = createFileRoute(
 function BrowserHandoffRoute() {
   const { handoffId } = Route.useParams();
   const trustedStorefrontOrigin = Route.useLoaderData();
+  const t = useMessages(aiAccessMessages);
   const [status, setStatus] = useState<"ready" | "loading" | "opened" | "error">("ready");
 
   const continueSecurely = async () => {
@@ -143,49 +147,24 @@ function BrowserHandoffRoute() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-xl items-center px-3 py-8">
-      <Card className="w-full shadow-none">
-        <CardHeader>
-          <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <CardTitle>Continue securely in Scalius</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This one-use step stays in your current 2FA-verified dashboard session.
-            No credential is stored in this page or included in its URL.
-          </p>
-          {status === "error" ? (
-            <Alert variant="destructive">
-              <AlertTitle>Secure handoff unavailable</AlertTitle>
-              <AlertDescription>
-                It may have expired or already been used. Run the agent operation again.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {status === "opened" ? (
-            <Alert>
-              <ShieldCheck aria-hidden="true" />
-              <AlertTitle>Secure browser step opened</AlertTitle>
-              <AlertDescription>You can close this page after completing the new tab.</AlertDescription>
-            </Alert>
-          ) : null}
-          <Button
-            type="button"
-            className="min-h-11 w-full sm:min-h-9"
-            disabled={status === "loading" || status === "opened"}
-            onClick={() => void continueSecurely()}
-          >
-            {status === "loading" ? (
-              <Loader2 className="animate-spin" aria-hidden="true" />
-            ) : (
-              <ExternalLink aria-hidden="true" />
-            )}
-            {status === "loading" ? "Preparing secure handoff…" : "Continue"}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+    <AccessPage title={t("continueTitle")}>
+      <SettingsCard title={t("continueDescription")}>
+        {status === "error" ? (
+          <p role="alert" className="text-body text-destructive">{t("continueFailed")}</p>
+        ) : null}
+        {status === "opened" ? (
+          <p role="status" className="text-body text-muted-foreground">{t("continueOpened")}</p>
+        ) : null}
+        <Button
+          type="button"
+          className="w-full sm:w-fit"
+          disabled={status === "loading" || status === "opened"}
+          onClick={() => void continueSecurely()}
+        >
+          {status === "loading" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+          {t("continue")}
+        </Button>
+      </SettingsCard>
+    </AccessPage>
   );
 }

@@ -3,12 +3,6 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const inPlaceWorkspaceRoutes = [
-  ["routes/admin/settings/index.tsx", 2],
-  ["routes/admin/settings/notifications.tsx", 2],
-  ["routes/admin/settings/checkout.tsx", 1],
-  ["routes/admin/settings/meta-conversion.tsx", 1],
-  ["routes/admin/settings/account.tsx", 1],
-  ["routes/admin/settings/taxes.tsx", 2],
   ["routes/admin/inventory/index.tsx", 1],
   ["routes/admin/media.tsx", 1],
 ] as const;

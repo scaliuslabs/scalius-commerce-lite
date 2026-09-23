@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
     queryKey: ["settings", "taxes"],
     queryFn: vi.fn(),
   })),
+  taxSettingsQueryOptions: vi.fn(() => ({
+    queryKey: ["settings", "taxes", "settings"],
+    queryFn: vi.fn(),
+  })),
 }));
 
 vi.mock("~/lib/admin-route-context", () => ({
@@ -14,19 +18,20 @@ vi.mock("~/lib/admin-route-context", () => ({
 }));
 vi.mock("~/lib/api-query-options/taxes", () => ({
   taxConfigurationQueryOptions: mocks.taxConfigurationQueryOptions,
+  taxSettingsQueryOptions: mocks.taxSettingsQueryOptions,
 }));
-vi.mock("~/components/admin/taxes", () => ({
-  TaxSettingsPage: () => null,
+vi.mock("~/components/admin/taxes/TaxesSettings", () => ({
+  TaxCollectionCard: () => null,
+  TaxGroupsCard: () => null,
+  TaxRatesCard: () => null,
+  TaxOverridesCard: () => null,
+  firstTaxOverridesQuery: { queryKey: ["settings", "tax-classifications"], queryFn: vi.fn() },
 }));
 vi.mock("~/lib/route-error", () => ({
   RouteErrorComponent: () => null,
 }));
 
-import {
-  Route,
-  requireFreshTaxesRouteAuthority,
-  validateTaxesSearch,
-} from "./taxes";
+import { Route, requireFreshTaxesRouteAuthority } from "./taxes";
 
 function accessContext(input: {
   isSuperAdmin: boolean;
@@ -54,6 +59,7 @@ describe("taxes route authority", () => {
   beforeEach(() => {
     mocks.getFreshAdminRouteContext.mockReset();
     mocks.taxConfigurationQueryOptions.mockClear();
+    mocks.taxSettingsQueryOptions.mockClear();
   });
 
   it("redirects a freshly revoked tax viewer before tax data loads", async () => {
@@ -73,6 +79,7 @@ describe("taxes route authority", () => {
     });
     expect(Route.options.beforeLoad).toBe(requireFreshTaxesRouteAuthority);
     expect(mocks.taxConfigurationQueryOptions).not.toHaveBeenCalled();
+    expect(mocks.taxSettingsQueryOptions).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -85,23 +92,5 @@ describe("taxes route authority", () => {
     mocks.getFreshAdminRouteContext.mockResolvedValue(context);
 
     await expect(requireFreshTaxesRouteAuthority()).resolves.toBe(context);
-  });
-
-  it("keeps a valid deep-linked workspace section and normalizes invalid input", () => {
-    expect(validateTaxesSearch({ section: "preview" })).toEqual({
-      section: "preview",
-    });
-    expect(validateTaxesSearch({
-      section: "unknown",
-      kind: "variant",
-      query: "  CLOG  ",
-      page: "3",
-    })).toEqual({
-      section: "policy",
-      kind: "variant",
-      query: "CLOG",
-      page: 3,
-    });
-    expect(Route.options.validateSearch).toBe(validateTaxesSearch);
   });
 });

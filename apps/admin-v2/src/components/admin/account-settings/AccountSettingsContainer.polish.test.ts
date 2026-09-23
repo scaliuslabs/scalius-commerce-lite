@@ -13,7 +13,6 @@ describe("account settings workspace polish", () => {
     expect(container).toContain('className="min-h-11 bg-card"');
     expect(container).toContain("<SelectGroup>");
     expect(container).toContain("Personal");
-    expect(container).toContain("Store access");
     expect(container).toContain("lg:sticky lg:top-4 lg:block");
     expect(container).not.toContain("overflow-x-auto");
   });

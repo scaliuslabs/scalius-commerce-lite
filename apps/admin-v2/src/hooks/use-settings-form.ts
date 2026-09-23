@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useSaveBar } from "~/components/admin/shared/SaveBar";
 
 interface UseSettingsFormOptions<T extends object, SaveResult> {
   queryKey: readonly unknown[];
@@ -11,6 +12,12 @@ interface UseSettingsFormOptions<T extends object, SaveResult> {
   successMessage?: string;
   errorMessage?: string;
   invalidateQueryKeys?: readonly (readonly unknown[])[];
+  /** Inside a page save bar: false blocks saving (the card shows why). */
+  isValid?: (values: T) => boolean;
+  /** Inside a page save bar: false blocks saving for this role. */
+  canEdit?: boolean;
+  /** Names this card in the page's "couldn't save" banner. */
+  label?: string;
 }
 
 export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
@@ -40,6 +47,9 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   successMessage = "Settings saved",
   errorMessage = "Failed to save settings",
   invalidateQueryKeys = [],
+  isValid,
+  canEdit = true,
+  label,
 }: UseSettingsFormOptions<T, SaveResult>) {
   const queryClient = useQueryClient();
 
@@ -52,10 +62,14 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   const hasLoaded = data !== undefined && !isError;
 
   const defaultValuesRef = useRef(defaultValues);
-  const [{ values, savedValues }, setDraft] = useState(() => ({
-    values: defaultValues,
-    savedValues: defaultValues,
-  }));
+  // Route loaders prefetch settings: seed from the cache so navigation never
+  // flashes default values.
+  const [{ values, savedValues }, setDraft] = useState(() => {
+    const cached = queryClient.getQueryData<Partial<T>>(queryKey as unknown[]);
+    const initial = cached ? ({ ...defaultValues, ...cached } as T) : defaultValues;
+    return { values: initial, savedValues: initial };
+  });
+  const inSaveBarRef = useRef(false);
   const ignoredReadUpdates = useRef(-1);
 
   // A refresh may acknowledge normalization even when structural sharing keeps
@@ -98,9 +112,12 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
         );
       }
       await Promise.all(invalidations);
-      toast.success(successMessage);
+      // A page save bar reports one success for all of its cards.
+      if (!inSaveBarRef.current) toast.success(successMessage);
     },
     onError: (error) => {
+      // In a save scope the page banner lists the problem instead.
+      if (inSaveBarRef.current) return;
       toast.error(error instanceof Error && error.message ? error.message : errorMessage);
     },
   });
@@ -130,6 +147,15 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     }
     await mutation.mutateAsync(values);
   }, [hasLoaded, values, mutation]);
+
+  inSaveBarRef.current = useSaveBar({
+    dirty: isDirty,
+    saving: mutation.isPending,
+    invalid: !canEdit || !hasLoaded || (isValid ? !isValid(values) : false),
+    label,
+    save: () => mutation.mutateAsync(values),
+    discard: reset,
+  });
 
   return {
     values,

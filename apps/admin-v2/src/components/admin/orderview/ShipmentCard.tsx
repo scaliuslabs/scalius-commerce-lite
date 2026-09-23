@@ -236,7 +236,7 @@ const CreateShipmentForm = ({
                     <p className="mt-1 text-xs text-muted-foreground">Add a provider for tracked courier shipments.</p>
                   </div>
                   <Button asChild type="button" variant="outline" size="sm" className="h-11 sm:h-8">
-                    <Link to="/admin/settings/delivery-providers">Configure providers</Link>
+                    <Link to="/admin/settings/shipping">Configure providers</Link>
                   </Button>
                 </div>
               )}
