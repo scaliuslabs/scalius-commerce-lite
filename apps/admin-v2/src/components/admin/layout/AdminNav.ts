@@ -1,372 +1,93 @@
-// Admin navigation data and its shared icon contract.
-
-import { createElement, type ComponentType } from "react";
+// The dashboard sidebar: one list of sections, filtered by the same page
+// permission map that guards the routes, so a link is shown exactly when its
+// page would open.
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  FolderTree,
-  ListTree,
-  Layers3,
-  Images,
-  FileText,
-  Settings,
-  SlidersHorizontal,
-  Truck,
-  Database,
-  ShoppingBag,
   BadgePercent,
-  BarChart3,
-  Users,
-  ShieldAlert,
-  Bell,
-  UserCog,
-  Bot,
-  Warehouse,
-  Palette,
-  Package,
-  ReceiptText,
-  Boxes,
-  CircleDollarSign,
-  GalleryHorizontalEnd,
-  LibraryBig,
-  ShoppingBasket,
-  Megaphone,
-  Menu,
-  Newspaper,
+  FileText,
+  House,
+  Inbox,
+  Settings,
+  Store,
+  Tag,
+  UserRound,
+  type LucideIcon,
 } from "lucide-react";
-import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
+import type { shellMessages } from "~/i18n/shell";
 
-export const NAV_PERMISSIONS = {
-  DASHBOARD_VIEW: ADMIN_PERMISSIONS.DASHBOARD_VIEW,
-  PRODUCTS_VIEW: ADMIN_PERMISSIONS.PRODUCTS_VIEW,
-  CATEGORIES_VIEW: ADMIN_PERMISSIONS.CATEGORIES_VIEW,
-  ATTRIBUTES_VIEW: ADMIN_PERMISSIONS.ATTRIBUTES_VIEW,
-  COLLECTIONS_VIEW: ADMIN_PERMISSIONS.COLLECTIONS_VIEW,
-  PAGES_VIEW: ADMIN_PERMISSIONS.PAGES_VIEW,
-  MEDIA_VIEW: ADMIN_PERMISSIONS.MEDIA_VIEW,
-  ORDERS_VIEW: ADMIN_PERMISSIONS.ORDERS_VIEW,
-  CUSTOMERS_VIEW: ADMIN_PERMISSIONS.CUSTOMERS_VIEW,
-  DISCOUNTS_VIEW: ADMIN_PERMISSIONS.DISCOUNTS_VIEW,
-  ANALYTICS_VIEW: ADMIN_PERMISSIONS.ANALYTICS_VIEW,
-  SETTINGS_GENERAL_VIEW: ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-  SETTINGS_NOTIFICATIONS_EDIT: ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-  SETTINGS_HEADER_EDIT: ADMIN_PERMISSIONS.SETTINGS_HEADER_EDIT,
-  SETTINGS_DELIVERY_PROVIDERS_VIEW:
-    ADMIN_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-  SETTINGS_FRAUD_CHECKER_VIEW: ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-  SETTINGS_CACHE_VIEW: ADMIN_PERMISSIONS.SETTINGS_CACHE_VIEW,
-  TAXES_VIEW: ADMIN_PERMISSIONS.TAXES_VIEW,
-  AGENT_ACCESS_VIEW: ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW,
-} as const;
+type ShellKey = keyof (typeof shellMessages)["en"];
 
-export interface NavIconProps {
-  className?: string;
-  strokeWidth?: number;
-  "aria-hidden"?: boolean;
-}
-
-export type NavIcon = ComponentType<NavIconProps>;
-
-/**
- * The Meta CAPI route is a direct provider integration, so its official mark is
- * more useful than another generic analytics glyph. A mask preserves the
- * verified provider silhouette while allowing active, hover, and dark-theme
- * colors to continue coming from the sidebar.
- */
-export function MetaCapiNavIcon({ className }: NavIconProps) {
-  return createElement("span", {
-    "aria-hidden": true,
-    className: ["inline-block size-4 shrink-0", className]
-      .filter(Boolean)
-      .join(" "),
-    style: {
-      backgroundColor: "currentColor",
-      maskImage: "url(/provider-marks/meta.svg)",
-      maskPosition: "center",
-      maskRepeat: "no-repeat",
-      maskSize: "contain",
-      WebkitMaskImage: "url(/provider-marks/meta.svg)",
-      WebkitMaskPosition: "center",
-      WebkitMaskRepeat: "no-repeat",
-      WebkitMaskSize: "contain",
-    },
-  });
-}
-
-export interface NavSubItem {
-  name: string;
-  href: string;
-  icon?: NavIcon;
-  requiredPermission?: string;
-  anyOfPermissions?: string[];
+export interface NavLink {
+  key: ShellKey;
+  to: string;
 }
 
 export interface NavItem {
-  name: string;
-  href: string;
-  icon: NavIcon;
-  subItems?: NavSubItem[];
-  defaultOpen?: boolean;
-  requiredPermission?: string;
-  anyOfPermissions?: string[];
+  key: ShellKey;
+  /** Own page; sections without one open their first visible child. */
+  to?: string;
+  icon: LucideIcon;
+  children?: NavLink[];
 }
 
-export interface NavSection {
-  label: string;
-  items: NavItem[];
-}
-
-export function hasNavPermission(
-  item: NavItem | NavSubItem,
-  permissions: Set<string> | undefined,
-  isSuperAdmin: boolean,
-): boolean {
-  if (isSuperAdmin) return true;
-  if (!item.requiredPermission && !item.anyOfPermissions) return true;
-  if (item.requiredPermission) {
-    return permissions ? permissions.has(item.requiredPermission) : false;
-  }
-  if (item.anyOfPermissions) {
-    return permissions
-      ? item.anyOfPermissions.some((p: string) => permissions.has(p))
-      : false;
-  }
-  return true;
-}
-
-export const allNavSections: NavSection[] = [
+export const ADMIN_NAV: readonly NavItem[] = [
+  { key: "home", to: "/admin", icon: House },
+  { key: "orders", to: "/admin/orders", icon: Inbox },
   {
-    label: "",
-    items: [
-      // Dashboard — standalone
-      {
-        name: "Dashboard",
-        href: "/admin",
-        icon: LayoutDashboard,
-        requiredPermission: NAV_PERMISSIONS.DASHBOARD_VIEW,
-      },
-      // Catalog — default open
-      {
-        name: "Catalog",
-        href: "/admin/products",
-        icon: Boxes,
-        defaultOpen: true,
-        subItems: [
-          {
-            name: "Products",
-            href: "/admin/products",
-            icon: Package,
-            requiredPermission: NAV_PERMISSIONS.PRODUCTS_VIEW,
-          },
-          {
-            name: "Categories",
-            href: "/admin/categories",
-            icon: FolderTree,
-            requiredPermission: NAV_PERMISSIONS.CATEGORIES_VIEW,
-          },
-          {
-            name: "Attributes",
-            href: "/admin/attributes",
-            icon: ListTree,
-            requiredPermission: NAV_PERMISSIONS.ATTRIBUTES_VIEW,
-          },
-          {
-            name: "Collections",
-            href: "/admin/collections",
-            icon: Layers3,
-            requiredPermission: NAV_PERMISSIONS.COLLECTIONS_VIEW,
-          },
-          {
-            name: "Inventory",
-            href: "/admin/inventory",
-            icon: Warehouse,
-            requiredPermission: NAV_PERMISSIONS.PRODUCTS_VIEW,
-          },
-        ],
-      },
-      // Content — default open
-      {
-        name: "Content",
-        href: "/admin/pages",
-        icon: LibraryBig,
-        defaultOpen: true,
-        subItems: [
-          {
-            name: "Pages",
-            href: "/admin/pages",
-            icon: FileText,
-            requiredPermission: NAV_PERMISSIONS.PAGES_VIEW,
-          },
-          {
-            name: "Articles",
-            href: "/admin/articles",
-            icon: Newspaper,
-            requiredPermission: NAV_PERMISSIONS.PAGES_VIEW,
-          },
-          {
-            name: "Media",
-            href: "/admin/media",
-            icon: Images,
-            requiredPermission: NAV_PERMISSIONS.MEDIA_VIEW,
-          },
-          {
-            name: "Navigation",
-            href: "/admin/navigation",
-            icon: Menu,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_HEADER_EDIT,
-          },
-        ],
-      },
-      // Sales — default open
-      {
-        name: "Sales",
-        href: "/admin/orders",
-        icon: CircleDollarSign,
-        defaultOpen: true,
-        subItems: [
-          {
-            name: "Orders",
-            href: "/admin/orders",
-            icon: ShoppingBag,
-            requiredPermission: NAV_PERMISSIONS.ORDERS_VIEW,
-          },
-          {
-            name: "Checkouts",
-            href: "/admin/abandoned-checkouts",
-            icon: ShoppingCart,
-            requiredPermission: NAV_PERMISSIONS.ORDERS_VIEW,
-          },
-          {
-            name: "Customers",
-            href: "/admin/customers",
-            icon: Users,
-            requiredPermission: NAV_PERMISSIONS.CUSTOMERS_VIEW,
-          },
-          {
-            name: "Discounts",
-            href: "/admin/discounts",
-            icon: BadgePercent,
-            requiredPermission: NAV_PERMISSIONS.DISCOUNTS_VIEW,
-          },
-          {
-            name: "Promotions",
-            href: "/admin/promotions",
-            icon: Megaphone,
-            requiredPermission: NAV_PERMISSIONS.DISCOUNTS_VIEW,
-          },
-          {
-            name: "Analytics",
-            href: "/admin/analytics",
-            icon: BarChart3,
-            requiredPermission: NAV_PERMISSIONS.ANALYTICS_VIEW,
-          },
-        ],
-      },
-      // Settings — collapsed by default
-      {
-        name: "Settings",
-        href: "/admin/settings",
-        icon: Settings,
-        subItems: [
-          {
-            name: "General",
-            href: "/admin/settings",
-            icon: SlidersHorizontal,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Theme",
-            href: "/admin/settings/theme",
-            icon: Palette,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Account",
-            href: "/admin/settings/account",
-            icon: UserCog,
-          },
-          {
-            name: "Agent Access",
-            href: "/admin/settings/agent-access",
-            icon: Bot,
-            requiredPermission: NAV_PERMISSIONS.AGENT_ACCESS_VIEW,
-          },
-          {
-            name: "Notifications",
-            href: "/admin/settings/notifications",
-            icon: Bell,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-          },
-          {
-            name: "Hero Sliders",
-            href: "/admin/settings/hero-sliders",
-            icon: GalleryHorizontalEnd,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_HEADER_EDIT,
-          },
-          {
-            name: "Checkout",
-            href: "/admin/settings/checkout",
-            icon: ShoppingBasket,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
-          },
-          {
-            name: "Taxes",
-            href: "/admin/settings/taxes",
-            icon: ReceiptText,
-            requiredPermission: NAV_PERMISSIONS.TAXES_VIEW,
-          },
-          {
-            name: "Delivery",
-            href: "/admin/settings/delivery-providers",
-            icon: Truck,
-            requiredPermission:
-              NAV_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-          },
-          {
-            name: "Fraud checks",
-            href: "/admin/settings/fraud-checker",
-            icon: ShieldAlert,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-          },
-          {
-            name: "Meta conversions",
-            href: "/admin/settings/meta-conversion",
-            icon: MetaCapiNavIcon,
-            requiredPermission: NAV_PERMISSIONS.ANALYTICS_VIEW,
-          },
-          {
-            name: "Cache",
-            href: "/admin/settings/cache",
-            icon: Database,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_CACHE_VIEW,
-          },
-        ],
-      },
+    key: "products",
+    to: "/admin/products",
+    icon: Tag,
+    children: [
+      { key: "collections", to: "/admin/collections" },
+      { key: "categories", to: "/admin/categories" },
+      { key: "inventory", to: "/admin/inventory" },
+      { key: "attributes", to: "/admin/attributes" },
+    ],
+  },
+  { key: "customers", to: "/admin/customers", icon: UserRound },
+  { key: "discounts", to: "/admin/discounts", icon: BadgePercent },
+  {
+    key: "content",
+    icon: FileText,
+    children: [
+      { key: "pages", to: "/admin/pages" },
+      { key: "blogPosts", to: "/admin/articles" },
+      { key: "files", to: "/admin/media" },
+    ],
+  },
+  {
+    key: "onlineStore",
+    icon: Store,
+    children: [
+      { key: "theme", to: "/admin/online-store/theme" },
+      { key: "navigation", to: "/admin/online-store/navigation" },
+      { key: "homepageBanners", to: "/admin/online-store/banners" },
+      { key: "preferences", to: "/admin/online-store/preferences" },
     ],
   },
 ];
 
-export function getFilteredNavSections(
-  permissions: Set<string> | undefined,
-  isSuperAdmin: boolean,
-): NavSection[] {
-  return allNavSections
-    .map((section) => ({
-      ...section,
-      items: section.items
-        .filter((item) => hasNavPermission(item, permissions, isSuperAdmin))
-        .map((item) => {
-          if (item.subItems) {
-            return {
-              ...item,
-              subItems: item.subItems.filter((subItem) =>
-                hasNavPermission(subItem, permissions, isSuperAdmin),
-              ),
-            };
-          }
-          return item;
-        })
-        .filter((item) => !item.subItems || item.subItems.length > 0),
-    }))
-    .filter((section) => section.items.length > 0);
+export const SETTINGS_ITEM: { key: ShellKey; to: string; icon: LucideIcon } = { key: "settings", to: "/admin/settings", icon: Settings };
+
+export interface VisibleNavItem {
+  key: ShellKey;
+  to: string;
+  icon: LucideIcon;
+  children: NavLink[];
+}
+
+export function visibleNav(canOpen: (path: string) => boolean): VisibleNavItem[] {
+  return ADMIN_NAV.flatMap((item) => {
+    const children = (item.children ?? []).filter((child) => canOpen(child.to));
+    const to = item.to && canOpen(item.to) ? item.to : children[0]?.to;
+    return to ? [{ key: item.key, to, icon: item.icon, children }] : [];
+  });
+}
+
+export function matchesPath(path: string, to: string): boolean {
+  if (to === "/admin") return path === "/admin" || path === "/admin/";
+  return path === to || path.startsWith(`${to}/`);
+}
+
+export function isSectionActive(path: string, item: VisibleNavItem): boolean {
+  return matchesPath(path, item.to) || item.children.some((child) => matchesPath(path, child.to));
 }

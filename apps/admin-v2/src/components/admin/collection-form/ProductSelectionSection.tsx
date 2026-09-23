@@ -124,7 +124,7 @@ export const ProductSelectionSection = React.memo(
                         <Badge key={category.id} variant="secondary" className="gap-1 pr-1">
                           <span className="max-w-[220px] truncate">{category.name}</span>
                           {category.status !== "published" ? (
-                            <span className="text-[10px] uppercase text-amber-700 dark:text-amber-300">
+                            <span className="text-xs uppercase text-amber-700 dark:text-amber-300">
                               {category.status}
                             </span>
                           ) : null}

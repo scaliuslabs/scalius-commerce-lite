@@ -1,82 +1,27 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import {
-  BadgePercent,
-  Bot,
-  Boxes,
-  CircleDollarSign,
-  GalleryHorizontalEnd,
-  LibraryBig,
-  Megaphone,
-  Package,
-  ShieldAlert,
-  ShoppingBasket,
-  ShoppingCart,
-} from "lucide-react";
 import { describe, expect, it } from "vitest";
-import {
-  allNavSections,
-  MetaCapiNavIcon,
-  type NavItem,
-  type NavSubItem,
-} from "./AdminNav";
-import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { canAccessAdminPath } from "~/lib/admin-access";
+import { isSectionActive, visibleNav } from "./AdminNav";
 
-const topLevelItems = allNavSections.flatMap((section) => section.items);
-const leafItems = topLevelItems.flatMap((item) => item.subItems ?? [item]);
+const viewer = (...permissions: string[]) => (to: string) =>
+  canAccessAdminPath(to, { isSuperAdmin: false, hasAdminAccess: true, permissions: new Set(permissions) });
 
-function topLevelItem(name: string): NavItem {
-  const item = topLevelItems.find((candidate) => candidate.name === name);
-  if (!item) throw new Error(`Missing top-level navigation item: ${name}`);
-  return item;
-}
+describe("admin sidebar", () => {
+  it("shows exactly the pages the page-permission map would open", () => {
+    const nav = visibleNav(viewer(PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.PAGES_VIEW));
 
-function leafItem(href: string): NavSubItem | NavItem {
-  const item = leafItems.find((candidate) => candidate.href === href);
-  if (!item) throw new Error(`Missing navigation route: ${href}`);
-  return item;
-}
-
-describe("AdminNav icon taxonomy", () => {
-  it("uses distinct, familiar meanings for navigation groups and critical routes", () => {
-    expect(topLevelItem("Catalog").icon).toBe(Boxes);
-    expect(topLevelItem("Content").icon).toBe(LibraryBig);
-    expect(topLevelItem("Sales").icon).toBe(CircleDollarSign);
-
-    expect(leafItem("/admin/products").icon).toBe(Package);
-    expect(leafItem("/admin/abandoned-checkouts").icon).toBe(ShoppingCart);
-    expect(leafItem("/admin/abandoned-checkouts").name).toBe("Checkouts");
-    expect(leafItem("/admin/discounts").icon).toBe(BadgePercent);
-    expect(leafItem("/admin/promotions").icon).toBe(Megaphone);
-    expect(leafItem("/admin/discounts").name).toBe("Discounts");
-    expect(leafItem("/admin/promotions").name).toBe("Promotions");
-    expect(leafItem("/admin/settings/hero-sliders").icon).toBe(
-      GalleryHorizontalEnd,
-    );
-    expect(leafItem("/admin/settings/checkout").icon).toBe(ShoppingBasket);
-    expect(leafItem("/admin/settings/agent-access").icon).toBe(Bot);
-    expect(leafItem("/admin/settings/agent-access").requiredPermission).toBe(
-      ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW,
-    );
-    expect(leafItem("/admin/settings/fraud-checker").icon).toBe(ShieldAlert);
+    expect(nav.map((item) => item.key)).toEqual(["products", "content"]);
+    // Without products.view the section opens its first reachable page.
+    expect(nav[0]).toMatchObject({ to: "/admin/categories" });
+    expect(nav[0]!.children.map((child) => child.key)).toEqual(["categories"]);
+    expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts"]);
   });
 
-  it("does not reuse a visual meaning across leaf routes", () => {
-    const icons = leafItems.map((item) => item.icon);
-    expect(new Set(icons).size).toBe(icons.length);
-  });
+  it("keeps a section active on its sub-pages and detail routes", () => {
+    const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW));
 
-  it("uses the official Meta silhouette without breaking sidebar color states", () => {
-    expect(leafItem("/admin/settings/meta-conversion").icon).toBe(
-      MetaCapiNavIcon,
-    );
-
-    const markup = renderToStaticMarkup(
-      createElement(MetaCapiNavIcon, { className: "size-4" }),
-    );
-
-    expect(markup).toContain('aria-hidden="true"');
-    expect(markup).toContain("/provider-marks/meta.svg");
-    expect(markup).toContain("background-color:currentColor");
+    expect(isSectionActive("/admin/products/p1/edit", products!)).toBe(true);
+    expect(isSectionActive("/admin/collections/c1/edit", products!)).toBe(true);
+    expect(isSectionActive("/admin/customers", products!)).toBe(false);
   });
 });

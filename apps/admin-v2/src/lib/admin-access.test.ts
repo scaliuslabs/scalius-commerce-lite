@@ -53,7 +53,7 @@ describe("admin shell access", () => {
 
   it("allows the account page to any authenticated user with admin access", () => {
     expect(
-      canAccessAdminPath("/admin/settings/account", {
+      canAccessAdminPath("/admin/account", {
         isSuperAdmin: false,
         hasAdminAccess: true,
         permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
@@ -118,13 +118,13 @@ describe("admin shell access", () => {
       "/admin/collections/collection-123/edit",
       "/admin/orders/order-123",
       "/admin/orders/order-123/edit",
-      "/admin/customers/customer-123/history",
+      "/admin/customers/customer-123/edit",
       "/admin/discounts/discount-123/edit",
       "/admin/promotions/promotion-123/edit",
       "/admin/analytics/report-123/edit",
       "/admin/pages/page-123/edit",
       "/admin/articles/article-123/edit",
-      "/admin/settings/account",
+      "/admin/account",
       "/admin/settings/cache",
       "/admin/settings/taxes",
       "/admin/experimental",

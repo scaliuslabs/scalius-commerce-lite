@@ -96,7 +96,7 @@ export function ChangePasswordForm() {
       <CardContent className="p-4 pt-0">
         <form
           method="post"
-          action="/admin/settings/account"
+          action="/admin/account"
           onSubmit={handleSubmit}
           className="space-y-4"
           noValidate

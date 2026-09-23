@@ -252,10 +252,10 @@ describe("CollectionForm", () => {
     await renderCollectionForm([]);
 
     await waitFor(() => {
-      expect(host.textContent).toContain("Save Collection");
+      expect(host.textContent).toContain("Save");
     });
 
-    expect(getButton(host, "Save Collection").disabled).toBe(false);
+    expect(getButton(host, "Save").disabled).toBe(false);
     expect(getInputByPlaceholder(host, "Collection name").value).toBe(
       "Late Label Collection",
     );
@@ -285,7 +285,7 @@ describe("CollectionForm", () => {
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
     await act(async () => {
-      getButton(host, "Save Collection").dispatchEvent(
+      getButton(host, "Save").dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true }),
       );
     });
@@ -327,9 +327,8 @@ describe("CollectionForm", () => {
     permissionMock.canEdit = false;
     await renderCollectionForm(productLabels);
 
-    expect(host.textContent).toContain("Read-only access");
-    expect(host.textContent).toContain("Save Collection");
-    expect(getButton(host, "Save Collection").disabled).toBe(true);
+    expect(host.textContent).toContain("You can view this but not change it.");
+    expect(getButton(host, "Save").disabled).toBe(true);
     expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
   });
 
@@ -356,7 +355,7 @@ describe("CollectionForm", () => {
     if (!publishedSwitch) throw new Error("Expected published switch");
 
     await act(async () => publishedSwitch.click());
-    await act(async () => getButton(host, "Save Collection").click());
+    await act(async () => getButton(host, "Save").click());
     await waitFor(() => {
       expect(host.textContent).toContain(
         "Add at least one product before publishing a manual collection.",
@@ -481,7 +480,7 @@ describe("CollectionForm", () => {
 
     expect(host.textContent).toContain("Third Woven Scarf");
     expect(host.textContent).toContain("Fourth Canvas Tote");
-    await act(async () => getButton(host, "Save Collection").click());
+    await act(async () => getButton(host, "Save").click());
     await waitFor(() => {
       expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
     });

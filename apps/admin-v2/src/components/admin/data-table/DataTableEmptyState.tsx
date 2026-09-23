@@ -1,5 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { Package } from "lucide-react";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 export interface EmptyStateConfig {
   icon?: React.ComponentType<{ className?: string }>;
@@ -8,21 +10,16 @@ export interface EmptyStateConfig {
   action?: ReactNode;
 }
 
-interface DataTableEmptyStateProps {
-  config?: EmptyStateConfig;
-}
-
-export const DataTableEmptyState = memo(function DataTableEmptyState({ config }: DataTableEmptyStateProps) {
+export const DataTableEmptyState = memo(function DataTableEmptyState({ config }: { config?: EmptyStateConfig }) {
+  const t = useMessages(resourceMessages);
   const Icon = config?.icon ?? Package;
-  const title = config?.title ?? "No results found";
-  const description = config?.description ?? "Try adjusting your search or filters.";
-
+  const description = config?.description ?? t("noResultsHint");
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-muted-foreground/50 mb-3" />
-      <p className="text-sm font-medium text-muted-foreground">{title}</p>
-      <p className="text-xs text-muted-foreground/70 mt-1">{description}</p>
-      {config?.action && <div className="mt-4">{config.action}</div>}
+      <Icon className="mb-3 h-8 w-8 text-muted-foreground" />
+      <p className="text-sm font-semibold">{config?.title ?? t("noResults")}</p>
+      {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+      {config?.action ? <div className="mt-4">{config.action}</div> : null}
     </div>
   );
 });

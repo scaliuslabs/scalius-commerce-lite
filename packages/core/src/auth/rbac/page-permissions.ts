@@ -19,6 +19,8 @@ export interface PagePermissionConfig {
 const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Explicit permissionless admin utility pages
   "/admin/access-denied": { allowAnyAdmin: true },
+  // Own profile, password, two-step verification and sessions.
+  "/admin/account": { allowAnyAdmin: true },
 
   // Dashboard
   "/admin": { permission: PERMISSIONS.DASHBOARD_VIEW },
@@ -41,7 +43,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Collections
   "/admin/collections": { permission: PERMISSIONS.COLLECTIONS_VIEW },
   "/admin/collections/new": { permission: PERMISSIONS.COLLECTIONS_CREATE },
-  "/admin/collections/trash": { permission: PERMISSIONS.COLLECTIONS_VIEW },
 
   // Media
   "/admin/media": { permission: PERMISSIONS.MEDIA_VIEW },
@@ -49,7 +50,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Pages
   "/admin/pages": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
-  "/admin/pages/trash": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
 
@@ -159,14 +159,10 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.ORDERS_VIEW },
   },
 
-  // Customers
+  // Customers: one customer page; saving and order history are gated inside it.
   {
     pattern: /^\/admin\/customers\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.CUSTOMERS_EDIT },
-  },
-  {
-    pattern: /^\/admin\/customers\/[^/]+\/history$/,
-    config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY },
+    config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
   },
 
   // Discounts
@@ -208,12 +204,12 @@ const DEFAULT_ADMIN_PAGE_CANDIDATES = [
   "/admin/pages",
   "/admin/articles",
   "/admin/media",
-  "/admin/settings/account",
+  "/admin/account",
 ] as const;
 
 /**
  * Get the permission config for a given admin page route.
- * Returns undefined if no specific permission is required (e.g., /admin/settings/account).
+ * Returns undefined if no specific permission is required (e.g., /admin/account).
  */
 export function getPagePermission(
   pathname: string,

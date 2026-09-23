@@ -1,14 +1,10 @@
-import { useEffect } from "react";
-import {
-  createFileRoute,
-  Outlet,
-  redirect,
-} from "@tanstack/react-router";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { useCallback, useEffect, useMemo } from "react";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
 import { AdminNavigationProgress } from "@/components/admin/layout/AdminNavigationProgress";
-import { ThemeProvider } from "@/components/admin/layout/ThemeProvider";
+import { SETTINGS_ITEM, matchesPath, visibleNav } from "@/components/admin/layout/AdminNav";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
 import { AdminSessionSync } from "@/components/auth/AdminSessionSync";
@@ -18,6 +14,7 @@ import {
 } from "~/lib/admin-route-context";
 import {
   ADMIN_ACCESS_DENIED_PATH,
+  canAccessAdminPath,
   getDefaultAdminPath,
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
@@ -45,35 +42,41 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
+  // Settings is a full-screen view with its own navigation (Shopify style).
+  const inSettings = useLocation({ select: (location) => matchesPath(location.pathname, SETTINGS_ITEM.to) });
 
   useEffect(() => {
     primeAdminRouteContextCache(authContext);
   }, [authContext]);
 
+  const canOpen = useCallback(
+    (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin }),
+    [permissions, isSuperAdmin],
+  );
+  const nav = useMemo(() => visibleNav(canOpen), [canOpen]);
+
   return (
-    <ThemeProvider>
+    <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
       <AdminSessionSync />
-      <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset className="h-svh min-w-0 overflow-hidden">
-            <AdminNavigationProgress />
-            <AdminHeader user={user} />
-            <div
-              id="admin-main-scroll"
-              data-scroll-restoration-id="admin-main-scroll"
-              className="flex-1 overflow-y-auto bg-gray-50 px-3 pb-4 pt-4 dark:bg-[#0a0a0a] sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
-            >
-              <div className="mx-auto max-w-7xl">
-                <Outlet />
-              </div>
+      <SidebarProvider className="h-svh flex-col overflow-hidden">
+        <AdminNavigationProgress />
+        <AdminHeader user={user} nav={nav} canOpen={canOpen} showMenu={!inSettings} />
+        <div className="flex min-h-0 flex-1">
+          {inSettings ? null : <AppSidebar nav={nav} showSettings={canOpen(SETTINGS_ITEM.to)} />}
+          <main
+            id="admin-main-scroll"
+            data-scroll-restoration-id="admin-main-scroll"
+            className="min-w-0 flex-1 overflow-y-auto bg-muted/40 px-3 py-4 sm:px-4 md:px-6 lg:[scrollbar-gutter:stable]"
+          >
+            <div className="mx-auto max-w-7xl">
+              <Outlet />
             </div>
-            {/* Portal target for form action bars — sits OUTSIDE the scroll area */}
-            <div id="form-action-bar-slot" />
-          </SidebarInset>
-        </SidebarProvider>
-        <DeferredToaster />
-      </PermissionProvider>
-    </ThemeProvider>
+          </main>
+        </div>
+        {/* Portal target for form action bars — sits outside the scroll area. */}
+        <div id="form-action-bar-slot" />
+      </SidebarProvider>
+      <DeferredToaster />
+    </PermissionProvider>
   );
 }

@@ -5,6 +5,7 @@ import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { getFormEntityLabel } from "./form-copy";
+import { PageHeader } from "@/components/admin/resource/PageHeader";
 
 interface FormContainerProps<
   TFieldValues extends FieldValues,
@@ -12,6 +13,10 @@ interface FormContainerProps<
 > {
   /** The section name shown as breadcrumb link (e.g., "Categories") */
   title: string;
+  /** Page title (e.g. the record's name). Defaults to "Edit/Create {entity}". */
+  heading?: React.ReactNode;
+  /** Status badge next to the title. */
+  badge?: React.ReactNode;
   /** Accepted for older form call sites; the current bottom action bar no longer displays it. */
   entityName?: string;
   isEdit: boolean;
@@ -61,6 +66,8 @@ export function FormContainer<
   TTransformedValues extends FieldValues = TFieldValues,
 >({
   title,
+  heading,
+  badge,
   isEdit,
   isSubmitting,
   backUrl,
@@ -74,7 +81,7 @@ export function FormContainer<
   form,
   onSubmit,
   children,
-  formClassName = "-mt-4 pb-6",
+  formClassName = "pb-6",
   allowSamePathStateNavigation = false,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
   const entityLabel = getFormEntityLabel(title, newLabel);
@@ -96,11 +103,11 @@ export function FormContainer<
           className={formClassName}
           noValidate
         >
-          <div className="mb-4">
-            <h1 className="text-xl font-semibold tracking-tight">
-              {isEdit ? `Edit ${entityLabel}` : `Create ${entityLabel}`}
-            </h1>
-          </div>
+          <PageHeader
+            backTo={backUrl}
+            badge={badge}
+            title={heading ?? (isEdit ? `Edit ${entityLabel}` : `Create ${entityLabel}`)}
+          />
           {children}
         </form>
         <FormActionBar

@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  type MouseEvent,
   type ComponentType,
   type ReactNode,
 } from "react";
@@ -21,10 +22,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@scalius/shared/utils";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
-import { DataTableBodyRow } from "./DataTableBodyRow";
+import { DataTableBodyRow, rowClickHandler } from "./DataTableBodyRow";
+import { useNavigate } from "@tanstack/react-router";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import {
   DataTableInitialCards,
   DataTableInitialRows,
@@ -56,6 +62,13 @@ interface DataTableProps<TData extends TableRowData> {
   sortable?: boolean;
   /** Called after a drag-and-drop reorder with old and new index. */
   onReorder?: (oldIndex: number, newIndex: number) => void;
+  /**
+   * "card": one bordered card holding toolbar, rows and pagination.
+   * "bare": no frame of its own, for a table placed inside the caller's card.
+   */
+  variant?: "default" | "card" | "bare";
+  /** Opens a row from a click anywhere on it (not on its checkbox, links or menu). */
+  getRowHref?: (row: TData) => string | undefined;
 }
 
 export function DataTable<TData extends TableRowData>({
@@ -67,13 +80,26 @@ export function DataTable<TData extends TableRowData>({
   error,
   onRetry,
   mobileCardRenderer,
-  itemLabel = "items",
+  itemLabel,
   pageSizeOptions,
   className,
   sortable = false,
   onReorder,
+  variant = "default",
+  getRowHref,
 }: DataTableProps<TData>) {
+  const t = useMessages(resourceMessages);
+  const navigate = useNavigate();
+  const openRow = (row: Row<TData>) => {
+    const href = getRowHref?.(row.original);
+    if (!href) return undefined;
+    return (event: MouseEvent) => {
+      if (event.metaKey || event.ctrlKey) window.open(withDashboardBasePath(href), "_blank", "noopener");
+      else void navigate({ to: href });
+    };
+  };
   const isMobile = useIsMobile();
+  const isCard = variant === "card";
   const rows = table.getRowModel().rows;
   const hasRows = rows.length > 0;
   const showError = Boolean(error) && !isLoading;
@@ -83,13 +109,7 @@ export function DataTable<TData extends TableRowData>({
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
       <AlertTriangle className="mb-3 h-10 w-10 text-destructive/70" />
-      <p className="text-sm font-medium text-foreground">
-        Could not load this list
-      </p>
-      <p className="mt-1 max-w-md text-xs text-muted-foreground">
-        The latest rows could not be fetched. Retry before taking bulk actions so
-        you do not act on stale data.
-      </p>
+      <p className="text-sm font-medium text-foreground">{t("loadFailed")}</p>
       {onRetry && (
         <Button
           type="button"
@@ -98,7 +118,7 @@ export function DataTable<TData extends TableRowData>({
           className="mt-4"
           onClick={onRetry}
         >
-          Retry
+          {t("retry")}
         </Button>
       )}
     </div>
@@ -146,6 +166,7 @@ export function DataTable<TData extends TableRowData>({
                 cells={cells}
                 isSelected={row.getIsSelected()}
                 includeDragColumn={includeDragColumn}
+                onOpen={openRow(row)}
               />
             );
           })
@@ -169,16 +190,16 @@ export function DataTable<TData extends TableRowData>({
   );
 
   return (
-    <div className={className}>
+    <div className={cn(isCard && "overflow-hidden rounded-xl border bg-card shadow-xs", className)}>
       {toolbar}
 
       <div
-        className="relative rounded-md border"
+        className={cn("relative", variant === "default" ? "rounded-md border" : "border-t")}
         aria-busy={showInitialLoading || undefined}
         data-data-table-results=""
       >
         <span className="sr-only" role="status" aria-live="polite">
-          {showInitialLoading ? `Loading ${itemLabel}` : ""}
+          {showInitialLoading ? itemLabel ?? t("loading") : ""}
         </span>
         <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
@@ -188,9 +209,14 @@ export function DataTable<TData extends TableRowData>({
             {showError ? (
               renderErrorState()
             ) : hasRows ? (
-              rows.map((row) => (
-                <div key={row.id}>{mobileCardRenderer(row)}</div>
-              ))
+              rows.map((row) => {
+                const open = openRow(row);
+                return (
+                  <div key={row.id} onClick={rowClickHandler(open)} className={open ? "cursor-pointer" : undefined}>
+                    {mobileCardRenderer(row)}
+                  </div>
+                );
+              })
             ) : showInitialLoading ? (
               <DataTableInitialCards />
             ) : (
@@ -220,7 +246,6 @@ export function DataTable<TData extends TableRowData>({
       {!showError && (
         <DataTablePagination
           table={table}
-          itemLabel={itemLabel}
           pageSizeOptions={pageSizeOptions}
         />
       )}

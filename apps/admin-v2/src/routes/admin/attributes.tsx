@@ -1,506 +1,163 @@
-import { useMemo, useCallback, useRef, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Button } from "~/components/ui/button";
-import { Tags, Trash2, Plus } from "lucide-react";
-import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
+import { useMemo, useRef, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { ListTree } from "lucide-react";
+import {
+  deleteApiV1AdminAttributesById,
+  deleteApiV1AdminAttributesByIdPermanent,
+  postApiV1AdminAttributesBulkDelete,
+  postApiV1AdminAttributesBulkRestore,
+} from "@scalius/api-client/sdk";
+import { createListSearchValidator } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { attributesQueryOptions } from "~/lib/api-query-options/attributes";
+import { apiData } from "~/lib/api";
+import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
-import {
-  useUpdateAttribute,
-  useDeleteAttribute,
-  usePermanentDeleteAttribute,
-  useRestoreAttribute,
-  useBulkDeleteAttributes,
-} from "~/lib/api-mutations/attributes";
-import { DataTable } from "~/components/admin/data-table/DataTable";
-import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
-import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import {
-  getAttributeColumns,
-  type AttributeItem,
-} from "~/components/admin/data-table/columns/attribute-columns";
-import {
-  AttributeCreateDialog,
-  AttributeDeleteDialog,
-  AttributeValuesViewer,
-  AttributeValueEditor,
-} from "~/components/admin/attributes-manager/components";
-import { useAttributeActions } from "~/components/admin/attributes-manager/hooks/useAttributeActions";
-import type { NewAttribute } from "~/components/admin/attributes-manager/types";
+import { attributesQueryOptions, type AttributeDto } from "~/lib/api-query-options/attributes";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
+import { Button } from "~/components/ui/button";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { sortHeader } from "~/components/admin/resource/columns";
+import { AttributeDialog } from "~/components/admin/attributes-manager/components/AttributeDialog";
+import { AttributeValueEditor } from "~/components/admin/attributes-manager/components/AttributeValueEditor";
+import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
+import { translate, useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
   { sort: "name", order: "asc" },
 );
 
-function mapParams(deps: ReturnType<typeof validateAttributeSearch>): Parameters<typeof attributesQueryOptions>[0] {
-  return {
-    page: deps.page,
-    limit: deps.limit,
-    search: deps.search || undefined,
-    sort: deps.sort,
-    order: deps.order,
-    trashed: deps.trashed ? ("true" as const) : undefined,
-  };
+function listQuery(search: ReturnType<typeof validateAttributeSearch>) {
+  return attributesQueryOptions({
+    page: search.page,
+    limit: search.limit,
+    search: search.search || undefined,
+    sort: search.sort,
+    order: search.order,
+    trashed: search.trashed ? "true" : undefined,
+  });
 }
 
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
-  staleTime: 1000 * 60 * 2,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await warmRouteQuery(queryClient, attributesQueryOptions(mapParams(deps)));
-  },
-  head: ({ match }) => ({
-    meta: [
-      {
-        title: `${match.search.trashed ? "Attribute Trash" : "Product Attributes"} | Scalius Admin`,
-      },
-    ],
-  }),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
 });
 
+const INVALIDATE = [queryKeys.attributes.all];
+
 function AttributesPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate();
-  const showTrashed = search.trashed;
-  const { attributes: attributeActions } = useCatalogActionPermissions();
+  const t = useMessages(catalogMessages);
+  const { attributes: can } = useCatalogActionPermissions();
+  const [editing, setEditing] = useState<AttributeDto | "new" | null>(null);
+  const [values, setValues] = useState<AttributeDto | null>(null);
+  const valuesOpener = useRef<HTMLElement | null>(null);
 
-  // Mutations
-  const updateMutation = useUpdateAttribute();
-  const deleteMutation = useDeleteAttribute();
-  const permanentDeleteMutation = usePermanentDeleteAttribute();
-  const restoreMutation = useRestoreAttribute();
-  const bulkDeleteMutation = useBulkDeleteAttributes();
-
-  // Dialog states for attribute-specific features
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newAttribute, setNewAttribute] = useState<NewAttribute>({
-    name: "",
-    slug: "",
-    filterable: true,
-    options: [],
-  });
-  const [viewValuesFor, setViewValuesFor] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [editValuesFor, setEditValuesFor] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [deleteRequest, setDeleteRequest] = useState<{
-    ids: string[];
-    permanent: boolean;
-  } | null>(null);
-  const createFallbackRef = useRef<HTMLButtonElement | null>(null);
-  const createOpenerRef = useRef<HTMLElement | null>(null);
-  const viewValuesOpenerRef = useRef<HTMLElement | null>(null);
-  const editValuesOpenerRef = useRef<HTMLElement | null>(null);
-
-  // We need a dummy setAttributes/fetchAttributes for the create dialog hook
-  // (The create action uses the old hook; all other actions use centralized mutations)
-  const { isCreating, handleCreate } = useAttributeActions(
-    () => {
-      /* refresh handled by mutation invalidation */
+  const columns = useMemo<ColumnDef<AttributeDto, unknown>[]>(() => [
+    {
+      accessorKey: "name",
+      header: sortHeader(t("attribute")),
+      meta: { mobile: "primary" },
+      cell: ({ row }) =>
+        can.canEdit && !search.trashed ? (
+          <button type="button" className="truncate text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
+            {row.original.name}
+          </button>
+        ) : (
+          <span className="truncate font-medium">{row.original.name}</span>
+        ),
     },
-    () => {
-      /* no-op setter */
+    {
+      accessorKey: "slug",
+      header: sortHeader(t("handle")),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => <span className="text-muted-foreground">{row.original.slug}</span>,
     },
-  );
-
-  // Track which IDs are currently being saved
-  const savingIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (updateMutation.isPending && updateMutation.variables) {
-      ids.add(updateMutation.variables.id);
-    }
-    return ids;
-  }, [updateMutation.isPending, updateMutation.variables]);
-
-  // Column action callbacks
-  const handleUpdateName = useCallback(
-    (id: string, name: string) => {
-      if (!attributeActions.canEdit) return;
-      updateMutation.mutate({ id, name });
-    },
-    [attributeActions.canEdit, updateMutation],
-  );
-
-  const handleUpdateSlug = useCallback(
-    (id: string, slug: string) => {
-      if (!attributeActions.canEdit) return;
-      updateMutation.mutate({ id, slug });
-    },
-    [attributeActions.canEdit, updateMutation],
-  );
-
-  const handleToggleFilterable = useCallback(
-    (id: string, filterable: boolean) => {
-      if (!attributeActions.canEdit) return;
-      updateMutation.mutate({ id, filterable });
-    },
-    [attributeActions.canEdit, updateMutation],
-  );
-
-  const handleViewValues = useCallback(
-    (id: string, name: string, opener: HTMLElement) => {
-      viewValuesOpenerRef.current = opener;
-      setViewValuesFor({ id, name });
-    },
-    [],
-  );
-
-  const handleEditValues = useCallback(
-    (id: string, name: string, opener: HTMLElement) => {
-      if (attributeActions.canEdit) {
-        editValuesOpenerRef.current = opener;
-        setEditValuesFor({ id, name });
-      }
-    },
-    [attributeActions.canEdit],
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      if (!attributeActions.canDelete) return;
-      setDeleteRequest({ ids: [id], permanent: false });
-    },
-    [attributeActions.canDelete],
-  );
-
-  const handleRestore = useCallback(
-    (id: string) => {
-      if (!attributeActions.canRestore) return;
-      restoreMutation.mutate(id);
-    },
-    [attributeActions.canRestore, restoreMutation],
-  );
-
-  const handlePermanentDelete = useCallback(
-    (id: string) => {
-      if (!attributeActions.canPermanentDelete) return;
-      setDeleteRequest({ ids: [id], permanent: true });
-    },
-    [attributeActions.canPermanentDelete],
-  );
-
-  // Create attribute handlers
-  const handleNewAttributeNameChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const name = e.target.value;
-    const slug = name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
-    setNewAttribute((prev) => ({ ...prev, name, slug }));
-  };
-
-  const handleCreateAttribute = () => {
-    if (!attributeActions.canCreate) return;
-    handleCreate(newAttribute, () => {
-      setNewAttribute({ name: "", slug: "", filterable: true, options: [] });
-      setShowCreateDialog(false);
-    });
-  };
-
-  // Columns
-  const columns = useMemo(
-    () =>
-      getAttributeColumns({
-        showTrashed,
-        savingIds,
-        canSelect: attributeActions.canBulkDelete,
-        canEdit: attributeActions.canEdit,
-        canDelete: attributeActions.canDelete,
-        canRestore: attributeActions.canRestore,
-        canPermanentDelete: attributeActions.canPermanentDelete,
-        onUpdateName: handleUpdateName,
-        onUpdateSlug: handleUpdateSlug,
-        onToggleFilterable: handleToggleFilterable,
-        onViewValues: handleViewValues,
-        onEditValues: handleEditValues,
-        onDelete: handleDelete,
-        onRestore: handleRestore,
-        onPermanentDelete: handlePermanentDelete,
-      }),
-    [
-      showTrashed,
-      savingIds,
-      attributeActions,
-      handleUpdateName,
-      handleUpdateSlug,
-      handleToggleFilterable,
-      handleViewValues,
-      handleEditValues,
-      handleDelete,
-      handleRestore,
-      handlePermanentDelete,
-    ],
-  );
-
-  // Data selector
-  const dataSelector = useMemo(() => createDataSelector<AttributeItem>("attributes"), []);
-
-  // URL param updaters
-  const onPaginationChange = useCallback(
-    (page: number, limit: number) => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          page,
-          limit,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  const onSortingChange = useCallback(
-    (sort: string, order: "asc" | "desc") => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          sort,
-          order,
-          page: 1,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  const onSearchChange = useCallback(
-    (value: string) => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          search: value || undefined,
-          page: 1,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  // Server table
-  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
-    useServerTable<AttributeItem>({
-      columns,
-      queryOptions: attributesQueryOptions(mapParams(search)),
-      dataSelector,
-      currentPage: search.page,
-      currentLimit: search.limit,
-      currentSort: search.sort,
-      currentOrder: search.order,
-      onPaginationChange,
-      onSortingChange,
-    });
-
-  // Bulk action handlers
-  const handleBulkDelete = useCallback(() => {
-    if (!attributeActions.canBulkDelete || selectedIds.length === 0) return;
-    setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed });
-  }, [
-    attributeActions.canBulkDelete,
-    selectedIds,
-    showTrashed,
-  ]);
-
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteRequest) return;
-    const onSuccess = () => {
-      if (deleteRequest.ids.length > 1) clearSelection();
-      setDeleteRequest(null);
-    };
-
-    if (deleteRequest.ids.length > 1) {
-      bulkDeleteMutation.mutate(deleteRequest, { onSuccess });
-    } else if (deleteRequest.permanent) {
-      permanentDeleteMutation.mutate(deleteRequest.ids[0]!, { onSuccess });
-    } else {
-      deleteMutation.mutate(deleteRequest.ids[0]!, { onSuccess });
-    }
-  }, [
-    bulkDeleteMutation,
-    clearSelection,
-    deleteMutation,
-    deleteRequest,
-    permanentDeleteMutation,
-  ]);
-
-  const deletePending =
-    deleteMutation.isPending ||
-    permanentDeleteMutation.isPending ||
-    bulkDeleteMutation.isPending;
-
-  // Toolbar
-  const toolbar = (
-    <DataTableToolbar
-      searchValue={search.search}
-      onSearchChange={onSearchChange}
-      searchPlaceholder="Search attributes..."
-      selectedCount={selectedIds.length}
-      bulkActions={attributeActions.canBulkDelete ? (
-        <Button
-          variant={showTrashed ? "destructive" : "outline"}
-          size="sm"
-          onClick={handleBulkDelete}
-          disabled={Boolean(error)}
-          className={
-            !showTrashed
-              ? "text-destructive border-destructive hover:bg-destructive/10"
-              : undefined
-          }
+    {
+      id: "values",
+      header: t("values"),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="text-muted-foreground hover:underline disabled:no-underline"
+          disabled={search.trashed}
+          onClick={(event) => {
+            valuesOpener.current = event.currentTarget;
+            setValues(row.original);
+          }}
         >
-          <Trash2 className="h-4 w-4 mr-1.5" />
-          {showTrashed
-            ? `Delete (${selectedIds.length})`
-            : `Trash (${selectedIds.length})`}
-        </Button>
-      ) : undefined}
-      actions={
-        <div className="flex items-center gap-2">
-          <Link
-            to="/admin/attributes"
-            search={{ trashed: !showTrashed }}
-          >
-            <Button variant="outline" size="sm">
-              {showTrashed ? (
-                <>
-                  <Tags className="mr-2 h-4 w-4" />
-                  View Active
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  View Trash
-                </>
-              )}
-            </Button>
-          </Link>
-          {!showTrashed && attributeActions.canCreate && (
-            <Button
-              ref={createFallbackRef}
-              onClick={(event) => {
-                createOpenerRef.current = event.currentTarget;
-                setShowCreateDialog(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Attribute
-            </Button>
-          )}
-        </div>
-      }
-    />
-  );
+          {t("values")}: {row.original.valueCount}
+        </button>
+      ),
+    },
+    {
+      accessorKey: "filterable",
+      header: sortHeader(t("filterable")),
+      meta: { mobile: "status" },
+      cell: ({ row }) => (row.original.filterable ? <StatusBadge tone="neutral">{t("filterableYes")}</StatusBadge> : null),
+    },
+  ], [t, can.canEdit, search.trashed]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {showTrashed ? "Attribute Trash" : "Product Attributes"}
-        </h1>
-        <p className="text-muted-foreground">
-          {showTrashed
-            ? "View, restore, or permanently delete trashed attributes."
-            : "Manage attributes like brand, color, or warranty to organize and filter products."}
-        </p>
-      </div>
-
-      <DataTable
-        table={table}
-        isFetching={isFetching}
-        isLoading={isLoading}
-        error={error}
-        onRetry={() => void refetch()}
-        toolbar={toolbar}
-        itemLabel="attributes"
-        emptyState={{
-          icon: Tags,
-          title: search.search
-            ? "No attributes found"
-            : showTrashed
-              ? "Trash is empty"
-              : "No attributes yet",
-          description: search.search
-            ? "Try adjusting your search query."
-            : showTrashed
-              ? "Deleted attributes will appear here."
-              : "Create your first attribute to get started.",
-          action:
-            !showTrashed && attributeActions.canCreate && !search.search ? (
-              <Button
-                onClick={(event) => {
-                  createOpenerRef.current = event.currentTarget;
-                  setShowCreateDialog(true);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Attribute
-              </Button>
-            ) : undefined,
+    <>
+      <ResourceListPage<AttributeDto>
+        title={t("attributes")}
+        actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
+        search={search}
+        query={listQuery(search)}
+        dataKey="attributes"
+        columns={columns}
+        invalidate={INVALIDATE}
+        empty={{ icon: ListTree, title: t("attributesEmptyTitle"), description: t("attributesEmptyBody") }}
+        rowActions={(row) => [
+          ...(can.canEdit ? [{ label: t("editAttribute"), onClick: () => setEditing(row) }] : []),
+          {
+            label: can.canEdit ? t("editValues") : t("viewValues"),
+            onClick: (opener?: HTMLElement) => {
+              valuesOpener.current = opener ?? null;
+              setValues(row);
+            },
+          },
+        ]}
+        lifecycle={{
+          canTrash: can.canDelete,
+          canRestore: can.canRestore,
+          canDelete: can.canPermanentDelete,
+          run: (action, rows) => {
+            const ids = rows.map((row) => row.id);
+            if (action === "restore") return apiData(postApiV1AdminAttributesBulkRestore({ body: { ids } }));
+            if (rows.length > 1) return apiData(postApiV1AdminAttributesBulkDelete({ body: { ids, permanent: action === "delete" } }));
+            return action === "delete"
+              ? apiData(deleteApiV1AdminAttributesByIdPermanent({ path: { id: ids[0]! } }))
+              : apiData(deleteApiV1AdminAttributesById({ path: { id: ids[0]! } }));
+          },
         }}
       />
-
-      {/* Create Attribute Dialog */}
-      {attributeActions.canCreate && (
-        <AttributeCreateDialog
-          open={showCreateDialog}
-          newAttribute={newAttribute}
-          isCreating={isCreating}
-          onOpenChange={setShowCreateDialog}
-          onNameChange={handleNewAttributeNameChange}
-          onSlugChange={(slug) =>
-            setNewAttribute((prev) => ({ ...prev, slug }))
-          }
-          onFilterableChange={(checked) =>
-            setNewAttribute((prev) => ({ ...prev, filterable: checked }))
-          }
-          onOptionsChange={(options) =>
-            setNewAttribute((prev) => ({ ...prev, options }))
-          }
-          onCreate={handleCreateAttribute}
-          openerRef={createOpenerRef}
-          fallbackFocusRef={createFallbackRef}
-        />
-      )}
-
-      <AttributeDeleteDialog
-        count={deleteRequest?.ids.length ?? 0}
-        permanent={deleteRequest?.permanent ?? false}
-        open={deleteRequest !== null}
-        pending={deletePending}
-        onOpenChange={(open) => {
-          if (!open && !deletePending) setDeleteRequest(null);
-        }}
-        onConfirm={handleConfirmDelete}
-      />
-
-      {/* Attribute Values Viewer */}
-      <AttributeValuesViewer
-        attributeId={viewValuesFor?.id || null}
-        attributeName={viewValuesFor?.name || null}
-        onClose={() => setViewValuesFor(null)}
-        openerRef={viewValuesOpenerRef}
-      />
-
-      {/* Attribute Value Editor */}
-      {attributeActions.canEdit && (
+      {editing ? <AttributeDialog attribute={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} /> : null}
+      {can.canEdit ? (
         <AttributeValueEditor
-          key={editValuesFor?.id ?? "closed"}
-          attributeId={editValuesFor?.id || null}
-          attributeName={editValuesFor?.name || null}
-          onClose={() => setEditValuesFor(null)}
-          openerRef={editValuesOpenerRef}
+          key={values?.id ?? "closed"}
+          attributeId={values?.id ?? null}
+          attributeName={values?.name ?? null}
+          onClose={() => setValues(null)}
+          openerRef={valuesOpener}
+        />
+      ) : (
+        <AttributeValuesViewer
+          attributeId={values?.id ?? null}
+          attributeName={values?.name ?? null}
+          onClose={() => setValues(null)}
+          openerRef={valuesOpener}
         />
       )}
-    </div>
+    </>
   );
 }

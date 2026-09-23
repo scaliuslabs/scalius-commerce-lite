@@ -226,7 +226,7 @@ export function ProductPickerDialog({
                             {product.categoryName || "Uncategorized"}
                           </span>
                         </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                        <span className="shrink-0 text-xs text-muted-foreground">
                           {isAlreadyAdded
                             ? "Added"
                             : product.isActive === false

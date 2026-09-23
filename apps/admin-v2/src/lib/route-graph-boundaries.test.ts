@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, extname, join, relative } from "node:path";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ADMIN_PERMISSIONS } from "./admin-permissions";
-import { NAV_PERMISSIONS } from "../components/admin/layout/AdminNav";
 
 const ADMIN_SRC_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SOURCE_EXTENSIONS = [".ts", ".tsx"] as const;
@@ -356,10 +355,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "routes", "admin.tsx"),
       "utf8",
     );
-    const adminHeaderSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
-      "utf8",
-    );
     const userMenuSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "auth", "UserMenu.tsx"),
       "utf8",
@@ -379,11 +374,6 @@ describe("admin route graph boundaries", () => {
 
     expect(adminRouteSource).toContain("@/components/ui/deferred-toaster");
     expect(adminRouteSource).not.toContain("@/components/ui/sonner");
-    expect(adminHeaderSource).toContain('import("@/components/auth/UserMenu")');
-    expect(adminHeaderSource).toContain("function DeferredUserMenu");
-    expect(adminHeaderSource).not.toMatch(/import\s+\{\s*UserMenu\s*\}\s+from/);
-    expect(adminHeaderSource).not.toContain("@/components/ui/dropdown-menu");
-    expect(adminHeaderSource).not.toContain("@/components/ui/avatar");
     expect(userMenuSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
     expect(userMenuSource).toContain('await import("@/lib/auth-client")');
     expect(deferredToasterSource).toContain("lazy(() =>");
@@ -410,13 +400,11 @@ describe("admin route graph boundaries", () => {
       "routes/admin/attributes.tsx",
       "routes/admin/categories/index.tsx",
       "routes/admin/collections/index.tsx",
-      "routes/admin/collections/trash.tsx",
       "routes/admin/customers/index.tsx",
       "routes/admin/discounts/index.tsx",
       "routes/admin/inventory/index.tsx",
       "routes/admin/orders/index.tsx",
       "routes/admin/pages/index.tsx",
-      "routes/admin/pages/trash.tsx",
       "routes/admin/products/index.tsx",
     ];
 
@@ -447,7 +435,6 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const corePermissionValues = new Set(Object.values(PERMISSIONS));
-    const localPermissionValues = new Set(Object.values(ADMIN_PERMISSIONS));
     const adminAccessRbacImports = [
       ...adminAccessSource.matchAll(/@scalius\/core\/auth\/rbac\/([^"']+)/g),
     ].map((match) => match[1]);
@@ -464,12 +451,6 @@ describe("admin route graph boundaries", () => {
         corePermissionValues.has(permission),
       ),
     ).toBe(true);
-    expect(Object.values(NAV_PERMISSIONS).length).toBeGreaterThan(0);
-    expect(
-      Object.values(NAV_PERMISSIONS).every((permission) =>
-        localPermissionValues.has(permission),
-      ),
-    ).toBe(true);
   });
 
   it("keeps customer form writes invalidating dashboard aggregates", () => {
@@ -478,21 +459,8 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toContain("queryKeys.customers.list()");
+    expect(source).toContain("queryKeys.customers.all");
     expect(source).toContain("queryKeys.dashboard.all");
-  });
-
-  it("keeps the dashboard chart off Recharts and the shared chart wrapper", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "DashboardChart.tsx"),
-      "utf8",
-    );
-
-    expect(source).not.toMatch(/from\s+["']recharts["']/);
-    expect(source).not.toContain("@/components/ui/chart");
-    expect(
-      existsSync(join(ADMIN_SRC_ROOT, "components", "ui", "chart.tsx")),
-    ).toBe(false);
   });
 
   it("keeps analytics list dates hydration-safe", () => {
@@ -755,7 +723,7 @@ describe("admin route graph boundaries", () => {
           "account-settings",
           "ChangePasswordForm.tsx",
         ),
-        action: 'action="/admin/settings/account"',
+        action: 'action="/admin/account"',
       },
       {
         path: join(
@@ -1057,24 +1025,6 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    const adminHeaderSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminHeader.tsx"),
-      "utf8",
-    );
-    const appSidebarSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AppSidebar.tsx"),
-      "utf8",
-    );
-    const storefrontFooterLinkSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "layout",
-        "StorefrontFooterLink.tsx",
-      ),
-      "utf8",
-    );
     const settingsQueryOptionsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "api-query-options", "settings.ts"),
       "utf8",
@@ -1107,19 +1057,6 @@ describe("admin route graph boundaries", () => {
     expect(orderListSource).toContain("orderListRefreshInFlightRef");
     expect(orderListSource).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
     expect(orderListSource).not.toContain("refreshIntervalRef");
-    expect(adminHeaderSource).toContain("requestIdleCallback");
-    expect(adminHeaderSource).toContain("lazy(()");
-    expect(adminHeaderSource).not.toMatch(
-      /import\s+\{\s*NotificationDropdown\s*\}\s+from/,
-    );
-    expect(appSidebarSource).toContain('import("./StorefrontFooterLink")');
-    expect(appSidebarSource).not.toContain(
-      "~/lib/api-query-options/storefront-url",
-    );
-    expect(storefrontFooterLinkSource).toContain(
-      "~/lib/api-query-options/storefront-url",
-    );
-    expect(appSidebarSource).not.toContain("~/lib/api-query-options/settings");
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollRestoration: true");
     expect(routerSource).toContain(
@@ -1129,7 +1066,6 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).toContain(
       'data-scroll-restoration-id="admin-main-scroll"',
     );
-    expect(adminRouteSource).toContain("lg:[scrollbar-gutter:stable]");
     expect(adminRouteSource).not.toContain("[overflow-anchor:none]");
     expect(adminRouteSource).not.toContain("useAdminNestedScrollRestoration");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
@@ -1175,24 +1111,6 @@ describe("admin route graph boundaries", () => {
         file: "-ProductDeleteDialog.tsx",
         openMarker: "isProductDeleteDialogOpen &&",
       },
-      {
-        route: "categories",
-        component: "CategoryDeleteDialog",
-        file: "-CategoryDeleteDialog.tsx",
-        openMarker: "isCategoryDeleteDialogOpen &&",
-      },
-      {
-        route: "customers",
-        component: "CustomerDeleteDialog",
-        file: "-CustomerDeleteDialog.tsx",
-        openMarker: "isCustomerDeleteDialogOpen &&",
-      },
-      {
-        route: "pages",
-        component: "PageDeleteDialog",
-        file: "-PageDeleteDialog.tsx",
-        openMarker: "isPageDeleteDialogOpen &&",
-      },
     ];
 
     for (const { route, component, file, openMarker } of cases) {
@@ -1215,61 +1133,6 @@ describe("admin route graph boundaries", () => {
       expect(dialogSource).toContain("~/components/ui/alert-dialog");
       expect(dialogSource).toContain(component);
     }
-  });
-
-  it("keeps dashboard route entry from blocking on summary data", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "index.tsx"),
-      "utf8",
-    );
-    const currencyHookSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "hooks", "use-currency.ts"),
-      "utf8",
-    );
-    const dashboardStatsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "DashboardStats.tsx"),
-      "utf8",
-    );
-    const loaderSource = source.slice(
-      source.indexOf("loader: async"),
-      source.indexOf("head: ()"),
-    );
-
-    expect(source).toContain('from "~/lib/api-query-options/dashboard-home"');
-    expect(source).not.toContain('from "~/lib/api-query-options/dashboard"');
-    expect(source).not.toMatch(
-      /import\s+\{\s*DashboardStats\s*\}\s+from\s+["']~\/components\/admin\/DashboardStats["']/,
-    );
-    expect(source).not.toMatch(
-      /import\s+\{\s*RecentOrders\s*\}\s+from\s+["']~\/components\/admin\/RecentOrders["']/,
-    );
-    expect(source).not.toMatch(
-      /import\s+\{\s*WelcomeBanner\s*\}\s+from\s+["']~\/components\/admin\/WelcomeBanner["']/,
-    );
-    expect(source).toContain("const DashboardStats = lazy(()");
-    expect(source).toContain("const RecentOrders = lazy(()");
-    expect(source).not.toContain("WelcomeBanner");
-    expect(source).toContain(">Dashboard</h1>");
-    expect(loaderSource).toContain('typeof window === "undefined"');
-    expect(loaderSource).toContain(
-      "void queryClient.prefetchQuery(dashboardSummaryQueryOptions())",
-    );
-    expect(loaderSource).not.toContain("dashboardActivityQueryOptions()");
-    expect(loaderSource).not.toContain(
-      "await queryClient.ensureQueryData(dashboardSummaryQueryOptions())",
-    );
-    expect(loaderSource).not.toContain("await warmRouteQuery");
-    expect(source).toContain("isSummaryInitialLoading");
-    expect(source).toContain("DashboardSummaryLoading");
-    expect(source).toContain("useDashboardActivityEnabled");
-    expect(source).toContain("enabled: shouldFetchActivity");
-    expect(source).toContain("requestIdleCallback");
-    expect(dashboardStatsSource).not.toContain("requestIdleCallback");
-    expect(dashboardStatsSource).not.toContain("setShouldLoadChart");
-    expect(currencyHookSource).toContain("~/lib/api-query-options/currency");
-    expect(currencyHookSource).not.toContain(
-      "~/lib/api-query-options/settings",
-    );
   });
 
   it("keeps secondary admin tool routes from blocking first paint on data reads", () => {

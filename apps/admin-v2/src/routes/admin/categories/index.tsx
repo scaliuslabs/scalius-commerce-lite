@@ -1,342 +1,139 @@
-import { lazy, Suspense, useState, useMemo, useCallback } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Tag, Plus, Trash2 } from "lucide-react";
-import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
+import { useMemo } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { FolderTree } from "lucide-react";
+import {
+  postApiV1AdminCategoriesBulkDelete,
+  postApiV1AdminCategoriesBulkRestore,
+} from "@scalius/api-client/sdk";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import {
+  createListSearchValidator,
+  normalizeOptionalEnumSearchParam,
+  type SearchValidatorInput,
+} from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { Button } from "~/components/ui/button";
+import { apiData } from "~/lib/api";
+import { queryKeys } from "~/lib/query-keys";
+import { warmRouteQuery } from "~/lib/route-query-warming";
+import { categoriesQueryOptions, type CategoryListItem } from "~/lib/api-query-options/categories";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
-import {
-  categoriesQueryOptions,
-  type CategoryRevisionClaim,
-} from "~/lib/api-query-options/categories";
-import { warmRouteQuery } from "~/lib/route-query-warming";
-import {
-  useDeleteCategory,
-  usePermanentDeleteCategory,
-  useRestoreCategory,
-  useBulkDeleteCategories,
-  useBulkRestoreCategories,
-} from "~/lib/api-mutations/categories";
-import { DataTable } from "~/components/admin/data-table/DataTable";
-import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
-import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import {
-  getCategoryColumns,
-  type CategoryListItem,
-} from "~/components/admin/data-table/columns/category-columns";
+import { Button } from "~/components/ui/button";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
+import { translate, useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
 
-const CategoryDeleteDialog = lazy(() =>
-  import("./-CategoryDeleteDialog").then((module) => ({
-    default: module.CategoryDeleteDialog,
-  })),
-);
+const STATUSES = ["published", "draft", "internal"] as const;
+const validateBase = createListSearchValidator(["name", "status", "createdAt", "updatedAt"] as const, { sort: "updatedAt" });
 
-const validateCategorySearch = createListSearchValidator(
-  ["name", "status", "createdAt", "updatedAt"] as const,
-  { sort: "updatedAt" },
-);
+function validateCategorySearch(search: SearchValidatorInput) {
+  return { ...validateBase(search), status: normalizeOptionalEnumSearchParam(search.status, STATUSES) };
+}
 
-function mapParams(deps: ReturnType<typeof validateCategorySearch>): Parameters<typeof categoriesQueryOptions>[0] {
-  return {
-    page: deps.page,
-    limit: deps.limit,
-    search: deps.search || undefined,
-    sort: deps.sort,
-    order: deps.order,
-    trashed: deps.trashed ? ("true" as const) : undefined,
-  };
+function listQuery(search: ReturnType<typeof validateCategorySearch>) {
+  return categoriesQueryOptions({
+    page: search.page,
+    limit: search.limit,
+    search: search.search || undefined,
+    sort: search.sort,
+    order: search.order,
+    trashed: search.trashed ? "true" : undefined,
+    status: search.trashed ? undefined : search.status,
+  });
 }
 
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
-  staleTime: 1000 * 60 * 2,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await warmRouteQuery(queryClient, categoriesQueryOptions(mapParams(deps)));
-  },
-  head: ({ match }) => ({
-    meta: [
-      {
-        title: `${match.search.trashed ? "Trash" : "Categories"} | Scalius Admin`,
-      },
-    ],
-  }),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  head: () => ({ meta: [{ title: translate(catalogMessages, "categories") }] }),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
 });
 
+const claims = (rows: CategoryListItem[]) => rows.map((row) => ({ id: row.id, expectedRevision: row.revision }));
+
 function CategoriesPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate();
+  const t = useMessages(catalogMessages);
   const { getStorefrontPath } = useStorefrontUrl();
-  const { categories: categoryActions } = useCatalogActionPermissions();
-  const showTrashed = search.trashed;
+  const { categories: can } = useCatalogActionPermissions();
+  const editTo = (row: CategoryListItem) => (can.canEdit ? `/admin/categories/${row.id}/edit` : undefined);
 
-  // Mutations
-  const deleteMutation = useDeleteCategory();
-  const permanentDeleteMutation = usePermanentDeleteCategory();
-  const restoreMutation = useRestoreCategory();
-  const bulkDeleteMutation = useBulkDeleteCategories();
-  const bulkRestoreMutation = useBulkRestoreCategories();
-
-  const [deleteIntent, setDeleteIntent] = useState<{
-    categories: CategoryRevisionClaim[];
-    permanent: boolean;
-    bulk: boolean;
-  } | null>(null);
-
-  const isActionLoading =
-    deleteMutation.isPending ||
-    permanentDeleteMutation.isPending ||
-    bulkDeleteMutation.isPending;
-
-  const isCategoryDeleteDialogOpen = deleteIntent !== null;
-
-  // Column definitions
-  const columns = useMemo(
-    () =>
-      getCategoryColumns({
-        showTrashed,
-        getStorefrontPath,
-        canSelect: showTrashed
-          ? categoryActions.canRestore || categoryActions.canPermanentDelete
-          : categoryActions.canBulkDelete,
-        canEdit: categoryActions.canEdit,
-        canDelete: categoryActions.canDelete,
-        canRestore: categoryActions.canRestore,
-        canPermanentDelete: categoryActions.canPermanentDelete,
-        onEdit: (id) =>
-          categoryActions.canEdit
-            ? void navigate({
-                to: "/admin/categories/$categoryId/edit",
-                params: { categoryId: id },
-              })
-            : undefined,
-        onDelete: (category) => {
-          if (categoryActions.canDelete) {
-            setDeleteIntent({
-              categories: [{ id: category.id, expectedRevision: category.revision }],
-              permanent: false,
-              bulk: false,
-            });
-          }
-        },
-        onRestore: (category) => {
-          if (categoryActions.canRestore) {
-            restoreMutation.mutate({
-              id: category.id,
-              expectedRevision: category.revision,
-            });
-          }
-        },
-        onPermanentDelete: (category) => {
-          if (categoryActions.canPermanentDelete) {
-            setDeleteIntent({
-              categories: [{ id: category.id, expectedRevision: category.revision }],
-              permanent: true,
-              bulk: false,
-            });
-          }
-        },
-      }),
-    [
-      showTrashed,
-      getStorefrontPath,
-      categoryActions,
-      navigate,
-      restoreMutation,
-    ],
-  );
-
-  // Data selector
-  const dataSelector = useMemo(() => createDataSelector<CategoryListItem>("categories"), []);
-
-  const onPaginationChange = useCallback(
-    (page: number, limit: number) => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({ ...prev, page, limit })) as never,
-      });
+  const columns = useMemo<ColumnDef<CategoryListItem, unknown>[]>(() => [
+    {
+      accessorKey: "name",
+      header: sortHeader(t("category")),
+      meta: { mobile: "primary" },
+      cell: ({ row }) => (
+        <div className="flex min-w-0 items-center gap-3">
+          <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
+          <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>
+        </div>
+      ),
     },
-    [navigate],
-  );
-
-  const onSortingChange = useCallback(
-    (sort: string, order: "asc" | "desc") => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({ ...prev, sort, order, page: 1 })) as never,
-      });
+    {
+      accessorKey: "status",
+      header: sortHeader(t("status")),
+      meta: { mobile: "status" },
+      cell: ({ row }) => {
+        const status = row.original.status;
+        return (
+          <StatusBadge tone={status === "published" ? "success" : "neutral"}>
+            {t(status === "published" ? "published" : status === "internal" ? "hidden" : "draft")}
+          </StatusBadge>
+        );
+      },
     },
-    [navigate],
-  );
-
-  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
-    useServerTable({
-      columns,
-      queryOptions: categoriesQueryOptions(mapParams(search)),
-      dataSelector,
-      currentPage: search.page,
-      currentLimit: search.limit,
-      currentSort: search.sort,
-      currentOrder: search.order,
-      onPaginationChange,
-      onSortingChange,
-    });
-
-  const selectedCategories = table
-    .getSelectedRowModel()
-    .rows.map(({ original }) => ({
-      id: original.id,
-      expectedRevision: original.revision,
-    }));
-
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteIntent) return;
-    const intent = deleteIntent;
-    if (intent.permanent) {
-      if (!categoryActions.canPermanentDelete) return;
-      if (intent.bulk) {
-        bulkDeleteMutation.mutate(
-          { categories: intent.categories, permanent: true },
-          { onSuccess: clearSelection },
+    {
+      id: "productCount",
+      header: t("products"),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => {
+        const count = row.original.productCount ?? 0;
+        const label = count === 1 ? t("productCountOne") : t("productCount", { count });
+        return count > 0 ? (
+          <Link to="/admin/products" search={{ category: row.original.id } as never} className="text-muted-foreground hover:underline">
+            {label}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">{label}</span>
         );
-      } else {
-        permanentDeleteMutation.mutate(intent.categories[0]!);
-      }
-    } else {
-      if (!categoryActions.canDelete) return;
-      if (intent.bulk) {
-        bulkDeleteMutation.mutate(
-          { categories: intent.categories, permanent: false },
-          { onSuccess: clearSelection },
-        );
-      } else {
-        deleteMutation.mutate(intent.categories[0]!);
-      }
-    }
-    setDeleteIntent(null);
-  }, [
-    deleteIntent,
-    categoryActions.canDelete,
-    categoryActions.canPermanentDelete,
-    deleteMutation,
-    permanentDeleteMutation,
-    bulkDeleteMutation,
-    clearSelection,
-  ]);
+      },
+    },
+    { accessorKey: "updatedAt", header: sortHeader(t("updated")), cell: ({ row }) => <DateText value={row.original.updatedAt} /> },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, search.trashed, can.canEdit]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {showTrashed ? "Category Trash" : "Categories"}
-          </h1>
-          <p className="text-muted-foreground">
-            {showTrashed
-              ? "View, restore, or permanently delete trashed categories."
-              : "Organize your products into categories."}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/admin/categories"
-            search={((prev: Record<string, unknown>) => ({ ...prev, trashed: !showTrashed })) as never}
-          >
-            <Button variant="outline" size="sm">
-              {showTrashed ? (
-                <Tag className="mr-2 h-4 w-4" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              {showTrashed ? "View Active" : "View Trash"}
-            </Button>
-          </Link>
-          {!showTrashed && categoryActions.canCreate && (
-            <Link to="/admin/categories/new">
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                New Category
-              </Button>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      <DataTable
-        table={table}
-        isFetching={isFetching}
-        isLoading={isLoading}
-        error={error}
-        onRetry={() => void refetch()}
-        itemLabel="categories"
-        emptyState={{
-          icon: Tag,
-          title: showTrashed ? "Trash is empty" : "No categories found",
-          description: showTrashed
-            ? "Categories moved to trash will appear here."
-            : "Create your first category to organize products.",
-        }}
-        toolbar={
-          <DataTableToolbar
-            searchValue={search.search}
-            onSearchChange={(value) =>
-              void navigate({
-                search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
-              })
-            }
-            searchPlaceholder="Search categories..."
-            selectedCount={selectedIds.length}
-            bulkActions={selectedIds.length > 0 ? (
-              <div className="flex items-center gap-2">
-                {showTrashed && categoryActions.canRestore ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => bulkRestoreMutation.mutate(selectedCategories, { onSuccess: clearSelection })}
-                    disabled={Boolean(error) || bulkRestoreMutation.isPending}
-                  >
-                    Restore ({selectedIds.length})
-                  </Button>
-                ) : null}
-                {(!showTrashed && categoryActions.canBulkDelete) ||
-                (showTrashed && categoryActions.canPermanentDelete) ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive border-destructive hover:bg-destructive/10"
-                    onClick={() => setDeleteIntent({
-                      categories: selectedCategories,
-                      permanent: showTrashed,
-                      bulk: true,
-                    })}
-                    disabled={Boolean(error) || bulkDeleteMutation.isPending}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {showTrashed ? "Delete permanently" : "Move to trash"} ({selectedIds.length})
-                  </Button>
-                ) : null}
-              </div>
-            ) : undefined}
-          />
-        }
-      />
-
-      {isCategoryDeleteDialogOpen &&
-        (showTrashed
-          ? categoryActions.canPermanentDelete
-          : categoryActions.canDelete) && (
-        <Suspense fallback={null}>
-          <CategoryDeleteDialog
-            showTrashed={showTrashed}
-            isOpen={isCategoryDeleteDialogOpen}
-            isActionLoading={isActionLoading}
-            itemCount={deleteIntent?.categories.length ?? 1}
-            onOpenChange={(open) => !open && setDeleteIntent(null)}
-            onConfirm={handleConfirmDelete}
-          />
-        </Suspense>
-      )}
-    </div>
+    <ResourceListPage<CategoryListItem>
+      title={t("categories")}
+      actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
+      search={search}
+      query={listQuery(search)}
+      dataKey="categories"
+      columns={columns}
+      invalidate={[queryKeys.categories.all, queryKeys.collections.categoryOptions(), queryKeys.products.stats()]}
+      empty={{ icon: FolderTree, title: t("categoriesEmptyTitle"), description: t("categoriesEmptyBody") }}
+      views={{ param: "status", tabs: [
+        { value: "published", label: t("published") },
+        { value: "draft", label: t("draft") },
+        { value: "internal", label: t("hidden") },
+      ] }}
+      rowTo={editTo}
+      viewUrl={(row) => (row.status === "published" ? getStorefrontPath(`/categories/${row.slug}`) : undefined)}
+      lifecycle={{
+        canTrash: can.canDelete,
+        canRestore: can.canRestore,
+        canDelete: can.canPermanentDelete,
+        run: (action, rows) =>
+          action === "restore"
+            ? apiData(postApiV1AdminCategoriesBulkRestore({ body: { categories: claims(rows) } }))
+            : apiData(postApiV1AdminCategoriesBulkDelete({ body: { categories: claims(rows), permanent: action === "delete" } })),
+      }}
+    />
   );
 }

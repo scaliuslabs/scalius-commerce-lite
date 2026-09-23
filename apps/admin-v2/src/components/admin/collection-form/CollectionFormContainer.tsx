@@ -13,6 +13,11 @@ import {
 } from "../../ui/form";
 import { Input } from "../../ui/input";
 import { FormActionBar } from "~/components/admin/FormStickyHeader";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { ReadOnlyNotice } from "~/components/admin/resource/ReadOnlyNotice";
+import { useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
+import { resourceMessages } from "~/i18n/resource";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,6 +60,8 @@ export function CollectionForm({
   isEdit = false,
 }: CollectionFormProps) {
   const navigate = useNavigate();
+  const t = useMessages(catalogMessages);
+  const tr = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const { collections: collectionActions } = useCatalogActionPermissions();
   const canSave = isEdit ? collectionActions.canEdit : collectionActions.canCreate;
@@ -184,7 +191,7 @@ export function CollectionForm({
           : []),
       ]);
 
-      toast.success(isEdit ? "Collection saved" : "Collection created");
+      toast.success(t(isEdit ? "collectionSaved" : "collectionCreated"));
       if (!isEdit) {
         void navigate({
           to: "/admin/collections/$collectionId/edit",
@@ -273,19 +280,14 @@ export function CollectionForm({
           onSubmit={canSave && form.formState.isDirty
             ? form.handleSubmit(handleSubmit)
             : (event) => event.preventDefault()}
-          className="-mt-4 pb-6"
+          className="pb-6"
           noValidate
         >
-          <div className="mb-4">
-            <h1 className="text-xl font-semibold tracking-tight">
-              {isEdit ? "Edit collection" : "Create collection"}
-            </h1>
-            {!canSave ? (
-              <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
-                Read-only access. Collection changes require catalog edit permission.
-              </p>
-            ) : null}
-          </div>
+          <PageHeader
+            backTo="/admin/collections"
+            title={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
+          />
+          {!canSave ? <ReadOnlyNotice /> : null}
           <fieldset disabled={!canSave} className="grid grid-cols-1 gap-3 disabled:opacity-70 lg:grid-cols-3 lg:gap-4">
             {/* Left Column (2/3) - Main content */}
             <div className="space-y-3 lg:col-span-2">
@@ -347,12 +349,11 @@ export function CollectionForm({
         isDirty={form.formState.isDirty}
         cancelUrl="/admin/collections"
         newUrl="/admin/collections/new"
-        newLabel="New collection"
+        newLabel={t("addCollection")}
         canCreateNew={collectionActions.canCreate}
         canSave={canSave}
-        saveDisabledReason={isEdit
-          ? "You do not have permission to edit collections."
-          : "You do not have permission to create collections."}
+        saveLabel={tr("save")}
+        saveDisabledReason={tr("noPermissionToSave")}
         onSave={() => form.handleSubmit(handleSubmit)()}
       />
     </>

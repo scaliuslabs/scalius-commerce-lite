@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, Eye, Pencil, Trash2, Undo } from "lucide-react";
 import type { ExtraAction } from "./DataTableRowActions";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 export interface DataTableRowActionsMenuProps {
   open: boolean;
@@ -36,6 +38,7 @@ export function DataTableRowActionsMenu({
   extraActions,
   children,
 }: DataTableRowActionsMenuProps) {
+  const t = useMessages(resourceMessages);
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -44,13 +47,13 @@ export function DataTableRowActionsMenu({
         {onView && (
           <DropdownMenuItem onClick={onView}>
             <Eye className="mr-2 h-3.5 w-3.5" />
-            View
+            {t("view")}
           </DropdownMenuItem>
         )}
         {onEdit && !showTrashed && (
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
-            Edit
+            {t("edit")}
           </DropdownMenuItem>
         )}
         {extraActions?.map((action) => (
@@ -71,7 +74,7 @@ export function DataTableRowActionsMenu({
             {onRestore && (
               <DropdownMenuItem onClick={onRestore}>
                 <Undo className="mr-2 h-3.5 w-3.5" />
-                Restore
+                {t("restore")}
               </DropdownMenuItem>
             )}
             {onPermanentDelete && (
@@ -80,7 +83,7 @@ export function DataTableRowActionsMenu({
                 className="text-destructive"
               >
                 <AlertTriangle className="mr-2 h-3.5 w-3.5" />
-                Delete permanently
+                {t("deletePermanently")}
               </DropdownMenuItem>
             )}
           </>
@@ -88,7 +91,7 @@ export function DataTableRowActionsMenu({
           onDelete && (
             <DropdownMenuItem onClick={onDelete} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Move to trash
+              {t("moveToTrash")}
             </DropdownMenuItem>
           )
         )}
