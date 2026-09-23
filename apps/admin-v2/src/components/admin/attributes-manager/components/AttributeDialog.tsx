@@ -17,13 +17,14 @@ import { catalogMessages } from "~/i18n/catalog";
 const toHandle = (name: string) => name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
 interface AttributeDialogProps {
+  open: boolean;
   /** Attribute to edit; omit to create one. */
   attribute?: AttributeDto;
   onClose: () => void;
 }
 
 /** Create or edit an attribute: name, handle, filter switch and preset values. */
-export function AttributeDialog({ attribute, onClose }: AttributeDialogProps) {
+export function AttributeDialog({ open, attribute, onClose }: AttributeDialogProps) {
   const t = useMessages(catalogMessages);
   const [name, setName] = useState(attribute?.name ?? "");
   const [slug, setSlug] = useState(attribute?.slug ?? "");
@@ -52,7 +53,7 @@ export function AttributeDialog({ attribute, onClose }: AttributeDialogProps) {
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && !save.isPending && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && !save.isPending && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{attribute ? t("editAttribute") : t("addAttribute")}</DialogTitle>
