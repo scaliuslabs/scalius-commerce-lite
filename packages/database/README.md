@@ -1,7 +1,6 @@
 # @scalius/database
 
-Drizzle ORM schema, request-safe client composition, atomic checkout transports,
-and deterministic migration tools for Cloudflare D1, TursoDB, and
+Drizzle ORM schema, request-safe client composition, and deterministic migration tools for Cloudflare D1, TursoDB, and
 PostgreSQL/Neon. D1 is the zero-configuration default. External providers are
 selected by complete credentials or an explicit `DATABASE_PROVIDER`; ambiguous
 or incomplete configurations fail closed.
@@ -12,12 +11,7 @@ or incomplete configurations fail closed.
 {
   "./schema": "./src/schema/index.ts",
   "./client": "./src/client.ts",
-  "./checkout-commit": "./src/checkout-commit.ts",
-  "./checkout-transport": "./src/checkout-transport.ts",
-  "./checkout-projection": "./src/checkout-projection.ts",
   "./postgres-adapter": "./src/postgres-adapter.ts",
-  "./postgres-checkout": "./src/postgres-checkout.ts",
-  "./inventory-authority": "./src/inventory-authority.ts",
   "./migration-artifacts": "./src/migration-artifacts.ts",
   "./schema-contract": "./src/schema-contract.ts",
   "./portability": "./src/portability.ts",
@@ -73,7 +67,7 @@ Provider selection is fail-closed:
 
 Migration/copy/cutover orchestration does not run in this package or on request
 paths. It belongs to deployment operations and repo-owned migration tools.
-The deployed API/admin Workers expose the separate `DATABASE_MIGRATION_FREEZE`
+The deployed API Worker exposes the separate `DATABASE_MIGRATION_FREEZE`
 operations-only secret so a live copy can stop HTTP writes, queue consumption, and
 scheduled mutations while still exposing API health/readiness. Follow
 `audit/OPERATIONAL_RUNBOOK.md`; never copy a live D1 database without binding one
@@ -117,8 +111,6 @@ Some tables use inline enum arrays instead of the centralized enums:
 - `heroSliders.type`: `["desktop", "mobile"]`
 - `deliveryLocations.type`: `["city", "zone", "area"]`
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`
-- `siteSettings.authVerificationMethod`: `["email", "both", "whatsapp_otp", "sms_otp"]` legacy summary only; advanced customer auth policy is stored in `settings.customer_auth/policy`, and phone collection remains mandatory.
-- `siteSettings.checkoutMode`: `["guest_cod_only", "gateways_only", "all"]`; the checkout-flow fields share the positive monotonic `checkoutFlowRevision` CAS authority so concurrent admin saves cannot silently overwrite one another.
 - `metaConversionsLogs.status`: `["success", "failed"]`
 
 ## Table Inventory
@@ -220,7 +212,6 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `discountCollections` | Discount-collection junction. `applicationType` ("get") |
 | `discountUsage` | Discount usage tracking. `orderId` FK, `customerId` FK, amount discounted |
 | `discountCustomerRedemptions` | Atomic one-use identity claims keyed by discount plus immutable checkout-phone or authenticated-account identity |
-| `metaConversionsSettings` | Meta Pixel CAPI settings. `singletonKey` constraint, pixel/access token, enabled flag |
 | `metaConversionsLogs` | CAPI event log. Event identity, status, request/response JSON |
 
 ### `content.ts` -- Content Domain
@@ -236,8 +227,7 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 
 | Table | Purpose |
 |-------|---------|
-| `settings` | Key-value settings store. `key` + `category` unique constraint, value, type, expiry |
-| `siteSettings` | Singleton site config. Header/footer JSON, revision-guarded checkout-flow settings, SEO, WhatsApp OTP config |
+| `settings` | Typed settings documents (one row per document: `category` = document key, `key = 'document'`, JSON value, CAS `revision`) plus fraud-checker provider rows and notification provider-health markers. `key` + `category` unique. Shapes live in `@scalius/core/modules/settings/documents` |
 | `analytics` | Analytics script configs. Type, raw script config, location, Partytown flag |
 | `adminFcmTokens` | Firebase Cloud Messaging tokens. User FK, unique token, device metadata |
 | `shippingMethods` | Shipping method options. Name, fee, sort order |
@@ -251,10 +241,6 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 |---|---|
 | `collections.config` | `{ source: "manual" | "dynamic", categoryIds: string[], productIds: string[], featuredProductId?: string, showOnHomepage: boolean (default false), maxProducts: number (1-24, default 8), title?: string, subtitle?: string }` |
 | `productAttributes.options` | `string[]` (declared via Drizzle `mode: "json"`) |
-| `siteSettings.headerConfig` | `{ topBar: { text, isEnabled }, logo: { src, alt }, favicon: { src, alt }, contact: { phone, text, isEnabled }, social: SocialLink[] \| Record<string, string>, navigation?: NavItem[] }` |
-| `siteSettings.footerConfig` | `{ logo: { src, alt }, favicon: { src, alt }, tagline, description, copyrightText, social: SocialLink[], menus: { id, title, items: { id, label, href }[] }[] }` |
-| `siteSettings.socialLinks` | `string` (JSON, legacy -- header/footerConfig now contains social data) |
-| `siteSettings.contactInfo` | `string` (JSON, legacy) |
 | `heroSliders.images` | `{ id: string, url: credential-free HTTPS URL, title: string, link: safe internal/HTTPS destination or "" }[]` (maximum 12, unique IDs) |
 | `heroSections.config` | `string` (JSON, provider-specific hero configuration) |
 | `pageTemplates.config` | `string` (JSON, template-specific configuration) |

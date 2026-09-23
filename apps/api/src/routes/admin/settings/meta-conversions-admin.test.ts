@@ -22,7 +22,7 @@ const settingsRow = {
     pixelId: "1234567890",
     accessToken: "stored-ciphertext",
     testEventCode: "stored-test-code",
-    isEnabled: 1,
+    isEnabled: true,
     logRetentionDays: 30,
 };
 
@@ -51,9 +51,8 @@ function createDb(options: {
         },
     });
     if (settings) {
-        sqlite.prepare(`INSERT INTO meta_conversions_settings
-            (id, pixel_id, access_token, test_event_code, is_enabled, log_retention_days) VALUES ('singleton', ?, ?, ?, ?, ?)`)
-            .run(settings.pixelId, settings.accessToken, settings.testEventCode, settings.isEnabled, settings.logRetentionDays);
+        sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('meta', 'document', ?, 'json', 'meta_conversions')")
+            .run(JSON.stringify(settings));
     }
     analyticsRows.forEach((row, index) => {
         sqlite.prepare("INSERT INTO analytics (id, name, type, config, location) VALUES (?, 'Script', ?, ?, 'head')")
@@ -67,10 +66,12 @@ function createDb(options: {
     }
     return {
         db,
+        /** The stored document (the access token as stored ciphertext). */
         get settings() {
-            return sqlite.prepare(`SELECT pixel_id AS pixelId, access_token AS accessToken,
-                test_event_code AS testEventCode, is_enabled AS isEnabled, log_retention_days AS logRetentionDays
-                FROM meta_conversions_settings`).get() as typeof settingsRow | undefined ?? null;
+            const row = sqlite.prepare("SELECT value FROM settings WHERE category = 'meta_conversions'").get() as
+                | { value: string }
+                | undefined;
+            return row ? JSON.parse(row.value) as typeof settingsRow : null;
         },
     };
 }
@@ -105,7 +106,7 @@ async function getSettings(db: ReturnType<typeof createDb>) {
     const body = await response.json() as {
         success: boolean;
         data: {
-            settings: (Omit<typeof settingsRow, "isEnabled"> & { isEnabled: boolean }) | null;
+            settings: typeof settingsRow | null;
             pixelParity: {
                 status: string;
                 severity: string;
@@ -230,7 +231,7 @@ describe("Meta Conversions admin settings", () => {
         expect(body.data?.accessToken).toBe("••••••••••••");
         expect(body.data?.testEventCode).toBe("••••••••••••");
         expect(db.settings?.accessToken).not.toContain("live-access-token");
-        await expect(decryptCredentials(db.settings!.accessToken, CREDENTIAL_ENCRYPTION_KEY))
+        await expect(decryptCredentials(db.settings!.accessToken.replace(/^enc:/, ""), CREDENTIAL_ENCRYPTION_KEY))
             .resolves.toBe("live-access-token");
         expect(mocks.cacheDelete).toHaveBeenCalledWith("meta-capi:browser-events:circuit");
         expect(mocks.bumpCacheGeneration).toHaveBeenCalled();
@@ -249,7 +250,7 @@ describe("Meta Conversions admin settings", () => {
         expect(response.status).toBe(200);
         expect(db.settings?.pixelId).toBe("9876543210");
         expect(db.settings?.accessToken).toBe("stored-ciphertext");
-        expect(db.settings?.testEventCode).toBeNull();
+        expect(db.settings?.testEventCode).toBe("");
     });
 
     it("preserves the stored test event code when saving its masked marker", async () => {
@@ -276,7 +277,7 @@ describe("Meta Conversions admin settings", () => {
             pixelId: "1234567890",
             accessToken: "stored-ciphertext",
             testEventCode: "stored-test-code",
-            isEnabled: 0,
+            isEnabled: false,
             logRetentionDays: 30,
         });
         expect(body.data).toMatchObject({
@@ -326,7 +327,7 @@ describe("Meta Conversions admin settings", () => {
         });
 
         expect(response.status).toBe(201);
-        expect(db.settings?.accessToken).toBeNull();
+        expect(db.settings?.accessToken).toBe("");
     });
 
     it("rejects obvious placeholder credentials without substring matching real-looking tokens", async () => {
@@ -352,7 +353,7 @@ describe("Meta Conversions admin settings", () => {
         });
 
         expect(realLooking.response.status).toBe(201);
-        await expect(decryptCredentials(realLookingDb.settings!.accessToken, CREDENTIAL_ENCRYPTION_KEY))
+        await expect(decryptCredentials(realLookingDb.settings!.accessToken.replace(/^enc:/, ""), CREDENTIAL_ENCRYPTION_KEY))
             .resolves.toBe("EAABtestLiveToken123");
     });
 

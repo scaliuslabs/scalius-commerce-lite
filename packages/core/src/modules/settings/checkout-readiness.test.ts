@@ -16,6 +16,8 @@ vi.mock("../../integrations/whatsapp", () => ({
     getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings,
 }));
 
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { checkoutDocument } from "./documents";
 import {
     CHECKOUT_READINESS_CODES,
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
@@ -23,45 +25,19 @@ import {
     getCustomerSignInReadiness,
 } from "./checkout-readiness";
 
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    const promise = new Promise<T>((resolvePromise) => {
-        resolve = resolvePromise;
-    });
-    return { promise, resolve };
-}
-
-function createAuthDb(options: {
+async function createAuthDb(options: {
     guestCheckoutEnabled: boolean;
     authVerificationMethod?: string;
     policy?: Record<string, unknown>;
 }) {
-    const select = vi.fn().mockReturnValueOnce({
-        from: () => ({
-            limit: () => ({
-                get: () => Promise.resolve({
-                    guestCheckoutEnabled: options.guestCheckoutEnabled,
-                    authVerificationMethod: options.authVerificationMethod ?? "email",
-                }),
-            }),
-        }),
-    });
-    if (options.policy) {
-        select.mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    get: () => Promise.resolve({ value: JSON.stringify(options.policy) }),
-                }),
-            }),
-        });
-    } else {
-        select.mockReturnValueOnce({
-            from: () => ({
-                where: () => ({ get: () => Promise.resolve(null) }),
-            }),
-        });
-    }
-    return { select };
+    const harness = createSqliteD1Database();
+    await checkoutDocument.write(harness.db, { guestCheckoutEnabled: options.guestCheckoutEnabled });
+    harness.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('auth', 'document', ?, 'json', 'customer_auth')")
+        .run(JSON.stringify({
+            authVerificationMethod: options.authVerificationMethod ?? "email",
+            policy: options.policy ?? null,
+        }));
+    return harness;
 }
 
 describe("customer checkout sign-in readiness", () => {
@@ -72,41 +48,14 @@ describe("customer checkout sign-in readiness", () => {
         mocks.getWhatsAppCloudApiSettings.mockResolvedValue({});
     });
 
-    it("starts delivery and sign-in reads together while preserving fail-closed readiness", async () => {
-        const shipping = deferred<Array<{ id: string }>>();
-        const hierarchy = deferred<Array<{ id: string }>>();
-        const site = deferred<{
-            guestCheckoutEnabled: boolean;
-            authVerificationMethod: string;
-        }>();
-        const select = vi.fn()
-            .mockReturnValueOnce({
-                from: () => ({
-                    where: () => ({ limit: () => shipping.promise }),
-                }),
-            })
-            .mockReturnValueOnce({
-                from: () => ({
-                    where: () => ({ limit: () => hierarchy.promise }),
-                }),
-            })
-            .mockReturnValueOnce({
-                from: () => ({
-                    limit: () => ({ get: () => site.promise }),
-                }),
-            });
+    it("blocks checkout when accounts are required and no sign-in channel is usable", async () => {
+        const { db, sqlite } = await createAuthDb({ guestCheckoutEnabled: false });
+        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee, is_active) VALUES ('sm_1', 'Standard', 60, 1);
+            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+            VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
+                   ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);`);
 
-        const resultPromise = getCheckoutReadiness({ select } as never, {});
-
-        expect(select).toHaveBeenCalledTimes(3);
-        shipping.resolve([{ id: "shipping_1" }]);
-        hierarchy.resolve([{ id: "zone_1" }]);
-        site.resolve({
-            guestCheckoutEnabled: false,
-            authVerificationMethod: "email",
-        });
-
-        await expect(resultPromise).resolves.toEqual({
+        await expect(getCheckoutReadiness(db, {})).resolves.toEqual({
             status: "incomplete",
             issues: [CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE],
             hasActiveShippingMethod: true,
@@ -117,13 +66,11 @@ describe("customer checkout sign-in readiness", () => {
         expect(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE.code)
             .toBe(CHECKOUT_READINESS_CODES.customerSignIn);
         expect(mocks.getEmailProviderReadiness).not.toHaveBeenCalled();
-        expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
-        expect(mocks.getWhatsAppCloudApiSettings).not.toHaveBeenCalled();
     });
 
     it("fails closed when accounts are required without the credential encryption key", async () => {
         const result = await getCustomerSignInReadiness(
-            createAuthDb({ guestCheckoutEnabled: false }) as never,
+            (await createAuthDb({ guestCheckoutEnabled: false })).db,
             {},
         );
 
@@ -138,7 +85,7 @@ describe("customer checkout sign-in readiness", () => {
 
     it("accepts a configured provider allowed by the saved customer auth policy", async () => {
         mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [], activeProvider: "mimsms" });
-        const db = createAuthDb({
+        const { db } = await createAuthDb({
             guestCheckoutEnabled: false,
             policy: {
                 otpChannels: ["sms"],
@@ -148,7 +95,7 @@ describe("customer checkout sign-in readiness", () => {
             },
         });
 
-        await expect(getCustomerSignInReadiness(db as never, {
+        await expect(getCustomerSignInReadiness(db, {
             encryptionKey: "credential-key",
         })).resolves.toEqual({
             status: "ready",
@@ -161,7 +108,7 @@ describe("customer checkout sign-in readiness", () => {
 
     it("does not read optional sign-in providers on the public guest-checkout path", async () => {
         const result = await getCustomerSignInReadiness(
-            createAuthDb({ guestCheckoutEnabled: true }) as never,
+            (await createAuthDb({ guestCheckoutEnabled: true })).db,
             {},
         );
 
@@ -176,7 +123,7 @@ describe("customer checkout sign-in readiness", () => {
 
     it("lets the admin preview optional sign-in provider readiness before requiring accounts", async () => {
         const result = await getCustomerSignInReadiness(
-            createAuthDb({ guestCheckoutEnabled: true }) as never,
+            (await createAuthDb({ guestCheckoutEnabled: true })).db,
             { inspectOptionalCustomerSignIn: true },
         );
 

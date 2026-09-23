@@ -1,33 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { encryptCredentials } from "../../utils/credential-encryption";
 import { getCapiSettings, logCapiEvent } from "./meta.service";
 
-const baseSettings = {
-  id: "singleton",
-  pixelId: "1234567890",
-  accessToken: "legacy-token",
-  testEventCode: null,
-  isEnabled: true,
-  logRetentionDays: 30,
-  createdAt: 1,
-  updatedAt: 1,
-};
-
-function createDb(row: typeof baseSettings | null) {
-  return {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => row),
-        })),
-      })),
-    })),
-  };
+function createDb(accessToken: string) {
+  const { db, sqlite } = createSqliteD1Database();
+  sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('meta', 'document', ?, 'json', 'meta_conversions')")
+    .run(JSON.stringify({ pixelId: "1234567890", accessToken, testEventCode: "", isEnabled: true, logRetentionDays: 30 }));
+  return db;
 }
 
 describe("getCapiSettings", () => {
+  it("returns null until the settings are saved", async () => {
+    await expect(getCapiSettings(createSqliteD1Database().db)).resolves.toBeNull();
+  });
+
   it("keeps legacy plaintext access tokens readable", async () => {
-    const settings = await getCapiSettings(createDb(baseSettings) as never);
+    const settings = await getCapiSettings(createDb("legacy-token"));
 
     expect(settings?.accessToken).toBe("legacy-token");
   });
@@ -39,15 +28,12 @@ describe("getCapiSettings", () => {
     const encryptedToken = await encryptCredentials("live-meta-token", key);
 
     try {
-      const settings = await getCapiSettings(
-        createDb({ ...baseSettings, accessToken: encryptedToken }) as never,
-        wrongKey,
-      );
+      const settings = await getCapiSettings(createDb(encryptedToken), wrongKey);
 
-      expect(settings?.accessToken).toBeNull();
+      expect(settings?.accessToken).toBe("");
       expect(JSON.stringify(settings)).not.toContain(encryptedToken);
       expect(warnSpy).toHaveBeenCalledWith(
-        "[Meta CAPI] Access token is not ready:",
+        "[Settings] meta_conversions accessToken is not readable:",
         "Meta Conversions API access token could not be decrypted with the configured credential key.",
       );
     } finally {

@@ -1,34 +1,22 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { safeBatch } from "@scalius/database/client";
-import { settings, siteSettings } from "@scalius/database/schema";
-import { eq, and, sql } from "drizzle-orm";
-
-import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
-    emailSettingsDocument,
     getEmailProviderReadiness,
     getEmailRuntimeSettings,
-    type EmailSettingsDocument,
 } from "@scalius/core/integrations/email";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import {
-    firebaseSettingsDocument,
     normalizeFirebaseServiceAccountJson,
     readFirebaseSettings,
-    type FirebaseSettingsDocument,
 } from "@scalius/core/integrations/firebase/settings";
 import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
-    whatsappAccessTokenDocument,
-    WHATSAPP_ACCESS_TOKEN_KEY,
-    WHATSAPP_SETTINGS_CATEGORY,
 } from "@scalius/core/integrations/whatsapp";
 import {
     getActivePaymentMethods,
 } from "@scalius/core/modules/payments/gateway-settings";
-import { filterPaymentGatewayIdsForCurrency } from "@scalius/core/modules/payments/gateway-currency-policy";
+import { filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments/gateways/registry";
 import {
     CUSTOMER_AUTH_CONTACT_FIELDS,
     CUSTOMER_AUTH_METHODS,
@@ -37,7 +25,6 @@ import {
     customerAuthPolicyUsesSmsProvider,
     customerAuthPolicyUsesWhatsAppProvider,
     getCustomerAuthPolicyForMethod,
-    getLegacyCustomerAuthMethodForPolicy,
     normalizeCustomerAuthMethod,
     normalizeCustomerAuthPolicy,
 } from "@scalius/shared/customer-auth-policy";
@@ -47,17 +34,22 @@ import {
     saveCheckoutFlowSettingsDocument,
 } from "@scalius/core/modules/settings/checkout-flow-admin.service";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
-import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
 import {
-    prepareSettingAggregateStatements,
-    type SettingAggregateWrite,
-} from "@scalius/core/modules/settings/settings-write";
+    customerAuthDocument,
+    emailDocument,
+    firebaseDocument,
+    securityDocument,
+    whatsappDocument,
+    type EmailSettings,
+    type FirebaseSettings,
+    type WhatsAppSettings,
+} from "@scalius/core/modules/settings/documents";
 import {
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
     getCheckoutReadiness,
     getCustomerSignInReadiness,
 } from "@scalius/core/modules/settings/checkout-readiness";
-import { bumpCacheGeneration, getOptionalExecutionContext } from "../../../utils/cache-generation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import {
     buildClearNotificationProviderBlocksStatement,
 } from "@scalius/core/modules/notifications/notification-provider-health";
@@ -68,7 +60,7 @@ import {
 } from "@scalius/shared/security-csp";
 
 import { ok } from "../../../utils/api-response";
-import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { ValidationError } from "../../../utils/api-error";
 import {
     conflictResponse,
     successEnvelope,
@@ -232,15 +224,6 @@ const checkoutReadinessResponseSchema = readinessSchema.extend({
     hasUsableCustomerSignIn: z.boolean(),
 });
 
-function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
-    if (!value) return undefined;
-    try {
-        return JSON.parse(value) as unknown;
-    } catch {
-        return undefined;
-    }
-}
-
 // ─────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────
@@ -275,7 +258,7 @@ const checkoutFlowSettingsSchema = z.object({
     checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
     partialPaymentEnabled: z.boolean(),
     partialPaymentAmount: z.number(),
-    revision: z.number().int().positive(),
+    revision: z.number().int().nonnegative(),
 });
 
 const getCheckoutFlowRoute = createRoute({
@@ -303,7 +286,7 @@ app.openapi(getCheckoutFlowRoute, async (c) => {
 
 const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
     .omit({ revision: true })
-    .extend({ expectedRevision: z.number().int().positive() })
+    .extend({ expectedRevision: z.number().int().nonnegative() })
     .strict();
 
 const saveCheckoutFlowRoute = createRoute({
@@ -356,13 +339,12 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     ]);
     const saved = await saveCheckoutFlowSettingsDocument(db, {
         ...body,
-        availablePaymentMethods: filterPaymentGatewayIdsForCurrency(
+        availablePaymentMethods: filterPaymentMethodsForCurrency(
             activePaymentMethods.enabledMethods,
             currencySettings.currencyCode,
         ),
     });
 
-    await invalidateSiteSettingsCache(c.env.CACHE);
     await bumpCacheGeneration(c);
     return ok(c, saved);
 });
@@ -389,42 +371,19 @@ const getAuthRoute = createRoute({
 
 app.openapi(getAuthRoute, async (c) => {
     const db = c.get("db");
-        const [row] = await db.select().from(siteSettings).limit(1);
-        if (!row) throw new NotFoundError("Settings not found");
-        const policyRow = await db
-            .select({ value: settings.value })
-            .from(settings)
-            .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
-            .get()
-            .catch(() => null);
-        const customerAuthPolicy = normalizeCustomerAuthPolicy(
-            parseCustomerAuthPolicy(policyRow?.value),
-            row.authVerificationMethod,
-        );
-        const whatsapp = await getWhatsAppCloudApiSettings(
-            db,
-            getCredentialEncryptionKey(c.env as Record<string, unknown>),
-            {
-                migrateLegacy: true,
-                migrationEncryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
-            },
-        );
+    const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const [auth, whatsapp] = await Promise.all([
+        customerAuthDocument.read(db),
+        getWhatsAppCloudApiSettings(db, credentialEncryptionKey),
+    ]);
 
-	        return ok(c, {
-	            authVerificationMethod: policyRow?.value
-                    ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)
-                    : normalizeCustomerAuthMethod(row.authVerificationMethod),
-                customerAuthPolicy,
-            whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
-            whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(
-                0,
-                WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH,
-            ),
-            whatsappTemplateName: (whatsapp.authTemplateName || "").slice(
-                0,
-                WHATSAPP_TEMPLATE_NAME_MAX_LENGTH,
-            ),
-        });
+    return ok(c, {
+        authVerificationMethod: auth.authVerificationMethod,
+        customerAuthPolicy: auth.policy,
+        whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
+        whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(0, WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
+        whatsappTemplateName: (whatsapp.authTemplateName || "").slice(0, WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
+    });
 });
 
 const saveAuthSchema = z.object({
@@ -459,176 +418,102 @@ const saveAuthRoute = createRoute({
 
 app.openapi(saveAuthRoute, async (c) => {
     const db = c.get("db");
-        const body = c.req.valid("json");
-        const [[existingSettings], existingPolicyRow] = await Promise.all([
-            db.select().from(siteSettings).limit(1),
-            db
-                .select({ value: settings.value })
-                .from(settings)
-                .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
-                .get()
-                .catch(() => null),
-        ]);
+    const body = c.req.valid("json");
+    const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const existingAuth = await customerAuthDocument.read(db);
 
-        if (!existingSettings) throw new ValidationError("Base Site Settings must be configured first");
+    const incomingWhatsAppAccessToken =
+        typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED
+            ? body.whatsappAccessToken.trim()
+            : undefined;
+    const whatsappPlaceholderError = firstWhatsAppPlaceholderConfigError([
+        ["WhatsApp access token", incomingWhatsAppAccessToken],
+        ["WhatsApp phone number ID", typeof body.whatsappPhoneNumberId === "string" ? body.whatsappPhoneNumberId : undefined],
+        ["WhatsApp template name", typeof body.whatsappTemplateName === "string" ? body.whatsappTemplateName : undefined],
+    ]);
+    if (whatsappPlaceholderError) {
+        throw new ValidationError(whatsappPlaceholderError);
+    }
 
-        const updates: Partial<typeof siteSettings.$inferInsert> = {};
-        let customerAuthPolicyValue: string | undefined;
-        let requestedCustomerAuthPolicy:
-            | ReturnType<typeof normalizeCustomerAuthPolicy>
-            | undefined;
-        const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-        const existingCustomerAuthPolicy = normalizeCustomerAuthPolicy(
-            parseCustomerAuthPolicy(existingPolicyRow?.value),
-            existingSettings.authVerificationMethod,
+    // A null clears the field; the store falls back to the default template.
+    const whatsappPatch: Partial<WhatsAppSettings> = {
+        accessToken: incomingWhatsAppAccessToken,
+        phoneNumberId: body.whatsappPhoneNumberId === undefined ? undefined : body.whatsappPhoneNumberId ?? "",
+        authTemplateName: body.whatsappTemplateName === undefined ? undefined : body.whatsappTemplateName ?? "",
+    };
+    const whatsappProviderTouched = Object.values(whatsappPatch).some((value) => value !== undefined);
+
+    let requestedCustomerAuthPolicy: ReturnType<typeof normalizeCustomerAuthPolicy> | undefined;
+    if (body.customerAuthPolicy) {
+        requestedCustomerAuthPolicy = normalizeCustomerAuthPolicy(
+            body.customerAuthPolicy,
+            body.authVerificationMethod ?? existingAuth.authVerificationMethod,
         );
-        const incomingWhatsAppAccessToken =
-            typeof body.whatsappAccessToken === "string" &&
-            body.whatsappAccessToken !== MASKED
-                ? body.whatsappAccessToken.trim()
-                : undefined;
-        const whatsappPlaceholderError = firstWhatsAppPlaceholderConfigError([
-            ["WhatsApp access token", incomingWhatsAppAccessToken],
-            ["WhatsApp phone number ID", typeof body.whatsappPhoneNumberId === "string" ? body.whatsappPhoneNumberId : undefined],
-            ["WhatsApp template name", typeof body.whatsappTemplateName === "string" ? body.whatsappTemplateName : undefined],
-        ]);
-        if (whatsappPlaceholderError) {
-            throw new ValidationError(whatsappPlaceholderError);
+    } else if (body.authVerificationMethod) {
+        requestedCustomerAuthPolicy = getCustomerAuthPolicyForMethod(
+            normalizeCustomerAuthMethod(body.authVerificationMethod),
+        );
+    }
+    const effectiveCustomerAuthPolicy = requestedCustomerAuthPolicy ?? existingAuth.policy;
+
+    if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
+        const emailReadiness = await getEmailProviderReadiness({
+            db,
+            env: c.env as Record<string, unknown>,
+            encryptionKey: credentialEncryptionKey,
+        });
+        if (!isReady(emailReadiness)) {
+            throw new ValidationError(
+                `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.issues[0]?.message ?? ""}`.trim(),
+            );
         }
-        const credentialWriteKey =
-            incomingWhatsAppAccessToken
+    }
+
+    if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
+        const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
+        if (!isReady(smsReadiness)) {
+            throw new ValidationError(
+                `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.issues[0]?.message ?? ""}`.trim(),
+            );
+        }
+    }
+
+    if (customerAuthPolicyUsesWhatsAppProvider(effectiveCustomerAuthPolicy)) {
+        const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
+        const nextAccessToken = whatsappPatch.accessToken === undefined
+            ? whatsapp.accessToken
+            : whatsappPatch.accessToken || undefined;
+        const nextPhoneNumberId = whatsappPatch.phoneNumberId === undefined
+            ? whatsapp.phoneNumberId?.trim() || undefined
+            : whatsappPatch.phoneNumberId.trim() || undefined;
+        const nextTemplateName = whatsappPatch.authTemplateName === undefined
+            ? whatsapp.authTemplateName?.trim() || undefined
+            : whatsappPatch.authTemplateName.trim() || undefined;
+
+        if (!nextAccessToken || !nextPhoneNumberId || !nextTemplateName) {
+            throw new ValidationError(
+                "WhatsApp OTP cannot be enabled until a WhatsApp access token, phone number ID, and OTP template name are configured.",
+            );
+        }
+    }
+
+    // Credentials first: a policy is never saved that points at credentials
+    // this request failed to store.
+    if (whatsappProviderTouched) {
+        await whatsappDocument.write(db, whatsappPatch, {
+            encryptionKey: whatsappPatch.accessToken
                 ? requireEncryptionKey(c.env as Record<string, unknown>)
-                : undefined;
-        const whatsappProviderTouched =
-            (typeof body.whatsappAccessToken === "string" && body.whatsappAccessToken !== MASKED) ||
-            typeof body.whatsappPhoneNumberId === "string" ||
-            body.whatsappPhoneNumberId === null ||
-            typeof body.whatsappTemplateName === "string" ||
-            body.whatsappTemplateName === null;
+                : credentialEncryptionKey,
+        }, {
+            after: [buildClearNotificationProviderBlocksStatement(db, { channel: "whatsapp" })],
+        });
+    }
+    if (requestedCustomerAuthPolicy) {
+        await customerAuthDocument.write(db, { policy: requestedCustomerAuthPolicy });
+    }
 
-        if (body.customerAuthPolicy) {
-            const customerAuthPolicy = normalizeCustomerAuthPolicy(
-                body.customerAuthPolicy,
-                body.authVerificationMethod ?? existingSettings.authVerificationMethod,
-            );
-            requestedCustomerAuthPolicy = customerAuthPolicy;
-            updates.authVerificationMethod = getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy);
-            customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
-        } else if (body.authVerificationMethod) {
-            const authVerificationMethod = normalizeCustomerAuthMethod(body.authVerificationMethod);
-            const customerAuthPolicy = getCustomerAuthPolicyForMethod(authVerificationMethod);
-            requestedCustomerAuthPolicy = customerAuthPolicy;
-            updates.authVerificationMethod = authVerificationMethod;
-            customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
-        }
-        if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
-            updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId;
-        }
-        if (typeof body.whatsappTemplateName === "string" || body.whatsappTemplateName === null) {
-            updates.whatsappTemplateName = body.whatsappTemplateName;
-        }
-
-        const effectiveCustomerAuthPolicy = requestedCustomerAuthPolicy ?? existingCustomerAuthPolicy;
-
-        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
-            const emailReadiness = await getEmailProviderReadiness({
-                db,
-                env: c.env as Record<string, unknown>,
-                encryptionKey: credentialEncryptionKey,
-            });
-            if (!isReady(emailReadiness)) {
-                throw new ValidationError(
-                    `Email OTP cannot be enabled until transactional email is configured. ${emailReadiness.issues[0]?.message ?? ""}`.trim(),
-                );
-            }
-        }
-
-        if (requestedCustomerAuthPolicy && customerAuthPolicyUsesSmsProvider(requestedCustomerAuthPolicy)) {
-            const smsReadiness = await getSmsProviderReadiness(db, credentialEncryptionKey);
-            if (!isReady(smsReadiness)) {
-                throw new ValidationError(
-                    `SMS OTP cannot be enabled until an active SMS provider is configured. ${smsReadiness.issues[0]?.message ?? ""}`.trim(),
-                );
-            }
-        }
-
-        if (customerAuthPolicyUsesWhatsAppProvider(effectiveCustomerAuthPolicy)) {
-            const whatsapp = await getWhatsAppCloudApiSettings(db, credentialEncryptionKey);
-            const nextAccessToken =
-                typeof body.whatsappAccessToken === "string"
-                    ? body.whatsappAccessToken === MASKED
-                        ? whatsapp.accessToken
-                        : body.whatsappAccessToken.trim() || undefined
-                    : whatsapp.accessToken;
-            const nextPhoneNumberId =
-                updates.whatsappPhoneNumberId !== undefined
-                    ? updates.whatsappPhoneNumberId?.trim() || undefined
-                    : whatsapp.phoneNumberId?.trim() || undefined;
-            const nextTemplateName =
-                updates.whatsappTemplateName !== undefined
-                    ? updates.whatsappTemplateName?.trim() || undefined
-                    : whatsapp.authTemplateName?.trim() || undefined;
-
-            if (!nextAccessToken || !nextPhoneNumberId || !nextTemplateName) {
-                throw new ValidationError(
-                    "WhatsApp OTP cannot be enabled until a WhatsApp access token, phone number ID, and OTP template name are configured.",
-                );
-            }
-        }
-
-        const settingWrites: SettingAggregateWrite[] = [];
-        if (customerAuthPolicyValue !== undefined) {
-            settingWrites.push({
-                category: "customer_auth",
-                key: "policy",
-                value: customerAuthPolicyValue,
-                type: "json",
-            });
-        }
-
-        const whatsappAccessTokenChanged =
-            typeof body.whatsappAccessToken === "string"
-            && body.whatsappAccessToken !== MASKED;
-        if (whatsappAccessTokenChanged) {
-            updates.whatsappAccessToken = null;
-        }
-
-        const statements = await prepareSettingAggregateStatements(db, settingWrites, undefined);
-        if (whatsappAccessTokenChanged && incomingWhatsAppAccessToken) {
-            // The document owns WhatsApp credential storage and encryption; the
-            // statement joins this batch so the policy and the token commit
-            // together.
-            const prepared = await whatsappAccessTokenDocument.prepareWrite(
-                db,
-                { accessToken: incomingWhatsAppAccessToken },
-                { encryptionKey: credentialWriteKey },
-            );
-            statements.push(...prepared.statements);
-        } else if (whatsappAccessTokenChanged) {
-            statements.push(db.delete(settings).where(and(
-                eq(settings.category, WHATSAPP_SETTINGS_CATEGORY),
-                eq(settings.key, WHATSAPP_ACCESS_TOKEN_KEY),
-            )));
-        }
-        if (Object.keys(updates).length > 0) {
-            statements.push(db
-                .update(siteSettings)
-                .set({ ...updates, updatedAt: sql`unixepoch()` })
-                .where(eq(siteSettings.id, existingSettings.id)));
-        }
-        if (whatsappProviderTouched) {
-            statements.push(buildClearNotificationProviderBlocksStatement(
-                db,
-                { channel: "whatsapp" },
-            ));
-        }
-        if (statements.length > 0) {
-            await safeBatch(db, statements);
-        }
-
-        await invalidateSiteSettingsCache(c.env.CACHE);
-        await bumpCacheGeneration(c);
-        return ok(c, { message: "Auth settings saved successfully" });
+    await bumpCacheGeneration(c);
+    return ok(c, { message: "Auth settings saved successfully" });
 });
 
 // ─────────────────────────────────────────
@@ -648,7 +533,7 @@ const getSecurityRoute = createRoute({
 });
 
 app.openapi(getSecurityRoute, async (c) => {
-    const stored = await securitySettingsDocument.read(
+    const { value: stored } = await securityDocument.readDetailed(
         c.get("db"),
         {},
         { skipCache: true },
@@ -716,27 +601,13 @@ app.openapi(saveSecurityRoute, async (c) => {
     const { cspAllowedDomains } = c.req.valid("json");
 
         if (typeof cspAllowedDomains === "string") {
-            const saved = await securitySettingsDocument.write(db, {
+            // Writing through refreshes the KV mirror the Partytown proxy reads.
+            await securityDocument.write(db, {
                 cspAllowedDomains: normalizeStoredMerchantCspSources(
                     cspAllowedDomains,
                     c.env as Record<string, unknown>,
                 ),
-            });
-
-            // The KV mirror is the storefront CSP handler's and the Partytown
-            // proxy's read path, so it is refreshed outside the response path.
-            const env = c.env as Env | undefined;
-            if (env?.CACHE) {
-                const cacheWrite = securitySettingsDocument
-                    .writeCached({ kv: env.CACHE }, saved);
-
-                const executionCtx = getOptionalExecutionContext(c);
-                if (executionCtx) {
-                    executionCtx.waitUntil(cacheWrite);
-                } else {
-                    void cacheWrite;
-                }
-            }
+            }, { kv: c.env.CACHE });
             await bumpCacheGeneration(c);
         }
 
@@ -780,7 +651,9 @@ app.openapi(getEmailRoute, async (c) => {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
             settings: emailSettings,
         });
-        const { sender } = await emailSettingsDocument.read(db);
+        const { sender } = (await emailDocument.readDetailed(db, {
+            encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        })).value;
 
         return ok(c, {
             provider: emailSettings.provider,
@@ -819,26 +692,15 @@ const saveEmailRoute = createRoute({
 app.openapi(saveEmailRoute, async (c) => {
     const db = c.get("db");
         const { apiKey, sender, provider } = c.req.valid("json");
-        const patch: Partial<EmailSettingsDocument> = {};
+        const patch: Partial<EmailSettings> = {};
         const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-        const [currentEmailSettings, [currentSiteSettings], currentPolicyRow] = await Promise.all([
+        const [currentEmailSettings, customerAuth] = await Promise.all([
             getEmailRuntimeSettings({
                 db,
                 env: c.env as Record<string, unknown>,
                 encryptionKey: credentialEncryptionKey,
             }),
-            db
-                .select({
-                    authVerificationMethod: siteSettings.authVerificationMethod,
-                })
-                .from(siteSettings)
-                .limit(1),
-            db
-                .select({ value: settings.value })
-                .from(settings)
-                .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
-                .get()
-                .catch(() => null),
+            customerAuthDocument.read(db),
         ]);
 
         if (provider) {
@@ -860,10 +722,7 @@ app.openapi(saveEmailRoute, async (c) => {
             patch.sender = sender.trim();
         }
 
-        const effectiveCustomerAuthPolicy = normalizeCustomerAuthPolicy(
-            parseCustomerAuthPolicy(currentPolicyRow?.value),
-            currentSiteSettings?.authVerificationMethod,
-        );
+        const effectiveCustomerAuthPolicy = customerAuth.policy;
         const emailSettingsTouched = Object.keys(patch).length > 0;
         if (emailSettingsTouched && customerAuthPolicyUsesEmailProvider(effectiveCustomerAuthPolicy)) {
             // Judge the settings this save would leave behind with the one
@@ -891,13 +750,11 @@ app.openapi(saveEmailRoute, async (c) => {
         }
 
         if (emailSettingsTouched) {
-            const prepared = await emailSettingsDocument.prepareWrite(db, patch, {
+            await emailDocument.write(db, patch, {
                 encryptionKey: credentialWriteKey ?? credentialEncryptionKey,
+            }, {
+                after: [buildClearNotificationProviderBlocksStatement(db, { channel: "email" })],
             });
-            await safeBatch(db, [
-                ...prepared.statements,
-                buildClearNotificationProviderBlocksStatement(db, { channel: "email" }),
-            ]);
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
             await bumpCacheGeneration(c);
@@ -955,7 +812,7 @@ const saveFirebaseRoute = createRoute({
 app.openapi(saveFirebaseRoute, async (c) => {
     const db = c.get("db");
     const { serviceAccount, publicConfig } = c.req.valid("json");
-    const patch: Partial<FirebaseSettingsDocument> = {};
+    const patch: Partial<FirebaseSettings> = {};
     let encryptionKey: string | undefined;
     const credentialChanged = typeof serviceAccount === "string" && serviceAccount !== MASKED;
 
@@ -970,15 +827,14 @@ app.openapi(saveFirebaseRoute, async (c) => {
     }
 
     if (Object.keys(patch).length > 0) {
-        const prepared = await firebaseSettingsDocument.prepareWrite(db, patch, {
+        await firebaseDocument.write(db, patch, {
             encryptionKey: encryptionKey
                 ?? getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        }, {
+            after: credentialChanged
+                ? [buildClearNotificationProviderBlocksStatement(db, { channel: "push" })]
+                : [],
         });
-        const statements = [...prepared.statements];
-        if (credentialChanged) {
-            statements.push(buildClearNotificationProviderBlocksStatement(db, { channel: "push" }));
-        }
-        await safeBatch(db, statements);
     }
 
     return ok(c, { message: "Settings saved successfully" });

@@ -26,8 +26,6 @@ const CUSTOMER_COOKIE_CLEAR_HEADERS = [
   "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
 ];
 
-type OnlinePaymentMethod = "stripe" | "sslcommerz";
-
 type CheckoutCreateOrderPayload = CreateOrderPayload & {
   initialPaymentSession?: unknown;
 };
@@ -36,23 +34,19 @@ type InitialPaymentSessionResult =
   | { session: Record<string, unknown>; error?: never }
   | { session?: never; error: string };
 
-const PAYMENT_SESSION_ENDPOINTS: Record<OnlinePaymentMethod, string> = {
-  stripe: "/payment/stripe/intent",
-  sslcommerz: "/payment/sslcommerz/session",
-};
-
-function isOnlinePaymentMethod(value: unknown): value is OnlinePaymentMethod {
-  return value === "stripe" || value === "sslcommerz";
+/** Every payment method except cash on delivery is an online gateway id. */
+function isOnlinePaymentMethod(value: unknown): value is string {
+  return typeof value === "string" && value !== "cod" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
 }
 
 async function createInitialPaymentSession(
-  paymentMethod: OnlinePaymentMethod,
+  paymentMethod: string,
   orderId: string,
   receiptToken: string,
 ): Promise<InitialPaymentSessionResult> {
   try {
     const res = await apiFetch(
-      PAYMENT_SESSION_ENDPOINTS[paymentMethod],
+      `/payment/${paymentMethod}/session`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

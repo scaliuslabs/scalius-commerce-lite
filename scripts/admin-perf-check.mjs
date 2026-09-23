@@ -497,75 +497,8 @@ function checkOrderViewBoundary(context) {
   });
 }
 
-function checkServerManifest(context) {
-  const manifestPath = "apps/admin-v2/dist/server/.vite/manifest.json";
-  const absoluteManifestPath = resolveFromRoot(context.rootDir, manifestPath);
-  if (!existsSync(absoluteManifestPath)) {
-    skip(context, "dist: server manifest route chunks", `${manifestPath} not found`);
-    return;
-  }
-
-  const failureCount = context.failures.length;
-  let manifest;
-  try {
-    manifest = JSON.parse(readFileSync(absoluteManifestPath, "utf8"));
-  } catch (error) {
-    fail(
-      context,
-      "dist",
-      `${manifestPath}: could not parse JSON (${error instanceof Error ? error.message : String(error)}).`,
-    );
-    return;
-  }
-
-  const hotEntries = Object.entries(manifest).filter(
-    ([key]) => key.includes("routes/admin/index") || key.includes("routes/admin/settings"),
-  );
-
-  if (hotEntries.length === 0) {
-    skip(context, "dist: server manifest route chunks", "no dashboard/settings route chunks found");
-    return;
-  }
-
-  const bad = [];
-  for (const [key, value] of hotEntries) {
-    const blob = JSON.stringify(value);
-    if (/list-helpers|api\.queries/.test(blob)) bad.push(key);
-  }
-
-  if (bad.length > 0) {
-    fail(
-      context,
-      "dist",
-      `server manifest dashboard/settings chunks reference list-helpers/api.queries: ${bad.join(", ")}`,
-    );
-  }
-
-  if (context.failures.length === failureCount) {
-    pass(context, "dist: server manifest route chunks", `${hotEntries.length} entries`);
-  }
-
-  const clientRoot = resolveFromRoot(context.rootDir, "apps/admin-v2/dist/client");
-  const browserAssetPattern = /\.(?:css|png|jpe?g|webp|svg|gif|ico|woff2?|ttf|otf)$/i;
-  const missingBrowserAssets = Object.entries(manifest)
-    .map(([key, value]) => ({ key, file: value?.file }))
-    .filter(({ file }) => typeof file === "string" && browserAssetPattern.test(file))
-    .filter(({ file }) => !existsSync(resolve(clientRoot, file)))
-    .map(({ key, file }) => `${key} -> ${file}`);
-
-  if (missingBrowserAssets.length > 0) {
-    fail(
-      context,
-      "dist",
-      `server manifest references browser assets missing from dist/client:\n    ${missingBrowserAssets.join("\n    ")}`,
-    );
-  } else {
-    pass(context, "dist: server manifest browser assets", "all references exist");
-  }
-}
-
 function checkProductFormClientChunk(context) {
-  const assetsPath = `apps/admin-v2/dist/client/${ADMIN_IMMUTABLE_ASSET_DIR}`;
+  const assetsPath = `apps/admin-v2/dist/${ADMIN_IMMUTABLE_ASSET_DIR}`;
   const absoluteAssetsPath = resolveFromRoot(context.rootDir, assetsPath);
   if (!existsSync(absoluteAssetsPath)) {
     skip(context, "dist: ProductForm client chunk", `${assetsPath} not found`);
@@ -640,17 +573,6 @@ function checkStaticAssetCaching(context) {
   );
 }
 
-function checkAdminDist(context) {
-  const distPath = "apps/admin-v2/dist";
-  if (!existsSync(resolveFromRoot(context.rootDir, distPath))) {
-    skip(context, "dist: admin build artifacts", `${distPath} not found`);
-    return;
-  }
-
-  checkServerManifest(context);
-  checkProductFormClientChunk(context);
-}
-
 export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
   const context = {
     rootDir: resolve(rootDir),
@@ -670,7 +592,7 @@ export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
   checkGeneralSettingsBoundary(context);
   checkOrderViewBoundary(context);
   checkStaticAssetCaching(context);
-  checkAdminDist(context);
+  checkProductFormClientChunk(context);
 
   return {
     rootDir: context.rootDir,

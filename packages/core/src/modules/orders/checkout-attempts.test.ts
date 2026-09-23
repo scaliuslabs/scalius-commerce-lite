@@ -89,34 +89,6 @@ describe("atomic checkout attempts", () => {
     });
   });
 
-  it("replays the aggregate authority before its compatibility projection exists", async () => {
-    const identity = await buildCheckoutAttemptIdentity(buildInput());
-    let selectCount = 0;
-    const db = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            get: async () => {
-              selectCount += 1;
-              return selectCount === 1
-                ? undefined
-                : {
-                    requestHash: identity.requestHash,
-                    responsePayload: JSON.stringify({ orderId: "aggregate_order" }),
-                  };
-            },
-          }),
-        }),
-      }),
-    } as unknown as Database;
-
-    await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(db, identity))
-      .resolves.toEqual({
-        status: "replay",
-        response: { orderId: "aggregate_order" },
-      });
-  });
-
   it("reuses failed and stale legacy identities in the new atomic commit", async () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     for (const row of [

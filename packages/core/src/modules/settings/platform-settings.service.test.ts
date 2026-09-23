@@ -10,16 +10,15 @@ import {
 } from "@scalius/shared/platform-config";
 
 import {
-  PLATFORM_CONFIG_CACHE_KEY,
-  PLATFORM_SETTINGS_CATEGORY,
   cachePlatformConfig,
   getConfiguredStorefrontUrl,
   getPlatformSettings,
-  invalidatePlatformConfigCache,
   readCachedPlatformConfig,
   resolvePlatformConfig,
   savePlatformSettings,
 } from "./platform-settings.service";
+
+const PLATFORM_CONFIG_CACHE_KEY = "settings:platform";
 
 const PRODUCTION_PATCH = {
   storefrontUrl: "https://shop.example.com",
@@ -41,11 +40,6 @@ const AUTOMATION_DEFAULTS = {
   },
 };
 
-const STORED_AUTOMATION_DEFAULTS = {
-  setupTokenRequired: false,
-  identityHandoff: AUTOMATION_DEFAULTS.identityHandoff,
-};
-
 function createKv(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
   return {
@@ -60,11 +54,11 @@ function createKv(initial: Record<string, string> = {}) {
   };
 }
 
-function storedPlatformRows(sqlite: DatabaseSync): Record<string, string> {
-  const rows = sqlite
-    .prepare("SELECT key, value FROM settings WHERE category = ? ORDER BY key")
-    .all(PLATFORM_SETTINGS_CATEGORY) as Array<{ key: string; value: string }>;
-  return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+function storedPlatformDocument(sqlite: DatabaseSync): unknown {
+  const row = sqlite
+    .prepare("SELECT value FROM settings WHERE category = 'platform' AND key = 'document'")
+    .get() as { value: string } | undefined;
+  return row ? JSON.parse(row.value) : null;
 }
 
 describe("platform settings storage", () => {
@@ -85,48 +79,6 @@ describe("platform settings storage", () => {
     await expect(getConfiguredStorefrontUrl(db)).resolves.toBe("");
   });
 
-  it("assembles the pre-document per-key rows and writes the document back", async () => {
-    const insert = sqlite.prepare(
-      "INSERT INTO settings (id, key, value, type, category) VALUES (?, ?, ?, 'string', ?)",
-    );
-    insert.run("s1", "api_url", "https://api.example.com", PLATFORM_SETTINGS_CATEGORY);
-    insert.run("s2", "dashboard_url", "https://dashboard.example.com", PLATFORM_SETTINGS_CATEGORY);
-    insert.run("s3", "media_url", "https://cdn.example.com", PLATFORM_SETTINGS_CATEGORY);
-    insert.run("s4", "customer_auth_cookie_domain", "example.com", PLATFORM_SETTINGS_CATEGORY);
-    insert.run(
-      "s5",
-      "cors_allowed_origins",
-      JSON.stringify(["https://mobile.example.com"]),
-      PLATFORM_SETTINGS_CATEGORY,
-    );
-
-    await expect(getPlatformSettings(db)).resolves.toEqual({
-      ...EMPTY_PLATFORM_CONFIG,
-      apiUrl: "https://api.example.com",
-      dashboardUrl: "https://dashboard.example.com",
-      mediaUrl: "https://cdn.example.com",
-      customerAuthCookieDomain: "example.com",
-      corsAllowedOrigins: ["https://mobile.example.com"],
-    });
-
-    // The document row is written back; the legacy rows stay untouched so no
-    // D1 migration is required and a rollback keeps reading production data.
-    expect(storedPlatformRows(sqlite).config).toBe(JSON.stringify({
-      apiUrl: "https://api.example.com",
-      dashboardUrl: "https://dashboard.example.com",
-      mediaUrl: "https://cdn.example.com",
-      customerAuthCookieDomain: "example.com",
-      corsAllowedOrigins: ["https://mobile.example.com"],
-      ...STORED_AUTOMATION_DEFAULTS,
-    }));
-
-    // A later read comes from the document, not the legacy rows.
-    sqlite.exec("UPDATE settings SET value = 'https://stale.example.com' WHERE key = 'api_url'");
-    await expect(getPlatformSettings(db)).resolves.toMatchObject({
-      apiUrl: "https://api.example.com",
-    });
-  });
-
   it("round-trips every field through save and get", async () => {
     const saved = await savePlatformSettings(db, {
       ...PRODUCTION_PATCH,
@@ -142,19 +94,7 @@ describe("platform settings storage", () => {
     });
     await expect(getPlatformSettings(db)).resolves.toEqual(saved);
     await expect(getConfiguredStorefrontUrl(db)).resolves.toBe("https://shop.example.com");
-    expect(storedPlatformRows(sqlite)).toEqual({
-      config: JSON.stringify({
-        apiUrl: "https://api.example.com",
-        dashboardUrl: "https://dashboard.example.com",
-        mediaUrl: "https://cdn.example.com",
-        customerAuthCookieDomain: "example.com",
-        corsAllowedOrigins: ["https://mobile.example.com", "https://kiosk.example.com"],
-        ...STORED_AUTOMATION_DEFAULTS,
-      }),
-    });
-    expect(
-      sqlite.prepare("SELECT storefront_url FROM site_settings").get(),
-    ).toEqual({ storefront_url: "https://shop.example.com" });
+    expect(storedPlatformDocument(sqlite)).toEqual(saved);
   });
 
   it("applies partial patches without touching other stored values", async () => {
@@ -259,16 +199,7 @@ describe("platform settings storage", () => {
       ...EMPTY_PLATFORM_CONFIG,
       storefrontUrl: "https://shop.example.com",
     });
-    expect(storedPlatformRows(sqlite)).toEqual({
-      config: JSON.stringify({
-        apiUrl: "",
-        dashboardUrl: "",
-        mediaUrl: "",
-        customerAuthCookieDomain: "",
-        corsAllowedOrigins: [],
-        ...STORED_AUTOMATION_DEFAULTS,
-      }),
-    });
+    expect(storedPlatformDocument(sqlite)).toEqual(cleared);
   });
 
   it("rejects an empty storefront URL because the store origin is required", async () => {
@@ -293,8 +224,7 @@ describe("platform settings storage", () => {
   ] as const)("rejects invalid %s %s without writing", async (key, value, message) => {
     await expect(savePlatformSettings(db, { [key]: value })).rejects.toThrow(message);
     await expect(savePlatformSettings(db, { [key]: value })).rejects.toBeInstanceOf(ValidationError);
-    expect(storedPlatformRows(sqlite)).toEqual({});
-    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM site_settings").get()).toEqual({ count: 0 });
+    expect(storedPlatformDocument(sqlite)).toBeNull();
   });
 
   it("rejects invalid extra CORS origins and wildcards", async () => {
@@ -308,7 +238,7 @@ describe("platform settings storage", () => {
         "Every extra CORS origin must be an HTTPS origin without a path.",
       );
     }
-    expect(storedPlatformRows(sqlite)).toEqual({});
+    expect(storedPlatformDocument(sqlite)).toBeNull();
   });
 
   it("rejects more than the maximum number of distinct extra CORS origins", async () => {
@@ -332,22 +262,20 @@ describe("platform settings storage", () => {
       dashboardUrl: "not a url",
     })).rejects.toBeInstanceOf(ValidationError);
 
-    expect(storedPlatformRows(sqlite)).toEqual({});
+    expect(storedPlatformDocument(sqlite)).toBeNull();
     await expect(getConfiguredStorefrontUrl(db)).resolves.toBe("");
   });
 
-  it("normalizes legacy or malformed stored rows instead of trusting them", async () => {
-    sqlite.exec(`
-      INSERT INTO site_settings (id, site_name, header_config, footer_config, storefront_url, created_at, updated_at)
-      VALUES ('settings_1', 'Store', '{}', '{}', '/', 0, 0);
-      INSERT INTO settings (id, key, value, type, category) VALUES
-        ('s1', 'api_url', 'http://api.example.com', 'string', 'platform'),
-        ('s2', 'dashboard_url', 'https://Dashboard.Example.com/', 'string', 'platform'),
-        ('s3', 'media_url', 'https://cdn.example.com/assets/', 'string', 'platform'),
-        ('s4', 'customer_auth_cookie_domain', '.Example.com', 'string', 'platform'),
-        ('s5', 'cors_allowed_origins', 'https://a.example.com https://a.example.com,https://*.b.example.com', 'string', 'platform'),
-        ('s6', 'api_url', 'https://other-category.example.com', 'string', 'general');
-    `);
+  it("normalizes a malformed stored document instead of trusting it", async () => {
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('p', 'document', ?, 'json', 'platform')")
+      .run(JSON.stringify({
+        storefrontUrl: "/",
+        apiUrl: "http://api.example.com",
+        dashboardUrl: "https://Dashboard.Example.com/",
+        mediaUrl: "https://cdn.example.com/assets/",
+        customerAuthCookieDomain: ".Example.com",
+        corsAllowedOrigins: "https://a.example.com https://a.example.com,https://*.b.example.com",
+      }));
 
     await expect(getPlatformSettings(db)).resolves.toEqual({
       storefrontUrl: "",
@@ -366,15 +294,14 @@ describe("platform config KV cache", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses the versioned cache key without an expiring TTL", async () => {
+  it("uses one cache key without an expiring TTL", async () => {
     const kv = createKv();
     const config = { ...EMPTY_PLATFORM_CONFIG, ...PRODUCTION_PATCH };
 
     await cachePlatformConfig(kv, config);
 
-    expect(PLATFORM_CONFIG_CACHE_KEY).toBe("platform:config:v1");
-    // Every save deletes the key; an expiring entry would re-write KV on every
-    // Worker every few minutes for a value that only changes on save.
+    // Every save writes the key through; an expiring entry would re-write KV
+    // on every Worker every few minutes for a value that only changes on save.
     expect(kv.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(config),
@@ -383,26 +310,13 @@ describe("platform config KV cache", () => {
     expect(kv.get).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY, { cacheTtl: 60 });
   });
 
-  it("invalidates the cached configuration", async () => {
-    const kv = createKv({ [PLATFORM_CONFIG_CACHE_KEY]: JSON.stringify(PRODUCTION_PATCH) });
-
-    await invalidatePlatformConfigCache(kv);
-
-    expect(kv.delete).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY);
-    await expect(readCachedPlatformConfig(kv)).resolves.toBeNull();
-  });
-
   it("returns null for a missing binding, a cache miss, or an unreadable entry", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
     await expect(readCachedPlatformConfig(null)).resolves.toBeNull();
     await expect(readCachedPlatformConfig(undefined)).resolves.toBeNull();
     await expect(readCachedPlatformConfig(createKv())).resolves.toBeNull();
     await expect(
       readCachedPlatformConfig(createKv({ [PLATFORM_CONFIG_CACHE_KEY]: "{not json" })),
     ).resolves.toBeNull();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("is not decodable");
   });
 
   it("normalizes cached values so a stale or tampered entry cannot widen the config", async () => {
@@ -441,10 +355,8 @@ describe("platform config KV cache", () => {
     await expect(
       cachePlatformConfig(broken, { ...EMPTY_PLATFORM_CONFIG, ...PRODUCTION_PATCH }),
     ).resolves.toBeUndefined();
-    await expect(invalidatePlatformConfigCache(broken)).resolves.toBeUndefined();
     await expect(cachePlatformConfig(null, { ...EMPTY_PLATFORM_CONFIG })).resolves.toBeUndefined();
-    await expect(invalidatePlatformConfigCache(undefined)).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -473,6 +385,12 @@ describe("resolvePlatformConfig", () => {
     });
     expect(getDb).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("writes saves through to the cache", async () => {
+    const kv = createKv();
+    const saved = await savePlatformSettings(db, PRODUCTION_PATCH, kv);
+    await expect(readCachedPlatformConfig(kv)).resolves.toEqual(saved);
   });
 
   it("reads the database on a cache miss and fills the cache", async () => {

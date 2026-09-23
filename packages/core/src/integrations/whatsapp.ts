@@ -1,14 +1,7 @@
-import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import type { Database } from "@scalius/database/client";
-import { siteSettings } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import {
-  defineSettingsDocument,
-  rawStringSettingsCodec,
-} from "../modules/settings/settings-store";
+import { whatsappDocument } from "../modules/settings/documents";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
-import { ValidationError } from "../errors";
 
 export interface SendWhatsAppTemplateMessageInput {
   accessToken: string;
@@ -63,18 +56,8 @@ export interface WhatsAppCloudApiSettings {
   accessTokenConfigured: boolean;
   phoneNumberId?: string;
   authTemplateName: string;
-  accessTokenSource: "encrypted" | "legacy" | "none";
 }
 
-interface WhatsAppCloudApiSettingsOptions {
-  migrateLegacy?: boolean;
-  /** Must be the dedicated CREDENTIAL_ENCRYPTION_KEY, never the JWT fallback read key. */
-  migrationEncryptionKey?: string;
-}
-
-export const WHATSAPP_SETTINGS_CATEGORY = "whatsapp";
-export const WHATSAPP_ACCESS_TOKEN_KEY = "access_token";
-const WHATSAPP_ACCESS_TOKEN_MAX_LENGTH = 8_192;
 const PLACEHOLDER_EXACT_VALUES = new Set([
   "000000",
   "111111",
@@ -113,106 +96,29 @@ export function normalizeWhatsAppRecipient(input: string): string {
   return validateAndFormatPhone(input).replace(/^\+/, "");
 }
 
-/**
- * The Meta WhatsApp Cloud API access token. It is the only WhatsApp secret, so
- * the document is never cached and reads are strict.
- *
- * The phone number ID and template name stay in the wide `site_settings`
- * singleton row: they are written inside the customer-auth settings batch, and
- * a column adapter here would turn one parallel pair of reads on the OTP send
- * path into two sequential ones. They are assembled below instead.
- */
-export const whatsappAccessTokenDocument = defineSettingsDocument<{ accessToken: string }>({
-  category: WHATSAPP_SETTINGS_CATEGORY,
-  key: WHATSAPP_ACCESS_TOKEN_KEY,
-  label: "WhatsApp Cloud API",
-  schema: z.object({ accessToken: z.string().max(WHATSAPP_ACCESS_TOKEN_MAX_LENGTH) }),
-  defaults: { accessToken: "" },
-  secretFields: ["accessToken"],
-  // The row stays one bare ciphertext string, exactly as it was stored before.
-  codec: rawStringSettingsCodec("accessToken"),
-});
-
+/** WhatsApp Cloud API credentials. Placeholders read as not configured. */
 export async function getWhatsAppCloudApiSettings(
   db: Database,
   encryptionKey?: string,
-  options: WhatsAppCloudApiSettingsOptions = {},
 ): Promise<WhatsAppCloudApiSettings> {
-  const [site, storedToken] = await Promise.all([
-    db.select({
-      id: siteSettings.id,
-      whatsappAccessToken: siteSettings.whatsappAccessToken,
-      whatsappPhoneNumberId: siteSettings.whatsappPhoneNumberId,
-      whatsappTemplateName: siteSettings.whatsappTemplateName,
-    }).from(siteSettings).limit(1).get(),
-    whatsappAccessTokenDocument.readDetailed(db, { encryptionKey }),
-  ]);
-
-  const encryptedAccessToken = storedToken.value.accessToken || undefined;
-  /** A token is stored even when this reader cannot decrypt it. */
-  const storedAccessTokenPresent = Boolean(encryptedAccessToken)
-    || Boolean(storedToken.secretErrors.accessToken);
-  const legacyAccessToken = site?.whatsappAccessToken?.trim() || undefined;
-  const rawAccessToken = encryptedAccessToken ?? legacyAccessToken;
-  const accessToken = looksLikeWhatsAppPlaceholderCredential(rawAccessToken)
-    ? undefined
-    : rawAccessToken;
-  const accessTokenSource = encryptedAccessToken && accessToken
-    ? "encrypted"
-    : legacyAccessToken && accessToken
-      ? "legacy"
-      : "none";
-  const rawPhoneNumberId = site?.whatsappPhoneNumberId?.trim() || undefined;
-  const phoneNumberId = looksLikeWhatsAppPlaceholderCredential(rawPhoneNumberId)
-    ? undefined
-    : rawPhoneNumberId;
-  const rawTemplateName = site?.whatsappTemplateName?.trim();
-  const authTemplateName =
-    rawTemplateName === undefined || rawTemplateName === ""
-      ? "auth_otp"
-      : looksLikeWhatsAppPlaceholderCredential(rawTemplateName)
-        ? ""
-        : rawTemplateName;
-
-  if (site?.id && legacyAccessToken && options.migrationEncryptionKey && options.migrateLegacy && !storedAccessTokenPresent) {
-    await migrateLegacyWhatsAppAccessToken(db, site.id, legacyAccessToken, options.migrationEncryptionKey);
-  } else if (site?.id && legacyAccessToken && encryptedAccessToken && options.migrateLegacy && options.migrationEncryptionKey) {
-    await clearLegacyWhatsAppAccessToken(db, site.id);
-  }
+  const stored = (await whatsappDocument.readDetailed(db, { encryptionKey })).value;
+  const clean = (value: string) => {
+    const trimmed = value.trim();
+    return trimmed && !looksLikeWhatsAppPlaceholderCredential(trimmed) ? trimmed : undefined;
+  };
+  const accessToken = clean(stored.accessToken);
+  const rawTemplateName = stored.authTemplateName.trim();
 
   return {
     accessToken,
     accessTokenConfigured: Boolean(accessToken),
-    phoneNumberId,
-    authTemplateName,
-    accessTokenSource,
+    phoneNumberId: clean(stored.phoneNumberId),
+    authTemplateName: !rawTemplateName
+      ? "auth_otp"
+      : looksLikeWhatsAppPlaceholderCredential(rawTemplateName)
+        ? ""
+        : rawTemplateName,
   };
-}
-
-export async function saveWhatsAppAccessToken(
-  db: Database,
-  value: string,
-  encryptionKey?: string,
-  siteSettingsId?: string,
-): Promise<void> {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    await whatsappAccessTokenDocument.remove(db);
-    await clearLegacyWhatsAppAccessToken(db, siteSettingsId);
-    return;
-  }
-
-  if (!encryptionKey) {
-    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store WhatsApp credentials.");
-  }
-
-  const placeholderError = firstWhatsAppPlaceholderConfigError([
-    ["WhatsApp access token", trimmed],
-  ]);
-  if (placeholderError) throw new ValidationError(placeholderError);
-
-  await whatsappAccessTokenDocument.write(db, { accessToken: trimmed }, { encryptionKey });
-  await clearLegacyWhatsAppAccessToken(db, siteSettingsId);
 }
 
 export async function sendWhatsAppTemplateMessage(
@@ -393,45 +299,4 @@ export function firstWhatsAppPlaceholderConfigError(
     }
   }
   return null;
-}
-
-async function migrateLegacyWhatsAppAccessToken(
-  db: Database,
-  siteSettingsId: string,
-  legacyAccessToken: string,
-  encryptionKey: string,
-): Promise<void> {
-  try {
-    await saveWhatsAppAccessToken(db, legacyAccessToken, encryptionKey, siteSettingsId);
-  } catch (error: unknown) {
-    console.warn(
-      "[WhatsApp] Failed to migrate legacy plaintext access token:",
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
-
-async function clearLegacyWhatsAppAccessToken(
-  db: Database,
-  siteSettingsId?: string,
-): Promise<void> {
-  try {
-    const query = db
-      .update(siteSettings)
-      .set({
-        whatsappAccessToken: null,
-        updatedAt: sql`unixepoch()`,
-      });
-
-    if (siteSettingsId) {
-      await query.where(eq(siteSettings.id, siteSettingsId));
-    } else {
-      await query.where(eq(siteSettings.singletonKey, "default"));
-    }
-  } catch (error: unknown) {
-    console.warn(
-      "[WhatsApp] Failed to clear legacy plaintext access token:",
-      error instanceof Error ? error.message : error,
-    );
-  }
 }

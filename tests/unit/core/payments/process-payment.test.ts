@@ -390,7 +390,7 @@ describe("processPaymentConfirmed atomic persistence", () => {
       stripePaymentIntentId: "pi_test",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, paymentType: "deposit" });
     expect(db.batch).toHaveBeenCalledOnce();
     expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toHaveLength(4);
     expect(vi.mocked(db.batch).mock.calls[0]?.[0]).toContain(db.outboxStatement);
@@ -435,7 +435,7 @@ describe("processPaymentConfirmed atomic persistence", () => {
       stripePaymentIntentId: "pi_test",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, paymentType: "full" });
     expect(db.batch).toHaveBeenCalledTimes(2);
   });
 

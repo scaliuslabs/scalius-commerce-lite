@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { encryptCredentials } from "../../utils/credential-encryption";
 import { ValidationError } from "../../errors";
 import {
@@ -10,21 +11,23 @@ import {
   saveSmsSettings,
 } from "./sms-settings";
 
+/** Stores the SMS document exactly as given (bypassing save-time validation). */
 function createSmsSettingsDb(rows: Array<{ key: string; value: string }>) {
-  return {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          all: async () => rows,
-        }),
-      }),
-    }),
-  };
+  const harness = createSqliteD1Database();
+  if (rows.length > 0) {
+    const document = Object.fromEntries(rows.map(({ key, value }) => [
+      key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
+      value,
+    ]));
+    harness.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('sms', 'document', ?, 'json', 'sms')")
+      .run(JSON.stringify(document));
+  }
+  return Object.assign(harness.db, { sqlite: harness.sqlite });
 }
 
 describe("SMS settings readiness", () => {
   it("reports no active provider as not configured", async () => {
-    const result = await getSmsProviderReadiness(createSmsSettingsDb([]) as never);
+    const result = await getSmsProviderReadiness(createSmsSettingsDb([]));
 
     expect(result).toEqual({
       status: "incomplete",
@@ -36,7 +39,7 @@ describe("SMS settings readiness", () => {
   it("reports missing active provider credentials", async () => {
     const result = await getSmsProviderReadiness(createSmsSettingsDb([
       { key: "active_provider", value: "bdbulksms" },
-    ]) as never);
+    ]));
 
     expect(result).toEqual({
       status: "incomplete",
@@ -53,12 +56,12 @@ describe("SMS settings readiness", () => {
       { key: "gennet_sid", value: "SCALIUS" },
     ]);
 
-    await expect(getSmsProviderReadiness(db as never)).resolves.toEqual({
+    await expect(getSmsProviderReadiness(db)).resolves.toEqual({
       status: "ready",
       issues: [],
       activeProvider: "gennet",
     });
-    await expect(getSmsSettings(db as never)).resolves.toMatchObject({
+    await expect(getSmsSettings(db)).resolves.toMatchObject({
       activeProvider: "gennet",
       activeProviderConfigured: true,
       activeProviderError: null,
@@ -73,7 +76,7 @@ describe("SMS settings readiness", () => {
       { key: "active_provider", value: "smsnetbd" },
       { key: "smsnetbd_api_key", value: "dummy" },
       { key: "smsnetbd_sender_id", value: "SCALIUS" },
-    ]) as never)).resolves.toMatchObject({
+    ]))).resolves.toMatchObject({
       status: "incomplete",
       activeProvider: "smsnetbd",
       issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key looks like a placeholder. Save a real provider value before enabling SMS." }],
@@ -84,7 +87,7 @@ describe("SMS settings readiness", () => {
       { key: "gennet_api_token", value: "realish-token-789" },
       { key: "gennet_base_url", value: "https://example.gennet.com.bd" },
       { key: "gennet_sid", value: "SCALIUS" },
-    ]) as never)).resolves.toMatchObject({
+    ]))).resolves.toMatchObject({
       status: "incomplete",
       activeProvider: "gennet",
       issues: [{ code: SMS_READINESS_CODE, message: "GenNet base URL looks like a placeholder. Save a real provider value before enabling SMS." }],
@@ -99,50 +102,35 @@ describe("SMS settings readiness", () => {
   });
 
   it("fails before writes when changed secrets have no encryption key", async () => {
-    const db = {
-      insert: vi.fn(),
-      batch: vi.fn(),
-    };
+    const db = createSmsSettingsDb([]);
 
-    await expect(saveSmsSettings(db as never, {
+    await expect(saveSmsSettings(db, {
       activeProvider: "bdbulksms",
       bdbulksmsToken: "merchant-token-4821",
     })).rejects.toThrow("CREDENTIAL_ENCRYPTION_KEY is required");
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.batch).not.toHaveBeenCalled();
+    expect(db.sqlite.prepare("SELECT count(*) AS count FROM settings").get()).toEqual({ count: 0 });
   });
 
-  it("commits plaintext settings and encrypted secrets in one D1 batch", async () => {
-    const statements: unknown[] = [];
-    const db = {
-      insert: vi.fn(() => ({
-        values: vi.fn((values: Record<string, unknown>) => ({
-          onConflictDoUpdate: vi.fn(() => {
-            const statement = { values };
-            statements.push(statement);
-            return statement;
-          }),
-        })),
-      })),
-      batch: vi.fn(async (batch: unknown[]) => batch),
-    };
+  it("saves plaintext settings with encrypted secrets and keeps masked secrets unchanged", async () => {
+    const db = createSmsSettingsDb([]);
     const key = Buffer.alloc(32, 11).toString("base64");
 
-    await saveSmsSettings(db as never, {
+    await saveSmsSettings(db, {
       activeProvider: "gennet",
       gennetBaseUrl: "https://merchant.gennet.com.bd",
       gennetSid: "SCALIUS",
       gennetApiToken: "merchant-token-4821",
     }, key);
+    const stored = () => JSON.parse(
+      (db.sqlite.prepare("SELECT value FROM settings WHERE category = 'sms'").get() as { value: string }).value,
+    ) as Record<string, string>;
+    const token = stored().gennetApiToken;
+    expect(token).toMatch(/^enc:/);
+    expect(token).not.toContain("merchant-token-4821");
 
-    expect(db.batch).toHaveBeenCalledOnce();
-    expect(db.batch).toHaveBeenCalledWith(statements);
-    expect(statements).toHaveLength(4);
-    const tokenWrite = statements
-      .map((statement) => (statement as { values: Record<string, unknown> }).values)
-      .find((values) => values.key === "gennet_api_token");
-    expect(tokenWrite?.value).toEqual(expect.stringMatching(/^enc:/));
-    expect(String(tokenWrite?.value)).not.toContain("merchant-token-4821");
+    await saveSmsSettings(db, { gennetApiToken: "••••••••••••", gennetSid: "SHOP" }, key);
+    expect(stored()).toMatchObject({ gennetApiToken: token, gennetSid: "SHOP" });
+    await expect(getSmsProviderReadiness(db, key)).resolves.toMatchObject({ status: "ready" });
   });
 
   it("does not treat encrypted secrets as ready when the credential key is unavailable", async () => {
@@ -153,12 +141,12 @@ describe("SMS settings readiness", () => {
       { key: "bdbulksms_token", value: encryptedToken },
     ]);
 
-    await expect(getSmsProviderReadiness(db as never)).resolves.toMatchObject({
+    await expect(getSmsProviderReadiness(db)).resolves.toMatchObject({
       status: "incomplete",
       activeProvider: "bdbulksms",
       issues: [{ code: SMS_READINESS_CODE, message: "BDBulkSMS token is encrypted but CREDENTIAL_ENCRYPTION_KEY is not configured." }],
     });
-    await expect(getSmsProviderReadiness(db as never, key)).resolves.toEqual({
+    await expect(getSmsProviderReadiness(db, key)).resolves.toEqual({
       status: "ready",
       issues: [],
       activeProvider: "bdbulksms",
@@ -174,7 +162,7 @@ describe("SMS settings readiness", () => {
       { key: "smsnetbd_sender_id", value: "SCALIUS" },
     ]);
 
-    await expect(getSmsProviderReadiness(db as never, wrongKey)).resolves.toMatchObject({
+    await expect(getSmsProviderReadiness(db, wrongKey)).resolves.toMatchObject({
       status: "incomplete",
       activeProvider: "smsnetbd",
       issues: [{ code: SMS_READINESS_CODE, message: "SMS.net.bd API key could not be decrypted with the configured credential key." }],
@@ -182,20 +170,14 @@ describe("SMS settings readiness", () => {
   });
 
   it("reads authoritative provider settings for every dispatch", async () => {
-    const all = vi.fn().mockResolvedValue([
+    const db = createSmsSettingsDb([
       { key: "active_provider", value: "bdbulksms" },
       { key: "bdbulksms_token", value: "live-token-123" },
     ]);
-    const db = {
-      select: () => ({
-        from: () => ({
-          where: () => ({ all }),
-        }),
-      }),
-    };
 
-    await expect(getActiveSmsProvider(db as never)).resolves.not.toBeNull();
-    await expect(getActiveSmsProvider(db as never)).resolves.not.toBeNull();
-    expect(all).toHaveBeenCalledTimes(2);
+    await expect(getActiveSmsProvider(db)).resolves.not.toBeNull();
+    db.sqlite.exec("UPDATE settings SET value = json_set(value, '$.activeProvider', '') WHERE category = 'sms'");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(getActiveSmsProvider(db)).resolves.toBeNull();
   });
 });

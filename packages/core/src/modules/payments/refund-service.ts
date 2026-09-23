@@ -1,7 +1,7 @@
 // src/modules/payments/refund-service.ts
 // Gateway-agnostic refund orchestrator.
-// Determines the correct payment gateway from the order's payment records
-// and dispatches the refund via the unified PaymentProvider interface.
+// Allocates a refund across the order's captured payments, claims it locally,
+// then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
@@ -13,14 +13,9 @@ import {
     PaymentRecordStatus,
     type OrderPayment,
 } from "@scalius/database/schema";
-import { createPaymentProvider } from "./factory";
-import {
-    getStripeSettings,
-    getSSLCommerzSettings,
-} from "./gateway-settings";
+import { COD_PAYMENT_METHOD, getPaymentGateway, isPaymentMethodId } from "./gateways/registry";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
-import type { PaymentGateway } from "./types";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { canTransitionTo } from "../orders/order-state-machine";
 import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
@@ -32,7 +27,7 @@ import {
     roundOrderMoney,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import { resolveStripeRefundProviderMoney } from "./refund-provider-money";
+import { resolveRefundProviderMoney } from "./refund-provider-money";
 import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
@@ -43,11 +38,6 @@ import {
     noActivePaymentSessionAttemptForOrderIdCondition,
 } from "./payment-session-attempts";
 import type { OrderNotificationType } from "../notifications/notification-types";
-import type {
-    PaymentProvider,
-    RefundParams as ProviderRefundParams,
-    RefundResult as ProviderRefundResult,
-} from "./provider";
 import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";
 
 export interface RefundRequest {
@@ -55,8 +45,8 @@ export interface RefundRequest {
     /** Amount to refund. If omitted, full refund of paidAmount. */
     amount?: number;
     reason: string;
-    /** Override gateway detection (useful for multi-gateway orders) */
-    gateway?: "stripe" | "sslcommerz" | "cod";
+    /** Refund only payments captured by this payment method (useful for multi-gateway orders). */
+    gateway?: string;
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
 }
@@ -143,7 +133,7 @@ const PRE_FULFILLMENT_REFUND_STATUSES = new Set<string>([
     OrderStatus.CONFIRMED,
 ]);
 
-type CapturedPayment = OrderPayment & { paymentMethod: PaymentGateway };
+type CapturedPayment = OrderPayment;
 
 interface RefundAllocation {
     id: string;
@@ -184,10 +174,8 @@ function getRefundAttemptKey(allocation: Pick<RefundAllocation, "idempotencyKey"
     return `refund_attempt:${allocation.idempotencyKey}`;
 }
 
-function normalizePaymentGateway(value: string): PaymentGateway {
-    if (value === "stripe" || value === "sslcommerz" || value === "cod") {
-        return value;
-    }
+function normalizePaymentGateway(value: string): string {
+    if (isPaymentMethodId(value)) return value;
     throw new ValidationError(`Unsupported payment gateway: ${value}`);
 }
 
@@ -684,7 +672,7 @@ function buildRefundMetadata(params: {
         : params.error == null
             ? undefined
             : String(params.error);
-    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === "cod";
+    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD;
 
     return JSON.stringify({
         reason: params.request.reason,
@@ -729,7 +717,7 @@ function buildRefundAttemptMetadata(params: {
     claimVersion: number;
     allocationCount: number;
 }): string {
-    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === "cod";
+    const isManualSettlement = params.allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD;
     return JSON.stringify({
         reason: params.request.reason,
         gateway: params.allocation.sourcePayment.paymentMethod,
@@ -782,10 +770,8 @@ function buildRefundAttemptInsert(params: {
 }
 
 function getRefundAttemptSourceTransactionId(allocation: RefundAllocation): string | null {
-    if (allocation.sourcePayment.paymentMethod === "cod") {
-        return null;
-    }
-    return getTransactionId(allocation.sourcePayment.paymentMethod, allocation.sourcePayment);
+    if (allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD) return null;
+    return allocation.sourcePayment.providerSecondaryRef ?? allocation.sourcePayment.providerRef ?? null;
 }
 
 async function markRefundAttemptProcessing(
@@ -807,7 +793,7 @@ async function markRefundAttemptAccepted(
     db: Database,
     allocation: CompletedRefundAllocation,
 ): Promise<void> {
-    const isManualSettlement = allocation.sourcePayment.paymentMethod === "cod";
+    const isManualSettlement = allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD;
     await db.update(refundAttempts).set({
         status: "processing",
         providerRefundId: allocation.refundId ?? null,
@@ -829,7 +815,7 @@ async function markRefundAttemptsReconcileRequired(
     await db.batch(allocations.map((allocation) =>
         db.update(refundAttempts).set({
             status: "reconcile_required",
-            providerStatus: allocation.sourcePayment.paymentMethod === "cod"
+            providerStatus: allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD
                 ? "manual_confirmed"
                 : "accepted",
             providerRefundId: allocation.refundId ?? null,
@@ -933,139 +919,59 @@ async function markRefundAllocationsProviderUnknown(
 }
 
 // ---------------------------------------------------------------------------
-// Gateway transaction ID resolution
-// ---------------------------------------------------------------------------
-
-/** Extract the correct gateway-specific transaction ID from a payment record. */
-function getTransactionId(
-    gateway: PaymentGateway,
-    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null },
-): string {
-    switch (gateway) {
-        case "stripe": {
-            if (!payment.stripeChargeId) throw new ValidationError("No Stripe charge ID found on payment record");
-            return payment.stripeChargeId;
-        }
-        case "sslcommerz": {
-            if (!payment.sslcommerzBankTranId) throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
-            return payment.sslcommerzBankTranId;
-        }
-        case "cod":
-            throw new ValidationError("COD refunds do not have a provider transaction ID");
-        default:
-            throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Resolve gateway settings and create provider
-// ---------------------------------------------------------------------------
-
-async function resolveProvider(
-    db: Database,
-    gateway: PaymentGateway,
-    encryptionKey?: string,
-) {
-    switch (gateway) {
-        case "stripe": {
-            const settings = await getStripeSettings(
-                db,
-                encryptionKey,
-            );
-            if (!settings) throw new ServiceUnavailableError("Stripe is not configured");
-            return createPaymentProvider({ type: "stripe", settings });
-        }
-        case "sslcommerz": {
-            const settings = await getSSLCommerzSettings(
-                db,
-                encryptionKey,
-            );
-            if (!settings) throw new ServiceUnavailableError("SSLCommerz is not configured");
-            return createPaymentProvider({ type: "sslcommerz", settings });
-        }
-        case "cod":
-            throw new ValidationError("COD refunds must be recorded as confirmed manual settlements");
-        default:
-            throw new ValidationError(`Unsupported payment gateway: ${gateway}`);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Unified refund dispatch
+// Refund dispatch
 // ---------------------------------------------------------------------------
 
 /**
- * Dispatch a refund through the unified PaymentProvider interface.
- * Returns the gateway-assigned refund ID.
- *
- * Amount conventions per gateway (matching RefundParams contract):
- *   - Stripe: smallest currency unit (cents/paisa)
- *   - SSLCommerz: major units (the provider passes through to SSLCommerz API)
- *   - COD: no provider dispatch; the caller has already confirmed external repayment
+ * Dispatch one refund allocation through its gateway adapter and return the
+ * provider refund id. COD has no provider: the caller has already confirmed
+ * the external repayment. Failures before the provider call (configuration,
+ * missing references) are terminal; once the call starts, any error is an
+ * unknown outcome that reconciliation must resolve.
  */
 async function dispatchRefund(
     db: Database,
-    kv: KVNamespace | undefined,
-    gateway: PaymentGateway,
-    payment: { stripeChargeId?: string | null; sslcommerzBankTranId?: string | null },
+    payment: CapturedPayment,
     refundAmount: number,
     currency: OrderCurrencySnapshot,
     params: RefundRequest,
-    providerMetadata: Record<string, string>,
+    providerMetadata: { idempotencyKey: string; refundReference: string } & Record<string, string>,
     encryptionKey?: string,
 ): Promise<string | undefined> {
-    if (gateway === "cod") {
-        return undefined;
-    }
-    const transactionId = getTransactionId(gateway, payment);
-    const provider = await resolveProvider(db, gateway, encryptionKey);
+    if (payment.paymentMethod === COD_PAYMENT_METHOD) return undefined;
+    const gateway = getPaymentGateway(payment.paymentMethod);
+    if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
+    const settings = await gateway.loadSettings(db, encryptionKey);
+    if (!settings) throw new ServiceUnavailableError(`${gateway.label} is not configured`);
+    if (!settings.enabled) throw new ServiceUnavailableError(`${gateway.label} payment gateway is disabled`);
+    if (settings.credentialErrors?.length) throw new ServiceUnavailableError(`${gateway.label} credentials are not readable`);
+    if (!payment.providerRef) throw new ValidationError(`No ${gateway.label} payment reference found on payment record`);
+    const money = resolveRefundProviderMoney(refundAmount, currency, `${gateway.label} refund`);
 
-    // Determine the correct amount for each gateway's convention:
-    // Stripe: smallest currency unit, always explicit for allocation safety
-    // SSLCommerz/COD: major units, always required
-    let providerAmount: number | undefined;
-    if (gateway === "stripe") {
-        providerAmount = resolveStripeRefundProviderMoney(
-            refundAmount,
-            currency,
-        ).amountMinor;
-    } else {
-        // SSLCommerz always receives the explicit amount in major units.
-        providerAmount = refundAmount;
-    }
-
-    const refundParams = {
-        transactionId,
-        amount: providerAmount,
-        reason: params.reason,
-        metadata: providerMetadata,
-    };
-
-    let result: ProviderRefundResult;
-    try {
-        result = await callProviderRefundWithDeadline(provider, refundParams);
-    } catch (error: unknown) {
-        throw new ProviderRefundOutcomeUnknownError(error);
-    }
-
-    return result.refundId;
-}
-
-async function callProviderRefundWithDeadline(
-    provider: PaymentProvider,
-    params: ProviderRefundParams,
-): Promise<ProviderRefundResult> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
-
     try {
-        return await Promise.race([
-            provider.createRefund(params),
+        const result = await Promise.race([
+            gateway.refund(settings, {
+                providerRef: payment.providerRef,
+                secondaryRef: payment.providerSecondaryRef,
+                amountMinor: money.amountMinor,
+                currency: money.currency,
+                reason: params.reason,
+                idempotencyKey: providerMetadata.idempotencyKey,
+                reference: providerMetadata.refundReference,
+                metadata: providerMetadata,
+            }),
             new Promise<never>((_, reject) => {
                 timeout = setTimeout(() => {
                     reject(new Error(`Refund provider did not settle within ${REFUND_PROVIDER_DEADLINE_MS}ms`));
                 }, REFUND_PROVIDER_DEADLINE_MS);
             }),
         ]);
+        return result.refundId;
+    } catch (error: unknown) {
+        // Adapters validate their inputs before any network call.
+        if (error instanceof ValidationError) throw error;
+        throw new ProviderRefundOutcomeUnknownError(error);
     } finally {
         if (timeout) clearTimeout(timeout);
     }
@@ -1115,13 +1021,12 @@ function buildRefundStateNotificationFact(params: {
  *
  * 1. Finds the payment record (or uses specified gateway)
  * 2. Claims refund capacity locally before provider dispatch
- * 3. Dispatches to the correct gateway API via PaymentProvider
+ * 3. Dispatches each allocation through its gateway adapter
  * 4. Finalizes order payment status
  * 5. Releases inventory on full refund
  */
 export async function processRefund(
     db: Database,
-    kv: KVNamespace | undefined,
     params: RefundRequest,
     encryptionKey?: string,
 ): Promise<RefundResult> {
@@ -1252,7 +1157,7 @@ export async function processRefund(
         currency,
     });
     const hasManualCodAllocation = allocations.some(
-        (allocation) => allocation.sourcePayment.paymentMethod === "cod",
+        (allocation) => allocation.sourcePayment.paymentMethod === COD_PAYMENT_METHOD,
     );
     if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(
@@ -1347,8 +1252,6 @@ export async function processRefund(
             await markRefundAttemptProcessing(db, allocation, refundGroupId);
             const refundId = await dispatchRefund(
                 db,
-                kv,
-                allocation.sourcePayment.paymentMethod,
                 allocation.sourcePayment,
                 allocation.amount,
                 currency,
@@ -1367,9 +1270,8 @@ export async function processRefund(
 
             await db.update(orderPayments).set({
                 status: PaymentRecordStatus.REFUNDED,
-                // Refund records must NOT copy the original payment's unique gateway IDs —
-                // partial unique indexes (e.g., UNIQUE(orderId, stripePaymentIntentId))
-                // would reject the insert. Refund is identified by metadata.refundId instead.
+                // Refund rows never copy the source provider_ref: UNIQUE(provider,
+                // provider_ref) identifies captures. The refund id lives in metadata.
                 metadata: buildRefundMetadata({
                     request: params,
                     allocation,

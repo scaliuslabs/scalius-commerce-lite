@@ -1,4 +1,4 @@
-import { adminRouteGuard } from "~/lib/auth.fns";
+import { adminRouteGuard, type AdminRouteContext } from "~/lib/auth-guards";
 
 export const ADMIN_ROUTE_CONTEXT_FRESH_MS = 60_000;
 // Keep an already-rendered admin tab responsive after long idle/background periods.
@@ -6,7 +6,6 @@ export const ADMIN_ROUTE_CONTEXT_FRESH_MS = 60_000;
 // client route transitions before the background guard refresh completes.
 export const ADMIN_ROUTE_CONTEXT_STALE_MS = 4 * 60 * 60_000;
 
-type AdminRouteContext = Awaited<ReturnType<typeof adminRouteGuard>>;
 
 let cachedAdminRouteContext:
   | { context: AdminRouteContext; freshUntil: number; expiresAt: number }
@@ -67,15 +66,10 @@ function refreshAdminRouteContextInBackground() {
 }
 
 export function primeAdminRouteContextCache(context: AdminRouteContext) {
-  if (typeof window === "undefined") return;
   writeAdminRouteContextCache(context);
 }
 
 export async function getAdminRouteContext(): Promise<AdminRouteContext> {
-  if (typeof window === "undefined") {
-    return adminRouteGuard();
-  }
-
   const now = Date.now();
   if (cachedAdminRouteContext && cachedAdminRouteContext.expiresAt > now) {
     if (cachedAdminRouteContext.freshUntil <= now) {
@@ -97,10 +91,6 @@ export async function getAdminRouteContext(): Promise<AdminRouteContext> {
  * permissions instead of serving the responsive stale-context window.
  */
 export async function getFreshAdminRouteContext(): Promise<AdminRouteContext> {
-  if (typeof window === "undefined") {
-    return adminRouteGuard();
-  }
-
   clearAdminRouteContextCache();
   const loadEpoch = adminRouteContextEpoch;
   const context = await adminRouteGuard();

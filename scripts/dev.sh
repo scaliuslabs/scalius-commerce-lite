@@ -1,9 +1,8 @@
 #!/bin/bash
 # Dev server wrapper that ensures clean startup and shutdown.
 #
-# Fixes two macOS issues:
-# 1. Inspector port race: Astro/Cloudflare dev servers fight for Vite's
-#    inspector WebSocket port. Staggered starts prevent this.
+# 1. Ordering: the API Worker must be ready before the dashboard (Vite,
+#    proxying to :8787) and the storefront start.
 # 2. Zombie processes: Node/workerd children survive Ctrl+C.
 #    Cleanup terminates only processes started and tracked by this wrapper.
 
@@ -12,7 +11,6 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DRY_RUN="${SCALIUS_DEV_DRY_RUN:-0}"
 API_READY_URL="${SCALIUS_DEV_API_READY_URL:-http://localhost:8787/api/v1/setup}"
 API_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_API_READY_TIMEOUT_SECONDS:-60}"
-STAGGER_SECONDS="${SCALIUS_DEV_STAGGER_SECONDS:-3}"
 API_PID=""
 ADMIN_PID=""
 STOREFRONT_PID=""
@@ -303,20 +301,6 @@ wait_for_api_ready() {
   exit 1
 }
 
-stagger_next_start() {
-  validate_numeric_setting "SCALIUS_DEV_STAGGER_SECONDS" "$STAGGER_SECONDS"
-  if [ "$STAGGER_SECONDS" = "0" ]; then
-    return
-  fi
-
-  if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] would wait ${STAGGER_SECONDS}s before starting the next dev server."
-    return
-  fi
-
-  sleep "$STAGGER_SECONDS"
-}
-
 HAS_FILTERS=0
 HAS_API=0
 HAS_ADMIN=0
@@ -371,15 +355,13 @@ if [ "$HAS_FILTERS" = "1" ]; then
   exit 0
 fi
 
-# dev:all — start each app with a staggered delay to prevent inspector port races
+# dev:all — API first, then the dashboard and storefront against it
 apply_local_migrations
 
 start_api
 wait_for_api_ready
 
 start_admin
-stagger_next_start
-
 start_storefront
 
 echo ""

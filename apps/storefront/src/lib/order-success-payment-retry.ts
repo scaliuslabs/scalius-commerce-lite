@@ -5,7 +5,8 @@ import { getOrderSuccessVisibleBalanceDue } from "./order-success-state";
 import { getGatewayPresentation } from "./checkout/gateway-presentation";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
-export type OrderSuccessRetryGateway = "stripe" | "sslcommerz";
+/** An online gateway id (every payment method except "cod"). */
+export type OrderSuccessRetryGateway = string;
 export type OrderSuccessRetryOption = {
   gateway: OrderSuccessRetryGateway;
   label: string;
@@ -14,7 +15,6 @@ export type OrderSuccessRetryOption = {
   requiresCardForm: boolean;
 };
 
-const RETRYABLE_HOSTED_METHODS = new Set(["stripe", "sslcommerz"]);
 const RETRYABLE_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
 const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
   "cancelled",
@@ -28,14 +28,12 @@ function normalize(value: string | null | undefined): string {
 }
 
 export function isRetryableHostedPaymentMethod(paymentMethod: string | null | undefined): boolean {
-  return RETRYABLE_HOSTED_METHODS.has(normalize(paymentMethod));
+  return normalizeHostedGateway(paymentMethod) !== null;
 }
 
 export function getOrderSuccessRetryEndpoint(paymentMethod: string | null | undefined): string | null {
-  const method = normalize(paymentMethod);
-  if (method === "stripe") return "/api/checkout/stripe-intent";
-  if (method === "sslcommerz") return "/api/checkout/sslcommerz-session";
-  return null;
+  const method = normalizeHostedGateway(paymentMethod);
+  return method ? `/api/checkout/payment-session/${method}` : null;
 }
 
 export function isHostedPaymentRetryResult(result: string | null | undefined): boolean {
@@ -60,7 +58,7 @@ export function canRetryOrderSuccessPayment(
 
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
   const method = normalize(value);
-  return method === "stripe" || method === "sslcommerz" ? method : null;
+  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" ? method : null;
 }
 
 export function getOrderSuccessRetryOptions(

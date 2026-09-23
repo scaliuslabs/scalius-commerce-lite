@@ -9,8 +9,8 @@
  * Rules 1 (schema revision) and 5 (soft-deleted rows) are enforced upstream, in
  * `collect.mjs` and in the row filter in `source.mjs`. This module carries:
  *
- *   3. No commerce entanglement: no reserved stock, no reservation lanes, no
- *      lane movements and no order lines may reach into the exported catalog.
+ *   3. No commerce entanglement: no reserved stock and no order lines may
+ *      reach into the exported catalog.
  *   4. No dangling references: every non-null foreign key on an exported row
  *      must resolve to a row that is itself exported. The edges are read from
  *      `PRAGMA foreign_key_list`, never hard-coded, so a new reference added by

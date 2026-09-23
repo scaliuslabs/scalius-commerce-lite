@@ -192,11 +192,12 @@ followed by a lowercase path prefix, for example
 nothing changes for stores that keep one.
 
 The prefix is a runtime value, not a build constant, so one deployed artifact
-serves any prefix. It is applied to the router base path, asset URLs, session
-cookie `Path`, the Better Auth base path, server-function calls, service-worker
-registration, and every full-page redirect. Requests that arrive outside the
-prefix are redirected (GET and HEAD) or refused with `DASHBOARD_BASE_PATH`; the
-health probe keeps answering at the host root.
+serves any prefix. The API Worker applies it to the SPA shell (a meta tag plus
+every root-relative asset URL); it also sets the router base path, the Better
+Auth base path and session cookie `Path`, API calls, service-worker
+registration, and every full-page redirect. The front proxy routes `<prefix>/*`
+on that host to the API Worker (`scalius-api`). Requests on that host outside
+the prefix are redirected (GET and HEAD) or answered with 404.
 
 Local `vite dev` is the one place the prefix does not apply: Vite serves its own
 module URLs, which the Worker cannot route. Develop at the host root and set the
@@ -234,8 +235,8 @@ v1
 Signatures more than five minutes old or ahead are rejected. When the signature
 verifies, the request URL is rewritten to the forwarded proto and host and
 `cf-connecting-ip` is set to the forwarded client address; the signature header
-is stripped before the request reaches any route. The API, dashboard, and
-storefront Workers all apply this at their entry point.
+is stripped before the request reaches any route. The API and storefront
+Workers apply this at their entry point.
 
 ## 6. Remote migrations without Wrangler
 
@@ -292,8 +293,8 @@ settings, or credential row can reach a bundle. On top of that it stops when:
 
 - the source is not at the schema revision this build expects, by version, name,
   and the migration's own content hash;
-- any exported variant carries non-zero reserved stock, or a reservation lane,
-  lane movement, or order line reaches into the exported catalog;
+- any exported variant carries non-zero reserved stock, or an order line
+  reaches into the exported catalog;
 - any non-null foreign key on an exported row points at a row that is not itself
   exported — including references out of the allow-list, such as a tax class,
   which must be cleared before a portable seed can be taken;

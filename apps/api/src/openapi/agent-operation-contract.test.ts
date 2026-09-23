@@ -531,9 +531,8 @@ describe("agent operation contract", () => {
       "storefront.orders_cart_validation.cart_validation",
       "storefront.orders_tax_quote.tax_quote",
       "storefront.orders.orders",
-      "storefront.payment_stripe_intent.intent",
-      "storefront.payment_stripe_reconcile.reconcile",
-      "storefront.payment_sslcommerz_session.session",
+      "storefront.payment_session.session",
+      "storefront.payment_reconcile.reconcile",
     ] as const;
 
     for (const operationId of legacyStorefrontOperationIds) {
@@ -553,8 +552,7 @@ describe("agent operation contract", () => {
       "storefront.orders_payment_recovery_verify_otp.verify_otp",
       "storefront.orders_receipt.get",
       "storefront.orders.orders",
-      "storefront.payment_stripe_intent.intent",
-      "storefront.payment_sslcommerz_session.session",
+      "storefront.payment_session.session",
     ]) {
       expect(byId(manifest, operationId).sensitiveOutput).toBe(true);
     }

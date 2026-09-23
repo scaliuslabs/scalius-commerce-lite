@@ -3,15 +3,26 @@ import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   deleteApiV1AdminAuthUsersById,
+  getApiV1AdminAuthUsers,
   postApiV1AdminAuthUsers,
   postApiV1AdminAuthUsersByIdResendSetup,
   postApiV1AdminAuthUsersByIdSuspension,
 } from "@scalius/api-client/sdk";
-import { apiData } from "~/lib/api";
-import { getAdminUsers, type AdminUser } from "~/lib/api-server-fns";
+import { apiData, type ApiResult } from "~/lib/api";
 import { getRbacRoles } from "~/lib/api-query-options/rbac";
 
-export type { AdminUser };
+export type AdminUser = ApiResult<typeof getApiV1AdminAuthUsers>["users"][number];
+
+/** Every administrator; the API pages this list in small pages. */
+async function getAdminUsers(): Promise<AdminUser[]> {
+  const users: AdminUser[] = [];
+  for (let page = 1; page <= 1_000; page += 1) {
+    const result = await apiData(getApiV1AdminAuthUsers({ query: { page, limit: 2 } }));
+    users.push(...result.users);
+    if (!result.pagination.hasMore) return users;
+  }
+  throw new Error("Administrator list exceeded the supported page limit");
+}
 
 export interface Role {
   id: string;
@@ -33,8 +44,7 @@ export function useAdminUsers() {
     setIsLoading(true);
     setUsersError(null);
     try {
-      const result = await getAdminUsers();
-      setAdminUsers(result.users);
+      setAdminUsers(await getAdminUsers());
     } catch (error) {
       setUsersError(getServerFnError(error, "Administrators could not be loaded."));
     } finally {

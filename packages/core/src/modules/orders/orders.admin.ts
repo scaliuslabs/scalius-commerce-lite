@@ -55,6 +55,7 @@ import {
     validateStockBatchAvailability,
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
+import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -183,8 +184,6 @@ export interface AdminOrderFullEditSource {
     hasRefundHistory: number | boolean;
     hasReturnHistory: number | boolean;
     hasInvoiceHistory: number | boolean;
-    checkoutAggregateVersion?: number | null;
-    checkoutProjectionStatus?: string | null;
 }
 
 const FULL_EDITABLE_ORDER_STATUSES = new Set<string>([
@@ -196,15 +195,6 @@ const FULL_EDITABLE_ORDER_STATUSES = new Set<string>([
 export function buildAdminOrderFullEditReadiness(
     order: AdminOrderFullEditSource,
 ): AdminOrderFullEditReadiness {
-    if (
-        order.checkoutAggregateVersion === 1
-        && order.checkoutProjectionStatus !== "complete"
-    ) {
-        return {
-            allowed: false,
-            reason: "This checkout is still materializing its read models. Retry after projection completes.",
-        };
-    }
     if (!FULL_EDITABLE_ORDER_STATUSES.has(order.status)) {
         return {
             allowed: false,
@@ -318,8 +308,6 @@ export async function getAdminOrderFullEditReadiness(
             fulfillmentStatus: orders.fulfillmentStatus,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-            checkoutAggregateVersion: orders.checkoutAggregateVersion,
-            checkoutProjectionStatus: orders.checkoutProjectionStatus,
             ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
@@ -734,7 +722,8 @@ export async function quoteManualOrder(
 ): Promise<ManualOrderQuote> {
     return (await prepareManualOrderQuote(db, data)).quote;
 }
-export type BuyerRecoveryPaymentMethod = typeof PaymentMethod.SSLCOMMERZ;
+/** Buyer recovery links continue a hosted (redirect) gateway checkout. */
+export type BuyerRecoveryPaymentMethod = string;
 export type RecoveryLinkPaymentType = "full" | "deposit" | "balance";
 
 export interface OrderPaymentRecoveryLink {
@@ -764,14 +753,7 @@ interface AdminOrderSkuIssue {
     message: string;
 }
 
-const HOSTED_PAYMENT_METHODS = [
-    PaymentMethod.STRIPE,
-    PaymentMethod.SSLCOMMERZ,
-] as const;
-
-const BUYER_RECOVERY_PAYMENT_METHODS = [
-    PaymentMethod.SSLCOMMERZ,
-] as const;
+const HOSTED_PAYMENT_METHODS = listPaymentGateways().map((gateway) => gateway.id);
 
 const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
     state: "none",
@@ -822,12 +804,12 @@ function addAdminOrderSkuIssue(
     });
 }
 
-function isHostedPaymentMethod(method: string | null | undefined): method is (typeof HOSTED_PAYMENT_METHODS)[number] {
-    return typeof method === "string" && (HOSTED_PAYMENT_METHODS as readonly string[]).includes(method);
+function isHostedPaymentMethod(method: string | null | undefined): method is string {
+    return isOnlinePaymentMethod(method);
 }
 
 function isBuyerRecoveryPaymentMethod(method: string | null | undefined): method is BuyerRecoveryPaymentMethod {
-    return typeof method === "string" && (BUYER_RECOVERY_PAYMENT_METHODS as readonly string[]).includes(method);
+    return getPaymentGateway(method)?.flow === "hosted";
 }
 
 function isRecoveryLinkPaymentType(value: string | null | undefined): value is RecoveryLinkPaymentType {

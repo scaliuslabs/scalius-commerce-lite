@@ -1,20 +1,16 @@
 import type { Database } from "@scalius/database/client";
-import { siteSettings } from "@scalius/database/schema";
-import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { and, eq, sql } from "drizzle-orm";
+import { AppError, ValidationError } from "@scalius/core/errors";
 
 import {
     getCheckoutFlowValidationIssues,
     type CheckoutMode,
 } from "./checkout-flow";
+import { checkoutDocument, type CheckoutFlowSettings } from "./documents";
 
 export const CHECKOUT_FLOW_REVISION_CONFLICT = "CHECKOUT_FLOW_REVISION_CONFLICT";
 
-export interface CheckoutFlowSettingsDocument {
-    guestCheckoutEnabled: boolean;
-    checkoutMode: CheckoutMode;
-    partialPaymentEnabled: boolean;
-    partialPaymentAmount: number;
+export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {
+    /** 0 until the first save. */
     revision: number;
 }
 
@@ -42,28 +38,16 @@ export class CheckoutFlowRevisionConflictError extends AppError {
 export async function getCheckoutFlowSettingsDocument(
     db: Database,
 ): Promise<CheckoutFlowSettingsDocument> {
-    const row = await db
-        .select({
-            guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-            checkoutMode: siteSettings.checkoutMode,
-            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-            partialPaymentAmount: siteSettings.partialPaymentAmount,
-            revision: siteSettings.checkoutFlowRevision,
-        })
-        .from(siteSettings)
-        .where(eq(siteSettings.singletonKey, "default"))
-        .get();
-
-    if (!row) throw new NotFoundError("Checkout settings are not initialized");
-    return row;
+    const { value, revision } = await checkoutDocument.readDetailed(db);
+    return { ...value, revision };
 }
 
 export async function saveCheckoutFlowSettingsDocument(
     db: Database,
     input: SaveCheckoutFlowSettingsInput,
 ): Promise<CheckoutFlowSettingsDocument> {
-    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
-        throw new ValidationError("A positive checkout settings revision is required.");
+    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 0) {
+        throw new ValidationError("A non-negative checkout settings revision is required.");
     }
 
     const issues = getCheckoutFlowValidationIssues({
@@ -74,37 +58,17 @@ export async function saveCheckoutFlowSettingsDocument(
     });
     if (issues.length > 0) throw new ValidationError(issues.join(" "));
 
-    const updated = await db
-        .update(siteSettings)
-        .set({
-            guestCheckoutEnabled: input.guestCheckoutEnabled,
-            checkoutMode: input.checkoutMode,
-            partialPaymentEnabled: input.partialPaymentEnabled,
-            partialPaymentAmount: input.partialPaymentAmount,
-            checkoutFlowRevision: sql`${siteSettings.checkoutFlowRevision} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(siteSettings.singletonKey, "default"),
-            eq(siteSettings.checkoutFlowRevision, input.expectedRevision),
-        ))
-        .returning({
-            guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-            checkoutMode: siteSettings.checkoutMode,
-            partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-            partialPaymentAmount: siteSettings.partialPaymentAmount,
-            revision: siteSettings.checkoutFlowRevision,
-        });
-
-    if (updated[0]) return updated[0];
-
-    const current = await db
-        .select({ revision: siteSettings.checkoutFlowRevision })
-        .from(siteSettings)
-        .where(eq(siteSettings.singletonKey, "default"))
-        .get();
-    throw new CheckoutFlowRevisionConflictError(
-        input.expectedRevision,
-        current?.revision ?? null,
-    );
+    const { value, revision } = await checkoutDocument.write(db, {
+        guestCheckoutEnabled: input.guestCheckoutEnabled,
+        checkoutMode: input.checkoutMode,
+        partialPaymentEnabled: input.partialPaymentEnabled,
+        partialPaymentAmount: input.partialPaymentAmount,
+    }, {}, {
+        expectedRevision: input.expectedRevision,
+        conflict: (currentRevision) => new CheckoutFlowRevisionConflictError(
+            input.expectedRevision,
+            currentRevision,
+        ),
+    });
+    return { ...value, revision };
 }

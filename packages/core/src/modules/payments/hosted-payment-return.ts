@@ -24,7 +24,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { PaymentSessionGateway } from "./payment-session-attempts";
 import type { PaymentType } from "./types";
 
 export type HostedPaymentReturnResult = "failed" | "cancelled";
@@ -36,7 +35,7 @@ export type HostedPaymentReturnOutcome =
 
 export interface ReconcileHostedPaymentReturnInput {
   orderId: string;
-  gateway: PaymentSessionGateway;
+  gateway: string;
   paymentType: PaymentType;
   result: HostedPaymentReturnResult;
   /**

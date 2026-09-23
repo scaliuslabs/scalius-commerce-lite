@@ -219,7 +219,8 @@ const orderId = Astro.params.id ?? "";
     __scaliusLoadOrderDetail?: () => Promise<void>;
   };
   const detailWindow = window as DetailWindow;
-  type OnlineRecoveryGateway = "stripe" | "sslcommerz";
+  /** An online gateway id; "stripe" is the card flow, every other gateway redirects. */
+  type OnlineRecoveryGateway = string;
   let currentDetail: CustomerOrderDetail | null = null;
   let currentCheckoutConfig: CheckoutConfig | null = null;
   let recoveryAction: AccountPaymentRecoveryAction | null = null;
@@ -315,7 +316,7 @@ const orderId = Astro.params.id ?? "";
   }
 
   function isOnlineRecoveryGateway(value: string): value is OnlineRecoveryGateway {
-    return value === "stripe" || value === "sslcommerz";
+    return /^[a-z][a-z0-9_-]{0,63}$/.test(value) && value !== "cod";
   }
 
   function recoveryGatewayMarkup(gateway: OnlineRecoveryGateway): string {
@@ -369,7 +370,8 @@ const orderId = Astro.params.id ?? "";
   function recoveryButtonLabelFor(gateway: OnlineRecoveryGateway): string {
     if (gateway === "stripe") return "Enter card details";
     if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
-    return "Continue with SSLCommerz";
+    const name = currentCheckoutConfig?.gateways?.find((candidate) => candidate.id === gateway)?.name;
+    return `Continue with ${getGatewayPresentation(gateway, name ?? gateway).providerLabel ?? name ?? gateway}`;
   }
 
   function selectRecoveryGateway(gateway: OnlineRecoveryGateway): void {

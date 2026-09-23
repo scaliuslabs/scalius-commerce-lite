@@ -190,7 +190,7 @@ function installStripePaymentFixture() {
   }));
   (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
     ...baseConfig, activeDefaultMethod: "stripe",
-    gateways: [{ id: "stripe", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz" }],
+    gateways: [{ id: "stripe", flow: "card", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz", flow: "hosted" }],
   };
   return { cards, confirmCardPayment, createCard, stripe };
 }
@@ -214,7 +214,7 @@ function stripeRetryFetch(): typeof fetch {
         },
       }));
     }
-    if (url === "/api/checkout/stripe-intent") {
+    if (url === "/api/checkout/payment-session/stripe") {
       return new Response(JSON.stringify({ clientSecret: "pi_secret_original" }));
     }
     throw new Error(`Unexpected request: ${url}`);
@@ -529,7 +529,7 @@ describe("initCheckoutPage", () => {
       activeDefaultMethod: "cod",
       gateways: [
         { id: "cod", name: "Cash on Delivery" },
-        { id: "sslcommerz", name: "SSLCommerz" },
+        { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" },
       ],
     };
 
@@ -768,7 +768,7 @@ describe("initCheckoutPage", () => {
       ([input]) => String(input) === "/api/checkout/create-order",
     )).toHaveLength(1);
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "/api/checkout/stripe-intent",
+      "/api/checkout/payment-session/stripe",
       expect.objectContaining({
         body: JSON.stringify({
           orderId: "order_stripe_retry",
@@ -821,7 +821,7 @@ describe("initCheckoutPage", () => {
         ([input]) => String(input) === "/api/checkout/create-order",
       )).toHaveLength(scenario === "missing recovery pointer" ? 2 : 1);
       expect(vi.mocked(fetch).mock.calls.some(
-        ([input]) => String(input) === "/api/checkout/stripe-intent",
+        ([input]) => String(input) === "/api/checkout/payment-session/stripe",
       )).toBe(false);
     },
   );
@@ -954,7 +954,7 @@ describe("initCheckoutPage", () => {
       activeDefaultMethod: "cod",
       gateways: [
         { id: "cod", name: "Cash on Delivery" },
-        { id: "sslcommerz", name: "SSLCommerz" },
+        { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" },
       ],
     };
 
@@ -1063,7 +1063,7 @@ describe("initCheckoutPage", () => {
       activeDefaultMethod: "cod",
       gateways: [
         { id: "cod", name: "Cash on Delivery" },
-        { id: "sslcommerz", name: "SSLCommerz" },
+        { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" },
       ],
     };
 

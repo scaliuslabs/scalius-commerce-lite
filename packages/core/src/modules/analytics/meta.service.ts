@@ -1,8 +1,8 @@
 import { type Database } from "@scalius/database/client";
-import { metaConversionsSettings, metaConversionsLogs, type MetaConversionsSettings } from "@scalius/database/schema";
+import { metaConversionsLogs } from "@scalius/database/schema";
+import { metaConversionsDocument, type MetaConversionsSettings } from "../settings/documents";
 import { eq, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 
 const SAFE_META_LOG_PAYLOAD_UNAVAILABLE = JSON.stringify({ available: false });
 const META_MATCH_SIGNAL_FIELDS = [
@@ -232,35 +232,16 @@ export function summarizeMetaResponsePayload(
 }
 
 /**
- * Fetches the Meta Conversions API settings from the database.
+ * The Meta Conversions API settings with the access token strictly decrypted
+ * (empty when unreadable), or null when never saved or unreadable.
  */
 export async function getCapiSettings(
     db: Database,
     encryptionKey?: string,
 ): Promise<MetaConversionsSettings | null> {
     try {
-        const settings = await db
-            .select()
-            .from(metaConversionsSettings)
-            .where(eq(metaConversionsSettings.id, "singleton"))
-            .get();
-        if (!settings) {
-            return null;
-        }
-
-        const accessTokenRead = await readStoredCredentialStrict(
-            settings.accessToken,
-            encryptionKey,
-            "Meta Conversions API access token",
-        );
-        if (accessTokenRead.error) {
-            console.warn("[Meta CAPI] Access token is not ready:", accessTokenRead.error);
-        }
-
-        return {
-            ...settings,
-            accessToken: accessTokenRead.value || null,
-        };
+        const stored = await metaConversionsDocument.readDetailed(db, { encryptionKey });
+        return stored.stored ? stored.value : null;
     } catch (error: unknown) {
         console.error("Error fetching Meta CAPI settings:", error);
         return null;

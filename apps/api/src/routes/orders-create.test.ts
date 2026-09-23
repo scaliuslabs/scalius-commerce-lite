@@ -14,6 +14,7 @@ import {
 const DEFAULT_STATUS_REQUEST_KEY = `checkout_submit:v1:${"a".repeat(64)}`;
 const DEFAULT_STATUS_TOKEN = buildCheckoutStatusTokenFromRequestKey(DEFAULT_STATUS_REQUEST_KEY);
 const DEFAULT_QUOTE_FINGERPRINT = "taxq_abcdefghijklmnopqrstuv";
+const PREFETCHED_COMMIT_READS = { prefetched: true };
 
 const mocks = vi.hoisted(() => ({
   createStorefrontOrder: vi.fn(),
@@ -22,10 +23,6 @@ const mocks = vi.hoisted(() => ({
   buildCheckoutAttemptIdentity: vi.fn(),
   resolveExistingCheckoutAttempt: vi.fn(),
   createAtomicCheckoutAttempt: vi.fn(),
-  getCoordinatedCheckoutEligibility: vi.fn(),
-  prepareCheckoutCommitCommand: vi.fn(),
-  submitCheckoutCommitToCoordinator: vi.fn(),
-  submitCheckoutIntentToCoordinator: vi.fn(),
   commitStorefrontOrderPayload: vi.fn(),
   runStorefrontOrderPostCommitSideEffects: vi.fn(),
   validateStorefrontCartItems: vi.fn(),
@@ -41,7 +38,6 @@ const mocks = vi.hoisted(() => ({
   calculateStorefrontTaxQuote: vi.fn(),
   isDiscountValid: vi.fn(),
   calculateDiscountAmount: vi.fn(),
-  findCheckoutReservationAvailabilityTransitions: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
 
@@ -53,12 +49,31 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
     resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
     createAtomicCheckoutAttempt: mocks.createAtomicCheckoutAttempt,
-    getCoordinatedCheckoutEligibility: mocks.getCoordinatedCheckoutEligibility,
-    prepareCheckoutCommitCommand: mocks.prepareCheckoutCommitCommand,
     createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
     createStorefrontOrder: mocks.createStorefrontOrder,
     buildStorefrontCheckoutQuoteFingerprint: mocks.buildStorefrontCheckoutQuoteFingerprint,
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
+    // The route reads attempt + authority in one batch; the mocks keep their
+    // separate seams so each decision is still observable.
+    loadStorefrontCheckoutReads: async (db: unknown, identity: unknown, input: unknown, key: unknown) => {
+      const existingAttempt = await mocks.resolveExistingCheckoutAttempt(db, identity);
+      let authority: Promise<unknown> | null = null;
+      if (existingAttempt?.status !== "replay" && existingAttempt?.status !== "processing") {
+        const pending: Promise<unknown> = mocks.loadStorefrontCheckoutAuthority(db, input, key);
+        pending.catch(() => undefined);
+        authority = pending;
+      }
+      const snapshot = authority ? await authority.then((value) => ({ value }), (error) => ({ error })) : null;
+      return {
+        existingAttempt,
+        commitReads: PREFETCHED_COMMIT_READS,
+        authority: () => {
+          if (!snapshot) throw new Error("replay");
+          if ("error" in snapshot) throw snapshot.error;
+          return snapshot.value;
+        },
+      };
+    },
     getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
     getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
     commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
@@ -68,14 +83,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   };
 });
 
-vi.mock("../checkout-coordinator", () => ({
-  submitCheckoutCommitToCoordinator: mocks.submitCheckoutCommitToCoordinator,
-  submitCheckoutIntentToCoordinator: mocks.submitCheckoutIntentToCoordinator,
-}));
-
 vi.mock("../utils/cache-generation", () => ({
-  findCheckoutReservationAvailabilityTransitions:
-    mocks.findCheckoutReservationAvailabilityTransitions,
   bumpCacheGeneration: mocks.bumpCacheGeneration,
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
     try {
@@ -185,7 +193,6 @@ beforeEach(() => {
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
   mocks.isDiscountValid.mockResolvedValue({ valid: false });
   mocks.calculateDiscountAmount.mockResolvedValue(0);
-  mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([]);
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
@@ -212,25 +219,7 @@ beforeEach(() => {
     checkoutToken: "chk_order_1",
     statusToken: DEFAULT_STATUS_TOKEN,
   });
-  mocks.getCoordinatedCheckoutEligibility.mockReturnValue({
-    eligible: false,
-    reason: "unsupported_test_payload",
-  });
-  mocks.prepareCheckoutCommitCommand.mockResolvedValue({
-    schemaVersion: 1,
-    requestKey: "checkout_submit:v1:test",
-  });
-  mocks.submitCheckoutCommitToCoordinator.mockResolvedValue({
-    ok: true,
-    replay: false,
-    orderId: "order_1",
-    response: null,
-  });
-  mocks.submitCheckoutIntentToCoordinator.mockResolvedValue({
-    ok: false,
-    code: "CHECKOUT_COMMIT_UNAVAILABLE",
-  });
-  mocks.commitStorefrontOrderPayload.mockResolvedValue({});
+  mocks.commitStorefrontOrderPayload.mockResolvedValue({ availabilityTransitionVariantIds: [] });
   mocks.runStorefrontOrderPostCommitSideEffects.mockResolvedValue(undefined);
   mocks.validateStorefrontCartItems.mockResolvedValue({
     valid: true,
@@ -1392,72 +1381,6 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
 
-  it("does not couple coordinated checkout throughput to cache purges", async () => {
-    const commitPayload = { orderData: { id: "order_1" }, marker: "coordinated" };
-    const coordinatedResponse = {
-      checkoutToken: "chk_order_1",
-      receiptToken: "chk_order_1",
-      statusToken: DEFAULT_STATUS_TOKEN,
-      orderId: "order_1",
-      paymentMethod: "cod",
-      totalAmount: 100,
-      totalAmountMinor: 10_000,
-      taxAmount: 0,
-      taxAmountMinor: 0,
-      taxLabel: "Tax",
-      pricesIncludeTax: false,
-      currencyCode: "BDT",
-      decimalPlaces: 2,
-      message: "Order created",
-    };
-    const coordinatorBinding = {} as DurableObjectNamespace;
-
-    mocks.createStorefrontOrder.mockResolvedValue({
-      checkoutToken: "chk_order_1",
-      orderId: "order_1",
-      paymentMethod: "cod",
-      totalAmount: 100,
-      taxQuote: DEFAULT_TAX_QUOTE,
-      commitPayload,
-    });
-    mocks.submitCheckoutIntentToCoordinator.mockResolvedValue({
-      ok: true,
-      replay: false,
-      orderId: "order_1",
-      response: coordinatedResponse,
-      postCommitPayload: null,
-      availabilityTransitionVariantIds: [],
-    });
-
-    const { app, kv } = createTestApp();
-    const response = await app.request(
-      "/api/v1/orders",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validOrderBody),
-      },
-      { CACHE: kv, CHECKOUT_COORDINATOR: coordinatorBinding } as never,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(201);
-    expect(await response.json()).toMatchObject({
-      success: true,
-      data: coordinatedResponse,
-    });
-    expect(mocks.submitCheckoutIntentToCoordinator).toHaveBeenCalledWith(
-      coordinatorBinding,
-      "d1",
-      expect.objectContaining({
-        attempt: expect.objectContaining({ orderId: "order_1" }),
-        data: expect.objectContaining({ paymentMethod: "cod" }),
-      }),
-    );
-    expect(mocks.submitCheckoutCommitToCoordinator).not.toHaveBeenCalled();
-    expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-  });
-
   it("commits the order before scheduling checkout recovery hints and side effects", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const waitUntilPromises: Promise<unknown>[] = [];
@@ -1478,7 +1401,7 @@ describe("create order commit/KV ordering", () => {
     };
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
-      return {};
+      return { availabilityTransitionVariantIds: [] };
     });
     mocks.runStorefrontOrderPostCommitSideEffects.mockImplementation(async () => {
       calls.push("side-effects");
@@ -1538,6 +1461,7 @@ describe("create order commit/KV ordering", () => {
             statusToken: DEFAULT_STATUS_TOKEN,
           }),
         }),
+        PREFETCHED_COMMIT_READS,
       );
       expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
         expect.anything(),
@@ -1919,10 +1843,9 @@ describe("create order commit/KV ordering", () => {
           }],
         },
       });
-      mocks.commitStorefrontOrderPayload.mockResolvedValue({});
-      mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([
-        "variant_transition",
-      ]);
+      mocks.commitStorefrontOrderPayload.mockResolvedValue({
+        availabilityTransitionVariantIds: ["variant_transition"],
+      });
       const { app, kv } = createTestApp();
 
       const response = await app.request(
@@ -1939,12 +1862,6 @@ describe("create order commit/KV ordering", () => {
       expect(response.status, responseText).toBe(201);
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
       expect(mocks.runStorefrontOrderPostCommitSideEffects).toHaveBeenCalledOnce();
-      expect(
-        mocks.findCheckoutReservationAvailabilityTransitions,
-      ).toHaveBeenCalledWith(
-        expect.anything(),
-        [{ variantId: "variant_transition", quantity: 1 }],
-      );
       expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
         "availability caches",
@@ -2518,7 +2435,7 @@ describe("create order commit/KV ordering", () => {
     expect(await response.json()).toMatchObject({
       success: false,
       error: {
-        message: "SSLCommerz checkout requires the store currency to be BDT.",
+        message: "SSLCommerz checkout requires the store currency to be BDT. Current currency: KWD.",
       },
     });
     expect(mocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
@@ -2692,6 +2609,7 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({
         response: expect.objectContaining({ totalAmount: 120 }),
       }),
+      PREFETCHED_COMMIT_READS,
     );
   });
 

@@ -4946,7 +4946,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         /**
          * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
          */
-        paymentMethod: 'cod' | 'stripe' | 'sslcommerz';
+        paymentMethod: 'stripe' | 'sslcommerz' | 'cod';
     };
     headers?: {
         /**
@@ -7023,7 +7023,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartRes
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz';
+            gateway: string;
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -7399,28 +7399,19 @@ export type GetApiV1CheckoutConfigResponses = {
         success: true;
         data: {
             gateways: Array<{
-                id: 'stripe';
+                id: string;
                 name: string;
+                flow: 'card' | 'hosted' | 'cod';
                 currencies: Array<string>;
-                publishableKey: string;
-                testMode: boolean;
-            } | {
-                id: 'sslcommerz';
-                name: string;
-                currencies: Array<string>;
-                sandbox: boolean;
-                testMode: boolean;
-                amountLimits: {
-                    currency: 'BDT';
+                testMode?: boolean;
+                publishableKey?: string;
+                amountLimits?: {
+                    currency: string;
                     min: number;
                     max: number;
                 };
-            } | {
-                id: 'cod';
-                name: string;
-                currencies: Array<string>;
             }>;
-            activeDefaultMethod?: 'stripe' | 'sslcommerz' | 'cod';
+            activeDefaultMethod?: string;
             guestCheckoutEnabled: boolean;
             authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
             customerAuthPolicy: {
@@ -8585,7 +8576,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             }>;
             paymentRecovery: {
                 eligible: boolean;
-                gateway: 'stripe' | 'sslcommerz' | null;
+                gateway: string | null;
                 paymentType: 'full' | 'deposit' | 'balance' | null;
                 amountDue: number;
                 label: string | null;
@@ -8752,7 +8743,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponse = PostApiV1Cu
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionData = {
     body?: {
-        gateway?: 'stripe' | 'sslcommerz';
+        gateway?: string;
         replaceExistingAttempt?: boolean;
     };
     path: {
@@ -8862,23 +8853,18 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
     200: {
         success: true;
         data: {
+            gateway: string;
             paymentType: 'full' | 'deposit' | 'balance';
             amount: number;
             currency: string;
-            gateway: 'stripe';
-            stripe: {
+            stripe?: {
                 clientSecret?: string;
                 paymentIntentId?: string;
                 publishableKey: string;
                 amount: number;
                 currency: string;
             };
-        } | {
-            paymentType: 'full' | 'deposit' | 'balance';
-            amount: number;
-            currency: string;
-            gateway: 'sslcommerz';
-            hosted: {
+            hosted?: {
                 gatewayUrl?: string;
                 sessionKey?: string;
             };
@@ -8894,7 +8880,7 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz';
+            gateway: string;
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -36792,14 +36778,11 @@ export type GetApiV1AdminSettingsMetaConversionsResponses = {
         success: true;
         data: {
             settings: {
-                id: string;
                 pixelId: string | null;
                 accessToken: string | null;
                 testEventCode: string | null;
                 isEnabled: boolean;
                 logRetentionDays: number;
-                createdAt: string | number | unknown;
-                updatedAt: string | number | unknown;
             } | null;
             pixelParity: {
                 status: 'not_configured' | 'invalid_capi_pixel_id' | 'no_browser_pixel' | 'unreadable_browser_pixel' | 'ok' | 'mismatch' | 'multiple_browser_pixels' | 'unavailable';
@@ -36918,14 +36901,11 @@ export type PostApiV1AdminSettingsMetaConversionsResponses = {
     200: {
         success: true;
         data: {
-            id: string;
             pixelId: string | null;
             accessToken: string | null;
             testEventCode: string | null;
             isEnabled: boolean;
             logRetentionDays: number;
-            createdAt: string | number | unknown;
-            updatedAt: string | number | unknown;
         };
     };
     /**
@@ -36934,14 +36914,11 @@ export type PostApiV1AdminSettingsMetaConversionsResponses = {
     201: {
         success: true;
         data: {
-            id: string;
             pixelId: string | null;
             accessToken: string | null;
             testEventCode: string | null;
             isEnabled: boolean;
             logRetentionDays: number;
-            createdAt: string | number | unknown;
-            updatedAt: string | number | unknown;
         };
     };
 };
@@ -41249,7 +41226,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Filter by payment method
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         /**
          * Filter by fulfillment status
          */
@@ -41495,7 +41472,7 @@ export type GetApiV1AdminOrdersExportData = {
         status?: string;
         statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
         paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         archived?: 'true' | 'false';
@@ -41614,7 +41591,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         /**
          * Sort field
          */
@@ -41836,7 +41813,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         /**
          * Filter by fulfillment status
          */
@@ -42588,7 +42565,7 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
             expiresAt: string | number | unknown;
             accessMode: 'buyer_verified_receipt';
             note: string;
-            gateway: 'sslcommerz';
+            gateway: string;
             paymentType: 'full' | 'deposit' | 'balance' | null;
             depositAmount: number | null;
             paymentRecovery: {
@@ -43073,11 +43050,8 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 paymentMethod: string;
                 paymentType: string;
                 status: string;
-                stripePaymentIntentId: string | null;
-                stripeChargeId: string | null;
-                sslcommerzTranId: string | null;
-                sslcommerzValId: string | null;
-                sslcommerzBankTranId: string | null;
+                providerRef: string | null;
+                providerSecondaryRef: string | null;
                 codCollectedBy: string | null;
                 codCollectedAt: string | number | unknown;
                 codReceiptUrl: string | null;
@@ -52724,7 +52698,7 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
                 total: number;
                 hasCustomerContact: boolean;
                 orderId: string | null;
-                paymentMethod: 'stripe' | 'sslcommerz' | null;
+                paymentMethod: string | null;
                 paymentStatus: 'unpaid' | 'failed' | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -55209,25 +55183,25 @@ export type PostApiV1SetupResponses = {
 
 export type PostApiV1SetupResponse = PostApiV1SetupResponses[keyof PostApiV1SetupResponses];
 
-export type PostApiV1PaymentStripeIntentData = {
+export type PostApiV1PaymentByProviderSessionData = {
     body?: {
         orderId: string;
         receiptToken?: string;
         paymentType?: 'full' | 'deposit' | 'balance';
         depositAmount?: number;
-        currency?: string;
-        manualCapture?: boolean;
         replaceExistingAttempt?: boolean;
     };
     headers?: {
         'X-Receipt-Token'?: string;
     };
-    path?: never;
+    path: {
+        provider: string;
+    };
     query?: never;
-    url: '/api/v1/payment/stripe/intent';
+    url: '/api/v1/payment/{provider}/session';
 };
 
-export type PostApiV1PaymentStripeIntentErrors = {
+export type PostApiV1PaymentByProviderSessionErrors = {
     /**
      * Validation error
      */
@@ -55318,11 +55292,11 @@ export type PostApiV1PaymentStripeIntentErrors = {
     };
 };
 
-export type PostApiV1PaymentStripeIntentError = PostApiV1PaymentStripeIntentErrors[keyof PostApiV1PaymentStripeIntentErrors];
+export type PostApiV1PaymentByProviderSessionError = PostApiV1PaymentByProviderSessionErrors[keyof PostApiV1PaymentByProviderSessionErrors];
 
-export type PostApiV1PaymentStripeIntentResponses = {
+export type PostApiV1PaymentByProviderSessionResponses = {
     /**
-     * PaymentIntent created
+     * Card flows return a client secret; hosted flows return the provider redirect URL
      */
     200: {
         success: true;
@@ -55332,6 +55306,9 @@ export type PostApiV1PaymentStripeIntentResponses = {
             publishableKey: string;
             amount: number;
             currency: string;
+        } | {
+            gatewayUrl?: string;
+            sessionKey?: string;
         };
     };
     /**
@@ -55344,16 +55321,16 @@ export type PostApiV1PaymentStripeIntentResponses = {
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz';
+            gateway: string;
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
     };
 };
 
-export type PostApiV1PaymentStripeIntentResponse = PostApiV1PaymentStripeIntentResponses[keyof PostApiV1PaymentStripeIntentResponses];
+export type PostApiV1PaymentByProviderSessionResponse = PostApiV1PaymentByProviderSessionResponses[keyof PostApiV1PaymentByProviderSessionResponses];
 
-export type PostApiV1PaymentStripeReconcileData = {
+export type PostApiV1PaymentByProviderReconcileData = {
     body?: {
         orderId: string;
         receiptToken?: string;
@@ -55361,12 +55338,14 @@ export type PostApiV1PaymentStripeReconcileData = {
     headers?: {
         'X-Receipt-Token'?: string;
     };
-    path?: never;
+    path: {
+        provider: string;
+    };
     query?: never;
-    url: '/api/v1/payment/stripe/reconcile';
+    url: '/api/v1/payment/{provider}/reconcile';
 };
 
-export type PostApiV1PaymentStripeReconcileErrors = {
+export type PostApiV1PaymentByProviderReconcileErrors = {
     /**
      * Validation error
      */
@@ -55446,9 +55425,9 @@ export type PostApiV1PaymentStripeReconcileErrors = {
     };
 };
 
-export type PostApiV1PaymentStripeReconcileError = PostApiV1PaymentStripeReconcileErrors[keyof PostApiV1PaymentStripeReconcileErrors];
+export type PostApiV1PaymentByProviderReconcileError = PostApiV1PaymentByProviderReconcileErrors[keyof PostApiV1PaymentByProviderReconcileErrors];
 
-export type PostApiV1PaymentStripeReconcileResponses = {
+export type PostApiV1PaymentByProviderReconcileResponses = {
     /**
      * Payment is pending or already settled
      */
@@ -55471,144 +55450,4 @@ export type PostApiV1PaymentStripeReconcileResponses = {
     };
 };
 
-export type PostApiV1PaymentStripeReconcileResponse = PostApiV1PaymentStripeReconcileResponses[keyof PostApiV1PaymentStripeReconcileResponses];
-
-export type PostApiV1PaymentSslcommerzSessionData = {
-    body?: {
-        orderId: string;
-        receiptToken?: string;
-        paymentType?: 'full' | 'deposit' | 'balance';
-        depositAmount?: number;
-        currency?: string;
-        replaceExistingAttempt?: boolean;
-    };
-    headers?: {
-        'X-Receipt-Token'?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/payment/sslcommerz/session';
-};
-
-export type PostApiV1PaymentSslcommerzSessionErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Service unavailable
-     */
-    503: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1PaymentSslcommerzSessionError = PostApiV1PaymentSslcommerzSessionErrors[keyof PostApiV1PaymentSslcommerzSessionErrors];
-
-export type PostApiV1PaymentSslcommerzSessionResponses = {
-    /**
-     * Session created
-     */
-    200: {
-        success: true;
-        data: {
-            gatewayUrl?: string;
-            sessionKey?: string;
-        };
-    };
-    /**
-     * Payment session creation is already processing
-     */
-    202: {
-        success: true;
-        data: {
-            status: 'processing';
-            retryable: true;
-            retryAfterSeconds: number;
-            orderId: string;
-            gateway: 'stripe' | 'sslcommerz';
-            paymentType: 'full' | 'deposit' | 'balance';
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1PaymentSslcommerzSessionResponse = PostApiV1PaymentSslcommerzSessionResponses[keyof PostApiV1PaymentSslcommerzSessionResponses];
+export type PostApiV1PaymentByProviderReconcileResponse = PostApiV1PaymentByProviderReconcileResponses[keyof PostApiV1PaymentByProviderReconcileResponses];

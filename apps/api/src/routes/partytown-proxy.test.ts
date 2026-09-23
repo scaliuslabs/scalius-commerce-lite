@@ -8,14 +8,25 @@ vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
 }));
 
-import { CSP_ALLOWED_DOMAINS_CACHE_KEY, partytownProxyRoutes } from "./partytown-proxy";
+import { partytownProxyRoutes } from "./partytown-proxy";
+
+const CSP_ALLOWED_DOMAINS_CACHE_KEY = "settings:security";
+
+function securityDocument(cspAllowedDomains: string): string {
+  return JSON.stringify({ cspAllowedDomains });
+}
 
 function createDb(storedValue: string | null) {
-  const get = vi.fn(async () => (storedValue === null ? undefined : { value: storedValue }));
+  // Awaiting the query is the settings-document read.
+  const get = vi.fn(async () => (storedValue === null
+    ? []
+    : [{ category: "security", value: securityDocument(storedValue), revision: 1 }]));
   const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({ get })),
+        where: vi.fn(() => ({
+          then: (resolve: (rows: unknown[]) => unknown) => get().then(resolve),
+        })),
       })),
     })),
   };
@@ -24,7 +35,7 @@ function createDb(storedValue: string | null) {
 
 function createEnv(options: { kv?: string | null; db?: string | null; extra?: Record<string, unknown> } = {}) {
   const kv = {
-    get: vi.fn(async () => options.kv ?? null),
+    get: vi.fn(async () => (options.kv == null ? null : securityDocument(options.kv))),
     put: vi.fn(async () => undefined),
   };
   const { db, get } = createDb(options.db ?? null);
@@ -93,7 +104,7 @@ describe("partytown proxy route", () => {
     expect(dbGet).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
       CSP_ALLOWED_DOMAINS_CACHE_KEY,
-      "https://analytics.tiktok.com, *.vendor.example",
+      securityDocument("https://analytics.tiktok.com, *.vendor.example"),
     );
   });
 

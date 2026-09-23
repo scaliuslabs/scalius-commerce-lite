@@ -8,8 +8,6 @@ import {
   compileSqliteNullSafeComparisons,
   POSTGRES_SQLITE_PROFILE_BOOTSTRAP_SQL,
 } from "../src/postgres-sqlite-profile";
-import { CHECKOUT_COMMIT_HARD_MAX_ORDERS } from "../src/checkout-commit";
-import { buildPostgresCheckoutCommitFunctionSql } from "../src/postgres-checkout";
 import type { SqliteTriggerDefinition } from "../src/migration-artifacts";
 import {
   createProviderSchemaDatabase,
@@ -302,14 +300,8 @@ function compileTriggerBody(body: string): string {
 export function compileSqliteTriggerForPostgres(
   definition: SqliteTriggerDefinition,
 ): string {
-  const sourceSql = definition.name === "checkout_batch_outbox_shape_guard"
-    ? definition.sql.replace(
-      /json_array_length\(NEW\.`order_ids`\)\s+NOT\s+BETWEEN\s+1\s+AND\s+280/i,
-      `json_array_length(NEW.\`order_ids\`) NOT BETWEEN 1 AND ${CHECKOUT_COMMIT_HARD_MAX_ORDERS}`,
-    )
-    : definition.sql;
   const match = /^CREATE\s+TRIGGER\s+(.+?)\s+(BEFORE|AFTER)\s+(INSERT|DELETE|UPDATE)(?:\s+OF\s+([\s\S]+?))?\s+ON\s+(.+?)(?:\s+FOR\s+EACH\s+ROW)?(?:\s+WHEN\s+([\s\S]+?))?\s+BEGIN\s+([\s\S]*)\s+END\s*$/i.exec(
-    sourceSql.trim(),
+    definition.sql.trim(),
   );
   if (!match) {
     throw new Error(`Unsupported SQLite trigger header ${JSON.stringify(definition.name)}.`);
@@ -415,7 +407,6 @@ export async function compileCanonicalPostgresSchema(): Promise<PostgresSchemaBu
       "BEGIN;",
       ...indexObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
       ...triggerDefinitions.map(compileSqliteTriggerForPostgres),
-      buildPostgresCheckoutCommitFunctionSql(),
       "COMMIT;",
       "",
     ].join("\n\n");

@@ -164,10 +164,9 @@ export const RETIRED_LOCAL_ENV_KEYS = Object.freeze([
   "FIREBASE_SERVICE_ACCOUNT_CRED_JSON",
 ]);
 
-export function collectStaleLocalEnvIssues({ apiVars, adminVars, storefrontVars }) {
+export function collectStaleLocalEnvIssues({ apiVars, storefrontVars }) {
   const files = [
     { name: "apps/api/.dev.vars", vars: apiVars },
-    { name: "apps/admin-v2/.dev.vars", vars: adminVars },
     { name: "apps/storefront/.dev.vars", vars: storefrontVars },
   ].filter((file) => file.vars);
 
@@ -247,18 +246,15 @@ export function readEnvVarsIfExists(filePath) {
 
 /**
  * Chooses the two installed local secrets, reusing usable values from the
- * environment or existing .dev.vars files (API first, then admin, then
- * storefront) and generating fresh ones only when nothing usable exists.
+ * environment or existing .dev.vars files (API first, then storefront) and generating fresh ones only when nothing usable exists.
  */
 export function resolveSharedLocalSecrets({
   forceRegenerate = false,
   apiVars = null,
-  adminVars = null,
   storefrontVars = null,
   env = process.env,
 } = {}) {
   const existingApi = forceRegenerate ? null : apiVars;
-  const existingAdmin = forceRegenerate ? null : adminVars;
   const existingStorefront = forceRegenerate ? null : storefrontVars;
 
   return {
@@ -267,7 +263,6 @@ export function resolveSharedLocalSecrets({
       [
         env.SCALIUS_SECRET,
         existingApi?.SCALIUS_SECRET,
-        existingAdmin?.SCALIUS_SECRET,
         existingStorefront?.SCALIUS_SECRET,
       ],
       generateMasterSecret,
@@ -277,7 +272,6 @@ export function resolveSharedLocalSecrets({
       [
         env.CREDENTIAL_ENCRYPTION_KEY,
         existingApi?.CREDENTIAL_ENCRYPTION_KEY,
-        existingAdmin?.CREDENTIAL_ENCRYPTION_KEY,
       ],
       generateCredentialEncryptionKey,
     ),
@@ -288,22 +282,21 @@ export function resolveSharedLocalSecrets({
 export const LOCAL_SHARED_SECRETS = Object.freeze([
   Object.freeze({
     key: "SCALIUS_SECRET",
-    files: Object.freeze(["apps/api/.dev.vars", "apps/admin-v2/.dev.vars", "apps/storefront/.dev.vars"]),
+    files: Object.freeze(["apps/api/.dev.vars", "apps/storefront/.dev.vars"]),
     isValid: isUsableMasterSecret,
     invalidReason: `must be at least ${MASTER_SECRET_MIN_LENGTH} characters`,
   }),
   Object.freeze({
     key: "CREDENTIAL_ENCRYPTION_KEY",
-    files: Object.freeze(["apps/api/.dev.vars", "apps/admin-v2/.dev.vars"]),
+    files: Object.freeze(["apps/api/.dev.vars"]),
     isValid: isUsableCredentialEncryptionKey,
     invalidReason: `must be base64 of exactly ${CREDENTIAL_ENCRYPTION_KEY_BYTES} bytes`,
   }),
 ]);
 
-export function collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars }) {
+export function collectLocalSecretSyncIssues({ apiVars, storefrontVars }) {
   const files = [
     { name: "apps/api/.dev.vars", vars: apiVars },
-    { name: "apps/admin-v2/.dev.vars", vars: adminVars },
     { name: "apps/storefront/.dev.vars", vars: storefrontVars },
   ].filter((file) => file.vars);
 

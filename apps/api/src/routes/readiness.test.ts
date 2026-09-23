@@ -101,13 +101,6 @@ function createRateLimiter() {
   } as unknown as RateLimit;
 }
 
-function createCheckoutCoordinator() {
-  return {
-    idFromName: vi.fn(() => ({ toString: () => "checkout-coordinator" })),
-    get: vi.fn(() => ({ fetch: vi.fn() })),
-  } as unknown as DurableObjectNamespace;
-}
-
 function createApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.use("*", requestCorrelationMiddleware);
@@ -123,7 +116,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     JOBS_QUEUE: createQueue(),
     RL_STRICT: createRateLimiter(),
     RL_STANDARD: createRateLimiter(),
-    CHECKOUT_COORDINATOR: createCheckoutCoordinator(),
     // Installed secrets: the master secret plus the credential key.
     SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
@@ -173,7 +165,6 @@ describe("API readiness route", () => {
       api_cache_kv: { status: "ok" },
       r2: { status: "ok" },
       jobs_queue: { status: "ok" },
-      checkout_coordinator: { status: "ok" },
       rl_strict: { status: "ok" },
       rl_standard: { status: "ok" },
       runtime_config: { status: "ok", detail: "required secrets installed" },

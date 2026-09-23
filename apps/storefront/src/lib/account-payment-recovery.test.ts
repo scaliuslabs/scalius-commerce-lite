@@ -8,6 +8,7 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { getOrderPaymentPresentation, formatOrderSuccessPaymentMethod } from "./order-success-state";
 import { resolveSavedOrderMoneySummary } from "./order-tax-presentation";
+import { getGatewayPresentation } from "./checkout/gateway-presentation";
 
 import {
   getAccountPaymentRecoveryAction,
@@ -153,7 +154,7 @@ describe("account timeline payment presentation", () => {
     };
     const dependencies = {
       DEFAULT_CURRENCY, escapeHtml, ENGLISH_CHECKOUT_LANGUAGE_DATA, getOrderPaymentPresentation,
-      formatOrderSuccessPaymentMethod, resolveSavedOrderMoneySummary, getAccountPaymentRecoveryAction,
+      formatOrderSuccessPaymentMethod, resolveSavedOrderMoneySummary, getAccountPaymentRecoveryAction, getGatewayPresentation,
     };
     const render = new Function(...Object.keys(dependencies), `${script}\ncurrentCheckoutConfig = { unavailable: true }; return renderDetail;`)(...Object.values(dependencies));
     render(detail);

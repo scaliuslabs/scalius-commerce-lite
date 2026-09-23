@@ -1,127 +1,10 @@
-// src/lib/payment/types.ts
-// Shared types for payment gateway integrations.
-//
-// ── Amount convention ────────────────────────────────────────────────────────
-// Amounts stored in the database (orders.totalAmount, etc.) are in MAJOR units
-// (e.g. 150.00 BDT, 29.99 USD). This is the canonical representation.
-//
-// Gateway APIs each have their own convention:
-//   Stripe — expects amounts in SMALLEST currency unit (cents, paisa, fils).
-//     Conversion: amount * 10^(ISO 4217 decimal places).
-//     e.g. 150.00 BDT → 15000, 150 JPY → 150, 1.500 BHD → 1500.
-//     This conversion happens at the API route layer before calling gateway functions.
-//     The queue consumer reverses it (÷ 10^decimals) before writing to the DB.
-//   SSLCommerz — expects amounts in MAJOR units with appropriate decimal formatting.
-//     Uses toFixed(getDecimalPlaces(currency)) for the API call.
-//     No ×/÷ conversion needed; the amount passes through as-is.
-//   COD — no external gateway; amounts are always in major units.
-//
-// Use getDecimalPlaces() from @scalius/shared/currency for the ISO 4217 lookup.
-// ─────────────────────────────────────────────────────────────────────────────
+// Shared payment types. Order amounts in the database are MAJOR units; provider
+// adapters (gateways/port.ts) exchange integer minor units at their boundary.
 
-export type PaymentGateway = "stripe" | "sslcommerz" | "cod";
-export type PaymentType = "full" | "deposit" | "balance";
+export type { PaymentType } from "./gateways/port";
+import type { PaymentType } from "./gateways/port";
+
 export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
-
-// ---------------------------------------------------------------------------
-// Stripe
-// ---------------------------------------------------------------------------
-
-export interface CreateStripePaymentIntentParams {
-  orderId: string;
-  amount: number; // In smallest currency unit — use getDecimalPlaces(currency) for conversion
-  currency: string; // ISO 4217 lowercase (usd, bdt, jpy)
-  paymentType: PaymentType;
-  /** Set to true for manual capture (authorise now, capture on fulfilment) */
-  manualCapture?: boolean;
-  /** Provider-side idempotency key for checkout/session retries */
-  idempotencyKey?: string;
-  /** Per-provider HTTP deadline in milliseconds for checkout/session creation. */
-  requestTimeoutMs?: number;
-  /** Disable SDK network retries for buyer-facing session creation hot paths. */
-  maxNetworkRetries?: number;
-  metadata?: Record<string, string>;
-}
-
-export interface StripePaymentIntentResult {
-  success: boolean;
-  clientSecret?: string;
-  paymentIntentId?: string;
-  error?: string;
-  timedOut?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// SSLCommerz
-// ---------------------------------------------------------------------------
-
-export interface InitSSLCommerzSessionParams {
-  orderId: string;
-  transactionId?: string;
-  totalAmount: number; // Major units (e.g. 150.00 BDT) — SSLCommerz formats via toFixed(decimals)
-  currency: string; // BDT | USD | EUR | GBP | SGD
-  successUrl: string;
-  failUrl: string;
-  cancelUrl: string;
-  ipnUrl: string;
-  customerName: string;
-  customerPhone: string;
-  customerEmail?: string;
-  customerAddress?: string;
-  customerCity?: string;
-  customerPostcode?: string;
-  paymentType: PaymentType;
-  productName?: string;
-  numItems?: number;
-  /** Abort signal from the API route deadline guard. */
-  signal?: AbortSignal;
-}
-
-export interface SSLCommerzSessionResult {
-  success: boolean;
-  gatewayUrl?: string; // Redirect customer to this URL
-  sessionKey?: string; // SSLCommerz session key (stored as paymentIntentId)
-  error?: string;
-  timedOut?: boolean;
-}
-
-export interface SSLCommerzIPNPayload {
-  status: string; // VALID | VALIDATED | INVALID_TRANSACTION | FAILED | etc.
-  tran_id: string; // Merchant transaction/attempt ID
-  val_id: string; // SSLCommerz validation ID
-  amount: string;
-  store_amount: string;
-  currency: string;
-  bank_tran_id: string;
-  card_type: string;
-  card_no: string;
-  card_issuer: string;
-  card_brand: string;
-  card_issuer_country: string;
-  card_issuer_country_code: string;
-  currency_type: string;
-  currency_amount: string;
-  currency_rate: string;
-  base_fair: string;
-  value_a?: string;
-  value_b?: string;
-  value_c?: string;
-  value_d?: string;
-  [key: string]: string | undefined;
-}
-
-export interface SSLCommerzValidationResult {
-  status: "VALID" | "VALIDATED" | "INVALID_TRANSACTION" | "FAILED" | "UNATTEMPTED" | "CANCELLED" | "PENDING" | "EXPIRED";
-  tran_id: string;
-  val_id: string;
-  amount: string;
-  store_amount: string;
-  bank_tran_id: string;
-  card_type: string;
-  currency_type: string;
-  currency_amount: string;
-  [key: string]: string;
-}
 
 // ---------------------------------------------------------------------------
 // COD
@@ -150,13 +33,14 @@ export interface RecordCODFailureParams {
 
 export interface ProcessPaymentParams {
   orderId: string;
-  amount: number; // Major units (e.g. 150.00 BDT) — queue consumer converts from smallest unit before calling
-  paymentGateway: PaymentGateway;
-  paymentType: PaymentType;
-  stripePaymentIntentId?: string;
-  stripeChargeId?: string;
-  sslcommerzTranId?: string;
-  sslcommerzValId?: string;
-  sslcommerzBankTranId?: string;
+  /** Gateway id (registry key); stored as order_payments.payment_method. */
+  provider: string;
+  /** Major units in the order currency. */
+  amount: number;
+  currency: string;
+  /** Omitted when the provider did not bind one; the kernel infers it from the amount. */
+  paymentType?: PaymentType;
+  providerRef: string;
+  secondaryRef?: string;
   metadata?: Record<string, unknown>;
 }

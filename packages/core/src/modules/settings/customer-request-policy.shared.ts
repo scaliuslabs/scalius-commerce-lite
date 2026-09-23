@@ -2,8 +2,6 @@
  * Browser-safe customer-request policy contract and projections.
  * Keep persistence and relational-provider imports in customer-request-policy.ts.
  */
-export const CUSTOMER_REQUEST_POLICY_CATEGORY = "order_support";
-export const CUSTOMER_REQUEST_POLICY_KEY = "customer_request_policy";
 export const CUSTOMER_REQUEST_INTRO_MAX_LENGTH = 240;
 
 export const CUSTOMER_REQUEST_TYPES = [

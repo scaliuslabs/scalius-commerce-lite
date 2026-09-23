@@ -1,10 +1,11 @@
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { listPaymentGateways } from "@scalius/core/modules/payments/gateways/registry";
 
 export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
-export const PAYMENT_WEBHOOK_PROVIDERS = ["stripe", "sslcommerz"] as const;
+export const PAYMENT_WEBHOOK_PROVIDERS = listPaymentGateways().map((gateway) => gateway.id);
 
 export interface StaleQueuedWebhookSweepResult {
   scanned: number;

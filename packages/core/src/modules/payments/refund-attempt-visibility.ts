@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { refundAttempts } from "@scalius/database/schema";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "./refund-attempt-guard";
+import { paymentMethodLabel } from "./gateways/registry";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
 type RefundAttemptSeverity = "info" | "success" | "warning" | "danger";
@@ -92,18 +93,14 @@ function timestampToIso(timestamp: number | null | undefined): string | null {
   return new Date(timestamp * 1000).toISOString();
 }
 
-function normalizeGateway(gateway: string): string {
-  if (gateway === "sslcommerz") return "SSLCommerz";
-  if (gateway === "cod") return "Cash on Delivery";
-  return gateway.charAt(0).toUpperCase() + gateway.slice(1);
-}
+
 
 function copyForStatus(
   status: string,
   gateway: string,
   audience: RefundAttemptVisibilityAudience,
 ): { severity: RefundAttemptSeverity; label: string; message: string } {
-  const gatewayLabel = normalizeGateway(gateway);
+  const gatewayLabel = paymentMethodLabel(gateway);
 
   switch (status) {
     case "pending":

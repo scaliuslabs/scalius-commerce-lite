@@ -24,7 +24,7 @@ The `type` field is a SQL literal (`'category'` or `'page'`), not a DB column.
 Returns `{ count }` for an admin dynamic navigation link preview. It verifies
 the category is public via `getPublicCategoryById()` and delegates to
 `getStorefrontProducts()` with `limit: 1`, so the count matches the storefront
-category filtering rules without loading product rows into the admin worker.
+category filtering rules without loading product rows into the dashboard.
 
 Accepted input:
 
@@ -39,32 +39,6 @@ Accepted input:
     attributeFilters?: { slug: string; value: string }[];
 }
 ```
-
-### `getNavigationMenus(db)`
-
-Returns header and footer configs from the `siteSettings` singleton. Stored JSON
-is parsed and validated; malformed or unsafe persisted configuration raises an
-explicit service-unavailable error instead of returning empty menus. Legacy
-`/pages/{slug}` links normalize to the real public `/{slug}` route.
-
-### `getNavigationMenu(db, id)`
-
-Returns a single navigation config by ID. Accepts `"header"` or `"footer"` as the ID.
-
-### `saveNavigationConfig(db, data)`
-
-Validates and normalizes a navigation configuration before saving it. Internal
-and relative links remain same-store; external links must be credential-free
-HTTPS. Unsafe schemes, protocol-relative URLs, traversal, and unsafe characters
-are rejected before any database write.
-
-### `updateNavigationConfig(db, id, data)`
-
-Updates an existing navigation config by settings ID. Updates either `headerConfig` or `footerConfig` based on `data.type`.
-
-### `deleteNavigationConfig(db, id, type)`
-
-Resets a navigation config to empty. Sets the corresponding config column (headerConfig or footerConfig) to `"{}"`.
 
 ### `buildDefaultNavigation(db)`
 
@@ -143,7 +117,7 @@ Two endpoints:
 
 ## Dependencies
 
-- `@scalius/database` -- `categories`, `pages`, `siteSettings` schemas
+- `@scalius/database` -- `categories`, `pages`, `settings` (header/footer documents) schemas
 - `drizzle-orm` -- `isNull`, `sql`, `eq`
 - `nanoid` -- ID generation for new settings rows
 - `zod` -- validation schemas

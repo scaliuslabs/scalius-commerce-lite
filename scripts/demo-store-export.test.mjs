@@ -554,17 +554,17 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0064_something_else' WHERE version = 64");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0067_something_else' WHERE version = 67");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 64\/0064_something_else .* can only be exported at revision 64\/0064_cache_generation/su);
+      .rejects.toThrow(/is at schema revision 67\/0067_something_else .* can only be exported at revision 67\/0067_settings_documents/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 64`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 67`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
@@ -603,19 +603,6 @@ describe("demo store export fail-closed preconditions", () => {
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
       .rejects.toThrow(/order_items holds order line\(s\) that reference the exported catalog: oit_1/u);
-  });
-
-  it("refuses a catalog a checkout reservation lane still points at", async () => {
-    const testCase = newExportCase();
-    testCase.mutate((database) => {
-      database.prepare(
-        `INSERT INTO inventory_reservation_lanes (variant_id, pool, lane, capacity, reserved_quantity, version, source_stock_version, created_at, updated_at)
-         VALUES (?, 'regular', 0, 4, 0, 0, 1, ?, ?)`,
-      ).run("var_basin_default", FIXED_TIMESTAMP, FIXED_TIMESTAMP);
-    });
-
-    await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/inventory_reservation_lanes holds checkout reservation lane\(s\) that reference the exported catalog: var_basin_default:regular:0/u);
   });
 
   it("refuses a product that still carries a tax class assignment", async () => {

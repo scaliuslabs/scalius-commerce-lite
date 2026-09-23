@@ -3,7 +3,7 @@
 // Used by the customer-auth route handler (apps/api/src/routes/customer-auth.ts).
 
 import { nanoid } from "nanoid";
-import { customers, customerSessions, deliveryLocations, siteSettings, settings as genericSettings } from "@scalius/database/schema";
+import { customers, customerSessions, deliveryLocations } from "@scalius/database/schema";
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -29,8 +29,6 @@ import {
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
-    normalizeCustomerAuthMethod,
-    normalizeCustomerAuthPolicy,
     resolveCustomerAuthChannelForRequest,
     type CustomerAuthOtpChannel,
     type CustomerAuthPolicyConfig,
@@ -40,6 +38,12 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
 import { isReady } from "@scalius/shared/readiness";
 import { getAllowedCountries } from "../settings/site-settings.service";
+import {
+    customerAuthDocument,
+    customerCountriesDocument,
+    type CustomerAuthSettings,
+} from "../settings/documents";
+import { selectSettingsDocuments } from "../settings/settings-store";
 
 // ─────────────────────────────────────────
 // Constants
@@ -99,7 +103,6 @@ export interface SendOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
-    migrationEncryptionKey?: string;
 }
 
 export interface SendOtpResult {
@@ -253,43 +256,22 @@ export function getCookieConfig(
     };
 }
 
-function parseStoredCustomerAuthPolicy(value: string | null | undefined): unknown {
-    if (!value) return undefined;
-    try {
-        return JSON.parse(value) as unknown;
-    } catch {
-        return undefined;
-    }
-}
-
 async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
-    settings: typeof siteSettings.$inferSelect;
+    settings: CustomerAuthSettings;
     policy: CustomerAuthPolicyConfig;
     phoneCountryPolicy: PhoneCountryPolicy;
 }> {
-    const [settingsRow, policyRow, allowedCountriesConfig] = await Promise.all([
-        db.select().from(siteSettings).limit(1).then((rows) => rows[0] ?? null),
-        db.select({ value: genericSettings.value })
-            .from(genericSettings)
-            .where(and(eq(genericSettings.category, "customer_auth"), eq(genericSettings.key, "policy")))
-            .get()
-            .catch(() => null),
-        getAllowedCountries(db),
+    const rows = await selectSettingsDocuments(db, [customerAuthDocument, customerCountriesDocument]);
+    const [auth, countries] = await Promise.all([
+        customerAuthDocument.fromRows(rows),
+        customerCountriesDocument.fromRows(rows),
     ]);
-
-    if (!settingsRow) {
-        throw new ServiceUnavailableError("Customer authentication settings are not initialized.");
-    }
-
     return {
-        settings: settingsRow,
-        policy: normalizeCustomerAuthPolicy(
-            parseStoredCustomerAuthPolicy(policyRow?.value),
-            settingsRow.authVerificationMethod,
-        ),
+        settings: auth.value,
+        policy: auth.value.policy,
         phoneCountryPolicy: {
-            countries: allowedCountriesConfig.allowedCountries,
-            mode: allowedCountriesConfig.allowedCountriesMode,
+            countries: countries.value.allowedCountries,
+            mode: countries.value.allowedCountriesMode,
         },
     };
 }
@@ -792,10 +774,7 @@ export async function sendOtp(
         }
     }
     if (channel === "whatsapp") {
-        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey, {
-            migrateLegacy: true,
-            migrationEncryptionKey: input.migrationEncryptionKey,
-        });
+        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
         if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
             throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
         }
@@ -850,7 +829,7 @@ export async function sendOtp(
     // Build queue payload via transport. The raw OTP is intentionally absent; the
     // consumer derives the code and recipient target from the challenge and delivery references.
     const queuePayload = transport.buildQueuePayload(
-        { ...settings, authVerificationMethod: normalizeCustomerAuthMethod(settings.authVerificationMethod) },
+        settings,
         channel,
         deliveryKey,
         challenge.expiresAt,

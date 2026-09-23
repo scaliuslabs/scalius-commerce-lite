@@ -53,9 +53,18 @@ describe("customer order email composition and delivery", () => {
 
   afterEach(() => sqlite.close());
 
+  /** Sets one field of a settings document (JSON values are stored as JSON). */
   function setting(key: string, value: string, category = "notifications") {
-    sqlite.prepare("INSERT OR REPLACE INTO settings (id, key, value, category, type) VALUES (?, ?, ?, ?, 'text')")
-      .run(`${category}:${key}`, key, value, category);
+    const [document, field, isJson] = ({
+      "business_info:company_name": ["business", "companyName", false],
+      "business_info:email": ["business", "email", false],
+      "business_info:phone": ["business", "phone", false],
+      "notifications:order_channels": ["notifications", "orderChannels", true],
+    } as const)[`${category}:${key}` as "notifications:order_channels"];
+    sqlite.prepare("INSERT OR IGNORE INTO settings (id, key, value, category, type) VALUES (?, 'document', '{}', ?, 'json')")
+      .run(document, document);
+    sqlite.prepare(`UPDATE settings SET value = json_set(value, '$.${field}', ${isJson ? "json(?)" : "?"}) WHERE category = ?`)
+      .run(value, document);
   }
 
   async function send(type: OrderNotificationType = "order_confirmed", input: {
@@ -107,7 +116,7 @@ describe("customer order email composition and delivery", () => {
     failItemRead = true;
     await send();
     expect(transport.sendEmail).toHaveBeenCalledTimes(1);
-    expect(reads.some((query) => query.includes('"order_items"') || query.includes("business_info"))).toBe(false);
+    expect(reads.some((query) => query.includes('"order_items"') || query.includes('"business"'))).toBe(false);
     expect(sqlite.prepare("SELECT attempts FROM order_notification_delivery_receipts").get()).toMatchObject({ attempts: 1 });
   });
 
@@ -143,7 +152,7 @@ describe("customer order email composition and delivery", () => {
       await sendOrderNotificationEmail("buyer@example.test", "Buyer", "order_email", "order_confirmed", {}, db);
     }
     expect(transport.sendEmail).not.toHaveBeenCalled();
-    expect(reads.some((query) => query.includes('"order_items"') || query.includes("business_info"))).toBe(false);
+    expect(reads.some((query) => query.includes('"order_items"') || query.includes('"business"'))).toBe(false);
   });
 
   it.each([
@@ -237,7 +246,7 @@ describe("customer order email composition and delivery", () => {
   });
 
   it.each(["", "javascript:alert(1)", "https://user:secret@shop.example.test", "https://shop.example.test/path?buyer=private", "http://public.example.test"])("omits invalid storefront origin %s and absent business facts", async (origin) => {
-    sqlite.exec("DELETE FROM settings WHERE category = 'business_info'");
+    sqlite.exec("DELETE FROM settings WHERE category = 'business'");
     await send("order_confirmed", { origin });
     const email = message();
     expect(email.links).toEqual([]);

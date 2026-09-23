@@ -1,5 +1,12 @@
 export type StripeCredentialEnvironment = "test" | "live" | "mixed" | "unknown";
 
+/** SSLCommerz accepts BDT charges only within this range (major units). */
+export const SSL_COMMERZ_BDT_AMOUNT_LIMITS = {
+  currency: "BDT",
+  min: 10,
+  max: 500000,
+} as const;
+
 function getStripeKeyEnvironment(
   value: unknown,
   keyType: "secret" | "publishable",

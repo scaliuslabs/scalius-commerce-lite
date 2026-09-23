@@ -194,14 +194,17 @@ describe("deploy target wiring", () => {
   });
 
   it("accepts only the platform Workers that remain", () => {
-    for (const target of ["api", "admin", "storefront"]) {
+    for (const target of ["api", "storefront"]) {
       expect(parseOnlyTarget(["--only", target])).toEqual({ ok: true, target });
     }
 
-    expect(parseOnlyTarget(["--only", "removed-worker"])).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("api, admin, storefront"),
-    });
+    // The dashboard is the API Worker's static assets, not a Worker of its own.
+    for (const target of ["admin", "removed-worker"]) {
+      expect(parseOnlyTarget(["--only", target])).toMatchObject({
+        ok: false,
+        message: expect.stringContaining("api, storefront"),
+      });
+    }
   });
 
   it("passes an explicit provider-specific Wrangler config only to the API deploy", () => {
@@ -216,12 +219,13 @@ describe("deploy target wiring", () => {
   });
 
   it("keeps typechecking and deployment commands on supported workspaces", () => {
-    expect(getTypecheckCommandForTarget("api")).toContain("--filter @scalius/api typecheck");
-    expect(getTypecheckCommandForTarget("admin")).toContain("--filter @scalius/admin-v2 typecheck");
+    expect(getTypecheckCommandForTarget("api")).toContain(
+      "--workspace-concurrency=1 --filter @scalius/admin-v2 --filter @scalius/api typecheck",
+    );
+    expect(getTypecheckCommandForTarget("storefront")).toContain("--filter @scalius/storefront typecheck");
     expect(getSequentialWorkspaceCommand("typecheck")).toContain("--concurrency=1");
     expect(getSequentialWorkspaceCommand("build")).toContain("--concurrency=1");
-    expect(getBuildCommandForTarget("api")).toContain("--filter @scalius/api build");
-    expect(getBuildCommandForTarget("admin")).toContain("--filter @scalius/admin-v2 build");
+    expect(getBuildCommandForTarget("api")).toContain("turbo run build --filter=@scalius/api --concurrency=1");
     expect(getBuildCommandForTarget("storefront")).toContain("--filter @scalius/storefront build");
     expect(() => getBuildCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
@@ -552,21 +556,12 @@ describe("post-deploy verification URLs", () => {
     const deploymentUrls = { storefrontUrl: "https://shop.example.test", apiUrl: "https://api.example.test" };
     const verifyApiDeployImpl = vi.fn();
     const verifyStorefrontDeployImpl = vi.fn();
-    const verifyLatestWorkerDeploymentImpl = vi.fn();
-    const options = {
-      deploymentUrls,
-      verifyApiDeployImpl,
-      verifyStorefrontDeployImpl,
-      verifyLatestWorkerDeploymentImpl,
-    };
+    const options = { deploymentUrls, verifyApiDeployImpl, verifyStorefrontDeployImpl };
 
     await verifyPostDeployTarget("api", { name: "scalius-api" }, null, options);
     expect(verifyApiDeployImpl).toHaveBeenCalledWith({ name: "scalius-api" }, null, options);
 
     await verifyPostDeployTarget("storefront", { name: "scalius-api" }, null, options);
     expect(verifyStorefrontDeployImpl).toHaveBeenCalledWith(options);
-
-    await verifyPostDeployTarget("admin", { name: "scalius-api" }, null, options);
-    expect(verifyLatestWorkerDeploymentImpl).toHaveBeenCalledWith(expect.stringMatching(/apps\/admin-v2$/), "Admin V2 Worker");
   });
 });

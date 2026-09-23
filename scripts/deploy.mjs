@@ -3,9 +3,8 @@
  * deploy.mjs — Full deploy pipeline for Cloudflare Workers
  *
  * Usage:
- *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy all workers)
- *   node scripts/deploy.mjs --only api       # typecheck + build/deploy API and migrate D1
- *   node scripts/deploy.mjs --only admin     # typecheck + build/deploy admin
+ *   node scripts/deploy.mjs                  # full deploy (build + migrate + deploy both workers)
+ *   node scripts/deploy.mjs --only api       # typecheck + build dashboard SPA and API, migrate D1, deploy API
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
@@ -27,7 +26,9 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces
  *   2. D1 migration, or read-only external schema compatibility preflight
- *   3. wrangler deploy   — deploys the API, Admin, and Storefront Workers
+ *   3. wrangler deploy   — deploys the API Worker (which also serves the
+ *                          dashboard SPA from its ASSETS binding) and the
+ *                          Storefront Worker
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1).
  */
@@ -41,7 +42,6 @@ import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-util
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
-const adminV2Dir = resolve(root, "apps", "admin-v2");
 const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
@@ -61,12 +61,11 @@ const PLATFORM_CONFIG_PATH = "/api/v1/platform";
 const PLATFORM_CONFIG_TIMEOUT_MS = 10_000;
 const API_URL_HINT = "pass --api-url https://api.example.com (or set SCALIUS_API_URL)";
 const STOREFRONT_URL_HINT = "pass --storefront-url https://shop.example.com (or set SCALIUS_STOREFRONT_URL)";
-const deployTargets = ["api", "admin", "storefront"];
-const selectableDeployTargets = deployTargets;
+const deployTargets = ["api", "storefront"];
+// The API Worker deploys apps/admin-v2/dist as its static assets.
 const appDirsByTarget = {
-  api: "apps/api",
-  admin: "apps/admin-v2",
-  storefront: "apps/storefront",
+  api: ["apps/admin-v2", "apps/api"],
+  storefront: ["apps/storefront"],
 };
 export const storefrontStaticPostDeployWarmPaths = [
   "/robots.txt",
@@ -194,7 +193,7 @@ function runWithRetry(cmd, label, cwd = root, maxRetries = 3) {
 }
 
 function validateOnlyTarget() {
-  const result = parseOnlyTarget(args, selectableDeployTargets);
+  const result = parseOnlyTarget(args);
   if (result.ok) return result.target;
 
   console.error(result.message);
@@ -219,9 +218,8 @@ export function parseOnlyTarget(inputArgs, targets = deployTargets) {
 export function getBuildCommandForTarget(target) {
   switch (target) {
     case "api":
-      return `${pnpm} --filter @scalius/api build`;
-    case "admin":
-      return `${pnpm} --filter @scalius/admin-v2 build`;
+      // Turbo builds the dashboard SPA first (@scalius/api#build in turbo.json).
+      return `${pnpm} exec turbo run build --filter=@scalius/api --concurrency=1`;
     case "storefront":
       return `${pnpm} --filter @scalius/storefront build`;
     default:
@@ -230,13 +228,13 @@ export function getBuildCommandForTarget(target) {
 }
 
 export function getTypecheckCommandForTarget(target) {
-  const workspace = {
-    api: "@scalius/api",
-    admin: "@scalius/admin-v2",
-    storefront: "@scalius/storefront",
+  const workspaces = {
+    api: ["@scalius/admin-v2", "@scalius/api"],
+    storefront: ["@scalius/storefront"],
   }[target];
-  if (!workspace) throw new Error(`Unknown deploy target: ${target}`);
-  return `${pnpm} --filter ${workspace} typecheck`;
+  if (!workspaces) throw new Error(`Unknown deploy target: ${target}`);
+  const filters = workspaces.map((workspace) => `--filter ${workspace}`).join(" ");
+  return `${pnpm} --workspace-concurrency=1 ${filters} typecheck`;
 }
 
 export function getSequentialWorkspaceCommand(task) {
@@ -282,12 +280,6 @@ export function getDeployCommandForTarget(target, apiWranglerConfigPath = null) 
         label: "Deploy API Worker",
         cwd: apiDir,
       };
-    case "admin":
-      return {
-        cmd: `${pnpm} exec wrangler deploy`,
-        label: "Deploy Admin V2 Worker",
-        cwd: adminV2Dir,
-      };
     case "storefront":
       return {
         cmd: `${pnpm} exec wrangler deploy --config dist/server/wrangler.json`,
@@ -301,8 +293,7 @@ export function getDeployCommandForTarget(target, apiWranglerConfigPath = null) 
 
 function buildTarget(target) {
   const labels = {
-    api: "Build API workspace",
-    admin: "Build Admin V2 workspace",
+    api: "Build dashboard SPA and API workspace",
     storefront: "Build Storefront workspace",
   };
   run(getBuildCommandForTarget(target), labels[target]);
@@ -486,7 +477,7 @@ function getReadinessCheckSummary(payload) {
 /**
  * Readiness checks that describe merchant setup state rather than
  * infrastructure. Platform origins are saved in the dashboard after the
- * dashboard Worker is deployed, so a fresh deployment legitimately reports
+ * API Worker (which serves the dashboard) is deployed, so a fresh deployment legitimately reports
  * them as missing while every binding and secret is healthy.
  */
 const SETUP_PENDING_READINESS_CHECKS = new Set(["platform_config"]);
@@ -956,26 +947,6 @@ async function verifyApiDeploy(config, apiWranglerConfigPath = null, options = {
   await sampleApiReadiness(apiBaseUrl);
 }
 
-function verifyLatestWorkerDeployment(cwd, label, configPath = null) {
-  const configFlag = configPath ? ` --config ${shellQuote(configPath)}` : "";
-  const deployments = runJson(
-    `${pnpm} exec wrangler deployments list --json${configFlag}`,
-    `Verify latest ${label} deployment`,
-    cwd,
-  );
-  const latest = getLatestDeployment(deployments);
-  const deployedVersion = getFullyServedVersion(latest);
-  if (!latest || !deployedVersion?.version_id) {
-    throw new Error(
-      `Could not prove the latest ${label} deployment is serving one version at 100%.`,
-    );
-  }
-  console.log(
-    `✓ Latest ${label} deployment serves ${deployedVersion.version_id} at 100%.`,
-  );
-  return deployedVersion.version_id;
-}
-
 export async function verifyPostDeployTarget(
   target,
   apiConfig,
@@ -983,16 +954,11 @@ export async function verifyPostDeployTarget(
   options = {},
 ) {
   const verifyApiDeployImpl = options.verifyApiDeployImpl ?? verifyApiDeploy;
-  const verifyLatestWorkerDeploymentImpl =
-    options.verifyLatestWorkerDeploymentImpl ?? verifyLatestWorkerDeployment;
   const verifyStorefrontDeployImpl =
     options.verifyStorefrontDeployImpl ?? verifyStorefrontDeploy;
 
   if (target === "api") {
     await verifyApiDeployImpl(apiConfig, apiWranglerConfigPath, options);
-  }
-  if (target === "admin") {
-    verifyLatestWorkerDeploymentImpl(adminV2Dir, "Admin V2 Worker");
   }
   if (target === "storefront") {
     await verifyStorefrontDeployImpl(options);
@@ -1000,7 +966,7 @@ export async function verifyPostDeployTarget(
 }
 
 function checkDistEnvFiles(targets = deployTargets) {
-  const appDirs = targets.map((target) => appDirsByTarget[target]).join(" ");
+  const appDirs = targets.flatMap((target) => appDirsByTarget[target]).join(" ");
   run(
     `node scripts/clean-dist-env-files.mjs --check ${appDirs}`,
     "Verify app dist outputs do not contain local env files",
@@ -1180,7 +1146,7 @@ export async function main() {
     // are already current without mutating them.
     prepareSelectedProviderSchema();
 
-    // 4. Deploy all workers (admin-v2 replaces the old Astro admin)
+    // 4. Deploy both workers
     for (const targetName of deployTargets) {
       deployTarget(targetName);
       await verifyPostDeployTarget(targetName, config, null, { deploymentUrls });

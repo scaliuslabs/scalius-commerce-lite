@@ -1,9 +1,10 @@
-import { eq, isNull } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { analytics, metaConversionsSettings } from "@scalius/database/schema";
+import { analytics } from "@scalius/database/schema";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
+import { metaConversionsDocument } from "../settings/documents";
 import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   analyticsScriptTypes,
@@ -86,6 +87,8 @@ interface MetaCapiSettingsForHealth {
   pixelId: string | null;
   accessToken: string | null;
   isEnabled: boolean;
+  /** Set when the settings reader could not decrypt the stored token. */
+  accessTokenError?: string | null;
 }
 
 interface BuildAnalyticsProviderHealthOptions {
@@ -350,7 +353,7 @@ export async function buildMetaCapiServerSideReadiness(
     "Meta Conversions API access token",
   );
 
-  if (accessTokenRead.error) {
+  if (settings.accessTokenError || accessTokenRead.error) {
     return {
       status: "blocked",
       configured: false,
@@ -426,7 +429,7 @@ export async function getAnalyticsProviderHealth(
   db: Database,
   options: GetAnalyticsProviderHealthOptions = {},
 ): Promise<AnalyticsProviderHealthResponse> {
-  const [scripts, metaSettings] = await Promise.all([
+  const [scripts, meta] = await Promise.all([
     db
       .select({
         type: analytics.type,
@@ -436,21 +439,15 @@ export async function getAnalyticsProviderHealth(
       .from(analytics)
       .where(isNull(analytics.deletedAt))
       .all(),
-    db
-      .select({
-        pixelId: metaConversionsSettings.pixelId,
-        accessToken: metaConversionsSettings.accessToken,
-        isEnabled: metaConversionsSettings.isEnabled,
-      })
-      .from(metaConversionsSettings)
-      .where(eq(metaConversionsSettings.id, "singleton"))
-      .get(),
+    metaConversionsDocument.readDetailed(db, {
+      encryptionKey: options.credentialEncryptionKey,
+    }),
   ]);
 
-  const metaServerSide = await buildMetaCapiServerSideReadiness(
-    metaSettings,
-    options.credentialEncryptionKey,
-  );
+  const metaServerSide = await buildMetaCapiServerSideReadiness({
+    ...meta.value,
+    accessTokenError: meta.secretErrors.accessToken,
+  });
 
   return buildAnalyticsProviderHealth(scripts, { metaServerSide });
 }

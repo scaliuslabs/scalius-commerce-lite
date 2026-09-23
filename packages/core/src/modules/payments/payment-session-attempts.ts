@@ -2,16 +2,14 @@ import type { Database } from "@scalius/database/client";
 import { paymentSessionAttempts } from "@scalius/database/schema";
 import { and, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import type { PaymentGateway, PaymentType } from "./types";
-
-export type PaymentSessionGateway = Exclude<PaymentGateway, "cod">;
+import type { PaymentType } from "./types";
 
 export interface PaymentSessionAttemptIdentity {
   attemptKey: string;
   requestHash: string;
   transactionSuffix: string;
   orderId: string;
-  gateway: PaymentSessionGateway;
+  gateway: string;
   paymentType: PaymentType;
   amount: number;
   currency: string;
@@ -19,7 +17,7 @@ export interface PaymentSessionAttemptIdentity {
 
 export interface BuildPaymentSessionAttemptIdentityInput {
   orderId: string;
-  gateway: PaymentSessionGateway;
+  gateway: string;
   paymentType: PaymentType;
   amount: number;
   currency: string;
@@ -48,7 +46,7 @@ export type PaymentSessionAttemptProcessingResult = {
   retryable: true;
   retryAfterSeconds: number;
   orderId: string;
-  gateway: PaymentSessionGateway;
+  gateway: string;
   paymentType: PaymentType;
   message: string;
 };
@@ -567,7 +565,7 @@ function processingResultFromAttempt(row: AttemptRow): PaymentSessionAttemptProc
     retryable: true,
     retryAfterSeconds: PAYMENT_SESSION_PROCESSING_RETRY_AFTER_SECONDS,
     orderId: row.orderId,
-    gateway: row.gateway as PaymentSessionGateway,
+    gateway: row.gateway,
     paymentType: row.paymentType as PaymentType,
     message: "Payment session creation is already processing. Please try again shortly.",
   };

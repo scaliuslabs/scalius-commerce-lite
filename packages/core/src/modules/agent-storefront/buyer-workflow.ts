@@ -27,7 +27,11 @@ import {
   resolveExistingCheckoutAttempt,
   type StorefrontOrderCommitPayload,
 } from "@scalius/core/modules/orders";
-import { getSSLCommerzBdtAmountLimitIssue } from "@scalius/core/modules/payments/sslcommerz";
+import {
+  getCheckoutGatewayPrecommitIssue,
+  getPaymentMethodCurrencyIssue,
+  isOnlinePaymentMethod,
+} from "@scalius/core/modules/payments/gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -80,7 +84,7 @@ export interface AgentStorefrontCheckoutSubmitInput {
   customerEmail: string | null;
   shippingAddress: string;
   notes: string | null;
-  paymentMethod: "cod" | "stripe" | "sslcommerz";
+  paymentMethod: string;
 }
 
 export interface AgentStorefrontCheckoutSubmitView {
@@ -350,9 +354,10 @@ export async function submitAgentStorefrontCheckout(
       "The authorized customer account is missing its required phone number.",
     );
   }
-  if (input.paymentMethod === PaymentMethod.SSLCOMMERZ && authority.currency.currencyCode !== "BDT") {
-    throw new ValidationError("SSLCommerz checkout requires the store currency to be BDT.");
-  }
+  const gatewayCurrencyIssue = isOnlinePaymentMethod(input.paymentMethod)
+    ? getPaymentMethodCurrencyIssue(input.paymentMethod, authority.currency.currencyCode)
+    : null;
+  if (gatewayCurrencyIssue) throw new ValidationError(gatewayCurrencyIssue);
 
   const data = {
     checkoutRequestId: requestId,
@@ -462,16 +467,14 @@ export async function submitAgentStorefrontCheckout(
     currentQuoteFingerprint,
   );
 
-  if (input.paymentMethod === PaymentMethod.SSLCOMMERZ) {
-    const configuredDeposit = checkoutSettings.partialPaymentAmount;
-    const charge = checkoutSettings.partialPaymentEnabled
-      && configuredDeposit > 0
-      && configuredDeposit < prepared.totalAmount
-      ? configuredDeposit
-      : prepared.totalAmount;
-    const issue = getSSLCommerzBdtAmountLimitIssue(charge);
-    if (issue) throw new ValidationError(issue);
-  }
+  const gatewayAmountIssue = getCheckoutGatewayPrecommitIssue({
+    paymentMethod: input.paymentMethod,
+    currencyCode: prepared.taxQuote.currencyCode,
+    totalAmount: prepared.totalAmount,
+    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+    partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+  });
+  if (gatewayAmountIssue) throw new ValidationError(gatewayAmountIssue);
 
   const response: AgentStorefrontCheckoutSubmitView = {
     status: "complete",
@@ -493,8 +496,9 @@ export async function submitAgentStorefrontCheckout(
       : "Order created. Start secure payment with storefront.orders.payment.begin.",
   };
 
+  let committed: Awaited<ReturnType<typeof commitStorefrontOrderPayload>>;
   try {
-    await withCheckoutStage("AGENT_CHECKOUT_COMMIT", () => commitStorefrontOrderPayload(db, prepared.commitPayload, {
+    committed = await withCheckoutStage("AGENT_CHECKOUT_COMMIT", () => commitStorefrontOrderPayload(db, prepared.commitPayload, {
       attempt,
       response,
       agentContext: {
@@ -518,7 +522,7 @@ export async function submitAgentStorefrontCheckout(
   return {
     response,
     postCommitPayload: prepared.commitPayload,
-    availabilityVariantIds: [...new Set(prepared.commitPayload.items.map((item) => item.variantId))],
+    availabilityVariantIds: committed.availabilityTransitionVariantIds,
   };
 }
 

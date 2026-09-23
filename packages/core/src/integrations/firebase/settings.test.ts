@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   FIREBASE_READINESS_CODES,
   getFirebaseServiceAccountReadiness,
   normalizeFirebaseServiceAccountJson,
-  readFirebaseServiceAccountJsonFromStoredValue,
   readFirebaseSettings,
 } from "./settings";
 
@@ -18,32 +18,14 @@ const serviceAccountJson = JSON.stringify({
   project_id: "scalius-test",
 });
 
-/**
- * Pre-document storage: the legacy `service_account` row exists and there is
- * no settings-document row yet, so every read assembles from the legacy rows.
- */
+/** Stores the Firebase document with the service account exactly as given. */
 function createReadinessDb(value: string | null) {
-  const upserts: Array<Record<string, unknown>> = [];
-  const db = {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => undefined),
-          all: vi.fn(async () =>
-            value === null ? [] : [{ key: "service_account", value }]),
-        })),
-      })),
-    })),
-    insert: vi.fn(() => ({
-      values: vi.fn((values: Record<string, unknown>) => ({
-        onConflictDoUpdate: vi.fn(() => {
-          upserts.push(values);
-          return values;
-        }),
-      })),
-    })),
-  };
-  return Object.assign(db, { upserts });
+  const { db, sqlite } = createSqliteD1Database();
+  if (value !== null) {
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('firebase', 'document', ?, 'json', 'firebase')")
+      .run(JSON.stringify({ serviceAccount: value, publicConfig: {} }));
+  }
+  return db;
 }
 
 describe("Firebase credential settings", () => {
@@ -51,39 +33,20 @@ describe("Firebase credential settings", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps legacy plaintext service accounts readable", async () => {
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue(serviceAccountJson, credentialKey),
-    ).resolves.toBe(serviceAccountJson);
-  });
-
-  it("reads encrypted service accounts with the credential encryption key only", async () => {
+  it("reads stored service accounts with the credential encryption key only", async () => {
     const storedValue = encodeEncryptedCredential(
       await encryptCredentials(serviceAccountJson, credentialKey),
     );
-    const otherKey = Buffer.alloc(32, 18).toString("base64");
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue(storedValue, credentialKey),
-    ).resolves.toBe(serviceAccountJson);
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue(storedValue, otherKey),
-    ).resolves.toBeUndefined();
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue(storedValue),
-    ).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not return unreadable encrypted service account ciphertext", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue("enc:not-valid-aes-gcm", credentialKey),
-    ).resolves.toBeUndefined();
-    await expect(
-      readFirebaseServiceAccountJsonFromStoredValue("enc:not-decrypted-without-key"),
-    ).resolves.toBeUndefined();
+
+    await expect(readFirebaseSettings(createReadinessDb(serviceAccountJson), credentialKey))
+      .resolves.toMatchObject({ serviceAccountJson });
+    await expect(readFirebaseSettings(createReadinessDb(storedValue), credentialKey))
+      .resolves.toMatchObject({ serviceAccountStored: true, serviceAccountJson });
+    await expect(readFirebaseSettings(createReadinessDb(storedValue), Buffer.alloc(32, 18).toString("base64")))
+      .resolves.toMatchObject({ serviceAccountStored: true, serviceAccountJson: undefined });
+    await expect(readFirebaseSettings(createReadinessDb(storedValue)))
+      .resolves.toMatchObject({ serviceAccountStored: true, serviceAccountJson: undefined });
   });
 
   it("validates required Firebase service account fields", () => {
@@ -101,7 +64,7 @@ describe("Firebase credential settings", () => {
 
     await expect(
       getFirebaseServiceAccountReadiness(
-        createReadinessDb(storedValue) as never,
+        createReadinessDb(storedValue),
         credentialKey,
       ),
     ).resolves.toEqual({
@@ -115,7 +78,7 @@ describe("Firebase credential settings", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await expect(
       getFirebaseServiceAccountReadiness(
-        createReadinessDb("enc:not-valid-aes-gcm") as never,
+        createReadinessDb("enc:not-valid-aes-gcm"),
         credentialKey,
       ),
     ).resolves.toEqual({
@@ -129,39 +92,6 @@ describe("Firebase credential settings", () => {
     });
   });
 
-  it("assembles the legacy rows into the settings document on first read", async () => {
-    const storedValue = encodeEncryptedCredential(
-      await encryptCredentials(serviceAccountJson, credentialKey),
-    );
-    const db = createReadinessDb(storedValue);
-
-    await expect(
-      readFirebaseSettings(db as never, credentialKey),
-    ).resolves.toMatchObject({
-      serviceAccountStored: true,
-      serviceAccountJson,
-    });
-
-    expect(db.upserts).toHaveLength(1);
-    const written = JSON.parse(String(db.upserts[0]?.value)) as Record<string, string>;
-    expect(db.upserts[0]).toMatchObject({ category: "firebase", key: "config" });
-    expect(written.serviceAccount).toMatch(/^enc:/);
-    expect(String(db.upserts[0]?.value)).not.toContain("scalius-test");
-  });
-
-  it("never replaces an undecryptable legacy credential with an empty document", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const db = createReadinessDb("enc:not-valid-aes-gcm");
-
-    await expect(
-      readFirebaseSettings(db as never, credentialKey),
-    ).resolves.toMatchObject({
-      serviceAccountStored: true,
-      serviceAccountJson: undefined,
-    });
-    expect(db.upserts).toHaveLength(0);
-  });
-
   it("reports no source when nothing is stored, even if a legacy env value is present", async () => {
     const previous = process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON;
     process.env.FIREBASE_SERVICE_ACCOUNT_CRED_JSON = serviceAccountJson;
@@ -170,7 +100,7 @@ describe("Firebase credential settings", () => {
       for (const stored of [null, "", "   "]) {
         await expect(
           getFirebaseServiceAccountReadiness(
-            createReadinessDb(stored) as never,
+            createReadinessDb(stored),
             credentialKey,
           ),
         ).resolves.toEqual({

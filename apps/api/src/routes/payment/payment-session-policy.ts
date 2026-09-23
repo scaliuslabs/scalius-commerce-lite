@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { PaymentPlanStatus, PaymentStatus, paymentPlans, siteSettings } from "@scalius/database/schema";
+import { PaymentPlanStatus, PaymentStatus, paymentPlans } from "@scalius/database/schema";
+import { checkoutDocument } from "@scalius/core/modules/settings/documents";
 import { getUnpayableOrderReason } from "@scalius/core/modules/payments/payable-order";
 import {
   orderMoneyEqual,
@@ -106,14 +107,8 @@ function optionalMinorAmount(amount: number, currency: OrderCurrencySnapshot): n
 
 type PartialPaymentSettings = Pick<CheckoutFlowSettings, "partialPaymentEnabled" | "partialPaymentAmount">;
 
-async function getPartialPaymentSettings(db: Database): Promise<PartialPaymentSettings | null | undefined> {
-  return db
-    .select({
-      partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-      partialPaymentAmount: siteSettings.partialPaymentAmount,
-    })
-    .from(siteSettings)
-    .get();
+async function getPartialPaymentSettings(db: Database): Promise<PartialPaymentSettings> {
+  return checkoutDocument.read(db);
 }
 
 async function getPaymentPlan(db: Database, orderId: string) {

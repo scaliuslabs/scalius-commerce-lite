@@ -70,25 +70,25 @@ The browser side (Firebase SDK init, token registration, foreground messages) li
 
 ## Admin Dashboard Integration
 
-### `getFirebaseConfig()` (`apps/admin-v2/src/lib/api-server-fns.ts`)
+### Public config (`apps/admin-v2/src/lib/api-query-options/firebase.ts`)
 
-A TanStack server function that fetches the public Firebase config from
-`GET /api/v1/auth/firebase-config` and normalizes it to `Record<string, string>`.
-No env-var default or merge: an unset field is simply absent from the result.
+A React Query option that reads `GET /api/v1/auth/firebase-config` and
+normalizes it to `Record<string, string>`. No env-var default or merge: an
+unset field is simply absent from the result.
 
-### `/firebase-messaging-sw.js` (`apps/admin-v2/src/routes/firebase-messaging-sw[.]js.tsx`)
+### `/firebase-messaging-sw.js` (`apps/admin-v2/public/firebase-messaging-sw.js`)
 
-Generates a dynamic service worker at `/firebase-messaging-sw.js`:
-1. Reads the public Firebase config through `fetchApi()` (the `API` service binding in production, local HTTP in `vite dev`) from `GET /api/v1/auth/firebase-config`. There is no environment-variable fallback or default config.
-2. If `apiKey` is missing (unconfigured or the read failed), returns a no-op service worker that logs a warning instead of a broken one.
-3. Otherwise outputs a script that imports the Firebase compat SDK (v9.15.0) and initializes messaging.
-4. Handles `onBackgroundMessage`: Shows browser notification with order details, "View Order" link, and custom icon.
-5. Handles `notificationclick`: Focuses existing admin tab or opens new window to the order URL.
+A static service worker. The dashboard registers it with the public Firebase
+config (never a secret; `vapidKey` omitted) in the script URL's query string:
+1. Without an `apiKey` it initializes nothing.
+2. Otherwise it imports the Firebase compat SDK (v9.15.0) and initializes messaging.
+3. Handles `onBackgroundMessage`: Shows browser notification with order details and a link below the registration scope (so a dashboard base path is kept).
+4. Handles `notificationclick`: Focuses an existing admin tab or opens a new window to the order URL.
 
 ## API Endpoints
 
 ### `GET /api/v1/auth/firebase-config`
-Returns public Firebase config from DB settings table (category `firebase`, key `public_config`). Used by both the client init and the service worker.
+Returns public Firebase config from DB settings table (category `firebase`, key `public_config`). Used by the dashboard's push-notification setup.
 
 ### `POST /api/v1/admin/fcm-token`
 Registers an FCM token for push notifications. Validates user ownership. Upserts into `adminFcmTokens` table (conflict on unique `token` column).

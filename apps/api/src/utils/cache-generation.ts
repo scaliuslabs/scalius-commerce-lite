@@ -8,7 +8,6 @@
 // when an availability band changes, so public stock stays band-only.
 import { getDb, type Database } from "@scalius/database/client";
 import { cacheGeneration, productVariants } from "@scalius/database/schema";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { eq, inArray } from "drizzle-orm";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import {
@@ -216,7 +215,7 @@ async function loadBuyerAvailabilityRows(
         id: productVariants.id,
         stock: productVariants.stock,
         preorderStock: productVariants.preorderStock,
-        reservedStock: effectiveRegularReservedStockSql(),
+        reservedStock: productVariants.reservedStock,
         trackInventory: productVariants.trackInventory,
         allowPreorder: productVariants.allowPreorder,
         lowStockThreshold: productVariants.lowStockThreshold,
@@ -229,9 +228,9 @@ async function loadBuyerAvailabilityRows(
 }
 
 /**
- * Direct checkout is the compatibility lane; the high-throughput coordinator
- * reports transitions without this read. Conservatively return every affected
- * variant if authority cannot be read after the commit.
+ * Post-commit band check for callers whose commit does not report its counter
+ * after-state (storefront checkout reads it from its own batch). Conservatively
+ * returns every affected variant if the read fails.
  */
 export async function findCheckoutReservationAvailabilityTransitions(
   db: Database,

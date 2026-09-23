@@ -90,31 +90,25 @@ describe("checkout authority fence", () => {
     `);
     expect(revision(database)).toBe(beforeLastUsed);
 
+    // Meta CAPI settings are a settings document; every stored change fences checkout.
     const beforeMeta = revision(database);
     database.exec(`
-      INSERT INTO meta_conversions_settings (
-        id, singleton_key, pixel_id, access_token, is_enabled,
-        log_retention_days, created_at, updated_at
-      ) VALUES (
-        'meta_fence', 'default', 'pixel_fence', 'token_fence', 0,
-        30, unixepoch(), unixepoch()
-      );
+      INSERT INTO settings (id, key, value, type, category)
+      VALUES ('meta_fence', 'document', '{"pixelId":"pixel_fence","isEnabled":false}', 'json', 'meta_conversions');
     `);
     expect(revision(database)).toBe(beforeMeta + 1);
 
     database.exec(`
-      UPDATE meta_conversions_settings
-      SET is_enabled = 1, updated_at = unixepoch()
+      UPDATE settings
+      SET value = '{"pixelId":"pixel_fence","isEnabled":true}', revision = revision + 1
       WHERE id = 'meta_fence';
     `);
     expect(revision(database)).toBe(beforeMeta + 2);
 
-    const beforeRetention = revision(database);
+    const beforeTimestamp = revision(database);
     database.exec(`
-      UPDATE meta_conversions_settings
-      SET log_retention_days = 60, updated_at = unixepoch()
-      WHERE id = 'meta_fence';
+      UPDATE settings SET updated_at = unixepoch() + 1 WHERE id = 'meta_fence';
     `);
-    expect(revision(database)).toBe(beforeRetention);
+    expect(revision(database)).toBe(beforeTimestamp);
   });
 });

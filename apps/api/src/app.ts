@@ -15,10 +15,8 @@ import { footerRoutes } from "./routes/footer";
 import { pagesRoutes } from "./routes/pages";
 import { articleRoutes } from "./routes/articles";
 import { orderRoutes } from "./routes/orders";
-import { stripePaymentRoutes } from "./routes/payment/stripe-routes";
-import { sslcommerzPaymentRoutes } from "./routes/payment/sslcommerz-routes";
-import { stripeWebhookRoutes } from "./routes/webhooks/stripe";
-import { sslcommerzWebhookRoutes } from "./routes/webhooks/sslcommerz";
+import { paymentRoutes } from "./routes/payment/payment-routes";
+import { paymentWebhookRoutes } from "./routes/webhooks/payments";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { discountRoutes } from "./routes/discounts";
@@ -53,7 +51,10 @@ import {
 
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
-import { cookieOriginGuardMiddleware } from "./middleware/cookie-origin-guard";
+import {
+  cookieOriginGuardMiddleware,
+  dashboardOriginGuardMiddleware,
+} from "./middleware/cookie-origin-guard";
 import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
@@ -123,7 +124,7 @@ app.route("/discounts", discountRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
 app.route("/storefront", storefrontRoutes);
-// Public platform origins consumed by the storefront and dashboard Workers
+// Public platform origins consumed by the storefront Worker and the dashboard
 app.route("/platform", platformRoutes);
 // Compatibility discovery for automated deployments (release, API majors, schema revision)
 app.route("/meta", metaRoutes);
@@ -181,15 +182,15 @@ app.route("/__ptproxy", partytownProxyRoutes);
 // Webhook routes — NO auth middleware (signature verification IS the auth)
 // Must be registered BEFORE the auth middleware block
 app.use("/webhooks/*", webhookBodyLimitMiddleware);
-app.route("/webhooks/stripe", stripeWebhookRoutes);
-app.route("/webhooks/sslcommerz", sslcommerzWebhookRoutes);
 app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
+// Payment gateways: /webhooks/{provider}. Registered after the courier routes.
+app.route("/webhooks", paymentWebhookRoutes);
 
 // Apply protection only to paths needing it. The storefront order router is
 // public but proof/origin guarded: checkout create/cart-validation/status/receipt
 // must stay reachable without a bearer token.
-app.use("/cache/*", cookieOriginGuardMiddleware);
+app.use("/cache/*", dashboardOriginGuardMiddleware);
 app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", cookieOriginGuardMiddleware);
 
@@ -205,7 +206,7 @@ app.route("/orders", orderRoutes);
 // The /admin/* routes are strictly protected by adminAuthMiddleware.
 // It verifies an active Better Auth dashboard session; scanner cookies are
 // limited to exact scanner workflow endpoints inside the middleware.
-app.use("/admin/*", cookieOriginGuardMiddleware);
+app.use("/admin/*", dashboardOriginGuardMiddleware);
 app.use("/admin/*", adminAuthMiddleware);
 
 // Register Admin routes
@@ -240,8 +241,7 @@ app.route("/admin/settings/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/setup", authSetupRoutes);
 
 // Payment routes — session/intent creation is public (storefront)
-app.route("/payment/stripe", stripePaymentRoutes);
-app.route("/payment/sslcommerz", sslcommerzPaymentRoutes);
+app.route("/payment", paymentRoutes);
 
 // Add Swagger UI documentation (relative path '/docs')
 // Swagger URL needs full path as it's resolved by browser/Swagger tool

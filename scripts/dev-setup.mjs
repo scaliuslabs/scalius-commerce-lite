@@ -5,8 +5,8 @@
  * Usage: pnpm dev:setup
  *
  * 1. Installs dependencies
- * 2. Generates the two installed secrets and creates .dev.vars for all three
- *    Workers (SCALIUS_SECRET everywhere; CREDENTIAL_ENCRYPTION_KEY on API + admin)
+ * 2. Generates the two installed secrets and creates .dev.vars for both
+ *    Workers (SCALIUS_SECRET on API + storefront; CREDENTIAL_ENCRYPTION_KEY on API)
  * 3. Applies local D1 migrations
  * 4. Creates the default local admin account unless --skip-admin is passed
  *
@@ -66,24 +66,16 @@ if (resolvedWranglerState) {
 }
 
 const apiDevVarsPath = resolve(apiDir, ".dev.vars");
-const adminDevVarsPath = resolve(adminDir, ".dev.vars");
 const storefrontDevVarsPath = resolve(storefrontDir, ".dev.vars");
 const existingApiVars = readEnvVarsIfExists(apiDevVarsPath);
-const existingAdminVars = readEnvVarsIfExists(adminDevVarsPath);
 const existingStorefrontVars = readEnvVarsIfExists(storefrontDevVarsPath);
 const { scaliusSecret, credentialEncryptionKey } = resolveSharedLocalSecrets({
   forceRegenerate,
   apiVars: existingApiVars,
-  adminVars: existingAdminVars,
   storefrontVars: existingStorefrontVars,
 });
 
 const apiDevVars = {
-  SCALIUS_SECRET: scaliusSecret,
-  CREDENTIAL_ENCRYPTION_KEY: credentialEncryptionKey,
-};
-
-const adminDevVars = {
   SCALIUS_SECRET: scaliusSecret,
   CREDENTIAL_ENCRYPTION_KEY: credentialEncryptionKey,
 };
@@ -172,8 +164,8 @@ function writeDevVarsFile({ path, label, workerLabel, values, secretNotes }) {
 }
 
 const secretNotes = {
-  SCALIUS_SECRET: "Master secret; identical across API, admin, and storefront (>= 32 chars).",
-  CREDENTIAL_ENCRYPTION_KEY: "AES-256 key for merchant credentials at rest; identical across API and admin.",
+  SCALIUS_SECRET: "Master secret; identical across API and storefront (>= 32 chars).",
+  CREDENTIAL_ENCRYPTION_KEY: "AES-256 key for merchant credentials at rest (API only).",
 };
 
 console.log("\n🚀 Scalius Commerce — Local Development Setup\n");
@@ -187,19 +179,12 @@ if (skipInstall || envOnly) {
 }
 
 // 2. Create .dev.vars for all Workers. Existing usable secrets are reused so
-// partially missing local env files do not desynchronize API/admin/storefront.
+// partially missing local env files do not desynchronize API/storefront.
 writeDevVarsFile({
   path: apiDevVarsPath,
   label: "apps/api/.dev.vars",
   workerLabel: "API Worker",
   values: apiDevVars,
-  secretNotes,
-});
-writeDevVarsFile({
-  path: adminDevVarsPath,
-  label: "apps/admin-v2/.dev.vars",
-  workerLabel: "Admin V2 Worker",
-  values: adminDevVars,
   secretNotes,
 });
 writeDevVarsFile({
@@ -211,12 +196,10 @@ writeDevVarsFile({
 });
 
 const writtenApiVars = readEnvVarsIfExists(apiDevVarsPath);
-const writtenAdminVars = readEnvVarsIfExists(adminDevVarsPath);
 const writtenStorefrontVars = readEnvVarsIfExists(storefrontDevVarsPath);
 
 assertLocalSecretSync({
   apiVars: writtenApiVars,
-  adminVars: writtenAdminVars,
   storefrontVars: writtenStorefrontVars,
 });
 
@@ -224,10 +207,11 @@ assertLocalSecretSync({
 // longer read them; they are harmless but confusing, so say so once.
 const staleIssues = collectStaleLocalEnvIssues({
   apiVars: writtenApiVars,
-  adminVars: writtenAdminVars,
   storefrontVars: writtenStorefrontVars,
 });
+// The dashboard is a static SPA served by the API Worker; it reads no env.
 const staleBuildEnvFiles = [
+  ["apps/admin-v2/.dev.vars", resolve(adminDir, ".dev.vars")],
   ["apps/admin-v2/.env.development", resolve(adminDir, ".env.development")],
   ["apps/storefront/.env.development", resolve(storefrontDir, ".env.development")],
 ].filter(([, path]) => existsSync(path)).map(([label]) => label);

@@ -9,12 +9,7 @@ import {
   ValidationError,
 } from "../../errors";
 import type { StorefrontCheckoutAuthoritySnapshot } from "./checkout-authority";
-
-const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
-  cod: "Cash on delivery",
-  stripe: "Stripe",
-  sslcommerz: "SSLCommerz",
-};
+import { paymentMethodLabel } from "../payments/gateways/registry";
 
 export interface StorefrontCheckoutSettingsSnapshot {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";
@@ -48,9 +43,9 @@ export function assertStorefrontCheckoutPolicy(
     );
   }
 
-  if (!authority.activePaymentMethods.enabledMethods.includes(paymentMethod)) {
+  if (!(authority.activePaymentMethods.enabledMethods as readonly string[]).includes(paymentMethod)) {
     throw new ServiceUnavailableError(
-      `${PAYMENT_METHOD_LABELS[paymentMethod]} is not enabled for checkout.`,
+      `${paymentMethodLabel(paymentMethod)} is not enabled for checkout.`,
     );
   }
 
@@ -61,7 +56,7 @@ export function assertStorefrontCheckoutPolicy(
     partialPaymentAmount: snapshot.partialPaymentAmount,
   })) {
     throw new ValidationError(
-      `${PAYMENT_METHOD_LABELS[paymentMethod]} is not available for the current checkout settings.`,
+      `${paymentMethodLabel(paymentMethod)} is not available for the current checkout settings.`,
     );
   }
 

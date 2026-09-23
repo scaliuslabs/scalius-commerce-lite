@@ -9,21 +9,17 @@ import { cartItemVariantLabel } from "../cart/item-options";
 
 type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
 
-export type InitialPaymentSession =
-  | {
-      gateway: "stripe";
-      clientSecret?: string;
-      paymentIntentId?: string;
-      publishableKey?: string;
-      amount?: number;
-      currency?: string;
-    }
-  | {
-      gateway: "sslcommerz";
-      gatewayUrl?: string;
-      sessionKey?: string;
-      checkoutId?: string;
-    };
+/** Card gateways return a client secret; hosted gateways return the provider URL. */
+export type InitialPaymentSession = {
+  gateway: string;
+  clientSecret?: string;
+  paymentIntentId?: string;
+  publishableKey?: string;
+  amount?: number;
+  currency?: string;
+  gatewayUrl?: string;
+  sessionKey?: string;
+};
 
 type CheckoutCartLine = {
   id: string;
@@ -139,7 +135,7 @@ export function parseDiscountInput(checkoutData: Record<string, unknown>): {
 
 export async function createOrder(
   checkoutData: Record<string, unknown>,
-  paymentMethod: PaymentMethod,
+  paymentMethod: string,
 ): Promise<{
   orderId: string;
   totalAmount?: number;
@@ -199,7 +195,7 @@ export async function createOrder(
     shippingMethodId: readOptionalString(checkoutData.shippingMethodId),
     discountAmount: discount.amount,
     discountCode: discount.code,
-    paymentMethod,
+    paymentMethod: paymentMethod as PaymentMethod,
   };
 
   const res = await fetch("/api/checkout/create-order", {
