@@ -55,7 +55,6 @@ import {
   createThemePreviewSession,
   saveThemeSettings,
   getMediaOptimizationSettings,
-  mediaOptimizationDocument,
   isValidMediaHostInput,
   saveMediaOptimizationSettings,
   getSeoSettings,
@@ -73,7 +72,7 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
 } from "@scalius/core/modules/products";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 import { ok } from "../../../utils/api-response";
 import {
@@ -85,16 +84,6 @@ import {
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const LAYOUT_CACHE_GROUPS = ["layout"] as const;
-const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
-const DISCOVERY_CACHE_GROUPS = ["discovery"] as const;
-const STOREFRONT_URL_CACHE_GROUPS = [
-  ...HOMEPAGE_CACHE_GROUPS,
-  ...LAYOUT_CACHE_GROUPS,
-  ...DISCOVERY_CACHE_GROUPS,
-] as const;
-const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
-const CURRENCY_CACHE_GROUPS = ["layout", "checkout"] as const;
 async function deleteLegacyCurrencyGatewayCache(
   kv?: KVNamespace | null,
 ): Promise<void> {
@@ -205,7 +194,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
 
   const kv = c.env.CACHE;
   await deleteLegacyCurrencyGatewayCache(kv);
-  await invalidateApiAndScheduleStorefrontGroups(CURRENCY_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
 
   return ok(c, { message: "Currency settings saved successfully" });
 });
@@ -426,7 +415,7 @@ app.openapi(saveHeaderRoute, async (c) => {
     expectedRevision,
   );
   await invalidateSiteSettingsCache(c.env.CACHE);
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, saved);
 });
 
@@ -537,7 +526,7 @@ app.openapi(saveFooterRoute, async (c) => {
     expectedRevision,
   );
   await invalidateSiteSettingsCache(c.env.CACHE);
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, saved);
 });
 
@@ -651,7 +640,7 @@ app.openapi(saveThemeRoute, async (c) => {
     body.expectedRevision,
     user?.id ?? null,
   );
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, {
     ...saved,
     message: "Theme settings saved successfully",
@@ -807,7 +796,7 @@ app.openapi(publishThemeDraftRoute, async (c) => {
     body.expectedDraftRevision,
     user?.id ?? null,
   );
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, workspace);
 });
 
@@ -893,7 +882,7 @@ app.openapi(rollbackThemeRoute, async (c) => {
     body.expectedDraftRevision,
     user?.id ?? null,
   );
-  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, workspace);
 });
 
@@ -1076,10 +1065,7 @@ app.openapi(saveMediaOptimizationRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
   const saved = await saveMediaOptimizationSettings(db, body);
-  await invalidateApiAndScheduleStorefrontGroups(
-    mediaOptimizationDocument.invalidationGroups,
-    c,
-  );
+  await bumpCacheGeneration(c);
   return ok(c, {
     message: "Media settings saved successfully",
     ...projectMediaOptimizationSettings(saved),
@@ -1473,14 +1459,7 @@ app.openapi(saveSeoRoute, async (c) => {
   const data = c.req.valid("json");
   await saveSeoSettings(db, data);
   await invalidateSiteSettingsCache(c.env.CACHE);
-  await invalidateApiAndScheduleStorefrontGroups(
-    [
-      ...HOMEPAGE_CACHE_GROUPS,
-      ...LAYOUT_CACHE_GROUPS,
-      ...DISCOVERY_CACHE_GROUPS,
-    ] as const,
-    c,
-  );
+  await bumpCacheGeneration(c);
   return ok(c, { message: "SEO settings saved successfully" });
 });
 
@@ -1567,10 +1546,7 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
     invalidateSiteSettingsCache(kv),
     invalidateStorefrontUrlCache(kv),
   ]);
-  await invalidateApiAndScheduleStorefrontGroups(
-    STOREFRONT_URL_CACHE_GROUPS,
-    c,
-  );
+  await bumpCacheGeneration(c);
   return ok(c, { message: "Storefront URL saved successfully" });
 });
 
@@ -1659,7 +1635,7 @@ app.openapi(saveHomepagePresentationRoute, async (c) => {
     expectedRevision,
   );
   await invalidateSiteSettingsCache(c.env.CACHE);
-  await invalidateApiAndScheduleStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, saved);
 });
 
@@ -1766,7 +1742,7 @@ app.openapi(saveAllowedCountriesRoute, async (c) => {
     projected.allowedCountries,
     projected.allowedCountriesMode,
   );
-  await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { message: "Allowed countries saved", ...result });
 });
 

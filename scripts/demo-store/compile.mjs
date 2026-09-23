@@ -126,6 +126,8 @@ function productOptionMatrix(product, existing) {
       stock: existing
         ? commandRef(`current-variant:${variant.logicalKey}`, "stock")
         : variant.inventory.onHand,
+      // Saved rows adopt current stock as a compare-and-set; new rows resolve to undefined.
+      ...(existing ? { expectedStockVersion: commandRef(`current-variant:${variant.logicalKey}`, "stockVersion") } : {}),
       trackInventory: existing ? commandRef(`current-variant:${variant.logicalKey}`, "trackInventory") : true,
       weight: existing ? commandRef(`current-variant:${variant.logicalKey}`, "weight") : null,
       barcode: existing
@@ -297,6 +299,7 @@ function productCommands(manifest, current) {
           sku: commandRef(`current-variant:${variant.logicalKey}`, "sku"),
           price: variant.price,
           stock: variant.inventory.onHand,
+          expectedStockVersion: commandRef(`current-variant:${variant.logicalKey}`, "stockVersion"),
           trackInventory: true,
           discountType: "percentage",
           discountPercentage: 0,
@@ -335,6 +338,8 @@ function productCommands(manifest, current) {
         sku: variant.sku,
         price: variant.price,
         stock: variant.inventory.onHand,
+        // The default SKU was created in the previous command at stockVersion 1.
+        expectedStockVersion: 1,
         trackInventory: true,
         discountType: "percentage",
         discountPercentage: 0,

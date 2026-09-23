@@ -6,7 +6,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 const mocks = vi.hoisted(() => ({
     createOrder: vi.fn(),
     findCheckoutReservationAvailabilityTransitions: vi.fn(),
-    invalidateProductAvailabilityCaches: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
@@ -14,10 +14,10 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     createOrder: mocks.createOrder,
 }));
 
-vi.mock("../../utils/cache-invalidation", async (importOriginal) => ({
-    ...await importOriginal<typeof import("../../utils/cache-invalidation")>(),
+vi.mock("../../utils/cache-generation", async (importOriginal) => ({
+    ...await importOriginal<typeof import("../../utils/cache-generation")>(),
     findCheckoutReservationAvailabilityTransitions: mocks.findCheckoutReservationAvailabilityTransitions,
-    invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { adminOrdersRoutes } from "./orders";

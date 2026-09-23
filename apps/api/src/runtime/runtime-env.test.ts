@@ -139,7 +139,7 @@ describe("composeApiRuntimeEnv", () => {
       expect(composed[name], name).toBe(await deriveRuntimeSecret(MASTER_SECRET, purpose));
     }
     expect(composed.JWT_SECRET).not.toBe(composed.BETTER_AUTH_SECRET);
-    expect(composed.API_TOKEN).not.toBe(composed.PURGE_TOKEN);
+    expect(composed.API_TOKEN).not.toBe(composed.JWT_SECRET);
     expect(composed.CREDENTIAL_ENCRYPTION_KEY).toBe("credential-key");
     expect(composed.SCALIUS_SECRET).toBe(MASTER_SECRET);
     expect(composed.CACHE).toBe(cache);
@@ -178,7 +178,6 @@ describe("composeApiRuntimeEnv", () => {
       BETTER_AUTH_URL: "https://dashboard.example.com",
       R2_PUBLIC_URL: "https://cdn.example.com",
       CDN_DOMAIN_URL: "cdn.example.com",
-      PURGE_URL: "https://shop.example.com/api/purge-cache",
       CUSTOMER_AUTH_COOKIE_DOMAIN: "example.com",
       CORS_ALLOWED_ORIGINS: "https://mobile.example.com,https://kiosk.example.com",
     });
@@ -220,7 +219,6 @@ describe("composeApiRuntimeEnv", () => {
       BETTER_AUTH_URL: "http://localhost:4323",
       R2_PUBLIC_URL: "http://localhost:8787/api/v1/media",
       CDN_DOMAIN_URL: "localhost:8787",
-      PURGE_URL: "http://localhost:4322/api/purge-cache",
     });
     expect(composed.PLATFORM_CONFIG).toMatchObject({
       storefrontUrl: "http://localhost:4322",
@@ -241,7 +239,6 @@ describe("composeApiRuntimeEnv", () => {
     expect(composed.BETTER_AUTH_URL).toBeUndefined();
     expect(composed.R2_PUBLIC_URL).toBeUndefined();
     expect(composed.CDN_DOMAIN_URL).toBeUndefined();
-    expect(composed.PURGE_URL).toBeUndefined();
     expect(composed.CUSTOMER_AUTH_COOKIE_DOMAIN).toBeUndefined();
     expect(composed.CORS_ALLOWED_ORIGINS).toBeUndefined();
   });
@@ -285,20 +282,6 @@ describe("composeApiRuntimeEnv", () => {
 
       expect(composed.PUBLIC_API_BASE_URL).toBe("https://api.example.com");
     });
-  });
-
-  it("derives PURGE_URL only from a valid storefront origin", async () => {
-    const withStorefront = await composeApiRuntimeEnv(
-      createEnv({ CACHE: createKv(JSON.stringify(PRODUCTION_CONFIG)) }),
-    );
-    expect(withStorefront.PURGE_URL).toBe("https://shop.example.com/api/purge-cache");
-
-    const withoutStorefront = await composeApiRuntimeEnv(
-      createEnv({ CACHE: createKv(JSON.stringify({ ...PRODUCTION_CONFIG, storefrontUrl: "" })) }),
-      { requestUrl: "https://api.example.com/api/v1/products" },
-    );
-    expect(withoutStorefront.PURGE_URL).toBeUndefined();
-    expect(withoutStorefront.STOREFRONT_URL).toBeUndefined();
   });
 
   it("joins the extra CORS origins into a comma list and drops invalid entries", async () => {

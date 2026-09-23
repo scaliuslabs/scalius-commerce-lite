@@ -16,16 +16,19 @@ import { toast } from "sonner";
 import { ChevronDown, Loader2, RotateCcw, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getAllowedCountries,
-  updateAllowedCountries,
   type AllowedCountriesPayload,
-} from "~/lib/api-functions/settings";
+} from "~/lib/api-query-options/settings";
 import { queryKeys } from "~/lib/query-keys";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
+import {
+  getApiV1AdminSettingsAllowedCountries,
+  putApiV1AdminSettingsAllowedCountries,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 interface CountryOption {
   value: Country;
@@ -68,7 +71,7 @@ export default function AllowedCountriesBuilder() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await getAllowedCountries() as Record<string, unknown>;
+      const data = await apiData(getApiV1AdminSettingsAllowedCountries()) as Record<string, unknown>;
       const nextSelected = Array.isArray(data.allowedCountries)
         ? (data.allowedCountries as Country[])
         : [];
@@ -102,9 +105,9 @@ export default function AllowedCountriesBuilder() {
     };
     setSaving(true);
     try {
-      await updateAllowedCountries({ data: { allowedCountries: submittedSelected, mode: submittedMode } });
+      await apiData(putApiV1AdminSettingsAllowedCountries({ body: { allowedCountries: submittedSelected, mode: submittedMode } }));
       const [{ savedPolicy, refreshed }] = await Promise.all([
-        getAllowedCountries()
+        apiData(getApiV1AdminSettingsAllowedCountries())
           .then((policy) => ({ savedPolicy: policy, refreshed: true }))
           .catch(() => ({ savedPolicy: submittedPolicy, refreshed: false })),
         queryClient.invalidateQueries({

@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   isDiscountValid: vi.fn(),
   calculateDiscountAmount: vi.fn(),
   findCheckoutReservationAvailabilityTransitions: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -73,10 +73,10 @@ vi.mock("../checkout-coordinator", () => ({
   submitCheckoutIntentToCoordinator: mocks.submitCheckoutIntentToCoordinator,
 }));
 
-vi.mock("../utils/cache-invalidation", () => ({
+vi.mock("../utils/cache-generation", () => ({
   findCheckoutReservationAvailabilityTransitions:
     mocks.findCheckoutReservationAvailabilityTransitions,
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
   getOptionalExecutionContext: (c: { executionCtx?: unknown }) => {
     try {
       return c.executionCtx;
@@ -186,7 +186,7 @@ beforeEach(() => {
   mocks.isDiscountValid.mockResolvedValue({ valid: false });
   mocks.calculateDiscountAmount.mockResolvedValue(0);
   mocks.findCheckoutReservationAvailabilityTransitions.mockResolvedValue([]);
-  mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
     orderId: "order_1",
@@ -1945,11 +1945,7 @@ describe("create order commit/KV ordering", () => {
         expect.anything(),
         [{ variantId: "variant_transition", quantity: 1 }],
       );
-      expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-        expect.anything(),
-        { variantIds: ["variant_transition"] },
-        expect.anything(),
-      );
+      expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
         "availability caches",
       );

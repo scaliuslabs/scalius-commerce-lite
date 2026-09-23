@@ -18,7 +18,11 @@ import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGua
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
-import { createCollection, updateCollection } from "~/lib/api-functions/collections";
+import {
+  postApiV1AdminCollections,
+  putApiV1AdminCollectionsById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
@@ -145,9 +149,10 @@ export function CollectionForm({
         if (!entityId) throw new Error("Collection ID is required for update");
         const expectedVersion = values.version || defaultValues?.version;
         if (!expectedVersion) throw new Error("Collection version is required for update");
-        const result = await updateCollection({
-          data: { ...submission, id: entityId, expectedVersion },
-        });
+        const result = await apiData(putApiV1AdminCollectionsById({
+          path: { id: entityId },
+          body: { ...submission, expectedVersion },
+        }));
         form.reset({
           ...values,
           id: result.id,
@@ -155,7 +160,7 @@ export function CollectionForm({
         });
         savedCollectionId = entityId;
       } else {
-        const result = await createCollection({ data: submission });
+        const result = await apiData(postApiV1AdminCollections({ body: submission }));
         form.reset({
           ...values,
           id: result.id,

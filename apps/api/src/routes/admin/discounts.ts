@@ -10,7 +10,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, paginatedEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../schemas/responses";
 import { discountSchema } from "../../schemas/entities";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
@@ -106,7 +106,7 @@ app.openapi(createDiscountRoute, (async (c: AdminRouteContext<typeof createDisco
             PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
         ),
     });
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return created(c, result);
 }) as unknown as AdminRouteHandler<typeof createDiscountRoute>);
 
@@ -141,7 +141,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const { discountIds, permanent } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await bulkDeleteDiscounts(db, discountIds, permanent);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -173,7 +173,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const { discountIds } = c.req.valid("json");
     if (discountIds.length === 0) throw new ValidationError("No discount IDs provided");
     await restoreDiscounts(db, discountIds);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -233,7 +233,7 @@ app.openapi(updateDiscountRoute, (async (c: AdminRouteContext<typeof updateDisco
             PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
         ),
     });
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 }) as unknown as AdminRouteHandler<typeof updateDiscountRoute>);
 
@@ -258,7 +258,7 @@ app.openapi(deleteDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteDiscount(db, id);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -283,7 +283,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteDiscount(db, id);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -321,7 +321,7 @@ app.openapi(toggleStatusRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { isActive, expectedRevision } = c.req.valid("json");
     const result = await setDiscountActiveStatus(db, id, isActive, expectedRevision);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -347,7 +347,7 @@ app.openapi(restoreDiscountRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreDiscounts(db, [id]);
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, {});
 });
 

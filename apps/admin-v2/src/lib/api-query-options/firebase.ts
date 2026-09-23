@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getFirebaseConfig } from "../api-functions/firebase";
+import { getFirebaseConfig } from "../api-server-fns";
 import { queryKeys } from "../query-keys";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;

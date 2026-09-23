@@ -66,7 +66,6 @@ describe("Agent Access UI security boundaries", () => {
   it("offers a confirmed, permission-gated purge that is disabled when nothing is clearable", () => {
     const settings = source("AgentAccessSettingsPage.tsx");
     const dialog = source("PurgeRevokedDialog.tsx");
-    const api = source("api.ts");
 
     expect(settings).toContain("<PurgeRevokedDialog");
     expect(settings).toContain("disabled={!canManage}");
@@ -78,9 +77,6 @@ describe("Agent Access UI security boundaries", () => {
     expect(dialog).toContain("audit history");
     expect(dialog).toContain("cannot be undone");
     expect(dialog).toContain("Active and pending connections are not affected.");
-    expect(api).toContain("`${BASE}/connections/revoked");
-    expect(api).toContain('status: "revoked"');
-    expect(api).toContain('status: "expired"');
   });
 
   it("uses the dashboard permission registry for view and management gates", () => {

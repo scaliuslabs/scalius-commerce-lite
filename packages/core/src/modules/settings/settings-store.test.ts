@@ -92,7 +92,6 @@ function demoDocument(overrides: Record<string, unknown> = {}) {
     key: "config",
     schema: demoSchema,
     defaults: { enabled: true, label: "", hosts: [] },
-    invalidationGroups: ["layout", "homepage"],
     ...overrides,
   });
 }
@@ -112,7 +111,6 @@ describe("settings store", () => {
       label: "",
       hosts: [],
     });
-    expect(document.invalidationGroups).toEqual(["layout", "homepage"]);
   });
 
   it("fails soft to defaults with a masked warning when the stored document is invalid", async () => {

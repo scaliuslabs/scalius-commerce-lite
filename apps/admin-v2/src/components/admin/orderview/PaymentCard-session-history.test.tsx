@@ -4,7 +4,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrderPaymentsPayload } from "~/lib/api-functions/orders";
+import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import type { Order } from "./types";
 import { PaymentCard } from "./PaymentCard";
 

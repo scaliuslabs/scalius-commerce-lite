@@ -7,7 +7,8 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
-import { apiPost } from "~/lib/api";
+import { postApiV1AdminAgentAccessBrowserHandoffsByHandoffId } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
 
@@ -109,9 +110,9 @@ function BrowserHandoffRoute() {
       return;
     }
     try {
-      const result = await apiPost<{ action: BrowserAction }>(
-        `/agent-access/browser-handoffs/${encodeURIComponent(handoffId)}`,
-      );
+      const result = await apiData(postApiV1AdminAgentAccessBrowserHandoffsByHandoffId({
+        path: { handoffId },
+      }));
       if (!isSafeBrowserAction(result.action, trustedStorefrontOrigin)) {
         throw new Error("Unsafe browser action");
       }

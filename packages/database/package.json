@@ -16,7 +16,8 @@
     "./migration-plan": "./src/migration-plan.ts",
     "./schema-contract": "./src/schema-contract.ts",
     "./portability": "./src/portability.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./testing/sqlite-d1": "./src/testing/sqlite-d1.ts"
   },
   "scripts": {
     "compile:data-export": "tsx scripts/compile-sqlite-data-export.ts",

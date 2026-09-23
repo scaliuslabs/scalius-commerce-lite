@@ -35,9 +35,6 @@ const ORDER_COLUMNS_SOURCE = fileURLToPath(
     import.meta.url,
   ),
 );
-const ORDER_SERVER_FUNCTIONS_SOURCE = fileURLToPath(
-  new URL("../../../lib/api-functions/orders.ts", import.meta.url),
-);
 const ORDER_MUTATIONS_SOURCE = fileURLToPath(
   new URL("../../../lib/api-mutations/orders.ts", import.meta.url),
 );
@@ -213,10 +210,6 @@ describe("order list interactions", () => {
   it("keeps payment and fulfillment filters wired from URL to API params", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
     const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
-    const serverFunctionsSource = readFileSync(
-      ORDER_SERVER_FUNCTIONS_SOURCE,
-      "utf8",
-    );
 
     expect(routeSource).toContain("const PAYMENT_STATUS_FILTERS");
     expect(routeSource).toContain("const PAYMENT_METHOD_FILTERS");
@@ -271,22 +264,6 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain('ariaLabel="Filter by payment recovery"');
     expect(toolbarSource).toContain(
       'ariaLabel="Filter by fulfillment status"',
-    );
-
-    expect(serverFunctionsSource).toContain(
-      "if (data.statusGroup) params.statusGroup = data.statusGroup",
-    );
-    expect(serverFunctionsSource).toContain(
-      "if (data.paymentStatus) params.paymentStatus = data.paymentStatus",
-    );
-    expect(serverFunctionsSource).toContain(
-      "if (data.paymentMethod) params.paymentMethod = data.paymentMethod",
-    );
-    expect(serverFunctionsSource).toContain(
-      "if (data.fulfillmentStatus) params.fulfillmentStatus = data.fulfillmentStatus",
-    );
-    expect(serverFunctionsSource).toContain(
-      "if (data.paymentRecovery) params.paymentRecovery = data.paymentRecovery",
     );
   });
 
@@ -481,13 +458,12 @@ describe("order list interactions", () => {
     const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
     const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
     const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
-    const serverFunctionsSource = readFileSync(ORDER_SERVER_FUNCTIONS_SOURCE, "utf8");
 
     expect(routeSource).toContain("expectedVersion: order.version");
     expect(routeSource).toContain("archiveMut.mutate");
     expect(routeSource).toContain("restoreMut.mutate({ id, expectedVersion })");
     expect(routeSource).toContain("archived: normalizeBooleanSearchParam(search.archived)");
-    expect(routeSource).toContain("showArchived: deps.archived");
+    expect(routeSource).toContain('archived: deps.archived ? "true" : undefined');
     expect(routeSource).not.toContain("search.trashed");
     expect(toolbarSource).toContain("search={showTrashed ? undefined : { archived: true }}");
     expect(columnsSource).toContain("onArchive(order.id, order.version)");
@@ -498,8 +474,5 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("aria-label={`Restore order ${order.id}`}");
     expect(columnsSource).not.toContain("onPermanentDelete");
     expect(mobileSource).not.toContain("onPermanentDelete");
-    expect(serverFunctionsSource).toContain('apiPost<void>("/orders/archive", data)');
-    expect(serverFunctionsSource).not.toContain("/orders/bulk-delete");
-    expect(serverFunctionsSource).not.toContain("/permanent");
   });
 });

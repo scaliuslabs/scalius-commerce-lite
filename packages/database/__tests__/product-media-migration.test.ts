@@ -96,14 +96,7 @@ function runSql(sql: string, bail: "on" | "off" = "on") {
 }
 
 describe("ordered product media migration", () => {
-    it("uses remote-D1-safe trigger bodies and clears untrusted legacy SKU images", () => {
-        expect(migration).not.toMatch(/BEGIN\s+SELECT CASE WHEN/iu);
-        expect(migration).toContain("SELECT \"id\", \"product_id\", \"option_combination_key\", NULL");
-        expect(migration).toContain("CREATE TRIGGER `product_media_insert_ready_guard`");
-        expect(migration).toContain("CREATE TRIGGER `product_media_identity_update_guard`");
-        expect(migration).toContain("CREATE TRIGGER `product_variants_identity_insert_guard`");
-        expect(migration).toContain("CREATE TRIGGER `product_variants_identity_update_guard`");
-
+    it("clears untrusted legacy SKU images", () => {
         const result = runSql(`
           SELECT id, image_id FROM product_variants WHERE id = 'var_legacy';
           INSERT INTO product_media (

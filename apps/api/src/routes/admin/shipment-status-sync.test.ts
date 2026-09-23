@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   assertNoActiveRefundAttempt: vi.fn(),
   assertNoActivePaymentSessionAttempt: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -27,8 +27,8 @@ vi.mock("@scalius/core/modules/payments", () => ({
   assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
 }));
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+vi.mock("../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -74,7 +74,7 @@ describe("admin shipment status sync helper", () => {
     mocks.getDeliveryProvider.mockResolvedValue({ id: "provider_1", name: "Steadfast" });
     mocks.assertNoActiveRefundAttempt.mockResolvedValue(undefined);
     mocks.assertNoActivePaymentSessionAttempt.mockResolvedValue(undefined);
-    mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
     mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ enqueued: true });
   });
 
@@ -128,11 +128,7 @@ describe("admin shipment status sync helper", () => {
       "ship_1",
       "delivered",
     );
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      db,
-      { variantIds: ["variant_1"] },
-      { env: { JOBS_QUEUE: queue } },
-    );
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env: { JOBS_QUEUE: queue } });
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
       queue,
@@ -165,7 +161,7 @@ describe("admin shipment status sync helper", () => {
 
     expect(mocks.checkShipmentStatus).not.toHaveBeenCalled();
     expect(mocks.updateOrderStatusFromShipment).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
   });
 });

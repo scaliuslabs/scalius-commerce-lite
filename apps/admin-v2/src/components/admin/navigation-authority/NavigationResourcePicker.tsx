@@ -7,7 +7,7 @@ import { navigationResourcesQueryOptions } from "~/lib/api-query-options/navigat
 import type {
   NavigationResourceOption,
   NavigationResourceType,
-} from "~/lib/api-functions/navigation-authority";
+} from "~/lib/api-query-options/navigation";
 import { Button } from "~/components/ui/button";
 import {
   Command,

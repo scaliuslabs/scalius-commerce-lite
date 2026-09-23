@@ -36,10 +36,11 @@ import { toast } from "sonner";
 import type { AttributeValue } from "../types";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  renameAttributeValue,
-  addAttributeValue,
-  removeAttributeValue,
-} from "~/lib/api-functions/attributes";
+  deleteApiV1AdminAttributesByIdValues,
+  postApiV1AdminAttributesByIdValues,
+  putApiV1AdminAttributesByIdValues,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
 import { queryKeys } from "~/lib/query-keys";
 import { useDebounce } from "~/hooks/use-debounce";
@@ -131,13 +132,13 @@ export function AttributeValueEditor({
     commandInFlight.current = true;
     setSavingValue(editingValue);
     try {
-      await renameAttributeValue({
-        data: {
-          attributeId,
+      await apiData(putApiV1AdminAttributesByIdValues({
+        path: { id: attributeId },
+        body: {
           oldValue: editingValue,
           newValue: editedValue.trim(),
         },
-      });
+      }));
 
       toast.success(`Value renamed to "${editedValue.trim()}"`);
       setEditingValue(null);
@@ -158,9 +159,10 @@ export function AttributeValueEditor({
     commandInFlight.current = true;
     setSavingValue("new");
     try {
-      await addAttributeValue({
-        data: { attributeId, value: newValue.trim() },
-      });
+      await apiData(postApiV1AdminAttributesByIdValues({
+        path: { id: attributeId },
+        body: { value: newValue.trim() },
+      }));
 
       toast.success(`Value "${newValue.trim()}" added`);
       setNewValue("");
@@ -181,7 +183,10 @@ export function AttributeValueEditor({
     commandInFlight.current = true;
     setSavingValue(value);
     try {
-      await removeAttributeValue({ data: { attributeId, value } });
+      await apiData(deleteApiV1AdminAttributesByIdValues({
+        path: { id: attributeId },
+        body: { value },
+      }));
 
       toast.success(`Value "${value}" deleted from all products`);
       setDeleteConfirm(null);

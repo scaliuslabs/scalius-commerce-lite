@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { describe, expect, it } from "vitest";
 
-import { siteSettings } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
 
 import {
@@ -10,91 +9,42 @@ import {
     saveCheckoutFlowSettingsDocument,
 } from "./checkout-flow-admin.service";
 
-const serviceSource = readFileSync(
-    new URL("./checkout-flow-admin.service.ts", import.meta.url),
-    "utf8",
-);
-
-function checkoutDocument(revision: number) {
-    return {
-        guestCheckoutEnabled: true,
-        checkoutMode: "all" as const,
-        partialPaymentEnabled: false,
-        partialPaymentAmount: 0,
-        revision,
-    };
+function setup() {
+    const harness = createSqliteD1Database();
+    harness.sqlite.exec(`INSERT INTO site_settings (id, singleton_key, site_name, header_config, footer_config)
+        VALUES ('site_default', 'default', 'Store', '{}', '{}')`);
+    return harness;
 }
 
-function createDb(options: {
-    currentRevision?: number;
-    updateSucceeds?: boolean;
-    missing?: boolean;
-} = {}) {
-    const currentRevision = options.currentRevision ?? 1;
-    const update = vi.fn((table: unknown) => {
-        expect(table).toBe(siteSettings);
-        return {
-            set: vi.fn(() => ({
-                where: vi.fn(() => ({
-                    returning: vi.fn(async () => options.updateSucceeds === false
-                        ? []
-                        : [checkoutDocument(currentRevision + 1)]),
-                })),
-            })),
-        };
-    });
-    const select = vi.fn((shape: Record<string, unknown>) => ({
-        from: vi.fn((table: unknown) => {
-            expect(table).toBe(siteSettings);
-            const row = options.missing
-                ? undefined
-                : "guestCheckoutEnabled" in shape
-                    ? checkoutDocument(currentRevision)
-                    : { revision: currentRevision };
-            return {
-                limit: vi.fn(() => ({ get: vi.fn(async () => row) })),
-                where: vi.fn(() => ({ get: vi.fn(async () => row) })),
-            };
-        }),
-    }));
-
-    return { db: { select, update }, select, update };
-}
+const gatewaysOnly = {
+    guestCheckoutEnabled: false,
+    checkoutMode: "gateways_only" as const,
+    partialPaymentEnabled: false,
+    partialPaymentAmount: 0,
+    availablePaymentMethods: ["stripe"],
+};
 
 describe("checkout flow settings revision authority", () => {
-    it("reads the initialized legacy row at migration revision one", async () => {
-        const { db } = createDb({ currentRevision: 1 });
+    it("reads the initialized singleton at revision one and increments exactly once per current save", async () => {
+        const { db } = setup();
 
-        await expect(getCheckoutFlowSettingsDocument(db as never)).resolves.toEqual(
-            checkoutDocument(1),
-        );
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1 });
+        const saved = await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 1 });
+
+        expect(saved).toMatchObject({ revision: 2, checkoutMode: "gateways_only", guestCheckoutEnabled: false });
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toEqual(saved);
     });
 
-    it("increments exactly once when the expected revision is current", async () => {
-        const { db, update } = createDb({ currentRevision: 4 });
+    it("rejects the stale second tab with the authoritative revision and keeps the first save", async () => {
+        const { db } = setup();
+        await saveCheckoutFlowSettingsDocument(db, { ...gatewaysOnly, expectedRevision: 1 });
 
-        const saved = await saveCheckoutFlowSettingsDocument(db as never, {
-            guestCheckoutEnabled: false,
-            checkoutMode: "gateways_only",
-            partialPaymentEnabled: false,
-            partialPaymentAmount: 0,
-            expectedRevision: 4,
-            availablePaymentMethods: ["stripe"],
-        });
-
-        expect(saved.revision).toBe(5);
-        expect(update).toHaveBeenCalledOnce();
-    });
-
-    it("returns the authoritative current revision for the stale second tab", async () => {
-        const { db } = createDb({ currentRevision: 5, updateSucceeds: false });
-
-        const error = await saveCheckoutFlowSettingsDocument(db as never, {
+        const error = await saveCheckoutFlowSettingsDocument(db, {
             guestCheckoutEnabled: true,
             checkoutMode: "all",
             partialPaymentEnabled: false,
             partialPaymentAmount: 0,
-            expectedRevision: 4,
+            expectedRevision: 1,
             availablePaymentMethods: ["cod"],
         }).catch((cause: unknown) => cause);
 
@@ -102,33 +52,20 @@ describe("checkout flow settings revision authority", () => {
         expect(error).toMatchObject({
             status: 409,
             code: "CHECKOUT_FLOW_REVISION_CONFLICT",
-            details: { expectedRevision: 4, currentRevision: 5 },
+            details: { expectedRevision: 1, currentRevision: 2 },
         });
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 2, checkoutMode: "gateways_only" });
     });
 
     it("rejects invalid flow rules before attempting the CAS", async () => {
-        const { db, update } = createDb();
+        const { db } = setup();
 
-        await expect(saveCheckoutFlowSettingsDocument(db as never, {
+        await expect(saveCheckoutFlowSettingsDocument(db, {
+            ...gatewaysOnly,
             guestCheckoutEnabled: true,
-            checkoutMode: "gateways_only",
-            partialPaymentEnabled: false,
-            partialPaymentAmount: 0,
             expectedRevision: 1,
             availablePaymentMethods: ["cod"],
         })).rejects.toBeInstanceOf(ValidationError);
-        expect(update).not.toHaveBeenCalled();
-    });
-
-    it("keeps the expected revision in the atomic update predicate", () => {
-        expect(serviceSource).toContain(
-            "eq(siteSettings.singletonKey, \"default\")",
-        );
-        expect(serviceSource).toContain(
-            "eq(siteSettings.checkoutFlowRevision, input.expectedRevision)",
-        );
-        expect(serviceSource).toContain(
-            "checkoutFlowRevision: sql`${siteSettings.checkoutFlowRevision} + 1`",
-        );
+        await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1, checkoutMode: "all" });
     });
 });

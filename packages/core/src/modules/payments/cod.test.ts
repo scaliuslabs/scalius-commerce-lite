@@ -1,16 +1,8 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
 import type { Database } from "@scalius/database/client";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
-import * as databaseSchema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   codTracking,
   CodStatus,
@@ -109,84 +101,16 @@ function createCodDbMock({
   return { db, batches, inserts, updates };
 }
 
-const migrationDirectory = fileURLToPath(new URL(
-  "../../../../database/migrations/",
-  import.meta.url,
-));
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: sqlite.prepare(query).all(...values) as Record<string, SQLOutputValue>[],
-    success: true,
-    meta: {},
+/** A migrated D1 whose first batch is preceded by `race` (a competing committed write). */
+function createCodIntegrationDatabase(race?: (sqlite: DatabaseSync) => void) {
+  let pending = race;
+  return createSqliteD1Database({
+    beforeBatch(sqlite) {
+      const applyRace = pending;
+      pending = undefined;
+      applyRace?.(sqlite);
+    },
   });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).get(...values) as Record<string, SQLOutputValue> | undefined;
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createCodIntegrationDatabase(
-  beforeFirstBatch?: (sqlite: DatabaseSync) => void,
-): { sqlite: DatabaseSync; db: Database } {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort()) {
-    sqlite.exec(compileSqliteMigrationForProvider(readFileSync(`${migrationDirectory}/${name}`, "utf8"), "d1"));
-  }
-  let beforeBatch = beforeFirstBatch;
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      if (beforeBatch) {
-        const applyRace = beforeBatch;
-        beforeBatch = undefined;
-        applyRace(sqlite);
-      }
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-  return {
-    sqlite,
-    db: drizzle(binding as unknown as D1Database, { schema: databaseSchema }) as unknown as Database,
-  };
 }
 
 async function insertAdvancePaymentOrder(db: Database, orderId: string): Promise<void> {

@@ -37,10 +37,7 @@ import {
   successEnvelope,
 } from "../schemas/responses";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import {
-  getOptionalExecutionContext,
-  invalidateProductAvailabilityCaches,
-} from "../utils/cache-invalidation";
+import { bumpCacheGeneration, getOptionalExecutionContext } from "../utils/cache-generation";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -662,13 +659,9 @@ app.openapi(submitCheckoutRoute, async (c) => {
     else await postCommit;
   }
   if (submitted.availabilityVariantIds.length > 0) {
-    const invalidation = invalidateProductAvailabilityCaches(
-      c.get("db"),
-      { variantIds: submitted.availabilityVariantIds },
-      c,
-    );
-    if (executionCtx) executionCtx.waitUntil(invalidation);
-    else await invalidation;
+    const bump = bumpCacheGeneration(c);
+    if (executionCtx) executionCtx.waitUntil(bump);
+    else await bump;
   }
   return submitted.response.status === "complete"
     ? created(c, submitted.response)

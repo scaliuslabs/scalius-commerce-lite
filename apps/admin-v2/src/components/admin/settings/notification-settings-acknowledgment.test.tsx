@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmailSettingsPayload, FirebaseSettingsPayload } from "~/lib/api-functions/settings";
+import type { EmailSettingsPayload, FirebaseSettingsPayload } from "~/lib/api-query-options/settings";
 import { queryKeys } from "~/lib/query-keys";
 import EmailSettingsForm from "./EmailSettingsForm";
 import FirebaseSettingsForm from "./FirebaseSettingsForm";
@@ -13,10 +13,13 @@ const api = vi.hoisted(() => ({
   email: vi.fn(), firebase: vi.fn(), updateEmail: vi.fn(), updateFirebase: vi.fn(), readiness: vi.fn(),
   blocker: vi.fn(), permission: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn(),
 }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getEmailSettings: api.email, getFirebaseSettings: api.firebase,
-  updateEmailSettings: api.updateEmail, updateFirebaseSettings: api.updateFirebase,
-  getAdminNotificationChannels: api.readiness,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsEmail: api.email,
+  getApiV1AdminSettingsFirebase: api.firebase,
+  postApiV1AdminSettingsEmail: api.updateEmail,
+  postApiV1AdminSettingsFirebase: api.updateFirebase,
+  getApiV1AdminSettingsNotificationChannelsAdminChannels: api.readiness,
 }));
 vi.mock("~/contexts/PermissionContext", () => ({ usePermissions: () => ({ hasPermission: api.permission }) }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: api.blocker }));
@@ -63,11 +66,11 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     api.email.mockImplementation(async () => structuredClone(storedEmail));
     api.firebase.mockImplementation(async () => structuredClone(storedFirebase));
     api.readiness.mockResolvedValue({ push: { status: "ready" as const, issues: [] } });
-    api.updateEmail.mockImplementation(async ({ data }) => {
+    api.updateEmail.mockImplementation(async ({ body: data }) => {
       storedEmail = { ...storedEmail, ...data, apiKey: "apiKey" in data ? data.apiKey ? mask : "" : storedEmail.apiKey };
       return { message: "Saved" };
     });
-    api.updateFirebase.mockImplementation(async ({ data }) => {
+    api.updateFirebase.mockImplementation(async ({ body: data }) => {
       storedFirebase = { ...storedFirebase, ...data, publicConfig: structuredClone(data.publicConfig), serviceAccount: "serviceAccount" in data ? data.serviceAccount ? mask : "" : storedFirebase.serviceAccount };
       return { message: "Saved" };
     });
@@ -153,7 +156,7 @@ for (const kind of ["email", "firebase"] as const) describe(`${kind} settings ac
     } else await type("later-app", "firebase-appId");
     await click(button("Save changes"));
     expect(mainStored()).toBe(after);
-    const payload = update.mock.calls.at(-1)![0].data;
+    const payload = update.mock.calls.at(-1)![0].body;
     expect(kind === "email" ? payload.sender : payload.publicConfig.projectId).toBe(after);
   });
 

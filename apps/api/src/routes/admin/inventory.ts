@@ -10,9 +10,11 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import {
+    bumpCacheGeneration,
     findStockMutationAvailabilityTransitions,
-    invalidateProductAvailabilityCaches,
-} from "../../utils/cache-invalidation";
+    type CacheWriteContext,
+    type StockAvailabilityMutationInput,
+} from "../../utils/cache-generation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
@@ -42,20 +44,14 @@ function resolveInventoryOperationKey(
     return operationKey;
 }
 
-async function invalidateStockMutationIfVisible(
+/** Same-band stock writes leave the public cache generation alone. */
+async function bumpCacheGenerationIfBandChanged(
     db: Parameters<typeof findStockMutationAvailabilityTransitions>[0],
-    result: {
-        variantId: string;
-        previousStock: number;
-        newStock: number;
-        pool?: "stock" | "preorderStock";
-    },
-    c: Parameters<typeof invalidateProductAvailabilityCaches>[2],
+    result: StockAvailabilityMutationInput,
+    c: CacheWriteContext,
 ): Promise<void> {
     const variantIds = await findStockMutationAvailabilityTransitions(db, [result]);
-    if (variantIds.length > 0) {
-        await invalidateProductAvailabilityCaches(db, { variantIds }, c);
-    }
+    if (variantIds.length > 0) await bumpCacheGeneration(c);
 }
 
 // ─── Inline response schemas ──
@@ -586,7 +582,7 @@ app.openapi(adjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
-        await invalidateStockMutationIfVisible(db, { ...result, pool: payload.pool }, c);
+        await bumpCacheGenerationIfBandChanged(db, { ...result, pool: payload.pool }, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -669,7 +665,7 @@ app.openapi(stockAdjustRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
-        await invalidateStockMutationIfVisible(db, result, c);
+        await bumpCacheGenerationIfBandChanged(db, result, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -720,7 +716,7 @@ app.openapi(stockSetRoute, async (c) => {
     const user = c.get("user");
     try {
         const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);
-        await invalidateStockMutationIfVisible(db, result, c);
+        await bumpCacheGenerationIfBandChanged(db, result, c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);

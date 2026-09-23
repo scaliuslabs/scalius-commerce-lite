@@ -28,16 +28,7 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("sonner", () => ({ toast: toastMocks }));
 
-vi.mock("../api-functions/discounts", () => ({
-  bulkDeleteDiscounts: vi.fn(),
-  bulkRestoreDiscounts: vi.fn(),
-  createDiscount: vi.fn(),
-  deleteDiscount: vi.fn(),
-  permanentDeleteDiscount: vi.fn(),
-  restoreDiscount: vi.fn(),
-  toggleDiscountStatus: vi.fn(),
-  updateDiscount: vi.fn(),
-}));
+vi.mock("@scalius/api-client/sdk", () => ({}));
 
 import { AdminApiResponseError } from "../admin-api-error";
 import { queryKeys } from "../query-keys";

@@ -20,28 +20,15 @@ interface Fetcher {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
-  readonly exports: {
-    CachedPublicStorefront: WorkerEntrypointFetcher & {
-      purgeGroups(groups: string[]): Promise<void>;
-    };
-  };
-  readonly cache?: WorkersCacheContext;
 }
 
-interface WorkersCachePurgeResult {
-  success: boolean;
-  errors: Array<{ code: number; message: string }>;
+interface KVNamespace {
+  get(key: string, options?: { cacheTtl?: number }): Promise<string | null>;
 }
 
-interface WorkersCacheContext {
-  purge(options: { tags: string[] }): Promise<WorkersCachePurgeResult>;
-}
-
-interface WorkerEntrypointFetcher {
-  fetch(
-    request: Request,
-    options?: { cf?: { cacheKey?: string } },
-  ): Promise<Response>;
+// The Workers Cache API's per-data-center default cache.
+interface CacheStorage {
+  readonly default: Cache;
 }
 
 // Cloudflare Workers environment bindings (global Env interface).
@@ -55,8 +42,11 @@ interface Env {
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
 
+  // Shared with the API Worker; read only for the public cache generation.
+  CACHE?: KVNamespace;
+
   // The only installed secret (`wrangler secret put SCALIUS_SECRET`).
-  // API_TOKEN and PURGE_TOKEN are derived from it at request time.
+  // API_TOKEN is derived from it at request time.
   SCALIUS_SECRET?: string;
 
   [key: string]: unknown;
@@ -69,6 +59,11 @@ declare module "cloudflare:workers" {
     protected readonly env: Bindings;
     protected readonly ctx: ExecutionContext;
   }
+}
+
+// Provided by integrations/deferred-partytown.mjs.
+declare module "virtual:scalius/partytown" {
+  export const partytownLoaderPath: string;
 }
 
 declare namespace App {

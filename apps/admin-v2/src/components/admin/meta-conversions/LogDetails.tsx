@@ -1,6 +1,7 @@
 import type { MetaConversionsLog } from "./hooks/useMetaConversionsLogs";
 
-function safeJsonParse(jsonString: string): unknown {
+function safeJsonParse(jsonString: string | null): unknown {
+  if (jsonString === null) return null;
   try {
     return JSON.parse(jsonString);
   } catch {

@@ -1,242 +1,80 @@
-import { readFileSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
-import { categories, collections, products } from "@scalius/database/schema";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
-import { bulkDeleteCategories, restoreCategories } from "./categories.service";
+import {
+  bulkDeleteCategories,
+  restoreCategories,
+  updateCategory,
+  updateCategoryStatus,
+} from "./categories.service";
+
+function setup(race?: (sqlite: DatabaseSync) => void) {
+  let pending = race;
+  const harness = createSqliteD1Database({
+    beforeBatch(sqlite) {
+      const apply = pending;
+      pending = undefined;
+      apply?.(sqlite);
+    },
+  });
+  harness.sqlite.exec(`
+    INSERT INTO categories (id, name, slug, status, revision, deleted_at) VALUES
+      ('cat_delete', 'Delete', 'delete', 'draft', 1, 1700000000),
+      ('cat_keep', 'Keep', 'keep', 'published', 1, NULL),
+      ('cat_active', 'Active', 'active', 'published', 1, NULL);
+  `);
+  const collection = (id: string, isActive: boolean, categoryIds: string[]) =>
+    harness.sqlite.prepare("INSERT INTO collections (id, name, presentation, config, is_active) VALUES (?, ?, 'grid', ?, ?)")
+      .run(id, id, JSON.stringify({ source: "dynamic", categoryIds }), isActive ? 1 : 0);
+  const categoryExists = (id: string) =>
+    harness.sqlite.prepare("SELECT 1 FROM categories WHERE id = ?").get(id) !== undefined;
+  return { ...harness, collection, categoryExists };
+}
+
+const deleteClaim = [{ id: "cat_delete", expectedRevision: 1 }];
 
 describe("category permanent delete integrity", () => {
-  it("preserves non-target membership while batching collection cleanup with delete", async () => {
-    const batchCalls: unknown[][] = [];
-    const db = {
-      select() {
-        return {
-          from(table: unknown) {
-            return {
-              kind: "guard",
-              all: async () => table === collections ? [
-                {
-                  id: "col_1",
-                  name: "Seasonal",
-                  isActive: false,
-                  deletedAt: null,
-                  config: JSON.stringify({
-                    source: "dynamic",
-                    categoryIds: ["cat_delete", "cat_keep"],
-                  }),
-                },
-              ] : [],
-              where() {
-                if (table === products) {
-                  return { limit: () => ({ all: async () => [] }) };
-                }
-                if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
-                }
-                if (table === collections) {
-                  return { all: async () => [{
-                    id: "col_1",
-                    name: "Seasonal",
-                    isActive: false,
-                    deletedAt: null,
-                    config: JSON.stringify({
-                      source: "dynamic",
-                      categoryIds: ["cat_delete", "cat_keep"],
-                    }),
-                  }] };
-                }
-                return { all: async () => [] };
-              },
-            };
-          },
-        };
-      },
-      update(table: unknown) {
-        return {
-          set(values: Record<string, unknown>) {
-            return {
-              where() {
-                return { kind: "update", table, values };
-              },
-            };
-          },
-        };
-      },
-      run() {
-        return { kind: "guard" };
-      },
-      delete(table: unknown) {
-        return {
-          where() {
-            return {
-              returning() {
-                return { kind: "delete", table };
-              },
-            };
-          },
-        };
-      },
-      async batch(statements: unknown[]) {
-        batchCalls.push(statements);
-        return statements.map((statement, index) =>
-          index === statements.length - 1 ? [{ id: "cat_delete" }] : [],
-        );
-      },
-    };
+  it("removes only the deleted membership from collections in the same batch as the delete", async () => {
+    const { sqlite, db, collection, categoryExists } = setup();
+    collection("col_seasonal", false, ["cat_delete", "cat_keep"]);
+    sqlite.exec(`INSERT INTO products (id, name, price, slug, category_id, deleted_at)
+      VALUES ('prod_trashed', 'Old', 10, 'old', 'cat_delete', 1700000000)`);
 
-    await bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true);
+    await bulkDeleteCategories(db, deleteClaim, true);
 
-    expect(batchCalls).toHaveLength(1);
-    expect(batchCalls[0]).toHaveLength(5);
-    expect(batchCalls[0]?.[0]).toMatchObject({ kind: "guard" });
-    expect(batchCalls[0]?.[2]).toMatchObject({
-      kind: "update",
-      table: products,
+    expect(categoryExists("cat_delete")).toBe(false);
+    expect(sqlite.prepare("SELECT config, version FROM collections WHERE id = 'col_seasonal'").get()).toEqual({
+      config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_keep"] }),
+      version: 2,
     });
-    expect(batchCalls[0]?.[3]).toMatchObject({
-      kind: "update",
-      table: collections,
-      values: {
-        config: JSON.stringify({
-          source: "dynamic",
-          categoryIds: ["cat_keep"],
-        }),
-      },
-    });
-    expect(batchCalls[0]?.[4]).toMatchObject({ kind: "delete" });
-  });
-
-  it("routes single permanent delete through the bulk cleanup primitive", () => {
-    const source = readFileSync(
-      new URL("./categories.service.ts", import.meta.url),
-      "utf8",
-    );
-    expect(source).toContain("await bulkDeleteCategories(db, [{ id, expectedRevision }], true)");
-  });
-
-  it("routes single soft delete through the same atomic bulk guard", () => {
-    const source = readFileSync(
-      new URL("./categories.service.ts", import.meta.url),
-      "utf8",
-    );
-    expect(source).toContain("await bulkDeleteCategories(db, [{ id, expectedRevision }], false)");
-    expect(source).toContain("categoryDeleteUsageGuard(db, claims)");
+    expect(sqlite.prepare("SELECT aggregate_revision FROM products WHERE id = 'prod_trashed'").get())
+      .toEqual({ aggregate_revision: 2 });
   });
 
   it("fails closed when a product is assigned after the initial usage read", async () => {
-    const db = {
-      select() {
-        return {
-          from(table: unknown) {
-            return {
-              kind: "guard",
-              all: async () => [],
-              where() {
-                if (table === products) {
-                  return { limit: () => ({ all: async () => [] }) };
-                }
-                if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
-                }
-                return { all: async () => [] };
-              },
-            };
-          },
-        };
-      },
-      run() {
-        return { kind: "guard" };
-      },
-      update() {
-        return { set: () => ({ where: () => ({ kind: "update" }) }) };
-      },
-      delete() {
-        return { where: () => ({ returning: () => ({ kind: "delete" }) }) };
-      },
-      async batch() {
-        throw new Error("D1_ERROR: malformed JSON");
-      },
-    };
+    const { db, categoryExists } = setup((sqlite) => {
+      sqlite.exec("INSERT INTO products (id, name, price, slug, category_id) VALUES ('prod_new', 'New', 10, 'new', 'cat_delete')");
+    });
 
-    await expect(
-      bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true),
-    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(bulkDeleteCategories(db, deleteClaim, true)).rejects.toBeInstanceOf(ValidationError);
+    expect(categoryExists("cat_delete")).toBe(true);
   });
 
   it("requires trash before permanent deletion", async () => {
-    const db = {
-      select() {
-        return {
-          from(table: unknown) {
-            return {
-              where() {
-                if (table === products) {
-                  return { limit: () => ({ all: async () => [] }) };
-                }
-                return { all: async () => [{ id: "cat_active", deletedAt: null }] };
-              },
-            };
-          },
-        };
-      },
-      update() {
-        return { set: () => ({ where: () => ({ kind: "update" }) }) };
-      },
-      run() {
-        return { kind: "guard" };
-      },
-    };
+    const { db, categoryExists } = setup();
 
-    await expect(
-      bulkDeleteCategories(db as never, [{ id: "cat_active", expectedRevision: 1 }], true),
-    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(bulkDeleteCategories(db, [{ id: "cat_active", expectedRevision: 1 }], true))
+      .rejects.toBeInstanceOf(ConflictError);
+    expect(categoryExists("cat_active")).toBe(true);
   });
 
   it("does not orphan an active dynamic collection", async () => {
-    const db = {
-      select() {
-        return {
-          from(table: unknown) {
-            return {
-              where() {
-                if (table === products) {
-                  return { limit: () => ({ all: async () => [] }) };
-                }
-                if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
-                }
-                if (table === collections) {
-                  return { all: async () => [{
-                    id: "col_1",
-                    name: "Featured shoes",
-                    isActive: true,
-                    deletedAt: null,
-                    config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_delete"] }),
-                  }] };
-                }
-                return { all: async () => [] };
-              },
-              all: async () => table === collections ? [{
-                id: "col_1",
-                name: "Featured shoes",
-                isActive: true,
-                deletedAt: null,
-                config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_delete"] }),
-              }] : [],
-            };
-          },
-        };
-      },
-      update() {
-        return { set: () => ({ where: () => ({ kind: "update" }) }) };
-      },
-      run() {
-        return { kind: "guard" };
-      },
-    };
+    const { db, collection, categoryExists } = setup();
+    collection("col_featured", true, ["cat_delete"]);
 
-    await expect(
-      bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true),
-    ).rejects.toThrow("without a source");
+    await expect(bulkDeleteCategories(db, deleteClaim, true)).rejects.toThrow("without a source");
+    expect(categoryExists("cat_delete")).toBe(true);
   });
 
   it("caps restore sets before constructing a D1 query", async () => {
@@ -246,5 +84,25 @@ describe("category permanent delete integrity", () => {
     }));
     await expect(restoreCategories({} as never, claims))
       .rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("does not churn product composition revisions for category edit, status, trash, or restore writes", async () => {
+    const { sqlite, db } = setup();
+    sqlite.exec(`INSERT INTO products (id, name, price, slug, category_id) VALUES ('prod_live', 'Live', 10, 'live', 'cat_keep');
+      INSERT INTO products (id, name, price, slug, category_id, deleted_at) VALUES ('prod_old', 'Old', 10, 'old', 'cat_active', 1700000000);`);
+
+    await updateCategory(db, "cat_keep", {
+      name: "Keep renamed", slug: "keep", description: null, metaTitle: null, metaDescription: null,
+      canonicalPath: null, noIndex: false, excludeFromSitemap: false, image: null,
+      expectedRevision: 1, status: "draft",
+    });
+    await updateCategoryStatus(db, "cat_keep", { expectedRevision: 2, status: "internal" });
+    await bulkDeleteCategories(db, [{ id: "cat_active", expectedRevision: 1 }], false);
+    await restoreCategories(db, [{ id: "cat_active", expectedRevision: 2 }]);
+
+    expect(sqlite.prepare("SELECT id, aggregate_revision FROM products ORDER BY id").all()).toEqual([
+      { id: "prod_live", aggregate_revision: 1 },
+      { id: "prod_old", aggregate_revision: 1 },
+    ]);
   });
 });

@@ -27,10 +27,9 @@ import {
   errorResponses,
   successEnvelope,
 } from "../../schemas/responses";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const TAX_CACHE_GROUPS = ["checkout"] as const;
 
 function serializeTimestamp(value: unknown): string | number | null {
   if (value instanceof Date) return value.toISOString();
@@ -212,7 +211,7 @@ const updateSettingsRoute = createRoute({
 
 app.openapi(updateSettingsRoute, async (c) => {
   const settings = await updateTaxSettings(c.get("db"), c.req.valid("json"));
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { settings: serializeTaxSettings(settings) });
 });
 
@@ -274,7 +273,7 @@ const createClassRoute = createRoute({
 });
 app.openapi(createClassRoute, async (c) => {
   const taxClass = await createTaxClass(c.get("db"), c.req.valid("json"));
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return created(c, { taxClass: serializeTaxClass(taxClass) });
 });
 
@@ -299,7 +298,7 @@ const updateClassRoute = createRoute({
 });
 app.openapi(updateClassRoute, async (c) => {
   const taxClass = await updateTaxClass(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { taxClass: serializeTaxClass(taxClass) });
 });
 
@@ -324,7 +323,7 @@ const deleteClassRoute = createRoute({
 });
 app.openapi(deleteClassRoute, async (c) => {
   const taxClass = await deleteTaxClass(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion);
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { taxClass: serializeTaxClass(taxClass) });
 });
 
@@ -400,7 +399,7 @@ const createRateRoute = createRoute({
 });
 app.openapi(createRateRoute, async (c) => {
   const taxRate = await createTaxRate(c.get("db"), c.req.valid("json"));
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return created(c, { taxRate: serializeTaxRate(taxRate) });
 });
 
@@ -425,7 +424,7 @@ const updateRateRoute = createRoute({
 });
 app.openapi(updateRateRoute, async (c) => {
   const taxRate = await updateTaxRate(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { taxRate: serializeTaxRate(taxRate) });
 });
 
@@ -446,7 +445,7 @@ const deleteRateRoute = createRoute({
 });
 app.openapi(deleteRateRoute, async (c) => {
   const taxRate = await deleteTaxRate(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion);
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { taxRate: serializeTaxRate(taxRate) });
 });
 
@@ -549,7 +548,7 @@ const updateClassificationRoute = createRoute({
 app.openapi(updateClassificationRoute, async (c) => {
   const params = c.req.valid("param");
   const classification = await updateTaxClassification(c.get("db"), { ...params, ...c.req.valid("json") });
-  await invalidateApiAndScheduleStorefrontGroups(TAX_CACHE_GROUPS, c);
+  await bumpCacheGeneration(c);
   return ok(c, { classification });
 });
 

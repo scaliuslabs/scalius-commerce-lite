@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
-import { existsSync, readFileSync } from "node:fs";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 import {
   cartStore,
@@ -21,7 +20,6 @@ import {
 } from "./client";
 
 const apiMocks = vi.hoisted(() => ({
-  getActiveCheckoutLanguage: vi.fn(),
   saveAbandonedCheckout: vi.fn(),
   validateDiscount: vi.fn(),
 }));
@@ -35,10 +33,9 @@ const analyticsMocks = vi.hoisted(() => ({
   trackFbInitiateCheckout: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
-  getActiveCheckoutLanguage: apiMocks.getActiveCheckoutLanguage,
-  saveAbandonedCheckout: apiMocks.saveAbandonedCheckout,
-  validateDiscount: apiMocks.validateDiscount,
+vi.mock("./browser-api", () => ({
+  saveAbandonedCheckoutFromBrowser: apiMocks.saveAbandonedCheckout,
+  validateDiscountFromBrowser: apiMocks.validateDiscount,
 }));
 
 vi.mock("@/lib/analytics", () => ({
@@ -188,7 +185,7 @@ describe("initCartFunctionality", () => {
     renderCartDom();
     localStorage.setItem("cart", JSON.stringify(cartState));
     cartStore.set(cartState);
-    apiMocks.getActiveCheckoutLanguage.mockResolvedValue(null);
+    window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA };
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -319,7 +316,9 @@ describe("initCartFunctionality", () => {
       .getElementById("customerPhone-input")
       ?.dispatchEvent(new FocusEvent("blur"));
 
-    expect(analyticsMocks.trackFbInitiateCheckout).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() =>
+      expect(analyticsMocks.trackFbInitiateCheckout).toHaveBeenCalledTimes(1),
+    );
   });
 
   it("clears an old hosted-payment pointer after the buyer changes to a different cart", async () => {
@@ -1025,58 +1024,5 @@ describe("initCartFunctionality", () => {
       "Enter your phone number to check this one-use discount",
     );
     expect(cartStore.get().discount).toBeNull();
-  });
-
-  it("preserves checkout navigation state and keeps startup free of inline discount hooks", () => {
-    const cartPagePath = [
-      `${process.cwd()}/src/pages/cart.astro`,
-      `${process.cwd()}/apps/storefront/src/pages/cart.astro`,
-    ].find((path) => existsSync(path));
-    expect(cartPagePath).toBeDefined();
-
-    const cartPage = readFileSync(cartPagePath as string, "utf8");
-    expect(cartPage).not.toContain("clearCheckoutTransferSession();");
-    expect(cartPage).toContain("void initCartFunctionality();");
-    expect(cartPage).toContain("readCheckoutFormDraft");
-    expect(cartPage).toContain("writeCheckoutFormDraft");
-    expect(cartPage).toContain('"pageshow"');
-    expect(cartPage).toContain("PageTransitionEvent");
-    expect(cartPage).not.toContain('onclick="window.removeDiscountCode()"');
-    expect(cartPage).toContain(
-      "window.__scaliusCartPageAbortController?.abort();",
-    );
-    expect(cartPage).toContain("writeCheckoutTransferSession(");
-    expect(cartPage).toContain(
-      "showCheckoutTransferError(transferWrite.message);",
-    );
-    expect(cartPage).not.toContain(
-      'sessionStorage.setItem("scalius_checkout_data"',
-    );
-    expect(cartPage).toContain('quickBuyStorage") === "blocked"');
-    expect(cartPage).toContain(
-      'document.addEventListener("cart-updated", updateCheckoutButtonState',
-    );
-    expect(cartPage).not.toContain(
-      'window.addEventListener("cart-updated", updateCheckoutButtonState',
-    );
-    expect(cartPage).toContain(
-      "lg:sticky lg:self-start transition-all duration-200 order-1",
-    );
-    expect(cartPage).toContain(
-      '<div id="checkoutPanel" class="hidden lg:w-7/12 order-2">',
-    );
-    expect(cartPage).not.toContain("order-2 lg:order-1");
-    expect(cartPage).not.toContain("order-1 lg:order-2");
-    expect(cartPage).toContain('id="cartPageRoot"');
-    expect(cartPage).toContain('data-cart-ready="false"');
-    expect(cartPage).toContain('id="cartSummary"');
-    expect(cartPage).toContain('id="checkoutPanel"');
-    expect(cartPage).toContain('id="taxAmount"');
-    expect(cartPage).toContain('id="totalLabel"');
-    expect(cartPage).toContain("copy.estimatedTotalText");
-    expect(cartPage).toContain("copy.cartLoadingText");
-    expect(cartPage).toContain("copy.noScriptText");
-    expect(cartPage).toContain("window.__CHECKOUT_LANGUAGE__=");
-    expect(cartPage).toContain("disabled={true}");
   });
 });

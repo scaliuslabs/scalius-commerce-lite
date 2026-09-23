@@ -4,11 +4,16 @@ import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
     issueInvoice: vi.fn(),
+    getInvoiceDocument: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders/invoice.service", async (importOriginal) => ({
     ...await importOriginal<typeof import("@scalius/core/modules/orders/invoice.service")>(),
     issueInvoice: mocks.issueInvoice,
+    getInvoiceDocument: mocks.getInvoiceDocument,
+}));
+vi.mock("@scalius/core/modules/orders/invoice-printable-artifact", () => ({
+    renderPrintableInvoice: () => "<p>Buyer <script>é</script></p>",
 }));
 
 import { adminOrdersInvoiceRoutes } from "./orders-invoice";
@@ -28,10 +33,28 @@ function createApp() {
     return app;
 }
 
-describe("admin invoice issue idempotency boundary", () => {
+describe("admin invoice route boundaries", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mocks.issueInvoice.mockResolvedValue({ status: "issued", invoiceNumber: "INV-00001" });
+        mocks.getInvoiceDocument.mockResolvedValue({ status: "draft", invoiceNumber: null, order: { id: "order_1" } });
+    });
+
+    it("keeps invoice reads side-effect free and never issues a number", async () => {
+        const app = createApp();
+        expect((await app.request("/api/v1/admin/orders/order_1/invoice")).status).toBe(200);
+        expect((await app.request("/api/v1/admin/orders/order_1/invoice/print")).status).toBe(200);
+        expect(mocks.getInvoiceDocument).toHaveBeenCalledTimes(2);
+        expect(mocks.issueInvoice).not.toHaveBeenCalled();
+    });
+
+    it("serves the printable invoice as a private, exact-length attachment", async () => {
+        const response = await createApp().request("/api/v1/admin/orders/order_1/invoice/print");
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="invoice-draft-order_1.html"');
+        expect(response.headers.get("Content-Length")).toBe(String(bytes.byteLength));
+        expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+        expect(response.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
     });
 
     it("passes one canonical header key through exact request replay", async () => {

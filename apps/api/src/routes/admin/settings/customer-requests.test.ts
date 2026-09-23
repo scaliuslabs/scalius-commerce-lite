@@ -1,24 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
-
-const mocks = vi.hoisted(() => ({
-  getCustomerRequestPolicy: vi.fn(),
-  saveCustomerRequestPolicy: vi.fn(),
-}));
-
-vi.mock("@scalius/core/modules/settings/customer-request-policy", async () => {
-  const actual = await vi.importActual<
-    typeof import("@scalius/core/modules/settings/customer-request-policy")
-  >("@scalius/core/modules/settings/customer-request-policy");
-  return {
-    ...actual,
-    getCustomerRequestPolicy: mocks.getCustomerRequestPolicy,
-    saveCustomerRequestPolicy: mocks.saveCustomerRequestPolicy,
-  };
-});
-
 import { customerRequestPolicyRoutes } from "./customer-requests";
 
 const policy = {
@@ -30,34 +14,36 @@ const policy = {
 };
 
 function createTestApp() {
-  const db = { id: "db" };
+  const { db } = createSqliteD1Database();
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
   });
   app.use("*", async (c, next) => {
-    c.set("db", db as never);
+    c.set("db", db);
     await next();
   });
   app.route("/admin/settings", customerRequestPolicyRoutes);
-  return { app, db };
+  return app;
+}
+
+function put(app: ReturnType<typeof createTestApp>, body: unknown) {
+  return app.request("/api/v1/admin/settings/customer-requests", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 describe("customer request policy settings", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+  it("round-trips a complete strict policy and the exact buyer preview", async () => {
+    const app = createTestApp();
 
-  it("returns normalized policy and the exact buyer preview", async () => {
-    mocks.getCustomerRequestPolicy.mockResolvedValue(policy);
-    const { app, db } = createTestApp();
+    expect((await put(app, policy)).status).toBe(200);
+    const response = await app.request("/api/v1/admin/settings/customer-requests");
 
-    const response = await app.request(
-      "/api/v1/admin/settings/customer-requests",
-    );
     expect(response.status).toBe(200);
-    expect(mocks.getCustomerRequestPolicy).toHaveBeenCalledWith(db);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
@@ -72,33 +58,13 @@ describe("customer request policy settings", () => {
     });
   });
 
-  it("saves a complete strict policy through PUT", async () => {
-    mocks.saveCustomerRequestPolicy.mockResolvedValue(policy);
-    const { app, db } = createTestApp();
+  it("rejects unknown policy fields without persisting", async () => {
+    const app = createTestApp();
 
-    const response = await app.request(
-      "/api/v1/admin/settings/customer-requests",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(policy),
-      },
-    );
-    expect(response.status).toBe(200);
-    expect(mocks.saveCustomerRequestPolicy).toHaveBeenCalledWith(db, policy);
-  });
-
-  it("rejects unknown policy fields", async () => {
-    const { app } = createTestApp();
-    const response = await app.request(
-      "/api/v1/admin/settings/customer-requests",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...policy, seoReturnWindow: 30 }),
-      },
-    );
-    expect(response.status).toBe(400);
-    expect(mocks.saveCustomerRequestPolicy).not.toHaveBeenCalled();
+    expect((await put(app, { ...policy, seoReturnWindow: 30 })).status).toBe(400);
+    const stored = await (await app.request("/api/v1/admin/settings/customer-requests")).json() as {
+      data: { policy: { introText: string } };
+    };
+    expect(stored.data.policy.introText).not.toBe(policy.introText);
   });
 });

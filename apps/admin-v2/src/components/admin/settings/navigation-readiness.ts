@@ -1,4 +1,4 @@
-import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import type { Readiness as NavigationConfigSectionReadiness } from "@scalius/shared/readiness";
 
 /**
  * Stable issue codes from `NAVIGATION_READINESS_CODES`

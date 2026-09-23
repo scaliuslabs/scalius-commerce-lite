@@ -10,9 +10,12 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  previewTaxConfiguration,
-  type TaxConfigurationPayload,
-} from "@/lib/api-functions/taxes";
+  postApiV1AdminTaxesPreview,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type {
+  TaxConfigurationPayload,
+} from "@/lib/api-query-options/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { formatTaxMoney } from "./tax-form";
 
@@ -74,13 +77,13 @@ export function TaxPreviewPanel({
     Boolean(city && zone);
 
   const previewMutation = useMutation({
-    mutationFn: () => previewTaxConfiguration({ data: {
+    mutationFn: () => apiData(postApiV1AdminTaxesPreview({ body: {
       ...parsed,
       taxClassId: taxClassId === DEFAULT_CLASS ? null : taxClassId,
       city,
       zone,
       area: area === NO_AREA ? null : area,
-    } }),
+    } })),
   });
   const preview = previewMutation.data;
 

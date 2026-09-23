@@ -1,17 +1,19 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteDiscounts,
-  createDiscount,
-  deleteDiscount,
-  permanentDeleteDiscount,
-  restoreDiscount,
-  toggleDiscountStatus,
-  updateDiscount,
-  type CreateDiscountInput,
-  type DiscountDto,
-  type UpdateDiscountInput,
-} from "../api-functions/discounts";
+  deleteApiV1AdminDiscountsById,
+  deleteApiV1AdminDiscountsByIdPermanent,
+  postApiV1AdminDiscounts,
+  postApiV1AdminDiscountsBulkDelete,
+  postApiV1AdminDiscountsByIdRestore,
+  postApiV1AdminDiscountsByIdToggleStatus,
+  putApiV1AdminDiscountsById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
+import type { DiscountDto } from "../api-query-options/discounts";
+
+type CreateDiscountInput = ApiBody<typeof postApiV1AdminDiscounts>;
+type UpdateDiscountInput = ApiBody<typeof putApiV1AdminDiscountsById>;
 import { getServerFnError, queryKeys } from "./shared";
 import { readDiscountRevisionConflict } from "../admin-api-error";
 
@@ -64,7 +66,7 @@ export function useCreateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: DiscountMutationInput) =>
-      createDiscount({ data: serializeCreateDiscountInput(data) }),
+      apiData(postApiV1AdminDiscounts({ body: serializeCreateDiscountInput(data) })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discount created");
@@ -78,7 +80,10 @@ export function useUpdateDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateDiscountMutationInput) =>
-      updateDiscount({ data: serializeUpdateDiscountInput(data) }),
+      apiData(putApiV1AdminDiscountsById({
+        path: { id: data.id },
+        body: serializeUpdateDiscountInput(data),
+      })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.invalidateQueries({
@@ -96,7 +101,7 @@ export function useUpdateDiscount() {
 export function useDeleteDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteDiscount({ data: { id } }),
+    mutationFn: (id: string) => apiData(deleteApiV1AdminDiscountsById({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
@@ -110,7 +115,8 @@ export function useDeleteDiscount() {
 export function usePermanentDeleteDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => permanentDeleteDiscount({ data: { id } }),
+    mutationFn: (id: string) =>
+      apiData(deleteApiV1AdminDiscountsByIdPermanent({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
@@ -126,7 +132,7 @@ export function usePermanentDeleteDiscount() {
 export function useRestoreDiscount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreDiscount({ data: { id } }),
+    mutationFn: (id: string) => apiData(postApiV1AdminDiscountsByIdRestore({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.invalidateQueries({
@@ -142,12 +148,15 @@ export function useRestoreDiscount() {
 export function useToggleDiscountStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
+    mutationFn: ({ id, isActive, expectedRevision }: {
       id: string;
       isActive: boolean;
       expectedRevision: number;
     }) =>
-      toggleDiscountStatus({ data }),
+      apiData(postApiV1AdminDiscountsByIdToggleStatus({
+        path: { id },
+        body: { isActive, expectedRevision },
+      })),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({
         queryKey: queryKeys.discounts.detail(variables.id),
@@ -200,12 +209,12 @@ export function useBulkDeleteDiscounts() {
       ids?: string[];
       permanent?: boolean;
     }) =>
-      bulkDeleteDiscounts({
-        data: {
+      apiData(postApiV1AdminDiscountsBulkDelete({
+        body: {
           discountIds: data.discountIds ?? data.ids ?? [],
           permanent: data.permanent,
         },
-      }),
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       toast.success("Discounts deleted");

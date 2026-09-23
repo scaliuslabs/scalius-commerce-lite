@@ -8,18 +8,20 @@ import { toast } from "sonner";
 import { readPromotionRevisionConflict } from "../admin-api-error";
 
 import {
-  activatePromotion,
-  createPromotion,
-  deletePromotion,
-  pausePromotion,
-  previewPromotion,
-  updatePromotion,
-  type CreatePromotionInput,
-  type PreviewPromotionInput,
-  type PromotionRevisionClaim,
-  type UpdatePromotionDraftInput,
-  type UpdatePromotionInput,
-} from "../api-functions/promotions";
+  deleteApiV1AdminPromotionsById,
+  postApiV1AdminPromotions,
+  postApiV1AdminPromotionsByIdActivate,
+  postApiV1AdminPromotionsByIdPause,
+  postApiV1AdminPromotionsByIdPreview,
+  putApiV1AdminPromotionsById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
+import type {
+  CreatePromotionDraftInput,
+  UpdatePromotionDraftInput,
+} from "../api-query-options/promotions";
+
+type PromotionRevisionClaim = { id: string; expectedRevision: number };
 import { getServerFnError, queryKeys } from "./shared";
 
 function invalidatePromotion(
@@ -53,7 +55,8 @@ function handlePromotionMutationError(
 export function useCreatePromotion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreatePromotionInput) => createPromotion({ data }),
+    mutationFn: (body: CreatePromotionDraftInput) =>
+      apiData(postApiV1AdminPromotions({ body })),
     onSuccess: () => {
       invalidatePromotion(queryClient);
       toast.success("Promotion draft created");
@@ -68,7 +71,7 @@ export function useUpdatePromotion() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdatePromotionDraftInput }) =>
-      updatePromotion({ data: { id, ...input } as UpdatePromotionInput }),
+      apiData(putApiV1AdminPromotionsById({ path: { id }, body: input })),
     onSuccess: (_result, variables) => {
       invalidatePromotion(queryClient, variables.id);
       toast.success("Promotion saved");
@@ -87,7 +90,9 @@ export function useUpdatePromotion() {
 export function usePreviewPromotion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: PreviewPromotionInput) => previewPromotion({ data }),
+    mutationFn: ({ id, ...body }: { id: string } &
+      ApiBody<typeof postApiV1AdminPromotionsByIdPreview>) =>
+      apiData(postApiV1AdminPromotionsByIdPreview({ path: { id }, body })),
     onError: (error, variables) => {
       handlePromotionMutationError(
         error,
@@ -102,7 +107,8 @@ export function usePreviewPromotion() {
 export function useActivatePromotion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: PromotionRevisionClaim) => activatePromotion({ data }),
+    mutationFn: ({ id, expectedRevision }: PromotionRevisionClaim) =>
+      apiData(postApiV1AdminPromotionsByIdActivate({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_result, variables) => {
       invalidatePromotion(queryClient, variables.id);
       toast.success("Promotion activated");
@@ -121,7 +127,8 @@ export function useActivatePromotion() {
 export function usePausePromotion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: PromotionRevisionClaim) => pausePromotion({ data }),
+    mutationFn: ({ id, expectedRevision }: PromotionRevisionClaim) =>
+      apiData(postApiV1AdminPromotionsByIdPause({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_result, variables) => {
       invalidatePromotion(queryClient, variables.id);
       toast.success("Promotion paused");
@@ -140,7 +147,8 @@ export function usePausePromotion() {
 export function useDeletePromotion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: PromotionRevisionClaim) => deletePromotion({ data }),
+    mutationFn: ({ id, expectedRevision }: PromotionRevisionClaim) =>
+      apiData(deleteApiV1AdminPromotionsById({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.promotions.list(),

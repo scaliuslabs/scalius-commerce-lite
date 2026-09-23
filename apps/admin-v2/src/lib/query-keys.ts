@@ -269,12 +269,6 @@ export const queryKeys = {
     heroSliders: () => ["settings", "hero-sliders"] as const,
   },
 
-  // ── Cache ────────────────────────────────────────────────────────
-  cache: {
-    all: ["cache"] as const,
-    groups: () => ["cache", "groups"] as const,
-  },
-
   // ── Setup ────────────────────────────────────────────────────────
   setup: {
     all: ["setup"] as const,

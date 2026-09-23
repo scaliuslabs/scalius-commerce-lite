@@ -13,7 +13,7 @@ import {
 
 /**
  * Fetches a list of all active cities for shipping.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @returns A promise resolving to an array of city LocationData objects or null on failure.
  */
 export async function getCities(): Promise<LocationData[] | null> {
@@ -36,7 +36,7 @@ export async function getCities(): Promise<LocationData[] | null> {
 
 /**
  * Fetches a list of all active zones for a given city.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param cityId The ID of the parent city.
  * @returns A promise resolving to an array of zone LocationData objects or null on failure.
  */
@@ -66,7 +66,7 @@ export async function getZones(cityId: string): Promise<LocationData[] | null> {
 
 /**
  * Fetches a list of all active areas for a given zone.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param zoneId The ID of the parent zone.
  * @returns A promise resolving to an array of area LocationData objects or null on failure.
  */
@@ -96,7 +96,7 @@ export async function getAreas(zoneId: string): Promise<LocationData[] | null> {
 
 /**
  * Fetches all active shipping methods available for the store.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @returns A promise resolving to an array of ShippingMethod objects or null on failure.
  */
 export async function getShippingMethods(): Promise<ShippingMethod[] | null> {

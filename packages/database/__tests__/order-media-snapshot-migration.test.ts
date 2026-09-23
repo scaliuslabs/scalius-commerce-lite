@@ -34,11 +34,7 @@ function runSql(sql: string, bail: "on" | "off" = "on") {
 }
 
 describe("order image snapshot migration", () => {
-  it("uses remote-D1-safe triggers and accepts retained image snapshots", () => {
-    expect(migration).not.toContain("SELECT CASE WHEN");
-    expect(migration).toContain("order_items_product_image_media_insert_guard");
-    expect(migration).toContain("order_items_product_image_media_update_guard");
-
+  it("accepts retained image snapshots", () => {
     const result = runSql(`
       INSERT INTO order_items (id, quantity, product_image_media_id)
         VALUES ('item_ready', 1, 'med_ready_image');

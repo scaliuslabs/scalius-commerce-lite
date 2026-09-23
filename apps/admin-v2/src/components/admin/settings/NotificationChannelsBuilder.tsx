@@ -51,13 +51,14 @@ import { Label } from "@/components/ui/label";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
-import {
-  getAdminNotificationChannels,
-  getNotificationChannels,
-  updateAdminNotificationChannels,
-  updateNotificationChannels,
-} from "@/lib/api-functions/settings";
 import { describeNotificationIssue } from "@/lib/order-notification-display";
+import {
+  getApiV1AdminSettingsNotificationChannels,
+  getApiV1AdminSettingsNotificationChannelsAdminChannels,
+  putApiV1AdminSettingsNotificationChannels,
+  putApiV1AdminSettingsNotificationChannelsAdminChannels,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 const DEFAULT_WHATSAPP_TEMPLATE = {
   templateName: "order_status_update",
@@ -445,7 +446,7 @@ export function NotificationChannelsBuilder({
     setIsLoading(true);
     setCustomerLoadError(null);
     try {
-      const data = (await getNotificationChannels()) as {
+      const data = (await apiData(getApiV1AdminSettingsNotificationChannels())) as {
         channels?: Record<string, string[]>;
         whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
         email?: Readiness;
@@ -487,7 +488,7 @@ export function NotificationChannelsBuilder({
     setIsAdminLoading(true);
     setAdminLoadError(null);
     try {
-      const data = (await getAdminNotificationChannels()) as {
+      const data = (await apiData(getApiV1AdminSettingsNotificationChannelsAdminChannels())) as {
         channels?: Record<string, string[]>;
         push?: Readiness;
       };
@@ -567,12 +568,12 @@ export function NotificationChannelsBuilder({
           whatsAppTemplate.languageCode.trim() ||
           DEFAULT_WHATSAPP_TEMPLATE.languageCode,
       };
-      await updateNotificationChannels({
-        data: {
+      await apiData(putApiV1AdminSettingsNotificationChannels({
+        body: {
           channels: serializeCustomerNotificationConfig(channels),
           whatsappTemplate: normalizedTemplate,
         },
-      });
+      }));
       setWhatsAppTemplate(normalizedTemplate);
       setSavedWhatsAppTemplate(normalizedTemplate);
       setSavedChannels(channels);
@@ -600,9 +601,9 @@ export function NotificationChannelsBuilder({
     }
     setIsAdminSaving(true);
     try {
-      await updateAdminNotificationChannels({
-        data: { channels: serializeAdminNotificationConfig(adminChannels) },
-      });
+      await apiData(putApiV1AdminSettingsNotificationChannelsAdminChannels({
+        body: { channels: serializeAdminNotificationConfig(adminChannels) },
+      }));
       setSavedAdminChannels(adminChannels);
       toast.success("Admin notification rules saved");
     } catch (error: unknown) {

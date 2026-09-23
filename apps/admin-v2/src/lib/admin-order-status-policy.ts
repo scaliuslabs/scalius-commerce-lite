@@ -1,7 +1,18 @@
-import {
-  OrderStatus as OrderStatusValues,
-  type OrderStatus,
-} from "~/types/api-responses";
+export const OrderStatus = {
+  PENDING: "pending",
+  PROCESSING: "processing",
+  CONFIRMED: "confirmed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  REFUNDED: "refunded",
+  RETURNED: "returned",
+  PARTIALLY_REFUNDED: "partially_refunded",
+  INCOMPLETE: "incomplete",
+} as const;
+
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly OrderStatus[]>>> = {
   incomplete: ["pending", "cancelled"],
@@ -53,7 +64,7 @@ export function getAdminOrderCancellationBlockedReason(
 }
 
 export function isAdminOrderStatus(status: string): status is OrderStatus {
-  return Object.values(OrderStatusValues).includes(status as OrderStatus);
+  return Object.values(OrderStatus).includes(status as OrderStatus);
 }
 
 export function getAdminOrderStatusTransitions(

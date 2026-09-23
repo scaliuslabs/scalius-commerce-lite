@@ -46,11 +46,12 @@ describe("admin full-order edit readiness", () => {
         expect(result.reason).toContain("before shipment");
     });
 
+    // Stored evidence rows (payment, refund, shipment, tax snapshot, return,
+    // invoice) are covered end to end in orders.admin-full-edit-readiness.d1.test.ts.
     it.each([
         { paymentStatus: "paid", paidAmount: 100 },
-        { hasPaymentHistory: true },
-        { hasRefundHistory: true },
-    ])("locks payment and refund evidence: %o", (override) => {
+        { paymentStatus: "unpaid", paidAmount: 1 },
+    ])("locks payment state: %o", (override) => {
         const result = buildAdminOrderFullEditReadiness(editableOrder(override));
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain("Payment or refund evidence");
@@ -58,7 +59,6 @@ describe("admin full-order edit readiness", () => {
 
     it.each([
         { fulfillmentStatus: "partial" },
-        { hasShipmentHistory: true },
         {
             shipmentClaimId: "claim_1",
             shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
@@ -69,14 +69,6 @@ describe("admin full-order edit readiness", () => {
         expect(result.reason).toContain("Fulfillment or shipment evidence");
     });
 
-    it("locks immutable checkout tax snapshots", () => {
-        const result = buildAdminOrderFullEditReadiness(
-            editableOrder({ hasTaxSnapshot: true }),
-        );
-        expect(result.allowed).toBe(false);
-        expect(result.reason).toContain("immutable tax and line snapshots");
-    });
-
     it("locks an aggregate checkout until normalized read models are complete", () => {
         const result = buildAdminOrderFullEditReadiness(editableOrder({
             checkoutAggregateVersion: 1,
@@ -85,15 +77,6 @@ describe("admin full-order edit readiness", () => {
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain("materializing");
     });
-
-    it.each([{ hasReturnHistory: true }, { hasInvoiceHistory: true }])(
-        "locks return and invoice evidence: %o",
-        (override) => {
-            const result = buildAdminOrderFullEditReadiness(editableOrder(override));
-            expect(result.allowed).toBe(false);
-            expect(result.reason).toContain("Return or invoice evidence");
-        },
-    );
 });
 
 function amendableOrder(

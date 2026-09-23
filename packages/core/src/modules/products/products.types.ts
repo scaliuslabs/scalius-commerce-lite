@@ -50,8 +50,25 @@ export const createVariantSchema = variantMutationSchema.extend({
     expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 });
 
+/** Shown whenever a quantity edit was based on stock that has since changed. */
+export const STOCK_CHANGED_MESSAGE = "Stock changed since you opened this product. Reload to see the latest.";
+
+/**
+ * A quantity edit is a compare-and-set: the caller names the stockVersion it
+ * read, so a sale or adjustment in between fails the save instead of being
+ * overwritten. Omit both to keep the current quantity.
+ */
+export const expectedStockVersionSchema = z.number().int().min(0)
+    .describe("The SKU stockVersion the new quantity was based on. Required with stock.");
+
 export const updateVariantSchema = variantMutationSchema.extend({
+    stock: variantMutationSchema.shape.stock.optional()
+        .describe("New on-hand quantity. Omit to keep the current quantity."),
+    expectedStockVersion: expectedStockVersionSchema.optional(),
     expectedAggregateRevision: expectedProductAggregateRevisionSchema,
+}).refine((value) => value.stock === undefined || value.expectedStockVersion !== undefined, {
+    message: "Send expectedStockVersion with stock.",
+    path: ["expectedStockVersion"],
 });
 
 // ─────────────────────────────────────────

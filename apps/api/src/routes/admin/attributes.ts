@@ -36,12 +36,8 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { attributeSchema } from "../../schemas/entities";
-import {
-    invalidateApiAndScheduleStorefrontGroups,
-    type WaitUntilExecutionContext,
-} from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const ATTRIBUTE_CACHE_GROUPS = ["attributes", "products"] as const;
 const attributeMutationResultSchema = z.object({
     id: z.string().max(180),
     name: z.string().max(100),
@@ -51,13 +47,6 @@ const attributeMutationResultSchema = z.object({
 const attributeAgentSummarySchema = attributeMutationResultSchema.extend({
     deletedAt: z.union([z.string(), z.number()]).nullable(),
 });
-
-async function invalidateAttributeCaches(c: {
-    env?: Env;
-    executionCtx?: WaitUntilExecutionContext;
-}) {
-    await invalidateApiAndScheduleStorefrontGroups(ATTRIBUTE_CACHE_GROUPS, c);
-}
 
 // ── List Attributes ──
 
@@ -166,7 +155,7 @@ app.openapi(createAttributeRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createAttribute(db, data);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return created(c, result);
 });
 
@@ -197,7 +186,7 @@ app.openapi(updateAttributeRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateAttribute(db, id, data);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -223,7 +212,7 @@ app.openapi(deleteAttributeRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteAttribute(db, id);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -248,7 +237,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await permanentlyDeleteAttribute(db, id);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -273,7 +262,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { ids, permanent } = c.req.valid("json");
     await bulkDeleteAttributes(db, ids, permanent);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -298,7 +287,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkRestoreAttributes(db, ids);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -327,7 +316,7 @@ app.openapi(restoreRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await restoreAttribute(db, id);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, { message: "Attribute restored" });
 });
 
@@ -412,7 +401,7 @@ app.openapi(addValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
     await addAttributeValue(db, attributeId, value);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, {});
 });
 
@@ -443,7 +432,7 @@ app.openapi(updateValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { oldValue, newValue } = c.req.valid("json");
     await renameAttributeValue(db, attributeId, oldValue, newValue);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, {
         message: `Value "${oldValue}" renamed to "${newValue}"`
     });
@@ -475,7 +464,7 @@ app.openapi(deleteValueRoute, async (c) => {
     const { id: attributeId } = c.req.valid("param");
     const { value } = c.req.valid("json");
     await deleteAttributeValue(db, attributeId, value);
-    await invalidateAttributeCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, {
         message: `Value "${value}" deleted from all products`
     });

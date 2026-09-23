@@ -11,16 +11,13 @@ const mocks = vi.hoisted(() => ({
   invalidatePlatformConfigCache: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
   invalidateStorefrontUrlCache: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
   getPlatformSettings: mocks.getPlatformSettings,
   savePlatformSettings: mocks.savePlatformSettings,
   invalidatePlatformConfigCache: mocks.invalidatePlatformConfigCache,
-  platformSettingsDocument: {
-    invalidationGroups: ["layout", "homepage", "discovery", "checkout"],
-  },
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -28,8 +25,8 @@ vi.mock("@scalius/core/modules/settings", () => ({
   invalidateStorefrontUrlCache: mocks.invalidateStorefrontUrlCache,
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { platformSettingsRoutes } from "./platform";
@@ -66,7 +63,7 @@ function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined 
   mocks.invalidatePlatformConfigCache.mockResolvedValue(undefined);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -183,9 +180,7 @@ describe("admin platform settings", () => {
       expect(mocks.invalidatePlatformConfigCache).toHaveBeenCalledWith(cache);
       expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledWith(cache);
       expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(cache);
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-        ["layout", "homepage", "discovery", "checkout"],
-        expect.anything(),
+      expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
       );
       // The response reflects the persisted state, not the request-time env.
       await expect(response.json()).resolves.toEqual({
@@ -268,7 +263,7 @@ describe("admin platform settings", () => {
       expect(response.status).toBe(400);
       expect(mocks.savePlatformSettings).not.toHaveBeenCalled();
       expect(mocks.invalidatePlatformConfigCache).not.toHaveBeenCalled();
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+      expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
 
     it("surfaces service validation errors as 400 and skips cache invalidation", async () => {
@@ -286,7 +281,7 @@ describe("admin platform settings", () => {
       expect(mocks.invalidatePlatformConfigCache).not.toHaveBeenCalled();
       expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
       expect(mocks.invalidateStorefrontUrlCache).not.toHaveBeenCalled();
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+      expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
   });
 });

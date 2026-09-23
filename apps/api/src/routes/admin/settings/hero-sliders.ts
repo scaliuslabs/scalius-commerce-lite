@@ -12,21 +12,9 @@ import { HERO_SLIDE_LIMIT, HERO_SLIDE_TITLE_LIMIT } from "@scalius/shared/hero-s
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
 import { nullableTimestampSchema } from "../../../schemas/timestamps";
-import {
-    getOptionalExecutionContext,
-    invalidateApiAndStorefrontGroups,
-    type WaitUntilExecutionContext,
-} from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const HOMEPAGE_CACHE_GROUPS = ["homepage"] as const;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
-
-async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
-    const executionCtx = getOptionalExecutionContext(c);
-    await invalidateApiAndStorefrontGroups([...HOMEPAGE_CACHE_GROUPS], c.env, {
-        cleanupExecutionCtx: executionCtx,
-    });
-}
 
 const sliderImageSchema = z.object({
     id: z.string().min(1).max(80),
@@ -108,7 +96,7 @@ app.openapi(createSliderRoute, (async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const slider = await createHeroSlider(db, data);
-    await invalidateHomepageCaches(c);
+    await bumpCacheGeneration(c);
     return created(c, slider);
 }) as AppRouteHandler<typeof createSliderRoute>);
 
@@ -159,7 +147,7 @@ app.openapi(updateSliderRoute, (async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const slider = await updateHeroSlider(db, id, data);
-    await invalidateHomepageCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, slider);
 }) as AppRouteHandler<typeof updateSliderRoute>);
 
@@ -193,7 +181,7 @@ app.openapi(deleteSliderRoute, (async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
     const slider = await deleteHeroSlider(db, id, expectedRevision);
-    await invalidateHomepageCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, slider);
 }) as AppRouteHandler<typeof deleteSliderRoute>);
 

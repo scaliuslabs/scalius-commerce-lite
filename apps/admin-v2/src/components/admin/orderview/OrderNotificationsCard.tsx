@@ -28,7 +28,7 @@ import {
   useRetryOrderNotification,
 } from "@/lib/api-mutations/orders";
 import { useHydrated } from "@/hooks/use-hydrated";
-import type { OrderNotificationOutboxDto } from "@/lib/api-functions/orders";
+import type { OrderNotificationOutboxDto } from "@/lib/api-query-options/orders";
 import {
   buildReceiptDisplayGroups,
   deliveryAttemptLabel,

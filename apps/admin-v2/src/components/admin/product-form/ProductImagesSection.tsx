@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import {
   ArrowLeft,
   ArrowRight,
@@ -76,7 +76,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   const [isOpen, setIsOpen] = React.useState(true);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [showAll, setShowAll] = React.useState(false);
-  const mediaItems = form.watch("media") ?? EMPTY_PRODUCT_MEDIA;
+  const mediaItems = useWatch({ control: form.control, name: "media" }) ?? EMPTY_PRODUCT_MEDIA;
   const mediaCount = mediaItems.length;
   const attachedMediaIds = React.useMemo(
     () => mediaItems.map((item) => item.mediaId),

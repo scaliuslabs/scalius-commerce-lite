@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
-import { DatabaseSync, type SQLInputValue, type SQLOutputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventProcessed: vi.fn(),
   markWebhookEventFailed: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
-  invalidateProductAvailabilityCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -35,8 +33,8 @@ vi.mock("@scalius/core/modules/delivery/tracking", () => ({
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 
-vi.mock("../../utils/cache-invalidation", () => ({
-  invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+vi.mock("../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", () => ({
@@ -44,30 +42,6 @@ vi.mock("../../utils/order-notification-queue", () => ({
 }));
 
 import { buildSteadfastWebhookDedupKey, steadfastWebhookRoutes } from "./steadfast";
-
-function sqliteD1Statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []) {
-  const execute = () => ({
-    results: sqlite.prepare(query).all(...values) as Record<string, SQLOutputValue>[],
-    success: true as const,
-    meta: {},
-  });
-  return {
-    query,
-    bind: (...nextValues: SQLInputValue[]) => sqliteD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column?: string) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
 
 function createDbMock(
   shipment: Record<string, unknown> | null,
@@ -229,7 +203,7 @@ describe("Steadfast webhook idempotency keys", () => {
       "steadfast:delivery_status:delivery_wh:steadfast:123:delivery_status:delivered",
       expect.objectContaining({ rawStatus: "delivered", normalizedStatus: "delivered" }),
     );
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
       queue: undefined,
@@ -391,19 +365,8 @@ describe("Steadfast webhook idempotency keys", () => {
   });
 
   it("persists the recovered consignment for subsequent provider polling", async () => {
-    const sqlite = new DatabaseSync(":memory:");
+    const { sqlite, db } = createSqliteD1Database();
     try {
-      const migrations = new URL("../../../../../packages/database/migrations/", import.meta.url);
-      for (const name of readdirSync(migrations).filter((entry) => /^\d{4}_.+\.sql$/.test(entry)).sort()) {
-        sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-      }
-      const binding = {
-        prepare: (query: string) => sqliteD1Statement(sqlite, query),
-        async batch(statements: ReturnType<typeof sqliteD1Statement>[]) {
-          return statements.map((statement) => statement.execute());
-        },
-      };
-      const db = drizzle(binding as never, { schema });
       await db.insert(schema.deliveryProviders).values({
         id: "provider_steadfast",
         name: "Steadfast",
@@ -516,11 +479,7 @@ describe("Steadfast webhook idempotency keys", () => {
       trackingId: "TRACK-1",
       source: "steadfast-webhook",
     });
-    expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-      db,
-      { variantIds: ["variant_1"] },
-      expect.anything(),
-    );
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
   });
 
   it("skips duplicate durable delivery-status events before shipment updates", async () => {
@@ -550,7 +509,7 @@ describe("Steadfast webhook idempotency keys", () => {
     expect(body.deduplicated).toBe(true);
     expect(updateSet).not.toHaveBeenCalled();
     expect(mocks.updateOrderStatusFromShipment).not.toHaveBeenCalled();
-    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 });

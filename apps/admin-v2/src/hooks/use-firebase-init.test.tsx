@@ -97,7 +97,7 @@ describe("useFirebaseInit registration acknowledgment", () => {
     await act(async () => hook.enablePushNotifications());
     expect(container.textContent).toBe("enabled");
     expect(mocks.register).toHaveBeenCalledTimes(2);
-    expect(mocks.register).toHaveBeenLastCalledWith("/api/v1/admin/fcm-token", expect.objectContaining({ method: "POST" }));
+    expect(mocks.register).toHaveBeenLastCalledWith(expect.stringContaining("/api/v1/admin/fcm-token"), expect.objectContaining({ method: "POST" }));
     expect(mocks.onMessage).toHaveBeenCalledOnce();
     await act(async () => hook.enablePushNotifications());
     expect(mocks.register).toHaveBeenCalledTimes(2);

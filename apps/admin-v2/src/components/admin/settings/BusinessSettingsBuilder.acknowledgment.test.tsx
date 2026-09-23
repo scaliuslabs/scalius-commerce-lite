@@ -16,9 +16,10 @@ const api = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock("~/lib/api-functions/settings", () => ({
-  getBusinessSettings: api.get,
-  updateBusinessSettings: api.update,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsBusiness: api.get,
+  postApiV1AdminSettingsBusiness: api.update,
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
 vi.mock("../shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));

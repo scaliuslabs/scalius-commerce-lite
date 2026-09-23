@@ -1,65 +1,19 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import * as ordersAdmin from "./orders.admin";
 import {
   confirmManualOrderAmendment,
   getAdminOrderAmendmentReadiness,
   previewManualOrderAmendment,
+  updateOrder,
 } from "./orders.admin";
+import { createOrderSchema } from "./orders.validation";
 import type { ConfirmManualOrderAmendmentInput } from "./orders.validation";
 import type { PreviewManualOrderAmendmentInput } from "./orders.validation";
-
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  query: string;
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): D1Statement {
-  const execute = (): D1Result => ({
-    results: sqlite.prepare(query).all(...values),
-    success: true,
-    meta: {},
-  });
-  return {
-    query,
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
+import { saveAllowedCountries } from "../settings/site-settings.service";
 
 describe("manual COD order amendments on D1 storage", () => {
   let sqlite: DatabaseSync;
@@ -67,11 +21,15 @@ describe("manual COD order amendments on D1 storage", () => {
   let beforeAmendmentBatch: (() => void) | null;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
+    beforeAmendmentBatch = null;
+    ({ sqlite, db } = createSqliteD1Database({
+      beforeBatch(_sqlite, statements) {
+        if (!statements.some((statement) => statement.query.includes('"order_amendments"'))) return;
+        const before = beforeAmendmentBatch;
+        beforeAmendmentBatch = null;
+        before?.();
+      },
+    }));
     sqlite.exec(`
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES
@@ -147,27 +105,6 @@ describe("manual COD order amendments on D1 storage", () => {
         2, 'regular', 1, 0, 1, 0, 0, 2, 2, 0, 0, 0
       );
     `);
-    beforeAmendmentBatch = null;
-    const binding = {
-      prepare: (query: string) => d1Statement(sqlite, query),
-      async batch(statements: D1Statement[]) {
-        if (statements.some((statement) => statement.query.includes('"order_amendments"'))) {
-          const before = beforeAmendmentBatch;
-          beforeAmendmentBatch = null;
-          before?.();
-        }
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(binding as unknown as D1Database, { schema }) as unknown as Database;
   });
 
   afterEach(() => sqlite.close());
@@ -392,5 +329,112 @@ describe("manual COD order amendments on D1 storage", () => {
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
       .toEqual({ reserved_stock: 2 });
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_amendments").get()).toEqual({ count: 0 });
+  });
+
+  it("refuses full-editor replacement for a stale revision, lifecycle change, issued invoice, or return", async () => {
+    // A full-editable manual order has no checkout tax snapshot.
+    sqlite.exec("DELETE FROM order_item_tax_snapshots; DELETE FROM order_tax_snapshots;");
+    const edit = (overrides: Record<string, unknown> = {}) => updateOrder(db, "order_1", {
+      ...input(),
+      items: [{ productId: "product_1", variantId: "variant_1", quantity: 3, price: 100 }],
+      status: "confirmed",
+      ...overrides,
+    } as never);
+
+    const state = () => [
+      sqlite.prepare("SELECT version FROM orders").get(),
+      sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get(),
+    ];
+
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/changed after you opened/i);
+    await expect(edit({ status: "shipped" })).rejects.toThrow(/order status action/i);
+    expect(state()).toEqual([{ version: 1 }, { reserved_stock: 2 }]);
+    await expect(edit()).resolves.toMatchObject({ id: "order_1" });
+    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
+
+    // Invoice then return: each refusal is attributable because the return check runs first.
+    sqlite.exec(`INSERT INTO order_invoices (id, order_id, invoice_number, prefix, formatted_number,
+      order_version, snapshot, content_hash, render_version, issued_at)
+      VALUES ('invoice_1', 'order_1', 1, 'INV', 'INV-1', 2, '{}', '${"a".repeat(64)}', 'v1', unixepoch())`);
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/invoice/i);
+    sqlite.exec(`INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id)
+      VALUES ('return_1', 'order_1', 'cancelled', 'Test return', 'admin', 'admin_1')`);
+    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/return/i);
+    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
+  });
+
+  it("commits a manual order with its reservation, COD tracking, customer stats and replay evidence exactly once", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, phone, total_orders, total_spent)
+      VALUES ('cust_1', 'Buyer', '+8801712345678', 4, 900)`);
+    const { expectedVersion: _expectedVersion, ...draft } = input();
+    const data = { ...draft, items: [{ productId: "product_1", variantId: "variant_1", quantity: 3 }] };
+
+    const created = await ordersAdmin.createOrder(db, data, "admin_1");
+    await expect(ordersAdmin.createOrder(db, data, "admin_1")).resolves.toEqual(created);
+
+    expect(sqlite.prepare("SELECT customer_id, total_amount, balance_due, payment_status, inventory_action FROM orders WHERE id = ?")
+      .get(created.id)).toEqual({
+      customer_id: "cust_1", total_amount: 360, balance_due: 360, payment_status: "unpaid", inventory_action: "reserved",
+    });
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ reserved_stock: 5 });
+    expect(sqlite.prepare("SELECT total_orders, total_spent FROM customers").get()).toEqual({ total_orders: 5, total_spent: 900 });
+    expect(sqlite.prepare("SELECT cod_status FROM cod_tracking WHERE order_id = ?").get(created.id)).toEqual({ cod_status: "pending" });
+    expect(sqlite.prepare("SELECT status FROM admin_order_create_attempts WHERE order_id = ?").get(created.id))
+      .toEqual({ status: "committed" });
+  });
+
+  it("creates a manual order only for a present phone from an allowed country", async () => {
+    await saveAllowedCountries(db, ["BD"], "include");
+    const { expectedVersion: _expectedVersion, ...draft } = input();
+    const data = { ...draft, items: [{ productId: "product_1", variantId: "variant_1", quantity: 1 }] };
+    const orderIds = () => sqlite.prepare("SELECT id FROM orders ORDER BY id").all().map((row) => row.id);
+
+    await expect(ordersAdmin.createOrder(db, { ...data, customerPhone: "" }, "admin_1"))
+      .rejects.toThrow("Phone number is required");
+    expect(createOrderSchema.safeParse({ ...data, customerPhone: "" }).success).toBe(false);
+    await expect(ordersAdmin.createOrder(db, { ...data, customerPhone: "+919876543210" }, "admin_1"))
+      .rejects.toThrow("Phone numbers from IN are not accepted");
+    expect(orderIds()).toEqual(["order_1"]);
+
+    // A refused phone does not burn the request key; the route schema stores E.164.
+    const corrected = createOrderSchema.parse({ ...data, customerPhone: "+880 1812-345678" });
+    const created = await ordersAdmin.createOrder(db, corrected, "admin_1");
+    expect(sqlite.prepare("SELECT customer_phone FROM orders WHERE id = ?").get(created.id))
+      .toEqual({ customer_phone: "+8801812345678" });
+    expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
+      .toEqual({ reserved_stock: 3 });
+  });
+
+  it("refuses a full-editor phone change to a disallowed country", async () => {
+    sqlite.exec("DELETE FROM order_item_tax_snapshots; DELETE FROM order_tax_snapshots;");
+    const edit = (customerPhone: string, expectedVersion = 1) => updateOrder(db, "order_1", {
+      ...input({ expectedVersion, customerPhone }),
+      items: [{ productId: "product_1", variantId: "variant_1", quantity: 2, price: 100 }],
+      status: "confirmed",
+    } as never);
+    const stored = () => sqlite.prepare("SELECT customer_phone, version FROM orders").get();
+
+    // The stored phone predates the policy; only a changed phone is re-checked.
+    await saveAllowedCountries(db, ["IN"], "include");
+    await expect(edit("+8801812345678")).rejects.toThrow("Phone numbers from BD are not accepted");
+    expect(stored()).toEqual({ customer_phone: "+8801712345678", version: 1 });
+    await expect(edit("+8801712345678")).resolves.toMatchObject({ id: "order_1" });
+
+    await saveAllowedCountries(db, ["IN"], "exclude");
+    await expect(edit("+919876543210", 2)).rejects.toThrow("Phone numbers from IN are not accepted");
+    expect(stored()).toEqual({ customer_phone: "+8801712345678", version: 2 });
+    // Regression: the new-phone customer insert once bound 19 values to 23 columns.
+    await expect(edit("+8801812345678", 2)).resolves.toMatchObject({ id: "order_1" });
+    expect(stored()).toEqual({ customer_phone: "+8801812345678", version: 3 });
+    expect(sqlite.prepare(`SELECT c.phone, c.city_name, c.zone_name, c.total_orders, c.account_claimed_at
+      FROM customers c JOIN orders o ON o.customer_id = c.id`).get()).toEqual({
+      phone: "+8801812345678", city_name: "Dhaka", zone_name: "North", total_orders: 1, account_claimed_at: null,
+    });
+  });
+
+  it("exposes archive but no permanent order deletion service", () => {
+    expect(Object.keys(ordersAdmin).filter((name) => /delete/i.test(name))).toEqual([]);
+    expect(ordersAdmin.archiveOrders).toBeTypeOf("function");
   });
 });

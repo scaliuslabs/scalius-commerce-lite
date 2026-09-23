@@ -1,10 +1,8 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import type { DatabaseSync } from "node:sqlite";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SendEmailOptions } from "../../integrations/email/provider";
 import { sendOrderNotificationEmail } from "./notifications.service";
 import type { OrderNotificationType } from "./notification-types";
@@ -20,33 +18,22 @@ describe("customer order email composition and delivery", () => {
   let afterOrderRead: (() => void) | undefined;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
     reads = [];
     failItemRead = false;
     afterOrderRead = undefined;
-    const execute = (query: { sql: string; params: unknown[]; method: string }) => {
-      if (query.sql.startsWith("select")) reads.push(`${query.sql} ${JSON.stringify(query.params)}`);
-      if (failItemRead && query.sql.includes('"order_items"')) throw new Error("Temporary order item read failure");
-      const statement = sqlite.prepare(query.sql);
-      statement.setReturnArrays(true);
-      const result = { rows: query.method === "get"
-        ? statement.get(...query.params as SQLInputValue[]) as unknown as unknown[]
-        : statement.all(...query.params as SQLInputValue[]) as unknown as unknown[][] };
-      if (afterOrderRead && query.sql.includes('from "orders"')) {
-        afterOrderRead();
-        afterOrderRead = undefined;
-      }
-      return result;
-    };
-    db = drizzle(
-      async (sql, params, method) => execute({ sql, params, method }),
-      async (batch) => batch.map(execute),
-      { schema },
-    ) as unknown as Database;
+    let orderRead = false;
+    ({ sqlite, db } = createSqliteD1Database({
+      onQuery(query, params) {
+        // onQuery runs before execution, so apply the amendment on the statement after the order read.
+        if (orderRead && afterOrderRead) {
+          afterOrderRead();
+          afterOrderRead = undefined;
+        }
+        orderRead ||= query.includes('from "orders"');
+        if (query.startsWith("select")) reads.push(`${query} ${JSON.stringify(params)}`);
+        if (failItemRead && query.includes('"order_items"')) throw new Error("Temporary order item read failure");
+      },
+    }));
     transport.sendEmail.mockReset().mockResolvedValue({ success: true, provider: "mailpit", providerRef: "synthetic-mail", rawStatus: "captured" });
     setting("company_name", "River & Loom", "business_info");
     setting("email", "support@example.test", "business_info");

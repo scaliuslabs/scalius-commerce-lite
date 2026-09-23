@@ -50,11 +50,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
 import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar";
-import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
-import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
+import {
+  abandonedCheckoutsQueryOptions,
+  type AbandonedCheckout,
+} from "@/lib/api-query-options/abandoned-checkouts";
+import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -559,18 +562,9 @@ export function AbandonedCheckoutsManager({
   });
 
   // Extract typed data
-  const { checkouts, pagination } = useMemo(() => {
-    const raw = rawData as Record<string, unknown> | undefined;
-    if (!raw) {
-      return {
-        checkouts: [] as AbandonedCheckout[],
-        pagination: { page: 1, limit: routeState.limit, total: 0, totalPages: 1 } as Pagination,
-      };
-    }
-    return {
-      checkouts: (raw.checkouts ?? []) as AbandonedCheckout[],
-      pagination: (raw.pagination ?? { page: 1, limit: routeState.limit, total: 0, totalPages: 1 }) as Pagination,
-    };
+  const { checkouts, pagination } = useMemo(() => rawData ?? {
+    checkouts: [] as AbandonedCheckout[],
+    pagination: { page: 1, limit: routeState.limit, total: 0, totalPages: 1 } as Pagination,
   }, [rawData, routeState.limit]);
 
   const deleteDialogHostedArchiveCount = useMemo(() => {
@@ -649,7 +643,7 @@ export function AbandonedCheckoutsManager({
     }
     setIsActionLoading(true);
     try {
-      await deleteAbandonedCheckouts({ data: { ids: deleteDialog.ids } });
+      await apiData(deleteApiV1AdminAbandonedCheckouts({ body: { ids: deleteDialog.ids } }));
       toast.success(`${formatAbandonedCheckoutRecordCount(deleteDialog.ids.length)} deleted.`);
       setSelectedIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });

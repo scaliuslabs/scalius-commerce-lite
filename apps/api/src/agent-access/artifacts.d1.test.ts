@@ -1,13 +1,6 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { AgentPrincipal } from "./types";
 import {
   claimAgentArtifact,
@@ -19,119 +12,10 @@ import {
   verifyAgentArtifactBytes,
 } from "./artifacts";
 
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []): D1Statement {
-  const execute = (): D1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...next) => statement(sqlite, query, next),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
 function createHarness() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    CREATE TABLE agent_grants (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      owner_user_id TEXT,
-      resource TEXT NOT NULL,
-      label TEXT NOT NULL,
-      preset TEXT NOT NULL,
-      permissions_json TEXT NOT NULL,
-      risk_ceiling TEXT NOT NULL,
-      authority_revision INTEGER NOT NULL DEFAULT 1,
-      status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_credentials (
-      id TEXT PRIMARY KEY,
-      grant_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      token_hash TEXT NOT NULL,
-      token_hint TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      revoked_at INTEGER,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_artifact_handles (
-      id TEXT PRIMARY KEY,
-      grant_id TEXT NOT NULL,
-      credential_id TEXT,
-      resource TEXT NOT NULL,
-      operation_id TEXT NOT NULL,
-      r2_key TEXT NOT NULL UNIQUE,
-      media_type TEXT NOT NULL,
-      filename TEXT NOT NULL,
-      size_bytes INTEGER NOT NULL,
-      sha256 TEXT NOT NULL,
-      status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      claimed_at INTEGER,
-      failure_class TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `);
-  let prepareCount = 0;
-  const binding = {
-    prepare: (query: string) => {
-      prepareCount += 1;
-      return statement(sqlite, query);
-    },
-    async batch(statements: D1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((item) => item.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  return {
-    sqlite,
-    db: drizzle(binding, { schema }) as unknown as Database,
-    getPrepareCount: () => prepareCount,
-  };
+  let queryCount = 0;
+  const { sqlite, db } = createSqliteD1Database({ onQuery: () => { queryCount += 1; } });
+  return { sqlite, db, getQueryCount: () => queryCount };
 }
 
 const grantId = "agr_0123456789abcdefghij";
@@ -148,17 +32,21 @@ function seedAuthority(
 ) {
   const now = Math.floor(Date.now() / 1000);
   const kind = input.kind ?? "pat";
+  sqlite.exec("INSERT INTO user (id, name, email) VALUES ('owner-1', 'Owner', 'owner@example.test')");
   sqlite.prepare(`
     INSERT INTO agent_grants (
-      id, kind, owner_user_id, resource, label, preset, permissions_json,
-      risk_ceiling, authority_revision, status, expires_at, created_at, updated_at
-    ) VALUES (?, ?, 'owner-1', ?, 'Agent', 'read', '["agent_access.view"]',
-      'read', 1, ?, ?, ?, ?)
+      id, kind, owner_user_id, resource, label, oauth_client_id, oauth_redirect_uris_json, preset,
+      permissions_json, risk_ceiling, authority_revision, status, revoked_at, expires_at, created_at, updated_at
+    ) VALUES (?, ?, 'owner-1', ?, 'Agent', ?, ?, 'read', '["agent_access.view"]',
+      'read', 1, ?, ?, ?, ?, ?)
   `).run(
     grantId,
     kind,
     input.resource ?? "dashboard",
+    kind === "oauth" ? "client-1" : null,
+    kind === "oauth" ? "[]" : null,
     input.grantStatus ?? "active",
+    input.grantStatus === "revoked" ? now : null,
     now + 3600,
     now - 10,
     now - 10,
@@ -280,7 +168,7 @@ describe("agent artifact D1 authority and one-use claims", () => {
   });
 
   it.each([
-    ["grant revocation", "UPDATE agent_grants SET status = 'revoked' WHERE id = ?"],
+    ["grant revocation", "UPDATE agent_grants SET status = 'revoked', revoked_at = unixepoch() WHERE id = ?"],
     ["credential revocation", "UPDATE agent_credentials SET revoked_at = unixepoch() WHERE id = ?"],
     ["authority narrowing", "UPDATE agent_grants SET authority_revision = 2 WHERE id = ?"],
   ])("rejects a stale claim after %s between resolution and commit", async (_label, mutation) => {
@@ -374,6 +262,7 @@ describe("agent artifact D1 authority and one-use claims", () => {
   it("drains a 1,050-row tied-expiry backlog deterministically past a poison object", async () => {
     const harness = createHarness();
     sqlite = harness.sqlite;
+    seedAuthority(sqlite);
     const now = Math.floor(Date.now() / 1000);
     const idFor = (index: number) => `aah_${index.toString(36).padStart(20, "0")}`;
     const insert = sqlite.prepare(`
@@ -395,7 +284,7 @@ describe("agent artifact D1 authority and one-use claims", () => {
         "a".repeat(64),
         expiresAt,
         expiresAt - 1,
-        now - 600,
+        expiresAt - 60,
         now - 1,
       );
     }
@@ -405,7 +294,7 @@ describe("agent artifact D1 authority and one-use claims", () => {
     let after: { expiresAt: Date; id: string } | undefined;
     const seen: Array<{ expiresAt: Date; id: string }> = [];
     let pageCount = 0;
-    const prepareCountBefore = harness.getPrepareCount();
+    const queryCountBefore = harness.getQueryCount();
     while (seen.length < 2_000) {
       const page = await listAgentArtifactCleanupCandidates(harness.db, {
         limit: 100,
@@ -443,7 +332,7 @@ describe("agent artifact D1 authority and one-use claims", () => {
     expect(await listAgentArtifactCleanupCandidates(harness.db, { limit: 100 })).toEqual([
       expect.objectContaining({ id: poisonId }),
     ]);
-    expect(harness.getPrepareCount() - prepareCountBefore).toBe(33);
+    expect(harness.getQueryCount() - queryCountBefore).toBe(33);
     await expect(deleteAgentArtifactRecords(
       harness.db,
       Array.from({ length: 91 }, (_, index) => idFor(index)),

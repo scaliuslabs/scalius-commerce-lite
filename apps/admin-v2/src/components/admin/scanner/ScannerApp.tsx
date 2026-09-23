@@ -15,7 +15,13 @@ import { ManualSheet } from "./ManualSheet";
 import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
-import { unwrapEnvelope } from "@/lib/api-helpers";
+import {
+  getApiV1AdminInventoryScannerLookup,
+  postApiV1AdminInventoryStockAdjust,
+  postApiV1AdminInventoryStockSet,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import { AdminApiResponseError, isAdminApiNotFoundError } from "@/lib/admin-api-error";
 import { formatAdminTime } from "@/lib/admin-time";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 
@@ -123,46 +129,22 @@ function createInventoryOperationKey(): string {
   return `invop_${crypto.randomUUID()}`;
 }
 
-class InventoryOperationHttpError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-    this.name = "InventoryOperationHttpError";
+/** Inventory writes are idempotent by operation key, so retry once unless the API rejected them. */
+async function withOneRetry<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof AdminApiResponseError && error.status < 500) throw error;
+    return operation();
   }
 }
 
-async function postInventoryOperation(
-  url: string,
-  body: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await fetch(withDashboardBasePath(url), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (response.ok) {
-        return unwrapEnvelope(await response.json());
-      }
-      const errorBody = await response.json().catch(() => null);
-      const message = errorBody?.error?.message ?? errorBody?.error ?? `API error: ${response.status}`;
-      throw new InventoryOperationHttpError(message, response.status);
-    } catch (error) {
-      lastError = error;
-      if (
-        attempt === 1 ||
-        (error instanceof InventoryOperationHttpError && error.status < 500)
-      ) {
-        throw error;
-      }
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("Inventory operation failed");
-}
+const adjustStock = (body: {
+  operationKey: string;
+  variantId: string;
+  adjustment: number;
+  reason: string;
+}) => withOneRetry(() => apiData(postApiV1AdminInventoryStockAdjust({ body })));
 
 // ---------------------------------------------------------------------------
 // Component
@@ -199,9 +181,9 @@ export function ScannerApp({ token }: ScannerAppProps) {
             if (!res.ok) {
               throw new Error("Invalid or expired scanner session");
             }
-            return res.json();
-          })
-          .then((json) => unwrapEnvelope<Record<string, string>>(json)),
+            // This Worker route answers `{ success, valid, adminName }` unwrapped.
+            return res.json() as Promise<Record<string, string>>;
+          }),
       };
     }
 
@@ -275,17 +257,12 @@ export function ScannerApp({ token }: ScannerAppProps) {
   // ---- Barcode lookup ----
   const lookupBarcode = useCallback(
     async (code: string): Promise<ScannedProduct | null> => {
-      const url = `/api/v1/admin/inventory/scanner/lookup?code=${encodeURIComponent(code)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        if (res.status === 404) return null;
-        const body = await res.json().catch(() => null);
-        throw new Error(
-          body?.error?.message ?? body?.error ?? `Lookup failed: ${res.status}`,
-        );
-      }
-      const json = await res.json();
-      const raw = unwrapEnvelope(json);
+      const raw = await apiData(getApiV1AdminInventoryScannerLookup({ query: { code } }))
+        .catch((error: unknown) => {
+          if (isAdminApiNotFoundError(error)) return null;
+          throw error;
+        });
+      if (!raw) return null;
       const v = raw.variant;
       const p = raw.product;
       if (!v || !p) return null;
@@ -345,7 +322,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
       // Fire API call — correct on failure
       try {
-        await postInventoryOperation("/api/v1/admin/inventory/stock-adjust", {
+        await adjustStock({
           operationKey: createInventoryOperationKey(),
           variantId: product.variantId,
           adjustment: quantity,
@@ -445,15 +422,11 @@ export function ScannerApp({ token }: ScannerAppProps) {
       const { variantId, adjustment, reason, isAbsolute, operationKey, product } = opts;
 
       try {
-        const url = isAbsolute
-          ? "/api/v1/admin/inventory/stock-set"
-          : "/api/v1/admin/inventory/stock-adjust";
-
-        const body = isAbsolute
-          ? { operationKey, variantId, newStock: adjustment, reason }
-          : { operationKey, variantId, adjustment, reason };
-
-        const data = await postInventoryOperation(url, body);
+        const data: { newStock?: unknown } = isAbsolute
+          ? await withOneRetry(() => apiData(postApiV1AdminInventoryStockSet({
+              body: { operationKey, variantId, newStock: adjustment, reason },
+            })))
+          : await adjustStock({ operationKey, variantId, adjustment, reason });
         const newStock = typeof data.newStock === "number"
           ? data.newStock
           : isAbsolute ? adjustment : product.stock + adjustment;
@@ -521,7 +494,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
       undoOperationKeysRef.current.set(item.id, operationKey);
 
       try {
-        await postInventoryOperation("/api/v1/admin/inventory/stock-adjust", {
+        await adjustStock({
           operationKey,
           variantId: item.product.variantId,
           adjustment: item.oldStock - item.newStock,

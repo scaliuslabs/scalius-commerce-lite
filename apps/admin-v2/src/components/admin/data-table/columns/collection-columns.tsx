@@ -5,7 +5,9 @@ import { LayoutGrid, GridIcon, House } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { InlineEditCell } from "../InlineEditCell";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
-import type { Collection } from "~/types/api-responses";
+import type {
+  CollectionSummaryDto as Collection,
+} from "~/lib/api-query-options/collections";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 
 export interface CollectionItem extends Collection {

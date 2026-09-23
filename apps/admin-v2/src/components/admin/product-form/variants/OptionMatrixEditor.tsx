@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +26,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
-import { saveProductOptionMatrix, type ProductOptionMatrixInput } from "@/lib/api-functions/products";
+import {
+  putApiV1AdminProductsByIdOptionsMatrix,
+  putApiV1AdminProductsByIdVariantsByVariantId,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type { ProductOptionMatrixInput } from "@/lib/api-query-options/products";
 import { getServerFnError } from "@/lib/api-helpers";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
 import { queryKeys } from "@/lib/query-keys";
@@ -34,22 +40,26 @@ import type {
   ProductOptionDefinition,
   ProductOptionStandardMapping,
   ProductVariant,
-} from "@/types/api-responses";
+} from "~/lib/api-query-options/products";
 import {
   draftId,
   getOptionMatrixIssue,
+  getSimpleSkuIssue,
   initialOptions,
   initialVariants,
   combinationKey,
   materializeCombination,
   materializeVariants,
   materializeVariantsExcluding,
+  matrixSaveVariants,
   missingOptionCombinations,
   normalized,
   optionTopologySignature,
   type DraftOption,
   type DraftVariant,
   type OptionMatrixEditorHandle,
+  type ProductCreateComposition,
+  type SimpleSkuDraft,
 } from "./option-matrix-editor-model";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
@@ -65,7 +75,7 @@ type OptionMatrixEditorProps = {
   aggregateRevision?: number;
   onAggregateRevisionChange?: (revision: number) => void;
   onSaved?: () => void;
-  onDraftChange?: (matrix: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null) => void;
+  onDraftChange?: (composition: ProductCreateComposition | null) => void;
   onDraftIssueChange?: (issue: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
@@ -93,6 +103,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   productSaving,
 }, ref) {
   const queryClient = useQueryClient();
+  const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
+  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => ({
+    sku: defaultSku?.sku ?? "",
+    // New products track quantity by default; saved SKUs keep their setting.
+    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
+    stock: defaultSku?.stock ?? 0,
+  }));
+  const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
   const [variants, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -103,7 +121,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     missingOptionCombinations(initialOptions(savedOptions), initialVariants(savedVariants)).map(combinationKey),
   ));
   const [omittedVariantsByKey, setOmittedVariantsByKey] = React.useState<Map<string, DraftVariant>>(() => new Map());
-  const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
   const requiredStockAllocation = savedOptions.length === 0 && defaultSku?.trackInventory
@@ -131,15 +148,24 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     blockedCommittedStock,
     !dirty,
   );
+  // A product without options sells one hidden SKU; edit its inventory directly.
+  const simpleMode = options.length === 0 && savedOptions.length === 0 && (!productId || Boolean(defaultSku));
+  const simpleCommitted = defaultSku?.reservedStock ?? 0;
+  const draftIssue = !simpleMode
+    ? matrixIssue
+    : dirty || !productId ? getSimpleSkuIssue(simpleSku, simpleCommitted, Boolean(productId)) : null;
 
   React.useEffect(() => {
     if (!onDraftChange) return;
-    onDraftChange(!matrixIssue && options.length > 0
-      ? { options, variants }
-      : null);
-  }, [matrixIssue, onDraftChange, options, variants]);
+    const sku = simpleSku.sku.trim();
+    onDraftChange(draftIssue
+      ? null
+      : simpleMode
+        ? { defaultSku: { ...(sku ? { sku } : {}), trackInventory: simpleSku.trackInventory, stock: simpleSku.trackInventory ? simpleSku.stock : 0 } }
+        : options.length > 0 ? { optionMatrix: { options, variants } } : null);
+  }, [draftIssue, onDraftChange, options, simpleMode, simpleSku, variants]);
 
-  React.useEffect(() => onDraftIssueChange?.(matrixIssue), [matrixIssue, onDraftIssueChange]);
+  React.useEffect(() => onDraftIssueChange?.(draftIssue), [draftIssue, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const stageOptions = React.useCallback((nextOptions: DraftOption[]) => {
@@ -228,12 +254,34 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   );
 
   const mutation = useMutation({
-    mutationFn: (revisionOverride?: number) => saveProductOptionMatrix({
-      data: {
-        productId: productId!,
-        matrix: { options, variants, expectedAggregateRevision: revisionOverride ?? aggregateRevision! },
-      },
-    }),
+    mutationFn: (revisionOverride?: number) => simpleMode && defaultSku
+      ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
+          path: { id: productId!, variantId: defaultSku.id },
+          body: {
+            selectedOptionValueIds: [],
+            imageId: defaultSku.imageId,
+            weight: defaultSku.weight,
+            sku: simpleSku.sku.trim(),
+            price: productPrice,
+            trackInventory: simpleSku.trackInventory,
+            // Unedited quantity is omitted so a concurrent sale is never overwritten.
+            ...(simpleStockEdited && simpleSku.trackInventory
+              ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
+              : {}),
+            discountType: "percentage",
+            discountPercentage: null,
+            discountAmount: null,
+            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
+          },
+        }))
+      : apiData(putApiV1AdminProductsByIdOptionsMatrix({
+          path: { id: productId! },
+          body: {
+            options,
+            variants: matrixSaveVariants(variants, savedVariants),
+            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
+          },
+        })),
     onSuccess: async (result) => {
       onAggregateRevisionChange?.(result.aggregateRevision);
       setDirty(false);
@@ -256,7 +304,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           queryKey: queryKeys.products.variants(productId!),
         }),
       ]);
-      toast.success("Options and SKUs saved");
+      toast.success(simpleMode ? "Inventory saved" : "Options and SKUs saved");
       onSaved?.();
     },
     onError: (error) => {
@@ -272,21 +320,66 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   React.useEffect(() => onSavingChange?.(mutation.isPending), [mutation.isPending, onSavingChange]);
   React.useImperativeHandle(ref, () => ({
     save: (revisionOverride) => {
-      if (!productId || !dirty || matrixIssue || mutation.isPending) return;
+      if (!productId || !dirty || draftIssue || mutation.isPending) return;
       mutation.mutate(revisionOverride);
     },
-  }), [dirty, matrixIssue, mutation, productId]);
+  }), [dirty, draftIssue, mutation, productId]);
 
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+      {simpleMode ? (
+        <div className="space-y-3 rounded-lg border p-3">
+          <h3 className="text-sm font-semibold">Inventory</h3>
+          <label className="flex min-h-11 items-center gap-2 text-sm md:min-h-0">
+            <Checkbox
+              checked={simpleSku.trackInventory}
+              onCheckedChange={(checked) => {
+                setSimpleSku((current) => ({ ...current, trackInventory: checked === true }));
+                setDirty(true);
+              }}
+            />
+            Track quantity
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {simpleSku.trackInventory ? (
+              <label className="space-y-1 text-xs text-muted-foreground">
+                Quantity
+                <InventoryQuantityInput
+                  ariaLabel="Quantity"
+                  value={simpleSku.stock}
+                  committed={simpleCommitted}
+                  onChange={(stock) => {
+                    setSimpleSku((current) => ({ ...current, stock }));
+                    setSimpleStockEdited(true);
+                    setDirty(true);
+                  }}
+                />
+              </label>
+            ) : null}
+            <label className="space-y-1 text-xs text-muted-foreground">
+              SKU
+              <Input
+                value={simpleSku.sku}
+                placeholder={productId ? undefined : "Generated automatically"}
+                onChange={(event) => {
+                  setSimpleSku((current) => ({ ...current, sku: event.target.value }));
+                  setDirty(true);
+                }}
+                className="h-11 text-sm md:h-8"
+              />
+            </label>
+          </div>
+          {draftIssue ? <p className="text-xs text-destructive" role="alert">{draftIssue}</p> : null}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">Options and SKUs</h3>
-            {dirty ? <Badge variant="outline" className="h-5 text-xs">Unsaved</Badge> : null}
+            {dirty && !simpleMode ? <Badge variant="outline" className="h-5 text-xs">Unsaved</Badge> : null}
           </div>
         </div>
-        {productId ? (
+        {productId && !simpleMode ? (
           <Button
             type="button"
             size="sm"
@@ -831,10 +924,11 @@ function NumberInput({ value, onChange, ariaLabel, integer = false, className }:
   return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-11 px-2 text-sm md:h-8", className)} />;
 }
 
-function InventoryQuantityInput({ value, committed, onChange }: {
+function InventoryQuantityInput({ value, committed, onChange, ariaLabel = "On-hand stock" }: {
   value: number;
   committed: number;
   onChange: (value: number) => void;
+  ariaLabel?: string;
 }) {
   const available = Math.max(0, value - committed);
   return (
@@ -843,7 +937,7 @@ function InventoryQuantityInput({ value, committed, onChange }: {
         value={value}
         integer
         onChange={onChange}
-        ariaLabel="On-hand stock"
+        ariaLabel={ariaLabel}
         className={committed > 0 ? "pr-12 md:pr-8" : undefined}
       />
       {committed > 0 ? (

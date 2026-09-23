@@ -8,10 +8,6 @@ import { Image as ImageIcon, LayoutList, Loader2, RotateCcw, Share2 } from "luci
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "~/lib/api-helpers";
-import {
-  getGeneralSettings,
-  saveFooterConfig,
-} from "~/lib/api-functions/settings";
 import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
@@ -32,6 +28,11 @@ import {
   isNavigationConfigUnreadable,
   navigationConfigNeedsNormalizationSave,
 } from "~/components/admin/settings/navigation-readiness";
+import {
+  getApiV1AdminSettingsGeneral,
+  postApiV1AdminSettingsFooter,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 const SocialLinksSection = lazy(() =>
   import("./SocialLinksSection").then((module) => ({
@@ -133,9 +134,9 @@ export function FooterBuilder({
       const { menus: _menus, ...storedConfig } = draftBeingSaved;
       const saved = typeof onSave === "function"
         ? await onSave(storedConfig, revision)
-        : await saveFooterConfig({
-            data: { ...storedConfig, expectedRevision: revision },
-          });
+        : await apiData(postApiV1AdminSettingsFooter({
+            body: { ...storedConfig, expectedRevision: revision },
+          }));
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       setRevision(saved.revision);
@@ -146,7 +147,7 @@ export function FooterBuilder({
       const conflict = readSitePresentationRevisionConflict(error, "footer");
       if (conflict) {
         try {
-          const latest = await getGeneralSettings();
+          const latest = await apiData(getApiV1AdminSettingsGeneral());
           const latestRevision = latest.revisions.footer;
           setRevisionConflict({
             config: normalizeFooterConfig(

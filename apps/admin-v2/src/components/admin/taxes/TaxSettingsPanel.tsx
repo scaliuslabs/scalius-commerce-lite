@@ -13,10 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import {
-  saveTaxSettings,
-  type TaxConfigurationPayload,
-  type UpdateTaxSettingsInput,
-} from "@/lib/api-functions/taxes";
+  putApiV1AdminTaxesSettings,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type {
+  TaxConfigurationPayload,
+  UpdateTaxSettingsInput,
+} from "@/lib/api-query-options/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { queryKeys } from "@/lib/query-keys";
 import { taxSettingsFormIsDirty, taxSettingsIssue } from "./tax-form";
@@ -52,7 +55,7 @@ export function TaxSettingsPanel({
   const issue = taxSettingsIssue(form, configuration);
   const isDirty = taxSettingsFormIsDirty(form, savedForm);
   const saveMutation = useMutation({
-    mutationFn: () => saveTaxSettings({ data: form }),
+    mutationFn: () => apiData(putApiV1AdminTaxesSettings({ body: form })),
     onSuccess: async () => {
       toast.success("Tax settings saved");
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxes() });

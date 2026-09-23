@@ -16,7 +16,7 @@ import {
 
 import { NotFoundError } from "../../utils/api-error";
 import { created, noContent, ok } from "../../utils/api-response";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import {
     conflictResponse,
     errorResponses,
@@ -202,7 +202,7 @@ app.openapi(updateRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json"),
     );
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -289,7 +289,7 @@ app.openapi(activateRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -319,7 +319,7 @@ app.openapi(pauseRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -353,7 +353,7 @@ app.openapi(archiveRoute, async (c) => {
         c.req.valid("param").id,
         c.req.valid("json").expectedRevision,
     );
-    await invalidateCatalogCaches("discounts", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 

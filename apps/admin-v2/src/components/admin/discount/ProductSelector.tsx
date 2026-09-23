@@ -14,7 +14,7 @@ import { Check, ChevronsUpDown, Loader2, Tag, X } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
-import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
+import { fetchProducts, fetchProductsByIds } from "~/lib/api-query-options/products";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 export interface DiscountProductOption {
@@ -73,12 +73,10 @@ export function ProductSelector({
         setIsLoadingMore(true);
       }
 
-      const data = await getProducts({
-        data: {
-          limit: 10,
-          page,
-          search: search.trim() || undefined,
-        },
+      const data = await fetchProducts({
+        limit: 10,
+        page,
+        search: search.trim() || undefined,
       });
 
       if (requestId !== loadRequestRef.current) return;
@@ -151,7 +149,7 @@ export function ProductSelector({
 
     const resolveNames = async () => {
       try {
-        const data = await getProductsByIds({ data: { ids: unresolvedIds } });
+        const data = await fetchProductsByIds(unresolvedIds);
         const productMap = new Map(data.products.map((product) => [product.id, product]));
         const resolved = selectedProducts.map((selected) => {
           const found = productMap.get(selected.id);

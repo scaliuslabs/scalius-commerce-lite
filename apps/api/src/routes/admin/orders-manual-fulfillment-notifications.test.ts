@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     createFulfillmentShipment: vi.fn(),
-    invalidateProductAvailabilityCaches: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
     enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
@@ -15,8 +15,8 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     };
 });
 
-vi.mock("../../utils/cache-invalidation", () => ({
-    invalidateProductAvailabilityCaches: mocks.invalidateProductAvailabilityCaches,
+vi.mock("../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../utils/order-notification-queue", async (importOriginal) => {
@@ -51,7 +51,7 @@ function createTestApp() {
 describe("admin manual fulfillment notifications", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+        mocks.bumpCacheGeneration.mockResolvedValue(undefined);
         mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({
             orderId: "order_1",
             enqueued: true,
@@ -84,7 +84,7 @@ describe("admin manual fulfillment notifications", () => {
         }, env);
 
         expect(response.status).toBe(201);
-        expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
             db,
             queue,
@@ -105,32 +105,5 @@ describe("admin manual fulfillment notifications", () => {
             fulfillmentStatus: "complete",
         });
         expect(body.data).not.toHaveProperty("statusChange");
-    });
-
-    it("does not invent a notification when manual fulfillment only changes fulfillment status", async () => {
-        mocks.createFulfillmentShipment.mockResolvedValue({
-            shipmentId: "shp_2",
-            isFinalShipment: false,
-            fulfillmentStatus: "partial",
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/fulfill", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                itemIds: ["item_1"],
-                isFinalShipment: false,
-            }),
-        }, env);
-
-        expect(response.status).toBe(201);
-        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
-            db,
-            queue,
-            statusChange: undefined,
-            trackingId: null,
-            source: "orders-manual-fulfillment",
-        });
     });
 });

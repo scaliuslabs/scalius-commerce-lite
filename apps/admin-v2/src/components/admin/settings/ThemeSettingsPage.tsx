@@ -20,18 +20,11 @@ import {
 
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import {
-  createThemePreviewSession,
-  getThemeVersions,
-  getThemeWorkspace,
-  publishThemeDraft,
-  rebaseThemeDraft,
-  rollbackTheme,
-  saveThemeDraft,
-  type ThemeDraftPayload,
-  type ThemeVersionPayload,
-  type ThemeWorkspacePayload,
-} from "~/lib/api-functions/settings";
+import type {
+  ThemeDraftPayload,
+  ThemeVersionPayload,
+  ThemeWorkspacePayload,
+} from "~/lib/api-query-options/settings";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
 import {
@@ -72,6 +65,16 @@ import {
   submitThemePreview,
 } from "./theme-preview-window";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
+import {
+  getApiV1AdminSettingsThemeWorkspace,
+  postApiV1AdminSettingsThemeDraft,
+  postApiV1AdminSettingsThemeDraftRebase,
+  postApiV1AdminSettingsThemePreviewSession,
+  postApiV1AdminSettingsThemePublish,
+  postApiV1AdminSettingsThemeRollback,
+  getApiV1AdminSettingsThemeVersions,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 const COLOR_FIELDS = [
   { key: "primary", label: "Primary", description: "Main actions and links" },
@@ -220,7 +223,7 @@ export default function ThemeSettingsPage({
     try {
       setLoading(true);
       setLoadError(null);
-      applyWorkspace(await getThemeWorkspace());
+      applyWorkspace(await apiData(getApiV1AdminSettingsThemeWorkspace()));
       setMessage(null);
     } catch {
       setLoadError("Storefront style could not be loaded. No values have been assumed.");
@@ -237,7 +240,7 @@ export default function ThemeSettingsPage({
     try {
       setHistoryLoading(true);
       setHistoryError(null);
-      const result = await getThemeVersions();
+      const result = await apiData(getApiV1AdminSettingsThemeVersions({ query: { limit: 20 } }));
       setVersions(result.versions);
     } catch {
       setHistoryError("Published history could not be loaded.");
@@ -345,13 +348,13 @@ export default function ThemeSettingsPage({
     }
     if (!beginOperation("rebasing")) return;
     try {
-      const saved = await rebaseThemeDraft({
-        data: {
+      const saved = await apiData(postApiV1AdminSettingsThemeDraftRebase({
+        body: {
           theme: normalizeThemeSettingsDraft(rebased),
           expectedDraftRevision: conflict.latest.draft.revision,
           basePublishedRevision: conflict.latest.published.revision,
         },
-      });
+      }));
       acknowledgeDraft(saved, editorSnapshot);
       setPublishedTheme(conflict.latest.published.theme);
       setPublishedRevision(conflict.latest.published.revision);
@@ -374,7 +377,7 @@ export default function ThemeSettingsPage({
   const readConflictingWorkspace = async (intent: ThemeDraftIntent) => {
     setConflict({ base: intent.base, submitted: intent.submitted, latest: null });
     try {
-      const latest = await getThemeWorkspace();
+      const latest = await apiData(getApiV1AdminSettingsThemeWorkspace());
       setConflict({ base: intent.base, submitted: intent.submitted, latest });
       setMessage(null);
     } catch {
@@ -406,13 +409,13 @@ export default function ThemeSettingsPage({
     if (!canManage) return null;
     const intent = { base: savedDraftTheme, submitted: theme };
     try {
-      const saved = await saveThemeDraft({
-        data: {
+      const saved = await apiData(postApiV1AdminSettingsThemeDraft({
+        body: {
           theme: normalizeThemeSettingsDraft(intent.submitted),
           expectedDraftRevision: draftRevision,
           basePublishedRevision,
         },
-      });
+      }));
       acknowledgeDraft(saved, intent.submitted);
       return saved;
     } catch (error) {
@@ -471,13 +474,13 @@ export default function ThemeSettingsPage({
         return;
       }
       intent = { base: saved.theme, submitted: saved.theme };
-      const preview = await createThemePreviewSession({
-        data: {
+      const preview = await apiData(postApiV1AdminSettingsThemePreviewSession({
+        body: {
           expectedDraftRevision: saved.revision,
           path: selectedPath,
           device: selectedDevice,
         },
-      });
+      }));
       await submitThemePreview({
         previewWindow,
         storefrontUrl: configuredStorefrontUrl,
@@ -523,12 +526,12 @@ export default function ThemeSettingsPage({
         setMessage({ type: "success", text: "Published style is already current." });
         return;
       }
-      const workspace = await publishThemeDraft({
-        data: {
+      const workspace = await apiData(postApiV1AdminSettingsThemePublish({
+        body: {
           expectedPublishedRevision: publishedRevision,
           expectedDraftRevision: saved.revision,
         },
-      });
+      }));
       applyWorkspace(workspace, saved.theme);
       setMessage({ type: "success", text: `Storefront style published as revision ${workspace.published.revision}.` });
       if (section === "review") void loadHistory();
@@ -547,24 +550,24 @@ export default function ThemeSettingsPage({
     try {
       let exactDraftRevision = draftRevision;
       if (exactDraftRevision === 0) {
-        const saved = await saveThemeDraft({
-          data: {
+        const saved = await apiData(postApiV1AdminSettingsThemeDraft({
+          body: {
             theme: savedDraftTheme,
             expectedDraftRevision: 0,
             basePublishedRevision,
           },
-        });
+        }));
         exactDraftRevision = saved.revision;
         acknowledgeDraft(saved, savedDraftTheme);
         intent = { base: saved.theme, submitted: editorSnapshot };
       }
-      const workspace = await rollbackTheme({
-        data: {
+      const workspace = await apiData(postApiV1AdminSettingsThemeRollback({
+        body: {
           sourceRevision,
           expectedPublishedRevision: publishedRevision,
           expectedDraftRevision: exactDraftRevision,
         },
-      });
+      }));
       applyWorkspace(workspace, editorSnapshot);
       setMessage({
         type: "success",

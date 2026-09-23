@@ -354,10 +354,19 @@ function updateStockAndActions() {
     exact &&
     getBuyerStockSummary([exact]).canPurchaseAny,
   );
+  const copy = cache.actions?.dataset;
   const actions = getProductActionsPresentation({
     productName: cache.container?.dataset.productName ?? "Product",
     exactVariantAvailable: exactAvailable,
     anyVariantAvailable: summary.canPurchaseAny,
+    copy: copy?.addToCartText
+      ? {
+          addToCartText: copy.addToCartText,
+          buyNowText: copy.buyNowText ?? "",
+          selectOptionsText: copy.selectOptionsText ?? "",
+          unavailableText: copy.unavailableText ?? "",
+        }
+      : undefined,
   });
   cache.unavailableNotice?.classList.toggle(
     "hidden",

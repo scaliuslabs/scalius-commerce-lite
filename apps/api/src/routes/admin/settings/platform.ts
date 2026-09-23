@@ -5,7 +5,6 @@ import type { Context } from "hono";
 import {
   getPlatformSettings,
   invalidatePlatformConfigCache,
-  platformSettingsDocument,
   savePlatformSettings,
 } from "@scalius/core/modules/settings/platform-settings.service";
 import {
@@ -20,7 +19,7 @@ import {
   dashboardBasePathFromUrl,
   getPlatformConfigReadiness,
 } from "@scalius/shared/platform-config";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
@@ -138,10 +137,7 @@ app.openapi(updatePlatformRoute, async (c) => {
     invalidateSiteSettingsCache(kv),
     invalidateStorefrontUrlCache(kv),
   ]);
-  await invalidateApiAndScheduleStorefrontGroups(
-    platformSettingsDocument.invalidationGroups,
-    c,
-  );
+  await bumpCacheGeneration(c);
 
   c.header("Cache-Control", "private, no-store");
   return respond(c, stored);

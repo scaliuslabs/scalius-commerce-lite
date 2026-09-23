@@ -6,7 +6,7 @@ import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tr
 import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import {
   enqueueOrderStatusChangeNotification,
   type EnqueueOrderNotificationResult,
@@ -75,11 +75,7 @@ export async function checkAndSyncShipmentStatus(options: {
     && Array.isArray(orderSync.availabilityTransitionVariantIds)
     && orderSync.availabilityTransitionVariantIds.length > 0
   ) {
-    await invalidateProductAvailabilityCaches(
-      db,
-      { variantIds: orderSync.availabilityTransitionVariantIds },
-      c,
-    );
+    await bumpCacheGeneration(c);
   }
 
   const notificationResult = await enqueueOrderStatusChangeNotification({

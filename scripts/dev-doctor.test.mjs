@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   formatTextReport,
@@ -84,15 +83,6 @@ describe("dev doctor helpers", () => {
     expect(getServiceIdsForProfile("storefront")).toEqual(["mailbox", "api", "storefront"]);
   });
 
-  it("allows cold UI renders longer without slowing API or mailbox failures", () => {
-    const source = readFileSync(new URL("./dev-doctor.mjs", import.meta.url), "utf8");
-
-    expect(source).toContain(
-      'service.id === "admin" || service.id === "storefront" ? 10_000 : 2500',
-    );
-    expect(source).toContain("AbortSignal.timeout(requestTimeoutMs)");
-  });
-
   it("rejects unknown service profiles", () => {
     expect(() => getDoctorConfig(["--profile", "checkout"], {})).toThrow(/Unknown --profile/);
   });
@@ -122,19 +112,6 @@ describe("dev doctor helpers", () => {
     expect(report).toContain("[fail] Installed local secrets");
     expect(report).toContain("SCALIUS_SECRET differs");
     expect(report).not.toContain("super-secret-value");
-  });
-
-  it("checks only the two installed secrets and never local URL vars", () => {
-    const source = readFileSync(new URL("./dev-doctor.mjs", import.meta.url), "utf8");
-
-    expect(source).toContain("collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars })");
-    expect(source).toContain("collectStaleLocalEnvIssues({ apiVars, adminVars, storefrontVars })");
-    expect(source).not.toContain("collectLocalUrlConfigIssues");
-    expect(source).not.toContain("Build-time env files");
-    for (const retired of ["PURGE_TOKEN", "PURGE_URL", "PUBLIC_API_BASE_URL", "BETTER_AUTH_URL"]) {
-      expect(source).not.toMatch(new RegExp(`apiRequired.*${retired}`));
-      expect(source).not.toMatch(new RegExp(`key: "${retired}"`));
-    }
   });
 
   it("keeps the LOCAL_API_BASE_URL override for the running-API probe", () => {

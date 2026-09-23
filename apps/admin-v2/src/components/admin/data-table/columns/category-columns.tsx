@@ -5,14 +5,11 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
-import type { Category } from "~/types/api-responses";
+import type { CategoryListItem } from "~/lib/api-query-options/categories";
 import { getPlainText } from "~/lib/format-utils";
 import { Badge } from "~/components/ui/badge";
 
-/** Extended category type that includes the product count from list responses */
-export interface CategoryListItem extends Category {
-  productCount?: number;
-}
+export type { CategoryListItem };
 
 interface CategoryColumnOptions {
   showTrashed: boolean;

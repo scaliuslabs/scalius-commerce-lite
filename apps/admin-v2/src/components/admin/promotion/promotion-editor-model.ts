@@ -4,7 +4,7 @@ import type {
   CreatePromotionDraftInput,
   PromotionAggregate,
   UpdatePromotionDraftInput,
-} from "~/lib/api-functions/promotions";
+} from "~/lib/api-query-options/promotions";
 import { ADMIN_TIME_ZONE } from "~/lib/admin-time";
 
 export const PROMOTION_TARGETS = ["line", "order", "shipping"] as const;

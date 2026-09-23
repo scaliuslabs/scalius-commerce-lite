@@ -12,7 +12,8 @@ import {
 import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
-import { changePassword } from "~/lib/api-functions/auth-management";
+import { postApiV1AdminAuthChangePassword } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 
@@ -61,7 +62,7 @@ export function ChangePasswordForm() {
     setIsLoading(true);
 
     try {
-      await changePassword({ data: { currentPassword, newPassword } });
+      await apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword, newPassword } }));
       toast.success("Password updated");
       setCurrentPassword("");
       setNewPassword("");

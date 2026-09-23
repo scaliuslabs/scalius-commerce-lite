@@ -19,15 +19,16 @@
 			"custom_domain": true
 		}
 	],
-	"cache": {
-		"enabled": true,
-		// Never serve HTML produced by a superseded storefront deployment.
-		"cross_version_cache": false
-	},
-	"exports": {
-		"default": { "type": "worker", "cache": { "enabled": false } },
-		"CachedPublicStorefront": { "type": "worker", "cache": { "enabled": true } }
-	},
+	// Public pages are cached with the Cache API (caches.default) under keys
+	// that include the build ID and the store's cache generation, read from
+	// the API's KV namespace below. Workers Cache stays off here: it would
+	// bill every page hit twice and every static asset request.
+	"kv_namespaces": [
+		{
+			"binding": "CACHE",
+			"id": "d6e2d77d898e4b3f9c186802ce63f9b8"
+		}
+	],
 	// Highest-volume, lowest-value logs (page renders): no invocation records
 	// and 10% of invocations keep their console output.
 	"observability": {

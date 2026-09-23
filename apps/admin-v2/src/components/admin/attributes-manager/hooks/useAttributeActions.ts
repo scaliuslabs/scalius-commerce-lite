@@ -4,12 +4,13 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  updateAttribute,
-  createAttribute,
-  deleteAttribute,
-  deleteAttributePermanent,
-  restoreAttribute,
-} from "~/lib/api-functions/attributes";
+  deleteApiV1AdminAttributesById,
+  deleteApiV1AdminAttributesByIdPermanent,
+  postApiV1AdminAttributes,
+  postApiV1AdminAttributesByIdRestore,
+  putApiV1AdminAttributesById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import type { Attribute, NewAttribute } from "../types";
 
 export function useAttributeActions(
@@ -20,7 +21,7 @@ export function useAttributeActions(
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Attribute> }) =>
-      updateAttribute({ data: { id, ...data } }),
+      apiData(putApiV1AdminAttributesById({ path: { id }, body: data })),
     onMutate: async ({ id, data }) => {
       setAttributes((prev) =>
         prev.map((attr) => (attr.id === id ? { ...attr, ...data } : attr)),
@@ -40,7 +41,7 @@ export function useAttributeActions(
 
   const createMutation = useMutation({
     mutationFn: (newAttribute: NewAttribute) =>
-      createAttribute({ data: newAttribute }),
+      apiData(postApiV1AdminAttributes({ body: newAttribute })),
     onSuccess: (_data, newAttribute) => {
       toast.success(`Attribute "${newAttribute.name}" created successfully.`);
       onRefresh();
@@ -56,8 +57,8 @@ export function useAttributeActions(
   const deleteMutation = useMutation({
     mutationFn: ({ id, showTrashed }: { id: string; name: string; showTrashed: boolean }) =>
       showTrashed
-        ? deleteAttributePermanent({ data: { id } })
-        : deleteAttribute({ data: { id } }),
+        ? apiData(deleteApiV1AdminAttributesByIdPermanent({ path: { id } }))
+        : apiData(deleteApiV1AdminAttributesById({ path: { id } })),
     onSuccess: (_data, { name, showTrashed }) => {
       toast.success(
         showTrashed
@@ -78,7 +79,7 @@ export function useAttributeActions(
   });
 
   const restoreMutation = useMutation({
-    mutationFn: (id: string) => restoreAttribute({ data: { id } }),
+    mutationFn: (id: string) => apiData(postApiV1AdminAttributesByIdRestore({ path: { id } })),
     onSuccess: () => {
       toast.success("Attribute restored.");
       onRefresh();

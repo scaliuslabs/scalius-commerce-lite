@@ -449,6 +449,13 @@
       "when": 1790169864978,
       "tag": "0063_media_variants_drop_polar",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1790180633689,
+      "tag": "0064_cache_generation",
+      "breakpoints": true
     }
   ]
 }

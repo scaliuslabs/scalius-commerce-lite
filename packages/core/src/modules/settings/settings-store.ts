@@ -18,9 +18,8 @@
 //                  the first read, so no D1 migration is required.
 //   * cache      - one KV key with one declared TTL, read with `cacheTtl: 60`,
 //                  written through on save, deleted by `invalidate()`.
-//   * invalidation groups - the API cache groups a write must clear, so route
-//                  handlers pass `document.invalidationGroups` instead of
-//                  hand-picking a list per endpoint.
+//   Public HTTP caches are not per document: route handlers bump the store
+//   cache generation after a successful save.
 
 import type { ZodType } from "zod";
 import { and, eq, sql } from "drizzle-orm";
@@ -128,8 +127,6 @@ export interface SettingsDocumentDefinition<T extends object> {
   /** Obvious dummy credentials read as not configured. */
   isPlaceholderSecret?: (value: string) => boolean;
   cache?: SettingsDocumentCache;
-  /** API cache groups a write must invalidate. */
-  invalidationGroups?: readonly string[];
   legacy?: SettingsDocumentLegacy<T>;
   columns?: SettingsDocumentColumns<T>;
   codec?: SettingsDocumentCodec;
@@ -171,7 +168,6 @@ export interface SettingsDocument<T extends object> {
   readonly key: string;
   readonly defaults: T;
   readonly cacheKey: string | null;
-  readonly invalidationGroups: readonly string[];
   read(
     db: Database,
     ctx?: SettingsDocumentContext,
@@ -227,7 +223,6 @@ export function defineSettingsDocument<T extends object>(
   const columnFields = new Set<string>(definition.columns?.fields ?? []);
   const codec = definition.codec ?? JSON_SETTINGS_CODEC;
   const storageType = definition.storageType ?? (definition.codec ? "string" : "json");
-  const invalidationGroups = definition.invalidationGroups ?? [];
 
   if (secretFields.length > 0 && definition.cache) {
     // AGENTS.md: decrypted provider credentials are never written to KV.
@@ -642,7 +637,6 @@ export function defineSettingsDocument<T extends object>(
     key,
     defaults: definition.defaults,
     cacheKey: definition.cache?.key ?? null,
-    invalidationGroups,
     readDetailed,
     async read(db, ctx, options) {
       return (await readDetailed(db, ctx, options)).value;

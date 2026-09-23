@@ -1,10 +1,6 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 import type { AgentOAuthProps, AgentPrincipal } from "./types";
 
@@ -78,87 +74,6 @@ import { finalizeOpenApiContract, type OpenApiDocument } from "../openapi-contra
 import { buildAgentOperationManifest } from "../openapi/agent-operation-manifest";
 import { DashboardMcpHandler } from "./mcp/dashboard";
 import { createAgentMcpServer } from "./mcp/server";
-
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): D1Statement {
-  const execute = (): D1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...next) => d1Statement(sqlite, query, next),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createD1Harness() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    CREATE TABLE agent_grants (
-      id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner_user_id TEXT,
-      resource TEXT NOT NULL, label TEXT NOT NULL, preset TEXT NOT NULL,
-      permissions_json TEXT NOT NULL, risk_ceiling TEXT NOT NULL,
-      authority_revision INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_artifact_handles (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, credential_id TEXT,
-      resource TEXT NOT NULL, operation_id TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE,
-      media_type TEXT NOT NULL, filename TEXT NOT NULL, size_bytes INTEGER NOT NULL,
-      sha256 TEXT NOT NULL, status TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      claimed_at INTEGER, failure_class TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-  `);
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: D1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  return { sqlite, binding };
-}
 
 function liveLabelOperation(): AgentOperationManifestEntry {
   const document = finalizeOpenApiContract(app.getOpenAPIDocument({
@@ -324,14 +239,15 @@ describe("continuous MCP artifact execution and one-use download", () => {
       exposure: "execute",
     });
 
-    const harness = createD1Harness();
+    const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
     const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(OWNER_ID);
     sqlite.prepare(`
       INSERT INTO agent_grants (
-        id, kind, owner_user_id, resource, label, preset, permissions_json,
-        risk_ceiling, authority_revision, status, expires_at, created_at, updated_at
-      ) VALUES (?, 'oauth', ?, 'dashboard', 'Labels', 'full', '["products.view"]',
+        id, kind, owner_user_id, resource, label, oauth_client_id, oauth_redirect_uris_json, preset,
+        permissions_json, risk_ceiling, authority_revision, status, expires_at, created_at, updated_at
+      ) VALUES (?, 'oauth', ?, 'dashboard', 'Labels', 'client-1', '[]', 'full', '["products.view"]',
         'security', 1, 'active', ?, ?, ?)
     `).run(GRANT_ID, OWNER_ID, now + 3600, now - 1, now - 1);
     const r2 = inMemoryR2();

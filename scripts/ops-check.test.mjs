@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildApiV1Url,
@@ -95,10 +94,6 @@ describe("ops-check config helpers", () => {
 
   it("defaults the API origin to the repository demo without reading Wrangler vars", () => {
     expect(parseOpsCheckArgs([]).apiBaseUrl).toBe("https://api.scalius.com");
-
-    const source = readFileSync(new URL("./ops-check.mjs", import.meta.url), "utf8");
-    expect(source).not.toContain("vars?.PUBLIC_API_BASE_URL");
-    expect(source).not.toContain("vars.PUBLIC_API_BASE_URL");
   });
 
   it("builds API v1 URLs without duplicating an existing prefix", () => {

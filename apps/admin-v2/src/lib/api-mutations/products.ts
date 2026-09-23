@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteProducts,
-  deleteProduct,
-  permanentDeleteProduct,
-  restoreProduct,
-  type BulkDeleteProductsInput,
-  type ProductAggregateRevisionClaim,
-} from "../api-functions/products";
+  deleteApiV1AdminProductsById,
+  deleteApiV1AdminProductsByIdPermanent,
+  postApiV1AdminProductsBulkDelete,
+  postApiV1AdminProductsByIdRestore,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
+import type { ProductAggregateRevisionClaim } from "../api-query-options/products";
 import {
   getServerFnError,
   invalidateDashboardQueries,
@@ -35,7 +35,8 @@ function handleProductListMutationError(
 export function useDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ProductAggregateRevisionClaim) => deleteProduct({ data }),
+    mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
+      apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);
@@ -56,8 +57,11 @@ export function useDeleteProduct() {
 export function usePermanentDeleteProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ProductAggregateRevisionClaim) =>
-      permanentDeleteProduct({ data }),
+    mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
+      apiData(deleteApiV1AdminProductsByIdPermanent({
+        path: { id },
+        query: { expectedAggregateRevision },
+      })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);
@@ -78,7 +82,8 @@ export function usePermanentDeleteProduct() {
 export function useRestoreProduct() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ProductAggregateRevisionClaim) => restoreProduct({ data }),
+    mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
+      apiData(postApiV1AdminProductsByIdRestore({ path: { id }, query: { expectedAggregateRevision } })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);
@@ -101,8 +106,8 @@ export function useRestoreProduct() {
 export function useBulkDeleteProducts() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: BulkDeleteProductsInput) =>
-      bulkDeleteProducts({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminProductsBulkDelete>) =>
+      apiData(postApiV1AdminProductsBulkDelete({ body })),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);

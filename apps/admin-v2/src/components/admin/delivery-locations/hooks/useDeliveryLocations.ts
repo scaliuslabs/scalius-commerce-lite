@@ -18,14 +18,17 @@ import {
 } from "~/lib/api-mutations/delivery-locations";
 import {
   type DeliveryLocation,
-  importPathaoLocations,
   type PathaoImportProgress,
-  resetImportPathao,
-  type DeliveryLocationsQueryInput,
-} from "~/lib/api-functions/delivery";
+  type DeliveryLocationsQuery as DeliveryLocationsQueryInput,
+} from "~/lib/api-query-options/delivery";
+import {
+  deleteApiV1AdminSettingsDeliveryLocationsImportPathao,
+  postApiV1AdminSettingsDeliveryLocationsImportPathao,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 export type Location = DeliveryLocation;
-export type { PathaoImportProgress } from "~/lib/api-functions/delivery";
+export type { PathaoImportProgress };
 
 export interface PaginationState {
   page: number;
@@ -196,9 +199,7 @@ export function useDeliveryLocations() {
     setImporting(true);
     try {
       while (!importAbortRef.current) {
-        const data = await importPathaoLocations({
-          data: {},
-        });
+        const data = await apiData(postApiV1AdminSettingsDeliveryLocationsImportPathao());
         setImportProgress(data);
 
         if (data.status === "complete") {
@@ -276,7 +277,7 @@ export function useDeliveryLocations() {
 
   const resetImport = async () => {
     try {
-      await resetImportPathao();
+      await apiData(deleteApiV1AdminSettingsDeliveryLocationsImportPathao());
       importAbortRef.current = true;
       setImportProgress(null);
       setImporting(false);
@@ -299,7 +300,8 @@ export function useDeliveryLocations() {
     setFormData({
       name: location.name,
       parentId: location.parentId || "",
-      externalIds: location.externalIds,
+      // The API stores provider ids as strings or numbers.
+      externalIds: (location.externalIds ?? {}) as Record<string, string | number>,
       isActive: location.isActive,
     });
     setShowAddDialog(true);
@@ -337,7 +339,7 @@ export function useDeliveryLocations() {
         type: activeTab,
         parentId: activeTab === "city" ? null : formData.parentId || null,
         externalIds: normalizeExternalIds(formData.externalIds),
-        metadata: editMode && editingLocation ? editingLocation.metadata : {},
+        metadata: (editMode && editingLocation ? editingLocation.metadata ?? {} : {}) as Record<string, string>,
         isActive: formData.isActive,
       };
 

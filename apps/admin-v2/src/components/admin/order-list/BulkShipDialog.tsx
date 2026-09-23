@@ -19,7 +19,9 @@ import {
 import { LoaderCircle, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
-import type { DeliveryProviderRecord } from "~/types/api-responses";
+import type {
+  DeliveryProviderRecord,
+} from "~/lib/api-query-options/delivery";
 import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,

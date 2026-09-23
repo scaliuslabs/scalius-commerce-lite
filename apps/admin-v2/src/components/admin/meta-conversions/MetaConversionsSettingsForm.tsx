@@ -27,24 +27,14 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useMetaConversionsSettings } from "./hooks/useMetaConversionsSettings";
-import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
+import type {
+  MetaConversionsSettings,
+  MetaPixelParityDiagnostics,
+} from "~/lib/api-query-options/settings";
 import { OfficialProviderMark } from "~/components/admin/settings/provider-marks";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-
-// Local types replacing @scalius/database/schema imports
-export interface MetaConversionsSettings {
-  id: string;
-  singletonKey: string;
-  pixelId: string | null;
-  accessToken: string | null;
-  testEventCode: string | null;
-  isEnabled: boolean;
-  logRetentionDays: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export interface FormData {
   pixelId: string;

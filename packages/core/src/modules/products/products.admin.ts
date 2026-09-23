@@ -935,7 +935,11 @@ export async function createProduct(
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
 
     const productId = "prod_" + nanoid();
-    const defaultVariant = defaultVariantValues(productId, data.price);
+    const defaultVariant = {
+        ...defaultVariantValues(productId, data.price),
+        ...(data.defaultSku?.sku ? { sku: data.defaultSku.sku } : {}),
+        trackInventory: data.defaultSku?.trackInventory ?? false,
+    };
     const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
 
     // Drizzle D1 batch() requires specific tuple types
@@ -967,6 +971,21 @@ export async function createProduct(
 
     if (!data.optionMatrix) {
         batchOps.push(db.insert(productVariants).values(defaultVariant));
+        const initialStock = data.defaultSku?.stock ?? 0;
+        if (initialStock > 0) {
+            batchOps.push(buildStockMovementClaim(db, {
+                movementId: crypto.randomUUID(),
+                variantId: defaultVariant.id,
+                pool: "regular",
+                quantity: initialStock,
+                before: { stock: 0, reservedStock: 0, preorderStock: 0, stockVersion: 1 },
+                after: { stock: initialStock, reservedStock: 0, preorderStock: 0, stockVersion: 2 },
+                notes: "Stocktake: Initial product stock",
+            }));
+            batchOps.push(db.update(productVariants)
+                .set({ stock: initialStock, stockVersion: 2, updatedAt: sql`unixepoch()` })
+                .where(and(eq(productVariants.id, defaultVariant.id), eq(productVariants.stockVersion, 1))));
+        }
     }
 
     batchOps.push(...buildProductMediaInsertStatements(db, mediaPlan.newRows));
@@ -1061,18 +1080,19 @@ export async function createProduct(
                     optionValueId: selectedOptionValueIds[optionIndex]!,
                 });
             }
-            if (matrixVariant.stock > 0) {
+            const initialStock = matrixVariant.stock ?? 0;
+            if (initialStock > 0) {
                 batchOps.push(buildStockMovementClaim(db, {
                     movementId: crypto.randomUUID(),
                     variantId,
                     pool: "regular",
-                    quantity: matrixVariant.stock,
+                    quantity: initialStock,
                     before: { stock: 0, reservedStock: 0, preorderStock: 0, stockVersion: 1 },
-                    after: { stock: matrixVariant.stock, reservedStock: 0, preorderStock: 0, stockVersion: 2 },
+                    after: { stock: initialStock, reservedStock: 0, preorderStock: 0, stockVersion: 2 },
                     notes: "Stocktake: Initial product option stock",
                 }));
                 batchOps.push(db.update(productVariants)
-                    .set({ stock: matrixVariant.stock, stockVersion: 2, updatedAt: sql`unixepoch()` })
+                    .set({ stock: initialStock, stockVersion: 2, updatedAt: sql`unixepoch()` })
                     .where(and(eq(productVariants.id, variantId), eq(productVariants.stockVersion, 1))));
             }
         }

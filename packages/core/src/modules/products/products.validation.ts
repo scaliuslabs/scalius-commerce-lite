@@ -149,14 +149,31 @@ function requireCanonicalProductHandle(
     }
 }
 
+/** Inventory facts for the hidden SKU of a product created without options. */
+const defaultSkuInputSchema = z.object({
+    sku: z.string().trim().min(3).max(100).optional()
+        .describe("Omit to use the generated SIMPLE-<productId> SKU."),
+    trackInventory: z.boolean(),
+    stock: z.number().int().min(0).describe("Initial on-hand quantity; must be 0 when inventory is not tracked."),
+}).refine((value) => value.trackInventory || value.stock === 0, {
+    message: "Turn on quantity tracking before setting a quantity.",
+    path: ["stock"],
+});
+
 /** Schema for creating a new product (POST /api/products) */
 export const createProductSchema = productBaseSchema
     .extend({
         categoryId: z.string().min(1),
         productCondition: productConditionSchema,
         optionMatrix: createProductOptionMatrixSchema.optional(),
+        defaultSku: defaultSkuInputSchema.optional()
+            .describe("Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."),
     })
-    .superRefine(requireCanonicalProductHandle);
+    .superRefine(requireCanonicalProductHandle)
+    .refine((value) => !(value.optionMatrix && value.defaultSku), {
+        message: "Send either optionMatrix or defaultSku, not both.",
+        path: ["defaultSku"],
+    });
 
 /** Schema for updating an existing product (PUT /api/products/[id]) */
 export const updateProductSchema = productBaseSchema

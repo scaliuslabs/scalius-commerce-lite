@@ -1,30 +1,32 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  saveSettingAggregate: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/settings-write", () => ({
-  saveSettingAggregate: mocks.saveSettingAggregate,
-}));
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { businessSettingsRoutes } from "./business";
 
+let sqlite: DatabaseSync;
+
 function createApp() {
+  const database = createSqliteD1Database();
+  sqlite = database.sqlite;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
     return c.json(body, status);
   });
   app.use("*", async (c, next) => {
-    c.set("db", {} as never);
+    c.set("db", database.db);
     await next();
   });
   app.route("/admin/settings", businessSettingsRoutes);
@@ -39,14 +41,15 @@ async function save(app: ReturnType<typeof createApp>, body: Record<string, unkn
   });
 }
 
+function businessInfo() {
+  return sqlite.prepare("SELECT key, value FROM settings WHERE category = 'business_info' ORDER BY key").all();
+}
+
 describe("Business email route boundary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.saveSettingAggregate.mockResolvedValue(undefined);
-    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   });
-
-  afterEach(() => vi.restoreAllMocks());
 
   it("rejects malformed email without constructing an aggregate write", async () => {
     const response = await save(createApp(), { email: "support@" });
@@ -54,8 +57,8 @@ describe("Business email route boundary", () => {
 
     expect(response.status).toBe(400);
     expect(body.error?.message).toContain("valid business support email address");
-    expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(businessInfo()).toEqual([]);
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -65,20 +68,14 @@ describe("Business email route boundary", () => {
     const response = await save(createApp(), body);
 
     expect(response.status).toBe(200);
-    expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-      expect.anything(),
-      [{ category: "business_info", key: "email", value: expectedEmail }],
-    );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledOnce();
+    expect(businessInfo()).toEqual([{ key: "email", value: expectedEmail }]);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
   });
 
   it("leaves omitted email out of the aggregate write", async () => {
     const response = await save(createApp(), { companyName: "Merchant" });
 
     expect(response.status).toBe(200);
-    expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-      expect.anything(),
-      [{ category: "business_info", key: "company_name", value: "Merchant" }],
-    );
+    expect(businessInfo()).toEqual([{ key: "company_name", value: "Merchant" }]);
   });
 });

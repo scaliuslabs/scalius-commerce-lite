@@ -15,15 +15,17 @@ import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
-import { getCategoryFormOptions } from "~/lib/api-functions/categories";
+import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import {
-  getHomepagePresentation,
-  saveHomepagePresentation,
-  type HomepagePresentationDocument,
-} from "~/lib/api-functions/homepage-presentation";
+  getApiV1AdminSettingsHomepagePresentation,
+  postApiV1AdminSettingsHomepagePresentation,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiResult } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { SortableList } from "../shared/SortableList";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+
+type HomepagePresentationDocument = ApiResult<typeof getApiV1AdminSettingsHomepagePresentation>;
 
 function cloneConfig(config: HomepagePresentationConfig): HomepagePresentationConfig {
   return {
@@ -70,12 +72,9 @@ export function HomepagePresentationBuilder({
   const queryClient = useQueryClient();
   const presentationQuery = useQuery({
     queryKey: queryKeys.settings.homepagePresentation(),
-    queryFn: getHomepagePresentation,
+    queryFn: () => apiData(getApiV1AdminSettingsHomepagePresentation()),
   });
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.categories.formOptions(),
-    queryFn: getCategoryFormOptions,
-  });
+  const categoriesQuery = useQuery(categoryFormOptionsQueryOptions());
   const [config, setConfig] = useState<HomepagePresentationConfig>(() =>
     cloneConfig(DEFAULT_HOMEPAGE_PRESENTATION)
   );
@@ -118,9 +117,9 @@ export function HomepagePresentationBuilder({
 
   const saveMutation = useMutation({
     mutationFn: async ({ config: submittedConfig, expectedRevision }: HomepageSaveVariables) => {
-      return saveHomepagePresentation({
-        data: { ...submittedConfig, expectedRevision },
-      });
+      return apiData(postApiV1AdminSettingsHomepagePresentation({
+        body: { ...submittedConfig, expectedRevision },
+      }));
     },
     onSuccess: (document, variables) => {
       const previousSaved = savedRef.current;

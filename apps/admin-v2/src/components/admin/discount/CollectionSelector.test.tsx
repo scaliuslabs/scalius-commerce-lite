@@ -10,10 +10,10 @@ const mocks = vi.hoisted(() => ({
   getCollectionsByIds: vi.fn(),
 }));
 
-vi.mock("~/lib/api-functions/collections", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/lib/api-functions/collections")>()),
-  getCollections: mocks.getCollections,
-  getCollectionsByIds: mocks.getCollectionsByIds,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminCollections: mocks.getCollections,
+  getApiV1AdminCollectionsByIds: mocks.getCollectionsByIds,
 }));
 
 import { CollectionSelector } from "./CollectionSelector";
@@ -42,7 +42,7 @@ describe("CollectionSelector", () => {
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     });
     mocks.getCollections.mockImplementation(
-      ({ data }: { data: { page: number } }) => Promise.resolve(
+      ({ query: data }: { query: { page: number } }) => Promise.resolve(
         data.page === 2
           ? {
               collections: [collection(11)],
@@ -90,10 +90,10 @@ describe("CollectionSelector", () => {
     });
     expect(mocks.getCollections).toHaveBeenCalledTimes(2);
     expect(mocks.getCollections).toHaveBeenNthCalledWith(1, {
-      data: { page: 1, limit: 10, search: undefined },
+      query: { page: 1, limit: 10, search: undefined },
     });
     expect(mocks.getCollections).toHaveBeenNthCalledWith(2, {
-      data: { page: 2, limit: 10, search: undefined },
+      query: { page: 2, limit: 10, search: undefined },
     });
     expect(trigger.className).toContain("h-11");
     expect(loadMore.className).toContain("h-11");
@@ -105,7 +105,7 @@ describe("CollectionSelector", () => {
 
   it("starts a fresh first page for a debounced search", async () => {
     mocks.getCollections.mockImplementation(
-      ({ data }: { data: { page: number; search?: string } }) => Promise.resolve(
+      ({ query: data }: { query: { page: number; search?: string } }) => Promise.resolve(
         data.search === "spring"
           ? {
               collections: [{ ...collection(20), name: "Spring collection" }],
@@ -147,7 +147,7 @@ describe("CollectionSelector", () => {
     );
     expect(document.body.textContent).not.toContain("Collection 1");
     expect(mocks.getCollections).toHaveBeenLastCalledWith({
-      data: { page: 1, limit: 10, search: "spring" },
+      query: { page: 1, limit: 10, search: "spring" },
     });
   });
 

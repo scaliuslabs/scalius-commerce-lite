@@ -2921,6 +2921,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                 mediaUrl: string;
             };
             cspAllowedDomains: string;
+            storefrontCopy: {
+                languageCode: string;
+                addToCartText: string;
+                buyNowText: string;
+                selectOptionsText: string;
+                unavailableText: string;
+            };
         };
     };
 };
@@ -11144,106 +11151,6 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
 
 export type GetApiV1CategoriesBySlugProductSummariesResponse = GetApiV1CategoriesBySlugProductSummariesResponses[keyof GetApiV1CategoriesBySlugProductSummariesResponses];
 
-export type GetApiV1CacheGroupsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/cache/groups';
-};
-
-export type GetApiV1CacheGroupsErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1CacheGroupsError = GetApiV1CacheGroupsErrors[keyof GetApiV1CacheGroupsErrors];
-
-export type GetApiV1CacheGroupsResponses = {
-    /**
-     * Public cache domains and mutation-path mapping
-     */
-    200: {
-        success: true;
-        data: {
-            groups: {
-                [key: string]: {
-                    label: string;
-                    description: string;
-                };
-            };
-            pathMapping: {
-                [key: string]: Array<string>;
-            };
-        };
-    };
-};
-
-export type GetApiV1CacheGroupsResponse = GetApiV1CacheGroupsResponses[keyof GetApiV1CacheGroupsResponses];
-
 export type PostApiV1CacheClearData = {
     body?: never;
     path?: never;
@@ -11324,7 +11231,7 @@ export type PostApiV1CacheClearError = PostApiV1CacheClearErrors[keyof PostApiV1
 
 export type PostApiV1CacheClearResponses = {
     /**
-     * Public caches purged
+     * New public cache generation started
      */
     200: {
         success: true;
@@ -11335,101 +11242,6 @@ export type PostApiV1CacheClearResponses = {
 };
 
 export type PostApiV1CacheClearResponse = PostApiV1CacheClearResponses[keyof PostApiV1CacheClearResponses];
-
-export type PostApiV1CacheClearGroupData = {
-    body: {
-        groups: Array<string>;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/cache/clear-group';
-};
-
-export type PostApiV1CacheClearGroupErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1CacheClearGroupError = PostApiV1CacheClearGroupErrors[keyof PostApiV1CacheClearGroupErrors];
-
-export type PostApiV1CacheClearGroupResponses = {
-    /**
-     * Selected public caches purged
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            groups: Array<string>;
-        };
-    };
-};
-
-export type PostApiV1CacheClearGroupResponse = PostApiV1CacheClearGroupResponses[keyof PostApiV1CacheClearGroupResponses];
 
 export type GetApiV1OrdersStatusByTokenData = {
     body?: never;
@@ -44035,7 +43847,14 @@ export type PostApiV1AdminProductsData = {
                 imageId: string | null;
                 sku: string;
                 price: number;
-                stock: number;
+                /**
+                 * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
+                 */
+                stock?: number;
+                /**
+                 * The SKU stockVersion the new quantity was based on. Required with stock.
+                 */
+                expectedStockVersion?: number;
                 trackInventory: boolean;
                 /**
                  * Weight in grams.
@@ -44047,6 +43866,20 @@ export type PostApiV1AdminProductsData = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
             }>;
+        };
+        /**
+         * Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix.
+         */
+        defaultSku?: {
+            /**
+             * Omit to use the generated SIMPLE-<productId> SKU.
+             */
+            sku?: string;
+            trackInventory: boolean;
+            /**
+             * Initial on-hand quantity; must be 0 when inventory is not tracked.
+             */
+            stock: number;
         };
     };
     path?: never;
@@ -46130,13 +45963,20 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         weight: number | null;
         sku: string;
         price: number;
-        stock: number;
+        /**
+         * New on-hand quantity. Omit to keep the current quantity.
+         */
+        stock?: number;
         trackInventory?: boolean;
         barcode?: string | null;
         barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
+        /**
+         * The SKU stockVersion the new quantity was based on. Required with stock.
+         */
+        expectedStockVersion?: number;
         expectedAggregateRevision: number;
     };
     path: {
@@ -46322,7 +46162,14 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             imageId: string | null;
             sku: string;
             price: number;
-            stock: number;
+            /**
+             * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
+             */
+            stock?: number;
+            /**
+             * The SKU stockVersion the new quantity was based on. Required with stock.
+             */
+            expectedStockVersion?: number;
             trackInventory: boolean;
             /**
              * Weight in grams.

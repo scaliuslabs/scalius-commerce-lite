@@ -42,9 +42,9 @@ describe("finalizeOpenApiContract", () => {
         },
       },
       "/api/v1/admin/inventory/scanner/lookup": { get: { responses: {} } },
-      "/api/v1/cache/groups": {
-        get: {
-          operationId: "dashboard.cache.groups_list",
+      "/api/v1/cache/clear": {
+        post: {
+          operationId: "dashboard.cache.purge_all",
           responses: {},
         },
       },
@@ -95,15 +95,15 @@ describe("finalizeOpenApiContract", () => {
       { adminSession: [] },
       { scannerSession: [] },
     ]);
-    expect(operation(spec, "/api/v1/cache/groups", "get")).toMatchObject({
-      operationId: "dashboard.cache.groups_list",
+    expect(operation(spec, "/api/v1/cache/clear", "post")).toMatchObject({
+      operationId: "dashboard.cache.purge_all",
       "x-scalius-agent": { surface: "dashboard" },
       "x-scalius-rbac": {
         type: "permission",
-        permission: "settings.cache.view",
+        permission: "settings.cache.manage",
       },
     });
-    expect(operation(spec, "/api/v1/cache/groups", "get").security).toContainEqual({
+    expect(operation(spec, "/api/v1/cache/clear", "post").security).toContainEqual({
       adminSession: [],
     });
     expect(operation(spec, "/api/v1/auth/token", "get").security).toEqual([

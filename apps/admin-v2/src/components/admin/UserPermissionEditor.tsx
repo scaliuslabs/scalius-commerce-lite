@@ -31,15 +31,18 @@ import { toast } from "sonner";
 import { getServerFnError } from "@/lib/api-helpers";
 import { refreshAdminRouteContext } from "@/lib/admin-route-context";
 import {
-  assignUserPermission,
-  assignUserRole,
+  deleteApiV1AdminRbacUserPermissions,
+  deleteApiV1AdminRbacUserRoles,
+  postApiV1AdminRbacUserPermissions,
+  postApiV1AdminRbacUserRoles,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import {
   getRbacPermissions,
   getRbacRoles,
-  removeUserPermission,
-  removeUserRole,
   type RbacPermissionMetadata,
   type RbacRole,
-} from "@/lib/api-functions/rbac";
+} from "@/lib/api-query-options/rbac";
 
 type Role = RbacRole;
 type PermissionMetadata = RbacPermissionMetadata;
@@ -133,7 +136,7 @@ export function UserPermissionEditor({
 
   const handleAddRole = async (roleId: string) => {
     try {
-      await assignUserRole({ data: { userId: user.id, roleId } });
+      await apiData(postApiV1AdminRbacUserRoles({ body: { userId: user.id, roleId } }));
       setAssignedRoleIds((prev) => new Set([...prev, roleId]));
       await refreshPermissions();
       onUpdate();
@@ -146,7 +149,7 @@ export function UserPermissionEditor({
 
   const handleRemoveRole = async (roleId: string) => {
     try {
-      await removeUserRole({ data: { userId: user.id, roleId } });
+      await apiData(deleteApiV1AdminRbacUserRoles({ body: { userId: user.id, roleId } }));
       setAssignedRoleIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(roleId);
@@ -163,9 +166,9 @@ export function UserPermissionEditor({
 
   const handleSetOverride = async (permission: string, granted: boolean) => {
     try {
-      await assignUserPermission({
-        data: { userId: user.id, permission, granted },
-      });
+      await apiData(postApiV1AdminRbacUserPermissions({
+        body: { userId: user.id, permission, granted },
+      }));
 
       setPermissionOverrides((prev) => {
         const grants = new Set(prev.grants);
@@ -196,7 +199,7 @@ export function UserPermissionEditor({
 
   const handleRemoveOverride = async (permission: string) => {
     try {
-      await removeUserPermission({ data: { userId: user.id, permission } });
+      await apiData(deleteApiV1AdminRbacUserPermissions({ body: { userId: user.id, permission } }));
       setPermissionOverrides((prev) => {
         const grants = new Set(prev.grants);
         const denials = new Set(prev.denials);

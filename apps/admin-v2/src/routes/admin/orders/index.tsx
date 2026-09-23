@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import {
   createDataSelector,
   createListSearchValidator,
@@ -46,7 +47,10 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
-import type { BulkShipOrdersPayload } from "~/lib/api-functions/orders";
+import type { postApiV1AdminOrdersBulkShip } from "@scalius/api-client/sdk";
+import type { ApiResult } from "~/lib/api";
+
+type BulkShipOrdersPayload = ApiResult<typeof postApiV1AdminOrdersBulkShip>;
 import type { BulkShipResultSummary } from "~/components/admin/order-list/BulkShipDialog";
 import { getOrderAutoRefreshPauseReason } from "./-order-auto-refresh";
 import {
@@ -54,6 +58,7 @@ import {
   buildRecoveryExportSearchParams,
 } from "./-order-export-search-params";
 import { isAdminOrderStatus } from "~/lib/admin-order-status-policy";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 
 const ArchiveOrderDialog = lazy(() =>
   import("~/components/admin/order-list/ArchiveOrderDialog").then((module) => ({
@@ -168,12 +173,12 @@ function validateOrderSearch(search: SearchValidatorInput<SearchParams>): Search
 
 // ── Map search params to API params ───────────────────────────────
 
-function mapParams(deps: SearchParams) {
+function mapParams(deps: SearchParams): Parameters<typeof ordersQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
-    status: deps.status,
+    status: deps.status || undefined,
     statusGroup: deps.statusGroup,
     paymentStatus: deps.paymentStatus,
     paymentMethod: deps.paymentMethod,
@@ -181,9 +186,9 @@ function mapParams(deps: SearchParams) {
     paymentRecovery: deps.paymentRecovery,
     sort: deps.sort,
     order: deps.order,
-    showArchived: deps.archived,
-    startDate: deps.startDate,
-    endDate: deps.endDate,
+    archived: deps.archived ? "true" : undefined,
+    startDate: deps.startDate || undefined,
+    endDate: deps.endDate || undefined,
   };
 }
 
@@ -294,6 +299,7 @@ function OrdersPage() {
     expectedVersion: number;
   } | null>(null);
   const [isBulkArchiveOpen, setIsBulkArchiveOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
   const [isShippingDialogOpen, setIsShippingDialogOpen] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
   const [lastBulkShipResult, setLastBulkShipResult] =
@@ -533,7 +539,7 @@ function OrdersPage() {
   );
 
   const handleStatusUpdate = useCallback(
-    (orderId: string, newStatus: string) => {
+    (orderId: string, newStatus: string, confirmed = false) => {
       const normalizedStatus = newStatus.toLowerCase();
       if (!isAdminOrderStatus(normalizedStatus)) {
         toast.error("Invalid order status");
@@ -543,6 +549,10 @@ function OrdersPage() {
         toast.error("Status change unavailable", {
           description: "Your role can view orders but cannot change order status.",
         });
+        return;
+      }
+      if (normalizedStatus === "cancelled" && !confirmed) {
+        setOrderToCancel(orderId);
         return;
       }
       setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
@@ -727,7 +737,7 @@ function OrdersPage() {
   }, [selectedIds, table]);
   const autoRefreshPauseReason = getOrderAutoRefreshPauseReason({
     selectedCount: selectedIds.length,
-    actionDialogOpen: isArchiveDialogOpen || isShippingDialogOpen,
+    actionDialogOpen: isArchiveDialogOpen || isShippingDialogOpen || orderToCancel !== null,
     mutationInFlight: isShipping || archiveMut.isPending,
   });
 
@@ -842,7 +852,7 @@ function OrdersPage() {
       ? "/api/v1/admin/orders/payment-recovery/export"
       : "/api/v1/admin/orders/export";
     try {
-      const response = await fetch(`${endpoint}?${params.toString()}`);
+      const response = await fetch(`${withDashboardBasePath(endpoint)}?${params.toString()}`);
       if (!response.ok) throw new Error(`Export failed with ${response.status}`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -1203,6 +1213,20 @@ function OrdersPage() {
           />
         </Suspense>
       )}
+
+      <ConfirmDialog
+        open={orderToCancel !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setOrderToCancel(null);
+        }}
+        title={`Cancel order #${orderToCancel ?? ""}?`}
+        description="Stock is released and the customer is notified."
+        confirmLabel="Cancel order"
+        cancelLabel="Keep order"
+        onConfirm={() => {
+          if (orderToCancel) handleStatusUpdate(orderToCancel, "cancelled", true);
+        }}
+      />
 
       {/* Bulk ship dialog */}
       {(isShippingDialogOpen || isShipping) && (

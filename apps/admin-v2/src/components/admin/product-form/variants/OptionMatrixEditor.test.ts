@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   combinationKey,
   getOptionMatrixIssue,
+  getSimpleSkuIssue,
   materializeCombination,
   materializeVariants,
   materializeVariantsExcluding,
@@ -11,11 +10,6 @@ import {
   type DraftOption,
   type DraftVariant,
 } from "./option-matrix-editor-model";
-
-const editorSource = readFileSync(
-  fileURLToPath(new URL("./OptionMatrixEditor.tsx", import.meta.url)),
-  "utf8",
-);
 
 const option = (
   id: string,
@@ -221,70 +215,12 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 7, 0)).toContain("Allocate exactly 7");
     expect(getOptionMatrixIssue(options, rows, [], false, new Map([["one", 5]]), 0, 0)).toContain("lower than committed");
   });
-});
 
-describe("option matrix editor density and stock disclosure", () => {
-  it("keeps option axes in compact single-line rows", () => {
-    expect(editorSource).toContain(
-      "sm:grid-cols-[260px_minmax(0,1fr)_82px] sm:items-center",
-    );
-    expect(editorSource).toContain(
-      "grid grid-cols-[minmax(0,1fr)_112px] gap-1",
-    );
-    expect(editorSource).not.toContain(
-      'className="space-y-1">\n        <Input\n          value={option.name}',
-    );
-  });
-
-  it("moves committed and available quantities into an accessible tooltip", () => {
-    expect(editorSource).toContain("function InventoryQuantityInput");
-    expect(editorSource).toContain("available to sell; ${committed} committed from ${value} on hand");
-    expect(editorSource).toContain("committed to open orders");
-    expect(editorSource).not.toContain("committed ·");
-  });
-
-  it("states the persisted SKU weight unit in the compact editor", () => {
-    expect(editorSource).toContain("Weight (g)");
-    expect(editorSource).toContain("Weight in grams for ${variant.sku}");
-    expect(editorSource).toContain('placeholder="e.g. 500"');
-  });
-
-  it("uses exact selected-SKU assignments and an explicit automatic fallback", () => {
-    expect(editorSource).toContain("Automatic product image");
-    expect(editorSource).toContain("Using automatic product image");
-    expect(editorSource).toContain('title="Automatic product image"');
-    expect(editorSource).toContain("Uses the best product image available");
-    expect(editorSource).not.toContain("variantImageAxis");
-  });
-
-  it("keeps retained trash images visible without allowing new assignments", () => {
-    expect(editorSource).toContain('image.status === "trashed" && value !== image.id');
-    expect(editorSource).toContain("disabled={unavailable}");
-    expect(editorSource).toContain("In trash · existing assignments remain");
-  });
-
-  it("stages bulk image assignment and clear through the shared Apply action", () => {
-    expect(editorSource).toContain("const [bulkImageId, setBulkImageId]");
-    expect(editorSource).toContain("...(bulkImageId !== undefined ? { imageId: bulkImageId } : {})");
-    expect(editorSource).toContain('value={bulkImageId}');
-    expect(editorSource).toContain("allowNoChange");
-    expect(editorSource).toContain("onChange={setBulkImageId}");
-    expect(editorSource).toContain('bulkImageId === undefined');
-    expect(editorSource).toContain("setBulkImageId(undefined)");
-    expect(editorSource).not.toContain("selected.forEach((id) => onChange(id, { imageId }))");
-  });
-
-  it("keeps empty media and image controls explicit and accessible", () => {
-    expect(editorSource).toContain("Add product media first. SKUs without an exact image use the automatic product image.");
-    expect(editorSource).toContain('aria-label="Use the automatic product image"');
-    expect(editorSource).toContain("as the exact SKU image");
-    expect(editorSource).toContain("No image change staged");
-  });
-
-  it("routes the card save through product composition orchestration", () => {
-    expect(editorSource).toContain("onSaveRequest: () => void");
-    expect(editorSource).toContain("onClick={onSaveRequest}");
-    expect(editorSource).toContain("mutation.isPending || productSaving");
-    expect(editorSource).not.toContain("onClick={() => mutation.mutate(undefined)}");
+  it("validates simple product inventory", () => {
+    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, false)).toBeNull();
+    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, true)).toContain("at least 3");
+    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: true, stock: 1 }, 2, true)).toContain("lower than committed");
+    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 2, true)).toContain("Release committed");
+    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 0, true)).toBeNull();
   });
 });

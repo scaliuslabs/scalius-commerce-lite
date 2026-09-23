@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getApiV1CategoriesBySlugProducts: vi.fn(),
   getApiV1Search: vi.fn(),
   getApiV1ProductsSearch: vi.fn(),
+  getApiV1ProductsFeed: vi.fn(),
   getConfiguredSdkClient: vi.fn(() => ({ baseUrl: "https://api.example.test" })),
   edgeCacheKeys: [] as string[],
 }));
@@ -16,6 +17,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1CategoriesBySlugProducts: mocks.getApiV1CategoriesBySlugProducts,
   getApiV1Search: mocks.getApiV1Search,
   getApiV1ProductsSearch: mocks.getApiV1ProductsSearch,
+  getApiV1ProductsFeed: mocks.getApiV1ProductsFeed,
 }));
 
 vi.mock("@/lib/api/transport", () => ({
@@ -32,6 +34,7 @@ vi.mock("@/lib/api/transport", () => ({
 
 import {
   getAllProducts,
+  getFeedProducts,
   getProductsByCategory,
   getProductBySlugResult,
   searchProductsForForm,
@@ -206,5 +209,23 @@ describe("storefront product API helpers", () => {
 
     expect(mocks.getApiV1ProductsSearch).not.toHaveBeenCalled();
     expect(mocks.getApiV1Search).not.toHaveBeenCalled();
+  });
+
+  it("reads catalog feed pages only from the dedicated feed projection", async () => {
+    const pagination = { limit: 100, hasNextPage: true, cursor: "next_1" };
+    mocks.getApiV1ProductsFeed.mockResolvedValueOnce({
+      data: { success: true, data: { products: [{ id: "prod_1" }], pagination } },
+    });
+
+    await expect(getFeedProducts()).resolves.toEqual({ data: [{ id: "prod_1" }], pagination });
+    expect(mocks.getApiV1ProductsFeed).toHaveBeenCalledWith({
+      client: { baseUrl: "https://api.example.test" },
+      query: {},
+    });
+
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.getApiV1ProductsFeed.mockResolvedValueOnce({ error: { message: "down" } });
+    await expect(getFeedProducts({ page: 2 })).resolves.toBeNull();
+    expect(mocks.getApiV1Products).not.toHaveBeenCalled();
   });
 });

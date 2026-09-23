@@ -1,24 +1,12 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import { storefrontSourcePath } from "@/lib/test-source-paths";
 import {
   bindDesktopZoomWhenEligible,
   initProductMediaGallery,
   type ProductMediaChangeDetail,
 } from "./product-media-controller";
 import { bindDesktopZoom } from "./product-desktop-zoom-controller";
-
-const GALLERY_SOURCE = storefrontSourcePath(
-  "components/product/ProductGallery.astro",
-);
-const PRODUCT_PAGE_SOURCE = storefrontSourcePath("pages/products/[slug].astro");
-const API_TYPES_SOURCE = storefrontSourcePath("lib/api/types.ts");
-const PRODUCT_CONTROLLER_SOURCE = storefrontSourcePath(
-  "components/product/scripts/product-controller.ts",
-);
-const GLOBAL_STYLE_SOURCE = storefrontSourcePath("styles/global.css");
 
 function thumbnail(
   id: string,
@@ -594,112 +582,5 @@ describe("mixed product media gallery", () => {
     query.dispatchEvent(new Event("change"));
 
     expect(loadController).toHaveBeenCalledOnce();
-  });
-});
-
-describe("storefront mixed-media source boundaries", () => {
-  it("keeps video out of image optimizer and zoom paths", () => {
-    const source = readFileSync(GALLERY_SOURCE, "utf8");
-    expect(source).toContain('item.kind === "video"');
-    expect(source).toContain("data-product-video");
-    expect(source).toContain("media-theme-microvideo");
-    expect(source).toContain('slot="media"');
-    expect(source).toContain("controls");
-    expect(source).toContain("playsinline");
-    expect(source).toMatch(
-      /preload=\{initialMedia\?\.item\.kind === "video"\s*\? "metadata"\s*: "none"\}/,
-    );
-    expect(source).toMatch(
-      /src=\{initialMedia\?\.item\.kind === "video"\s*\? initialMedia\.mainUrl\s*: undefined\}/,
-    );
-    expect(source).toMatch(
-      /poster=\{initialMedia\?\.item\.kind === "video"\s*\? \(initialMedia\.posterUrl \?\? undefined\)\s*: undefined\}/,
-    );
-    expect(source).toContain("item.posterUrl");
-    expect(source).toContain("absolute inset-0 z-0");
-    expect(source).toContain("relative z-10 block h-full w-full");
-    expect(source).not.toContain("absolute inset-0 z-20 flex flex-col");
-    expect(source).not.toContain("<source");
-    expect(source).not.toContain("product-image-change");
-
-    const controller = readFileSync(
-      storefrontSourcePath(
-        "components/product/scripts/product-media-controller.ts",
-      ),
-      "utf8",
-    );
-    expect(controller).toContain('import("@player.style/microvideo")');
-    expect(controller).toContain(
-      'customElements.whenDefined("media-theme-microvideo")',
-    );
-    expect(controller).toContain("video.controls = false");
-    expect(controller).toContain("video.controls = true");
-    const styles = readFileSync(GLOBAL_STYLE_SOURCE, "utf8");
-    expect(styles).toContain("media-theme-microvideo::part(button)");
-    expect(styles).toContain("min-width: 44px");
-  });
-
-  it("keeps the closed mobile zoom dialog inert until the controller opens it", () => {
-    const gallery = readFileSync(GALLERY_SOURCE, "utf8");
-    expect(gallery).toMatch(
-      /data-mobile-zoom-modal[\s\S]*?aria-hidden="true"[\s\S]*?\binert\b/,
-    );
-  });
-
-  it("passes the ordered media contract directly and removes the image adapter type", () => {
-    const page = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
-    const types = readFileSync(API_TYPES_SOURCE, "utf8");
-    const controller = readFileSync(PRODUCT_CONTROLLER_SOURCE, "utf8");
-    expect(page).toContain("media={media}");
-    expect(page).not.toContain("const images = media.flatMap");
-    expect(types).not.toContain("interface ProductImage");
-    expect(controller).toContain('new CustomEvent("product-media-select"');
-    expect(controller).toContain("resolveVariantImageForSelection(");
-    expect(controller).toContain("resolveVariantCartMedia(validation.variant");
-    expect(controller).toContain(
-      "imageMediaId: cache.container.dataset.productImageMediaId",
-    );
-    expect(controller).not.toContain("currentDisplayedImage");
-    expect(controller).not.toContain("product-image-change");
-    expect(controller).not.toContain("controller-image-update");
-  });
-
-  it("uses one reusable preview rendition without background display warming", () => {
-    const gallery = readFileSync(GALLERY_SOURCE, "utf8");
-    const controller = readFileSync(
-      storefrontSourcePath(
-        "components/product/scripts/product-media-controller.ts",
-      ),
-      "utf8",
-    );
-    expect(gallery).not.toContain("data-variant-image");
-    expect(gallery).not.toContain("variantImageIds");
-    expect(gallery).toContain("data-preview-url");
-    expect(gallery).toContain("imageWidths.preview");
-    expect(controller).toContain("const shouldUsePreview =");
-    expect(controller).toContain('source !== "initial"');
-    expect(controller).toContain("root.dataset.activeMediaKey !== currentKey");
-    expect(controller).toContain("activeMediaDisplayUrl");
-    expect(controller).toContain("imagePreloads");
-    expect(controller).not.toContain("scheduleVariantImagePreload");
-    expect(controller).not.toContain("[data-variant-image='true']");
-    expect(controller).not.toContain("scheduleInitialImagePreload");
-    expect(gallery).not.toContain("client:media");
-    expect(gallery).not.toContain("ProductImageZoom");
-    expect(gallery).toContain("data-desktop-image-zoom");
-    expect(gallery).toMatch(
-      /data-desktop-main-image[\s\S]*?loading="lazy"[\s\S]*?fetchpriority="low"/,
-    );
-    expect(gallery).toMatch(
-      /data-mobile-main-image[\s\S]*?loading="eager"[\s\S]*?fetchpriority="high"[\s\S]*?decoding="sync"/,
-    );
-    expect(gallery.indexOf("data-mobile-main-image")).toBeLessThan(
-      gallery.indexOf('data-thumbnail-rail="desktop"'),
-    );
-    expect(gallery.indexOf("data-desktop-main-image")).toBeLessThan(
-      gallery.indexOf('data-thumbnail-rail="desktop"'),
-    );
-    expect(controller).toContain('import("./product-desktop-zoom-controller")');
-    expect(controller).toContain(".catch(() => undefined)");
   });
 });

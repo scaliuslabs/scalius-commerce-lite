@@ -1,6 +1,11 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { checkoutLanguagesQueryOptions } from "~/lib/api-query-options/checkout-languages";
+import {
+  checkoutLanguagesQueryOptions,
+  type CheckoutLanguage,
+  type CheckoutLanguagesPagination,
+  type CheckoutLanguagesQuery,
+} from "~/lib/api-query-options/checkout-languages";
 import {
   useCreateCheckoutLanguage,
   useUpdateCheckoutLanguage,
@@ -8,12 +13,6 @@ import {
   useDeleteCheckoutLanguage,
   useRestoreCheckoutLanguage,
 } from "~/lib/api-mutations/checkout-languages";
-import {
-  type CheckoutLanguage,
-  type CheckoutLanguagesPagination,
-  type CheckoutLanguagesQueryInput,
-  type CheckoutLanguageWriteInput,
-} from "@/lib/api-functions/checkout-languages";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   getCheckoutLanguagePreset,
@@ -119,14 +118,14 @@ export function useLanguages() {
 
   // Build query params
   const queryParams = useMemo(() => {
-    const params: CheckoutLanguagesQueryInput = {
+    const params: CheckoutLanguagesQuery = {
       page,
       limit,
       sort: sort.field,
       order: sort.order,
     };
     if (appliedSearch) params.search = appliedSearch;
-    if (showTrashed) params.trashed = true;
+    if (showTrashed) params.trashed = "true";
     return params;
   }, [page, limit, sort.field, sort.order, appliedSearch, showTrashed]);
 
@@ -215,11 +214,11 @@ export function useLanguages() {
         if (editingLanguageId) {
           await updateMutation.mutateAsync({
             id: editingLanguageId,
-            update: formData as CheckoutLanguageWriteInput,
+            update: formData as Parameters<typeof updateMutation.mutateAsync>[0]["update"],
           });
         } else {
           await createMutation.mutateAsync(
-            formData as CheckoutLanguageWriteInput,
+            formData as Parameters<typeof createMutation.mutateAsync>[0],
           );
           setPage(1);
         }

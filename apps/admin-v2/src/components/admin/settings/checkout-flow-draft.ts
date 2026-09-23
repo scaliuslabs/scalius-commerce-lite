@@ -1,7 +1,7 @@
 import type {
   CheckoutFlowSettingsPayload,
   CheckoutMode,
-} from "@/lib/api-functions/settings";
+} from "@/lib/api-query-options/settings";
 
 export interface CheckoutFlowValues {
   guestCheckoutEnabled: boolean;

@@ -1,14 +1,8 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { drizzle } from "drizzle-orm/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { AgentPrincipal } from "../agent-access/types";
 import { createAgentArtifact, sealAgentArtifact } from "../agent-access/artifacts";
 
@@ -39,87 +33,10 @@ vi.mock("../agent-access/audit", () => ({
 
 import { agentArtifactRoutes } from "./agent-artifacts";
 
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []): D1Statement {
-  const execute = (): D1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...next) => statement(sqlite, query, next),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
 function createHarness() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    CREATE TABLE agent_grants (
-      id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner_user_id TEXT,
-      resource TEXT NOT NULL, label TEXT NOT NULL, preset TEXT NOT NULL,
-      permissions_json TEXT NOT NULL, risk_ceiling TEXT NOT NULL,
-      authority_revision INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_credentials (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, kind TEXT NOT NULL,
-      token_hash TEXT NOT NULL, token_hint TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      revoked_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_artifact_handles (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, credential_id TEXT,
-      resource TEXT NOT NULL, operation_id TEXT NOT NULL, r2_key TEXT NOT NULL UNIQUE,
-      media_type TEXT NOT NULL, filename TEXT NOT NULL, size_bytes INTEGER NOT NULL,
-      sha256 TEXT NOT NULL, status TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      claimed_at INTEGER, failure_class TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-  `);
-  const binding = {
-    prepare: (query: string) => statement(sqlite, query),
-    async batch(statements: D1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((item) => item.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  const db = drizzle(binding, { schema }) as unknown as Database;
+  const { sqlite, db } = createSqliteD1Database();
   const now = Math.floor(Date.now() / 1000);
+  sqlite.exec("INSERT INTO user (id, name, email) VALUES ('owner-1', 'Owner', 'owner@example.test')");
   sqlite.prepare(`
     INSERT INTO agent_grants (
       id, kind, owner_user_id, resource, label, preset, permissions_json,

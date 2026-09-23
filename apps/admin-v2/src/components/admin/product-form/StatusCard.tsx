@@ -1,6 +1,6 @@
 // src/components/admin/product-form/StatusCard.tsx
 import { memo } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -32,7 +32,7 @@ interface StatusCardProps {
 }
 
 export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl }: StatusCardProps) {
-  const isActive = form.watch("isActive");
+  const isActive = useWatch({ control: form.control, name: "isActive" });
 
   return (
     <Card>

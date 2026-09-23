@@ -3,7 +3,7 @@
 import type { SocialLink, LogoConfig } from "~/components/admin/shared/builder-types";
 import type { NavigationTargetItem as NavigationItem } from "@scalius/shared/navigation-target";
 import type { MediaFile } from "~/components/admin/media-manager/types";
-import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import type { Readiness as NavigationConfigSectionReadiness } from "@scalius/shared/readiness";
 import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 
 export type { SocialLink, LogoConfig, NavigationItem, MediaFile };

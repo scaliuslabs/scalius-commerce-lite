@@ -15,7 +15,7 @@ import {
     serviceUnavailableResponse,
     successEnvelope,
 } from "../../schemas/responses";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration, type CacheWriteContext } from "../../utils/cache-generation";
 import {
     enqueueOrderRefundNotificationForOrder,
     enqueueOrderStatusChangeNotification,
@@ -127,17 +127,13 @@ async function recordPartialRefundProcessedSideEffects(options: {
     db: Database;
     queue: Env["JOBS_QUEUE"] | undefined;
     error: PartialRefundProcessedError;
-    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+    context: CacheWriteContext;
     source: string;
     statusSource?: string;
 }) {
     try {
         if (options.error.availabilityTransitionVariantIds.length > 0) {
-            await invalidateProductAvailabilityCaches(
-                options.db,
-                { variantIds: options.error.availabilityTransitionVariantIds },
-                options.context,
-            );
+            await bumpCacheGeneration(options.context);
         }
         if (options.error.statusChange && options.statusSource) {
             await enqueueOrderStatusChangeNotification({
@@ -167,18 +163,14 @@ async function recordReconciledRefundAttemptSideEffects(options: {
     queue: Env["JOBS_QUEUE"] | undefined;
     orderIds: string[];
     notifications: RefundNotificationFact[];
-    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+    context: CacheWriteContext;
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
     let notificationCount = 0;
     let sideEffectErrors = 0;
 
     if (options.orderIds.length > 0) {
         try {
-            await invalidateProductAvailabilityCaches(
-                options.db,
-                { orderIds: options.orderIds },
-                options.context,
-            );
+            await bumpCacheGeneration(options.context);
         } catch (error: unknown) {
             sideEffectErrors += 1;
             console.error("[orders-refund] Refund reconciliation cache invalidation failed after local commit:", error);
@@ -209,7 +201,7 @@ async function recordDirectRefundSideEffects(options: {
     queue: Env["JOBS_QUEUE"] | undefined;
     orderId: string;
     result: Awaited<ReturnType<typeof processRefund>>;
-    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+    context: CacheWriteContext;
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
     let notificationCount = 0;
     let sideEffectErrors = 0;
@@ -219,11 +211,7 @@ async function recordDirectRefundSideEffects(options: {
         && options.result.availabilityTransitionVariantIds.length > 0
     ) {
         try {
-            await invalidateProductAvailabilityCaches(
-                options.db,
-                { variantIds: options.result.availabilityTransitionVariantIds },
-                options.context,
-            );
+            await bumpCacheGeneration(options.context);
         } catch (error: unknown) {
             sideEffectErrors += 1;
             console.error("[orders-refund] Direct refund cache invalidation failed after local commit:", error);

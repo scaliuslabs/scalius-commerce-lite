@@ -10,7 +10,7 @@ import {
 import { formatDate } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import type { AnalyticsScriptSummary } from "~/types/api-responses";
+import type { AnalyticsScriptSummary } from "~/lib/api-query-options/analytics";
 import {
   ANALYTICS_LOCATION_LABELS,
   ANALYTICS_PROVIDER_LABELS,

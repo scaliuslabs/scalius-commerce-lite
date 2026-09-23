@@ -1,15 +1,7 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import type { DatabaseSync } from "node:sqlite";
 
-import { safeBatch, type Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/d1";
+import { safeBatch } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -17,164 +9,15 @@ import {
   prepareStockReservationBatch,
 } from "./reserve";
 
-const ledgerV2ValidationMigration = readFileSync(
-  fileURLToPath(new URL(
-    "../../../../database/migrations/0004_validate_inventory_ledger_v2.sql",
-    import.meta.url,
-  )),
-  "utf8",
-);
-
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function resultRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: resultRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = resultRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createFixture(stock: number): {
-  sqlite: DatabaseSync;
-  db: Database;
-} {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE products (
-      id TEXT PRIMARY KEY,
-      slug TEXT,
-      category_id TEXT,
-      is_active INTEGER NOT NULL,
-      deleted_at INTEGER
-    );
-    CREATE TABLE product_variants (
-      id TEXT PRIMARY KEY,
-      product_id TEXT NOT NULL REFERENCES products(id),
-      stock INTEGER NOT NULL,
-      reserved_stock INTEGER NOT NULL DEFAULT 0,
-      preorder_stock INTEGER NOT NULL DEFAULT 0,
-      track_inventory INTEGER NOT NULL DEFAULT 1,
-      stock_version INTEGER NOT NULL DEFAULT 1,
-      allow_preorder INTEGER NOT NULL DEFAULT 0,
-      allow_backorder INTEGER NOT NULL DEFAULT 0,
-      backorder_limit INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      deleted_at INTEGER
-    );
-    CREATE TABLE inventory_reservation_lanes (
-      variant_id TEXT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
-      pool TEXT NOT NULL,
-      lane INTEGER NOT NULL,
-      capacity INTEGER,
-      reserved_quantity INTEGER NOT NULL DEFAULT 0,
-      version INTEGER NOT NULL DEFAULT 0,
-      source_stock_version INTEGER NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      PRIMARY KEY (variant_id, pool, lane)
-    );
-    CREATE INDEX inventory_reservation_lanes_pool_idx
-      ON inventory_reservation_lanes(pool, variant_id);
-    CREATE TABLE inventory_movements (
-      id TEXT PRIMARY KEY,
-      variant_id TEXT NOT NULL REFERENCES product_variants(id),
-      order_id TEXT,
-      type TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
-      previous_stock INTEGER NOT NULL,
-      new_stock INTEGER NOT NULL,
-      notes TEXT,
-      created_by TEXT,
-      ledger_version INTEGER NOT NULL DEFAULT 1,
-      pool TEXT,
-      reservation_generation INTEGER,
-      stock_version_before INTEGER,
-      stock_version_after INTEGER,
-      stock_delta INTEGER,
-      previous_reserved_stock INTEGER,
-      new_reserved_stock INTEGER,
-      reserved_stock_delta INTEGER,
-      previous_preorder_stock INTEGER,
-      new_preorder_stock INTEGER,
-      preorder_stock_delta INTEGER,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-    CREATE UNIQUE INDEX inventory_movements_variant_version_uidx
-      ON inventory_movements(variant_id, stock_version_after);
+function createFixture(stock: number) {
+  const fixture = createSqliteD1Database({ foreignKeys: true });
+  fixture.sqlite.exec(`
+    INSERT INTO products (id, name, slug, price, is_active)
+    VALUES ('product_hot', 'Hot product', 'product-hot', 100, 1);
+    INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, preorder_stock, track_inventory, stock_version, is_default)
+    VALUES ('variant_hot', 'product_hot', 'HOT-1', 100, ${stock}, 0, 0, 1, 1, 1);
   `);
-  sqlite.exec(ledgerV2ValidationMigration);
-  sqlite.prepare(`
-    INSERT INTO products (id, slug, category_id, is_active)
-    VALUES ('product_hot', 'product-hot', 'category_hot', 1)
-  `).run();
-  sqlite.prepare(`
-    INSERT INTO product_variants (
-      id, product_id, stock, reserved_stock, preorder_stock,
-      track_inventory, stock_version
-    ) VALUES ('variant_hot', 'product_hot', ?, 0, 0, 1, 1)
-  `).run(stock);
-
-  const binding = {
-    prepare: (query: string) => createD1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-
-  return {
-    sqlite,
-    db: drizzle(binding as unknown as D1Database, { schema }) as unknown as Database,
-  };
+  return fixture;
 }
 
 describe("fresh checkout inventory transaction", () => {

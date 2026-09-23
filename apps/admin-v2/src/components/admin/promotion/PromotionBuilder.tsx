@@ -55,7 +55,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { readPromotionRevisionConflict } from "~/lib/admin-api-error";
-import type { PromotionAggregate } from "~/lib/api-functions/promotions";
+import type { PromotionAggregate } from "~/lib/api-query-options/promotions";
 import {
   useActivatePromotion,
   useArchivePromotion,

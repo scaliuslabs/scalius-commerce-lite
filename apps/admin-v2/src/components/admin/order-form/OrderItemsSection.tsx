@@ -16,7 +16,7 @@ import { updateOrderItems } from "@/store/orderStore";
 import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
 import { useDebounce } from "@/hooks/use-debounce";
-import type { ProductListItemDto } from "@/lib/api-functions/products";
+import type { ProductListItemDto } from "@/lib/api-query-options/products";
 import type { Product } from "./types";
 import {
   exceededStockMessage,
@@ -68,7 +68,8 @@ function normalizeCatalogProduct(product: ProductListItemDto): Product {
     name: product.name,
     price: product.price,
     discountPercentage: product.discountPercentage ?? null,
-    discountType: product.discountType ?? null,
+    // The list contract types discountType as a plain string.
+    discountType: (product.discountType as Product["discountType"]) ?? null,
     discountAmount: product.discountAmount ?? null,
     variantCount: product.variantCount ?? 0,
     variants: [],

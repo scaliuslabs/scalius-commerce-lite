@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { OrderNotificationReceiptDto } from "./api-functions/orders";
+import type { OrderNotificationReceiptDto } from "./api-query-options/orders";
 import {
   buildReceiptDisplayGroups,
   deliveryAttemptLabel,

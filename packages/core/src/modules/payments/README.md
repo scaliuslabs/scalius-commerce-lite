@@ -292,7 +292,7 @@ The `GET /checkout/config` endpoint returns:
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`
-- Cached for 60 seconds through the Cloudflare `PublicApi` cache with the `checkout` tag; committed payment, checkout, currency, delivery, and auth setting changes purge that tag before storefront warming
+- Cached through the Cloudflare `PublicApi` cache keyed by the store cache generation; committed payment, checkout, currency, delivery, and auth setting changes bump the generation
 - On assembly/read error: returns a non-cacheable `503 CHECKOUT_CONFIG_UNAVAILABLE`; the storefront fails closed with a temporary checkout-unavailable state instead of guessing COD availability
 
 ### Storefront Proxy Pattern

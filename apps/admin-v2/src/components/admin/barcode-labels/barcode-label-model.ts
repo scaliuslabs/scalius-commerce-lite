@@ -1,4 +1,4 @@
-import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
+import type { InventoryLabelVariant } from "~/lib/api-query-options/inventory";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 
 export const MAX_LABEL_SKUS = 150;

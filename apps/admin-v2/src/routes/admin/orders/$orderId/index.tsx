@@ -3,7 +3,9 @@ import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { OrderView } from "~/components/admin/OrderView";
 import { Button } from "~/components/ui/button";
-import type { DeliveryProviderRecord } from "~/types/api-responses";
+import type {
+  DeliveryProviderRecord,
+} from "~/lib/api-query-options/delivery";
 import type { Order } from "~/components/admin/orderview/types";
 import {
   orderQueryOptions,
@@ -17,7 +19,7 @@ import {
 import type {
   OrderDetailDto,
   OrderShipmentDto,
-} from "~/lib/api-functions/orders";
+} from "~/lib/api-query-options/orders";
 import type { OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
 import { useHydrated } from "~/hooks/use-hydrated";
 import {

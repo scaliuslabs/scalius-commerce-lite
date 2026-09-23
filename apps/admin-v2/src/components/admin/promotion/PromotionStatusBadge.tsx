@@ -1,5 +1,5 @@
 import { Badge } from "~/components/ui/badge";
-import type { PromotionAggregate } from "~/lib/api-functions/promotions";
+import type { PromotionAggregate } from "~/lib/api-query-options/promotions";
 
 export function getPromotionOperationalStatus(
   promotion: PromotionAggregate,

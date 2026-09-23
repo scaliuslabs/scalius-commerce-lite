@@ -2,13 +2,18 @@
 // Global Authentication Modal replacing inline login forms.
 // Intercepts guest checkouts if disabled, allows choosing WhatsApp/Email.
 
-import { useCallback, useState, useEffect, useRef, useMemo } from "react";
+import { memo, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { X } from "lucide-react";
 import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type AuthState, type CustomerInfo } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/transport";
 import type { LocationData } from "@/lib/api";
-import LocationSelector, { type LocationSelection } from "@/components/LocationSelector";
+import {
+  enhanceLocationSelects,
+  fetchLocationOptions,
+  type LocationPrefillDetail,
+  type LocationSelection,
+} from "@/lib/checkout/location-select";
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -98,6 +103,74 @@ function readInitialAuthSettings(): AuthRuntimeSettings {
 
 type Step = "input" | "otp" | "profile_setup" | "authenticated";
 type AuthIntent = "sign_in" | "sign_up";
+
+const profileSelectClass =
+  "block min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * Native city/zone selects for profile setup. React renders the static markup
+ * once; `enhanceLocationSelects` owns the zone options, so the component is
+ * memoized to keep React from reconciling those children.
+ */
+const ProfileLocationSelects = memo(
+  function ProfileLocationSelects({
+    cities,
+    initialLocation,
+    onChange,
+  }: {
+    cities: LocationData[];
+    initialLocation: LocationPrefillDetail;
+    onChange: (selection: LocationSelection) => void;
+  }) {
+    const rootRef = useRef<HTMLDivElement>(null);
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+
+    useEffect(() => {
+      const root = rootRef.current;
+      if (!root) return;
+      const controller = new AbortController();
+      const apiBaseUrl = createApiUrl("").replace(/\/$/, "");
+      const selects = enhanceLocationSelects(root, {
+        load: (level, parentId) => fetchLocationOptions(apiBaseUrl, level, parentId),
+        onChange: (selection) => onChangeRef.current(selection),
+        signal: controller.signal,
+      });
+      void selects?.prefill(initialLocation);
+      return () => controller.abort();
+    }, [initialLocation]);
+
+    return (
+      <div ref={rootRef} className="grid gap-3 sm:grid-cols-2" data-loading-text="Loading…">
+        <div className="space-y-1.5">
+          <label htmlFor="profile-city" className="text-sm font-medium">
+            City <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
+          </label>
+          <select id="profile-city" name="city" required defaultValue="" className={profileSelectClass}>
+            <option value="">Select a city</option>
+            {cities.map((city) => (
+              <option key={city.id} value={city.id}>{city.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="profile-zone" className="text-sm font-medium">
+            Zone <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
+          </label>
+          <select id="profile-zone" name="zone" required disabled defaultValue="" className={profileSelectClass}>
+            <option value="">Select a zone</option>
+          </select>
+          <button type="button" hidden data-location-retry="zone" className="text-xs font-medium text-destructive underline underline-offset-2">
+            Could not load zones. Try again
+          </button>
+        </div>
+      </div>
+    );
+  },
+  (previous, next) =>
+    previous.cities === next.cities &&
+    previous.initialLocation === next.initialLocation,
+);
 
 export default function AuthModal() {
   const initialSettingsRef = useRef<AuthRuntimeSettings | null>(null);
@@ -835,14 +908,10 @@ export default function AuthModal() {
                     </button>
                   </div>
                 ) : (
-                  <LocationSelector
+                  <ProfileLocationSelects
                     cities={cities}
                     initialLocation={initialProfileLocation}
-                    className="sm:grid-cols-2"
-                    cityLabel="City"
-                    zoneLabel="Zone"
-                    showAreaField={false}
-                    onSelectionChange={handleProfileLocationChange}
+                    onChange={handleProfileLocationChange}
                   />
                 )}
               </fieldset>

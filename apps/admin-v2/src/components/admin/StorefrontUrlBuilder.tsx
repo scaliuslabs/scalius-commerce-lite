@@ -4,9 +4,10 @@ import { Label } from "~/components/ui/label";
 import { Loader2, ExternalLink, RotateCcw } from "lucide-react";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
-  getStorefrontUrl,
-  updateStorefrontUrl,
-} from "~/lib/api-functions/storefront-url";
+  getApiV1AdminSettingsStorefrontUrl,
+  postApiV1AdminSettingsStorefrontUrl,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { queryKeys } from "~/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
@@ -19,7 +20,7 @@ interface StorefrontUrlValues {
 }
 
 const fetchUrl = async (): Promise<StorefrontUrlValues> => {
-  const data = await getStorefrontUrl();
+  const data = await apiData(getApiV1AdminSettingsStorefrontUrl());
   return {
     storefrontUrl: data.storefrontUrl ?? "",
   };
@@ -30,9 +31,9 @@ const saveUrl = async (values: StorefrontUrlValues) => {
   if (!storefrontUrl) {
     throw new Error("Enter a valid public store origin before saving.");
   }
-  await updateStorefrontUrl({
-    data: { storefrontUrl },
-  });
+  await apiData(postApiV1AdminSettingsStorefrontUrl({
+    body: { storefrontUrl },
+  }));
 };
 
 interface StorefrontUrlBuilderProps {

@@ -2,16 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  createAdminUser,
-  deleteAdminUser,
-  getAdminUsers,
-  resendAdminSetup,
-  setAdminSuspension,
-  type AdminUser,
-} from "~/lib/api-functions/auth-management";
-import { getRbacRoles } from "~/lib/api-functions/rbac";
+  deleteApiV1AdminAuthUsersById,
+  postApiV1AdminAuthUsers,
+  postApiV1AdminAuthUsersByIdResendSetup,
+  postApiV1AdminAuthUsersByIdSuspension,
+} from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
+import { getAdminUsers, type AdminUser } from "~/lib/api-server-fns";
+import { getRbacRoles } from "~/lib/api-query-options/rbac";
 
-export type { AdminUser } from "~/lib/api-functions/auth-management";
+export type { AdminUser };
 
 export interface Role {
   id: string;
@@ -62,13 +62,13 @@ export function useAdminUsers() {
 
   const addUser = async (name: string, email: string, roleId: string): Promise<boolean> => {
     try {
-      const result = await createAdminUser({
-        data: {
+      const result = await apiData(postApiV1AdminAuthUsers({
+        body: {
           name,
           email,
           roleId: roleId || undefined,
         },
-      });
+      }));
 
       if (result.emailFailed) {
         toast.warning(result.message);
@@ -84,7 +84,7 @@ export function useAdminUsers() {
 
   const deleteUser = async (userId: string) => {
     try {
-      const result = await deleteAdminUser({ data: { userId } });
+      const result = await apiData(deleteApiV1AdminAuthUsersById({ path: { id: userId } }));
       toast.success(result.message);
       await fetchAdminUsers();
     } catch (err) {
@@ -94,7 +94,7 @@ export function useAdminUsers() {
 
   const resendSetup = async (userId: string) => {
     try {
-      const result = await resendAdminSetup({ data: { userId } });
+      const result = await apiData(postApiV1AdminAuthUsersByIdResendSetup({ path: { id: userId } }));
       toast.success(result.message);
     } catch (err) {
       throw new Error(getServerFnError(err, "Could not resend the setup email"));
@@ -105,7 +105,7 @@ export function useAdminUsers() {
 
   const updateSuspension = async (userId: string, suspended: boolean) => {
     try {
-      const result = await setAdminSuspension({ data: { userId, suspended } });
+      const result = await apiData(postApiV1AdminAuthUsersByIdSuspension({ path: { id: userId }, body: { suspended } }));
       toast.success(result.message);
       await fetchAdminUsers();
     } catch (err) {

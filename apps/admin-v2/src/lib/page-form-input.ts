@@ -1,8 +1,4 @@
-import type {
-  CreatePageInput,
-  PageFeaturedImageDto,
-  UpdatePageInput,
-} from "./api-functions/pages";
+import type { CreatePageInput, UpdatePageInput } from "./api-query-options/pages";
 import type { PageFormValues } from "./form-schemas";
 import { publicationFieldsForInput } from "./page-publication";
 
@@ -14,7 +10,7 @@ function serializeDate(
 
 function serializeFeaturedImage(
   image: PageFormValues["featuredImage"],
-): PageFeaturedImageDto | null {
+): CreatePageInput["featuredImage"] {
   if (!image) return null;
   return {
     ...image,
@@ -58,7 +54,7 @@ export function toCreatePageInput(values: PageFormValues): CreatePageInput {
 
 export function toUpdatePageInput(
   values: PageFormValues,
-): Omit<UpdatePageInput, "id" | "expectedRevision"> {
+): Omit<UpdatePageInput, "expectedRevision"> {
   return {
     ...commonPageInput(values),
     ...(values.contentType === "article"

@@ -1,138 +1,131 @@
+/**
+ * The admin's single API transport: the generated `@scalius/api-client` SDK,
+ * configured once here, plus `apiData()` which unwraps the `{ success, data }`
+ * envelope and turns failures into `AdminApiResponseError`.
+ *
+ *   const category = await apiData(getApiV1AdminCategoriesById({ path: { id } }));
+ *
+ * Request path:
+ * - Browser: same-origin `fetch` to `<dashboard base>/api/v1/admin/*` with the
+ *   session cookie. Production answers through the admin proxy route
+ *   (`routes/api/v1/admin/$.ts`, cross-origin cookie guard + read timeout);
+ *   `vite dev` answers through the Vite proxy. Both return the API's raw
+ *   envelope, which `apiData()` unwraps, so dev and production see one shape.
+ * - Server (SSR loaders, server functions): `api.server.ts` forwards the
+ *   incoming cookie/authorization to the API service binding and propagates
+ *   Set-Cookie back.
+ */
 import { createIsomorphicFn } from "@tanstack/react-start";
+import { client as apiClient } from "@scalius/api-client/client";
 
 import { AdminApiResponseError } from "./admin-api-error";
 import { withDashboardBasePath } from "./dashboard-base-path";
-import {
-  apiDelete as serverApiDelete,
-  apiGet as serverApiGet,
-  apiPatch as serverApiPatch,
-  apiPost as serverApiPost,
-  apiPut as serverApiPut,
-} from "./api.server";
+import { fetchAdminApiFromServer } from "./api.server";
 
-type AdminApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+const ADMIN_API_PREFIX = "/api/v1/admin/";
 
-interface AdminApiRequest {
-  method: AdminApiMethod;
-  path: string;
-  params?: Record<string, string>;
-  body?: unknown;
+async function fetchAdminApiFromBrowser(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  // Only the admin proxy is reachable from the browser in production. Anything
+  // else would work under `vite dev` (which proxies all of /api/v1) and then
+  // fail in production, so reject it here in both.
+  if (!url.pathname.startsWith(ADMIN_API_PREFIX)) {
+    throw new Error(`Browser API calls must target ${ADMIN_API_PREFIX}*: ${url.pathname}`);
+  }
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  return fetch(withDashboardBasePath(url.pathname) + url.search, {
+    method: request.method,
+    headers: request.headers,
+    body: hasBody ? await request.text() : undefined,
+    credentials: "same-origin",
+    cache: "no-store",
+  });
 }
 
-interface ApiEnvelope {
-  success: boolean;
-  data?: unknown;
+const fetchAdminApi = createIsomorphicFn()
+  .server((request: Request) => fetchAdminApiFromServer(request))
+  .client((request: Request) => fetchAdminApiFromBrowser(request));
+
+// The origin is a placeholder: both transports only use path + query.
+apiClient.setConfig({
+  baseUrl: "https://admin-api.invalid",
+  // The API answers JSON envelopes; do not guess from Content-Type.
+  parseAs: "json",
+  // hey-api always calls `fetch(request)` with a built Request.
+  fetch: ((request: Request) => fetchAdminApi(request)) as typeof fetch,
+});
+
+export { apiClient };
+
+interface ApiErrorBody {
   error?: { code?: string; message?: string; details?: unknown } | string;
-  [key: string]: unknown;
 }
 
-function buildBrowserAdminPath(
-  path: string,
-  params?: Record<string, string>,
-): string {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const fullPath = withDashboardBasePath(`/api/v1/admin${normalizedPath}`);
-  if (!params || Object.keys(params).length === 0) return fullPath;
-  return `${fullPath}?${new URLSearchParams(params).toString()}`;
-}
-
-async function parseBrowserApiResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let message = `API error: ${response.status} ${response.statusText}`;
-    let code: string | undefined;
-    let details: unknown;
-    try {
-      const body = (await response.json()) as ApiEnvelope;
-      const error = body.error;
-      if (typeof error === "string") {
-        message = error;
-      } else if (error && typeof error === "object") {
-        message = error.message ?? message;
-        code = error.code;
-        details = error.details;
-      }
-    } catch {
-      // Preserve the status-based fallback.
-    }
-    throw new AdminApiResponseError(
-      message,
-      response.status,
-      code,
-      details,
-    );
-  }
-
-  if (response.status === 204) return undefined as T;
-  const body = (await response.json()) as ApiEnvelope;
-  if (body.success === false) {
-    const error = body.error;
-    const message = typeof error === "string"
-      ? error
-      : error?.message ?? "Unknown API error";
-    throw new AdminApiResponseError(message, response.status, error && typeof error === "object" ? error.code : undefined);
-  }
-  if (body.data !== undefined) return body.data as T;
-  const { success: _success, ...rest } = body;
-  return rest as T;
-}
-
-async function requestAdminApiFromBrowser(
-  request: AdminApiRequest,
-): Promise<unknown> {
-  const hasBody = request.body !== undefined;
-  const response = await fetch(
-    buildBrowserAdminPath(request.path, request.params),
-    {
-      method: request.method,
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: hasBody ? { "Content-Type": "application/json" } : undefined,
-      body: hasBody ? JSON.stringify(request.body) : undefined,
-    },
+function toAdminApiError(error: unknown, status: number): AdminApiResponseError {
+  const body = (error && typeof error === "object" ? error : {}) as ApiErrorBody;
+  const detail = body.error;
+  if (typeof detail === "string") return new AdminApiResponseError(detail, status);
+  return new AdminApiResponseError(
+    detail?.message ?? `API error: ${status}`,
+    status,
+    detail?.code,
+    detail?.details,
   );
-  return parseBrowserApiResponse(response);
 }
 
-async function requestAdminApiFromServer(
-  request: AdminApiRequest,
-): Promise<unknown> {
-  switch (request.method) {
-    case "GET":
-      return serverApiGet(request.path, request.params);
-    case "POST":
-      return serverApiPost(request.path, request.body);
-    case "PUT":
-      return serverApiPut(request.path, request.body);
-    case "PATCH":
-      return serverApiPatch(request.path, request.body);
-    case "DELETE":
-      return serverApiDelete(request.path, request.body);
+/** The payload inside the API's `{ success, data }` envelope. */
+export type ApiEnvelopeData<T> = T extends { data: infer D }
+  ? D
+  : T extends { success: unknown }
+    ? Omit<T, "success">
+    : T;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SdkFunction = (...args: any[]) => Promise<{ data?: unknown }>;
+
+/** Unwrapped success payload of a generated SDK function. */
+export type ApiResult<F extends SdkFunction> = ApiEnvelopeData<
+  NonNullable<Awaited<ReturnType<F>>["data"]>
+>;
+
+/** Request body of a generated SDK function. */
+export type ApiBody<F extends SdkFunction> = NonNullable<
+  NonNullable<Parameters<F>[0]>["body"]
+>;
+
+/** Query parameters of a generated SDK function. */
+export type ApiQuery<F extends SdkFunction> = NonNullable<
+  NonNullable<Parameters<F>[0]>["query"]
+>;
+
+/**
+ * Contract gap: `openapi-contract.ts` turns nullable timestamp unions into
+ * `unknown`. The API sends `string | number | null` for these keys.
+ */
+export type WithTimestamps<T, K extends keyof T> = Omit<T, K> & {
+  [P in K]: string | number | null;
+};
+
+/**
+ * Await a generated SDK call and return the envelope payload. Throws
+ * `AdminApiResponseError` (status, code, details preserved) for API failures
+ * and rethrows transport errors such as the read timeout unchanged.
+ */
+export async function apiData<T>(
+  call: Promise<{ data?: T; error?: unknown; response?: Response }>,
+): Promise<ApiEnvelopeData<NonNullable<T>>> {
+  const { data, error, response } = await call;
+  if (error !== undefined) {
+    if (error instanceof Error) throw error;
+    throw toAdminApiError(error, response?.status ?? 500);
   }
+  if (response?.status === 204) return undefined as ApiEnvelopeData<NonNullable<T>>;
+  const body = data as { success?: boolean; data?: unknown } | undefined;
+  if (body?.success === false) throw toAdminApiError(body, response?.status ?? 500);
+  if (body && typeof body === "object" && body.data !== undefined) {
+    return body.data as ApiEnvelopeData<NonNullable<T>>;
+  }
+  const { success: _success, ...rest } = (body ?? {}) as Record<string, unknown>;
+  return rest as ApiEnvelopeData<NonNullable<T>>;
 }
 
-const requestAdminApi = createIsomorphicFn()
-  .server(requestAdminApiFromServer)
-  .client(requestAdminApiFromBrowser);
-
-export function apiGet<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  return requestAdminApi({ method: "GET", path, params }) as Promise<T>;
-}
-
-export function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  return requestAdminApi({ method: "POST", path, body }) as Promise<T>;
-}
-
-export function apiPut<T>(path: string, body?: unknown): Promise<T> {
-  return requestAdminApi({ method: "PUT", path, body }) as Promise<T>;
-}
-
-export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
-  return requestAdminApi({ method: "PATCH", path, body }) as Promise<T>;
-}
-
-export function apiDelete<T = void>(path: string, body?: unknown): Promise<T> {
-  return requestAdminApi({ method: "DELETE", path, body }) as Promise<T>;
-}

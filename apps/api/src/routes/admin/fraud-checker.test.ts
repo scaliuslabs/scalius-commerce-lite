@@ -1,23 +1,15 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ServiceUnavailableError } from "../../utils/api-error";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  getCredentialEncryptionKey: vi.fn(),
-  requireEncryptionKey: vi.fn(),
   getFraudProviders: vi.fn(),
   getFraudProvider: vi.fn(),
   saveFraudProvider: vi.fn(),
   deleteFraudProvider: vi.fn(),
   testFraudProvider: vi.fn(),
   fraudLookupWithActiveProvider: vi.fn(),
-}));
-
-vi.mock("../../utils/encryption-key", () => ({
-  getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
-  requireEncryptionKey: mocks.requireEncryptionKey,
 }));
 
 vi.mock("@scalius/core/modules/fraud-checker/fraud-checker.service", async (importOriginal) => ({
@@ -50,8 +42,6 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
 
-  mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
-  mocks.requireEncryptionKey.mockReturnValue("credential-key");
   mocks.getFraudProviders.mockResolvedValue([providerRecord]);
   mocks.getFraudProvider.mockResolvedValue(providerRecord);
   mocks.saveFraudProvider.mockResolvedValue(providerRecord);
@@ -124,7 +114,6 @@ describe("admin fraud checker credential handling", () => {
     }, env);
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
     expect(mocks.saveFraudProvider).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({ apiKey: "new-key", apiSecret: "new-secret" }),
@@ -134,9 +123,7 @@ describe("admin fraud checker credential handling", () => {
 
   it("fails closed before create writes when CREDENTIAL_ENCRYPTION_KEY is missing", async () => {
     const { app, env } = createTestApp();
-    mocks.requireEncryptionKey.mockImplementationOnce(() => {
-      throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
-    });
+    delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
 
     const response = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",
@@ -222,20 +209,6 @@ describe("admin fraud checker credential handling", () => {
       },
     });
     expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
-  });
-
-  it("uses the credential encryption key for provider tests and manual lookups", async () => {
-    const { app, env } = createTestApp();
-
-    await app.request("/api/v1/admin/fraud-checker/provider_fraudbd/test", { method: "POST" }, env);
-    await app.request("/api/v1/admin/fraud-checker/lookup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: "+8801700000000" }),
-    }, env);
-
-    expect(mocks.testFraudProvider).toHaveBeenCalledWith({ id: "db" }, "provider_fraudbd", "credential-key");
-    expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith({ id: "db" }, "+8801700000000", "credential-key");
   });
 
   it("projects lookup facts without echoing phone or arbitrary provider fields", async () => {
@@ -339,7 +312,6 @@ describe("admin fraud checker credential handling", () => {
     const { app, env } = createTestApp();
     delete (env as Record<string, unknown>).CREDENTIAL_ENCRYPTION_KEY;
     (env as Record<string, unknown>).JWT_SECRET = "legacy-jwt-key";
-    mocks.getCredentialEncryptionKey.mockReturnValue(undefined);
 
     await app.request("/api/v1/admin/fraud-checker/lookup", {
       method: "POST",

@@ -1,10 +1,7 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -16,14 +13,15 @@ import { activatePromotion, pausePromotion } from "./promotions.lifecycle";
 import { PromotionRevisionConflictError } from "./promotions.revision";
 import { createPromotionDraft } from "./promotions.service";
 
-const migrationSql = [
-    "0028_cute_ghost_rider.sql",
-    "0029_messy_silver_surfer.sql",
-    "0030_messy_ultragirl.sql",
-].map((filename) => readFileSync(
-    resolve(import.meta.dirname, `../../../../database/migrations/${filename}`),
-    "utf8",
-).replaceAll("--> statement-breakpoint", "")).join("\n");
+function orderSql(orderId: string, itemId: string): string {
+    return `
+        INSERT OR IGNORE INTO products (id, name, slug, price) VALUES ('product_promo', 'Promo product', 'promo-product', 100);
+        INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount, shipping_charge)
+        VALUES ('${orderId}', 'Buyer', '+8801700000009', 'Address', 'city', 'zone', 100, 0);
+        INSERT INTO order_items (id, order_id, product_id, quantity, price)
+        VALUES ('${itemId}', '${orderId}', 'product_promo', 1, 100);
+    `;
+}
 
 describe("promotion checkout authority", () => {
     let sqlite: DatabaseSync | null = null;
@@ -34,53 +32,12 @@ describe("promotion checkout authority", () => {
     });
 
     function setup(): Database {
-        sqlite = new DatabaseSync(":memory:");
-        sqlite.exec(`
-            PRAGMA foreign_keys = ON;
-            CREATE TABLE orders (id TEXT PRIMARY KEY NOT NULL);
-            CREATE TABLE order_items (
-                id TEXT PRIMARY KEY NOT NULL,
-                order_id TEXT NOT NULL REFERENCES orders(id),
-                quantity INTEGER NOT NULL
-            );
-            CREATE TABLE customers (id TEXT PRIMARY KEY NOT NULL, phone TEXT NOT NULL UNIQUE);
-            CREATE TABLE discounts (id TEXT PRIMARY KEY NOT NULL, code TEXT NOT NULL UNIQUE);
-            ${migrationSql}
-            INSERT INTO customers (id, phone) VALUES
-                ('cust_1', '+8801700000001'),
-                ('cust_2', '+8801700000002');
-        `);
-
-        function executeQuery(query: string, params: unknown[], method: string) {
-            const statement = sqlite!.prepare(query);
-            statement.setReturnArrays(true);
-            const sqlParams = params as SQLInputValue[];
-            if (method === "run") {
-                statement.run(...sqlParams);
-                return { rows: [] as unknown[][] };
-            }
-            if (method === "get") {
-                const row = statement.get(...sqlParams) as unknown as unknown[] | undefined;
-                return { rows: row ?? [] };
-            }
-            return { rows: statement.all(...sqlParams) as unknown as unknown[][] };
-        }
-        return drizzle(
-            async (query, params, method) => executeQuery(query, params, method),
-            async (queries) => {
-                sqlite!.exec("BEGIN IMMEDIATE");
-                try {
-                    const results = queries.map(({ sql, params, method }) =>
-                        executeQuery(sql, params, method));
-                    sqlite!.exec("COMMIT");
-                    return results;
-                } catch (error) {
-                    sqlite!.exec("ROLLBACK");
-                    throw error;
-                }
-            },
-            { schema },
-        ) as unknown as Database;
+        const fixture = createSqliteD1Database();
+        sqlite = fixture.sqlite;
+        sqlite.exec(`INSERT INTO customers (id, name, phone) VALUES
+            ('cust_1', 'One', '+8801700000001'),
+            ('cust_2', 'Two', '+8801700000002');`);
+        return fixture.db;
     }
 
     it("activates by revision, evaluates exact allocations, and honors claimed limits", async () => {
@@ -155,9 +112,7 @@ describe("promotion checkout authority", () => {
         });
 
         sqlite!.exec(`
-            INSERT INTO orders (id) VALUES ('order_1');
-            INSERT INTO order_items (id, order_id, quantity)
-            VALUES ('item_1', 'order_1', 1);
+            ${orderSql("order_1", "item_1")}
             INSERT INTO order_discount_allocations (
                 id, order_id, order_item_id, promotion_id, effect_id,
                 promotion_revision, evaluator_version, method, promotion_name,
