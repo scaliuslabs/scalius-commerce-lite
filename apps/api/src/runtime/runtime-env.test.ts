@@ -3,7 +3,7 @@ import {
   RUNTIME_SECRET_PURPOSES,
   deriveRuntimeSecret,
 } from "@scalius/shared/runtime-secrets";
-import { PLATFORM_CONFIG_CACHE_KEY } from "@scalius/core/modules/settings/platform-settings.service";
+const PLATFORM_CONFIG_CACHE_KEY = "settings:platform";
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -34,51 +34,24 @@ const PRODUCTION_CONFIG = {
   },
 };
 
-/**
- * Minimal drizzle-shaped database: `getPlatformSettings` reads the storefront
- * origin with `.select().from(siteSettings).limit(1).then()` and the platform
- * rows with `.select().from(settings).where()`.
- */
+/** Minimal drizzle-shaped database: awaiting the query reads the platform document. */
 function createDb(options: {
-  storefrontUrl?: string | null;
-  rows?: Array<{ key: string; value: string }>;
+  document?: Record<string, unknown>;
   fail?: boolean;
 } = {}) {
-  const limit = vi.fn(async () => {
-    if (options.fail) throw new Error("D1 unavailable");
-    return options.storefrontUrl === undefined
-      ? []
-      : [{ storefrontUrl: options.storefrontUrl }];
-  });
-  // `.get()` reads the settings document row (absent here, so the legacy
-  // per-key rows are assembled and written back); awaiting the builder reads
-  // the legacy rows.
-  const where = vi.fn(() => {
-    const rows = async () => {
-      if (options.fail) throw new Error("D1 unavailable");
-      return options.rows ?? [];
-    };
-    return {
-      all: rows,
-      get: async () => {
-        if (options.fail) throw new Error("D1 unavailable");
-        return undefined;
-      },
-      then: (
-        resolve: (value: Array<{ key: string; value: string }>) => unknown,
-        reject: (reason: unknown) => unknown,
-      ) => rows().then(resolve, reject),
-    };
-  });
+  const where = vi.fn(() => ({
+    then: (resolve: (rows: unknown[]) => unknown, reject: (reason: unknown) => unknown) =>
+      (options.fail
+        ? Promise.reject(new Error("D1 unavailable"))
+        : Promise.resolve(options.document
+          ? [{ category: "platform", value: JSON.stringify(options.document), revision: 1 }]
+          : [])).then(resolve, reject),
+  }));
   return {
-    limit,
     where,
     db: {
       select: vi.fn(() => ({
-        from: vi.fn(() => ({ limit, where })),
-      })),
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({ onConflictDoUpdate: vi.fn(async () => undefined) })),
+        from: vi.fn(() => ({ where })),
       })),
     },
   };
@@ -100,20 +73,6 @@ function createEnv(overrides: Record<string, unknown> = {}): Env {
     DB: { id: "d1" },
     ...overrides,
   } as unknown as Env;
-}
-
-function storedRows(config: Partial<typeof PRODUCTION_CONFIG>) {
-  const rows: Array<{ key: string; value: string }> = [];
-  if (config.apiUrl !== undefined) rows.push({ key: "api_url", value: config.apiUrl });
-  if (config.dashboardUrl !== undefined) rows.push({ key: "dashboard_url", value: config.dashboardUrl });
-  if (config.mediaUrl !== undefined) rows.push({ key: "media_url", value: config.mediaUrl });
-  if (config.customerAuthCookieDomain !== undefined) {
-    rows.push({ key: "customer_auth_cookie_domain", value: config.customerAuthCookieDomain });
-  }
-  if (config.corsAllowedOrigins !== undefined) {
-    rows.push({ key: "cors_allowed_origins", value: JSON.stringify(config.corsAllowedOrigins) });
-  }
-  return rows;
 }
 
 describe("composeApiRuntimeEnv", () => {
@@ -185,19 +144,14 @@ describe("composeApiRuntimeEnv", () => {
 
   it("reads the database on a KV miss and caches the resolved configuration", async () => {
     const cache = createKv(null);
-    const { db, limit, where } = createDb({
-      storefrontUrl: PRODUCTION_CONFIG.storefrontUrl,
-      rows: storedRows(PRODUCTION_CONFIG),
-    });
+    const { db, where } = createDb({ document: PRODUCTION_CONFIG });
     mocks.getDb.mockReturnValue(db);
     const env = createEnv({ CACHE: cache });
 
     const composed = await composeApiRuntimeEnv(env);
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
-    expect(limit).toHaveBeenCalledTimes(1);
-    // Once for the settings document row, once for the legacy per-key rows.
-    expect(where).toHaveBeenCalledTimes(2);
+    expect(where).toHaveBeenCalledTimes(1);
     expect(cache.put).toHaveBeenCalledWith(
       PLATFORM_CONFIG_CACHE_KEY,
       JSON.stringify(PRODUCTION_CONFIG),
@@ -207,7 +161,7 @@ describe("composeApiRuntimeEnv", () => {
   });
 
   it("fills unset origins with the fixed local development ports when the request arrives on loopback", async () => {
-    mocks.getDb.mockReturnValue(createDb({ storefrontUrl: "/", rows: [] }).db);
+    mocks.getDb.mockReturnValue(createDb({ document: { storefrontUrl: "/" } }).db);
 
     const composed = await composeApiRuntimeEnv(createEnv({ CACHE: createKv(null) }), {
       requestUrl: "http://localhost:8787/api/v1/products",
@@ -229,7 +183,7 @@ describe("composeApiRuntimeEnv", () => {
   });
 
   it("never guesses production origins from a non-loopback request", async () => {
-    mocks.getDb.mockReturnValue(createDb({ storefrontUrl: null, rows: [] }).db);
+    mocks.getDb.mockReturnValue(createDb().db);
 
     const composed = await composeApiRuntimeEnv(createEnv({ CACHE: createKv(null) }), {
       requestUrl: "https://api.example.com/api/v1/products",

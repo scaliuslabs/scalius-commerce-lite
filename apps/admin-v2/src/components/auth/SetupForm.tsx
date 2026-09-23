@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
-import { runSetup } from "@/lib/api-server-fns";
+import { postApiV1Setup } from "@scalius/api-client/sdk";
+import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
+import { apiData } from "@/lib/api";
 import { storePendingTwoFactorMethods } from "@/lib/two-factor-pending";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,14 +58,13 @@ export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?:
 
     try {
       try {
-        await runSetup({
-          data: {
-            name,
-            email,
-            password,
-            ...(setupTokenRequired ? { setupToken: setupToken.trim() } : {}),
-          },
-        });
+        // The setup token travels as a header, never in the body or URL.
+        await apiData(postApiV1Setup({
+          body: { name, email, password },
+          headers: setupTokenRequired
+            ? { [ADMIN_SETUP_TOKEN_HEADER]: setupToken.trim() }
+            : undefined,
+        }));
       } catch (setupError: unknown) {
         setError(setupError instanceof Error ? setupError.message : "Failed to create account");
         setIsLoading(false);

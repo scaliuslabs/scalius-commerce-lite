@@ -36,17 +36,8 @@ import {
   verifyOtp,
 } from "./customer-auth.service";
 
-const baseSiteSettings = {
-  id: "site_settings_1",
-  authVerificationMethod: "email",
-  guestCheckoutEnabled: true,
-  checkoutMode: "all",
-  partialPaymentEnabled: false,
-  partialPaymentAmount: 0,
-  whatsappAccessToken: null,
-  whatsappPhoneNumberId: null,
-  whatsappTemplateName: "auth_otp",
-};
+/** The stored sign-in method summary (customer_auth document). */
+const baseAuthSettings = { authVerificationMethod: "email" };
 
 describe("customer auth cookie domain", () => {
   it("keeps customer auth cookies host-only by default for custom domains", () => {
@@ -75,8 +66,66 @@ describe("customer auth cookie domain", () => {
   });
 });
 
-function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?: unknown[] }>) {
+type QueueEntry = { limit?: unknown[]; get?: unknown; all?: unknown[] };
+
+const LEGACY_DOCUMENT_FIELDS: Record<string, [category: string, field: string]> = {
+  email_provider: ["email", "provider"],
+  email_sender: ["email", "sender"],
+  resend_api_key: ["email", "resendApiKey"],
+  active_provider: ["sms", "activeProvider"],
+  bdbulksms_token: ["sms", "bdbulksmsToken"],
+};
+
+/** Legacy key/value fixture rows as the settings document rows they became. */
+function documentRows(rows: unknown[]): Array<{ category: string; value: string; revision: number }> {
+  const documents = new Map<string, Record<string, unknown>>();
+  for (const row of rows as Array<{ key: string; value: string }>) {
+    const [category, field] = LEGACY_DOCUMENT_FIELDS[row.key] ?? [];
+    if (!category || !field) continue;
+    documents.set(category, { ...documents.get(category), [field]: row.value });
+  }
+  return [...documents].map(([category, value]) => ({ category, value: JSON.stringify(value), revision: 1 }));
+}
+
+/**
+ * Sequential fake: queued results are consumed in call order. The leading
+ * sign-in method summary, saved policy and saved countries become the customer_auth
+ * and customer_countries documents; a later `{ all }` of settings rows answers
+ * the next settings-document read (email or SMS provider settings).
+ */
+function createDb(selectResults: QueueEntry[]) {
   const queue = [...selectResults];
+  const site = queue.shift()?.limit?.[0] as { authVerificationMethod?: string } | undefined;
+  const policy = queue[0] && "get" in queue[0] ? queue.shift()?.get as { value?: string } | null : null;
+  const countries = queue[0] && "get" in queue[0] ? queue.shift()?.get as { value?: string } | null : null;
+  let authDocuments: Array<{ category: string; value: string; revision: number }> | null = [
+    {
+      category: "customer_auth",
+      value: JSON.stringify({
+        authVerificationMethod: site?.authVerificationMethod ?? "email",
+        policy: policy?.value ? JSON.parse(policy.value) : null,
+      }),
+      revision: 1,
+    },
+    ...(countries?.value
+      ? [{
+        category: "customer_countries",
+        value: JSON.stringify({
+          allowedCountries: JSON.parse(countries.value).countries,
+          allowedCountriesMode: JSON.parse(countries.value).mode,
+        }),
+        revision: 1,
+      }]
+      : []),
+  ];
+  const settingsDocuments = () => {
+    if (authDocuments) {
+      const documents = authDocuments;
+      authDocuments = null;
+      return documents;
+    }
+    return queue[0] && "all" in queue[0] ? documentRows(queue.shift()?.all ?? []) : [];
+  };
   const insertValues = vi.fn(async (_values: unknown) => undefined);
   const insertCalls: Array<{ table: unknown; values: unknown }> = [];
   const updateCalls: Array<{ table: unknown; values: unknown }> = [];
@@ -123,6 +172,9 @@ function createDb(selectResults: Array<{ limit?: unknown[]; get?: unknown; all?:
               return result.all ?? [];
             }),
           })),
+          // Awaiting the query itself is the settings-document read.
+          then: (resolve: (rows: unknown[]) => unknown, reject: (error: unknown) => unknown) =>
+            Promise.resolve().then(settingsDocuments).then(resolve, reject),
         })),
       })),
     })),
@@ -214,7 +266,7 @@ describe("customer auth service intent handling", () => {
 
   it("does not reveal duplicate phone during email OTP account creation before OTP proof", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: readyEmailSettings },
     ]);
@@ -277,7 +329,7 @@ describe("customer auth service intent handling", () => {
 
   it("allows existing customers to sign in with email OTP without duplicate-phone account creation checks", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [createCustomerRow()] },
       { all: readyEmailSettings },
@@ -318,7 +370,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects unknown email sign-in before OTP delivery state is created", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [] },
       { get: null },
@@ -348,7 +400,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects rate-limited OTP sends before mutating challenge state", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [createCustomerRow()] },
       { all: readyEmailSettings },
@@ -380,7 +432,7 @@ describe("customer auth service intent handling", () => {
 
   it("stores phone OTP challenges under channel-scoped keys", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       {
         get: {
           value: JSON.stringify({
@@ -430,7 +482,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects disallowed primary phone OTP sends before rate limits or challenge mutation", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
       { all: readySmsSettings },
@@ -452,7 +504,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects disallowed secondary signup phones before email OTP challenge mutation", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
       { all: readyEmailSettings },
@@ -476,7 +528,7 @@ describe("customer auth service intent handling", () => {
 
   it("pins the account creation contact fields accepted when the OTP is issued", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { all: readySmsSettings },
     ]);
@@ -509,7 +561,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects SMS OTP when no SMS provider is configured before mutating OTP challenge state", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: createCustomerRow() },
@@ -532,7 +584,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects email OTP when no email provider is ready before mutating OTP challenge or rate-limit state", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [createCustomerRow()] },
       { all: [] },
@@ -553,7 +605,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects ambiguous email sign-in after OTP proof without creating a session", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [
         createCustomerRow({ id: "cust_1", phone: "+8801711111111" }),
@@ -588,7 +640,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects sign-in when no active email customer matches", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [] },
     ]);
@@ -620,7 +672,7 @@ describe("customer auth service intent handling", () => {
 
   it("returns restore-support guidance for soft-deleted email sign-in after OTP proof", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [] },
       { get: { id: "cust_deleted" } },
@@ -661,7 +713,7 @@ describe("customer auth service intent handling", () => {
       zone: "zone_mirpur",
     });
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [activeCustomer] },
     ]);
@@ -710,7 +762,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects phone sign-in when no active phone customer matches", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
     ]);
@@ -742,7 +794,7 @@ describe("customer auth service intent handling", () => {
 
   it("returns restore-support guidance for soft-deleted phone sign-in after OTP proof", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: null },
@@ -776,7 +828,7 @@ describe("customer auth service intent handling", () => {
 
   it("uses pinned OTP contact fields instead of tampered verify payload fields", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: null },
@@ -828,7 +880,7 @@ describe("customer auth service intent handling", () => {
       address: "Guest checkout address",
     });
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: guestProfile },
@@ -871,7 +923,7 @@ describe("customer auth service intent handling", () => {
       address: "Guest checkout address",
     });
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [guestProfile] },
     ]);
@@ -918,7 +970,7 @@ describe("customer auth service intent handling", () => {
 
   it("does not treat an unclaimed CRM profile as an existing sign-in account", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: createCustomerRow({ accountClaimedAt: null }) },
@@ -952,7 +1004,7 @@ describe("customer auth service intent handling", () => {
 
   it("marks only the OTP-proven email as verified when email sign-up collects phone", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { all: [] },
       { all: [] },
@@ -999,7 +1051,7 @@ describe("customer auth service intent handling", () => {
 
   it("does not persist a sign-up customer outside the account/session batch when session persistence fails", async () => {
     const db = createDb([
-      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
       { get: null },
       { get: null },
       { get: null },
@@ -1025,7 +1077,7 @@ describe("customer auth service intent handling", () => {
 
   it("rejects a now-disallowed pinned OTP phone before customer or session creation", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
       { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
     ]);
@@ -1076,7 +1128,7 @@ describe("customer auth service intent handling", () => {
 
   it("bubbles OTP challenge destination mismatches before account mutation", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
     ]);
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
@@ -1098,7 +1150,7 @@ describe("customer auth service intent handling", () => {
 
   it("does not read legacy KV OTP records during verification", async () => {
     const db = createDb([
-      { limit: [baseSiteSettings] },
+      { limit: [baseAuthSettings] },
       { get: null },
     ]);
     challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
@@ -1122,7 +1174,7 @@ describe("customer auth service intent handling", () => {
   it("rechecks required email policy during phone OTP account creation verification", async () => {
     const db = createDb([
       {
-        limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }],
+        limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }],
       },
       {
         get: {
@@ -1353,14 +1405,19 @@ describe("customer auth D1 sessions", () => {
         updatedAt: 2_000,
         deletedAt: null,
       },
-      { value: JSON.stringify({ countries: ["BD"], mode: "include" }) },
     ];
+    const countriesDocument = [{
+      category: "customer_countries",
+      value: JSON.stringify({ allowedCountries: ["BD"], allowedCountriesMode: "include" }),
+      revision: 1,
+    }];
     const update = vi.fn();
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           where: vi.fn(() => ({
             get: vi.fn(async () => getResults.shift() ?? null),
+            then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(countriesDocument).then(resolve),
           })),
         })),
       })),

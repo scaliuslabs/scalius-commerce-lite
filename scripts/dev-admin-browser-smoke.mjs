@@ -2,11 +2,11 @@
 /**
  * Local authenticated admin browser smoke for the product rich-text save path.
  *
- * This helper is intentionally loopback-local only. It starts local API/admin
- * workers against disposable Wrangler state when needed, signs in as a local
- * first admin, creates/reuses a non-discoverable product fixture, then opens
- * the real admin product edit page in Chrome/Chromium and verifies a rich-text
- * description edit persists.
+ * This helper is intentionally loopback-local only. It starts the local API
+ * Worker (against disposable Wrangler state) and the dashboard dev server when
+ * needed, signs in as a local first admin, creates/reuses a non-discoverable
+ * product fixture, then opens the real admin product edit page in
+ * Chrome/Chromium and verifies a rich-text description edit persists.
  */
 
 import { execFileSync, spawn } from "child_process";
@@ -937,7 +937,7 @@ async function withLocalWorkers(config, work) {
 
     if (!adminWasRunning) {
       assertDefaultDevPort(config.adminBaseUrl, 4323, "admin");
-      log(`Starting temporary admin worker at ${config.adminBaseUrl} with state ${config.wranglerState}...`);
+      log(`Starting temporary dashboard dev server at ${config.adminBaseUrl}...`);
       const child = spawnWorker("admin", ["--filter", "@scalius/admin-v2", "dev"], config);
       children.push(child);
       workers.adminStarted = true;
@@ -1291,7 +1291,7 @@ Options:
   --product-slug <slug>   Disposable product fixture slug
   --reset-admin           Reset local auth tables through scripts/dev-admin.mjs first
   --skip-setup            Do not create the first local admin when none exists
-  --no-start              Intentionally reuse already-running local API/admin workers
+  --no-start              Intentionally reuse the running local API Worker and dashboard dev server
   --skip-migrations       Do not apply local D1 migrations before starting workers
   --headed                Run Chrome with a visible window instead of headless mode
 

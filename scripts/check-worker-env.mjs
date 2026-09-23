@@ -39,17 +39,6 @@ export function collectResourceBindingViolations(configPath, config) {
   });
 }
 
-// Installed secrets and optional provider selection shared by API + admin.
-const INSTALLED_SECRETS = ["SCALIUS_SECRET", "CREDENTIAL_ENCRYPTION_KEY"];
-const OPTIONAL_DATABASE_PROVIDER_ENV = [
-  "DATABASE_PROVIDER",
-  "TURSO_DATABASE_URL",
-  "TURSO_AUTH_TOKEN",
-  "POSTGRES_DATABASE_URL",
-  "HYPERDRIVE",
-  "DATABASE_MIGRATION_FREEZE",
-];
-
 export const apps = [
   {
     name: "api",
@@ -59,8 +48,16 @@ export const apps = [
     envFiles: ["apps/api/src/env.d.ts"],
     envScanDir: "apps/api/src",
     extraEnv: [
-      ...INSTALLED_SECRETS,
-      ...OPTIONAL_DATABASE_PROVIDER_ENV,
+      // Installed secrets.
+      "SCALIUS_SECRET",
+      "CREDENTIAL_ENCRYPTION_KEY",
+      // Optional non-D1 relational provider selection.
+      "DATABASE_PROVIDER",
+      "TURSO_DATABASE_URL",
+      "TURSO_AUTH_TOKEN",
+      "POSTGRES_DATABASE_URL",
+      "HYPERDRIVE",
+      "DATABASE_MIGRATION_FREEZE",
       // Derived at Worker entry from SCALIUS_SECRET (apps/api/src/runtime/runtime-env.ts).
       "BETTER_AUTH_SECRET",
       "JWT_SECRET",
@@ -80,28 +77,6 @@ export const apps = [
       "CUSTOMER_AUTH_COOKIE_DOMAIN",
       "CORS_ALLOWED_ORIGINS",
       // Local development only (apps/api/wrangler.local.jsonc vars).
-      "LOCAL_MAILPIT_URL",
-    ],
-  },
-  {
-    name: "admin-v2",
-    configs: ["apps/admin-v2/wrangler.jsonc"],
-    envFiles: ["apps/admin-v2/src/env.d.ts"],
-    envScanDir: "apps/admin-v2/src",
-    extraEnv: [
-      ...INSTALLED_SECRETS,
-      ...OPTIONAL_DATABASE_PROVIDER_ENV,
-      // Derived per request from SCALIUS_SECRET.
-      "BETTER_AUTH_SECRET",
-      "IDENTITY_HANDOFF_SECRET",
-      "FRONT_PROXY_SECRET",
-      // Resolved per request from GET /api/v1/platform.
-      "BETTER_AUTH_URL",
-      "PUBLIC_API_BASE_URL",
-      "STOREFRONT_URL",
-      "R2_PUBLIC_URL",
-      "PLATFORM_CONFIG",
-      // Local development only (admin vite dev config).
       "LOCAL_MAILPIT_URL",
     ],
   },

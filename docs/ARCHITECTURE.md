@@ -9,16 +9,16 @@ rewrite thresholds are recorded in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEAS
 ## System Overview
 
 ```
-Browser (Customer/Admin)
-    ↓
-┌─────────────────────────────────────────────────────┐
-│  Admin Worker (TanStack)    Storefront Worker (SSR)  │
-│  :4323                      :4322                    │
-└────────────┬────────────────────────┬───────────────┘
-             │ Service Binding        │ Service Binding
-             ↓                        ↓
+Browser (Admin)                  Browser (Customer)
+    │ dashboard host                   ↓
+    │                 ┌────────────────────────────────┐
+    │                 │  Storefront Worker (SSR) :4322 │
+    │                 └───────────────┬────────────────┘
+    │                                 │ Service Binding
+    ↓                                 ↓
 ┌─────────────────────────────────────────────────────┐
 │  API Worker (Hono) :8787                             │
+│  ├─ Dashboard SPA (ASSETS) + Better Auth /api/auth   │
 │  ├─ Routes (thin HTTP layer)                         │
 │  ├─ Checkout DOs (sharded ingress + bounded commit)  │
 │  ├─ Middleware (auth, RBAC, cache, CSP)              │
@@ -57,9 +57,9 @@ even when database code reached the browser indirectly through a re-export
 barrel. UI code that needs a pure policy or type imports its leaf module.
 
 Worker bindings, database/auth/provider clients, credentials, in-flight I/O,
-and tenant data are request-scoped. The API and admin Workers create them from
-the current request context and never retain them in module variables. Deep
-media projection is the sole implicit request context: both Workers wrap each request in Cloudflare's
+and tenant data are request-scoped. The API Worker creates them from
+the current request context and never retains them in module variables. Deep
+media projection is the sole implicit request context: the API wraps each request in Cloudflare's
 `AsyncLocalStorage` with only the normalized public media base URL, allowing
 concurrent merchant requests to remain isolated without threading presentation
 configuration through every domain-service signature. The API production build
@@ -71,7 +71,7 @@ structural import/sink policies listed in that file.
 
 Wrangler configs declare resource bindings only; they carry no `vars`. Each
 Worker installs exactly one master secret, `SCALIUS_SECRET` (plus
-`CREDENTIAL_ENCRYPTION_KEY` on API and admin). Every per-purpose secret is
+`CREDENTIAL_ENCRYPTION_KEY` on the API). Every per-purpose secret is
 HKDF-derived from the master at Worker entry in
 `packages/shared/src/runtime-secrets.ts`.
 
@@ -79,11 +79,11 @@ Public origins are merchant settings, not deployment configuration. The API
 resolves them per invocation in `apps/api/src/runtime/runtime-env.ts`, which
 returns a request-scoped env carrying the derived secrets and the resolved
 `PLATFORM_CONFIG`; consumers keep reading fields such as `env.STOREFRONT_URL`
-without knowing where the value came from. The storefront and admin Workers hold
-no origins of their own: the admin reads `GET /api/v1/platform` and the
-storefront reads the same origins from `GET /api/v1/storefront/layout`, both
-through their service binding, and fall back to their own request origin for
-their own URL. Local
+without knowing where the value came from. The storefront Worker holds no
+origins of its own: it reads them from `GET /api/v1/storefront/layout` through
+its service binding and falls back to its own request origin for its own URL.
+The dashboard SPA needs no origins: it calls the same-origin API Worker that
+serves it. Local
 development substitutes fixed localhost ports in code.
 
 Automated and managed deployments extend this boundary without widening it.
@@ -114,7 +114,8 @@ target import, and exact logical schema/data fingerprints. See
 [Database portability and cutover](DATABASE-PORTABILITY.md).
 
 The current root deploy command is a single-merchant operational deployment: it
-deploys API, admin, and storefront Workers from fixed Wrangler configuration.
+deploys the API Worker (which also serves the dashboard SPA) and the storefront
+Worker from fixed Wrangler configuration.
 Automated deployment systems should consume versioned manifests and
 idempotently reconcile isolated bindings, domains, secrets, resource identities,
 and release digests. Monitoring belongs outside this per-merchant runtime so it
@@ -132,23 +133,24 @@ Everything in the platform revolves around orders. Here's the complete lifecycle
 STOREFRONT CHECKOUT                 ADMIN DASHBOARD
 ├─ POST /orders                     ├─ POST /admin/orders
 │  └─ Synchronous atomic commit     │  └─ Synchronous manual-order workflow
-│     1. Batched authority reads    │     with its own idempotency authority
-│        on deterministic ingress   │
-│     2. Build immutable command    │
-│     3. Commit aggregate + stock   │
-│        lane CAS + durable outbox  │
-│     4. Deterministic projection   │
-│     5. Relay queued side effects  │
+│     1. One read batch: idempotency│     with its own idempotency authority
+│        row + checkout authority + │
+│        customer and SKU rows      │
+│     2. Price, quote fingerprint,  │
+│        policy (memory only)       │
+│     3. One guarded write batch:   │
+│        order, items, SKU hold     │
+│        (ledger v2 + stockVersion),│
+│        attempt, receipt, outboxes │
+│     4. Post-commit side effects   │
 ```
 
-The common guest COD/regular-stock path uses checkout coordinator v2. D1 has
-one ingress and one single-writer commit object; TursoDB/PostgreSQL have 16
-deterministic ingress objects feeding two lane-bound commit objects. The
-database remains authority for checkout identity, settings revision, inventory,
-and recovery. Unsupported coordinator-v2 flows use the older complete atomic
-domain transaction rather than weakening their semantics. Capacity evidence
-and the no-claim rule are recorded in
-[Database portability and cutover](DATABASE-PORTABILITY.md#checkout-coordinator-v2-architecture--2026-08-03).
+Every storefront and agent checkout, for every payment method and inventory
+pool, commits through `commitStorefrontOrderPayload`: a D1 `batch()` (a real
+transaction on TursoDB/PostgreSQL) of guarded statements. Order items exist
+when the response is sent; there is no Durable Object, deferred projection,
+or reservation lane. Stock holds live only on `product_variants`
+(`reserved_stock`, `stock_version`) with one ledger-v2 movement per change.
 
 ### Status Transitions & Side Effects
 
@@ -387,27 +389,24 @@ If status changed:
 
 ## Settings Architecture
 
-### Two-Tier System
+Settings are typed documents: one `settings` row per document
+(`category` = document key, `key = 'document'`, JSON `value`, CAS `revision`),
+defined in `packages/core/src/modules/settings/documents.ts` and read/written
+only through `defineSettingsDocument()` (`settings-store.ts`). Secret fields are
+`enc:` ciphertext under `CREDENTIAL_ENCRYPTION_KEY`, decrypted strictly.
 
-| Table | Purpose | Example Keys |
-|-------|---------|-------------|
-| `siteSettings` | Singleton row, typed fields | guestCheckoutEnabled, checkoutMode, headerConfig, storefrontUrl |
-| `settings` | Key-value with category | `email.resend_api_key`, `whatsapp.access_token`, `firebase.service_account`, `sms.active_provider`, `business_info.company_name` |
+| Document | Purpose | Secret fields |
+|----------|---------|---------------|
+| `platform` | Public storefront/API/dashboard/media origins, customer cookie domain, extra CORS origins | -- |
+| `checkout`, `customer_auth`, `customer_countries`, `customer_requests`, `currency` | Checkout flow, sign-in policy, phone countries, buyer requests, currency | -- |
+| `header`, `footer`, `homepage`, `seo`, `media`, `security`, `business` | Storefront presentation, discovery, media delivery, CSP, business identity | -- |
+| `notifications` | Per-event channel preferences and order WhatsApp template | -- |
+| `email`, `whatsapp`, `sms`, `firebase` | Notification/OTP providers | Resend key, WhatsApp token, SMS credentials, service account |
+| `stripe`, `sslcommerz`, `payment_methods` | Payment gateways and checkout method allowlist | Gateway secrets |
+| `meta_conversions` | Meta CAPI | Access token |
 
-### Settings Categories
-
-| Category | Purpose | Encrypted |
-|----------|---------|-----------|
-| `email` | Email provider (Cloudflare Email selection/binding status, optional Resend API key, sender) | Resend key only |
-| `whatsapp` | Meta WhatsApp Cloud API access token; phone-number ID/auth template remain in `siteSettings` | Yes |
-| `sms` | SMS provider credentials (4 providers: smsnetbd, bdbulksms, mimsms, gennet) | Yes (AES-GCM) |
-| `stripe` | Stripe credentials | Yes |
-| `sslcommerz` | SSLCommerz credentials | Yes |
-| `firebase` | Firebase service account and public browser config | Service account only (AES-GCM `enc:`) |
-| `platform` | Public API/dashboard/media origins, customer cookie domain, extra CORS origins (the storefront origin stays in `siteSettings.storefrontUrl`) | No |
-| `business_info` | Company name, TIN, logo, address | No |
-| `invoice_counter` | Next invoice number | No |
-| `notifications` | Per-status channel preferences | No |
+Fraud-checker provider rows and `notification_provider_health` pause markers
+share the table but are not documents.
 
 ---
 

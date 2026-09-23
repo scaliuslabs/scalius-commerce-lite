@@ -1,13 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { AdminApiResponseError } from "./admin-api-error";
-
-vi.mock("@tanstack/react-start/server", () => ({
-  getRequestHeader: vi.fn(),
-  getResponseHeaders: vi.fn(() => new Headers()),
-}));
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
-const { apiData } = await import("./api");
+import { apiData } from "./api";
 
 const reply = (status: number, body: { data?: unknown; error?: unknown }) =>
   Promise.resolve({ ...body, response: new Response(null, { status: status === 204 ? 204 : 200 }) });

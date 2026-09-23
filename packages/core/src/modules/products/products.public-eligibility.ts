@@ -1,5 +1,4 @@
 import { products } from "@scalius/database/schema";
-import { availableRegularStockSql } from "@scalius/database/inventory-authority";
 import { eq, isNull, sql, type SQL } from "drizzle-orm";
 import { generateInternalCode128Barcode } from "@scalius/shared/barcode-identity";
 
@@ -16,11 +15,7 @@ function activePersistedSkuPredicate(alias: string, productId: SQL): SQL {
 }
 
 function availableSkuPredicate(alias: string): SQL {
-    const available = availableRegularStockSql({
-        variantId: sql.raw(`${alias}.id`),
-        stock: sql.raw(`${alias}.stock`),
-        legacyReservedStock: sql.raw(`${alias}.reserved_stock`),
-    });
+    const available = sql.raw(`(${alias}.stock - ${alias}.reserved_stock)`);
     return sql`(
         ${sql.raw(`${alias}.track_inventory`)} = 0
         OR ${available} > 0

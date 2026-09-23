@@ -1,26 +1,19 @@
 // src/modules/navigation/navigation.service.ts
 // All DB queries and business logic for the navigation domain.
 
-import { categories, collections, pages, products, siteSettings } from "@scalius/database/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
+import { categories, collections, pages, products } from "@scalius/database/schema";
+import { and, sql } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
+import { NotFoundError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../products/products.storefront";
 import { publicCategoryConditions } from "../categories/categories.publication";
-import { parseNavigationConfig } from "./navigation.validation";
 import { resolveNavigationConfigs } from "./navigation.resolver";
 import type {
     NavigationTargetItem,
     ResolvedNavigationItem,
 } from "@scalius/shared/navigation-target";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
-import {
-    isMediaReferenceDeletingGuardError,
-    MEDIA_REFERENCE_DELETING_MESSAGE,
-    noDeletingMediaReferences,
-} from "../media/media-reference-guard";
 
 // ─────────────────────────────────────────
 // Types
@@ -161,186 +154,6 @@ export async function getNavigationPreviewProductCount(
     });
 
     return { count: result.pagination.total };
-}
-
-/** Get navigation configs (header + footer) from siteSettings with safe JSON.parse.
- *  WIRE: api-app should call this from routes/admin/navigation.ts (getConfigRoute handler)
- *  replacing the inline DB query + raw JSON.parse at lines 88-96.
- *  Swap: `const { headerConfig, footerConfig } = await getNavigationMenus(db);`
- *  then `return ok(c, { headerConfig, footerConfig });` */
-export async function getNavigationMenus(
-    db: Database,
-    audience: "admin" | "public" = "public",
-) {
-    const settingsRows = await db
-        .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
-        .from(siteSettings)
-        .limit(1);
-    const row = settingsRows[0];
-
-    const parsePersistedConfig = (
-        type: "header" | "footer",
-        rawValue: string | null | undefined,
-    ): Record<string, unknown> => {
-        if (!rawValue) return {};
-        try {
-            return parseNavigationConfig(type, JSON.parse(rawValue));
-        } catch {
-            throw new ServiceUnavailableError(
-                `Stored ${type} navigation configuration is invalid. Re-save it in Settings.`,
-            );
-        }
-    };
-    const headerConfig = parsePersistedConfig("header", row?.headerConfig);
-    const footerConfig = parsePersistedConfig("footer", row?.footerConfig);
-
-    return resolveNavigationConfigs(db, headerConfig, footerConfig, audience);
-}
-
-/** Get a single navigation menu by type (header/footer/footer-menu-id).
- *  WIRE: api-app should call this from routes/navigation.ts (getNavigationByIdRoute handler)
- *  replacing the inline logic at lines 189-249.
- *  Swap: `const menu = await getNavigationMenu(db, id);`
- *  then `if (!menu) throw new NotFoundError(...);` + `return ok(c, { menu });` */
-export async function getNavigationMenu(db: Database, id: string) {
-    const { headerConfig, footerConfig } = await getNavigationMenus(db);
-
-    if (id === "header") {
-        const navigation = (headerConfig && typeof headerConfig === "object")
-            ? (headerConfig as { navigation?: unknown }).navigation ?? []
-            : [];
-        return { id: "header", name: "Header Navigation", items: navigation };
-    }
-
-    if (id === "footer") {
-        const menus = (footerConfig && typeof footerConfig === "object")
-            ? (footerConfig as { menus?: unknown }).menus ?? []
-            : [];
-        return { id: "footer", name: "Footer Navigation", items: menus };
-    }
-
-    // Try to find a specific footer menu by id
-    if (footerConfig && typeof footerConfig === "object") {
-        const menus = (footerConfig as { menus?: Array<{ id?: string; title?: string; links?: unknown[] }> }).menus;
-        if (Array.isArray(menus)) {
-            const footerMenu = menus.find((m) => m.id === id || m.title === id);
-            if (footerMenu) {
-                return {
-                    id: footerMenu.id || id,
-                    name: footerMenu.title || "",
-                    items: footerMenu.links ?? [],
-                };
-            }
-        }
-    }
-
-    return null;
-}
-
-/** Save the legacy header or footer navigation config. */
-export async function saveNavigationConfig(
-    db: Database,
-    type: "header" | "footer",
-    config: Record<string, unknown>,
-) {
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    const configJson = JSON.stringify(parseNavigationConfig(type, config));
-    const mediaGuard = noDeletingMediaReferences(configJson);
-
-    const [existing] = await db
-        .select({ id: siteSettings.id })
-        .from(siteSettings)
-        .limit(1);
-
-    if (existing) {
-        const updated = await db
-            .update(siteSettings)
-            .set({ [configField]: configJson, updatedAt: sql`unixepoch()` })
-            .where(and(
-                eq(siteSettings.id, existing.id),
-                ...(mediaGuard ? [mediaGuard] : []),
-            ))
-            .returning({ id: siteSettings.id })
-            .get();
-        if (!updated && mediaGuard) {
-            throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-        }
-    } else {
-        const insert = db.insert(siteSettings).values({
-                id: "settings_" + nanoid(),
-                siteName: "My Store",
-                siteDescription: "",
-                headerConfig: type === "header" ? configJson : JSON.stringify({}),
-                footerConfig: type === "footer" ? configJson : JSON.stringify({}),
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            });
-        if (mediaGuard) {
-            try {
-                await safeBatch(db, [
-                    buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
-                    insert,
-                ] as never);
-            } catch (error) {
-                if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-                throw error;
-            }
-        } else {
-            await insert;
-        }
-    }
-}
-
-/** Update a legacy navigation config by site-settings ID. */
-export async function updateNavigationConfig(
-    db: Database,
-    id: string,
-    type: "header" | "footer",
-    config: Record<string, unknown>,
-) {
-    const [existing] = await db
-        .select({ id: siteSettings.id })
-        .from(siteSettings)
-        .where(eq(siteSettings.id, id));
-    if (!existing) throw new NotFoundError("Navigation settings not found");
-
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    const configJson = JSON.stringify(parseNavigationConfig(type, config));
-    const mediaGuard = noDeletingMediaReferences(configJson);
-    const updated = await db
-        .update(siteSettings)
-        .set({
-            [configField]: configJson,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(siteSettings.id, id),
-            ...(mediaGuard ? [mediaGuard] : []),
-        ))
-        .returning({ id: siteSettings.id })
-        .get();
-    if (!updated && mediaGuard) {
-        throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-    }
-}
-
-/** Reset a legacy navigation config by site-settings ID. */
-export async function deleteNavigationConfig(
-    db: Database,
-    id: string,
-    type: "header" | "footer",
-) {
-    const [existing] = await db
-        .select({ id: siteSettings.id })
-        .from(siteSettings)
-        .where(eq(siteSettings.id, id));
-    if (!existing) throw new NotFoundError("Navigation settings not found");
-
-    const configField = type === "header" ? "headerConfig" : "footerConfig";
-    await db
-        .update(siteSettings)
-        .set({ [configField]: JSON.stringify({}), updatedAt: sql`unixepoch()` })
-        .where(eq(siteSettings.id, id));
 }
 
 // ─────────────────────────────────────────

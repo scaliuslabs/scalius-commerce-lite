@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
-import { settings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
+import { firebaseDocument } from "@scalius/core/modules/settings/documents";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
 
@@ -98,24 +98,10 @@ const firebaseConfigRoute = createRoute({
 });
 
 app.openapi(firebaseConfigRoute, async (c) => {
-  const db = c.get("db");
-  const result = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.key, "public_config"),
-        eq(settings.category, "firebase"),
-      ),
-    )
-    .get();
-
-  let config = {};
-  if (result && result.value) {
-    config = JSON.parse(result.value);
-  }
-
-  return ok(c, config);
+  const { publicConfig } = await firebaseDocument.read(c.get("db"), {
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
+  return ok(c, publicConfig);
 });
 
 // Apply auth middleware to all routes below

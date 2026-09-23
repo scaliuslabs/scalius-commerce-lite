@@ -6,11 +6,9 @@
 // Route handlers simply call a function and return c.json(result).
 
 import {
-  siteSettings,
   collections,
   heroSliders,
   analytics,
-  metaConversionsSettings,
   settings,
   themeSettings,
   categories,
@@ -29,60 +27,36 @@ import {
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
-import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import {
-  parseMediaOptimizationSettings,
-  readPersistedSitePresentation,
-} from "../settings/site-settings.service";
+  businessDocument,
+  currencyDocument,
+  footerDocument,
+  headerDocument,
+  homepageDocument,
+  mediaDocument,
+  metaConversionsDocument,
+  securityDocument,
+  seoDocument,
+} from "../settings/documents";
 import {
-  CSP_ALLOWED_DOMAINS_SETTING_KEY,
-  SECURITY_SETTINGS_CATEGORY,
-} from "../settings/security-settings.service";
-import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
-import {
-  parseStorefrontThemeSettings,
-  type StorefrontThemeSettings,
-} from "@scalius/shared/storefront-theme";
+  selectSettingsDocuments,
+  SETTINGS_DOCUMENT_ROW_KEY,
+  type SettingsDocumentRow,
+} from "../settings/settings-store";
+import { parseStorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
-import { parseHomepagePresentationConfig } from "@scalius/shared/homepage-presentation";
 import {
   HEADER_LOGO_WIDTH_DEFAULT,
   normalizeHeaderLogoWidth,
 } from "@scalius/shared/brand-presentation";
-import {
-  DEFAULT_CURRENCY,
-  normalizeSupportedCurrencyCode,
-} from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 import { publicCategoryConditions } from "../categories/categories.publication";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
-
-export function readStorefrontPresentationConfigs(
-  headerValue: string | null | undefined,
-  footerValue: string | null | undefined,
-): {
-  headerConfig: Record<string, unknown>;
-  footerConfig: Record<string, unknown>;
-} {
-  return {
-    headerConfig: readPersistedSitePresentation("header", headerValue),
-    footerConfig: readPersistedSitePresentation("footer", footerValue),
-  };
-}
-
-export function resolveStorefrontThemeSettings(
-  versionedValue: string | null | undefined,
-  legacyValue: string | null | undefined,
-): StorefrontThemeSettings {
-  const value = versionedValue ?? legacyValue;
-  return parseStorefrontThemeSettings(value);
-}
 
 interface NestedNavigationItem {
   id?: string;
@@ -132,16 +106,8 @@ function normalizeSocialLink(value: unknown): SocialLink {
 export async function getHomepageData(db: Database) {
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await db.batch([
-    // 0. SEO settings
-    db
-      .select({
-        siteTitle: siteSettings.siteTitle,
-        homepageTitle: siteSettings.homepageTitle,
-        homepageMetaDescription: siteSettings.homepageMetaDescription,
-        homepageConfig: siteSettings.homepageConfig,
-      })
-      .from(siteSettings)
-      .limit(1),
+    // 0. SEO + homepage presentation documents
+    selectSettingsDocuments(db, [seoDocument, homepageDocument]),
 
     // 1. Hero sliders (desktop and mobile)
     db
@@ -183,13 +149,15 @@ export async function getHomepageData(db: Database) {
         ...publicCategoryConditions(),
         sql`${categories.id} IN (
           SELECT CAST(homepage_category.value AS TEXT)
-          FROM ${siteSettings}, json_each(
+          FROM ${settings}, json_each(
             CASE
-              WHEN json_valid(${siteSettings.homepageConfig})
-                THEN json_extract(${siteSettings.homepageConfig}, '$.categoryRail.categoryIds')
+              WHEN json_valid(${settings.value})
+                THEN json_extract(${settings.value}, '$.categoryRail.categoryIds')
               ELSE '[]'
             END
           ) AS homepage_category
+          WHERE ${settings.category} = ${homepageDocument.key}
+            AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
         )`,
       )),
 
@@ -199,42 +167,32 @@ export async function getHomepageData(db: Database) {
       .from(shippingMethods)
       .where(eq(shippingMethods.isActive, true))
       .limit(1),
-
-    // 5. Return-policy facts used by the truthful policy strip.
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(and(
-        eq(settings.category, "seo"),
-        eq(settings.key, "return_policy"),
-      ))
-      .limit(1),
   ]);
 
   const [
-    seoResults,
+    documentRows,
     heroResults,
     collectionResults,
     categoryResults,
     shippingMethodResults,
-    returnPolicyResults,
   ] =
     batchResults;
 
-  // Process SEO
-  const siteRow = (seoResults as Record<string, unknown>[])[0];
-  const seoSettings = siteRow ? {
-    siteTitle: siteRow.siteTitle,
-    homepageTitle: siteRow.homepageTitle,
-    homepageMetaDescription: siteRow.homepageMetaDescription,
+  const rows = documentRows as SettingsDocumentRow[];
+  const [seo, homepage] = await Promise.all([
+    seoDocument.fromRows(rows),
+    homepageDocument.fromRows(rows),
+  ]);
+  const seoSettings = seo.stored ? {
+    siteTitle: seo.value.siteTitle,
+    homepageTitle: seo.value.homepageTitle,
+    homepageMetaDescription: seo.value.homepageMetaDescription,
   } : {
     siteTitle: "Scalius Commerce",
     homepageTitle: "Welcome to Scalius Commerce",
     homepageMetaDescription: "Your one-stop shop for everything amazing.",
   };
-  const homepageConfig = parseHomepagePresentationConfig(
-    typeof siteRow?.homepageConfig === "string" ? siteRow.homepageConfig : null,
-  );
+  const homepageConfig = homepage.value;
 
   // Process Hero
   const desktopSlider = (heroResults as { type: string }[]).find(
@@ -321,9 +279,7 @@ export async function getHomepageData(db: Database) {
       detail: "Choose an available method at checkout.",
     });
   }
-  const returnPolicy = parseSeoReturnPolicySettings(
-    (returnPolicyResults as Array<{ value?: string }>)[0]?.value,
-  );
+  const returnPolicy = seo.value.returnPolicy;
   if (returnPolicy.enabled) {
     const returnTitle = returnPolicy.category === "finite"
       ? `${returnPolicy.returnWindowDays}-day returns`
@@ -372,6 +328,17 @@ export async function getPageRenderData(db: Database, slug: string) {
 
 // ── Layout data ───────────────────────────────────────────────────────────────
 
+const LAYOUT_DOCUMENTS = [
+  headerDocument,
+  footerDocument,
+  currencyDocument,
+  mediaDocument,
+  metaConversionsDocument,
+  seoDocument,
+  businessDocument,
+  securityDocument,
+];
+
 /**
  * Fetch and shape all layout data in a single batched D1 round-trip.
  * Returns the final { analytics, header, navigation, footer, currency, theme, ..., cspAllowedDomains } object.
@@ -391,101 +358,17 @@ export async function getLayoutData(
       location: analytics.location,
     }).from(analytics).where(and(eq(analytics.isActive, true), isNull(analytics.deletedAt))),
 
-    // 1. Site settings (header + footer config)
-    db
-      .select({
-        headerConfig: siteSettings.headerConfig,
-        footerConfig: siteSettings.footerConfig,
-      })
-      .from(siteSettings)
-      .limit(1),
+    // 1. Settings documents the layout projects
+    selectSettingsDocuments(db, LAYOUT_DOCUMENTS),
 
-    // 2. Currency settings
-    db
-      .select({ key: settings.key, value: settings.value })
-      .from(settings)
-      .where(eq(settings.category, "currency")),
-
-    // 3. Versioned theme color overrides
+    // 2. Published theme
     db
       .select({ value: themeSettings.colors })
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
 
-    // 4. Legacy theme color fallback (used only when no versioned row exists)
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, "theme"),
-          eq(settings.key, "storefront_colors"),
-        ),
-      )
-      .limit(1),
-
-    // 5. Media delivery host settings
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, "media"),
-          eq(settings.key, "image_optimization"),
-        ),
-      )
-      .limit(1),
-
-    // 6. Meta CAPI browser dispatch readiness
-    db
-      .select({
-        isEnabled: metaConversionsSettings.isEnabled,
-        pixelId: metaConversionsSettings.pixelId,
-        accessToken: metaConversionsSettings.accessToken,
-      })
-      .from(metaConversionsSettings)
-      .where(eq(metaConversionsSettings.id, "singleton"))
-      .limit(1),
-
-    // 7. SEO discovery policy
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(and(eq(settings.category, "seo"), eq(settings.key, "discovery")))
-      .limit(1),
-
-    // 8. Business identity for public OnlineStore JSON-LD
-    db
-      .select({ key: settings.key, value: settings.value })
-      .from(settings)
-      .where(eq(settings.category, "business_info")),
-
-    // 9. Merchant return-policy schema settings
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, "seo"),
-          eq(settings.key, "return_policy"),
-        ),
-      )
-      .limit(1),
-
-    // 10. Merchant CSP sources for the storefront response header
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, SECURITY_SETTINGS_CATEGORY),
-          eq(settings.key, CSP_ALLOWED_DOMAINS_SETTING_KEY),
-        ),
-      )
-      .limit(1),
-
-    // 11. Active (else default) checkout language for storefront buyer copy
+    // 3. Active (else default) checkout language for storefront buyer copy
     db
       .select({
         code: checkoutLanguages.code,
@@ -504,18 +387,22 @@ export async function getLayoutData(
 
   const [
     analyticsResults,
-    settingsResults,
-    currencyResults,
+    documentRows,
     themeResults,
-    legacyThemeResults,
-    mediaResults,
-    metaCapiResults,
-    seoDiscoveryResults,
-    businessResults,
-    seoReturnPolicyResults,
-    cspResults,
     checkoutLanguageResults,
   ] = batchResults;
+  const rows = documentRows as SettingsDocumentRow[];
+  const ctx = { encryptionKey: options.credentialEncryptionKey };
+  const [header, footer, currency, media, metaCapiSettings, seo, business, security] = await Promise.all([
+    headerDocument.fromRows(rows, ctx),
+    footerDocument.fromRows(rows, ctx),
+    currencyDocument.fromRows(rows, ctx),
+    mediaDocument.fromRows(rows, ctx),
+    metaConversionsDocument.fromRows(rows, ctx),
+    seoDocument.fromRows(rows, ctx),
+    businessDocument.fromRows(rows, ctx),
+    securityDocument.fromRows(rows, ctx),
+  ]);
   // Process Analytics
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
@@ -542,16 +429,6 @@ export async function getLayoutData(
     });
 
   // Process Header + Navigation
-  const siteSettingsData = (settingsResults as Record<string, unknown>[])[0] as
-    | Record<string, string | null>
-    | undefined;
-  const {
-    headerConfig: storedHeaderConfig,
-    footerConfig: storedFooterConfig,
-  } = readStorefrontPresentationConfigs(
-    siteSettingsData?.headerConfig,
-    siteSettingsData?.footerConfig,
-  );
   let navigationPlacements: Awaited<ReturnType<typeof getPublishedNavigationPlacements>> = [];
   try {
     navigationPlacements = await getPublishedNavigationPlacements(db);
@@ -574,8 +451,8 @@ export async function getLayoutData(
   let headerData: Record<string, unknown>;
   const navigationData = (headerPlacement?.items ?? []) as NestedNavigationItem[];
 
-  if (siteSettingsData?.headerConfig) {
-    const headerConfig = storedHeaderConfig;
+  if (header.stored) {
+    const headerConfig = header.value;
     const topBarConfig = asRecord(headerConfig.topBar);
     const logoConfig = asRecord(headerConfig.logo);
     const faviconConfig = asRecord(headerConfig.favicon);
@@ -631,8 +508,8 @@ export async function getLayoutData(
 
   // Process Footer
   let footerData: Record<string, unknown>;
-  if (siteSettingsData?.footerConfig) {
-    const footerConfig = storedFooterConfig;
+  if (footer.stored) {
+    const footerConfig = footer.value;
     const footerLogoConfig = asRecord(footerConfig.logo);
     const footerFaviconConfig = asRecord(footerConfig.favicon);
 
@@ -668,82 +545,34 @@ export async function getLayoutData(
     };
   }
 
-  // Process Currency
-  const currencyMap = Object.fromEntries(
-    (currencyResults as { key: string; value: string }[]).map((r) => [
-      r.key,
-      r.value,
-    ]),
-  );
-  const currencyCode = normalizeSupportedCurrencyCode(currencyMap.currency_code);
-  const parsedExchangeRate = Number(currencyMap.usd_exchange_rate);
-  const currencyData = currencyCode
-    ? {
-        code: currencyCode,
-        symbol: currencyMap.currency_symbol ?? DEFAULT_CURRENCY.symbol,
-        usdExchangeRate: Number.isFinite(parsedExchangeRate) && parsedExchangeRate > 0
-          ? parsedExchangeRate
-          : DEFAULT_CURRENCY.usdExchangeRate,
-      }
-    : {
-        code: DEFAULT_CURRENCY.code,
-        symbol: DEFAULT_CURRENCY.symbol,
-        usdExchangeRate: DEFAULT_CURRENCY.usdExchangeRate,
-      };
-
-  // Process Theme
-  const storefrontTheme = resolveStorefrontThemeSettings(
+  const currencyRate = Number(currency.value.usdExchangeRate);
+  const currencyData = {
+    code: currency.value.currencyCode,
+    symbol: currency.value.currencySymbol,
+    usdExchangeRate: Number.isFinite(currencyRate) && currencyRate > 0 ? currencyRate : 1,
+  };
+  const storefrontTheme = parseStorefrontThemeSettings(
     (themeResults as { value?: string }[])[0]?.value,
-    (legacyThemeResults as { value?: string }[])[0]?.value,
   );
-
-  const mediaRow = (mediaResults as { value?: string }[])[0];
-  const media = parseMediaOptimizationSettings(mediaRow?.value);
-  const metaCapiRow = (metaCapiResults as {
-    isEnabled?: boolean | null;
-    pixelId?: string | null;
-    accessToken?: string | null;
-  }[])[0];
-  const metaCapiAccessToken = await readStoredCredentialStrict(
-    metaCapiRow?.accessToken,
-    options.credentialEncryptionKey,
-    "Meta Conversions API access token",
-  );
-  if (metaCapiAccessToken.error) {
-    console.warn(
-      "[Storefront] Meta CAPI browser events are not ready:",
-      metaCapiAccessToken.error,
-    );
-  }
   const metaCapi = {
     browserEventsEnabled: Boolean(
-      metaCapiRow?.isEnabled &&
-      metaCapiRow.pixelId?.trim() &&
-      metaCapiAccessToken.value.trim(),
+      metaCapiSettings.value.isEnabled &&
+      metaCapiSettings.value.pixelId.trim() &&
+      metaCapiSettings.value.accessToken.trim(),
     ),
   };
-  const seoDiscoveryRow = (seoDiscoveryResults as { value?: string }[])[0];
-  const discovery = parseSeoDiscoverySettings(seoDiscoveryRow?.value);
-  const seoReturnPolicyRow = (seoReturnPolicyResults as { value?: string }[])[0];
-  const returnPolicy = parseSeoReturnPolicySettings(seoReturnPolicyRow?.value);
-  const businessMap = Object.fromEntries(
-    (businessResults as { key: string; value: string }[]).map((row) => [
-      row.key,
-      row.value,
-    ]),
-  );
-  const business = {
-    companyName: businessMap.company_name ?? "",
-    legalName: businessMap.legal_name ?? "",
-    addressLine1: businessMap.address_line1 ?? "",
-    addressLine2: businessMap.address_line2 ?? "",
-    city: businessMap.city ?? "",
-    stateRegion: businessMap.state_region ?? "",
-    postalCode: businessMap.postal_code ?? "",
-    country: businessMap.country ?? "Bangladesh",
-    phone: businessMap.phone ?? "",
-    email: businessMap.email ?? "",
-    taxId: businessMap.tax_id ?? "",
+  const publicBusiness = {
+    companyName: business.value.companyName,
+    legalName: business.value.legalName,
+    addressLine1: business.value.addressLine1,
+    addressLine2: business.value.addressLine2,
+    city: business.value.city,
+    stateRegion: business.value.stateRegion,
+    postalCode: business.value.postalCode,
+    country: business.value.country,
+    phone: business.value.phone,
+    email: business.value.email,
+    taxId: business.value.taxId,
   };
 
   return {
@@ -753,14 +582,14 @@ export async function getLayoutData(
     footer: footerData,
     currency: currencyData,
     theme: storefrontTheme,
-    media,
+    media: media.value,
     metaCapi,
-    business,
+    business: publicBusiness,
     seo: {
-      discovery,
-      returnPolicy,
+      discovery: seo.value.discovery,
+      returnPolicy: seo.value.returnPolicy,
     },
-    cspAllowedDomains: (cspResults as { value?: string }[])[0]?.value ?? "",
+    cspAllowedDomains: security.value.cspAllowedDomains,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
   };
 }

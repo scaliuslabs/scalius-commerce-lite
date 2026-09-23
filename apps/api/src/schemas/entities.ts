@@ -743,23 +743,6 @@ export const deliveryLocationSchema = z.object({
 });
 
 // ─────────────────────────────────────────
-// Settings
-// ─────────────────────────────────────────
-
-/** Generic settings key-value pair. */
-export const settingSchema = z.object({
-  id: z.string(),
-  category: z.string(),
-  key: z.string(),
-  value: z.string().nullable(),
-});
-
-/** Site settings singleton row. */
-export const siteSettingsSchema = z.object({
-  id: z.string(),
-});
-
-// ─────────────────────────────────────────
 // Navigation
 // ─────────────────────────────────────────
 

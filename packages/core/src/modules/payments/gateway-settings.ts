@@ -1,19 +1,20 @@
 // src/modules/payments/gateway-settings.ts
-// Reads payment gateway configuration from the authoritative `settings` table.
-// Request paths may load one relational snapshot, but decrypted credentials are
-// never retained in Worker-global memory or written to KV.
+// Reads payment gateway configuration from the authoritative settings
+// documents (`stripe`, `sslcommerz`, `payment_methods`). Request paths may
+// load one relational snapshot, but decrypted credentials are never retained
+// in Worker-global memory or written to KV.
 
-import { eq, inArray, sql } from "drizzle-orm";
-import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
-import { registerGateway } from "./gateway-registry";
-import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "./sslcommerz";
 import {
-  encodeEncryptedCredential,
-  encryptCredentials,
-  readStoredCredentialStrict,
-} from "@scalius/core/utils/credential-encryption";
+  paymentMethodsDocument,
+  sslcommerzDocument,
+  stripeDocument,
+} from "../settings/documents";
+import {
+  selectSettingsDocuments,
+  type SettingsDocumentRow,
+} from "../settings/settings-store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,34 +69,18 @@ export interface SSLCommerzCheckoutReadiness {
   blockedReason?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Generic helper: bulk-read all keys for a category
-// ---------------------------------------------------------------------------
+/** A stored gateway settings document row (see `selectSettingsDocuments`). */
+export type GatewaySettingsStoredRow = SettingsDocumentRow;
 
-async function readCategory(
-  db: Database,
-  category: string
-): Promise<Record<string, string>> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, category))
-    .all();
-
-  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
-}
-
-export interface GatewaySettingsStoredRow {
-  category: string;
-  key: string;
-  value: string;
+async function readGatewayRows(db: Database): Promise<GatewaySettingsStoredRow[]> {
+  return selectSettingsDocuments(db, [paymentMethodsDocument, stripeDocument, sslcommerzDocument]);
 }
 
 // ---------------------------------------------------------------------------
 // Stripe
 // ---------------------------------------------------------------------------
 
-const STRIPE_CATEGORY = "stripe";
+const STRIPE_CATEGORY = stripeDocument.key;
 const STRIPE_PLACEHOLDER_VALUES = new Set([
   "dummy",
   "placeholder",
@@ -195,27 +180,18 @@ export async function getStripeSettings(
   db: Database,
   encryptionKey?: string,
 ): Promise<StripeSettings | null> {
-  const values = await readCategory(db, STRIPE_CATEGORY);
-  return resolveStripeSettingsFromValues(values, encryptionKey);
+  return resolveStripeSettingsFromRows(await readGatewayRows(db), encryptionKey);
 }
 
-async function resolveStripeSettingsFromValues(
-  values: Record<string, string>,
+async function resolveStripeSettingsFromRows(
+  rows: readonly GatewaySettingsStoredRow[],
   encryptionKey?: string,
 ): Promise<StripeSettings | null> {
-  if (!values.secret_key && !values.publishable_key && !values.webhook_secret && values.enabled === undefined) return null;
-
-  const [secretKey, webhookSecret] = await Promise.all([
-    readStoredCredentialStrict(values.secret_key, encryptionKey, "Stripe secret key"),
-    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Stripe webhook secret"),
-  ]);
-
+  const stored = await stripeDocument.fromRows(rows, { encryptionKey });
+  if (!stored.stored) return null;
   return {
-    secretKey: secretKey.value,
-    publishableKey: values.publishable_key ?? "",
-    webhookSecret: webhookSecret.value,
-    enabled: values.enabled !== "false",
-    credentialErrors: compactErrors([secretKey.error, webhookSecret.error]),
+    ...stored.value,
+    credentialErrors: compactErrors([stored.secretErrors.secretKey, stored.secretErrors.webhookSecret]),
   };
 }
 
@@ -223,7 +199,7 @@ async function resolveStripeSettingsFromValues(
 // SSLCommerz
 // ---------------------------------------------------------------------------
 
-const SSL_CATEGORY = "sslcommerz";
+const SSL_CATEGORY = sslcommerzDocument.key;
 const SSLCOMMERZ_STORED_SECRET_MARKER = "__stored__";
 const SSLCOMMERZ_PLACEHOLDER_VALUES = new Set([
   "dummy",
@@ -313,77 +289,26 @@ export async function getSSLCommerzSettings(
   db: Database,
   encryptionKey?: string,
 ): Promise<SSLCommerzSettings | null> {
-  const values = await readCategory(db, SSL_CATEGORY);
-  return resolveSSLCommerzSettingsFromValues(values, encryptionKey);
+  return resolveSSLCommerzSettingsFromRows(await readGatewayRows(db), encryptionKey);
 }
 
-async function resolveSSLCommerzSettingsFromValues(
-  values: Record<string, string>,
+async function resolveSSLCommerzSettingsFromRows(
+  rows: readonly GatewaySettingsStoredRow[],
   encryptionKey?: string,
 ): Promise<SSLCommerzSettings | null> {
-  if (!values.store_id && !values.store_password && values.sandbox === undefined && values.enabled === undefined) return null;
-
-  const storePassword = await readStoredCredentialStrict(
-    values.store_password,
-    encryptionKey,
-    "SSLCommerz store password",
-  );
-
+  const stored = await sslcommerzDocument.fromRows(rows, { encryptionKey });
+  if (!stored.stored) return null;
   return {
-    storeId: values.store_id ?? "",
-    storePassword: storePassword.value,
-    sandbox: values.sandbox !== "false",
-    enabled: values.enabled !== "false",
-    credentialErrors: compactErrors([storePassword.error]),
+    ...stored.value,
+    credentialErrors: compactErrors([stored.secretErrors.storePassword]),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Upsert helpers (used by admin API routes)
-// ---------------------------------------------------------------------------
-
-export async function upsertSetting(
-  db: Database,
-  category: string,
-  key: string,
-  value: string
-): Promise<void> {
-  await db
-    .insert(settings)
-    .values({
-      id: crypto.randomUUID(),
-      key,
-      value,
-      type: "string",
-      category,
-    })
-    .onConflictDoUpdate({
-      target: [settings.key, settings.category],
-      set: { value, updatedAt: sql`unixepoch()` },
-    });
-}
-
-/** Encrypt a provider secret then upsert it. New credential writes must fail closed when no key is configured. */
-export async function upsertEncryptedSetting(
-  db: Database,
-  category: string,
-  key: string,
-  value: string,
-  encryptionKey?: string,
-): Promise<void> {
-  if (!encryptionKey) {
-    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
-  }
-
-  const stored = encodeEncryptedCredential(await encryptCredentials(value, encryptionKey));
-  await upsertSetting(db, category, key, stored);
 }
 
 // ---------------------------------------------------------------------------
 // Payment Methods Configuration (storefront-facing)
 // ---------------------------------------------------------------------------
 
-const PAYMENT_METHODS_CATEGORY = "payment_methods";
+const PAYMENT_METHODS_CATEGORY = paymentMethodsDocument.key;
 
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront */
@@ -401,39 +326,28 @@ export interface PaymentMethodPreferences {
   hasExplicitEnabledMethods: boolean;
 }
 
-function parsePaymentMethodPreferences(
-  values: Record<string, string>,
-): PaymentMethodPreferences {
-  let enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
-  const hasExplicitEnabledMethods = values.enabled_methods !== undefined;
-  try {
-    const parsed = values.enabled_methods
-      ? JSON.parse(values.enabled_methods) as unknown
-      : ["cod"];
-    enabledMethods = Array.isArray(parsed)
-      ? Array.from(new Set(parsed.filter((method): method is ("stripe" | "sslcommerz" | "cod") =>
-          method === "stripe" ||
-          method === "sslcommerz" ||
-          method === "cod",
-        )))
-      : [];
-  } catch {
-    enabledMethods = hasExplicitEnabledMethods ? [] : ["cod"];
-  }
+type PaymentMethodId = PaymentMethodsConfig["defaultMethod"];
 
-  const storedDefault = values.default_method;
-  const defaultMethod = (
-    storedDefault === "stripe" ||
-    storedDefault === "sslcommerz" ||
-    storedDefault === "cod"
-  )
-    ? storedDefault
-    : "cod";
+function isPaymentMethodId(method: unknown): method is PaymentMethodId {
+  return method === "stripe" || method === "sslcommerz" || method === "cod";
+}
 
+/**
+ * Without a saved allowlist, COD is the implied checkout method. A saved but
+ * unreadable allowlist enables nothing: checkout never guesses COD.
+ */
+async function resolvePaymentMethodPreferences(
+  rows: readonly GatewaySettingsStoredRow[],
+): Promise<PaymentMethodPreferences> {
+  const read = await paymentMethodsDocument.fromRows(rows);
+  if (read.invalid) return { enabledMethods: [], defaultMethod: "cod", hasExplicitEnabledMethods: true };
+  const { enabledMethods, defaultMethod } = read.value;
   return {
-    enabledMethods,
-    defaultMethod,
-    hasExplicitEnabledMethods,
+    enabledMethods: enabledMethods === null
+      ? ["cod"]
+      : Array.from(new Set(enabledMethods.filter(isPaymentMethodId))),
+    defaultMethod: isPaymentMethodId(defaultMethod) ? defaultMethod : "cod",
+    hasExplicitEnabledMethods: enabledMethods !== null,
   };
 }
 
@@ -454,18 +368,6 @@ export interface PaymentGatewaySettingsSnapshot {
 }
 
 type ResolvedGatewaySettings = PaymentGatewaySettingsSnapshot["settings"];
-
-function groupGatewaySettingsRows(
-  rows: readonly GatewaySettingsStoredRow[],
-): Map<string, Record<string, string>> {
-  const byCategory = new Map<string, Record<string, string>>();
-  for (const row of rows) {
-    const values = byCategory.get(row.category) ?? {};
-    values[row.key] = row.value;
-    byCategory.set(row.category, values);
-  }
-  return byCategory;
-}
 
 function buildActivePaymentMethods(
   preferences: PaymentMethodPreferences,
@@ -492,13 +394,10 @@ async function resolvePaymentGatewaySettingsSnapshotFromRows(
   rows: readonly GatewaySettingsStoredRow[],
   encryptionKey?: string,
 ): Promise<PaymentGatewaySettingsSnapshot> {
-  const byCategory = groupGatewaySettingsRows(rows);
-  const preferences = parsePaymentMethodPreferences(
-    byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
-  );
-  const [stripe, sslcommerz] = await Promise.all([
-    resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey),
-    resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey),
+  const [preferences, stripe, sslcommerz] = await Promise.all([
+    resolvePaymentMethodPreferences(rows),
+    resolveStripeSettingsFromRows(rows, encryptionKey),
+    resolveSSLCommerzSettingsFromRows(rows, encryptionKey),
   ]);
   const resolved = { stripe, sslcommerz, cod: { enabled: true as const } };
   return {
@@ -512,18 +411,11 @@ export async function resolveActivePaymentMethodsFromRows(
   rows: readonly GatewaySettingsStoredRow[],
   encryptionKey?: string,
 ): Promise<PaymentMethodsConfig> {
-  const byCategory = groupGatewaySettingsRows(rows);
-  const preferences = parsePaymentMethodPreferences(
-    byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
-  );
+  const preferences = await resolvePaymentMethodPreferences(rows);
   const enabled = new Set(preferences.enabledMethods);
   const [stripe, sslcommerz] = await Promise.all([
-    enabled.has("stripe")
-      ? resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey)
-      : null,
-    enabled.has("sslcommerz")
-      ? resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey)
-      : null,
+    enabled.has("stripe") ? resolveStripeSettingsFromRows(rows, encryptionKey) : null,
+    enabled.has("sslcommerz") ? resolveSSLCommerzSettingsFromRows(rows, encryptionKey) : null,
   ]);
   return buildActivePaymentMethods(preferences, {
     stripe,
@@ -536,18 +428,13 @@ export async function getPaymentGatewaySettingsSnapshot(
   db: Database,
   encryptionKey?: string,
 ): Promise<PaymentGatewaySettingsSnapshot> {
-  const rows = await db
-    .select({ category: settings.category, key: settings.key, value: settings.value })
-    .from(settings)
-    .where(inArray(settings.category, [...STOREFRONT_GATEWAY_SETTING_CATEGORIES]))
-    .all();
-  return resolvePaymentGatewaySettingsSnapshotFromRows(rows, encryptionKey);
+  return resolvePaymentGatewaySettingsSnapshotFromRows(await readGatewayRows(db), encryptionKey);
 }
 
 export async function getPaymentMethodPreferences(
   db: Database,
 ): Promise<PaymentMethodPreferences> {
-  return parsePaymentMethodPreferences(await readCategory(db, PAYMENT_METHODS_CATEGORY));
+  return resolvePaymentMethodPreferences(await readGatewayRows(db));
 }
 
 /**
@@ -561,44 +448,5 @@ export async function getActivePaymentMethods(
   db: Database,
   encryptionKey?: string,
 ): Promise<PaymentMethodsConfig> {
-  const rows = await db
-    .select({ category: settings.category, key: settings.key, value: settings.value })
-    .from(settings)
-    .where(inArray(settings.category, [...STOREFRONT_GATEWAY_SETTING_CATEGORIES]))
-    .all();
-  return resolveActivePaymentMethodsFromRows(rows, encryptionKey);
+  return resolveActivePaymentMethodsFromRows(await readGatewayRows(db), encryptionKey);
 }
-
-// ---------------------------------------------------------------------------
-// Gateway Registry — register each gateway's metadata
-// ---------------------------------------------------------------------------
-
-registerGateway({
-  id: "stripe",
-  name: "Card Payment",
-  settingsCategory: STRIPE_CATEGORY,
-  getPublicConfig: (s) => ({
-    publishableKey: typeof s.publishableKey === "string" ? s.publishableKey.trim() : "",
-    testMode: getStripeCredentialEnvironment(s) === "test",
-  }),
-  getCurrencies: (localCurrency) => [localCurrency, "usd", "eur", "gbp"],
-});
-
-registerGateway({
-  id: "sslcommerz",
-  name: "Online Payment",
-  settingsCategory: SSL_CATEGORY,
-  getPublicConfig: (s) => ({
-    sandbox: s.sandbox,
-    testMode: s.sandbox === true,
-    amountLimits: SSL_COMMERZ_BDT_AMOUNT_LIMITS,
-  }),
-  getCurrencies: () => ["bdt"],
-});
-
-registerGateway({
-  id: "cod",
-  name: "Cash on Delivery",
-  settingsCategory: "cod",
-  getCurrencies: (localCurrency) => [localCurrency],
-});

@@ -30,7 +30,9 @@ vi.mock("../create-order", () => ({
 }));
 
 import { CheckoutOrderError } from "../create-order";
-import { sslcommerzHandler } from "./sslcommerz";
+import { createHostedGatewayHandler } from "./hosted";
+
+const sslcommerzHandler = createHostedGatewayHandler("sslcommerz", "SSLCommerz");
 import { resetStripePaymentElement, stripeHandler } from "./stripe";
 import type { CheckoutConfig, PaymentContext } from "../types";
 
@@ -85,7 +87,7 @@ describe("hosted online payment handlers", () => {
     {
       label: "SSLCommerz",
       handler: sslcommerzHandler,
-      endpoint: "/api/checkout/sslcommerz-session",
+      endpoint: "/api/checkout/payment-session/sslcommerz",
       gateway: "sslcommerz",
       successBody: { gatewayUrl: "https://ssl.example.test/pay" },
     },
@@ -332,7 +334,7 @@ describe("hosted online payment handlers", () => {
   });
 
   it.each([
-    { handler: sslcommerzHandler, gateway: "sslcommerz", endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
+    { handler: sslcommerzHandler, gateway: "sslcommerz", endpoint: "/api/checkout/payment-session/sslcommerz", gatewayUrl: "https://ssl.example.test/pay" },
   ])("replaces an existing order payment through $gateway without creating another order", async ({
     handler,
     gateway,
@@ -365,7 +367,7 @@ describe("hosted online payment handlers", () => {
   });
 
   it.each([
-    { handler: sslcommerzHandler, endpoint: "/api/checkout/sslcommerz-session", gatewayUrl: "https://ssl.example.test/pay" },
+    { handler: sslcommerzHandler, endpoint: "/api/checkout/payment-session/sslcommerz", gatewayUrl: "https://ssl.example.test/pay" },
   ])("keeps the existing method for an accepted deposit balance through $endpoint", async ({
     handler,
     endpoint,
@@ -602,7 +604,7 @@ describe("Stripe checkout handler", () => {
     const result = await stripeHandler.processPayment(makeContext());
 
     expect(fetch).toHaveBeenCalledWith(
-      "/api/checkout/stripe-intent",
+      "/api/checkout/payment-session/stripe",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ orderId: "order_1" }),

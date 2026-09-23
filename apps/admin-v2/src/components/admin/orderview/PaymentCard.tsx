@@ -83,11 +83,8 @@ interface OrderPayment {
   paymentMethod: string;
   paymentType: string;
   status: string;
-  stripePaymentIntentId: string | null;
-  stripeChargeId: string | null;
-  sslcommerzTranId: string | null;
-  sslcommerzValId: string | null;
-  sslcommerzBankTranId: string | null;
+  providerRef: string | null;
+  providerSecondaryRef: string | null;
   codCollectedBy: string | null;
   codCollectedAt: number | null;
   codReceiptUrl: string | null;
@@ -332,11 +329,8 @@ function canManuallyCheckRefundAttempt(attempt: OrderRefundAttempt): boolean {
 function paymentReferences(payment: OrderPayment): Array<{ label: string; value: string }> {
   return [
     { label: "Payment row", value: payment.id },
-    { label: "Stripe intent", value: payment.stripePaymentIntentId ?? "" },
-    { label: "Stripe charge", value: payment.stripeChargeId ?? "" },
-    { label: "SSL tran", value: payment.sslcommerzTranId ?? "" },
-    { label: "SSL val", value: payment.sslcommerzValId ?? "" },
-    { label: "SSL bank tran", value: payment.sslcommerzBankTranId ?? "" },
+    { label: "Provider reference", value: payment.providerRef ?? "" },
+    { label: "Provider transaction", value: payment.providerSecondaryRef ?? "" },
   ].filter((entry) => entry.value);
 }
 

@@ -191,6 +191,24 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 65,
+        name: "0065_single_checkout_commit",
+        sqliteStatements: 49,
+        postgresStatements: 54,
+      },
+      {
+        version: 66,
+        name: "0066_payment_provider_refs",
+        sqliteStatements: 17,
+        postgresStatements: 17,
+      },
+      {
+        version: 67,
+        name: "0067_settings_documents",
+        sqliteStatements: 29,
+        postgresStatements: 29,
+      },
     ]);
   });
 
@@ -304,6 +322,9 @@ describe("provider-neutral schema upgrades", () => {
           { version: 62, name: "0062_identity_handoff_audit" },
           { version: 63, name: "0063_media_variants_drop_polar" },
           { version: 64, name: "0064_cache_generation" },
+          { version: 65, name: "0065_single_checkout_commit" },
+          { version: 66, name: "0066_payment_provider_refs" },
+          { version: 67, name: "0067_settings_documents" },
         ],
       });
     } finally {

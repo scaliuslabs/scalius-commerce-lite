@@ -18039,9 +18039,9 @@
                   "paymentMethod": {
                     "type": "string",
                     "enum": [
-                      "cod",
                       "stripe",
-                      "sslcommerz"
+                      "sslcommerz",
+                      "cod"
                     ],
                     "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
                   }
@@ -24916,11 +24916,7 @@
                           "type": "string"
                         },
                         "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz"
-                          ]
+                          "type": "string"
                         },
                         "paymentType": {
                           "type": "string",
@@ -26406,139 +26402,70 @@
                         "gateways": {
                           "type": "array",
                           "items": {
-                            "oneOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string",
-                                    "enum": [
-                                      "stripe"
-                                    ]
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "currencies": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    },
-                                    "maxItems": 4
-                                  },
-                                  "publishableKey": {
-                                    "type": "string"
-                                  },
-                                  "testMode": {
-                                    "type": "boolean"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "currencies",
-                                  "publishableKey",
-                                  "testMode"
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "flow": {
+                                "type": "string",
+                                "enum": [
+                                  "card",
+                                  "hosted",
+                                  "cod"
                                 ]
                               },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string",
-                                    "enum": [
-                                      "sslcommerz"
-                                    ]
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "currencies": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    },
-                                    "maxItems": 4
-                                  },
-                                  "sandbox": {
-                                    "type": "boolean"
-                                  },
-                                  "testMode": {
-                                    "type": "boolean"
-                                  },
-                                  "amountLimits": {
-                                    "type": "object",
-                                    "properties": {
-                                      "currency": {
-                                        "type": "string",
-                                        "enum": [
-                                          "BDT"
-                                        ]
-                                      },
-                                      "min": {
-                                        "type": "number",
-                                        "minimum": 0,
-                                        "exclusiveMinimum": true
-                                      },
-                                      "max": {
-                                        "type": "number",
-                                        "minimum": 0,
-                                        "exclusiveMinimum": true
-                                      }
-                                    },
-                                    "required": [
-                                      "currency",
-                                      "min",
-                                      "max"
-                                    ]
-                                  }
+                              "currencies": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
                                 },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "currencies",
-                                  "sandbox",
-                                  "testMode",
-                                  "amountLimits"
-                                ]
+                                "maxItems": 4
                               },
-                              {
+                              "testMode": {
+                                "type": "boolean"
+                              },
+                              "publishableKey": {
+                                "type": "string"
+                              },
+                              "amountLimits": {
                                 "type": "object",
                                 "properties": {
-                                  "id": {
-                                    "type": "string",
-                                    "enum": [
-                                      "cod"
-                                    ]
-                                  },
-                                  "name": {
+                                  "currency": {
                                     "type": "string"
                                   },
-                                  "currencies": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    },
-                                    "maxItems": 4
+                                  "min": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
+                                  },
+                                  "max": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
                                   }
                                 },
                                 "required": [
-                                  "id",
-                                  "name",
-                                  "currencies"
+                                  "currency",
+                                  "min",
+                                  "max"
                                 ]
                               }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "flow",
+                              "currencies"
                             ]
                           },
-                          "maxItems": 3
+                          "maxItems": 32
                         },
                         "activeDefaultMethod": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz",
-                            "cod"
-                          ]
+                          "type": "string"
                         },
                         "guestCheckoutEnabled": {
                           "type": "boolean"
@@ -30615,12 +30542,7 @@
                             },
                             "gateway": {
                               "type": "string",
-                              "nullable": true,
-                              "enum": [
-                                "stripe",
-                                "sslcommerz",
-                                null
-                              ]
+                              "nullable": true
                             },
                             "paymentType": {
                               "type": "string",
@@ -31559,10 +31481,7 @@
                 "properties": {
                   "gateway": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz"
-                    ]
+                    "maxLength": 64
                   },
                   "replaceExistingAttempt": {
                     "type": "boolean"
@@ -31588,107 +31507,67 @@
                       ]
                     },
                     "data": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "paymentType": {
-                              "type": "string",
-                              "enum": [
-                                "full",
-                                "deposit",
-                                "balance"
-                              ]
-                            },
-                            "amount": {
-                              "type": "number"
-                            },
-                            "currency": {
-                              "type": "string"
-                            },
-                            "gateway": {
-                              "type": "string",
-                              "enum": [
-                                "stripe"
-                              ]
-                            },
-                            "stripe": {
-                              "type": "object",
-                              "properties": {
-                                "clientSecret": {
-                                  "type": "string"
-                                },
-                                "paymentIntentId": {
-                                  "type": "string"
-                                },
-                                "publishableKey": {
-                                  "type": "string"
-                                },
-                                "amount": {
-                                  "type": "number"
-                                },
-                                "currency": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "publishableKey",
-                                "amount",
-                                "currency"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "paymentType",
-                            "amount",
-                            "currency",
-                            "gateway",
-                            "stripe"
+                      "type": "object",
+                      "properties": {
+                        "gateway": {
+                          "type": "string"
+                        },
+                        "paymentType": {
+                          "type": "string",
+                          "enum": [
+                            "full",
+                            "deposit",
+                            "balance"
                           ]
                         },
-                        {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "stripe": {
                           "type": "object",
                           "properties": {
-                            "paymentType": {
-                              "type": "string",
-                              "enum": [
-                                "full",
-                                "deposit",
-                                "balance"
-                              ]
+                            "clientSecret": {
+                              "type": "string"
+                            },
+                            "paymentIntentId": {
+                              "type": "string"
+                            },
+                            "publishableKey": {
+                              "type": "string"
                             },
                             "amount": {
                               "type": "number"
                             },
                             "currency": {
                               "type": "string"
-                            },
-                            "gateway": {
-                              "type": "string",
-                              "enum": [
-                                "sslcommerz"
-                              ]
-                            },
-                            "hosted": {
-                              "type": "object",
-                              "properties": {
-                                "gatewayUrl": {
-                                  "type": "string"
-                                },
-                                "sessionKey": {
-                                  "type": "string"
-                                }
-                              }
                             }
                           },
                           "required": [
-                            "paymentType",
+                            "publishableKey",
                             "amount",
-                            "currency",
-                            "gateway",
-                            "hosted"
+                            "currency"
                           ]
+                        },
+                        "hosted": {
+                          "type": "object",
+                          "properties": {
+                            "gatewayUrl": {
+                              "type": "string"
+                            },
+                            "sessionKey": {
+                              "type": "string"
+                            }
+                          }
                         }
+                      },
+                      "required": [
+                        "gateway",
+                        "paymentType",
+                        "amount",
+                        "currency"
                       ]
                     }
                   },
@@ -31737,11 +31616,7 @@
                           "type": "string"
                         },
                         "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz"
-                          ]
+                          "type": "string"
                         },
                         "paymentType": {
                           "type": "string",
@@ -119753,8 +119628,7 @@
                         },
                         "revision": {
                           "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true
+                          "minimum": 0
                         }
                       },
                       "required": [
@@ -120065,8 +119939,7 @@
                   },
                   "expectedRevision": {
                     "type": "integer",
-                    "minimum": 0,
-                    "exclusiveMinimum": true
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -120117,8 +119990,7 @@
                         },
                         "revision": {
                           "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true
+                          "minimum": 0
                         }
                       },
                       "required": [
@@ -133051,9 +132923,6 @@
                           "type": "object",
                           "nullable": true,
                           "properties": {
-                            "id": {
-                              "type": "string"
-                            },
                             "pixelId": {
                               "type": "string",
                               "nullable": true
@@ -133071,39 +132940,14 @@
                             },
                             "logRetentionDays": {
                               "type": "number"
-                            },
-                            "createdAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
-                            },
-                            "updatedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
                             }
                           },
                           "required": [
-                            "id",
                             "pixelId",
                             "accessToken",
                             "testEventCode",
                             "isEnabled",
-                            "logRetentionDays",
-                            "createdAt",
-                            "updatedAt"
+                            "logRetentionDays"
                           ]
                         },
                         "pixelParity": {
@@ -133491,9 +133335,6 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "id": {
-                          "type": "string"
-                        },
                         "pixelId": {
                           "type": "string",
                           "nullable": true
@@ -133511,39 +133352,14 @@
                         },
                         "logRetentionDays": {
                           "type": "number"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
                         }
                       },
                       "required": [
-                        "id",
                         "pixelId",
                         "accessToken",
                         "testEventCode",
                         "isEnabled",
-                        "logRetentionDays",
-                        "createdAt",
-                        "updatedAt"
+                        "logRetentionDays"
                       ]
                     }
                   },
@@ -133571,9 +133387,6 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "id": {
-                          "type": "string"
-                        },
                         "pixelId": {
                           "type": "string",
                           "nullable": true
@@ -133591,39 +133404,14 @@
                         },
                         "logRetentionDays": {
                           "type": "number"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {}
-                          ]
                         }
                       },
                       "required": [
-                        "id",
                         "pixelId",
                         "accessToken",
                         "testEventCode",
                         "isEnabled",
-                        "logRetentionDays",
-                        "createdAt",
-                        "updatedAt"
+                        "logRetentionDays"
                       ]
                     }
                   },
@@ -149997,9 +149785,9 @@
             "schema": {
               "type": "string",
               "enum": [
-                "cod",
                 "stripe",
-                "sslcommerz"
+                "sslcommerz",
+                "cod"
               ],
               "description": "Filter by payment method"
             },
@@ -151028,9 +150816,9 @@
             "schema": {
               "type": "string",
               "enum": [
-                "cod",
                 "stripe",
-                "sslcommerz"
+                "sslcommerz",
+                "cod"
               ]
             },
             "required": false,
@@ -151482,9 +151270,9 @@
             "schema": {
               "type": "string",
               "enum": [
-                "cod",
                 "stripe",
-                "sslcommerz"
+                "sslcommerz",
+                "cod"
               ],
               "description": "Filter by payment gateway"
             },
@@ -152368,9 +152156,9 @@
             "schema": {
               "type": "string",
               "enum": [
-                "cod",
                 "stripe",
-                "sslcommerz"
+                "sslcommerz",
+                "cod"
               ],
               "description": "Filter by payment gateway"
             },
@@ -154842,10 +154630,7 @@
                           "type": "string"
                         },
                         "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "sslcommerz"
-                          ]
+                          "type": "string"
                         },
                         "paymentType": {
                           "type": "string",
@@ -157046,23 +156831,11 @@
                               "status": {
                                 "type": "string"
                               },
-                              "stripePaymentIntentId": {
+                              "providerRef": {
                                 "type": "string",
                                 "nullable": true
                               },
-                              "stripeChargeId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "sslcommerzTranId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "sslcommerzValId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "sslcommerzBankTranId": {
+                              "providerSecondaryRef": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -157114,11 +156887,8 @@
                               "paymentMethod",
                               "paymentType",
                               "status",
-                              "stripePaymentIntentId",
-                              "stripeChargeId",
-                              "sslcommerzTranId",
-                              "sslcommerzValId",
-                              "sslcommerzBankTranId",
+                              "providerRef",
+                              "providerSecondaryRef",
                               "codCollectedBy",
                               "codCollectedAt",
                               "codReceiptUrl",
@@ -192633,11 +192403,7 @@
                               "paymentMethod": {
                                 "type": "string",
                                 "nullable": true,
-                                "enum": [
-                                  "stripe",
-                                  "sslcommerz",
-                                  null
-                                ]
+                                "maxLength": 64
                               },
                               "paymentStatus": {
                                 "type": "string",
@@ -201202,13 +200968,23 @@
         "security": []
       }
     },
-    "/api/v1/payment/stripe/intent": {
+    "/api/v1/payment/{provider}/session": {
       "post": {
         "tags": [
-          "Payments - Stripe"
+          "Payments"
         ],
-        "summary": "Create a Stripe PaymentIntent for an order",
+        "summary": "Create a payment session for an order with the given gateway",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          },
           {
             "schema": {
               "type": "string"
@@ -201245,15 +201021,6 @@
                     "minimum": 0,
                     "exclusiveMinimum": true
                   },
-                  "currency": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 3
-                  },
-                  "manualCapture": {
-                    "type": "boolean",
-                    "default": false
-                  },
                   "replaceExistingAttempt": {
                     "type": "boolean"
                   }
@@ -201267,7 +201034,7 @@
         },
         "responses": {
           "200": {
-            "description": "PaymentIntent created",
+            "description": "Card flows return a client secret; hosted flows return the provider redirect URL",
             "content": {
               "application/json": {
                 "schema": {
@@ -201280,28 +201047,43 @@
                       ]
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "clientSecret": {
-                          "type": "string"
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "clientSecret": {
+                              "type": "string"
+                            },
+                            "paymentIntentId": {
+                              "type": "string"
+                            },
+                            "publishableKey": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "publishableKey",
+                            "amount",
+                            "currency"
+                          ]
                         },
-                        "paymentIntentId": {
-                          "type": "string"
-                        },
-                        "publishableKey": {
-                          "type": "string"
-                        },
-                        "amount": {
-                          "type": "number"
-                        },
-                        "currency": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "gatewayUrl": {
+                              "type": "string"
+                            },
+                            "sessionKey": {
+                              "type": "string"
+                            }
+                          }
                         }
-                      },
-                      "required": [
-                        "publishableKey",
-                        "amount",
-                        "currency"
                       ]
                     }
                   },
@@ -201350,11 +201132,7 @@
                           "type": "string"
                         },
                         "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz"
-                          ]
+                          "type": "string"
                         },
                         "paymentType": {
                           "type": "string",
@@ -201692,7 +201470,7 @@
             }
           }
         },
-        "operationId": "storefront.payment_stripe_intent.intent",
+        "operationId": "storefront.payment_session.session",
         "x-scalius-agent": {
           "surface": "storefront",
           "exposure": "excluded",
@@ -201710,7 +201488,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Requires raw receipt proof and returns a Stripe client secret; use the secure storefront payment continuation."
+          "exclusionReason": "Requires raw receipt proof and returns a card client secret or hosted gateway session; use the secure storefront payment continuation."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -201718,13 +201496,23 @@
         "security": []
       }
     },
-    "/api/v1/payment/stripe/reconcile": {
+    "/api/v1/payment/{provider}/reconcile": {
       "post": {
         "tags": [
-          "Payments - Stripe"
+          "Payments"
         ],
-        "summary": "Verify and reconcile a Stripe payment for a private order receipt",
+        "summary": "Verify and reconcile a gateway payment for a private order receipt",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          },
           {
             "schema": {
               "type": "string"
@@ -202110,7 +201898,7 @@
             }
           }
         },
-        "operationId": "storefront.payment_stripe_reconcile.reconcile",
+        "operationId": "storefront.payment_reconcile.reconcile",
         "x-scalius-agent": {
           "surface": "storefront",
           "exposure": "excluded",
@@ -202129,502 +201917,6 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Provider reconciliation requires raw receipt proof; storefront.payment.status owns context-authorized safe reconciliation."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
-    "/api/v1/payment/sslcommerz/session": {
-      "post": {
-        "tags": [
-          "Payments - SSLCommerz"
-        ],
-        "summary": "Create an SSLCommerz payment session",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": false,
-            "name": "X-Receipt-Token",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "orderId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "receiptToken": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "paymentType": {
-                    "type": "string",
-                    "enum": [
-                      "full",
-                      "deposit",
-                      "balance"
-                    ]
-                  },
-                  "depositAmount": {
-                    "type": "number",
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "replaceExistingAttempt": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "orderId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Session created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "gatewayUrl": {
-                          "type": "string"
-                        },
-                        "sessionKey": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Payment session creation is already processing",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "processing"
-                          ]
-                        },
-                        "retryable": {
-                          "type": "boolean",
-                          "enum": [
-                            true
-                          ]
-                        },
-                        "retryAfterSeconds": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true
-                        },
-                        "orderId": {
-                          "type": "string"
-                        },
-                        "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz"
-                          ]
-                        },
-                        "paymentType": {
-                          "type": "string",
-                          "enum": [
-                            "full",
-                            "deposit",
-                            "balance"
-                          ]
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "status",
-                        "retryable",
-                        "retryAfterSeconds",
-                        "orderId",
-                        "gateway",
-                        "paymentType",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "error"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "operationId": "storefront.payment_sslcommerz_session.session",
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "principals": [
-            "visitor",
-            "customer"
-          ],
-          "risk": "financial",
-          "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": true,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Requires raw receipt proof and returns hosted SSLCommerz session material; use the secure storefront payment continuation."
         },
         "x-scalius-rbac": {
           "type": "public"

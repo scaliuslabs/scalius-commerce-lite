@@ -2,7 +2,7 @@ import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
-import { sslcommerzHandler } from "./handlers/sslcommerz";
+import { createHostedGatewayHandler } from "./handlers/hosted";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -43,10 +43,27 @@ import {
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
 
-// Register all built-in gateway handlers
+// COD and the card flow have their own handlers; every hosted gateway shares one.
 registerGateway(codHandler);
 registerGateway(stripeHandler);
-registerGateway(sslcommerzHandler);
+
+function isHostedMethod(methodId: string): boolean {
+  return gateways.some((gateway) => gateway.id === methodId && gateway.flow === "hosted");
+}
+
+function providerLabelFor(methodId: string): string {
+  const gateway = gateways.find((candidate) => candidate.id === methodId);
+  const name = typeof gateway?.name === "string" ? gateway.name : methodId;
+  return getGatewayPresentation(methodId, name).providerLabel ?? name;
+}
+
+function handlerFor(methodId: string) {
+  const existing = getGateway(methodId);
+  if (existing || !isHostedMethod(methodId)) return existing;
+  const handler = createHostedGatewayHandler(methodId, providerLabelFor(methodId));
+  registerGateway(handler);
+  return handler;
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -700,9 +717,9 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
 function paymentActionLabel(methodId: string): string {
   if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
   if (methodId === "cod") return checkoutCopy.placeOrderText;
-  if (methodId === "sslcommerz") {
+  if (isHostedMethod(methodId)) {
     return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
-      provider: "SSLCommerz",
+      provider: providerLabelFor(methodId),
     });
   }
 
@@ -720,8 +737,8 @@ function paymentActionLabel(methodId: string): string {
 }
 
 function hostedRedirectMessage(methodId: string): string | null {
-  return methodId === "sslcommerz"
-    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider: "SSLCommerz" })
+  return isHostedMethod(methodId)
+    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider: providerLabelFor(methodId) })
     : null;
 }
 
@@ -751,7 +768,7 @@ async function renderGateways(): Promise<void> {
   }
 
   eligibleGateways.forEach((gw, index) => {
-    const handler = getGateway(gw.id);
+    const handler = handlerFor(gw.id);
     const fallbackLabel =
       (gw as { name?: string }).name || handler?.meta.label || gw.id;
     const presentation = localizedGatewayPresentation(
@@ -825,7 +842,7 @@ async function selectMethod(
   applySelectedMethodStyles(methodId);
   setPayButton(checkoutCopy.preparingPaymentText, true);
   hideError();
-  const handler = getGateway(methodId);
+  const handler = handlerFor(methodId);
   const stripeSection = document.getElementById("stripeSection");
   const actionHost = document.getElementById("paymentActionHost");
   const details = document.querySelector<HTMLElement>(
@@ -937,7 +954,7 @@ async function processPayment(): Promise<void> {
         },
   );
 
-  const handler = getGateway(processingMethod);
+  const handler = handlerFor(processingMethod);
   if (!handler) {
     hideCheckoutLoadingOverlay();
     showError(checkoutCopy.unknownPaymentMethodText);

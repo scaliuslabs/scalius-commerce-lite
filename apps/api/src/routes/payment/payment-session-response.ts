@@ -8,7 +8,7 @@ export const paymentSessionProcessingSchema = z.object({
   retryable: z.literal(true),
   retryAfterSeconds: z.number().int().positive(),
   orderId: z.string(),
-  gateway: z.enum(["stripe", "sslcommerz"]),
+  gateway: z.string(),
   paymentType: z.enum(["full", "deposit", "balance"]),
   message: z.string(),
 });

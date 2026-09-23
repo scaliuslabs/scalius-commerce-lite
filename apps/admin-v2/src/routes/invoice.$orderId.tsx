@@ -1,11 +1,11 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
+import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import {
   getApiV1AdminOrdersByIdInvoice,
   postApiV1AdminOrdersByIdInvoice,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "~/lib/api";
+import { getAdminRouteContext } from "~/lib/admin-route-context";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import {
   formatSavedMinorAmount,
@@ -18,31 +18,11 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 type InvoiceData = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
 type OrderItem = InvoiceData["order"]["items"][number];
 
-/**
- * Verify that the user has a valid admin session.
- * Reuses the same auth check as admin routes but without loading RBAC.
- */
-const requireAuth = createServerFn().handler(async () => {
-  const { getAuthSession, initBindings } = await import("~/lib/auth.server");
-  const { getRequestHeader } = await import("@tanstack/react-start/server");
-  initBindings();
-
-  const cookieHeader = getRequestHeader("cookie") ?? "";
-  const headers = new Headers();
-  if (cookieHeader) headers.set("cookie", cookieHeader);
-
-  const authResult = await getAuthSession(headers);
-  if (!authResult?.session || !authResult?.user) {
-    throw redirect({ to: "/auth/login" });
-  }
-  if (authResult.user.twoFactorEnabled && !authResult.session.twoFactorVerified) {
-    throw redirect({ to: "/auth/two-factor" });
-  }
-  return null;
-});
-
 export const Route = createFileRoute("/invoice/$orderId")({
-  beforeLoad: () => requireAuth(),
+  // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
+  beforeLoad: async () => {
+    await getAdminRouteContext();
+  },
   loader: async ({ params }) => {
     return apiData(getApiV1AdminOrdersByIdInvoice({ path: { id: params.orderId } }));
   },

@@ -8,7 +8,6 @@
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
@@ -21,11 +20,6 @@ import {
     type InventoryLedgerV2EdgeFields,
     type InventoryLedgerV2Event,
 } from "./ledger-v2";
-import {
-    CHECKOUT_LANE_INVENTORY_AUTHORITY,
-    parseCheckoutLaneInventoryEdges,
-    terminateCheckoutLaneReservations,
-} from "./checkout-lane-transitions";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
@@ -95,11 +89,7 @@ type InventoryTransitionOrder = {
     status: string;
     inventoryAction: string;
     inventoryPool: string;
-    inventoryAuthority: "legacy_counter" | "checkout_lane_v1";
     version: number;
-    checkoutAggregateVersion: number | null;
-    checkoutInventoryEdges: string | null;
-    checkoutProjectionStatus: string | null;
 };
 
 type InventoryVariantState = {
@@ -108,7 +98,6 @@ type InventoryVariantState = {
     reservedStock: number;
     preorderStock: number;
     stockVersion: number;
-    effectiveReservedStock: number;
     trackInventory: boolean;
     lowStockThreshold: number | null;
     allowPreorder: boolean;
@@ -147,7 +136,7 @@ function buyerCapacity(
             ? Math.max(0, state.backorderLimit - state.reservedStock)
             : Number.POSITIVE_INFINITY;
     }
-    return Math.max(0, state.stock - state.effectiveReservedStock);
+    return Math.max(0, state.stock - state.reservedStock);
 }
 
 function hasBuyerCapacityTransition(
@@ -191,11 +180,7 @@ export async function buildInventoryStatements(
             status: orders.status,
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
-            inventoryAuthority: orders.inventoryAuthority,
             version: orders.version,
-            checkoutAggregateVersion: orders.checkoutAggregateVersion,
-            checkoutInventoryEdges: orders.checkoutInventoryEdges,
-            checkoutProjectionStatus: orders.checkoutProjectionStatus,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -212,28 +197,6 @@ export async function buildInventoryStatements(
     const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
 
     if (needsRestore && currentAction === "reserved") {
-        if (order.inventoryAuthority === CHECKOUT_LANE_INVENTORY_AUTHORITY) {
-            const terminal = await terminateCheckoutLaneReservations(
-                db,
-                order,
-                newStatus,
-                "released",
-            );
-            await checkLowStockForTransitionEntries(
-                db,
-                terminal.variantIds.map((variantId) => ({
-                    variantId,
-                    quantity: 1,
-                    pool: "regular",
-                })),
-            );
-            return {
-                statements: [],
-                newAction: terminal.action,
-                availabilityTransitionVariantIds:
-                    terminal.availabilityTransitionVariantIds,
-            };
-        }
         const availabilityTransitionVariantIds = await releaseOrderReservations(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "restored")],
@@ -252,28 +215,6 @@ export async function buildInventoryStatements(
     }
 
     if (needsDeduct && currentAction === "reserved") {
-        if (order.inventoryAuthority === CHECKOUT_LANE_INVENTORY_AUTHORITY) {
-            const terminal = await terminateCheckoutLaneReservations(
-                db,
-                order,
-                newStatus,
-                "deducted",
-            );
-            await checkLowStockForTransitionEntries(
-                db,
-                terminal.variantIds.map((variantId) => ({
-                    variantId,
-                    quantity: 1,
-                    pool: "regular",
-                })),
-            );
-            return {
-                statements: [],
-                newAction: terminal.action,
-                availabilityTransitionVariantIds:
-                    terminal.availabilityTransitionVariantIds,
-            };
-        }
         const availabilityTransitionVariantIds = await deductOrderStock(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "deducted")],
@@ -289,7 +230,7 @@ export async function buildInventoryStatements(
     if (needsReReserve) {
         const availabilityTransitionVariantIds = await reserveOrderItems(db, order);
         return {
-            statements: [buildInventoryActionUpdate(db, order, "reserved", "legacy_counter")],
+            statements: [buildInventoryActionUpdate(db, order, "reserved")],
             newAction: "reserved",
             availabilityTransitionVariantIds,
         };
@@ -395,11 +336,7 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
             status: "",
             inventoryAction: "",
             inventoryPool: input.pool,
-            inventoryAuthority: "legacy_counter",
             version: 0,
-            checkoutAggregateVersion: null,
-            checkoutInventoryEdges: null,
-            checkoutProjectionStatus: null,
         },
         input.operation,
         entries,
@@ -417,19 +354,16 @@ function buildInventoryActionUpdate(
     db: Database,
     order: InventoryTransitionOrder,
     inventoryAction: InventoryAction,
-    inventoryAuthority?: "legacy_counter",
 ) {
     return db.update(orders)
         .set({
             inventoryAction,
-            ...(inventoryAuthority ? { inventoryAuthority } : {}),
             updatedAt: sql`unixepoch()`,
         })
         .where(
             and(
                 eq(orders.id, order.id),
                 eq(orders.inventoryAction, order.inventoryAction),
-                eq(orders.inventoryAuthority, order.inventoryAuthority),
             ),
         )
         .returning({ id: orders.id });
@@ -546,12 +480,7 @@ async function applyStrictInventoryTransitionMovements(
                     before,
                     pool,
                 );
-                const after = {
-                    ...counterAfter,
-                    effectiveReservedStock: before.effectiveReservedStock
-                        + counterAfter.reservedStock
-                        - before.reservedStock,
-                };
+                const after = { ...before, ...counterAfter };
                 return hasBuyerCapacityTransition(before, after, pool);
             })
             .map((entry) => entry.variantId);
@@ -789,7 +718,6 @@ async function loadTransitionVariantStates(
                 reservedStock: productVariants.reservedStock,
                 preorderStock: productVariants.preorderStock,
                 stockVersion: productVariants.stockVersion,
-                effectiveReservedStock: effectiveRegularReservedStockSql(),
                 trackInventory: productVariants.trackInventory,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 allowPreorder: productVariants.allowPreorder,
@@ -1380,19 +1308,6 @@ async function getOrderInventoryEntries(
         .all();
 
     const pool = normalizeInventoryPool(order.inventoryPool);
-    if (
-        items.length === 0
-        && order.checkoutAggregateVersion === 1
-        && order.checkoutProjectionStatus !== "complete"
-        && order.checkoutInventoryEdges
-    ) {
-        return parseCheckoutLaneInventoryEdges(order.checkoutInventoryEdges).map((edge) => ({
-            variantId: edge.variantId,
-            quantity: edge.quantity,
-            pool,
-        }));
-    }
-
     return items
         .filter((i) => i.variantId !== null && i.inventoryTracked)
         .map((i) => ({

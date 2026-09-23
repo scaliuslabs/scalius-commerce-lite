@@ -1,6 +1,4 @@
 import { getDb } from "@scalius/database/client";
-import { createCheckoutSqlTransport } from "@scalius/database/checkout-transport";
-import { recoverPendingCheckoutProjections } from "@scalius/database/checkout-projection";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
 import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
@@ -16,7 +14,7 @@ import {
   cleanupExpiredScannerTokenClaims,
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
-import { reconcileDueRefundAttempts, reconcileStripeExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
@@ -31,7 +29,6 @@ export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
 export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
-export const CHECKOUT_PROJECTION_SWEEP_LIMIT = 100;
 export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 25;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
@@ -40,7 +37,7 @@ export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
-export const STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
+export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 
@@ -229,27 +226,6 @@ async function runScheduledMaintenanceInner(
     );
   }
 
-  const checkoutProjection = await timed("checkout_projection_recovery", async () => {
-    const transport = createCheckoutSqlTransport(
-      env as unknown as Parameters<typeof createCheckoutSqlTransport>[0],
-    );
-    try {
-      return await recoverPendingCheckoutProjections(
-        transport,
-        CHECKOUT_PROJECTION_SWEEP_LIMIT,
-      );
-    } finally {
-      transport.close();
-    }
-  });
-  if (checkoutProjection.scanned > 0 || checkoutProjection.hasMore) {
-    console.log(
-      `[scheduled] Checkout projection recovery: scanned=${checkoutProjection.scanned}, ` +
-        `completed=${checkoutProjection.completed}, failed=${checkoutProjection.failed}, ` +
-        `limit=${CHECKOUT_PROJECTION_SWEEP_LIMIT}, hasMore=${checkoutProjection.hasMore}`,
-    );
-  }
-
   const notificationOutbox = await timed("notification_outbox_flush", () =>
     flushPendingOrderNotificationOutbox({
       db,
@@ -291,7 +267,7 @@ async function runScheduledMaintenanceInner(
   }
 
   const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
-    reconcileDueRefundAttempts(db, env.CACHE, {
+    reconcileDueRefundAttempts(db, {
       encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     }),
@@ -317,30 +293,30 @@ async function runScheduledMaintenanceInner(
     );
   }
 
-  const stripeExternalRefunds = await timed("stripe_external_refund_reconciliation", () =>
-    reconcileStripeExternalRefundWebhooks(db, env.CACHE, {
+  const externalRefunds = await timed("external_refund_reconciliation", () =>
+    reconcileExternalRefundWebhooks(db, {
       encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
     }),
   );
-  if (stripeExternalRefunds.refundNotifications.length > 0) {
-    await timed("stripe_external_refund_notification_enqueue", () =>
-      enqueueReconciledRefundNotifications(db, env, stripeExternalRefunds.refundNotifications),
+  if (externalRefunds.refundNotifications.length > 0) {
+    await timed("external_refund_notification_enqueue", () =>
+      enqueueReconciledRefundNotifications(db, env, externalRefunds.refundNotifications),
     );
   }
   if (
-    stripeExternalRefunds.scanned > 0 ||
-    stripeExternalRefunds.imported > 0 ||
-    stripeExternalRefunds.deferred > 0 ||
-    stripeExternalRefunds.errors.length > 0 ||
-    stripeExternalRefunds.hasMore
+    externalRefunds.scanned > 0 ||
+    externalRefunds.imported > 0 ||
+    externalRefunds.deferred > 0 ||
+    externalRefunds.errors.length > 0 ||
+    externalRefunds.hasMore
   ) {
     console.log(
-      `[scheduled] Stripe external refund reconciliation: scanned=${stripeExternalRefunds.scanned}, ` +
-        `imported=${stripeExternalRefunds.imported}, finalized=${stripeExternalRefunds.finalized}, ` +
-        `skipped=${stripeExternalRefunds.skipped}, deferred=${stripeExternalRefunds.deferred}, ` +
-        `errors=${stripeExternalRefunds.errors.length}, limit=${stripeExternalRefunds.limit}, ` +
-        `hasMore=${stripeExternalRefunds.hasMore}`,
+      `[scheduled] External refund reconciliation: scanned=${externalRefunds.scanned}, ` +
+        `imported=${externalRefunds.imported}, finalized=${externalRefunds.finalized}, ` +
+        `skipped=${externalRefunds.skipped}, deferred=${externalRefunds.deferred}, ` +
+        `errors=${externalRefunds.errors.length}, limit=${externalRefunds.limit}, ` +
+        `hasMore=${externalRefunds.hasMore}`,
     );
   }
 

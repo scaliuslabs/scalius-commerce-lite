@@ -49,6 +49,7 @@ export interface GatewayHandler {
 export interface CheckoutConfig {
   gateways: Array<{
     id: string;
+    flow?: "card" | "hosted" | "cod";
     testMode?: boolean;
     amountLimits?: {
       currency: string;

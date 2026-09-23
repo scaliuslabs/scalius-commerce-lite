@@ -28,5 +28,3 @@ export {
   getEmailProviderReadiness,
   getEmailRuntimeSettings,
 } from "./email/index";
-export { emailSettingsDocument } from "./email/settings";
-export type { EmailSettingsDocument } from "./email/settings";

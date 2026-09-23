@@ -41,22 +41,23 @@ function createStatement(query: string, values: unknown[] = []): MockD1Statement
   };
 }
 
+function settingsDocument(category: string, value: Record<string, unknown>) {
+  return { category, value: JSON.stringify(value), revision: 1 };
+}
+
 function authorityRows(): Record<string, unknown>[][] {
   return [
     [
-      { category: "currency", key: "currency_code", value: "BDT" },
-      { category: "currency", key: "currency_symbol", value: "৳" },
-      { category: "currency", key: "usd_exchange_rate", value: "1" },
-      { category: "phone", key: "allowed_countries", value: JSON.stringify({ countries: ["BD"], mode: "include" }) },
-      { category: "payment_methods", key: "enabled_methods", value: JSON.stringify(["cod"]) },
-      { category: "payment_methods", key: "default_method", value: "cod" },
+      settingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1" }),
+      settingsDocument("customer_countries", { allowedCountries: ["BD"], allowedCountriesMode: "include" }),
+      settingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     ],
-    [{
-      guestCheckoutEnabled: 1,
+    [settingsDocument("checkout", {
+      guestCheckoutEnabled: true,
       checkoutMode: "all",
-      partialPaymentEnabled: 0,
+      partialPaymentEnabled: false,
       partialPaymentAmount: 0,
-    }],
+    })],
     [{
       id: "product_1",
       name: "Product 1",
@@ -103,10 +104,7 @@ function authorityRows(): Record<string, unknown>[][] {
     }],
     [{
       revision: 1,
-      orderChannels: null,
-      adminChannels: null,
       hasActiveAdminPushTarget: 0,
-      metaPurchaseEnabled: 0,
     }],
     [],
     [],
@@ -204,8 +202,6 @@ describe("storefront checkout authority read", () => {
     expect(Math.max(...statements.map((statement) => statement.values.length))).toBeLessThan(100);
     expect(statements[2]?.query).toContain("json_each(?)");
     expect(statements[3]?.query).toContain("json_each(?)");
-    expect(statements[3]?.query).toContain("inventory_reservation_lanes");
-    expect(statements[3]?.query).toContain("reserved_quantity");
     expect(statements[4]?.query).toContain("json_each(?)");
   });
 
@@ -231,13 +227,19 @@ describe("storefront checkout authority read", () => {
 
   it("requests checkout side effects only when a real target or enabled Meta integration exists", async () => {
     const rows = authorityRows();
-    rows[7] = [{
-      revision: 1,
-      orderChannels: JSON.stringify({ order_created: ["email"] }),
-      adminChannels: JSON.stringify({ order_created: ["push"] }),
-      hasActiveAdminPushTarget: 1,
-      metaPurchaseEnabled: 1,
-    }];
+    rows[0]!.push(
+      settingsDocument("notifications", {
+        orderChannels: { order_created: ["email"] },
+        adminChannels: { order_created: ["push"] },
+      }),
+      // A stored token counts even when this request cannot decrypt it.
+      settingsDocument("meta_conversions", {
+        isEnabled: true,
+        pixelId: "123456789012345",
+        accessToken: "enc:AAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBB",
+      }),
+    );
+    rows[7] = [{ revision: 1, hasActiveAdminPushTarget: 1 }];
     const fixture = createMockDatabase(rows);
     const plan = createStorefrontCheckoutAuthorityReadPlan(fixture.db, {
       ...input,
@@ -251,27 +253,5 @@ describe("storefront checkout authority read", () => {
       orderCreatedNotification: true,
       metaPurchase: true,
     });
-  });
-
-  it("defers regular-stock availability only when the atomic coordinator owns it", async () => {
-    const rows = authorityRows();
-    rows[3]![0] = { ...rows[3]![0], stock: 0 };
-    const fixture = createMockDatabase(rows);
-    const coordinatedPlan = createStorefrontCheckoutAuthorityReadPlan(fixture.db, {
-      ...input,
-      inventoryAuthority: "coordinator",
-    });
-    const coordinatedResults = await fixture.db.batch(coordinatedPlan.statements as never);
-    const coordinated = await coordinatedPlan.resolve(coordinatedResults as unknown[]);
-
-    expect(coordinated.cartValidation).toMatchObject({
-      valid: true,
-      items: [expect.objectContaining({ availableQuantity: null })],
-    });
-
-    const snapshotPlan = createStorefrontCheckoutAuthorityReadPlan(fixture.db, input);
-    const snapshotResults = await fixture.db.batch(snapshotPlan.statements as never);
-    await expect(snapshotPlan.resolve(snapshotResults as unknown[]))
-      .rejects.toThrow(/cart need attention|items in your cart/i);
   });
 });

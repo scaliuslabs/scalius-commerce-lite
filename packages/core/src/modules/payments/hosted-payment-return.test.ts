@@ -196,8 +196,7 @@ describe("hosted payment return reconciliation", () => {
         paymentMethod: "sslcommerz",
         paymentType: "deposit",
         status: PaymentRecordStatus.SUCCEEDED,
-        sslcommerzTranId: "order_1_deposit_DEPOSIT1",
-        sslcommerzValId: "val_deposit",
+        providerRef: "val_deposit",
       });
       await insertHostedAttempt(db, {
         attemptKey: "payment_session:sslcommerz:balance_attempt",
@@ -235,13 +234,12 @@ describe("hosted payment return reconciliation", () => {
 
       await expect(processPaymentConfirmed(db, {
         orderId: "order_1",
-        paymentGateway: "sslcommerz",
+        provider: "sslcommerz",
         paymentType: "balance",
-        sslcommerzTranId: "order_1_balance_BALANCE1",
-        sslcommerzValId: "val_balance",
-        sslcommerzBankTranId: "bank_balance",
+        providerRef: "val_balance",
+        secondaryRef: "bank_balance",
         amount: 75,
-        metadata: { currency: "BDT" },
+        currency: "BDT",
       })).resolves.toMatchObject({ success: true });
       expect(sqlite.prepare(`
         SELECT payment_status, paid_amount, balance_due
@@ -267,13 +265,12 @@ describe("hosted payment return reconciliation", () => {
       providerCorrelationId: "order_1_full_ABC12345",
       confirmation: {
         orderId: "order_1",
-        paymentGateway: "sslcommerz" as const,
+        provider: "sslcommerz",
         paymentType: "full" as const,
-        sslcommerzTranId: "order_1_full_ABC12345",
-        sslcommerzValId: "val_1",
-        sslcommerzBankTranId: "bank_1",
+        providerRef: "val_1",
+        secondaryRef: "bank_1",
         amount: 100,
-        metadata: { currency: "BDT" },
+        currency: "BDT",
       },
     },
   ])("lets a late $gateway success promote the same failed/cancelled order", async ({
@@ -346,7 +343,7 @@ describe("hosted payment return reconciliation", () => {
         paymentMethod: "sslcommerz",
         paymentType: "full",
         status: PaymentRecordStatus.PENDING,
-        sslcommerzTranId: "order_1_full_ABC12345",
+        providerRef: "val_pending",
       });
 
       await expect(reconcileHostedPaymentReturn(db, {

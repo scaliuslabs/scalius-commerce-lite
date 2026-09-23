@@ -1,19 +1,9 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  runtimeEnv: {} as Record<string, unknown>,
-}));
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-vi.mock("./runtime-env.server", () => ({
-  getRuntimeEnv: () => mocks.runtimeEnv,
-}));
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   DASHBOARD_BASE_PATH_META_NAME,
   getDashboardBasePath,
-  readDashboardBasePathFromDocument,
   resetDashboardBasePathCache,
   withDashboardBasePath,
 } from "./dashboard-base-path";
@@ -27,26 +17,7 @@ function setMeta(content: string | null) {
   document.head.append(meta);
 }
 
-describe("server base path", () => {
-  beforeEach(() => {
-    mocks.runtimeEnv = {};
-  });
-
-  it("derives the base path from the request-scoped dashboard URL", () => {
-    mocks.runtimeEnv = { PLATFORM_CONFIG: { dashboardUrl: "https://shop.example.com/dashboard" } };
-    expect(getDashboardBasePath()).toBe("/dashboard");
-    expect(withDashboardBasePath("/api/v1/admin/products")).toBe("/dashboard/api/v1/admin/products");
-  });
-
-  it("is empty at a host root and outside a request", () => {
-    mocks.runtimeEnv = { PLATFORM_CONFIG: { dashboardUrl: "https://dashboard.example.com" } };
-    expect(getDashboardBasePath()).toBe("");
-    mocks.runtimeEnv = {};
-    expect(withDashboardBasePath("/auth/login")).toBe("/auth/login");
-  });
-});
-
-describe("browser base path", () => {
+describe("dashboard base path", () => {
   beforeEach(() => {
     resetDashboardBasePathCache();
   });
@@ -56,19 +27,25 @@ describe("browser base path", () => {
     resetDashboardBasePathCache();
   });
 
-  it("reads the meta tag rendered by the root route and normalizes it", () => {
+  it("reads the meta tag the API Worker writes into the shell", () => {
     setMeta("/dashboard/");
-    expect(readDashboardBasePathFromDocument()).toBe("/dashboard");
+    expect(getDashboardBasePath()).toBe("/dashboard");
+    expect(withDashboardBasePath("/api/v1/admin/products")).toBe("/dashboard/api/v1/admin/products");
+    // Absolute and inlined asset URLs already carry their location.
+    expect(withDashboardBasePath("https://admin.example.com/assets/immutable/logo.png"))
+      .toBe("https://admin.example.com/assets/immutable/logo.png");
+    expect(withDashboardBasePath("data:image/png;base64,AAAA")).toBe("data:image/png;base64,AAAA");
     // Memoized: a later DOM change does not move the dashboard.
     setMeta("/other");
-    expect(readDashboardBasePathFromDocument()).toBe("/dashboard");
+    expect(getDashboardBasePath()).toBe("/dashboard");
   });
 
   it("falls back to the host root without a meta tag or with an invalid one", () => {
     setMeta(null);
-    expect(readDashboardBasePathFromDocument()).toBe("");
+    expect(getDashboardBasePath()).toBe("");
+    expect(withDashboardBasePath("/auth/login")).toBe("/auth/login");
     resetDashboardBasePathCache();
     setMeta("/Not Valid");
-    expect(readDashboardBasePathFromDocument()).toBe("");
+    expect(getDashboardBasePath()).toBe("");
   });
 });

@@ -1,32 +1,24 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "@scalius/database/client";
-import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
+import { securityDocument } from "@scalius/core/modules/settings/documents";
 import { errorResponses } from "../schemas/responses";
 
 const ALLOWED_PROXY_PROTOCOLS = new Set(["https:"]);
 
-/** KV mirror written by the Security settings save handler. */
-export { CSP_ALLOWED_DOMAINS_CACHE_KEY } from "@scalius/core/modules/settings/security-settings.service";
-
 /**
  * The merchant CSP allow-list is dashboard-managed (Settings -> Security).
- * The settings document owns the storage, the KV mirror, and the read order:
- * KV first, then the `settings` row once on a miss, mirrored back so later
- * requests stay on the KV path. Failing to read anything yields the empty
- * default, which blocks every proxy target.
+ * KV first, then the settings row once on a miss (mirrored back to KV).
+ * Failing to read anything yields the empty default, which blocks every
+ * proxy target.
  */
 async function readMerchantCspAllowedDomains(env: Env): Promise<string> {
   const ctx = { kv: env.CACHE };
-  // A KV hit answers without opening the relational provider at all.
-  const cached = await securitySettingsDocument.readCached(ctx);
+  const cached = await securityDocument.readCached(ctx);
   if (cached) return cached.cspAllowedDomains;
 
   try {
-    // On a miss the document reads the row once and mirrors it back to KV.
-    const value = await securitySettingsDocument.read(getDb(env), ctx, {
-      skipCache: true,
-    });
-    return value.cspAllowedDomains;
+    return (await securityDocument.readDetailed(getDb(env), ctx, { skipCache: true }))
+      .value.cspAllowedDomains;
   } catch (error: unknown) {
     console.error("[Partytown Proxy] Failed to read the CSP allow-list", error);
     return "";

@@ -2,8 +2,6 @@
 // Public endpoint for storefront checkout configuration.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-// Side-effect import: registers all gateway metadata in the registry
-import "@scalius/core/modules/payments/gateway-settings";
 import { getCheckoutConfig } from "@scalius/core/modules/settings/checkout-config.service";
 import { successEnvelope, errorResponses, errorResponseSchema } from "../schemas/responses";
 import { readinessSchema } from "../schemas/readiness";
@@ -12,37 +10,25 @@ import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const checkoutGatewayBaseSchema = {
+/** One buyer-selectable payment method: a registered gateway or cash on delivery. */
+const checkoutGatewaySchema = z.object({
+  id: z.string(),
   name: z.string(),
+  /** card: confirm in the browser; hosted: redirect to the provider; cod: no online payment. */
+  flow: z.enum(["card", "hosted", "cod"]),
   currencies: z.array(z.string()).max(4),
-} as const;
-const checkoutGatewaySchema = z.discriminatedUnion("id", [
-  z.object({
-    id: z.literal("stripe"),
-    ...checkoutGatewayBaseSchema,
-    publishableKey: z.string(),
-    testMode: z.boolean(),
-  }),
-  z.object({
-    id: z.literal("sslcommerz"),
-    ...checkoutGatewayBaseSchema,
-    sandbox: z.boolean(),
-    testMode: z.boolean(),
-    amountLimits: z.object({
-      currency: z.literal("BDT"),
-      min: z.number().positive(),
-      max: z.number().positive(),
-    }),
-  }),
-  z.object({
-    id: z.literal("cod"),
-    ...checkoutGatewayBaseSchema,
-  }),
-]);
+  testMode: z.boolean().optional(),
+  publishableKey: z.string().optional(),
+  amountLimits: z.object({
+    currency: z.string(),
+    min: z.number().positive(),
+    max: z.number().positive(),
+  }).optional(),
+});
 
 const checkoutConfigSchema = z.object({
-  gateways: z.array(checkoutGatewaySchema).max(3),
-  activeDefaultMethod: z.enum(["stripe", "sslcommerz", "cod"]).optional(),
+  gateways: z.array(checkoutGatewaySchema).max(32),
+  activeDefaultMethod: z.string().optional(),
   guestCheckoutEnabled: z.boolean(),
   authVerificationMethod: z.enum(["email", "sms_otp", "whatsapp_otp", "both"]),
   customerAuthPolicy: z.object({

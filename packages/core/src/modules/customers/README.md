@@ -31,7 +31,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 All phone numbers are validated and stored in **E.164 format** (e.g. `+8801712345678`, `+14155552671`) using `libphonenumber-js`.
 
 - **`phoneNumberSchema`** (`@scalius/shared/customer-utils`): Zod transform that calls `validateAndFormatPhone()` -- validates via `libphonenumber-js` and returns E.164. Used in admin CRUD validation.
-- **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally applies the merchant include/exclude country policy from `settings.phone/allowed_countries`. Customer auth and the trusted admin customer/manual-order write boundaries enforce that policy; dashboard phone pickers are guidance, not authority.
+- **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally applies the merchant include/exclude country policy from the `customer_countries` settings document. Customer auth and the trusted admin customer/manual-order write boundaries enforce that policy; dashboard phone pickers are guidance, not authority.
 - **`formatPhoneForDisplay()`** (`@scalius/shared/customer-utils`): Converts E.164 back to international display format (e.g. `+880 1712-345678`).
 
 Both admin-created and storefront-created customers now use the same E.164 format, eliminating the previous format mismatch.
@@ -51,7 +51,7 @@ Every customer create, profile update, and soft delete writes a snapshot to `cus
 ### OTP Authentication (`customer-auth.service.ts`)
 
 **Flow:**
-1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, enforces the current include/exclude country policy for primary and secondary phone fields, resolves the advanced customer-auth policy from `settings.customer_auth/policy` with `siteSettings.authVerificationMethod` fallback, requires phone collection for customer identity, and rejects `sign_in` unless exactly one claimed active customer account matches before provider readiness or challenge creation. Rejected account lookups still consume the hashed-IP send limit so the new buyer guidance is not an unbounded enumeration endpoint. It then resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, passes a dedicated WhatsApp migration key so legacy credential cleanup cannot use JWT fallback encryption, enforces IP rate limiting (5 requests/10 min) through D1 `customer_auth_otp_rate_limits`, enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an opaque HMAC storage key, keyed identifier hash/mask, HMAC code hash, intent/channel, and encrypted pinned sign-up contact fields in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. Duplicate `sign_up` state is still disclosed only after valid OTP proof.
+1. `sendOtp()` -- validates sign-in vs sign-up intent as challenge metadata, validates identifier and secondary contact formats, normalizes phone to E.164, enforces the current include/exclude country policy for primary and secondary phone fields, resolves the advanced customer-auth policy from the `customer_auth` settings document (stored policy wins over the `authVerificationMethod` summary), requires phone collection for customer identity, and rejects `sign_in` unless exactly one claimed active customer account matches before provider readiness or challenge creation. Rejected account lookups still consume the hashed-IP send limit so the new buyer guidance is not an unbounded enumeration endpoint. It then resolves/validates the selected transport, verifies Email/SMS/WhatsApp provider readiness with the dedicated credential key before challenge mutation, enforces IP rate limiting (5 requests/10 min) through D1 `customer_auth_otp_rate_limits`, enforces per-channel identifier cooldown (2 min) through the D1 challenge upsert, generates 6-digit cryptographic OTP, stores only an opaque HMAC storage key, keyed identifier hash/mask, HMAC code hash, intent/channel, and encrypted pinned sign-up contact fields in `customer_auth_otp_challenges` with 5-min TTL, and returns a generic queue payload with `deliveryKey` + `otpExpiresAt`. Duplicate `sign_up` state is still disclosed only after valid OTP proof.
 2. `/send-otp` enqueues `auth.send_otp` to `JOBS_QUEUE`; if queue handoff fails after challenge creation, it deletes the exact D1 challenge by `otpKey` + `deliveryKey` and returns retryable `503`
 3. Queue consumer (in `apps/api/src/queue-consumer.ts`) claims `auth_otp_delivery_receipts` before provider work, skips terminal/expired receipts, then delivers OTP via the selected transport (email, SMS, WhatsApp)
 4. Delivery success marks the receipt `accepted` with provider refs/status. Retryable failures mark `failed` with bounded error/provider metadata so Cloudflare Queue retries can reclaim the receipt.
@@ -78,10 +78,10 @@ Every customer create, profile update, and soft delete writes a snapshot to `cus
 
 **Transport selection and collection policy:**
 - Phone number collection is a platform invariant for customer identity, checkout, delivery, fraud checks, SMS OTP, and WhatsApp OTP. Do not add a merchant setting that makes phone optional or uncollected.
-- The advanced policy lives at `settings.customer_auth/policy` with `{ otpChannels, requiredContactFields, optionalContactFields, defaultOtpChannel }`; `siteSettings.authVerificationMethod` remains a legacy summary/fallback.
+- The advanced policy lives in the `customer_auth` settings document as `policy: { otpChannels, requiredContactFields, optionalContactFields, defaultOtpChannel }`; `authVerificationMethod` is the summary used when no policy is saved.
 - OTP channels are independent: `"email"`, `"sms"`, and `"whatsapp"` may be enabled in any non-empty combination. The legacy summaries map to `"email"`, `"sms_otp"`, `"whatsapp_otp"`, and `"both"` for older callers.
 - Email collection is independent of OTP channel: merchants may not collect email, collect it optionally, or require it while still verifying through SMS/WhatsApp.
-- WhatsApp OTP validates encrypted Meta credentials before D1 challenge mutation, but the queue payload carries no provider secrets; the API queue consumer resolves/decrypts the token and phone-number ID at send time. Legacy WhatsApp token migration/cleanup requires the dedicated `migrationEncryptionKey`; `getEncryptionKey()` fallback output is read-only.
+- WhatsApp OTP validates encrypted Meta credentials before D1 challenge mutation, but the queue payload carries no provider secrets; the API queue consumer resolves/decrypts the token and phone-number ID at send time.
 
 **Auto-registration:**
 - Only explicit `sign_up` OTPs can create customers; explicit `sign_in` OTPs require an existing claimed account, return customer-facing account-not-found guidance before OTP delivery state is created, and recheck the same rule during verification.
@@ -123,7 +123,7 @@ Every customer create, profile update, and soft delete writes a snapshot to `cus
 
 ### Admin CRUD
 ```
-Astro page (SSR) -> loader (apiGet) -> admin proxy -> API worker -> customers.service -> D1
+Dashboard SPA (generated SDK) -> API worker /api/v1/admin/customers -> customers.service -> D1
                                                                                       -> customerHistory (audit)
 ```
 
@@ -152,7 +152,7 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 
 ## Dependencies
 
-- `@scalius/database` -- `customers`, `customerHistory`, `customerAuthOtpChallenges`, `customerAuthOtpRateLimits`, `customerSessions`, `authOtpDeliveryReceipts`, `deliveryLocations`, `deliveryShipments`, `deliveryProviders`, `siteSettings`, `orders`
+- `@scalius/database` -- `customers`, `customerHistory`, `customerAuthOtpChallenges`, `customerAuthOtpRateLimits`, `customerSessions`, `authOtpDeliveryReceipts`, `deliveryLocations`, `deliveryShipments`, `deliveryProviders`, `settings`, `orders`
 - `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `formatPhoneForDisplay`, `calculateCustomerStats`
 - `@scalius/core/errors` -- `ValidationError`, `ForbiddenError`, `RateLimitError`, `ServiceUnavailableError`
 - `@scalius/core/search` -- `ftsMatch` for FTS5 search

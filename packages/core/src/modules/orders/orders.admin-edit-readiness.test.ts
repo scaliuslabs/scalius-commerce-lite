@@ -68,15 +68,6 @@ describe("admin full-order edit readiness", () => {
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain("Fulfillment or shipment evidence");
     });
-
-    it("locks an aggregate checkout until normalized read models are complete", () => {
-        const result = buildAdminOrderFullEditReadiness(editableOrder({
-            checkoutAggregateVersion: 1,
-            checkoutProjectionStatus: "pending",
-        }));
-        expect(result.allowed).toBe(false);
-        expect(result.reason).toContain("materializing");
-    });
 });
 
 function amendableOrder(

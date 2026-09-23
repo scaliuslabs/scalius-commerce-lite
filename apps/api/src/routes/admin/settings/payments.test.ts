@@ -3,7 +3,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getSSLCommerzSettings, getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
-import { saveSettingAggregate } from "@scalius/core/modules/settings/settings-write";
+import {
+    checkoutDocument,
+    currencyDocument,
+    paymentMethodsDocument,
+    sslcommerzDocument,
+    stripeDocument,
+} from "@scalius/core/modules/settings/documents";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -19,28 +25,34 @@ import { paymentSettingsRoutes } from "./payments";
 
 const CREDENTIAL_ENCRYPTION_KEY = btoa("p".repeat(32));
 const MASKED = "••••••••••••";
-const SECRET_KEYS = new Set(["secret_key", "webhook_secret", "store_password"]);
+const liveStripe = { secretKey: "sk_live_existing", publishableKey: "pk_live_existing", webhookSecret: "whsec_existing", enabled: true };
+const liveSsl = { storeId: "real_store_123", storePassword: "stored-real-password", sandbox: false, enabled: true };
 
-const liveStripe = { secret_key: "sk_live_existing", publishable_key: "pk_live_existing", webhook_secret: "whsec_existing", enabled: "true" };
-const liveSsl = { store_id: "real_store_123", store_password: "stored-real-password", sandbox: "false", enabled: "true" };
-
-type Stored = Partial<Record<"stripe" | "sslcommerz" | "payment_methods" | "currency", Record<string, string>>>;
+type Stored = {
+    stripe?: Partial<typeof liveStripe>;
+    sslcommerz?: Partial<typeof liveSsl>;
+    payment_methods?: { enabledMethods: string[]; defaultMethod: string };
+    currency?: { currencyCode: string };
+};
 
 async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?: boolean } = {}) {
-    let failNextBatch = false;
+    let failNextWrite = false;
     const { sqlite, db } = createSqliteD1Database({
-        beforeBatch: () => {
-            if (!failNextBatch) return;
-            failNextBatch = false;
-            throw new Error("atomic batch failed");
+        onQuery: (query) => {
+            if (!failNextWrite || !/^(insert into|update) "settings"/i.test(query)) return;
+            failNextWrite = false;
+            throw new Error("settings write failed");
         },
     });
-    sqlite.prepare(`INSERT INTO site_settings (id, site_name, header_config, footer_config, checkout_mode,
-        partial_payment_enabled, partial_payment_amount) VALUES ('default', 'Store', '{}', '{}', 'all', ?, ?)`)
-        .run(site.partialPaymentEnabled ? 1 : 0, site.partialPaymentEnabled ? 500 : 0);
-    const writes = Object.entries(stored).flatMap(([category, values]) =>
-        Object.entries(values).map(([key, value]) => ({ category, key, value, encrypted: SECRET_KEYS.has(key) })));
-    await saveSettingAggregate(db, writes, CREDENTIAL_ENCRYPTION_KEY);
+    const ctx = { encryptionKey: CREDENTIAL_ENCRYPTION_KEY };
+    await checkoutDocument.write(db, {
+        partialPaymentEnabled: site.partialPaymentEnabled === true,
+        partialPaymentAmount: site.partialPaymentEnabled ? 500 : 0,
+    });
+    if (stored.stripe) await stripeDocument.write(db, stored.stripe, ctx);
+    if (stored.sslcommerz) await sslcommerzDocument.write(db, stored.sslcommerz, ctx);
+    if (stored.payment_methods) await paymentMethodsDocument.write(db, stored.payment_methods);
+    if (stored.currency) await currencyDocument.write(db, stored.currency as never);
 
     const env = { CREDENTIAL_ENCRYPTION_KEY } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -61,14 +73,15 @@ async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?
             : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
         requestEnv,
     );
-    return { request, db, sqlite, failNextBatch: () => { failNextBatch = true; } };
+    return { request, db, sqlite, failNextWrite: () => { failNextWrite = true; } };
 }
 
-function storedRows(sqlite: DatabaseSync, category: string) {
-    return Object.fromEntries((sqlite.prepare("SELECT key, value FROM settings WHERE category = ?").all(category) as Array<{
-        key: string;
-        value: string;
-    }>).map((row) => [row.key, row.value]));
+/** The raw stored document (secrets as ciphertext), or `{}` before the first save. */
+function storedRows(sqlite: DatabaseSync, category: string): Record<string, unknown> {
+    const row = sqlite.prepare("SELECT value FROM settings WHERE category = ? AND key = 'document'").get(category) as
+        | { value: string }
+        | undefined;
+    return row ? JSON.parse(row.value) as Record<string, unknown> : {};
 }
 
 async function expectValidationError(response: Response, message?: string) {
@@ -102,8 +115,8 @@ describe("payment settings", () => {
 
         it("returns raw selected methods separately from effective active checkout methods", async () => {
             const { request } = await createTestApp({
-                stripe: { ...liveStripe, publishable_key: "" },
-                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "stripe" },
+                stripe: { ...liveStripe, publishableKey: "" },
+                payment_methods: { enabledMethods: ["stripe", "cod"], defaultMethod: "stripe" },
             });
 
             const response = await request("/payment-methods");
@@ -134,7 +147,7 @@ describe("payment settings", () => {
         it("filters buyer-visible active methods through checkout flow rules", async () => {
             const { request } = await createTestApp({
                 stripe: liveStripe,
-                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "cod" },
+                payment_methods: { enabledMethods: ["stripe", "cod"], defaultMethod: "cod" },
             }, { partialPaymentEnabled: true });
 
             await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
@@ -152,8 +165,8 @@ describe("payment settings", () => {
         it("excludes a configured SSLCommerz method from dashboard checkout readiness outside BDT", async () => {
             const { request } = await createTestApp({
                 sslcommerz: liveSsl,
-                currency: { currency_code: "USD" },
-                payment_methods: { enabled_methods: JSON.stringify(["sslcommerz", "cod"]), default_method: "sslcommerz" },
+                currency: { currencyCode: "USD" },
+                payment_methods: { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
             });
 
             await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
@@ -181,8 +194,8 @@ describe("payment settings", () => {
 
             expect(response.status).toBe(200);
             expect(storedRows(sqlite, "payment_methods")).toEqual({
-                enabled_methods: JSON.stringify(["stripe", "cod"]),
-                default_method: "stripe",
+                enabledMethods: ["stripe", "cod"],
+                defaultMethod: "stripe",
             });
             expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         });
@@ -194,7 +207,7 @@ describe("payment settings", () => {
 
         it.each([
             ["duplicate methods", {}, {}, { enabledMethods: ["cod", "cod"], defaultMethod: "cod" }, undefined],
-            ["SSLCommerz outside BDT", { sslcommerz: liveSsl, currency: { currency_code: "USD" } }, {},
+            ["SSLCommerz outside BDT", { sslcommerz: liveSsl, currency: { currencyCode: "USD" } }, {},
                 { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
                 "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD."],
             ["removing every online gateway under partial payments", {}, { partialPaymentEnabled: true },
@@ -212,7 +225,7 @@ describe("payment settings", () => {
     });
 
     describe("gateway credential saves", () => {
-        it("encrypts a complete Stripe credential rotation in one atomic aggregate", async () => {
+        it("encrypts a complete Stripe credential rotation in one document write", async () => {
             const { request, db, sqlite } = await createTestApp();
 
             const response = await request("/stripe", {
@@ -224,8 +237,8 @@ describe("payment settings", () => {
 
             expect(response.status, await response.clone().text()).toBe(200);
             const raw = storedRows(sqlite, "stripe");
-            expect(raw.secret_key).not.toContain("sk_test_replacement");
-            expect(raw.webhook_secret).not.toContain("whsec_replacement");
+            expect(raw.secretKey).not.toContain("sk_test_replacement");
+            expect(raw.webhookSecret).not.toContain("whsec_replacement");
             await expect(getStripeSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
                 secretKey: "sk_test_replacement",
                 publishableKey: "pk_test_replacement",
@@ -241,7 +254,7 @@ describe("payment settings", () => {
             expect((await request("/sslcommerz", { storeId: "real_store_123", storePassword: "ssl_secret" })).status).toBe(200);
             expect((await request("/sslcommerz", { storePassword: MASKED, sandbox: true, enabled: true })).status).toBe(200);
 
-            expect(storedRows(sqlite, "sslcommerz").store_password).not.toContain("ssl_secret");
+            expect(storedRows(sqlite, "sslcommerz").storePassword).not.toContain("ssl_secret");
             await expect(getSSLCommerzSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
                 storeId: "real_store_123",
                 storePassword: "ssl_secret",
@@ -266,30 +279,30 @@ describe("payment settings", () => {
             expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
-        it("does not invalidate checkout caches when the atomic gateway save fails", async () => {
-            const { request, sqlite, failNextBatch } = await createTestApp({ stripe: liveStripe });
-            failNextBatch();
+        it("does not invalidate checkout caches when the gateway save fails", async () => {
+            const { request, sqlite, failNextWrite } = await createTestApp({ stripe: liveStripe });
+            failNextWrite();
 
             const response = await request("/stripe", { publishableKey: "pk_live_replacement" });
 
             expect(response.status).toBe(500);
-            expect(storedRows(sqlite, "stripe").publishable_key).toBe("pk_live_existing");
+            expect(storedRows(sqlite, "stripe").publishableKey).toBe("pk_live_existing");
             expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
         it.each([
             ["Stripe without an effective publishable key", "/stripe",
-                { stripe: { secret_key: "sk_live_existing", webhook_secret: "whsec_existing" } }, { enabled: true },
+                { stripe: { secretKey: "sk_live_existing", webhookSecret: "whsec_existing", enabled: false } }, { enabled: true },
                 undefined],
             ["Stripe with submitted placeholder credentials", "/stripe", {},
                 { secretKey: "stripe_secret_key", publishableKey: "pk_live_public", webhookSecret: "whsec_live", enabled: true },
                 "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."],
             ["a live publishable key paired with a retained test secret", "/stripe",
-                { stripe: { ...liveStripe, secret_key: "sk_test_existing", publishable_key: "pk_test_existing" } },
+                { stripe: { ...liveStripe, secretKey: "sk_test_existing", publishableKey: "pk_test_existing" } },
                 { publishableKey: "pk_live_replacement", enabled: true },
                 "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair."],
             ["Stripe when a masked stored credential is a placeholder", "/stripe",
-                { stripe: { ...liveStripe, secret_key: "sk_test_your_key_here", enabled: "false" } }, { enabled: true },
+                { stripe: { ...liveStripe, secretKey: "sk_test_your_key_here", enabled: false } }, { enabled: true },
                 "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."],
             ["SSLCommerz without an effective store password", "/sslcommerz", {},
                 { storeId: "store-id", enabled: true }, undefined],
@@ -297,7 +310,7 @@ describe("payment settings", () => {
                 { storeId: "dummy", storePassword: "real-store-password", enabled: true },
                 "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account."],
             ["SSLCommerz when a masked stored credential is a placeholder", "/sslcommerz",
-                { sslcommerz: { ...liveSsl, store_password: "password", enabled: "false" } }, { storePassword: MASKED, enabled: true },
+                { sslcommerz: { ...liveSsl, storePassword: "password", enabled: false } }, { storePassword: MASKED, enabled: true },
                 "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account."],
         ] as const)("rejects enabling %s without persisting", async (_, path, stored, body, message) => {
             const { request, sqlite } = await createTestApp(stored as Stored);
@@ -311,18 +324,18 @@ describe("payment settings", () => {
         it("keeps a compatible online gateway when partial payments require one", async () => {
             const lastGateway = await createTestApp({
                 stripe: liveStripe,
-                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "stripe" },
+                payment_methods: { enabledMethods: ["stripe", "cod"], defaultMethod: "stripe" },
             }, { partialPaymentEnabled: true });
             await expectValidationError(await lastGateway.request("/stripe", { enabled: false }));
-            expect(storedRows(lastGateway.sqlite, "stripe").enabled).toBe("true");
+            expect(storedRows(lastGateway.sqlite, "stripe").enabled).toBe(true);
 
             const withFallback = await createTestApp({
                 stripe: liveStripe,
                 sslcommerz: liveSsl,
-                payment_methods: { enabled_methods: JSON.stringify(["stripe", "sslcommerz", "cod"]), default_method: "sslcommerz" },
+                payment_methods: { enabledMethods: ["stripe", "sslcommerz", "cod"], defaultMethod: "sslcommerz" },
             }, { partialPaymentEnabled: true });
             expect((await withFallback.request("/stripe", { enabled: false })).status).toBe(200);
-            expect(storedRows(withFallback.sqlite, "stripe").enabled).toBe("false");
+            expect(storedRows(withFallback.sqlite, "stripe").enabled).toBe(false);
         });
     });
 });

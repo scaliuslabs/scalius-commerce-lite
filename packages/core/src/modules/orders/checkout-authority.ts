@@ -1,22 +1,25 @@
 import type { Database } from "@scalius/database/client";
-import { checkoutAuthority, settings, siteSettings } from "@scalius/database/schema";
+import { checkoutAuthority } from "@scalius/database/schema";
 import { inArray, sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import {
     resolveActivePaymentMethodsFromRows,
-    STOREFRONT_GATEWAY_SETTING_CATEGORIES,
     type GatewaySettingsStoredRow,
     type PaymentMethodsConfig,
 } from "../payments/gateway-settings";
 import {
-    resolveAllowedCountriesFromRows,
-    resolveCurrencySettingsFromRows,
+    checkoutDocument,
+    currencyDocument,
+    customerCountriesDocument,
+    metaConversionsDocument,
+    notificationsDocument,
+    paymentMethodsDocument,
+    sslcommerzDocument,
+    stripeDocument,
     type CurrencySettings,
-} from "../settings/site-settings.service";
-import {
-    resolveAdminNotificationChannelsFromStoredValue,
-    resolveNotificationChannelsFromStoredValue,
-} from "../settings/settings.service";
+    type CustomerCountries,
+} from "../settings/documents";
+import { selectSettingsDocuments } from "../settings/settings-store";
 import {
     resolveProductMediaProjectionRows,
     selectCheckoutProductMediaProjectionRows,
@@ -46,16 +49,20 @@ import {
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax/tax.service";
 
-const CHECKOUT_GENERIC_SETTING_CATEGORIES = [
-    "currency",
-    "phone",
-    ...STOREFRONT_GATEWAY_SETTING_CATEGORIES,
-] as const;
+/** Settings documents every checkout snapshot reads in its first statement. */
+const CHECKOUT_SETTINGS_DOCUMENTS = [
+    currencyDocument,
+    customerCountriesDocument,
+    notificationsDocument,
+    metaConversionsDocument,
+    paymentMethodsDocument,
+    stripeDocument,
+    sslcommerzDocument,
+];
 
 export interface StorefrontCheckoutAuthorityInput {
     items: StorefrontCartValidationItem[];
     inventoryPool?: string | null;
-    inventoryAuthority?: "snapshot" | "coordinator";
     city: string;
     zone: string;
     area?: string | null;
@@ -77,7 +84,7 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     cartValidation: StorefrontCartValidationResult;
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
-    allowedCountries: ReturnType<typeof resolveAllowedCountriesFromRows>;
+    allowedCountries: CustomerCountries;
     activePaymentMethods: PaymentMethodsConfig;
     taxAuthority: StorefrontTaxAuthoritySnapshot;
     sideEffects: {
@@ -86,19 +93,9 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     };
 }
 
-interface CheckoutSiteSettingsRow {
-    guestCheckoutEnabled: boolean;
-    checkoutMode: "guest_cod_only" | "gateways_only" | "all";
-    partialPaymentEnabled: boolean;
-    partialPaymentAmount: number;
-}
-
 interface CheckoutSideEffectSettingsRow {
     revision: number;
-    orderChannels: string | null;
-    adminChannels: string | null;
     hasActiveAdminPushTarget: number;
-    metaPurchaseEnabled: number;
 }
 
 export interface StorefrontCheckoutAuthorityReadPlan {
@@ -186,23 +183,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     );
     const taxPlan = createStorefrontTaxAuthorityReadPlan(db);
     const statements = [
-        db
-            .select({
-                category: settings.category,
-                key: settings.key,
-                value: settings.value,
-            })
-            .from(settings)
-            .where(inArray(settings.category, [...CHECKOUT_GENERIC_SETTING_CATEGORIES])),
-        db
-            .select({
-                guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-                checkoutMode: siteSettings.checkoutMode,
-                partialPaymentEnabled: siteSettings.partialPaymentEnabled,
-                partialPaymentAmount: siteSettings.partialPaymentAmount,
-            })
-            .from(siteSettings)
-            .limit(1),
+        selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
+        selectSettingsDocuments(db, [checkoutDocument]),
         selectStorefrontCartProductRows(db, productIds),
         selectStorefrontCartVariantRows(db, productIds, variantIds),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
@@ -210,25 +192,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectActiveStorefrontShippingMethodRowsByIds(db, shippingMethodIds),
         db.select({
             revision: checkoutAuthority.revision,
-            orderChannels: sql<string | null>`(
-                SELECT value FROM settings
-                WHERE category = 'notifications' AND key = 'order_channels'
-                LIMIT 1
-            )`,
-            adminChannels: sql<string | null>`(
-                SELECT value FROM settings
-                WHERE category = 'notifications' AND key = 'admin_channels'
-                LIMIT 1
-            )`,
             hasActiveAdminPushTarget: sql<number>`EXISTS(
                 SELECT 1 FROM admin_fcm_tokens WHERE is_active = 1
-            )`,
-            metaPurchaseEnabled: sql<number>`EXISTS(
-                SELECT 1 FROM meta_conversions_settings
-                WHERE singleton_key = 'default'
-                  AND is_enabled = 1
-                  AND length(trim(COALESCE(pixel_id, ''))) > 0
-                  AND length(trim(COALESCE(access_token, ''))) > 0
             )`,
         })
             .from(checkoutAuthority)
@@ -246,17 +211,25 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const genericRows = Array.isArray(results[0])
                 ? results[0] as GatewaySettingsStoredRow[]
                 : [];
-            const categoryRows = (category: string) => genericRows.filter(
-                (row) => row.category === category,
-            );
-            const currency = resolveCheckoutAuthorityStage(
-                "CHECKOUT_CURRENCY_SETTINGS",
-                () => resolveCurrencySettingsFromRows(categoryRows("currency")),
-            );
-            const siteRows = Array.isArray(results[1])
-                ? results[1] as CheckoutSiteSettingsRow[]
-                : [];
-            const site = siteRows[0];
+            const documentContext = { encryptionKey: credentialEncryptionKey };
+            const [currencyDocumentRead, countriesRead, notificationsRead, metaRead, checkoutRead] = await Promise.all([
+                currencyDocument.fromRows(genericRows, documentContext),
+                customerCountriesDocument.fromRows(genericRows, documentContext),
+                notificationsDocument.fromRows(genericRows, documentContext),
+                metaConversionsDocument.fromRows(genericRows, documentContext),
+                checkoutDocument.fromRows(
+                    Array.isArray(results[1]) ? results[1] as GatewaySettingsStoredRow[] : [],
+                    documentContext,
+                ),
+            ]);
+            const currency = currencyDocumentRead.value;
+            const site = checkoutRead.value;
+            const meta = metaRead.value;
+            // A stored token counts even when this isolate cannot decrypt it;
+            // the Meta send path performs the strict credential read.
+            const metaPurchaseEnabled = meta.isEnabled
+                && meta.pixelId.trim().length > 0
+                && (meta.accessToken.trim().length > 0 || Boolean(metaRead.secretErrors.accessToken));
             const productRows = Array.isArray(results[2])
                 ? results[2] as StorefrontCartProductRow[]
                 : [];
@@ -279,22 +252,9 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[7] as CheckoutSideEffectSettingsRow[]
                 : [];
             const sideEffectSettings = sideEffectRows[0];
-            const orderCreatedChannels = resolveCheckoutAuthorityStage(
-                "CHECKOUT_NOTIFICATION_SETTINGS",
-                () => resolveNotificationChannelsFromStoredValue(
-                    sideEffectSettings?.orderChannels,
-                ).order_created ?? [],
-            );
-            const adminOrderCreatedChannels = resolveCheckoutAuthorityStage(
-                "CHECKOUT_ADMIN_NOTIFICATION_SETTINGS",
-                () => resolveAdminNotificationChannelsFromStoredValue(
-                    sideEffectSettings?.adminChannels,
-                ).order_created ?? [],
-            );
-            const allowedCountries = resolveCheckoutAuthorityStage(
-                "CHECKOUT_PHONE_SETTINGS",
-                () => resolveAllowedCountriesFromRows(categoryRows("phone")),
-            );
+            const orderCreatedChannels = notificationsRead.value.orderChannels.order_created ?? [];
+            const adminOrderCreatedChannels = notificationsRead.value.adminChannels.order_created ?? [];
+            const allowedCountries = countriesRead.value;
             let activePaymentMethods: PaymentMethodsConfig;
             try {
                 activePaymentMethods = await resolveActivePaymentMethodsFromRows(
@@ -336,8 +296,6 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         {
                             inventoryPool: input.inventoryPool,
                             currencyCode: currency.currencyCode,
-                            deferRegularInventoryAuthority:
-                                input.inventoryAuthority === "coordinator",
                         },
                         productRows,
                         variantRows,
@@ -369,10 +327,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             cartValidation,
                             deliveryPreflight,
                             checkoutSettings: {
-                                guestCheckoutEnabled: site?.guestCheckoutEnabled ?? true,
-                                checkoutMode: site?.checkoutMode ?? "all",
-                                partialPaymentEnabled: site?.partialPaymentEnabled ?? false,
-                                partialPaymentAmount: site?.partialPaymentAmount ?? 0,
+                                guestCheckoutEnabled: site.guestCheckoutEnabled,
+                                checkoutMode: site.checkoutMode,
+                                partialPaymentEnabled: site.partialPaymentEnabled,
+                                partialPaymentAmount: site.partialPaymentAmount,
                             },
                             allowedCountries,
                             activePaymentMethods,
@@ -388,8 +346,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                     || (Number(sideEffectSettings?.hasActiveAdminPushTarget) === 1
                                         && adminOrderCreatedChannels.includes("push")),
                                 ),
-                                metaPurchase:
-                                    Number(sideEffectSettings?.metaPurchaseEnabled) === 1,
+                                metaPurchase: metaPurchaseEnabled,
                             },
                         },
                     };

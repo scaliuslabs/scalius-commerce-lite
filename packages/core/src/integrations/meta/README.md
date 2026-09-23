@@ -29,7 +29,7 @@ order-success.astro               orders/queue/scheduled           purchase-outb
 5. Dispatches `POST /api/v1/meta/events` via `sendMetaCapiEvent()` from `@/lib/api/tracking`
 6. API route (`apps/api/src/routes/meta-conversions.ts`) validates the payload via Zod schema, requires the event source origin to match `STOREFRONT_URL`, rate-limits the public endpoint through API KV when available, and enriches with IP/user-agent from request headers
 7. Calls `sendCapiEvent()` from this package, which:
-   a. Fetches CAPI settings from DB via `getCapiSettings()` (singleton row in `metaConversionsSettings`)
+   a. Fetches CAPI settings from DB via `getCapiSettings()` (the `meta_conversions` settings document)
    b. If disabled or missing credentials, logs a diagnostic event and returns early
    c. Hashes PII fields (email, phone, name, location) via SHA-256 per Meta's requirements
    d. Sends to `https://graph.facebook.com/{META_GRAPH_API_VERSION}/{pixelId}/events`
@@ -93,9 +93,9 @@ All hashing uses the Web Crypto API, compatible with Cloudflare Workers (no Node
 
 ## Database
 
-Settings are stored in the `metaConversionsSettings` table (singleton row with `id = "singleton"`):
+Settings are the `meta_conversions` settings document (see `modules/settings/README.md`):
 - `pixelId` -- Meta Pixel ID
-- `accessToken` -- Meta access token. New admin saves encrypt this with `CREDENTIAL_ENCRYPTION_KEY`; reads gracefully tolerate legacy plaintext so existing shops can migrate without downtime.
+- `accessToken` -- Meta access token, a secret field encrypted with `CREDENTIAL_ENCRYPTION_KEY` and decrypted strictly with that key.
 - `isEnabled` -- Boolean toggle
 - `testEventCode` -- Optional test event code for Meta Events Manager
 - `logRetentionDays` -- Configurable log retention period
@@ -130,5 +130,5 @@ This runs in the browser. The actual CAPI call happens server-side in the API wo
 ## Dependencies
 
 - Web Crypto API (`crypto.subtle`) -- SHA-256 hashing
-- `@scalius/database` -- `metaConversionsSettings`, `metaConversionsLogs`, `metaCapiPurchaseOutbox`, `orders`, and `orderItems` tables
+- `@scalius/database` -- `settings` (`meta_conversions` document), `metaConversionsLogs`, `metaCapiPurchaseOutbox`, `orders`, and `orderItems` tables
 - `@scalius/core/modules/analytics/meta.service` -- `getCapiSettings()` and `logCapiEvent()` functions

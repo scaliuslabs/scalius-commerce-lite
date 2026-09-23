@@ -14,7 +14,6 @@
     "build": "node scripts/turbo-run.mjs build",
     "deploy": "node scripts/deploy.mjs",
     "deploy:api": "node scripts/deploy.mjs --only api",
-    "deploy:admin": "node scripts/deploy.mjs --only admin",
     "deploy:storefront": "node scripts/deploy.mjs --only storefront",
     "ops:check": "node scripts/ops-check.mjs",
     "admin:read:check": "node scripts/admin-read-check.mjs",

@@ -1,16 +1,16 @@
-import { getSSLCommerzBdtAmountLimitIssue } from "../payments/sslcommerz";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import {
+    COD_PAYMENT_METHOD,
+    getGatewayAmountIssue,
+    getPaymentGateway,
+    isOnlinePaymentMethod,
+} from "../payments/gateways/registry";
 
 export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
-export type CheckoutPaymentMethodId = "stripe" | "sslcommerz" | "cod";
+/** A registered gateway id or "cod". */
+export type CheckoutPaymentMethodId = string;
 
-const ONLINE_PAYMENT_METHODS = new Set<CheckoutPaymentMethodId>([
-    "stripe",
-    "sslcommerz",
-]);
-
-export function isOnlinePaymentMethod(method: string): method is Exclude<CheckoutPaymentMethodId, "cod"> {
-    return ONLINE_PAYMENT_METHODS.has(method as CheckoutPaymentMethodId);
-}
+export { isOnlinePaymentMethod };
 
 export function isPositiveDepositAmount(value: unknown): boolean {
     const amount = Number(value);
@@ -25,8 +25,8 @@ export function isCheckoutGatewayUsableForFlow(options: {
 }): boolean {
     const checkoutMode = options.checkoutMode ?? "all";
 
-    if (options.gatewayId === "cod" && checkoutMode === "gateways_only") return false;
-    if (options.gatewayId !== "cod" && checkoutMode === "guest_cod_only") return false;
+    if (options.gatewayId === COD_PAYMENT_METHOD && checkoutMode === "gateways_only") return false;
+    if (options.gatewayId !== COD_PAYMENT_METHOD && checkoutMode === "guest_cod_only") return false;
 
     if (options.partialPaymentEnabled) {
         if (!isPositiveDepositAmount(options.partialPaymentAmount)) return false;
@@ -45,7 +45,7 @@ export function getCheckoutFlowValidationIssues(options: {
     const issues: string[] = [];
     const checkoutMode = options.checkoutMode ?? "all";
     const availablePaymentMethods = options.availablePaymentMethods;
-    const hasCod = availablePaymentMethods?.includes("cod") === true;
+    const hasCod = availablePaymentMethods?.includes(COD_PAYMENT_METHOD) === true;
     const hasOnlineGateway = availablePaymentMethods?.some(isOnlinePaymentMethod) === true;
 
     if (availablePaymentMethods) {
@@ -65,12 +65,13 @@ export function getCheckoutFlowValidationIssues(options: {
     if (!isPositiveDepositAmount(options.partialPaymentAmount)) {
         issues.push("Advance payment amount must be greater than zero.");
     }
-    if (availablePaymentMethods?.includes("sslcommerz") === true) {
-        const sslcommerzAmountIssue = getSSLCommerzBdtAmountLimitIssue(
-            options.partialPaymentAmount,
-            "SSLCommerz advance payment amount",
-        );
-        if (sslcommerzAmountIssue) issues.push(sslcommerzAmountIssue);
+    for (const methodId of availablePaymentMethods ?? []) {
+        const gateway = getPaymentGateway(methodId);
+        const limits = gateway?.amountLimits;
+        if (!gateway || !limits) continue;
+        const amountMinor = Math.round(Number(options.partialPaymentAmount) * 10 ** getDecimalPlaces(limits.currency));
+        const amountIssue = getGatewayAmountIssue(gateway, amountMinor, limits.currency, `${gateway.label} advance payment amount`);
+        if (amountIssue) issues.push(amountIssue);
     }
     if (checkoutMode === "guest_cod_only") {
         issues.push("Partial payment needs an online payment gateway, so Fast COD Only cannot be used.");

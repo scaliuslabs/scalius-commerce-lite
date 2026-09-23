@@ -143,7 +143,7 @@ function createMessage<T>(body: T, attempts?: number): Message<T>;
 function createMessage<T>(body: T, attempts = 1): Message<T> {
   const record = body as Record<string, unknown>;
   return {
-    id: `msg-${String(record.type)}-${String(record.orderId ?? "no-order")}`,
+    id: `msg-${String(record.type)}-${String(record.orderId ?? (record.event as { orderId?: string } | undefined)?.orderId ?? "no-order")}`,
     timestamp: new Date("2026-01-01T00:00:00Z"),
     body,
     attempts,
@@ -222,7 +222,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
       accessTokenConfigured: true,
       phoneNumberId: "phone_id_1",
       authTemplateName: "auth_otp",
-      accessTokenSource: "encrypted",
     });
     mocks.sendWhatsAppTemplateMessage.mockResolvedValue({
       success: true,
@@ -333,20 +332,31 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     const messages = [
       createMessage({
-        type: "payment.stripe.confirmed",
-        orderId: "order-stripe",
-        paymentIntentId: "pi_123",
-        amount: 12345,
-        currency: "usd",
+        type: "payment.event",
+        provider: "stripe",
+        event: {
+          kind: "confirmed",
+          orderId: "order-stripe",
+          providerRef: "pi_123",
+          amountMinor: 12345,
+          currency: "USD",
+          eventType: "test",
+          eventId: "evt",
+        },
       }),
       createMessage({
-        type: "payment.sslcommerz.confirmed",
-        orderId: "order-ssl",
-        tranId: "tran_123",
-        valId: "val_123",
-        bankTranId: "bank_123",
-        amount: 1200,
-        currency: "BDT",
+        type: "payment.event",
+        provider: "sslcommerz",
+        event: {
+          kind: "confirmed",
+          orderId: "order-ssl",
+          providerRef: "val_123",
+          secondaryRef: "bank_123",
+          amountMinor: 120000,
+          currency: "BDT",
+          eventType: "test",
+          eventId: "evt",
+        },
       }),
     ];
 
@@ -386,11 +396,17 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     const messages = ["order-1", "order-2", "order-3", "order-4"].map((orderId) =>
       createMessage({
-        type: "payment.stripe.confirmed",
-        orderId,
-        paymentIntentId: `pi_${orderId}`,
-        amount: 1000,
-        currency: "bdt",
+        type: "payment.event",
+        provider: "stripe",
+        event: {
+          kind: "confirmed",
+          orderId,
+          providerRef: `pi_${orderId}`,
+          amountMinor: 1000,
+          currency: "BDT",
+          eventType: "test",
+          eventId: "evt",
+        },
       }),
     );
 
@@ -428,11 +444,17 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const notificationQueue = { send: vi.fn(async () => undefined) };
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_123",
-      amount: 12345,
-      currency: "usd",
+      type: "payment.event",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_123",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {
@@ -460,40 +482,23 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
-  it("processes a projected Meta purchase message from the shared side-effect queue", async () => {
-    const message = createMessage({
-      type: "meta.purchase" as const,
-      orderId: "order-meta-checkout",
-      source: "storefront-checkout-aggregate",
-    });
-
-    await handleQueueBatch(
-      createBatch([message], "order-notifications-queue"),
-      { STOREFRONT_URL: "https://store.example.test" } as Env,
-    );
-
-    expect(mocks.processExistingMetaPurchaseOutboxForOrder).toHaveBeenCalledWith({
-      db: { id: "db" },
-      orderId: "order-meta-checkout",
-      source: "storefront-checkout-aggregate",
-      storefrontUrl: "https://store.example.test",
-      encryptionKey: "credential-key",
-    });
-    expect(message.ack).toHaveBeenCalledTimes(1);
-    expect(message.retry).not.toHaveBeenCalled();
-  });
-
   it("acks duplicate confirmations without repeating availability, notification, or analytics side effects", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({
       success: true,
       alreadyProcessed: true,
     });
     const message = createMessage({
-      type: "payment.stripe.confirmed",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_123",
-      amount: 12345,
-      currency: "usd",
+      type: "payment.event",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_123",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -510,14 +515,19 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const notificationQueue = { send: vi.fn(async () => undefined) };
 
     const message = createMessage({
-      type: "payment.sslcommerz.confirmed",
-      orderId: "order-balance",
-      tranId: "tran_balance",
-      valId: "val_balance",
-      bankTranId: "bank_balance",
-      amount: 750,
-      currency: "BDT",
-      paymentType: "balance",
+      type: "payment.event",
+      provider: "sslcommerz",
+      event: {
+        kind: "confirmed",
+        orderId: "order-balance",
+        providerRef: "val_balance",
+        secondaryRef: "bank_balance",
+        amountMinor: 75000,
+        currency: "BDT",
+        paymentType: "balance",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {
@@ -529,7 +539,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       expect.objectContaining({
         orderId: "order-balance",
-        paymentGateway: "sslcommerz",
+        provider: "sslcommerz",
         paymentType: "balance",
         amount: 750,
       }),
@@ -553,12 +563,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const notificationQueue = { send: vi.fn(async () => undefined) };
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
-      orderId: "order-stripe-balance",
-      paymentIntentId: "pi_balance",
-      amount: 6500,
-      currency: "bdt",
-      metadata: { paymentType: "balance" },
+      type: "payment.event",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe-balance",
+        providerRef: "pi_balance",
+        amountMinor: 6500,
+        currency: "BDT",
+        paymentType: "balance",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {
@@ -570,7 +586,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       expect.objectContaining({
         orderId: "order-stripe-balance",
-        paymentGateway: "stripe",
+        provider: "stripe",
         paymentType: "balance",
         amount: 65,
       }),
@@ -590,19 +606,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("keeps Stripe refund webhooks audit-only until scheduled reconciliation imports them", async () => {
     const message = createMessage({
-      type: "payment.stripe.refunded",
+      type: "payment.event",
       webhookEventId: "stripe:charge-refunded:evt_refund",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_stripe",
-      amountRefunded: 1500,
-      currency: "bdt",
-      chargeId: "ch_stripe",
-      refunds: [{
-        id: "re_stripe",
-        amount: 1500,
-        currency: "bdt",
-        status: "succeeded",
-      }],
+      provider: "stripe",
+      event: {
+        kind: "refund_observed",
+        orderId: "order-stripe",
+        providerRef: "pi_stripe",
+        secondaryRef: "ch_stripe",
+        details: { amountRefunded: 1500, currency: "BDT" },
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -614,20 +629,14 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       "stripe:charge-refunded:evt_refund",
       expect.objectContaining({
-        queueType: "payment.stripe.refunded",
+        queueType: "payment.event",
         orderId: "order-stripe",
         gateway: "stripe",
         outcome: "external_refund_observed",
         amountRefunded: 1500,
-        currency: "bdt",
-        paymentIntentId: "pi_stripe",
-        chargeId: "ch_stripe",
-        refunds: [{
-          id: "re_stripe",
-          amount: 1500,
-          currency: "bdt",
-          status: "succeeded",
-        }],
+        currency: "BDT",
+        providerRef: "pi_stripe",
+        secondaryRef: "ch_stripe",
       }),
     );
   });
@@ -637,12 +646,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     const notificationQueue = { send: vi.fn(async () => undefined) };
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_1",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_123",
-      amount: 12345,
-      currency: "usd",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_123",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {
@@ -655,7 +670,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       "stripe:payment_intent.succeeded:evt_1",
       expect.objectContaining({
         queueMessageId: message.id,
-        queueType: "payment.stripe.confirmed",
+        queueType: "payment.event",
         orderId: "order-stripe",
         gateway: "stripe",
         outcome: "confirmed",
@@ -672,12 +687,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_late",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_late",
-      amount: 12345,
-      currency: "usd",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_late",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -693,7 +714,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       "stripe:payment_intent.succeeded:evt_late",
       expect.objectContaining({
         queueMessageId: message.id,
-        queueType: "payment.stripe.confirmed",
+        queueType: "payment.event",
         orderId: "order-stripe",
         gateway: "stripe",
         outcome: "manual_reconciliation",
@@ -706,12 +727,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: false, error: "D1 batch failed" });
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_retry",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_retry",
-      amount: 12345,
-      currency: "usd",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_retry",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -727,12 +754,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: false, error: "D1 batch failed" });
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_terminal",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_terminal",
-      amount: 12345,
-      currency: "usd",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_terminal",
+        amountMinor: 12345,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     }, 6);
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -744,7 +777,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       "stripe:payment_intent.succeeded:evt_terminal",
       expect.objectContaining({
         queueMessageId: message.id,
-        queueType: "payment.stripe.confirmed",
+        queueType: "payment.event",
         orderId: "order-stripe",
         terminalDeliveryAttempt: 6,
         maxRetries: 5,
@@ -756,13 +789,19 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("archives payment DLQ messages without reprocessing payment side effects", async () => {
     const message = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_dlq",
-      orderId: "order-stripe",
-      paymentIntentId: "pi_dlq",
-      amount: 12345,
-      currency: "usd",
-      metadata: { paymentType: "deposit", ignored: "not persisted" },
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-stripe",
+        providerRef: "pi_dlq",
+        amountMinor: 12345,
+        currency: "USD",
+        paymentType: "deposit",
+        eventType: "test",
+        eventId: "evt",
+      },
     }, 5);
 
     await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
@@ -775,17 +814,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         webhookEventId: "stripe:payment_intent.succeeded:evt_dlq",
         provider: "stripe",
-        eventType: "payment.stripe.confirmed",
+        eventType: "payment.event.confirmed",
         orderId: "order-stripe",
         queueMessageId: message.id,
-        queueType: "payment.stripe.confirmed",
+        queueType: "payment.event",
         attempts: 5,
         messageTimestampSeconds: 1_767_225_600,
         payment: {
-          paymentIntentId: "pi_dlq",
-          amount: 12345,
-          currency: "usd",
-          chargeId: null,
+          kind: "confirmed",
+          providerRef: "pi_dlq",
+          secondaryRef: null,
+          amountMinor: 12345,
+          currency: "USD",
           paymentType: "deposit",
         },
       }),
@@ -796,12 +836,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("archives each type in one mixed jobs-dlq batch into its own durable row", async () => {
     const payment = createMessage({
-      type: "payment.stripe.confirmed",
+      type: "payment.event",
       webhookEventId: "stripe:payment_intent.succeeded:evt_mixed",
-      orderId: "order-mixed",
-      paymentIntentId: "pi_mixed",
-      amount: 100,
-      currency: "usd",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-mixed",
+        providerRef: "pi_mixed",
+        amountMinor: 100,
+        currency: "USD",
+        eventType: "test",
+        eventId: "evt",
+      },
     }, 6);
     const notification = createMessage({
       type: "order.notification",
@@ -832,15 +878,20 @@ describe("handleQueueBatch payment confirmation retries", () => {
   it("retries payment DLQ messages when evidence persistence fails", async () => {
     mocks.recordPaymentWebhookDlqEvidence.mockRejectedValueOnce(new Error("D1 unavailable"));
     const message = createMessage({
-      type: "payment.sslcommerz.confirmed",
+      type: "payment.event",
       webhookEventId: "sslcommerz:ipn:tran:val",
-      orderId: "order-ssl",
-      tranId: "tran_123",
-      valId: "val_123",
-      bankTranId: "bank_123",
-      amount: 1200,
-      currency: "BDT",
-      paymentType: "full",
+      provider: "sslcommerz",
+      event: {
+        kind: "confirmed",
+        orderId: "order-ssl",
+        providerRef: "val_123",
+        secondaryRef: "bank_123",
+        amountMinor: 120000,
+        currency: "BDT",
+        paymentType: "full",
+        eventType: "test",
+        eventId: "evt",
+      },
     }, 5);
 
     await handleQueueBatch(createBatch([message], "jobs-dlq") as never, {} as Env);
@@ -881,12 +932,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     const messages = ["order-dlq-1", "order-dlq-2", "order-dlq-3"].map((orderId) =>
       createMessage({
-        type: "payment.stripe.confirmed",
+        type: "payment.event",
         webhookEventId: `stripe:payment_intent.succeeded:${orderId}`,
-        orderId,
-        paymentIntentId: `pi_${orderId}`,
-        amount: 1000,
-        currency: "bdt",
+        provider: "stripe",
+        event: {
+          kind: "confirmed",
+          orderId,
+          providerRef: `pi_${orderId}`,
+          amountMinor: 1000,
+          currency: "BDT",
+          eventType: "test",
+          eventId: "evt",
+        },
       }, 5),
     );
 
@@ -925,13 +982,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.enqueueOrderCreatedNotificationForOrder.mockRejectedValue(new Error("queue unavailable"));
 
     const message = createMessage({
-      type: "payment.sslcommerz.confirmed",
-      orderId: "order-ssl",
-      tranId: "tran_123",
-      valId: "val_123",
-      bankTranId: "bank_123",
-      amount: 1200,
-      currency: "BDT",
+      type: "payment.event",
+      provider: "sslcommerz",
+      event: {
+        kind: "confirmed",
+        orderId: "order-ssl",
+        providerRef: "val_123",
+        secondaryRef: "bank_123",
+        amountMinor: 120000,
+        currency: "BDT",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -953,12 +1015,18 @@ describe("handleQueueBatch payment confirmation retries", () => {
     mocks.enqueueOrderBalancePaidNotificationForOrder.mockRejectedValue(new Error("queue unavailable"));
 
     const message = createMessage({
-      type: "payment.stripe.confirmed",
-      orderId: "order-balance",
-      paymentIntentId: "pi_balance",
-      amount: 6500,
-      currency: "bdt",
-      metadata: { paymentType: "balance" },
+      type: "payment.event",
+      provider: "stripe",
+      event: {
+        kind: "confirmed",
+        orderId: "order-balance",
+        providerRef: "pi_balance",
+        amountMinor: 6500,
+        currency: "BDT",
+        paymentType: "balance",
+        eventType: "test",
+        eventId: "evt",
+      },
     });
 
     await handleQueueBatch(createBatch([message]), {} as Env);
@@ -967,7 +1035,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       expect.objectContaining({
         orderId: "order-balance",
-        paymentGateway: "stripe",
+        provider: "stripe",
         paymentType: "balance",
         amount: 65,
       }),
@@ -999,7 +1067,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as Env);
 
-    expect(mocks.getCredentialEncryptionKey).toHaveBeenCalledTimes(2);
+    expect(mocks.getCredentialEncryptionKey).toHaveBeenCalledTimes(1);
     expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledWith(
       undefined,
       "SMS Customer",
@@ -1009,7 +1077,6 @@ describe("handleQueueBatch payment confirmation retries", () => {
       { id: "db" },
       {
         encryptionKey: "credential-key",
-        migrationEncryptionKey: "credential-key",
         env: {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
         },
@@ -1996,14 +2063,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith(
-      { id: "db" },
-      "credential-key",
-      {
-        migrateLegacy: true,
-        migrationEncryptionKey: "credential-key",
-      },
-    );
+    expect(mocks.getWhatsAppCloudApiSettings).toHaveBeenCalledWith({ id: "db" }, "credential-key");
     expect(mocks.sendWhatsAppTemplateMessage).toHaveBeenCalledWith({
       accessToken: "wa_token",
       phoneNumberId: "phone_id_1",

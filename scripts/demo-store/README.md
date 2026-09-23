@@ -107,8 +107,7 @@ rows in the way. There is no partial bundle and no repaired catalog.
    revision, or with no release ledger at all, is refused.
 2. **Catalog-only allow-list.** Only the fifteen tables above are read.
 3. **No commerce entanglement.** Refused when any exported variant carries
-   non-zero `reserved_stock`, or when any `inventory_reservation_lanes`,
-   `checkout_inventory_lane_movements` or `order_items` row references an
+   non-zero `reserved_stock`, or when any `order_items` row references an
    exported product or variant. The error names the offending ids.
 4. **No dangling references.** Every non-null foreign key on an exported row
    must resolve to a row that is itself exported. Edges come from

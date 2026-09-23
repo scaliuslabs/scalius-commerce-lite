@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { adminRouteGuard } from "~/lib/auth.fns";
+import { adminRouteGuard, type AdminRouteContext } from "~/lib/auth-guards";
 import {
   ADMIN_ROUTE_CONTEXT_FRESH_MS,
   ADMIN_ROUTE_CONTEXT_STALE_MS,
@@ -14,11 +14,10 @@ const mocks = vi.hoisted(() => ({
   adminRouteGuard: vi.fn(),
 }));
 
-vi.mock("~/lib/auth.fns", () => ({
+vi.mock("~/lib/auth-guards", () => ({
   adminRouteGuard: mocks.adminRouteGuard,
 }));
 
-type AdminRouteContext = Awaited<ReturnType<typeof adminRouteGuard>>;
 
 function makeContext(
   id: string,

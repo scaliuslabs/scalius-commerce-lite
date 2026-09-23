@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getWhatsAppCloudApiSettings,
-  saveWhatsAppAccessToken,
   sendWhatsAppTemplateMessage,
 } from "./whatsapp";
-import { decryptCredentials, encryptCredentials } from "../utils/credential-encryption";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { whatsappDocument } from "../modules/settings/documents";
 
 describe("WhatsApp Cloud API integration", () => {
   it("sends template messages with normalized recipients and body parameters", async () => {
@@ -200,236 +200,32 @@ describe("WhatsApp Cloud API integration", () => {
     expect(result.retryable).toBe(false);
   });
 
-  it("does not report encrypted tokens as configured when no key is available", async () => {
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: null,
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: { value: "enc:not-decrypted-without-key" },
+  it("reads the stored credentials strictly and treats placeholders as not configured", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const key = Buffer.alloc(32, 30).toString("base64");
+    const { db } = createSqliteD1Database();
+    await whatsappDocument.write(db, { accessToken: "EAAG-real-token", phoneNumberId: "109876543210987" }, { encryptionKey: key });
+
+    await expect(getWhatsAppCloudApiSettings(db, key)).resolves.toEqual({
+      accessToken: "EAAG-real-token",
+      accessTokenConfigured: true,
+      phoneNumberId: "109876543210987",
+      authTemplateName: "auth_otp",
     });
-
-    const result = await getWhatsAppCloudApiSettings(db);
-
-    expect(result).toMatchObject({
+    // An encrypted token is never used without the dedicated key.
+    await expect(getWhatsAppCloudApiSettings(db)).resolves.toMatchObject({
       accessToken: undefined,
       accessTokenConfigured: false,
-      phoneNumberId: "phone_id_1",
-      accessTokenSource: "none",
     });
-    expect(db.update).not.toHaveBeenCalled();
-  });
+    await expect(getWhatsAppCloudApiSettings(db, Buffer.alloc(32, 31).toString("base64")))
+      .resolves.toMatchObject({ accessTokenConfigured: false });
 
-  it("does not report placeholder WhatsApp credentials as configured", async () => {
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: "dummy",
-        whatsappPhoneNumberId: "123456",
-        whatsappTemplateName: "test",
-      },
-      tokenRow: null,
-    });
-
-    const result = await getWhatsAppCloudApiSettings(db);
-
-    expect(result).toMatchObject({
+    await whatsappDocument.write(db, { accessToken: "dummy", phoneNumberId: "123456", authTemplateName: "test" }, { encryptionKey: key });
+    await expect(getWhatsAppCloudApiSettings(db, key)).resolves.toEqual({
       accessToken: undefined,
       accessTokenConfigured: false,
       phoneNumberId: undefined,
       authTemplateName: "",
-      accessTokenSource: "none",
     });
-  });
-
-  it("rejects placeholder WhatsApp access tokens before saving", async () => {
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: null,
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: null,
-    });
-    const key = Buffer.alloc(32, 30).toString("base64");
-
-    await expect(saveWhatsAppAccessToken(db, "your-token-here", key)).rejects.toThrow(
-      "WhatsApp access token looks like a placeholder",
-    );
-    expect(db.insert).not.toHaveBeenCalled();
-  });
-
-  it("does not use bare encrypted legacy tokens as plaintext when the key is wrong", async () => {
-    const key = Buffer.alloc(32, 31).toString("base64");
-    const wrongKey = Buffer.alloc(32, 32).toString("base64");
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: null,
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: { value: await encryptCredentials("encrypted_token", key) },
-    });
-
-    const result = await getWhatsAppCloudApiSettings(db, wrongKey);
-
-    expect(result).toMatchObject({
-      accessToken: undefined,
-      accessTokenConfigured: false,
-      phoneNumberId: "phone_id_1",
-      accessTokenSource: "none",
-    });
-  });
-
-  it("keeps legacy plaintext fallback if an existing encrypted token cannot decrypt", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: "legacy_token",
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: { value: "enc:not-valid-aes-gcm" },
-    });
-
-    const result = await getWhatsAppCloudApiSettings(db, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", {
-      migrateLegacy: true,
-    });
-
-    expect(result).toMatchObject({
-      accessToken: "legacy_token",
-      accessTokenConfigured: true,
-      phoneNumberId: "phone_id_1",
-      accessTokenSource: "legacy",
-    });
-    expect(db.update).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it("does not migrate a legacy token when only the read fallback key is provided", async () => {
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: "legacy_token",
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: null,
-    });
-
-    const result = await getWhatsAppCloudApiSettings(db, "jwt-fallback-key", {
-      migrateLegacy: true,
-    });
-
-    expect(result).toMatchObject({
-      accessToken: "legacy_token",
-      accessTokenConfigured: true,
-      accessTokenSource: "legacy",
-    });
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("does not clear legacy plaintext after fallback-key decrypt without a dedicated migration key", async () => {
-    const fallbackKey = Buffer.alloc(32, 26).toString("base64");
-    const encryptedToken = `enc:${await encryptCredentials("encrypted_token", fallbackKey)}`;
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: "legacy_token",
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: { value: encryptedToken },
-    });
-
-    const result = await getWhatsAppCloudApiSettings(db, fallbackKey, {
-      migrateLegacy: true,
-    });
-
-    expect(result).toMatchObject({
-      accessToken: "encrypted_token",
-      accessTokenConfigured: true,
-      accessTokenSource: "encrypted",
-    });
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.update).not.toHaveBeenCalled();
-  });
-
-  it("migrates legacy plaintext only with a dedicated credential encryption key", async () => {
-    const migrationKey = Buffer.alloc(32, 27).toString("base64");
-    const db = createSettingsDb({
-      site: {
-        id: "site_settings_1",
-        whatsappAccessToken: "legacy_token",
-        whatsappPhoneNumberId: "phone_id_1",
-        whatsappTemplateName: "auth_otp",
-      },
-      tokenRow: null,
-    });
-
-    await getWhatsAppCloudApiSettings(db, "jwt-fallback-key", {
-      migrateLegacy: true,
-      migrationEncryptionKey: migrationKey,
-    });
-
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    const storedValue = db.getInsertedValues()[0]?.value;
-    expect(storedValue).toMatch(/^enc:/);
-    expect(storedValue).not.toContain("legacy_token");
-    await expect(
-      decryptCredentials(String(storedValue).slice("enc:".length), migrationKey),
-    ).resolves.toBe("legacy_token");
-    expect(db.update).toHaveBeenCalledTimes(1);
   });
 });
-
-function createSettingsDb(input: {
-  site: {
-    id: string;
-    whatsappAccessToken: string | null;
-    whatsappPhoneNumberId: string | null;
-    whatsappTemplateName: string | null;
-  } | null;
-  tokenRow: { value: string } | null;
-}) {
-  const insertedValues: Array<{ value: string }> = [];
-  const db = {
-    select: vi.fn((selection?: Record<string, unknown>) => {
-      const selectedToken = Boolean(selection && "value" in selection && Object.keys(selection).length === 1);
-      return {
-        from: vi.fn(() => selectedToken
-          ? {
-            where: vi.fn(() => ({
-              get: vi.fn(async () => input.tokenRow),
-            })),
-          }
-          : {
-            limit: vi.fn(() => ({
-              get: vi.fn(async () => input.site),
-            })),
-        }),
-      };
-    }),
-    insert: vi.fn(() => ({
-      values: vi.fn((row: { value: string }) => ({
-        onConflictDoUpdate: vi.fn(async () => {
-          insertedValues.push(row);
-        }),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(async () => undefined),
-      })),
-    })),
-    getInsertedValues: () => insertedValues,
-  };
-
-  return db as typeof db & Parameters<typeof getWhatsAppCloudApiSettings>[0];
-}

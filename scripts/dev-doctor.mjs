@@ -225,12 +225,10 @@ function checkPackageScripts(checks) {
 function checkLocalEnvFiles(checks) {
   const paths = {
     api: resolve(root, "apps", "api", ".dev.vars"),
-    admin: resolve(root, "apps", "admin-v2", ".dev.vars"),
     storefront: resolve(root, "apps", "storefront", ".dev.vars"),
   };
   const missingRuntime = [
     ["apps/api/.dev.vars", paths.api],
-    ["apps/admin-v2/.dev.vars", paths.admin],
     ["apps/storefront/.dev.vars", paths.storefront],
   ].filter(([, path]) => !existsSync(path));
   if (missingRuntime.length === 0) {
@@ -245,18 +243,17 @@ function checkLocalEnvFiles(checks) {
   }
 
   const apiVars = readEnvVarsIfExists(paths.api);
-  const adminVars = readEnvVarsIfExists(paths.admin);
   const storefrontVars = readEnvVarsIfExists(paths.storefront);
 
   // The only installed secrets: SCALIUS_SECRET (>= 32 chars, identical across
-  // API/admin/storefront) and CREDENTIAL_ENCRYPTION_KEY (base64 32 bytes,
-  // identical across API/admin). Values are never included in the report.
-  const drift = collectLocalSecretSyncIssues({ apiVars, adminVars, storefrontVars });
+  // API/storefront) and CREDENTIAL_ENCRYPTION_KEY (base64 32 bytes, API only).
+  // Values are never included in the report.
+  const drift = collectLocalSecretSyncIssues({ apiVars, storefrontVars });
   if (drift.length === 0 && missingRuntime.length === 0) {
     pass(
       checks,
       "Installed local secrets",
-      "SCALIUS_SECRET is present and identical across API/admin/storefront; CREDENTIAL_ENCRYPTION_KEY is present and identical across API/admin.",
+      "SCALIUS_SECRET is present and identical across API/storefront; CREDENTIAL_ENCRYPTION_KEY is present on the API.",
     );
   } else if (drift.length > 0) {
     fail(
@@ -272,8 +269,9 @@ function checkLocalEnvFiles(checks) {
   // URLs are dashboard Platform settings (local dev falls back to fixed ports
   // in code) and per-purpose secrets are derived from SCALIUS_SECRET, so any
   // leftover entries are ignored by every Worker. Warn so they get cleaned up.
-  const staleIssues = collectStaleLocalEnvIssues({ apiVars, adminVars, storefrontVars });
+  const staleIssues = collectStaleLocalEnvIssues({ apiVars, storefrontVars });
   const staleBuildEnvFiles = [
+    ["apps/admin-v2/.dev.vars", resolve(root, "apps", "admin-v2", ".dev.vars")],
     ["apps/admin-v2/.env.development", resolve(root, "apps", "admin-v2", ".env.development")],
     ["apps/storefront/.env.development", resolve(root, "apps", "storefront", ".env.development")],
   ].filter(([, path]) => existsSync(path)).map(([label]) => `${label} is no longer generated or read`);
@@ -283,7 +281,7 @@ function checkLocalEnvFiles(checks) {
       checks,
       "Retired local env entries",
       `${stale.join("; ")}.`,
-      "Run pnpm dev:setup --force --env-only to rewrite .dev.vars with only the installed secrets, and delete stale .env.development files.",
+      "Run pnpm dev:setup --force --env-only to rewrite .dev.vars with only the installed secrets, and delete the stale files.",
     );
   } else if (missingRuntime.length > 0) {
     skip(checks, "Retired local env entries", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");
@@ -420,11 +418,16 @@ async function checkServices(checks, config) {
     {
       id: "admin",
       title: "Admin dashboard",
-      url: `${config.adminBaseUrl}/admin`,
+      // Vite answers on :4323 and proxies /api/auth to the API Worker, so this
+      // proves the dashboard dev server and its API proxy together.
+      url: `${config.adminBaseUrl}/api/auth/dashboard-session`,
       downAction: "Start it with pnpm dev:admin or pnpm dev.",
       validate: async (response) => {
-        if (response.status < 500) return { ok: true, detail: `/admin responded with ${response.status}.` };
-        return { ok: false, detail: `/admin returned ${response.status}.` };
+        const data = await safeJson(response);
+        if (response.ok && typeof data?.adminExists === "boolean") {
+          return { ok: true, detail: `GET /api/auth/dashboard-session returned adminExists=${data.adminExists}.` };
+        }
+        return { ok: false, detail: `GET /api/auth/dashboard-session returned ${response.status}, not the expected session payload.` };
       },
     },
     {

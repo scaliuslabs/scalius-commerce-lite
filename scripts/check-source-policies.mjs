@@ -150,7 +150,7 @@ export const policies = [
       "packages/core/src/integrations/storage.ts",
       "packages/core/src/integrations/email/provider.ts",
       "packages/core/src/modules/delivery/pathao-location-import.ts",
-      "packages/core/src/modules/payments/stripe.ts",
+      "packages/core/src/modules/payments/gateways/stripe.ts",
       "apps/api/src/utils/kv-cache.ts",
     ],
     // `let` caches are caught by the mutable-module-variable check below.
@@ -158,9 +158,9 @@ export const policies = [
     sample: "const memCache = new Map();",
   },
   {
-    rule: "API and admin requests establish the async media presentation context",
+    rule: "API requests establish the async media presentation context",
     why: "the public media URL is per request; without the context it falls back to module state",
-    paths: ["apps/api/src/runtime/base-app.ts", "apps/admin-v2/src/server.ts"],
+    paths: ["apps/api/src/runtime/base-app.ts"],
     require: [/withPublicMediaUrl\(\s*[\s\S]{1,120}?,\s*\(\) =>/],
     sample: "return next();",
   },

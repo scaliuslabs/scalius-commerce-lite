@@ -6,6 +6,7 @@ import {
     type RefundNotificationFact,
 } from "@scalius/core/modules/payments/refund-service";
 import { reconcileRefundAttemptForOrder } from "@scalius/core/modules/payments/refund-reconciliation";
+import { listPaymentMethodIds } from "@scalius/core/modules/payments/gateways/registry";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -265,7 +266,7 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(["stripe", "sslcommerz", "cod"]).optional(),
+                        gateway: z.enum(listPaymentMethodIds() as [string, ...string[]]).optional(),
                         manualSettlementConfirmed: z.boolean().optional(),
                     })
                 }
@@ -285,13 +286,11 @@ app.openapi(refundOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const db = c.get("db");
-    const envCache = c.env?.CACHE;
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     let result: Awaited<ReturnType<typeof processRefund>>;
     try {
         result = await processRefund(
             db,
-            envCache,
             {
                 orderId,
                 amount: data.amount,
@@ -356,7 +355,6 @@ app.openapi(reconcileRefundAttemptRoute, async (c) => {
     const db = c.get("db");
     const result = await reconcileRefundAttemptForOrder(
         db,
-        c.env?.CACHE,
         orderId,
         attemptId,
         {

@@ -2,19 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const db = { id: "db" };
-  const checkoutTransport = {
-    provider: "d1",
-    all: vi.fn(),
-    get: vi.fn(),
-    atomic: vi.fn(),
-    close: vi.fn(),
-  };
   return {
     db,
-    checkoutTransport,
     getDb: vi.fn(() => db),
-    createCheckoutSqlTransport: vi.fn(() => checkoutTransport),
-    recoverPendingCheckoutProjections: vi.fn(),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
     cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
@@ -27,7 +17,7 @@ const mocks = vi.hoisted(() => {
     cleanupExpiredScannerTokenClaims: vi.fn(),
     pruneExpiredIdentityHandoffEvents: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
-    reconcileStripeExternalRefundWebhooks: vi.fn(),
+    reconcileExternalRefundWebhooks: vi.fn(),
     bumpCacheGeneration: vi.fn(),
     syncCacheGenerationMirror: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
@@ -37,14 +27,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
-}));
-
-vi.mock("@scalius/database/checkout-transport", () => ({
-  createCheckoutSqlTransport: mocks.createCheckoutSqlTransport,
-}));
-
-vi.mock("@scalius/database/checkout-projection", () => ({
-  recoverPendingCheckoutProjections: mocks.recoverPendingCheckoutProjections,
 }));
 
 vi.mock("@scalius/core/modules/inventory", () => ({
@@ -84,7 +66,7 @@ vi.mock("@scalius/core/auth", () => ({
 
 vi.mock("@scalius/core/modules/payments", () => ({
   reconcileDueRefundAttempts: mocks.reconcileDueRefundAttempts,
-  reconcileStripeExternalRefundWebhooks: mocks.reconcileStripeExternalRefundWebhooks,
+  reconcileExternalRefundWebhooks: mocks.reconcileExternalRefundWebhooks,
 }));
 
 vi.mock("./utils/cache-generation", () => ({
@@ -103,7 +85,6 @@ vi.mock("./utils/webhook-idempotency", () => ({
 import {
   ABANDONED_CHECKOUT_RETENTION_DAYS,
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
-  CHECKOUT_PROJECTION_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
@@ -114,7 +95,7 @@ import {
   ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
-  STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+  EXTERNAL_REFUND_RECONCILIATION_LIMIT,
   STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES,
   STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
@@ -168,12 +149,6 @@ describe("runScheduledMaintenance", () => {
       scannedEmpty: 0,
       deletedEmpty: 0,
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
-      hasMore: false,
-    });
-    mocks.recoverPendingCheckoutProjections.mockResolvedValue({
-      scanned: 0,
-      completed: 0,
-      failed: 0,
       hasMore: false,
     });
     mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
@@ -234,7 +209,7 @@ describe("runScheduledMaintenance", () => {
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
     });
-    mocks.reconcileStripeExternalRefundWebhooks.mockResolvedValue({
+    mocks.reconcileExternalRefundWebhooks.mockResolvedValue({
       scanned: 0,
       imported: 0,
       finalized: 0,
@@ -243,7 +218,7 @@ describe("runScheduledMaintenance", () => {
       errors: [],
       finalizedOrderIds: [],
       refundNotifications: [],
-      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       hasMore: false,
     });
     mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({
@@ -402,12 +377,6 @@ describe("runScheduledMaintenance", () => {
         limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       },
     );
-    expect(mocks.createCheckoutSqlTransport).toHaveBeenCalledWith(env);
-    expect(mocks.recoverPendingCheckoutProjections).toHaveBeenCalledWith(
-      mocks.checkoutTransport,
-      CHECKOUT_PROJECTION_SWEEP_LIMIT,
-    );
-    expect(mocks.checkoutTransport.close).toHaveBeenCalledOnce();
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
     expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
@@ -427,13 +396,13 @@ describe("runScheduledMaintenance", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Meta Purchase outbox flush"));
-    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, undefined, {
+    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
     });
-    expect(mocks.reconcileStripeExternalRefundWebhooks).toHaveBeenCalledWith(mocks.db, undefined, {
+    expect(mocks.reconcileExternalRefundWebhooks).toHaveBeenCalledWith(mocks.db, {
       encryptionKey: undefined,
-      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
     });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
       db: mocks.db,
@@ -509,7 +478,7 @@ describe("runScheduledMaintenance", () => {
   it("invalidates and enqueues notifications after Stripe external refunds are locally reconciled", async () => {
     const env = createEnv();
     const executionCtx = createExecutionContext();
-    mocks.reconcileStripeExternalRefundWebhooks.mockResolvedValue({
+    mocks.reconcileExternalRefundWebhooks.mockResolvedValue({
       scanned: 1,
       imported: 1,
       finalized: 1,
@@ -524,7 +493,7 @@ describe("runScheduledMaintenance", () => {
         amount: 15,
         refundId: "re_1",
       }],
-      limit: STRIPE_EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       hasMore: false,
     });
 

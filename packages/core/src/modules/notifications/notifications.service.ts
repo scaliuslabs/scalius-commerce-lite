@@ -43,7 +43,6 @@ interface OrderNotificationData {
 
 interface OrderNotificationOptions {
     encryptionKey?: string;
-    migrationEncryptionKey?: string;
     env?: EmailRuntimeContext["env"];
     outboxId?: string;
 }
@@ -846,7 +845,7 @@ export async function sendOrderNotificationEmail(
 
                 if (whatsappRecipient) {
                     const sendConfig = db
-                        ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey, options.migrationEncryptionKey)
+                        ? await resolveOrderWhatsAppSendConfig(db, options.encryptionKey)
                         : null;
                     if (!sendConfig) {
                         if (receiptDb && outboxId) {
@@ -978,12 +977,8 @@ interface OrderWhatsAppSendConfig {
 async function resolveOrderWhatsAppSendConfig(
     db: Database,
     encryptionKey?: string,
-    migrationEncryptionKey?: string,
 ): Promise<OrderWhatsAppSendConfig | null> {
-    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey, {
-        migrateLegacy: true,
-        migrationEncryptionKey,
-    });
+    const whatsapp = await getWhatsAppCloudApiSettings(db, encryptionKey);
     if (!whatsapp.accessToken || !whatsapp.phoneNumberId) {
         return null;
     }

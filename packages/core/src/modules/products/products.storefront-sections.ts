@@ -12,7 +12,6 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
@@ -677,7 +676,7 @@ export async function getStorefrontProductSection(
                 sku: productVariants.sku,
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: effectiveRegularReservedStockSql(),
+                reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 lowStockThreshold: productVariants.lowStockThreshold,

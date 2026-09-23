@@ -284,12 +284,6 @@ app.get("/readyz", async (c) => {
   const checks = [
     ...asyncChecks,
     queueBindingCheck("jobs_queue", env.JOBS_QUEUE),
-    bindingMethodsCheck(
-      "checkout_coordinator",
-      env.CHECKOUT_COORDINATOR,
-      ["idFromName", "get"],
-      "durable object namespace",
-    ),
     bindingMethodsCheck("rl_strict", env.RL_STRICT, ["limit"], "rate limit"),
     bindingMethodsCheck("rl_standard", env.RL_STANDARD, ["limit"], "rate limit"),
     configCheck(env),

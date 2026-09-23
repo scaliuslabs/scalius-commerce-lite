@@ -8,21 +8,12 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getPlatformSettings: vi.fn(),
   savePlatformSettings: vi.fn(),
-  invalidatePlatformConfigCache: vi.fn(),
-  invalidateSiteSettingsCache: vi.fn(),
-  invalidateStorefrontUrlCache: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
   getPlatformSettings: mocks.getPlatformSettings,
   savePlatformSettings: mocks.savePlatformSettings,
-  invalidatePlatformConfigCache: mocks.invalidatePlatformConfigCache,
-}));
-
-vi.mock("@scalius/core/modules/settings", () => ({
-  invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
-  invalidateStorefrontUrlCache: mocks.invalidateStorefrontUrlCache,
 }));
 
 vi.mock("../../../utils/cache-generation", () => ({
@@ -60,9 +51,6 @@ function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined 
 
   mocks.getPlatformSettings.mockResolvedValue(STORED);
   mocks.savePlatformSettings.mockResolvedValue(STORED);
-  mocks.invalidatePlatformConfigCache.mockResolvedValue(undefined);
-  mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-  mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -157,7 +145,7 @@ describe("admin platform settings", () => {
   });
 
   describe("PUT /api/v1/admin/settings/platform", () => {
-    it("saves a partial patch, invalidates every platform cache, and schedules storefront purges", async () => {
+    it("saves a partial patch through the platform cache and bumps the store cache generation", async () => {
       const { app, env, db, cache } = createTestApp();
       const saved = {
         ...STORED,
@@ -176,10 +164,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         apiUrl: "https://api.example.com",
         mediaUrl: "https://cdn.example.com",
-      });
-      expect(mocks.invalidatePlatformConfigCache).toHaveBeenCalledWith(cache);
-      expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledWith(cache);
-      expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(cache);
+      }, cache);
       expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
       );
       // The response reflects the persisted state, not the request-time env.
@@ -227,7 +212,7 @@ describe("admin platform settings", () => {
         dashboardUrl: "https://shop.example.com/ops/dashboard",
         setupTokenRequired: true,
         identityHandoff: { enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
-      });
+      }, expect.anything());
       expect(body.data.dashboardBasePath).toBe("/ops/dashboard");
       expect(body.data.identityHandoff).toEqual(saved.identityHandoff);
     });
@@ -244,7 +229,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         customerAuthCookieDomain: "",
         corsAllowedOrigins: [],
-      });
+      }, expect.anything());
     });
 
     it.each([
@@ -262,7 +247,6 @@ describe("admin platform settings", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.savePlatformSettings).not.toHaveBeenCalled();
-      expect(mocks.invalidatePlatformConfigCache).not.toHaveBeenCalled();
       expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
 
@@ -278,9 +262,6 @@ describe("admin platform settings", () => {
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
       expect(body.error.message).toContain("API URL must be an HTTPS origin");
-      expect(mocks.invalidatePlatformConfigCache).not.toHaveBeenCalled();
-      expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
-      expect(mocks.invalidateStorefrontUrlCache).not.toHaveBeenCalled();
       expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     });
   });

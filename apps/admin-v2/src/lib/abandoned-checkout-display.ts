@@ -211,7 +211,7 @@ function parseCartShape(data: Record<string, unknown>): ParsedAbandonedCheckoutD
 }
 
 function isHostedPaymentMethod(value: string | null): boolean {
-  return value === "stripe" || value === "sslcommerz";
+  return Boolean(value) && value !== "cod";
 }
 
 function parseArchivedHostedOrder(data: Record<string, unknown>): ParsedAbandonedCheckoutDisplay | null {

@@ -8,7 +8,6 @@ import {
     productAttributeValues,
     productAttributes,
 } from "@scalius/database/schema";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
@@ -630,7 +629,7 @@ async function readStorefrontFeedVariantMap(
                 barcodeType: productVariants.barcodeType,
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: effectiveRegularReservedStockSql(),
+                reservedStock: productVariants.reservedStock,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
@@ -1239,7 +1238,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             sku: productVariants.sku,
             price: productVariants.price,
             stock: productVariants.stock,
-            reservedStock: effectiveRegularReservedStockSql(),
+            reservedStock: productVariants.reservedStock,
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
             lowStockThreshold: productVariants.lowStockThreshold,
@@ -1450,7 +1449,7 @@ async function readStorefrontSearchVariantMap(
                 sku: productVariants.sku,
                 price: productVariants.price,
                 stock: productVariants.stock,
-                reservedStock: effectiveRegularReservedStockSql(),
+                reservedStock: productVariants.reservedStock,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,

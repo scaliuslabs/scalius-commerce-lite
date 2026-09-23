@@ -1,32 +1,25 @@
 #!/usr/bin/env node
 
 import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { staticChunkImports } from "./admin-client-import-graph.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = resolve(scriptDirectory, "..");
 
-export const measuredRoutes = [
-  { id: "__root__", label: "Document shell", maxJavaScript: 4, maxBrotliKiB: 145 },
-  { id: "/admin", label: "Admin shell", maxJavaScript: 20, maxBrotliKiB: 175 },
-  { id: "/admin/", label: "Dashboard", maxJavaScript: 28, maxBrotliKiB: 180 },
-  { id: "/admin/products/", label: "Products", maxJavaScript: 40, maxBrotliKiB: 210 },
-  { id: "/admin/orders/", label: "Orders", maxJavaScript: 42, maxBrotliKiB: 225 },
-  { id: "/admin/customers/", label: "Customers", maxJavaScript: 38, maxBrotliKiB: 205 },
-  { id: "/admin/inventory/", label: "Inventory", maxJavaScript: 42, maxBrotliKiB: 210 },
-  { id: "/admin/discounts/", label: "Discounts", maxJavaScript: 38, maxBrotliKiB: 200 },
-  { id: "/admin/analytics/", label: "Analytics", maxJavaScript: 40, maxBrotliKiB: 205 },
-  { id: "/admin/media", label: "Media", maxJavaScript: 28, maxBrotliKiB: 180 },
-];
+// The dashboard is a static SPA: every route pays for the JavaScript that
+// index.html loads plus that JavaScript's static imports. Route components are
+// lazy chunks the router fetches on navigation.
+export const shellBudget = { label: "Document shell", maxJavaScript: 4, maxBrotliKiB: 145 };
 
 const forbiddenPrincipalChunkNames = [
   /^html2pdf-.*\.js$/,
   /^TiptapEditor-.*\.js$/,
   /^media-theme-.*\.js$/,
   // html5-qrcode currently emits its browser engine under this name. The
-  // scanner route loads it dynamically; principal admin pages must not.
+  // scanner route loads it dynamically; the shell must not.
   /^esm-.*\.js$/,
 ];
 
@@ -52,60 +45,41 @@ function parseArguments(argv) {
   return result;
 }
 
-function findStartManifest(serverAssetDirectory) {
-  const candidates = readdirSync(serverAssetDirectory).filter(
-    (fileName) =>
-      fileName.startsWith("_tanstack-start-manifest_") && fileName.endsWith(".js"),
-  );
-
-  if (candidates.length !== 1) {
-    throw new Error(
-      `Expected one TanStack Start manifest in ${serverAssetDirectory}, found ${candidates.length}`,
-    );
+/** Root-relative module scripts and modulepreloads that index.html loads. */
+export function collectShellEntries(indexHtml) {
+  const entries = new Set();
+  for (const tag of indexHtml.match(/<(?:script|link)\b[^>]*>/g) ?? []) {
+    const isModuleScript = /^<script\b/.test(tag) && /\btype="module"/.test(tag);
+    const isModulePreload = /^<link\b/.test(tag) && /\brel="modulepreload"/.test(tag);
+    const url = tag.match(/\b(?:src|href)="(\/[^"]+\.js)"/)?.[1];
+    if ((isModuleScript || isModulePreload) && url) entries.add(url);
   }
-
-  return join(serverAssetDirectory, candidates[0]);
+  return [...entries];
 }
 
-function routeHierarchy(routeId) {
-  if (routeId === "__root__") return ["__root__"];
-  if (routeId === "/admin") return ["__root__", "/admin"];
-  return ["__root__", "/admin", routeId];
-}
-
-export function collectRouteJavaScript(routes, routeId) {
-  const routeIds = routeHierarchy(routeId);
-  const files = new Set();
-
-  for (const hierarchyRouteId of routeIds) {
-    const route = routes[hierarchyRouteId];
-    if (!route) throw new Error(`Route ${hierarchyRouteId} is absent from the Start manifest`);
-
-    for (const preload of route.preloads ?? []) {
-      if (preload.endsWith(".js")) files.add(preload);
-    }
+/** The entries plus every chunk they reach through static imports. */
+export function collectStaticClosure(entryFiles, readSource) {
+  const seen = new Set();
+  const pending = [...entryFiles];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    pending.push(...staticChunkImports(file, readSource(file)));
   }
-
-  return [...files].sort();
+  return [...seen].sort();
 }
 
-function measureFiles(clientDirectory, files, compressionCache) {
+function measureFiles(files) {
   let rawBytes = 0;
   let brotliBytes = 0;
 
-  for (const file of files) {
-    const filePath = join(clientDirectory, file);
-    if (!existsSync(filePath)) throw new Error(`Manifest asset does not exist: ${filePath}`);
-
+  for (const filePath of files) {
+    if (!existsSync(filePath)) throw new Error(`Shell asset does not exist: ${filePath}`);
     rawBytes += statSync(filePath).size;
-    let compressedSize = compressionCache.get(filePath);
-    if (compressedSize === undefined) {
-      compressedSize = brotliCompressSync(readFileSync(filePath), {
-        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
-      }).length;
-      compressionCache.set(filePath, compressedSize);
-    }
-    brotliBytes += compressedSize;
+    brotliBytes += brotliCompressSync(readFileSync(filePath), {
+      params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+    }).length;
   }
 
   return { rawBytes, brotliBytes };
@@ -115,23 +89,17 @@ function formatKiB(bytes) {
   return (bytes / 1024).toFixed(1);
 }
 
-export async function analyzeAdminClientBundle(repoRoot = defaultRepoRoot) {
-  const appDirectory = join(repoRoot, "apps/admin-v2");
-  const clientDirectory = join(appDirectory, "dist/client");
-  const serverAssetDirectory = join(appDirectory, "dist/server/assets/immutable");
-  const manifestPath = findStartManifest(serverAssetDirectory);
-  const manifestModule = await import(`${pathToFileURL(manifestPath).href}?report=${Date.now()}`);
-  const routes = manifestModule.tsrStartManifest().routes;
-  const compressionCache = new Map();
+export function analyzeAdminClientBundle(repoRoot = defaultRepoRoot) {
+  const distDirectory = join(repoRoot, "apps/admin-v2/dist");
+  const indexHtml = readFileSync(join(distDirectory, "index.html"), "utf8");
+  const entries = collectShellEntries(indexHtml).map((url) => join(distDirectory, url));
+  const files = collectStaticClosure(entries, (file) => readFileSync(file, "utf8"));
 
-  return measuredRoutes.map((route) => {
-    const files = collectRouteJavaScript(routes, route.id);
-    return {
-      ...route,
-      files,
-      ...measureFiles(clientDirectory, files, compressionCache),
-    };
-  });
+  return [{
+    ...shellBudget,
+    files: files.map((file) => `/${relative(distDirectory, file)}`),
+    ...measureFiles(files),
+  }];
 }
 
 export function validateAdminClientBundle(measurements) {
@@ -162,11 +130,11 @@ export function validateAdminClientBundle(measurements) {
   return failures;
 }
 
-async function main() {
+function main() {
   const options = parseArguments(process.argv.slice(2));
-  const measurements = await analyzeAdminClientBundle(options.repoRoot);
+  const measurements = analyzeAdminClientBundle(options.repoRoot);
 
-  console.log("Admin client direct-route preload closure:");
+  console.log("Admin client initial (static import) closure:");
   console.table(
     measurements.map((measurement) => ({
       route: measurement.label,
@@ -189,5 +157,5 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await main();
+  main();
 }

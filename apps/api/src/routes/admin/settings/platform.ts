@@ -4,13 +4,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
   getPlatformSettings,
-  invalidatePlatformConfigCache,
   savePlatformSettings,
 } from "@scalius/core/modules/settings/platform-settings.service";
-import {
-  invalidateSiteSettingsCache,
-  invalidateStorefrontUrlCache,
-} from "@scalius/core/modules/settings";
 import {
   IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
@@ -129,14 +124,7 @@ const updatePlatformRoute = createRoute({
 app.openapi(updatePlatformRoute, async (c) => {
   const db = c.get("db");
   const patch = c.req.valid("json");
-  const stored = await savePlatformSettings(db, patch);
-
-  const kv = c.env.CACHE;
-  await Promise.all([
-    invalidatePlatformConfigCache(kv),
-    invalidateSiteSettingsCache(kv),
-    invalidateStorefrontUrlCache(kv),
-  ]);
+  const stored = await savePlatformSettings(db, patch, c.env.CACHE);
   await bumpCacheGeneration(c);
 
   c.header("Cache-Control", "private, no-store");

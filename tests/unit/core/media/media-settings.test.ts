@@ -1,9 +1,7 @@
+import { createSqliteD1Database } from "../../../../packages/database/src/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
-import {
-  isValidMediaHostInput,
-  normalizeMediaHost,
-  parseMediaOptimizationSettings,
-} from "../../../../packages/core/src/modules/settings/site-settings.service";
+import { mediaDocument, normalizeMediaHost } from "../../../../packages/core/src/modules/settings/documents";
+import { isValidMediaHostInput } from "../../../../packages/core/src/modules/settings/site-settings.service";
 
 describe("media delivery settings", () => {
   it("normalizes pasted CDN hosts without accepting paths or queries", () => {
@@ -24,17 +22,16 @@ describe("media delivery settings", () => {
     );
   });
 
-  it("parses stored settings into a safe canonical shape", () => {
-    expect(
-      parseMediaOptimizationSettings(
-        JSON.stringify({
-          enabled: false,
-          canonicalCdnUrl: "https://cdn.example.com/",
-          allowedImageHosts: ["media.example.com", "media.example.com"],
-          canonicalHostAliases: ["old.example.com/path", "old.example.com"],
-        }),
-      ),
-    ).toEqual({
+  it("reads a stored document into a safe canonical shape", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('media', 'document', ?, 'json', 'media')")
+      .run(JSON.stringify({
+        enabled: false,
+        canonicalCdnUrl: "https://cdn.example.com/",
+        allowedImageHosts: ["media.example.com", "media.example.com"],
+        canonicalHostAliases: ["old.example.com/path", "old.example.com"],
+      }));
+    expect(await mediaDocument.read(db)).toEqual({
       canonicalCdnUrl: "cdn.example.com",
       canonicalHostAliases: ["old.example.com"],
     });

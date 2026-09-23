@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import {
   DEFAULT_CUSTOMER_REQUEST_POLICY,
@@ -98,42 +99,22 @@ describe("customer request policy", () => {
       .toEqual(["return", "refund"]);
   });
 
-  it("reads missing settings as defaults and persists normalized JSON", async () => {
-    const readQuery = {
-      from: vi.fn(() => readQuery),
-      where: vi.fn(() => readQuery),
-      get: vi.fn(() => Promise.resolve(undefined)),
-    };
-    await expect(getCustomerRequestPolicy({
-      select: vi.fn(() => readQuery),
-    } as never)).resolves.toEqual(DEFAULT_CUSTOMER_REQUEST_POLICY);
+  it("reads missing settings as defaults and persists the normalized policy", async () => {
+    const { db } = createSqliteD1Database();
+    await expect(getCustomerRequestPolicy(db)).resolves.toEqual(DEFAULT_CUSTOMER_REQUEST_POLICY);
 
-    const insertQuery = {
-      values: vi.fn(() => insertQuery),
-      onConflictDoUpdate: vi.fn(() => Promise.resolve()),
-    };
-    const db = { insert: vi.fn(() => insertQuery) };
-    await expect(saveCustomerRequestPolicy(db as never, {
-      cancellationEnabled: false,
-      visibility: "show_unavailable",
-    })).resolves.toEqual({
+    const expected = {
       cancellationEnabled: false,
       returnEnabled: true,
       refundEnabled: true,
       visibility: "show_unavailable",
       introText: null,
-    });
-    expect(insertQuery.values).toHaveBeenCalledWith(expect.objectContaining({
-      category: "order_support",
-      key: "customer_request_policy",
-      type: "json",
-      value: JSON.stringify({
-        cancellationEnabled: false,
-        returnEnabled: true,
-        refundEnabled: true,
-        visibility: "show_unavailable",
-        introText: null,
-      }),
-    }));
+    };
+    await expect(saveCustomerRequestPolicy(db, {
+      cancellationEnabled: false,
+      visibility: "show_unavailable",
+      unexpected: true,
+    })).resolves.toEqual(expected);
+    await expect(getCustomerRequestPolicy(db)).resolves.toEqual(expected);
   });
 });

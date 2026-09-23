@@ -1,5 +1,5 @@
 // apps/api/src/routes/platform.ts
-// Public platform origins. The storefront and dashboard Workers read this at
+// Public platform origins. The storefront Worker and the dashboard read this at
 // request time instead of carrying their own URL configuration.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
@@ -14,7 +14,7 @@ export const publicPlatformConfigSchema = z.object({
   /** May carry a path prefix when the dashboard is served below a host root. */
   dashboardUrl: z.string(),
   mediaUrl: z.string(),
-  /** Opt-in automation contracts. The dashboard Worker verifies handoff tokens with these. */
+  /** Opt-in automation contracts. Dashboard sign-in verifies handoff tokens with these. */
   setupTokenRequired: z.boolean(),
   identityHandoff: z.object({
     enabled: z.boolean(),

@@ -1,4 +1,4 @@
-import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "@scalius/core/modules/payments/sslcommerz";
+import { SSL_COMMERZ_BDT_AMOUNT_LIMITS } from "@scalius/shared/payment-gateway-environment";
 
 export const CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS = SSL_COMMERZ_BDT_AMOUNT_LIMITS;
 export const CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL =

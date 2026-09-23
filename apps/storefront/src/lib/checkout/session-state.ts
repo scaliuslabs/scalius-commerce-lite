@@ -33,9 +33,8 @@ const CHECKOUT_TRANSFER_SYNC_FIELDS = [
 ] as const;
 const HOSTED_PAYMENT_RECOVERY_STORAGE_KEY = "scalius_hosted_payment_recovery";
 const HOSTED_PAYMENT_RECOVERY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const CHECKOUT_RECOVERY_GATEWAYS = new Set(["cod", "stripe", "sslcommerz"]);
-
-type CheckoutRecoveryGateway = "cod" | "stripe" | "sslcommerz";
+/** "cod" or a gateway id. */
+type CheckoutRecoveryGateway = string;
 type CheckoutFormDraftField = (typeof CHECKOUT_FORM_DRAFT_FIELDS)[number];
 
 export type CheckoutFormDraft = Partial<Record<CheckoutFormDraftField, string>>;
@@ -247,8 +246,8 @@ function checkoutRecoveryBaseOrigin(): string {
 }
 
 function normalizeCheckoutRecoveryGateway(value: unknown): CheckoutRecoveryGateway | null {
-  return typeof value === "string" && CHECKOUT_RECOVERY_GATEWAYS.has(value)
-    ? value as CheckoutRecoveryGateway
+  return typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value)
+    ? value
     : null;
 }
 

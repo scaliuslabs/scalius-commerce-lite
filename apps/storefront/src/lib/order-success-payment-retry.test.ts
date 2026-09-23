@@ -35,8 +35,8 @@ describe("order success payment retry", () => {
     expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
     expect(isHostedPaymentRetryResult("cancelled")).toBe(true);
     expect(isHostedPaymentRetryResult("failed")).toBe(true);
-    expect(getOrderSuccessRetryEndpoint("sslcommerz")).toBe("/api/checkout/sslcommerz-session");
-    expect(getOrderSuccessRetryEndpoint("stripe")).toBe("/api/checkout/stripe-intent");
+    expect(getOrderSuccessRetryEndpoint("sslcommerz")).toBe("/api/checkout/payment-session/sslcommerz");
+    expect(getOrderSuccessRetryEndpoint("stripe")).toBe("/api/checkout/payment-session/stripe");
 
     expect(
       canRetryOrderSuccessPayment(
@@ -83,7 +83,7 @@ describe("order success payment retry", () => {
     ).toEqual([
       {
         gateway: "sslcommerz",
-        endpoint: "/api/checkout/sslcommerz-session",
+        endpoint: "/api/checkout/payment-session/sslcommerz",
         current: true,
         label: "Pay online",
         requiresCardForm: false,
@@ -106,14 +106,14 @@ describe("order success payment retry", () => {
     ).toEqual([
       {
         gateway: "sslcommerz",
-        endpoint: "/api/checkout/sslcommerz-session",
+        endpoint: "/api/checkout/payment-session/sslcommerz",
         current: true,
         label: "Pay online",
         requiresCardForm: false,
       },
       {
         gateway: "stripe",
-        endpoint: "/api/checkout/stripe-intent",
+        endpoint: "/api/checkout/payment-session/stripe",
         current: false,
         label: "Credit or debit card",
         requiresCardForm: true,
@@ -135,7 +135,7 @@ describe("order success payment retry", () => {
     ).toEqual([
       {
         gateway: "stripe",
-        endpoint: "/api/checkout/stripe-intent",
+        endpoint: "/api/checkout/payment-session/stripe",
         current: false,
         label: "Credit or debit card",
         requiresCardForm: true,

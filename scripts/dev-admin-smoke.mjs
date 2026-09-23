@@ -3,9 +3,10 @@
  * Local admin settings smoke helper.
  *
  * This script is intentionally loopback-local only. It can start the local API
- * and admin workers, ensures a first local admin when none exists, signs in
- * through the dashboard worker's same-origin Better Auth route, then proves the
- * admin proxy session can read account security and save business settings.
+ * Worker and dashboard dev server, ensures a first local admin when none
+ * exists, signs in through the dashboard origin's Better Auth route (Vite
+ * proxies it to the API), then proves that session can read account security
+ * and save business settings.
  */
 
 import { execFileSync, spawn } from "child_process";
@@ -234,7 +235,7 @@ Options:
   --state <path>        Wrangler local state path; relative paths resolve from repo root
   --reset-admin         Reset local auth tables through scripts/dev-admin.mjs first
   --skip-setup          Do not create the first local admin when none exists
-  --no-start            Require API and admin workers to already be running
+  --no-start            Require the API Worker and dashboard dev server to already be running
   --skip-migrations     Do not apply local D1 migrations before starting workers
 
 Safety:
@@ -277,7 +278,7 @@ async function withLocalWorkers(config, work) {
 
     if (!adminWasRunning) {
       assertDefaultDevPort(config.adminBaseUrl, 4323, "admin");
-      log(`Starting temporary admin worker at ${config.adminBaseUrl}...`);
+      log(`Starting temporary dashboard dev server at ${config.adminBaseUrl}...`);
       const child = spawnWorker("admin", ["--filter", "@scalius/admin-v2", "dev"], config);
       children.push(child);
       workers.adminStarted = true;

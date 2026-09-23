@@ -10,18 +10,20 @@ import {
   orderPayments,
   orders,
   paymentSessionAttempts,
-  PaymentMethod,
   PaymentRecordStatus,
   PaymentStatus,
-  settings,
 } from "@scalius/database/schema";
-import { createPaymentIntent } from "@scalius/core/modules/payments/stripe";
-import {
-  buildSSLCommerzTranId,
-  getSSLCommerzBdtAmountLimitIssue,
-  initSSLCommerzSession,
-} from "@scalius/core/modules/payments/sslcommerz";
+import { currencyDocument } from "@scalius/core/modules/settings/documents";
 import { getPaymentMethodPreferences } from "@scalius/core/modules/payments/gateway-settings";
+import { buildPaymentCorrelationId } from "@scalius/core/modules/payments/gateways/correlation";
+import { PaymentProviderError, type PaymentGateway } from "@scalius/core/modules/payments/gateways/port";
+import {
+  getGatewayAmountIssue,
+  getPaymentGateway,
+  getPaymentMethodCurrencyIssue,
+  isOnlinePaymentMethod,
+  requirePaymentGateway,
+} from "@scalius/core/modules/payments/gateways/registry";
 import {
   buildPaymentSessionAttemptIdentity,
   assertNoActivePaymentSessionAttempt,
@@ -43,7 +45,6 @@ import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from ".
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 import {
   createPaymentProviderTimeoutError,
-  isPaymentProviderTimedOut,
   withPaymentProviderDeadline,
 } from "./payment-provider-deadline";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -70,8 +71,6 @@ type PaymentReturnTarget =
   | { kind: "customer_account" }
   | { kind: "agent_continuation"; continuationId: string };
 
-type PaymentGateway = "stripe" | "sslcommerz";
-
 export interface CreatePaymentSessionInput {
   orderId: string;
   paymentType?: PaymentSessionType;
@@ -85,7 +84,7 @@ export interface CreatePaymentSessionInput {
 export interface CreateCustomerAccountPaymentSessionInput {
   orderId: string;
   customerId: string;
-  gateway?: PaymentGateway;
+  gateway?: string;
   replaceExistingAttempt?: boolean;
 }
 
@@ -98,7 +97,7 @@ export interface CreateAgentContextPaymentSessionInput {
 
 export interface CustomerPaymentSessionRecovery {
   eligible: boolean;
-  gateway: PaymentGateway | null;
+  gateway: string | null;
   paymentType: PaymentSessionType | null;
   amountDue: number;
   label: string | null;
@@ -108,7 +107,8 @@ export interface CustomerPaymentSessionRecovery {
   hostedRedirect: boolean;
 }
 
-export type StripeIntentResponse = {
+/** Card flow (Stripe.js confirms in the browser). */
+export type CardSessionResponse = {
   clientSecret?: string;
   paymentIntentId?: string;
   publishableKey: string;
@@ -116,28 +116,24 @@ export type StripeIntentResponse = {
   currency: string;
 };
 
-export type SSLCommerzSessionResponse = {
+/** Hosted flow: the buyer is redirected to the provider. */
+export type HostedSessionResponse = {
   gatewayUrl?: string;
   sessionKey?: string;
 };
 
 export type PaymentSessionProcessingResponse = PaymentSessionAttemptProcessingResult;
 
-export type CreatedCustomerPaymentSession =
-  | {
-      gateway: "stripe";
-      paymentType: PaymentSessionType;
-      amount: number;
-      currency: string;
-      stripe: StripeIntentResponse;
-    }
-  | {
-      gateway: "sslcommerz";
-      paymentType: PaymentSessionType;
-      amount: number;
-      currency: string;
-      hosted: SSLCommerzSessionResponse;
-    };
+export type CreatedCustomerPaymentSession = {
+  gateway: string;
+  paymentType: PaymentSessionType;
+  amount: number;
+  currency: string;
+  /** Card flows only. */
+  stripe?: CardSessionResponse;
+  /** Hosted flows only. */
+  hosted?: HostedSessionResponse;
+};
 
 export function isPaymentSessionProcessingResult(
   value: unknown,
@@ -238,19 +234,9 @@ export type CustomerPaymentSessionRecoveryOrder = Pick<
   | "shipmentClaimExpiresAt"
 >;
 
-const ONLINE_GATEWAY_METHODS = new Set<string>([
-  PaymentMethod.STRIPE,
-  PaymentMethod.SSLCOMMERZ,
-]);
-
 async function loadCurrentCurrencyCode(db: Database): Promise<string> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, "currency"))
-    .all();
-  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  const code = normalizeSupportedCurrencyCode(values.currency_code);
+  const stored = await currencyDocument.readDetailed(db);
+  const code = stored.stored ? normalizeSupportedCurrencyCode(stored.value.currencyCode) : null;
   if (!code) {
     throw new ValidationError(
       "Current store currency settings are incomplete. Save the currency settings before applying them to an order payment.",
@@ -269,130 +255,148 @@ function createCurrentCurrencyReader(db: Database) {
   };
 }
 
-export async function createStripePaymentSession(
+export async function createPaymentSession(
   c: PaymentRouteContext,
+  gatewayId: string,
   input: CreatePaymentSessionInput,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
-  const db = c.get("db");
-  const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
-  return createStripePaymentSessionForOrder(c, input, order);
+): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
+  const gateway = requirePaymentGateway(gatewayId);
+  const order = await loadPaymentSessionOrder(c.get("db"), input.orderId, input.expectedCustomerId);
+  return createPaymentSessionForOrder(c, gateway, input, order);
 }
 
-async function createStripePaymentSessionForOrder(
+function sessionBody(
+  gateway: PaymentGateway,
+  policy: PaymentSessionPolicy,
+  currency: string,
+  response: CardSessionResponse | HostedSessionResponse,
+): CreatedCustomerPaymentSession {
+  return {
+    gateway: gateway.id,
+    paymentType: policy.paymentType,
+    amount: policy.chargeAmount,
+    currency,
+    ...(gateway.flow === "card"
+      ? { stripe: response as CardSessionResponse }
+      : { hosted: response as HostedSessionResponse }),
+  };
+}
+
+/**
+ * The one session path for every gateway: assert payable → currency and
+ * provider limits → checkout policy → ready settings → plan → gateway switch →
+ * claim the attempt locally → provider call under a deadline → record the
+ * created attempt. A replayed claim returns the stored provider response.
+ */
+async function createPaymentSessionForOrder(
   c: PaymentRouteContext,
+  gateway: PaymentGateway,
   input: CreatePaymentSessionInput,
   order: PaymentSessionOrderRow,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "stripe" }) | PaymentSessionProcessingResponse> {
+): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
   const db = c.get("db");
-  assertOrderCanReachGatewayReadinessCheck(
-    order,
-    PaymentMethod.STRIPE,
-    "Stripe",
-  );
+  assertOrderCanReachGatewayReadinessCheck(order, gateway.id, gateway.label);
   const orderCurrency = resolveAuthoritativeOrderCurrency(order);
+  const currencyIssue = getPaymentMethodCurrencyIssue(gateway.id, orderCurrency.code);
+  if (currencyIssue) throw new ValidationError(currencyIssue);
   const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "stripe");
+  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id);
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
+  const currency = orderCurrency.code;
+  const amountMinor = resolveAuthoritativeProviderMinorAmount(policy, orderCurrency);
+  const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
+  if (amountIssue) throw new ValidationError(amountIssue);
 
-  const stripe = await loadCheckoutGatewaySettings(
-    db,
-    encryptionKey,
-    "stripe",
-  );
-  const currency = orderCurrency.code.toLowerCase();
-  const amountInSmallestUnit = resolveAuthoritativeProviderMinorAmount(policy, orderCurrency);
+  const settings = await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
+  const urls = buildGatewayUrls(c, gateway.id, input, policy);
   await ensurePendingPaymentPlanForSession(db, order, policy);
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.STRIPE, "Stripe", {
+  order = await ensureOrderCanUseGateway(db, order, gateway.id, gateway.label, {
     replaceExistingAttempt: input.replaceExistingAttempt,
   });
+
   const attemptIdentity = await buildPaymentSessionAttemptIdentity({
     orderId: input.orderId,
-    gateway: "stripe",
+    gateway: gateway.id,
     paymentType: policy.paymentType,
     amount: policy.chargeAmount,
     currency,
     ...identityProof(input.proof),
-    requestContext: {
-      amountInSmallestUnit,
-      manualCapture: false,
-      orderVersion: order.version,
-    },
+    requestContext: { amountMinor, orderVersion: order.version, ...urls },
   });
-  const attemptClaim = await claimPaymentSessionAttempt<StripeIntentResponse>(db, attemptIdentity);
-  if (attemptClaim.status === "replay") {
-    return {
-      gateway: "stripe",
-      paymentType: policy.paymentType,
-      amount: policy.chargeAmount,
-      currency,
-      stripe: attemptClaim.response,
-    };
-  }
+  const correlationId = buildPaymentCorrelationId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
+  const attemptClaim = await claimPaymentSessionAttempt<CardSessionResponse | HostedSessionResponse>(db, {
+    ...attemptIdentity,
+    providerCorrelationId: correlationId,
+  });
+  if (attemptClaim.status === "replay") return sessionBody(gateway, policy, currency, attemptClaim.response);
   if (attemptClaim.status === "processing") return attemptClaim;
 
-  let result: Awaited<ReturnType<typeof createPaymentIntent>>;
+  let session: Awaited<ReturnType<PaymentGateway["createSession"]>>;
   try {
-    result = await withPaymentProviderDeadline("Stripe", (_signal, requestTimeoutMs) =>
-      createPaymentIntent(stripe.secretKey, {
+    session = await withPaymentProviderDeadline(gateway.label, (signal, requestTimeoutMs) =>
+      gateway.createSession(settings, {
+        attemptKey: attemptIdentity.attemptKey,
+        correlationId,
         orderId: input.orderId,
-        amount: amountInSmallestUnit,
-        currency,
         paymentType: policy.paymentType,
-        manualCapture: false,
-        idempotencyKey: attemptIdentity.attemptKey,
+        amountMinor,
+        currency,
+        buyer: {
+          name: order.customerName,
+          phone: order.customerPhone,
+          email: order.customerEmail ?? undefined,
+          address: order.shippingAddress,
+          city: order.cityName ?? undefined,
+        },
+        urls,
+        signal,
         requestTimeoutMs,
-        maxNetworkRetries: 0,
       })
     );
   } catch (error: unknown) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-      .catch((markError: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", markError));
+      .catch((markError: unknown) => console.error(`[payments] Failed to mark ${gateway.id} session attempt failed:`, markError));
+    if (error instanceof PaymentProviderError) {
+      throw error.timedOut
+        ? createPaymentProviderTimeoutError(gateway.label)
+        : new ApiError(500, "PAYMENT_ERROR", error.message);
+    }
     throw error;
   }
 
-  if (!result.success) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create payment intent")
-      .catch((error: unknown) => console.error("[payments] Failed to mark Stripe session attempt failed:", error));
-    if (isPaymentProviderTimedOut(result)) {
-      throw createPaymentProviderTimeoutError("Stripe");
-    }
-    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create payment intent");
-  }
-
-  const responsePayload: StripeIntentResponse = {
-    clientSecret: result.clientSecret,
-    paymentIntentId: result.paymentIntentId,
-    publishableKey: stripe.publishableKey,
-    amount: policy.chargeAmount,
-    currency,
-  };
+  const responsePayload: CardSessionResponse | HostedSessionResponse = gateway.flow === "card"
+    ? {
+        clientSecret: session.clientSecret,
+        paymentIntentId: session.providerRef,
+        publishableKey: session.publishableKey ?? "",
+        amount: policy.chargeAmount,
+        currency: currency.toLowerCase(),
+      }
+    : { gatewayUrl: session.redirectUrl, sessionKey: session.providerRef };
 
   await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-    providerSessionId: result.paymentIntentId,
+    providerSessionId: session.providerRef,
+    providerCorrelationId: correlationId,
     response: responsePayload,
   });
 
-  await scheduleOrderRecoveryHint(
-    c,
-    db
-      .update(orders)
-      .set({ paymentIntentId: result.paymentIntentId, updatedAt: sql`unixepoch()` })
-      .where(eq(orders.id, input.orderId)),
-    "[payments] Stripe session was created, but local order recovery hint failed:",
-  );
+  if (session.providerRef) {
+    await scheduleOrderRecoveryHint(
+      c,
+      db
+        .update(orders)
+        .set({ paymentIntentId: session.providerRef, updatedAt: sql`unixepoch()` })
+        .where(eq(orders.id, input.orderId)),
+      `[payments] ${gateway.label} session was created, but local order recovery hint failed:`,
+    );
+  }
 
-  return {
-    gateway: "stripe",
-    paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
-    currency,
-    stripe: responsePayload,
-  };
+  return sessionBody(gateway, policy, currency, responsePayload);
 }
 
 export async function createCustomerAccountPaymentSession(
@@ -415,8 +419,7 @@ export async function createCustomerAccountPaymentSession(
     replaceExistingAttempt: input.replaceExistingAttempt,
   };
 
-  if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
-  return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
+  return createPaymentSessionForOrder(c, requirePaymentGateway(gateway), sessionInput, order);
 }
 
 export async function createAgentContextPaymentSession(
@@ -439,8 +442,7 @@ export async function createAgentContextPaymentSession(
     },
     expectedCustomerId: input.customerId ?? undefined,
   };
-  if (gateway === "stripe") return createStripePaymentSessionForOrder(c, sessionInput, order);
-  return createSSLCommerzPaymentSessionForOrder(c, sessionInput, order);
+  return createPaymentSessionForOrder(c, requirePaymentGateway(gateway), sessionInput, order);
 }
 
 export async function resolveCustomerPaymentSessionRecovery(
@@ -462,12 +464,12 @@ export async function resolveCustomerPaymentSessionRecovery(
   }
 
   const isBalancePayment = shouldRequestBalancePayment(order);
-  const candidateGateways: PaymentGateway[] = isBalancePayment
+  const candidateGateways: string[] = isBalancePayment
     ? [gateway]
     : [
         gateway,
         ...(await getPaymentMethodPreferences(db)).enabledMethods.filter(
-          (method): method is PaymentGateway => ONLINE_GATEWAY_METHODS.has(method) && method !== gateway,
+          (method) => isOnlinePaymentMethod(method) && method !== gateway,
         ),
       ];
   let blockedRecovery = inactiveRecovery(
@@ -478,16 +480,12 @@ export async function resolveCustomerPaymentSessionRecovery(
 
   for (const candidateGateway of candidateGateways) {
     try {
-      assertOrderCanReachGatewayReadinessCheck(
-        order,
-        candidateGateway,
-        gatewayLabel(candidateGateway),
-      );
+      const candidate = requirePaymentGateway(candidateGateway);
+      assertOrderCanReachGatewayReadinessCheck(order, candidate.id, candidate.label);
       const orderCurrency = resolveAuthoritativeOrderCurrency(order);
       const currentCurrency = createCurrentCurrencyReader(db);
-      if (candidateGateway === "sslcommerz" && orderCurrency.code !== "BDT") {
-        throw new ValidationError("SSLCommerz checkout requires the order currency to be BDT.");
-      }
+      const currencyIssue = getPaymentMethodCurrencyIssue(candidate.id, orderCurrency.code);
+      if (currencyIssue) throw new ValidationError(currencyIssue);
       const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
       const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, candidateGateway);
       const policy = await resolvePaymentSessionPolicy(
@@ -498,9 +496,9 @@ export async function resolveCustomerPaymentSessionRecovery(
         orderCurrency,
         currentCurrency.getCode,
       );
-      await loadCheckoutGatewaySettings(db, encryptionKey, candidateGateway);
+      await loadCheckoutGatewaySettings(db, encryptionKey, candidate);
 
-      return activeRecovery(candidateGateway, policy);
+      return activeRecovery(candidate, policy);
     } catch (error: unknown) {
       if (error instanceof ServiceUnavailableError) {
         blockedRecovery = inactiveRecovery(error.message, candidateGateway, "unavailable");
@@ -515,169 +513,6 @@ export async function resolveCustomerPaymentSessionRecovery(
   }
 
   return blockedRecovery;
-}
-
-export async function createSSLCommerzPaymentSession(
-  c: PaymentRouteContext,
-  input: CreatePaymentSessionInput,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
-  const db = c.get("db");
-  const order = await loadPaymentSessionOrder(db, input.orderId, input.expectedCustomerId);
-  return createSSLCommerzPaymentSessionForOrder(c, input, order);
-}
-
-async function createSSLCommerzPaymentSessionForOrder(
-  c: PaymentRouteContext,
-  input: CreatePaymentSessionInput,
-  order: PaymentSessionOrderRow,
-): Promise<(CreatedCustomerPaymentSession & { gateway: "sslcommerz" }) | PaymentSessionProcessingResponse> {
-  const db = c.get("db");
-  assertOrderCanReachGatewayReadinessCheck(
-    order,
-    PaymentMethod.SSLCOMMERZ,
-    "SSLCommerz",
-  );
-  const orderCurrency = resolveAuthoritativeOrderCurrency(order);
-  const currentCurrency = createCurrentCurrencyReader(db);
-  if (orderCurrency.code !== "BDT") {
-    throw new ValidationError("SSLCommerz checkout requires the order currency to be BDT.");
-  }
-
-  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, "sslcommerz");
-  const policy = await resolvePaymentSessionPolicy(db, order, {
-    paymentType: input.paymentType,
-    depositAmount: input.depositAmount,
-  }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
-  const sslcommerzAmountIssue = getSSLCommerzBdtAmountLimitIssue(policy.chargeAmount);
-  if (sslcommerzAmountIssue) {
-    throw new ValidationError(sslcommerzAmountIssue);
-  }
-
-  const ssl = await loadCheckoutGatewaySettings(
-    db,
-    encryptionKey,
-    "sslcommerz",
-  );
-  const currency = orderCurrency.code;
-
-  const origin = getTrustedApiOrigin(c.env, c.req.url);
-  const apiBase = `${origin}/api/v1`;
-  const callbackParams = {
-    order_id: input.orderId,
-    ...buildCallbackParams(input.returnTarget, policy.paymentType, policy.paymentType === "deposit" ? policy.depositAmount : undefined),
-  };
-  const successUrl = buildCallbackUrl(apiBase, "/payment/sslcommerz/success", callbackParams);
-  const failUrl = buildCallbackUrl(apiBase, "/payment/sslcommerz/fail", callbackParams);
-  const cancelUrl = buildCallbackUrl(apiBase, "/payment/sslcommerz/cancel", callbackParams);
-  const ipnUrl = `${apiBase}/webhooks/sslcommerz`;
-  await ensurePendingPaymentPlanForSession(db, order, policy);
-  order = await ensureOrderCanUseGateway(db, order, PaymentMethod.SSLCOMMERZ, "SSLCommerz", {
-    replaceExistingAttempt: input.replaceExistingAttempt,
-  });
-
-  const attemptIdentity = await buildPaymentSessionAttemptIdentity({
-    orderId: input.orderId,
-    gateway: "sslcommerz",
-    paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
-    currency,
-    ...identityProof(input.proof),
-    requestContext: {
-      successUrl,
-      failUrl,
-      cancelUrl,
-      ipnUrl,
-      orderVersion: order.version,
-    },
-  });
-  const transactionId = buildSSLCommerzTranId(input.orderId, policy.paymentType, attemptIdentity.transactionSuffix);
-  const attemptClaim = await claimPaymentSessionAttempt<SSLCommerzSessionResponse>(db, {
-    ...attemptIdentity,
-    providerCorrelationId: transactionId,
-  });
-  if (attemptClaim.status === "replay") {
-    return {
-      gateway: "sslcommerz",
-      paymentType: policy.paymentType,
-      amount: policy.chargeAmount,
-      currency,
-      hosted: attemptClaim.response,
-    };
-  }
-  if (attemptClaim.status === "processing") return attemptClaim;
-
-  let result: Awaited<ReturnType<typeof initSSLCommerzSession>>;
-  try {
-    result = await withPaymentProviderDeadline(
-      "SSLCommerz",
-      (signal) => initSSLCommerzSession(
-        ssl.storeId,
-        ssl.storePassword,
-        ssl.sandbox,
-        {
-          orderId: input.orderId,
-          transactionId,
-          totalAmount: policy.chargeAmount,
-          currency,
-          successUrl,
-          failUrl,
-          cancelUrl,
-          ipnUrl,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          customerEmail: order.customerEmail ?? undefined,
-          customerAddress: order.shippingAddress,
-          customerCity: order.cityName ?? undefined,
-          paymentType: policy.paymentType,
-          signal,
-        }
-      )
-    );
-  } catch (error: unknown) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
-      .catch((markError: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", markError));
-    throw error;
-  }
-
-  if (!result.success) {
-    await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, result.error || "Failed to create SSLCommerz session")
-      .catch((error: unknown) => console.error("[payments] Failed to mark SSLCommerz session attempt failed:", error));
-    if (isPaymentProviderTimedOut(result)) {
-      throw createPaymentProviderTimeoutError("SSLCommerz");
-    }
-    throw new ApiError(500, "PAYMENT_ERROR", result.error || "Failed to create SSLCommerz session");
-  }
-
-  const responsePayload: SSLCommerzSessionResponse = {
-    gatewayUrl: result.gatewayUrl,
-    sessionKey: result.sessionKey,
-  };
-
-  await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
-    providerSessionId: result.sessionKey,
-    providerCorrelationId: transactionId,
-    response: responsePayload,
-  });
-
-  if (result.sessionKey) {
-    await scheduleOrderRecoveryHint(
-      c,
-      db
-        .update(orders)
-        .set({ paymentIntentId: result.sessionKey, updatedAt: sql`unixepoch()` })
-        .where(eq(orders.id, input.orderId)),
-      "[payments] SSLCommerz session was created, but local order recovery hint failed:",
-    );
-  }
-
-  return {
-    gateway: "sslcommerz",
-    paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
-    currency,
-    hosted: responsePayload,
-  };
 }
 
 async function loadPaymentSessionOrder(
@@ -730,8 +565,8 @@ function assertOrderCanReachGatewayReadinessCheck(
   if (order.paymentMethod === expectedGateway) return;
 
   if (
-    !ONLINE_GATEWAY_METHODS.has(order.paymentMethod) ||
-    !ONLINE_GATEWAY_METHODS.has(expectedGateway) ||
+    !isOnlinePaymentMethod(order.paymentMethod) ||
+    !isOnlinePaymentMethod(expectedGateway) ||
     order.paymentStatus !== PaymentStatus.FAILED ||
     Number(order.paidAmount ?? 0) > 0
   ) {
@@ -750,7 +585,7 @@ async function ensureOrderCanUseGateway(
   assertPaymentSessionOrderPayable(order);
   if (order.paymentMethod === expectedGateway && !options.replaceExistingAttempt) return order;
 
-  if (!ONLINE_GATEWAY_METHODS.has(order.paymentMethod) || !ONLINE_GATEWAY_METHODS.has(expectedGateway)) {
+  if (!isOnlinePaymentMethod(order.paymentMethod) || !isOnlinePaymentMethod(expectedGateway)) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
 
@@ -961,15 +796,8 @@ async function ensureOrderCanUseGateway(
   };
 }
 
-function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMethod">): PaymentGateway | null {
-  if (order.paymentMethod === PaymentMethod.STRIPE) return "stripe";
-  if (order.paymentMethod === PaymentMethod.SSLCOMMERZ) return "sslcommerz";
-  return null;
-}
-
-function gatewayLabel(gateway: PaymentGateway): string {
-  if (gateway === "sslcommerz") return "SSLCommerz";
-  return "Stripe";
+function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMethod">): string | null {
+  return getPaymentGateway(order.paymentMethod)?.id ?? null;
 }
 
 function shouldRequestBalancePayment(order: Pick<PaymentSessionOrderRow, "paymentStatus" | "paidAmount" | "balanceDue">): boolean {
@@ -978,7 +806,7 @@ function shouldRequestBalancePayment(order: Pick<PaymentSessionOrderRow, "paymen
 
 function inactiveRecovery(
   reason: string,
-  gateway: PaymentGateway | null = null,
+  gateway: string | null = null,
   blockType: "validation" | "unavailable" = "validation",
 ): CustomerPaymentSessionRecovery {
   return {
@@ -1000,13 +828,13 @@ function activeRecovery(
 ): CustomerPaymentSessionRecovery {
   return {
     eligible: true,
-    gateway,
+    gateway: gateway.id,
     paymentType: policy.paymentType,
     amountDue: policy.chargeAmount,
     label: policy.paymentType === "balance" ? "Pay balance" : "Retry payment",
     reason: null,
-    requiresCardForm: gateway === "stripe",
-    hostedRedirect: gateway !== "stripe",
+    requiresCardForm: gateway.flow === "card",
+    hostedRedirect: gateway.flow === "hosted",
   };
 }
 
@@ -1077,6 +905,27 @@ function buildCallbackUrl(baseUrl: string, path: string, params: Record<string, 
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
+}
+
+/** Provider callback URLs. The webhook path is also what merchants configure in provider dashboards. */
+function buildGatewayUrls(
+  c: PaymentRouteContext,
+  gatewayId: string,
+  input: CreatePaymentSessionInput,
+  policy: PaymentSessionPolicy,
+): { success: string; fail: string; cancel: string; webhook: string } {
+  const apiBase = `${getTrustedApiOrigin(c.env, c.req.url)}/api/v1`;
+  const callbackParams = {
+    order_id: input.orderId,
+    ...buildCallbackParams(input.returnTarget, policy.paymentType, policy.paymentType === "deposit" ? policy.depositAmount : undefined),
+  };
+  const returnPath = `/payment/${encodeURIComponent(gatewayId)}`;
+  return {
+    success: buildCallbackUrl(apiBase, `${returnPath}/success`, callbackParams),
+    fail: buildCallbackUrl(apiBase, `${returnPath}/fail`, callbackParams),
+    cancel: buildCallbackUrl(apiBase, `${returnPath}/cancel`, callbackParams),
+    webhook: `${apiBase}/webhooks/${encodeURIComponent(gatewayId)}`,
+  };
 }
 
 function getTrustedApiOrigin(env: { PUBLIC_API_BASE_URL?: string }, requestUrl: string): string {

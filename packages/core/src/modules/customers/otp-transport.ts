@@ -6,7 +6,10 @@
 // resolved at send time; provider secrets and raw OTP codes must not be
 // serialized into queues.
 
-import type { SiteSettings } from "@scalius/database/schema";
+/** The store sign-in method the queue consumer re-checks at send time. */
+interface OtpTransportSettings {
+  authVerificationMethod: string;
+}
 import {
   type CustomerAuthOtpChannel,
   getCustomerAuthDeliveryChannel,
@@ -47,7 +50,7 @@ export interface OtpTransport {
 
   /** Build the queue payload for sending the OTP via this transport */
   buildQueuePayload(
-    settings: SiteSettings,
+    settings: OtpTransportSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
@@ -58,7 +61,7 @@ export interface OtpTransport {
    * Validate that the transport has the required configuration.
    * Returns an error message if misconfigured, or null if ready.
    */
-  validateConfig(settings: SiteSettings): string | null;
+  validateConfig(settings: OtpTransportSettings): string | null;
 }
 
 // ─────────────────────────────────────────
@@ -70,7 +73,7 @@ export class EmailOtpTransport implements OtpTransport {
   readonly label = "email";
 
   buildQueuePayload(
-    settings: SiteSettings,
+    settings: OtpTransportSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
@@ -88,7 +91,7 @@ export class EmailOtpTransport implements OtpTransport {
     };
   }
 
-  validateConfig(_settings: SiteSettings): string | null {
+  validateConfig(_settings: OtpTransportSettings): string | null {
     // Email transport uses the global email integration; no per-transport config needed.
     return null;
   }
@@ -99,7 +102,7 @@ export class SmsOtpTransport implements OtpTransport {
   readonly label = "SMS";
 
   buildQueuePayload(
-    settings: SiteSettings,
+    settings: OtpTransportSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
@@ -117,7 +120,7 @@ export class SmsOtpTransport implements OtpTransport {
     };
   }
 
-  validateConfig(_settings: SiteSettings): string | null {
+  validateConfig(_settings: OtpTransportSettings): string | null {
     // SMS provider integration is pending (see queue-consumer TODO).
     return null;
   }
@@ -128,7 +131,7 @@ export class WhatsAppOtpTransport implements OtpTransport {
   readonly label = "WhatsApp";
 
   buildQueuePayload(
-    settings: SiteSettings,
+    settings: OtpTransportSettings,
     channel: CustomerAuthOtpChannel,
     deliveryKey: string,
     otpExpiresAt: number,
@@ -146,7 +149,7 @@ export class WhatsAppOtpTransport implements OtpTransport {
     };
   }
 
-  validateConfig(_settings: SiteSettings): string | null {
+  validateConfig(_settings: OtpTransportSettings): string | null {
     // Customer auth validates encrypted WhatsApp credentials before queueing.
     return null;
   }
@@ -165,7 +168,7 @@ const whatsAppTransport = new WhatsAppOtpTransport();
  * store's `authVerificationMethod` setting.
  *
  * @param method  - "email" or "phone" (from the customer's request)
- * @param allowedMethod - the `authVerificationMethod` value from site_settings
+ * @param allowedMethod - the `authVerificationMethod` value from the customer_auth settings document
  */
 export function getOtpTransport(
   method: "email" | "phone",

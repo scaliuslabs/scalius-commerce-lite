@@ -1,5 +1,4 @@
 import { productVariants } from "@scalius/database/schema";
-import { availableRegularStockSql } from "@scalius/database/inventory-authority";
 import { sql, type SQL } from "drizzle-orm";
 
 /** A null or non-positive threshold explicitly disables low-stock alerts. */
@@ -14,7 +13,7 @@ export function isLowStockThresholdEnabled(
  * status, and only applies to variants with an explicitly enabled threshold.
  */
 export function buildInventoryLowStockCondition(): SQL {
-  const available = availableRegularStockSql();
+  const available = sql`(${productVariants.stock} - ${productVariants.reservedStock})`;
   return sql`(
     ${productVariants.lowStockThreshold} IS NOT NULL
     AND ${productVariants.lowStockThreshold} > 0

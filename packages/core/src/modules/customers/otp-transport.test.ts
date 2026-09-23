@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { SiteSettings } from "@scalius/database/schema";
 import { EmailOtpTransport, SmsOtpTransport, WhatsAppOtpTransport } from "./otp-transport";
 
-const baseSettings = {
-  authVerificationMethod: "email",
-  whatsappAccessToken: "wa_token",
-  whatsappPhoneNumberId: "phone_id_1",
-  whatsappTemplateName: "auth_otp",
-} as SiteSettings;
+const baseSettings = { authVerificationMethod: "email" };
 
 describe("OTP transports", () => {
   it("includes durable delivery metadata in email payloads", () => {
@@ -34,7 +28,7 @@ describe("OTP transports", () => {
 
   it("includes durable delivery metadata in SMS payloads", () => {
     const payload = new SmsOtpTransport().buildQueuePayload(
-      { ...baseSettings, authVerificationMethod: "sms_otp" } as SiteSettings,
+      { ...baseSettings, authVerificationMethod: "sms_otp" },
       "sms",
       "otp_delivery_sms_1",
       4_102_444_800,
@@ -57,7 +51,7 @@ describe("OTP transports", () => {
 
   it("includes durable metadata without WhatsApp credentials in WhatsApp payloads", () => {
     const payload = new WhatsAppOtpTransport().buildQueuePayload(
-      { ...baseSettings, authVerificationMethod: "whatsapp_otp" } as SiteSettings,
+      { ...baseSettings, authVerificationMethod: "whatsapp_otp" },
       "whatsapp",
       "otp_delivery_wa_1",
       4_102_444_800,

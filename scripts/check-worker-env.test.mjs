@@ -117,14 +117,13 @@ describe("worker env check: per-store resource shape", () => {
 });
 
 describe("worker env check: allowlists", () => {
-  it("installs exactly the master secret on every Worker and the AES key on API + admin", () => {
+  it("installs exactly the master secret on every Worker and the AES key on the API", () => {
     const byName = Object.fromEntries(apps.map((app) => [app.name, app.extraEnv]));
 
     expect(byName.api).toContain("SCALIUS_SECRET");
     expect(byName.api).toContain("CREDENTIAL_ENCRYPTION_KEY");
-    expect(byName["admin-v2"]).toContain("SCALIUS_SECRET");
-    expect(byName["admin-v2"]).toContain("CREDENTIAL_ENCRYPTION_KEY");
     expect(byName.storefront).toEqual(["SCALIUS_SECRET"]);
+    expect(Object.keys(byName)).toEqual(["api", "storefront"]);
   });
 
   it("never allowlists retired secrets, URL vars, or removed knobs", () => {
@@ -229,11 +228,13 @@ describe("worker env check: parsing", () => {
       durable_objects: { bindings: [{ name: "CHECKOUT_COORDINATOR", class_name: "CheckoutCoordinator" }] },
       send_email: [{ name: "EMAIL" }],
       ratelimits: [{ name: "RL_STANDARD", namespace_id: "1" }],
-      services: [{ binding: "API", service: "scalius-api" }],
+      services: [{ binding: "BACKEND_API", service: "scalius-api" }],
+      assets: { directory: "../admin-v2/dist", binding: "ASSETS" },
     });
 
     expect([...names].sort()).toEqual([
-      "API",
+      "ASSETS",
+      "BACKEND_API",
       "CACHE",
       "CHECKOUT_COORDINATOR",
       "EMAIL",

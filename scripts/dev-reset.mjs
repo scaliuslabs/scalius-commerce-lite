@@ -85,27 +85,16 @@ function run(cmd, label, options = {}) {
 console.log("\n🔄 Scalius Commerce — Database Reset\n");
 console.log("=".repeat(50));
 
-// 1. Delete ALL local D1/KV/R2 state (root + admin-v2's Cloudflare Vite plugin)
+// 1. Delete ALL local D1/KV/R2 state (shared by the API and storefront Workers)
 const wranglerState = resolvedWranglerStateOverride
   ? resolvedWranglerStateOverride
   : resolve(root, ".wrangler", "state");
-const adminV2State = resolve(root, "apps", "admin-v2", ".wrangler", "state");
 
-const paths = [
-  { path: wranglerState, label: ".wrangler/state/ (API + storefront)" },
-  ...(wranglerStateOverride ? [] : [{ path: adminV2State, label: "apps/admin-v2/.wrangler/state/ (admin)" }]),
-];
-
-let deleted = false;
-for (const { path, label } of paths) {
-  if (existsSync(path)) {
-    if (!deleted) console.log("\n▶ Deleting local database state");
-    rmSync(path, { recursive: true, force: true });
-    console.log(`  ✓ Deleted ${label}`);
-    deleted = true;
-  }
-}
-if (!deleted) {
+if (existsSync(wranglerState)) {
+  console.log("\n▶ Deleting local database state");
+  rmSync(wranglerState, { recursive: true, force: true });
+  console.log(`  ✓ Deleted ${wranglerState}`);
+} else {
   console.log("\n⚡ No local database state found — clean start");
 }
 

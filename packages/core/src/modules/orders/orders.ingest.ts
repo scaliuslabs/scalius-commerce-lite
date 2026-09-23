@@ -29,7 +29,9 @@ import { ConflictError, ServiceUnavailableError, ValidationError } from "../../e
 import {
     isInventoryReservationConflictError,
     prepareStockReservationBatch,
+    selectReservationVariantStates,
     type PreparedStockReservationBatch,
+    type ReservationVariantState,
 } from "../inventory";
 import {
     buildMetaPurchaseOutboxClaimInsert,
@@ -55,8 +57,18 @@ import {
 import {
     prepareAtomicCheckoutAttemptCommit,
     isCheckoutAttemptCommitConflictError,
+    resolveCheckoutAttemptRow,
+    selectCheckoutAttemptByKey,
     type AtomicCheckoutAttempt,
+    type CheckoutAttemptIdentity,
+    type CheckoutAttemptRow,
+    type ExistingCheckoutAttemptResult,
 } from "./checkout-attempts";
+import {
+    createStorefrontCheckoutAuthorityReadPlan,
+    type StorefrontCheckoutAuthorityInput,
+    type StorefrontCheckoutAuthoritySnapshot,
+} from "./checkout-authority";
 import { chunkRowsForD1 } from "./d1-write-chunks";
 import { MAX_ORDER_LINE_ITEMS } from "./orders.validation";
 
@@ -74,6 +86,8 @@ export interface StorefrontOrderCommitResult {
     customerId: string | null;
     accountOwnerCustomerId: string | null;
     alreadyCommitted: boolean;
+    /** Reserved variants whose buyer availability band changed in this commit. */
+    availabilityTransitionVariantIds: string[];
 }
 
 export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
@@ -185,7 +199,7 @@ async function loadActiveCustomerById(db: Database, id: string): Promise<OrderCu
         .get();
 }
 
-async function loadCustomerByPhone(db: Database, phone: string): Promise<OrderCustomerRow | undefined> {
+function selectCustomerByPhone(db: Database, phone: string) {
     return db
         .select({
             id: customers.id,
@@ -193,13 +207,93 @@ async function loadCustomerByPhone(db: Database, phone: string): Promise<OrderCu
             deletedAt: customers.deletedAt,
         })
         .from(customers)
-        .where(eq(customers.phone, phone))
-        .get();
+        .where(eq(customers.phone, phone));
+}
+
+/**
+ * Rows the commit would otherwise read one by one, fetched in the checkout's
+ * single read batch. Everything stays re-guarded inside the commit batch.
+ */
+export interface StorefrontOrderCommitReads {
+    customerPhone: string;
+    customerByPhone: OrderCustomerRow | undefined;
+    variantStates: ReservationVariantState[];
+}
+
+type SettledAuthority =
+    | { ok: true; snapshot: StorefrontCheckoutAuthoritySnapshot }
+    | { ok: false; error: unknown };
+
+function tagCheckoutError(error: unknown, code: string): unknown {
+    if (error instanceof Error && !("code" in error)) {
+        Object.defineProperty(error, "code", { configurable: true, enumerable: false, value: code });
+    }
+    return error;
+}
+
+/**
+ * One read round trip for a storefront checkout: the idempotency row, the
+ * checkout authority snapshot, and the rows the commit needs. The attempt is
+ * decided first so a committed request replays even if authority changed.
+ */
+export async function loadStorefrontCheckoutReads<TResponse>(
+    db: Database,
+    identity: CheckoutAttemptIdentity,
+    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string },
+    credentialEncryptionKey?: string,
+): Promise<{
+    existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
+    commitReads: StorefrontOrderCommitReads;
+    authority(): StorefrontCheckoutAuthoritySnapshot;
+}> {
+    const plan = createStorefrontCheckoutAuthorityReadPlan(db, authorityInput);
+    const variantIds = [...new Set(authorityInput.items
+        .map((item) => item.variantId)
+        .filter((variantId): variantId is string => typeof variantId === "string" && variantId.length > 0))];
+    const statements = [
+        ...plan.statements,
+        selectCheckoutAttemptByKey(db, identity.requestKey),
+        selectCustomerByPhone(db, authorityInput.customerPhone),
+        selectReservationVariantStates(db, variantIds),
+    ];
+    let results: unknown[];
+    try {
+        results = await safeBatch(db, statements as SQLiteBatchItem[]) as unknown[];
+    } catch (error) {
+        throw tagCheckoutError(error, "CHECKOUT_AUTHORITY_BATCH");
+    }
+    const [attemptRows, customerRows, variantRows] = results.slice(plan.statements.length) as [
+        CheckoutAttemptRow[],
+        OrderCustomerRow[],
+        ReservationVariantState[],
+    ];
+    const existingAttempt = resolveCheckoutAttemptRow<TResponse>(attemptRows[0], identity);
+    const settled: SettledAuthority = existingAttempt?.status === "replay"
+        ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
+        : await plan.resolve(results.slice(0, plan.statements.length), credentialEncryptionKey)
+            .then((snapshot): SettledAuthority => ({ ok: true, snapshot }))
+            .catch((error: unknown): SettledAuthority => ({
+                ok: false,
+                error: tagCheckoutError(error, "CHECKOUT_AUTHORITY_RESOLVE"),
+            }));
+    return {
+        existingAttempt,
+        commitReads: {
+            customerPhone: authorityInput.customerPhone,
+            customerByPhone: customerRows[0],
+            variantStates: variantRows,
+        },
+        authority() {
+            if (!settled.ok) throw settled.error;
+            return settled.snapshot;
+        },
+    };
 }
 
 async function resolveCustomerForOrder(
     db: Database,
     payload: StorefrontOrderCommitPayload,
+    reads?: StorefrontOrderCommitReads,
 ): Promise<ResolvedOrderCustomer> {
     if (payload.existingCustomer?.id) {
         const authenticatedCustomer = await loadActiveCustomerById(db, payload.existingCustomer.id);
@@ -214,7 +308,9 @@ async function resolveCustomerForOrder(
         };
     }
 
-    const existingProfile = await loadCustomerByPhone(db, payload.orderData.customerPhone);
+    const existingProfile = reads?.customerPhone === payload.orderData.customerPhone
+        ? reads.customerByPhone
+        : await selectCustomerByPhone(db, payload.orderData.customerPhone).get();
     if (existingProfile) {
         return {
             ...existingProfile,
@@ -342,6 +438,7 @@ async function prepareOrderInventory(
     db: Database,
     payload: StorefrontOrderCommitPayload,
     freshOrder = false,
+    variantStates?: readonly ReservationVariantState[],
 ): Promise<PreparedStockReservationBatch> {
     const entries = getReservationEntries(payload);
     const result = await prepareStockReservationBatch(
@@ -357,6 +454,7 @@ async function prepareOrderInventory(
             freshOrderIds: freshOrder
                 ? new Set([payload.orderData.id])
                 : undefined,
+            variantStates,
         },
     );
 
@@ -619,7 +717,7 @@ function buildOrderWriteBatch(
         createdAt: sql`unixepoch()`,
     }));
 
-    if (shouldCreateOrderCreatedNotification(od)) {
+    if (wantsOrderCreatedNotification(payload)) {
         writes.push(
             db.insert(orderNotificationOutbox).values(createOrderNotificationOutboxInsertValues({
                 dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
@@ -734,7 +832,10 @@ function buildOrderWriteBatch(
         }));
     }
 
-    if (isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customer.id)) {
+    if (
+        payload.checkoutSideEffects?.metaPurchase !== false
+        && isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customer.id)
+    ) {
         writes.push(buildMetaPurchaseOutboxClaimInsert(db, {
             orderId: od.id,
             source: "storefront-order",
@@ -742,6 +843,16 @@ function buildOrderWriteBatch(
     }
 
     return writes;
+}
+
+/**
+ * The checkout authority snapshot proves whether any order-created channel or
+ * Meta integration is configured; its revision fence rejects the commit if
+ * that changes before the batch runs, so skipped outbox rows are never lost.
+ */
+function wantsOrderCreatedNotification(payload: StorefrontOrderCommitPayload): boolean {
+    return payload.checkoutSideEffects?.orderCreatedNotification !== false
+        && shouldCreateOrderCreatedNotification(payload.orderData);
 }
 
 function isStorefrontOrderPayloadEligibleForMetaPurchase(
@@ -770,6 +881,7 @@ export async function commitStorefrontOrderPayload(
     db: Database,
     payload: StorefrontOrderCommitPayload,
     checkoutCommit?: StorefrontOrderCheckoutCommit,
+    prefetchedReads?: StorefrontOrderCommitReads,
 ): Promise<StorefrontOrderCommitResult> {
     if (payload.items.length > MAX_ORDER_LINE_ITEMS) {
         throw new ValidationError(
@@ -788,6 +900,8 @@ export async function commitStorefrontOrderPayload(
 
     let guestProfileRaceRetried = false;
     let inventoryConflictCount = 0;
+    // Prefetched rows serve the first attempt only; a retry re-reads.
+    let reads = prefetchedReads;
 
     while (true) {
         // A brand-new atomic candidate cannot already own an order. Retried
@@ -803,6 +917,7 @@ export async function commitStorefrontOrderPayload(
                 customerId: existing.customerId,
                 accountOwnerCustomerId: existing.accountOwnerCustomerId,
                 alreadyCommitted: true,
+                availabilityTransitionVariantIds: [],
             };
         }
 
@@ -834,13 +949,15 @@ export async function commitStorefrontOrderPayload(
         ) AND ${discountAuthority}`, CHECKOUT_AUTHORITY_CHANGED);
 
         const [customer, inventoryPlan] = await Promise.all([
-            resolveCustomerForOrder(db, payload),
+            resolveCustomerForOrder(db, payload, reads),
             prepareOrderInventory(
                 db,
                 payload,
                 checkoutCommit?.attempt.origin === "new",
+                reads?.variantStates,
             ),
         ]);
+        reads = undefined;
         if (payload.discountUsage && payload.promotion) {
             throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
         }
@@ -860,17 +977,21 @@ export async function commitStorefrontOrderPayload(
             ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
             : null;
         const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
-        const atomicWrites: SQLiteBatchItem[] = [
+        const writesBeforeInventory: SQLiteBatchItem[] = [
             authorityGuard,
             ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),
             ...(agentContextPlan?.writesBeforeOrder ?? []),
+        ];
+        const atomicWrites: SQLiteBatchItem[] = [
+            ...writesBeforeInventory,
             ...inventoryPlan.statements,
             ...orderWrites,
             ...(checkoutAttemptPlan?.writesAfterOrder ?? []),
             ...(agentContextPlan?.writesAfterOrder ?? []),
         ];
+        let batchResults: readonly unknown[];
         try {
-            await safeBatch(db, atomicWrites);
+            batchResults = await safeBatch(db, atomicWrites) as readonly unknown[];
         } catch (error) {
             const committedAfterError = await loadExistingCommittedOrder(db, payload.orderData.id)
                 .catch(() => undefined);
@@ -880,6 +1001,7 @@ export async function commitStorefrontOrderPayload(
                     customerId: committedAfterError.customerId,
                     accountOwnerCustomerId: committedAfterError.accountOwnerCustomerId,
                     alreadyCommitted: true,
+                    availabilityTransitionVariantIds: [],
                 };
             }
 
@@ -922,6 +1044,10 @@ export async function commitStorefrontOrderPayload(
                     customerId: customer.id,
                     accountOwnerCustomerId: customer.accountOwnerCustomerId,
                     alreadyCommitted: false,
+                    // The reservation committed in an earlier request whose
+                    // band outcome is unknown here; invalidate conservatively.
+                    availabilityTransitionVariantIds: getReservationEntries(payload)
+                        .map((entry) => entry.variantId),
                 };
             }
             if (idempotentReservation?.manualReconciliationRequired) {
@@ -952,6 +1078,12 @@ export async function commitStorefrontOrderPayload(
             customerId: customer.id,
             accountOwnerCustomerId: customer.accountOwnerCustomerId,
             alreadyCommitted: false,
+            availabilityTransitionVariantIds: inventoryPlan.availabilityTransitions(
+                batchResults.slice(
+                    writesBeforeInventory.length,
+                    writesBeforeInventory.length + inventoryPlan.statements.length,
+                ),
+            ),
         };
     }
 }
@@ -1052,17 +1184,19 @@ export async function runStorefrontOrderPostCommitSideEffects(
     env: StorefrontOrderCommitRuntime | undefined,
     payload: StorefrontOrderCommitPayload,
 ): Promise<void> {
-    await processExistingMetaPurchaseOutboxForOrder({
-        db,
-        orderId: payload.orderData.id,
-        source: "storefront-order",
-        storefrontUrl: env?.STOREFRONT_URL,
-        encryptionKey: env?.CREDENTIAL_ENCRYPTION_KEY,
-    }).catch((error: unknown) => {
-        console.error("[orders/commit] Meta Purchase CAPI side effect failed for order", payload.orderData.id, error);
-    });
+    if (payload.checkoutSideEffects?.metaPurchase !== false) {
+        await processExistingMetaPurchaseOutboxForOrder({
+            db,
+            orderId: payload.orderData.id,
+            source: "storefront-order",
+            storefrontUrl: env?.STOREFRONT_URL,
+            encryptionKey: env?.CREDENTIAL_ENCRYPTION_KEY,
+        }).catch((error: unknown) => {
+            console.error("[orders/commit] Meta Purchase CAPI side effect failed for order", payload.orderData.id, error);
+        });
+    }
 
-    if (!shouldCreateOrderCreatedNotification(payload.orderData)) {
+    if (!wantsOrderCreatedNotification(payload)) {
         return;
     }
 

@@ -6,8 +6,6 @@ import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-th
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  invalidateSiteSettingsCache: vi.fn(),
-  invalidateStorefrontUrlCache: vi.fn(),
   bumpCacheGeneration: vi.fn(),
   getCurrencySettings: vi.fn(),
   isCurrencyCodeLocked: vi.fn(),
@@ -37,11 +35,6 @@ const mocks = vi.hoisted(() => ({
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
   runSeoDiscoveryLiveProbe: vi.fn(),
-}));
-
-vi.mock("@scalius/core/modules/settings", () => ({
-  invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
-  invalidateStorefrontUrlCache: mocks.invalidateStorefrontUrlCache,
 }));
 
 vi.mock("../../../utils/cache-generation", () => ({
@@ -110,8 +103,6 @@ function createTestApp() {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-  mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
@@ -1037,35 +1028,11 @@ describe("site settings cache invalidation", () => {
         mocks.bumpCacheGeneration,
       ).toHaveBeenCalledWith(expect.objectContaining({ env }));
       if (path === "/storefront-url") {
-        expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
-        expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();
-        expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(kv);
+        // The storefront origin lives in the platform document; its KV mirror is written through.
+        expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), kv);
       }
     },
   );
-
-  it("does not fail currency saves when legacy gateway currency KV cleanup fails", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { app, env, kv } = createTestApp();
-    kv.delete.mockRejectedValueOnce(new Error("kv unavailable"));
-
-    const response = await requestJson(app, env, "POST", "/currency", {
-      currencyCode: "BDT",
-      currencySymbol: "Tk",
-      usdExchangeRate: "1",
-    });
-
-    expect(response.status).toBe(200);
-    expect(kv.delete).toHaveBeenCalledWith("gw:currency");
-    expect(warn).toHaveBeenCalledWith(
-      "[Settings] Legacy KV delete failed for gw:currency:",
-      "kv unavailable",
-    );
-    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
-    );
-
-    warn.mockRestore();
-  });
 
   it("reports the persisted-currency lock state to the admin form", async () => {
     const { app, env } = createTestApp();

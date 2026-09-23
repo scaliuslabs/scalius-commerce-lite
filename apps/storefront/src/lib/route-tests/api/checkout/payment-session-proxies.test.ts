@@ -15,10 +15,14 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
-import { POST as sslcommerzPost } from "../../../../pages/api/checkout/sslcommerz-session";
-import { POST as stripePost } from "../../../../pages/api/checkout/stripe-intent";
+import { POST as paymentSessionPost } from "../../../../pages/api/checkout/payment-session/[gateway]";
 import { POST as stripeReconcilePost } from "../../../../pages/api/checkout/stripe-reconcile";
 import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
+
+const sessionPostFor = (gateway: string) => (context: { request: Request }) =>
+  paymentSessionPost({ ...context, params: { gateway } } as never);
+const stripePost = sessionPostFor("stripe");
+const sslcommerzPost = sessionPostFor("sslcommerz");
 
 beforeEach(() => {
   mocks.apiFetch.mockReset();
@@ -30,7 +34,7 @@ describe("checkout payment-session proxies", () => {
   it.each([
     {
       label: "Stripe",
-      endpoint: "https://storefront.example.test/api/checkout/stripe-intent",
+      endpoint: "https://storefront.example.test/api/checkout/payment-session/stripe",
       post: stripePost,
     },
     {
@@ -40,7 +44,7 @@ describe("checkout payment-session proxies", () => {
     },
     {
       label: "SSLCommerz",
-      endpoint: "https://storefront.example.test/api/checkout/sslcommerz-session",
+      endpoint: "https://storefront.example.test/api/checkout/payment-session/sslcommerz",
       post: sslcommerzPost,
     },
   ])("fails closed for $label when the receipt cookie is missing", async ({ endpoint, post }) => {
@@ -61,12 +65,12 @@ describe("checkout payment-session proxies", () => {
   it.each([
     {
       label: "Stripe",
-      endpoint: "https://storefront.example.test/api/checkout/stripe-intent",
+      endpoint: "https://storefront.example.test/api/checkout/payment-session/stripe",
       post: stripePost,
     },
     {
       label: "SSLCommerz",
-      endpoint: "https://storefront.example.test/api/checkout/sslcommerz-session",
+      endpoint: "https://storefront.example.test/api/checkout/payment-session/sslcommerz",
       post: sslcommerzPost,
     },
   ])("preserves backend 202 processing responses for $label", async ({ endpoint, post }) => {
@@ -112,7 +116,7 @@ describe("checkout payment-session proxies", () => {
     expect(json).not.toHaveProperty("gatewayUrl");
     expect(json).not.toHaveProperty("clientSecret");
     expect(mocks.apiFetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/payment\/(?:stripe\/intent|sslcommerz\/session)$/),
+      expect.stringMatching(/\/payment\/(?:stripe|sslcommerz)\/session$/),
       expect.objectContaining({
         method: "POST",
         cache: "no-store",

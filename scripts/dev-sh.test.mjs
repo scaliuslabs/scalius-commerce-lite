@@ -13,7 +13,6 @@ function runDevSh(args = []) {
       ...process.env,
       SCALIUS_DEV_DRY_RUN: "1",
       SCALIUS_DEV_API_READY_TIMEOUT_SECONDS: "1",
-      SCALIUS_DEV_STAGGER_SECONDS: "1",
     },
     encoding: "utf8",
   });
@@ -50,21 +49,19 @@ describe("dev.sh startup planning", () => {
     expect(result.stdout).not.toContain("Starting storefront");
   });
 
-  it("keeps full-stack startup ordered and staggers admin before storefront", () => {
+  it("keeps full-stack startup ordered behind API readiness", () => {
     const result = runDevSh();
 
     expect(result.status).toBe(0);
     const apiIndex = result.stdout.indexOf("Starting API worker");
     const waitIndex = result.stdout.indexOf("Waiting for API readiness");
     const adminIndex = result.stdout.indexOf("Starting admin dashboard");
-    const staggerIndex = result.stdout.indexOf("[dry-run] would wait 1s");
     const storefrontIndex = result.stdout.indexOf("Starting storefront");
 
     expect(apiIndex).toBeGreaterThanOrEqual(0);
     expect(waitIndex).toBeGreaterThan(apiIndex);
     expect(adminIndex).toBeGreaterThan(waitIndex);
-    expect(staggerIndex).toBeGreaterThan(adminIndex);
-    expect(storefrontIndex).toBeGreaterThan(staggerIndex);
+    expect(storefrontIndex).toBeGreaterThan(adminIndex);
   });
 
   it("reports an occupied app port without terminating its owner", async () => {

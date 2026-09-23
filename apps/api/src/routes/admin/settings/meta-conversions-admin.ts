@@ -1,7 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { metaConversionsSettings, metaConversionsLogs } from "@scalius/database/schema";
-import { eq, desc, count } from "drizzle-orm";
+import { metaConversionsLogs } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
+import { desc, count } from "drizzle-orm";
 import {
     manualLogCleanup,
     summarizeMetaRequestPayload,
@@ -12,13 +13,16 @@ import {
     getMetaPixelParityDiagnostics,
     metaPixelParityStatuses,
 } from "@scalius/core/modules/analytics";
-import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import {
+    metaConversionsDocument,
+    type MetaConversionsSettings,
+} from "@scalius/core/modules/settings/documents";
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
-import { requireEncryptionKey } from "../../../utils/encryption-key";
+import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
@@ -72,15 +76,36 @@ const metaConversionsSettingsSchema = z.object({
 // ── Get Settings ──
 
 const metaConversionsSettingsResponseSchema = z.object({
-    id: z.string(),
     pixelId: z.string().nullable(),
     accessToken: z.string().nullable(),
     testEventCode: z.string().nullable(),
     isEnabled: z.boolean(),
     logRetentionDays: z.number(),
-    createdAt: z.union([z.string(), z.number()]).nullable(),
-    updatedAt: z.union([z.string(), z.number()]).nullable(),
 });
+
+/** Credentials never leave the API; a token that cannot be decrypted still reads as saved. */
+function maskedSettings(
+    value: MetaConversionsSettings,
+    accessTokenStored: boolean,
+): z.infer<typeof metaConversionsSettingsResponseSchema> {
+    return {
+        pixelId: value.pixelId || null,
+        accessToken: accessTokenStored ? MASKED_VALUE : null,
+        testEventCode: value.testEventCode ? MASKED_VALUE : null,
+        isEnabled: value.isEnabled,
+        logRetentionDays: value.logRetentionDays,
+    };
+}
+
+async function readMetaSettings(db: Database, env: Env) {
+    const stored = await metaConversionsDocument.readDetailed(db, {
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    });
+    return {
+        ...stored,
+        accessTokenStored: Boolean(stored.value.accessToken || stored.secretErrors.accessToken),
+    };
+}
 
 const metaPixelParityResponseSchema = z.object({
     status: z.enum(metaPixelParityStatuses),
@@ -109,24 +134,18 @@ const getSettingsRoute = createRoute({
 
 app.openapi(getSettingsRoute, (async (c) => {
     const db = c.get("db");
-    const settings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-    const maskedSettings = settings ? {
-        id: settings.id,
-        pixelId: settings.pixelId,
-        accessToken: settings.accessToken ? MASKED_VALUE : null,
-        testEventCode: settings.testEventCode ? MASKED_VALUE : null,
-        isEnabled: settings.isEnabled,
-        logRetentionDays: settings.logRetentionDays,
-        createdAt: timestampForClient(settings.createdAt),
-        updatedAt: timestampForClient(settings.updatedAt),
-    } : null;
-    const pixelParity = await getMetaPixelParityDiagnostics(db, settings?.pixelId).catch((error: unknown) => {
+    const stored = await readMetaSettings(db, c.env);
+    const pixelId = stored.stored ? stored.value.pixelId || null : null;
+    const pixelParity = await getMetaPixelParityDiagnostics(db, pixelId).catch((error: unknown) => {
         console.warn("Meta Pixel parity diagnostics unavailable", {
             error: error instanceof Error ? error.message : String(error),
         });
-        return buildUnavailableMetaPixelParityDiagnostics(settings?.pixelId);
+        return buildUnavailableMetaPixelParityDiagnostics(pixelId);
     });
-    return ok(c, { settings: maskedSettings, pixelParity });
+    return ok(c, {
+        settings: stored.stored ? maskedSettings(stored.value, stored.accessTokenStored) : null,
+        pixelParity,
+    });
 }) as AppRouteHandler<typeof getSettingsRoute>);
 
 // ── Save Settings ──
@@ -159,30 +178,27 @@ async function clearMetaCapiBrowserCircuit(env: Env): Promise<void> {
 app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRoute>) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
-    const existingSettings = await db.select().from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
+    const existing = await readMetaSettings(db, c.env);
     const pixelId = validation.pixelId === undefined
-        ? existingSettings?.pixelId ?? null
+        ? existing.value.pixelId || null
         : optionalTrimmedValue(validation.pixelId);
-    const isEnabled = validation.isEnabled ?? existingSettings?.isEnabled ?? false;
-    const logRetentionDays = validation.logRetentionDays
-        ?? existingSettings?.logRetentionDays
-        ?? 30;
+    const isEnabled = validation.isEnabled ?? existing.value.isEnabled;
+    const logRetentionDays = validation.logRetentionDays ?? existing.value.logRetentionDays;
     const rawTestEventCode = validation.testEventCode;
     const trimmedTestEventCode = typeof rawTestEventCode === "string"
         ? rawTestEventCode.trim()
         : undefined;
     const isUsingMaskedTestEventCode = trimmedTestEventCode === MASKED_VALUE;
     const testEventCode = isUsingMaskedTestEventCode || rawTestEventCode === undefined
-        ? existingSettings?.testEventCode ?? null
+        ? existing.value.testEventCode || null
         : optionalTrimmedValue(rawTestEventCode);
     const rawAccessToken = validation.accessToken;
     const trimmedAccessToken = typeof rawAccessToken === "string" ? rawAccessToken.trim() : undefined;
-    const hasStoredAccessToken = Boolean(existingSettings?.accessToken);
+    const hasStoredAccessToken = existing.accessTokenStored;
     const isUsingMaskedAccessToken = trimmedAccessToken === MASKED_VALUE;
     const hasEffectiveAccessToken = isUsingMaskedAccessToken || rawAccessToken === undefined
         ? hasStoredAccessToken
         : Boolean(trimmedAccessToken);
-    let accessToken: string | null | undefined;
 
     validateConcreteCredential("Pixel ID", pixelId);
     validateConcreteCredential("access token", !isUsingMaskedAccessToken && trimmedAccessToken ? trimmedAccessToken : null);
@@ -203,41 +219,27 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
         }
     }
 
-    if (isUsingMaskedAccessToken) {
-        accessToken = existingSettings?.accessToken ?? null;
-    } else if (typeof trimmedAccessToken === "string") {
-        accessToken = trimmedAccessToken
-            ? await encryptCredentials(
-                trimmedAccessToken,
-                requireEncryptionKey(c.env as unknown as Record<string, unknown>),
-            )
-            : null;
-    }
+    // A masked or omitted token keeps the stored ciphertext; an empty one clears it.
+    const accessToken = isUsingMaskedAccessToken ? undefined : trimmedAccessToken;
+    const saved = await metaConversionsDocument.write(db, {
+        pixelId: pixelId ?? "",
+        accessToken,
+        testEventCode: testEventCode ?? "",
+        isEnabled,
+        logRetentionDays,
+    }, {
+        encryptionKey: accessToken
+            ? requireEncryptionKey(c.env as unknown as Record<string, unknown>)
+            : getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    });
 
-    const now = new Date();
-    const resultArr = existingSettings
-        ? await db.update(metaConversionsSettings)
-            .set({ pixelId, accessToken, testEventCode, isEnabled, logRetentionDays, updatedAt: now })
-            .where(eq(metaConversionsSettings.id, "singleton")).returning()
-        : await db.insert(metaConversionsSettings)
-            .values({ id: "singleton", pixelId, accessToken: accessToken ?? null, testEventCode, isEnabled, logRetentionDays, createdAt: now, updatedAt: now })
-            .returning();
-    const result = resultArr[0];
-
-    if (!result) throw new ValidationError("Failed to save settings");
     await clearMetaCapiBrowserCircuit(c.env);
     await bumpCacheGeneration(c);
-    const maskedResult = {
-        id: result.id,
-        pixelId: result.pixelId,
-        accessToken: result.accessToken ? MASKED_VALUE : null,
-        testEventCode: result.testEventCode ? MASKED_VALUE : null,
-        isEnabled: result.isEnabled,
-        logRetentionDays: result.logRetentionDays,
-        createdAt: timestampForClient(result.createdAt),
-        updatedAt: timestampForClient(result.updatedAt),
-    };
-    return existingSettings ? ok(c, maskedResult) : created(c, maskedResult);
+    const maskedResult = maskedSettings(
+        saved.value,
+        accessToken === undefined ? hasStoredAccessToken : Boolean(accessToken),
+    );
+    return existing.stored ? ok(c, maskedResult) : created(c, maskedResult);
 }) as unknown as AppRouteHandler<typeof saveSettingsRoute>);
 
 // ── Get Logs ──
@@ -287,8 +289,7 @@ app.openapi(getLogsRoute, (async (c: AppRouteContext<typeof getLogsRoute>) => {
     const total = totalResult?.count ?? 0;
     const logs = await db.select().from(metaConversionsLogs).orderBy(desc(metaConversionsLogs.createdAt)).limit(limit).offset(offset).all();
 
-    const settings = await db.select({ logRetentionDays: metaConversionsSettings.logRetentionDays }).from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-    const retentionDays = settings?.logRetentionDays ?? 30;
+    const retentionDays = (await metaConversionsDocument.read(db)).logRetentionDays;
 
     return ok(c, {
         logs: logs.map((log) => ({
@@ -345,8 +346,7 @@ const manualCleanupRoute = createRoute({
 
 app.openapi(manualCleanupRoute, async (c) => {
     const db = c.get("db");
-    const settings = await db.select({ logRetentionDays: metaConversionsSettings.logRetentionDays }).from(metaConversionsSettings).where(eq(metaConversionsSettings.id, "singleton")).get();
-    const retentionHours = (settings?.logRetentionDays ?? 30) * 24;
+    const retentionHours = (await metaConversionsDocument.read(db)).logRetentionDays * 24;
     const result = await manualLogCleanup(db, retentionHours);
     if (result.success) return ok(c, { message: result.message });
     throw new ValidationError(result.message);
