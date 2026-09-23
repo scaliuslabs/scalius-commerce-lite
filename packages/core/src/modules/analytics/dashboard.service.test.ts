@@ -53,7 +53,8 @@ describe("dashboard query observability", () => {
             {
                 id: "ord_1",
                 customerName: "Buyer",
-                totalAmount: 1200,
+                totalAmountMinor: 120_000,
+                currencyDecimalPlaces: 2,
                 status: "processing",
                 createdAt: "2026-06-28T06:00:00.000Z",
             },
@@ -86,12 +87,13 @@ describe("dashboard query observability", () => {
         const { db, batch, chains } = createDashboardHomeDb([
             [{ count: 12 }],
             [{ count: 34 }],
-            [{ count: 9, revenue: 1234, delivered: 3, processing: 4, shipping: 1, cancelled: 1 }],
-            [{ count: 8, revenue: 1000 }],
+            [{ count: 9, revenueMinor: 123_400, currencyDecimalPlaces: 2, delivered: 3, processing: 4, shipping: 1, cancelled: 1 }],
+            [{ count: 8, revenueMinor: 100_000, currencyDecimalPlaces: 2 }],
             [{
                 id: "ord_1",
                 customerName: "Buyer",
-                totalAmount: 1200,
+                totalAmountMinor: 120_000,
+                currencyDecimalPlaces: 2,
                 status: "processing",
                 createdAt: "2026-06-28T06:00:00.000Z",
             }],

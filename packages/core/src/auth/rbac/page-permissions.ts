@@ -13,12 +13,39 @@ export interface PagePermissionConfig {
   allowAnyAdmin?: boolean;
 }
 
+const TEAM_PAGE_PERMISSIONS = [
+  PERMISSIONS.TEAM_VIEW,
+  PERMISSIONS.TEAM_MANAGE,
+  PERMISSIONS.TEAM_MANAGE_ROLES,
+] as const;
+const SHIPPING_PAGE_PERMISSIONS = [
+  PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW,
+  PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
+  PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+] as const;
+const APPS_PAGE_PERMISSIONS = [
+  PERMISSIONS.ANALYTICS_VIEW,
+  PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
+  PERMISSIONS.AGENT_ACCESS_VIEW,
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+] as const;
+const SETTINGS_PAGE_PERMISSIONS = [
+  PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+  PERMISSIONS.TAXES_VIEW,
+  ...TEAM_PAGE_PERMISSIONS,
+  ...SHIPPING_PAGE_PERMISSIONS,
+  ...APPS_PAGE_PERMISSIONS,
+] as const;
+
 // Admin page route to permission mapping.
 // Routes are matched from most specific to least specific.
 // Routes not listed here should be treated as unmapped and denied by the admin shell.
 const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Explicit permissionless admin utility pages
   "/admin/access-denied": { allowAnyAdmin: true },
+  // Own profile, password, two-step verification and sessions.
+  "/admin/account": { allowAnyAdmin: true },
 
   // Dashboard
   "/admin": { permission: PERMISSIONS.DASHBOARD_VIEW },
@@ -41,7 +68,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Collections
   "/admin/collections": { permission: PERMISSIONS.COLLECTIONS_VIEW },
   "/admin/collections/new": { permission: PERMISSIONS.COLLECTIONS_CREATE },
-  "/admin/collections/trash": { permission: PERMISSIONS.COLLECTIONS_VIEW },
 
   // Media
   "/admin/media": { permission: PERMISSIONS.MEDIA_VIEW },
@@ -49,31 +75,32 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Pages
   "/admin/pages": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
-  "/admin/pages/trash": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
 
-  // Reusable storefront menus
-  "/admin/navigation": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  // Online store
+  "/admin/online-store/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/online-store/navigation": {
+    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+  },
+  "/admin/online-store/banners": {
+    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+  },
+  "/admin/online-store/preferences": {
+    permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  },
 
   // Orders
   "/admin/orders": { permission: PERMISSIONS.ORDERS_VIEW },
   "/admin/orders/new": { permission: PERMISSIONS.ORDERS_CREATE },
 
-  // Abandoned Checkouts (requires orders.view)
-  "/admin/abandoned-checkouts": { permission: PERMISSIONS.ORDERS_VIEW },
+  // Abandoned checkouts live under Orders (requires orders.view)
+  "/admin/orders/abandoned": { permission: PERMISSIONS.ORDERS_VIEW },
 
   // Discounts
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/discounts/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
 
-  // Revisioned promotions (the canonical discount-management surface)
-  "/admin/promotions": { permission: PERMISSIONS.DISCOUNTS_VIEW },
-  "/admin/promotions/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
-
-  // Analytics
-  "/admin/analytics": { permission: PERMISSIONS.ANALYTICS_VIEW },
-  "/admin/analytics/new": { permission: PERMISSIONS.ANALYTICS_CREATE },
 
   // Customers
   "/admin/customers": { permission: PERMISSIONS.CUSTOMERS_VIEW },
@@ -81,27 +108,27 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
 
   // Settings - Account is always accessible (own account management)
   "/admin/settings/account": { allowAnyAdmin: true },
-  "/admin/settings/agent-access": {
-    permission: PERMISSIONS.AGENT_ACCESS_VIEW,
-  },
-  "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/notifications": {
-    permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-  },
-  "/admin/settings/hero-sliders": {
-    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
-  },
+
+  // Settings list: each page is gated by the permission its cards read with.
+  "/admin/settings": { anyOf: [...SETTINGS_PAGE_PERMISSIONS] },
+  "/admin/settings/store": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/users": { anyOf: [...TEAM_PAGE_PERMISSIONS] },
+  "/admin/settings/payments": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/delivery-providers": {
-    permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
-  },
-  "/admin/settings/fraud-checker": {
-    permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
-  },
-  "/admin/settings/meta-conversion": { permission: PERMISSIONS.ANALYTICS_VIEW },
-  "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
+  "/admin/settings/shipping": { anyOf: [...SHIPPING_PAGE_PERMISSIONS] },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
+  "/admin/settings/notifications": {
+    anyOf: [
+      PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+      PERMISSIONS.SETTINGS_GENERAL_VIEW,
+    ],
+  },
+  "/admin/settings/policies": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/apps": { anyOf: [...APPS_PAGE_PERMISSIONS] },
+  "/admin/settings/customer-accounts": {
+    permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  },
+  "/admin/settings/advanced": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
 };
 
 // Dynamic route patterns for pages with parameters (e.g., /admin/products/[id]/edit)
@@ -116,13 +143,15 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
   },
 
-  // Products
+  // Online store menu editor
+  {
+    pattern: /^\/admin\/online-store\/navigation\/[^/]+$/,
+    config: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+
+  // Products: one detail page; saving still requires products.edit.
   {
     pattern: /^\/admin\/products\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  {
-    pattern: /^\/admin\/products\/[^/]+$/,
     config: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
 
@@ -148,32 +177,16 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.ORDERS_VIEW },
   },
 
-  // Customers
+  // Customers: one customer page; saving and order history are gated inside it.
   {
     pattern: /^\/admin\/customers\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.CUSTOMERS_EDIT },
-  },
-  {
-    pattern: /^\/admin\/customers\/[^/]+\/history$/,
-    config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY },
+    config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
   },
 
-  // Discounts
+  // Discounts (one editor; saving still needs discounts.edit)
   {
-    pattern: /^\/admin\/discounts\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-
-  // Promotions
-  {
-    pattern: /^\/admin\/promotions\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
-  },
-
-  // Analytics
-  {
-    pattern: /^\/admin\/analytics\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.ANALYTICS_EDIT },
+    pattern: /^\/admin\/discounts\/[^/]+$/,
+    config: { permission: PERMISSIONS.DISCOUNTS_VIEW },
   },
 
   // Pages
@@ -197,12 +210,12 @@ const DEFAULT_ADMIN_PAGE_CANDIDATES = [
   "/admin/pages",
   "/admin/articles",
   "/admin/media",
-  "/admin/settings/account",
+  "/admin/account",
 ] as const;
 
 /**
  * Get the permission config for a given admin page route.
- * Returns undefined if no specific permission is required (e.g., /admin/settings/account).
+ * Returns undefined if no specific permission is required (e.g., /admin/account).
  */
 export function getPagePermission(
   pathname: string,

@@ -9,11 +9,7 @@ import {
   PaymentMethod,
   InventoryPool
 } from "@scalius/database/schema";
-import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
-import {
-  evaluateStorefrontPromotionCode,
-  resolvePromotionCustomerIdByPhone,
-} from "@scalius/core/modules/promotions";
+import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,
@@ -23,9 +19,10 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
-import { getCustomerVisibleBalanceDue } from "@scalius/core/modules/customers/customers.service";
+import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
@@ -49,6 +46,8 @@ import {
   sendOrderPaymentRecoveryOtp,
   assertStorefrontCheckoutPolicy,
   loadStorefrontCheckoutReads,
+  presentStorefrontCartValidation,
+  presentStorefrontDeliveryPreflight,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
   verifyOrderPaymentRecoveryOtp,
@@ -58,10 +57,6 @@ import {
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
-  fromMinorUnits,
-  toMinorUnits,
-  type StorefrontDiscountType,
-  type TaxDiscountAllocationInput,
   type TaxQuote,
 } from "@scalius/core/modules/tax";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
@@ -801,21 +796,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customerId: orders.customerId,
       customerName: orders.customerName,
       shippingAddress: orders.shippingAddress,
-      totalAmount: orders.totalAmount,
-      shippingCharge: orders.shippingCharge,
-      discountAmount: orders.discountAmount,
+      ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
-      currencyDecimalPlaces: orders.currencyDecimalPlaces,
       subtotalAmountMinor: orders.subtotalAmountMinor,
-      shippingAmountMinor: orders.shippingAmountMinor,
       shippingMethodId: orders.shippingMethodId,
       shippingMethodName: orders.shippingMethodName,
       shippingMethodDescription: orders.shippingMethodDescription,
       shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
       shippingFeeWaived: orders.shippingFeeWaived,
-      discountAmountMinor: orders.discountAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
-      totalAmountMinor: orders.totalAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
       city: orders.city,
@@ -827,8 +816,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
       fulfillmentStatus: orders.fulfillmentStatus,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
@@ -848,7 +835,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         productId: orderItems.productId,
         variantId: orderItems.variantId,
         quantity: orderItems.quantity,
-        price: orderItems.price,
         productName: orderItems.productName,
         productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
@@ -865,14 +851,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     getReceiptOrderSupportRequestStateForOrder(db, order),
   ]);
 
+  const money = orderMoneyAmounts(order);
   return ok(c, {
     order: {
       id: order.id,
       customerName: order.customerName,
       shippingAddress: order.shippingAddress,
-      totalAmount: order.totalAmount,
-      shippingCharge: order.shippingCharge,
-      discountAmount: order.discountAmount,
+      totalAmount: money.totalAmount,
+      shippingCharge: money.shippingCharge,
+      discountAmount: money.discountAmount,
       currencyCode: order.currencyCode,
       currencyDecimalPlaces: order.currencyDecimalPlaces,
       subtotalAmountMinor: order.subtotalAmountMinor,
@@ -896,12 +883,13 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       status: order.status,
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
-      paidAmount: order.paidAmount,
-      balanceDue: getCustomerVisibleBalanceDue(order),
+      paidAmount: money.paidAmount,
+      balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
         ...item,
+        price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&
           (productImageStatus === "ready" || productImageStatus === "trashed")
@@ -1065,6 +1053,9 @@ const taxQuoteResponseSchema = z.object({
   totalMinor: z.number().int(),
   totalAmount: z.number(),
   shippingMethod: storefrontShippingMethodSnapshotSchema,
+  discountOffers: z.array(z.string().max(160)).max(3).openapi({
+    description: "Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet.",
+  }),
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
     productId: z.string(),
@@ -1181,12 +1172,13 @@ app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const currency = await getCurrencySettings(db);
+  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
   });
   if (!result.valid || !data.city || !data.zone) {
-    return ok(c, result);
+    return ok(c, presentStorefrontCartValidation(result, decimalPlaces));
   }
 
   const delivery = await validateStorefrontDeliveryPreflight(
@@ -1196,11 +1188,13 @@ app.openapi(cartValidationRoute, async (c) => {
       zone: data.zone,
       area: data.area,
       shippingMethodId: data.shippingMethodId,
-      currencyCode: currency.currencyCode,
     },
     result,
   );
-  return ok(c, { ...result, delivery });
+  return ok(c, {
+    ...presentStorefrontCartValidation(result, decimalPlaces),
+    delivery: presentStorefrontDeliveryPreflight(delivery, decimalPlaces),
+  });
 });
 
 type TaxQuoteCartValidationResult = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
@@ -1217,114 +1211,30 @@ async function resolveAuthoritativeTaxQuote(
   delivery: TaxQuoteDeliveryResult,
   destination: { city: string; zone: string; area?: string | null },
   currencyCode: string,
-): Promise<TaxQuote> {
-  const totalBeforeDiscount = roundPrice(
-    cartValidation.subtotal + delivery.shippingCharge,
-    currencyCode,
-  );
-  const normalizedDiscountCode = input.discountCode?.trim().toUpperCase();
-  let discountAmount = 0;
-  let discountType: StorefrontDiscountType | null = null;
-  let applicableProductIds: string[] | undefined;
-  let promotionDiscountAllocation: TaxDiscountAllocationInput | undefined;
-  if (normalizedDiscountCode) {
-    if (!input.customerPhone) {
-      throw new ValidationError("A customer phone number is required to quote this discount.");
-    }
-    const discountItems = cartValidation.items.map((item) => ({
-      id: item.productId,
-      price: item.unitPrice,
-      quantity: item.quantity,
-      variantId: item.variantId,
-      freeDelivery: item.freeDelivery,
-    }));
-    const promotionCustomerId = input.customerId
-      ?? await resolvePromotionCustomerIdByPhone(db, input.customerPhone);
-    const promotionResolution = await evaluateStorefrontPromotionCode(db, {
-      code: normalizedDiscountCode,
-      customerId: promotionCustomerId,
-      cart: {
-        currencyCode,
-        lines: cartValidation.items.map((item) => ({
-          id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-          productId: item.productId,
-          variantId: item.variantId,
-          unitPriceMinor: toMinorUnits(item.unitPrice, getDecimalPlaces(currencyCode)),
-          quantity: item.quantity,
-        })),
-        shippingAmountMinor: toMinorUnits(delivery.shippingCharge, getDecimalPlaces(currencyCode)),
-        evaluatedAtEpochSeconds: Math.floor(Date.now() / 1_000),
-      },
-    });
-    if (promotionResolution.matched) {
-      if (!promotionResolution.valid) {
-        throw new ValidationError(promotionResolution.message);
-      }
-      const lineAmounts = new Map<string, number>();
-      let shippingMinor = 0;
-      for (const allocation of promotionResolution.evaluation.applied.allocations) {
-        if (allocation.target === "shipping") {
-          shippingMinor += allocation.discountAmountMinor;
-        } else if (allocation.lineId) {
-          lineAmounts.set(
-            allocation.lineId,
-            (lineAmounts.get(allocation.lineId) ?? 0) + allocation.discountAmountMinor,
-          );
-        }
-      }
-      promotionDiscountAllocation = {
-        lines: [...lineAmounts.entries()].map(([lineId, amountMinor]) => ({ lineId, amountMinor })),
-        shippingMinor,
-      };
-      discountAmount = fromMinorUnits(
-        promotionResolution.evaluation.applied.totalDiscountMinor,
-        getDecimalPlaces(currencyCode),
-      );
-    } else {
-      const validation = await isDiscountValid(
-        db,
-        normalizedDiscountCode,
-        cartValidation.subtotal,
-        discountItems,
-        input.customerPhone,
-        "",
-        currencyCode,
-        input.customerId ?? undefined,
-      ) as {
-      valid?: unknown;
-      discount?: {
-        id: string;
-        type: StorefrontDiscountType;
-        valueType: string;
-        discountValue: number;
-      };
-      applicableProductIds?: Set<string>;
-      hasProductRestrictions?: boolean;
-    } | null;
-      if (!validation?.valid || !validation.discount) {
-        throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
-      }
-      discountType = validation.discount.type;
-      if (discountType === "amount_off_products") {
-        if (!(validation.applicableProductIds instanceof Set)) {
-          throw new ValidationError("The product discount scope could not be verified.");
-        }
-        applicableProductIds = [...validation.applicableProductIds];
-      }
-      discountAmount = await calculateDiscountAmount(
-        db,
-        validation.discount,
-        totalBeforeDiscount,
-        discountItems,
-        delivery.shippingCharge,
-        validation.applicableProductIds,
-        currencyCode,
-        Boolean(validation.hasProductRestrictions),
-      );
-    }
+): Promise<{ quote: TaxQuote; offers: string[] }> {
+  const discountCode = input.discountCode?.trim() || null;
+  if (discountCode && !input.customerPhone) {
+    throw new ValidationError("A customer phone number is required to quote this discount.");
   }
+  const decimalPlaces = getDecimalPlaces(currencyCode);
+  const discount = await quoteStorefrontDiscount(db, {
+    code: discountCode,
+    customerId: input.customerId,
+    customerPhone: input.customerPhone,
+    cart: {
+      currencyCode,
+      lines: cartValidation.items.map((item) => ({
+        id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
+        productId: item.productId,
+        variantId: item.variantId,
+        unitPriceMinor: item.unitPriceMinor,
+        quantity: item.quantity,
+      })),
+      shippingAmountMinor: delivery.shippingMinor,
+    },
+  });
 
-  return calculateStorefrontTaxQuote(db, {
+  const quote = await calculateStorefrontTaxQuote(db, {
     destination: {
       city: destination.city,
       zone: destination.zone,
@@ -1337,20 +1247,15 @@ async function resolveAuthoritativeTaxQuote(
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       productId: item.productId,
       variantId: item.variantId,
-      unitPrice: item.unitPrice,
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
     })),
-    shippingAmount: delivery.shippingCharge,
-    discountAmount: roundPrice(Number(discountAmount), currencyCode),
-    discountType,
-    applicableProductIds,
-    promotionDiscountAllocation,
-    currency: {
-      code: currencyCode,
-      decimalPlaces: getDecimalPlaces(currencyCode),
-    },
+    shippingMinor: delivery.shippingMinor,
+    promotionDiscountAllocation: discount.taxAllocation,
+    currency: { code: currencyCode, decimalPlaces },
   });
+  return { quote, offers: discount.offers };
 }
 
 app.openapi(taxQuoteRoute, async (c) => {
@@ -1379,9 +1284,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     zone: data.zone,
     area: data.area,
     shippingMethodId: data.shippingMethodId,
-    currencyCode: currency.currencyCode,
   }, cartValidation);
-  const quote = await resolveAuthoritativeTaxQuote(
+  const { quote, offers } = await resolveAuthoritativeTaxQuote(
     db,
     {
       discountCode: data.discountCode,
@@ -1393,7 +1297,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     data,
     currency.currencyCode,
   );
-  const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
+  const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
@@ -1417,12 +1321,13 @@ app.openapi(taxQuoteRoute, async (c) => {
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
     shippingMethod: delivery.shippingMethod,
+    discountOffers: offers,
     items: cartValidation.items.map((item) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
+      unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),
@@ -1501,13 +1406,13 @@ function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: st
 function assertGatewayPrecommitReadiness(
   data: CreateOrderInput,
   checkoutSettings: CheckoutSettingsSnapshot,
-  totalAmount: number,
+  totalAmountMinor: number,
   currencyCode: string,
 ): void {
   const issue = getCheckoutGatewayPrecommitIssue({
     paymentMethod: data.paymentMethod,
     currencyCode,
-    totalAmount,
+    totalAmountMinor,
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
@@ -1652,31 +1557,10 @@ app.openapi(createOrderRoute, async (c) => {
     // or all roll back together.
     const checkoutAttempt = retryAttempt ?? createAtomicCheckoutAttempt(attemptIdentity);
 
-    type CartItem = { id: string; price: number; quantity: number; variantId: string };
     const result = await createStorefrontOrder(
       db,
       data,
       requestUrl,
-      (db, code, total, items, customerPhone, customerId) => isDiscountValid(
-        db,
-        code,
-        total,
-        items as CartItem[],
-        customerPhone,
-        "",
-        undefined,
-        customerId,
-      ),
-      (db, discount, total, items, shippingCost, applicableProductIds, hasProductRestrictions) => calculateDiscountAmount(
-        db,
-        discount as { id: string; type: string; valueType: string; discountValue: number },
-        total,
-        items as CartItem[],
-        shippingCost,
-        applicableProductIds,
-        currency.currencyCode,
-        hasProductRestrictions,
-      ),
       {
         orderId: checkoutAttempt.orderId,
         checkoutToken: checkoutAttempt.checkoutToken,
@@ -1688,7 +1572,6 @@ app.openapi(createOrderRoute, async (c) => {
         code: currency.currencyCode,
         decimalPlaces: getDecimalPlaces(currency.currencyCode),
       },
-      undefined,
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         authorityRevision: checkoutAuthority.authorityRevision,
@@ -1710,7 +1593,7 @@ app.openapi(createOrderRoute, async (c) => {
     assertGatewayPrecommitReadiness(
       data,
       checkoutSettings,
-      result.totalAmount,
+      result.taxQuote.totalMinor,
       currency.currencyCode,
     );
     diagnostics?.mark("prepare");
@@ -1728,9 +1611,9 @@ app.openapi(createOrderRoute, async (c) => {
       statusToken: checkoutAttempt.statusToken,
       orderId: result.orderId,
       paymentMethod: result.paymentMethod,
-      totalAmount: result.totalAmount,
+      totalAmount: fromMinor(result.taxQuote.totalMinor, result.taxQuote.decimalPlaces),
       totalAmountMinor: result.taxQuote.totalMinor,
-      taxAmount: fromMinorUnits(result.taxQuote.taxMinor, result.taxQuote.decimalPlaces),
+      taxAmount: fromMinor(result.taxQuote.taxMinor, result.taxQuote.decimalPlaces),
       taxAmountMinor: result.taxQuote.taxMinor,
       taxLabel: result.taxQuote.displayLabel,
       pricesIncludeTax: result.taxQuote.pricesIncludeTax,

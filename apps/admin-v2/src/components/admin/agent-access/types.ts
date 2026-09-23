@@ -7,11 +7,7 @@ export type AgentResource = "dashboard" | "storefront";
 export type AgentGrantKind = "oauth" | "pat" | "cli";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
 export type AgentGrantStatus = "pending" | "active" | "revoked" | "expired";
-/**
- * Connection list filter. `current` is the dashboard default and lists every
- * pending or active connection that has not expired; `revoked` and `expired`
- * together are exactly what "Clear revoked" permanently deletes.
- */
+/** Connection list filter; `revoked` + `expired` are what "Clear old connections" deletes. */
 export type AgentConnectionStatusFilter = NonNullable<
   NonNullable<GetApiV1AdminAgentAccessConnectionsData["query"]>["status"]
 >;
@@ -25,11 +21,12 @@ export interface AgentClearableConnections {
 export type AgentPurgeRevokedResult =
   DeleteApiV1AdminAgentAccessConnectionsRevokedResponses[200]["data"];
 
-export interface AgentCredentialSummary {
+/** One key behind a connection. The key itself is never returned after it is shown once. */
+export interface AgentCredential {
   id: string;
-  kind: "pat" | "cli";
-  tokenHint: string;
-  expiresAt: string;
+  kind: AgentGrantKind;
+  tokenHint: string | null;
+  expiresAt: string | null;
   lastUsedAt: string | null;
   revokedAt: string | null;
 }
@@ -40,51 +37,21 @@ export interface AgentConnection {
   resource: AgentResource;
   label: string;
   clientName: string | null;
-  clientId: string | null;
-  ownerUserId: string | null;
   ownerName: string | null;
   preset: AgentPreset;
+  /** Permission names this connection holds (what "custom" access means). */
+  permissions?: string[];
+  riskCeiling?: AgentRisk | null;
+  credentials?: AgentCredential[];
   status: AgentGrantStatus;
-  permissions: string[];
-  riskCeiling: string;
   createdAt: string;
-  updatedAt: string;
   expiresAt: string;
   lastUsedAt: string | null;
-  lastOperationId: string | null;
-  credentials: AgentCredentialSummary[];
-}
-
-export interface AgentPagination {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
 }
 
 export interface AgentConnectionsPage {
   connections: AgentConnection[];
-  pagination: AgentPagination;
-}
-
-export interface AgentAuditEvent {
-  id: string;
-  operationId: string | null;
-  resource: AgentResource;
-  risk: string;
-  outcome: string;
-  httpStatus: number | null;
-  errorClass: string | null;
-  durationMs: number | null;
-  requestId: string | null;
-  resourceIds: string[];
-  metadata: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface AgentAuditPage {
-  events: AgentAuditEvent[];
-  pagination: AgentPagination;
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
 export interface AgentSecretResult {
@@ -92,8 +59,25 @@ export interface AgentSecretResult {
   connection: AgentConnection;
 }
 
-export interface AgentRotationResult extends AgentSecretResult {
+export type AgentRisk = "read" | "write" | "destructive" | "financial" | "security";
+
+export interface AgentAuditEvent {
+  id: string;
+  operationId: string;
+  risk: AgentRisk;
+  outcome: "success" | "denied" | "failed";
+  createdAt: string;
+}
+
+export interface AgentAuditEventsPage {
+  events: AgentAuditEvent[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export interface AgentRotateResult {
+  token: string;
   credentialId: string;
+  connection: AgentConnection;
 }
 
 export interface AgentGrantSelection {
@@ -104,21 +88,8 @@ export interface AgentGrantSelection {
   riskCeiling?: AgentRisk;
 }
 
-export type AgentRisk =
-  | "read"
-  | "write"
-  | "destructive"
-  | "financial"
-  | "security";
-
 export interface CreateAgentTokenInput extends AgentGrantSelection {
   label: string;
-}
-
-export interface UpdateAgentGrantInput {
-  permissions?: string[];
-  expiresAt?: string;
-  riskCeiling?: AgentRisk;
 }
 
 export interface AgentAuthorizationRequest {
@@ -148,54 +119,3 @@ export type AgentAuthorizationDecisionResult =
 export type AgentDeviceDecisionResult =
   | { status: "approved"; grantId: string; credentialId: string }
   | { status: "denied" };
-
-export const AGENT_PRESETS: ReadonlyArray<{
-  id: AgentPreset;
-  label: string;
-  description: string;
-  warning?: string;
-}> = [
-  {
-    id: "read",
-    label: "Read only",
-    description: "Inspect data without changing the store.",
-  },
-  {
-    id: "operator",
-    label: "Operator",
-    description: "Read data and perform ordinary day-to-day updates.",
-  },
-  {
-    id: "full",
-    label: "Full automation",
-    description: "Use every action available to your current Super Admin account.",
-    warning: "Includes destructive, financial, security, and agent-access actions.",
-  },
-  {
-    id: "custom",
-    label: "Custom",
-    description: "Choose an exact permission set.",
-  },
-];
-
-export const AGENT_RESOURCE_COPY: Record<
-  AgentResource,
-  { label: string; description: string }
-> = {
-  dashboard: {
-    label: "Dashboard",
-    description: "Merchant and Super Admin operations.",
-  },
-  storefront: {
-    label: "Storefront",
-    description: "Visitor operations plus hosted customer authorization.",
-  },
-};
-
-export function permissionLabel(permission: string): string {
-  return permission
-    .split(/[._-]/g)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}

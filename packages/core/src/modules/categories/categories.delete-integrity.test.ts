@@ -38,8 +38,8 @@ describe("category permanent delete integrity", () => {
   it("removes only the deleted membership from collections in the same batch as the delete", async () => {
     const { sqlite, db, collection, categoryExists } = setup();
     collection("col_seasonal", false, ["cat_delete", "cat_keep"]);
-    sqlite.exec(`INSERT INTO products (id, name, price, slug, category_id, deleted_at)
-      VALUES ('prod_trashed', 'Old', 10, 'old', 'cat_delete', 1700000000)`);
+    sqlite.exec(`INSERT INTO products (id, name, price_minor, slug, category_id, deleted_at)
+      VALUES ('prod_trashed', 'Old', 1000, 'old', 'cat_delete', 1700000000)`);
 
     await bulkDeleteCategories(db, deleteClaim, true);
 
@@ -54,7 +54,7 @@ describe("category permanent delete integrity", () => {
 
   it("fails closed when a product is assigned after the initial usage read", async () => {
     const { db, categoryExists } = setup((sqlite) => {
-      sqlite.exec("INSERT INTO products (id, name, price, slug, category_id) VALUES ('prod_new', 'New', 10, 'new', 'cat_delete')");
+      sqlite.exec("INSERT INTO products (id, name, price_minor, slug, category_id) VALUES ('prod_new', 'New', 1000, 'new', 'cat_delete')");
     });
 
     await expect(bulkDeleteCategories(db, deleteClaim, true)).rejects.toBeInstanceOf(ValidationError);
@@ -88,8 +88,8 @@ describe("category permanent delete integrity", () => {
 
   it("does not churn product composition revisions for category edit, status, trash, or restore writes", async () => {
     const { sqlite, db } = setup();
-    sqlite.exec(`INSERT INTO products (id, name, price, slug, category_id) VALUES ('prod_live', 'Live', 10, 'live', 'cat_keep');
-      INSERT INTO products (id, name, price, slug, category_id, deleted_at) VALUES ('prod_old', 'Old', 10, 'old', 'cat_active', 1700000000);`);
+    sqlite.exec(`INSERT INTO products (id, name, price_minor, slug, category_id) VALUES ('prod_live', 'Live', 1000, 'live', 'cat_keep');
+      INSERT INTO products (id, name, price_minor, slug, category_id, deleted_at) VALUES ('prod_old', 'Old', 1000, 'old', 'cat_active', 1700000000);`);
 
     await updateCategory(db, "cat_keep", {
       name: "Keep renamed", slug: "keep", description: null, metaTitle: null, metaDescription: null,

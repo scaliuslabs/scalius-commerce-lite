@@ -8,14 +8,13 @@ import {
   type RefundAttempt,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import {
   assertOrderPaymentCurrency,
   resolveOrderCurrencySnapshot,
-  roundOrderMoney,
   type OrderCurrencySnapshot,
 } from "./order-currency";
-import { resolveRefundProviderMoney } from "./refund-provider-money";
 import { COD_PAYMENT_METHOD, getPaymentGateway } from "./gateways/registry";
 import type { GatewayProviderRefund, GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
@@ -45,7 +44,7 @@ type RefundAttemptProbeRow = Pick<
   | "orderId"
   | "refundPaymentId"
   | "gateway"
-  | "amount"
+  | "amountMinor"
   | "currency"
   | "status"
   | "sourcePaymentId"
@@ -193,7 +192,7 @@ function buildRefundAttemptStateNotificationFact(
     orderId: attempt.orderId,
     notificationType,
     dedupeKey: `refund:${attempt.orderId}:${attempt.refundGroupId}:${state}`,
-    amount: roundPrice(attempt.amount, attempt.currency),
+    amount: fromMinor(attempt.amountMinor, getDecimalPlaces(attempt.currency)),
     refundId: options.providerRefundId ?? attempt.providerRefundId ?? undefined,
   };
 }
@@ -361,12 +360,14 @@ async function probeProviderRefund(
   if (!settings || settings.credentialErrors?.length || !gateway.canVerify(settings)) {
     return { outcome: "unknown", error: `${gateway.label} is not configured for refund reconciliation`, manualReview: true };
   }
-  const money = resolveRefundProviderMoney(attempt.amount, context.currency, `${gateway.label} refund`);
+  if (!Number.isSafeInteger(attempt.amountMinor) || attempt.amountMinor <= 0) {
+    return { outcome: "unknown", error: `${gateway.label} refund must resolve to a positive provider amount.`, manualReview: true };
+  }
   return gateway.refundStatus(settings, {
     providerRefundId: attempt.providerRefundId,
     sourceRef: attempt.sourceTransactionId,
-    amountMinor: money.amountMinor,
-    currency: money.currency,
+    amountMinor: attempt.amountMinor,
+    currency: context.currency.code,
     reference: attempt.refundReference,
     idempotencyKey: attempt.providerIdempotencyKey,
   });
@@ -382,7 +383,7 @@ type ExternalRefundWebhookRow = {
 type SourcePaymentRow = {
   id: string;
   orderId: string;
-  amount: number;
+  amountMinor: number;
   currency: string;
   paymentMethod: string;
   providerRef: string | null;
@@ -417,7 +418,7 @@ async function findSourcePayment(
     .select({
       id: orderPayments.id,
       orderId: orderPayments.orderId,
-      amount: orderPayments.amount,
+      amountMinor: orderPayments.amountMinor,
       currency: orderPayments.currency,
       paymentMethod: orderPayments.paymentMethod,
       providerRef: orderPayments.providerRef,
@@ -443,7 +444,7 @@ async function getRefundedAmountForSourcePayment(
   currency: OrderCurrencySnapshot,
 ): Promise<number> {
   const rows = await db
-    .select({ amount: orderPayments.amount, currency: orderPayments.currency })
+    .select({ amountMinor: orderPayments.amountMinor, currency: orderPayments.currency })
     .from(refundAttempts)
     .innerJoin(orderPayments, eq(orderPayments.id, refundAttempts.refundPaymentId))
     .where(and(
@@ -453,10 +454,7 @@ async function getRefundedAmountForSourcePayment(
   for (const row of rows) {
     assertOrderPaymentCurrency(row.currency, currency, "Prior refund payment");
   }
-  return roundOrderMoney(
-    rows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
-    currency,
-  );
+  return rows.reduce((sum, row) => sum + row.amountMinor, 0);
 }
 
 async function getExistingRefundAttemptByProviderRefundId(
@@ -480,7 +478,7 @@ async function insertExternalRefundAttempt(
     webhookEventId: string;
     sourcePayment: SourcePaymentRow;
     refund: GatewayProviderRefund;
-    amount: number;
+    amountMinor: number;
     nowSeconds: number;
   },
 ): Promise<string> {
@@ -501,7 +499,7 @@ async function insertExternalRefundAttempt(
     providerStatus: params.refund.status,
     providerAmount: params.refund.amountMinor,
     providerCurrency: params.refund.currency,
-    amount: params.amount,
+    amountMinor: params.amountMinor,
   });
   const payload = JSON.stringify({
     source: EXTERNAL_REFUND_SOURCE,
@@ -520,7 +518,7 @@ async function insertExternalRefundAttempt(
       db.insert(orderPayments).values({
         id: refundPaymentId,
         orderId: params.sourcePayment.orderId,
-        amount: params.amount,
+        amountMinor: params.amountMinor,
         currency: params.sourcePayment.currency || params.refund.currency,
         paymentMethod: provider,
         paymentType: "refund",
@@ -537,7 +535,7 @@ async function insertExternalRefundAttempt(
         sourcePaymentId: params.sourcePayment.id,
         refundPaymentId,
         gateway: provider,
-        amount: params.amount,
+        amountMinor: params.amountMinor,
         currency: params.sourcePayment.currency || params.refund.currency,
         reason: "External provider refund",
         requestHash: `external:${provider}:${params.refund.id}:${params.refund.amountMinor}:${params.refund.currency}`,
@@ -660,13 +658,10 @@ async function reconcileExternalRefundWebhookEvent(
       continue;
     }
 
-    const amount = roundOrderMoney(
-      refund.amountMinor / Math.pow(10, currency.decimalPlaces),
-      currency,
-    );
+    const amountMinor = refund.amountMinor;
     const alreadyRefunded = await getRefundedAmountForSourcePayment(db, sourcePayment.id, currency);
-    const remaining = roundOrderMoney(Number(sourcePayment.amount ?? 0) - alreadyRefunded, currency);
-    if (amount <= 0 || amount > remaining + 0.000001) {
+    const remaining = sourcePayment.amountMinor - alreadyRefunded;
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0 || amountMinor > remaining) {
       deferred += 1;
       continue;
     }
@@ -675,7 +670,7 @@ async function reconcileExternalRefundWebhookEvent(
       webhookEventId: row.id,
       sourcePayment,
       refund,
-      amount,
+      amountMinor,
       nowSeconds,
     });
     imported += 1;
@@ -793,7 +788,7 @@ export async function reconcileRefundAttemptById(
       orderId: refundAttempts.orderId,
       refundPaymentId: refundAttempts.refundPaymentId,
       gateway: refundAttempts.gateway,
-      amount: refundAttempts.amount,
+      amountMinor: refundAttempts.amountMinor,
       currency: refundAttempts.currency,
       status: refundAttempts.status,
       sourcePaymentId: refundAttempts.sourcePaymentId,

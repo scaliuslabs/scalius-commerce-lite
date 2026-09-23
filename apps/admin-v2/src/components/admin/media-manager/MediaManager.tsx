@@ -1,8 +1,11 @@
 import { useEffect } from "react";
+import { cn } from "@scalius/shared/utils";
 import { DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
 import { MediaWorkspace } from "./MediaWorkspace";
 import { useMediaManager } from "./hooks/useMediaManager";
-import type { MediaManagerProps } from "./types";
+import { mediaLimitKey, type MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
   open: boolean;
@@ -19,6 +22,7 @@ export function MediaManager({
   open,
   onOpenChange,
 }: MediaManagerInternalProps) {
+  const t = useMessages(mediaMessages);
   const manager = useMediaManager({
     autoLoad: false,
     capability,
@@ -47,12 +51,12 @@ export function MediaManager({
   }, [open]);
 
   return (
-    <DialogContent
-      showCloseButton={false}
-      className={`h-[94svh] max-h-[860px] w-[96vw] max-w-7xl overflow-hidden p-0 ${dialogClassName ?? ""}`}
-    >
-      <DialogTitle className="sr-only">Choose media</DialogTitle>
-      <DialogDescription className="sr-only">Browse and upload supported media assets.</DialogDescription>
+    // eslint-disable-next-line shadcn/require-static-classes -- callers add layout only (z-index over the fullscreen editor)
+    <DialogContent className={cn("flex h-[94svh] max-h-[860px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-6xl", dialogClassName)}>
+      <div className="flex flex-col gap-1 border-b py-3 pl-4 pr-14">
+        <DialogTitle>{t(capability === "image" ? "chooseImage" : capability === "video" ? "chooseVideo" : "chooseFile")}</DialogTitle>
+        <DialogDescription>{t(mediaLimitKey(capability))}</DialogDescription>
+      </div>
       <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined} onClose={() => onOpenChange(false)} />
     </DialogContent>
   );

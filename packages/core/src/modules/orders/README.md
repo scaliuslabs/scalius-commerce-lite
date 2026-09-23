@@ -212,7 +212,7 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
 - **Checkout reservation rollback**: `commitStorefrontOrderPayload()` commits inventory CAS and ledger edges in the same guarded batch as the order. A failed authority, inventory, or order guard rolls back the whole batch; no compensating stock release is needed. Late reservation failures surface buyer-safe cart issues.
 - **Checkout idempotency**: `checkout_attempts` owns same-key replay, in-flight `202`, reserved order ids, and stale-claim recovery. `commitStorefrontOrderPayload()` also treats an already-committed order id as success so a crash after commit can converge without a duplicate order.
-- **Discount redemption authority**: Validation endpoints and pre-commit reads are advisory. Legacy `maxUses` and one-per-customer guards remain D1 triggers on `discount_usage`. Typed code promotions use immutable `promotion_redemptions` rows keyed to the canonical CRM customer (including guest profiles) and D1-triggered total/per-customer/spend limits. An order retry returns the existing order before a second claim. Cancellation/refund does not release typed claims; any future release policy must use an auditable adjustment ledger.
+- **Discount redemption authority**: One engine (`modules/promotions`): `quoteStorefrontDiscount` evaluates the typed code with active automatic discounts; the commit re-evaluates the snapshot. Validation endpoints and pre-commit reads are advisory. Code discounts write immutable `promotion_redemptions` rows keyed to the canonical CRM customer (including guest profiles) with D1-triggered total/per-customer/spend limits; automatic discounts have no limits and write allocations only (revision-guarded). An order retry returns the existing order before a second claim. Cancellation/refund does not release typed claims; any future release policy must use an auditable adjustment ledger.
 
 ## API Endpoints
 
@@ -285,13 +285,13 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
+- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `orderDiscountAllocations`, `promotionRedemptions`, `codTracking`
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`
 - `notifications` module -- `sendOrderNotificationEmail()`, `sendOrderNotification()` (FCM push)
 - `@scalius/core/search` -- FTS5 for order search
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
-- `@scalius/shared/price-utils` -- `roundPrice`, `addPrices`, `subtractPrice`
+- `@scalius/shared/money` -- `toMinor`, `fromMinor`, `discountedPriceMinor` (all order money is integer minor units of the order currency)
 - `@scalius/shared/order-utils` -- `generateOrderId`
 - `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `calculateCustomerStats`

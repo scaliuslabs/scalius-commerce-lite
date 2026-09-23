@@ -14,6 +14,7 @@ import {
     loadProductMediaProjections,
     resolveProductImageRepresentation,
 } from "./products.media";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "./products.money";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT = 500;
@@ -435,6 +436,7 @@ export async function getProductFeedDiagnostics(
         PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,
     );
 
+    const decimalPlacesRead = readStoreDecimalPlaces(db);
     const rows = await db
         .select({
             id: products.id,
@@ -442,10 +444,10 @@ export async function getProductFeedDiagnostics(
             slug: products.slug,
             isActive: products.isActive,
             excludeFromProductFeed: products.excludeFromProductFeed,
-            price: products.price,
+            priceMinor: products.priceMinor,
             discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
         })
@@ -454,18 +456,22 @@ export async function getProductFeedDiagnostics(
         .limit(scanLimit + 1)
         .all();
 
-    const productRows = rows.slice(0, scanLimit).map((row) => ({
-        id: row.id,
-        name: row.name,
-        slug: row.slug,
-        isActive: Boolean(row.isActive),
-        excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
-        price: row.price,
-        discountType: row.discountType,
-        discountPercentage: row.discountPercentage,
-        discountAmount: row.discountAmount,
-        deletedAt: row.deletedAt ?? null,
-    }));
+    const decimalPlaces = await decimalPlacesRead;
+    const productRows = rows.slice(0, scanLimit).map((row) => {
+        const price = presentCatalogPrice(row, decimalPlaces);
+        return {
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+            isActive: Boolean(row.isActive),
+            excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
+            price: price.price,
+            discountType: row.discountType,
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
+            deletedAt: row.deletedAt ?? null,
+        };
+    });
     const productIds = productRows.map((product) => product.id);
     const truncated = rows.length > scanLimit;
 
@@ -484,7 +490,19 @@ export async function getProductFeedDiagnostics(
     }
 
     const mediaMap = await loadProductMediaProjections(db, productIds);
-    const variantRows: Array<ProductFeedDiagnosticScanVariant & { productId: string }> = [];
+    const variantRows: Array<{
+        id: string;
+        productId: string;
+        optionCombinationKey: string | null;
+        stock: number;
+        reservedStock: number;
+        isDefault: boolean;
+        trackInventory: boolean;
+        priceMinor: number;
+        discountType: string | null;
+        discountBps: number;
+        discountAmountMinor: number;
+    }> = [];
     for (const productIdChunk of chunkProductIds(productIds)) {
         variantRows.push(...await db
             .select({
@@ -495,10 +513,10 @@ export async function getProductFeedDiagnostics(
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
-                price: productVariants.price,
+                priceMinor: productVariants.priceMinor,
                 discountType: productVariants.discountType,
-                discountPercentage: productVariants.discountPercentage,
-                discountAmount: productVariants.discountAmount,
+                discountBps: productVariants.discountBps,
+                discountAmountMinor: productVariants.discountAmountMinor,
             })
             .from(productVariants)
             .where(and(
@@ -520,6 +538,7 @@ export async function getProductFeedDiagnostics(
     const variantMap = new Map<string, ProductFeedDiagnosticScanVariant[]>();
     for (const row of variantRows) {
         const productVariantsForProduct = variantMap.get(row.productId) ?? [];
+        const price = presentCatalogPrice(row, decimalPlaces);
         productVariantsForProduct.push({
             id: row.id,
             productId: row.productId,
@@ -528,10 +547,10 @@ export async function getProductFeedDiagnostics(
             reservedStock: row.reservedStock,
             isDefault: Boolean(row.isDefault),
             trackInventory: Boolean(row.trackInventory),
-            price: row.price,
+            price: price.price,
             discountType: row.discountType,
-            discountPercentage: row.discountPercentage,
-            discountAmount: row.discountAmount,
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
         });
         variantMap.set(row.productId, productVariantsForProduct);
     }

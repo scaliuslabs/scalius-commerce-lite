@@ -5,6 +5,8 @@ import { pageQueryOptions } from "~/lib/api-query-options/pages";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 import { toPageFormValues } from "~/lib/page-form-values";
+import { translate } from "~/i18n";
+import { pageFormMessages } from "~/i18n/page-form";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -18,7 +20,7 @@ export const Route = createFileRoute("/admin/pages/$pageId/edit")({
       throw redirect({ to: "/admin/pages" });
   },
   head: () => ({
-    meta: [{ title: "Edit Page | Scalius Admin" }],
+    meta: [{ title: translate(pageFormMessages, "page") }],
   }),
   errorComponent: RouteErrorComponent,
   component: EditPagePage,

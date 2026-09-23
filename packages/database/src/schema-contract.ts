@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 67,
-  name: "0067_settings_documents",
+  version: 69,
+  name: "0069_integer_money",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -113,8 +113,18 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "49f766711be807af246f7a7c6c5ac1984dff6b49000ab73fce487f53d902d3b7",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 67,
+    name: "0067_settings_documents",
     sourceSha256: "cdf999ee82cb87fb8811552eb1d76d87a99d36eecf0508c4ac742699504f0205",
+  },
+  {
+    version: 68,
+    name: "0068_single_discount_engine",
+    sourceSha256: "9c33e0354f8b670c98596fbfa9daa760198a6fed7287c309293a4661ff5d8ce3",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "852add8cc9569b0f85a12fefb59f2e0d863bca2fb4c248768de79f9d2b274737",
   },
 ] as const;
 

@@ -23,8 +23,9 @@ type RecoveryOrderRow = {
   status: string;
   paymentStatus: string;
   paymentMethod: string;
-  paidAmount: number;
-  balanceDue: number;
+  currencyDecimalPlaces: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
   deletedAt: number | null;
   shipmentClaimId: string | null;
   shipmentClaimExpiresAt: number | null;
@@ -48,8 +49,9 @@ function recoveryOrder(overrides: Partial<RecoveryOrderRow> = {}): RecoveryOrder
     status: OrderStatus.INCOMPLETE,
     paymentStatus: PaymentStatus.FAILED,
     paymentMethod: PaymentMethod.SSLCOMMERZ,
-    paidAmount: 0,
-    balanceDue: 120,
+    currencyDecimalPlaces: 2,
+    paidAmountMinor: 0,
+    balanceDueMinor: 12_000,
     deletedAt: null,
     shipmentClaimId: null,
     shipmentClaimExpiresAt: null,
@@ -61,7 +63,7 @@ function createRecoveryLinkDb(options: {
   order?: RecoveryOrderRow | null;
   attempts?: AttemptRow[];
   payments?: Array<{ status: string }>;
-  plan?: { status: string; depositAmount: number } | null;
+  plan?: { status: string; depositAmountMinor: number } | null;
 } = {}) {
   const insertedReceipts: Array<Record<string, unknown>> = [];
 
@@ -115,7 +117,7 @@ describe("admin order payment recovery links", () => {
         updatedAt: 95,
       }],
       payments: [{ status: PaymentRecordStatus.FAILED }],
-      plan: { status: PaymentPlanStatus.PENDING, depositAmount: 60 },
+      plan: { status: PaymentPlanStatus.PENDING, depositAmountMinor: 6_000 },
     });
 
     const result = await createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100 });

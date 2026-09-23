@@ -3,6 +3,7 @@ import { getApiV1Platform } from "@scalius/api-client/sdk";
 
 import { AuthorizationApprovalPage } from "~/components/admin/agent-access";
 import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -18,9 +19,13 @@ async function getTrustedApiOrigin(): Promise<string> {
   return url.origin;
 }
 
+/** Approving an AI assistant needs a fresh Super Admin session that can manage access. */
 export async function requireFreshAgentApprovalAuthority() {
   const context = await getFreshAdminRouteContext();
-  if (!context.isSuperAdmin) {
+  if (
+    !context.isSuperAdmin ||
+    !context.permissions.includes(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE)
+  ) {
     throw redirect({ to: ADMIN_ACCESS_DENIED_PATH, replace: true });
   }
   return context;
@@ -33,7 +38,7 @@ export const Route = createFileRoute(
   loader: () => getTrustedApiOrigin(),
   head: () => ({
     meta: [
-      { title: "Approve Agent | Scalius Admin" },
+      { title: "Connect an app | Scalius Admin" },
       { name: "referrer", content: "no-referrer" },
       { name: "robots", content: "noindex,nofollow" },
     ],
@@ -44,14 +49,10 @@ export const Route = createFileRoute(
 
 function AgentAuthorizationRoute() {
   const { requestId } = Route.useParams();
-  const context = Route.useRouteContext();
-  const trustedApiOrigin = Route.useLoaderData();
-
   return (
     <AuthorizationApprovalPage
       requestId={requestId}
-      availablePermissions={[...context.permissions].sort()}
-      trustedApiOrigin={trustedApiOrigin}
+      trustedApiOrigin={Route.useLoaderData()}
     />
   );
 }

@@ -17,7 +17,7 @@ describe("guest order account claim", () => {
   beforeEach(async () => {
     ({ sqlite, db } = createSqliteD1Database());
     await db.insert(customers).values([
-      { id: "guest_crm", name: "Guest", email: "buyer@example.com", phone: "+8801711111111", totalOrders: 1, totalSpent: 0 },
+      { id: "guest_crm", name: "Guest", email: "buyer@example.com", phone: "+8801711111111", totalOrders: 1 },
       { id: "account_1", name: "Buyer", email: "buyer@example.com", phone: "+8801722222222" },
       { id: "account_2", name: "Other", email: "other@example.com", phone: "+8801733333333" },
     ]);
@@ -29,9 +29,8 @@ describe("guest order account claim", () => {
       shippingAddress: "Dhaka",
       city: "dhaka",
       zone: "zone_1",
-      totalAmount: 100,
-      shippingCharge: 0,
-      balanceDue: 100,
+      totalAmountMinor: 10_000,
+      balanceDueMinor: 10_000,
       customerId: "guest_crm",
       accountOwnerCustomerId: null,
     });
@@ -64,10 +63,9 @@ describe("guest order account claim", () => {
     }).from(orders).where(eq(orders.id, "order_1")).get();
     const account = await db.select({
       totalOrders: customers.totalOrders,
-      totalSpent: customers.totalSpent,
     }).from(customers).where(eq(customers.id, "account_1")).get();
     expect(claimed).toEqual({ customerId: "guest_crm", accountOwnerCustomerId: "account_1" });
-    expect(account).toEqual({ totalOrders: 0, totalSpent: 0 });
+    expect(account).toEqual({ totalOrders: 0 });
   });
 
   it("fails closed for a different contact and for an order already owned by another account", async () => {
@@ -90,14 +88,14 @@ describe("guest order account claim", () => {
   it("shows the claimed account the order-line snapshot, never the product's current media", async () => {
     sqlite.exec(`
       UPDATE orders SET account_owner_customer_id = 'account_1' WHERE id = 'order_1';
-      INSERT INTO products (id, name, slug, price) VALUES ('product_1', 'Renamed product', 'renamed', 100);
+      INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Renamed product', 'renamed', 10000);
       INSERT INTO media (id, filename, kind, object_key, size, mime_type) VALUES
         ('med_snapshot0001', 'old.webp', 'image', 'media/med_snapshot0001.webp', 1, 'image/webp'),
         ('med_current00001', 'new.webp', 'image', 'media/med_current00001.webp', 1, 'image/webp');
       INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order)
         VALUES ('pmed_current01', 'product_1', 'med_current00001', 1, 0);
-      INSERT INTO order_items (id, order_id, product_id, quantity, price, product_name, product_image_media_id)
-        VALUES ('item_1', 'order_1', 'product_1', 1, 100, 'Original name', 'med_snapshot0001');
+      INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, product_name, product_image_media_id)
+        VALUES ('item_1', 'order_1', 'product_1', 1, 10000, 'Original name', 'med_snapshot0001');
     `);
 
     const detail = await withPublicMediaUrl("https://media.example", () => getCustomerOrderDetail(db, "account_1", "order_1"));

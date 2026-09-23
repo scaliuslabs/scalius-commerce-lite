@@ -12,10 +12,6 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import {
-  calculateDiscountAmount,
-  isDiscountValid,
-} from "@scalius/core/modules/discounts/discounts.eligibility";
-import {
   assertGuestStorefrontCheckoutPolicy,
   assertStorefrontCheckoutPolicy,
   buildCheckoutAttemptIdentity,
@@ -33,6 +29,7 @@ import {
   isOnlinePaymentMethod,
 } from "@scalius/core/modules/payments/gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -359,6 +356,7 @@ export async function submitAgentStorefrontCheckout(
     : null;
   if (gatewayCurrencyIssue) throw new ValidationError(gatewayCurrencyIssue);
 
+  const storeDecimalPlaces = getDecimalPlaces(authority.currency.currencyCode);
   const data = {
     checkoutRequestId: requestId,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
@@ -377,13 +375,13 @@ export async function submitAgentStorefrontCheckout(
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: item.unitPrice,
+      price: fromMinor(item.unitPriceMinor, storeDecimalPlaces),
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),
     discountAmount: 0,
     discountCode: owned.discountCode,
-    shippingCharge: authority.deliveryPreflight.shippingCharge,
+    shippingCharge: fromMinor(authority.deliveryPreflight.shippingMinor, storeDecimalPlaces),
     shippingMethodId,
     paymentMethod: input.paymentMethod,
     inventoryPool: InventoryPool.REGULAR,
@@ -413,31 +411,10 @@ export async function submitAgentStorefrontCheckout(
     ? existing.attempt
     : createAtomicCheckoutAttempt(attemptIdentity);
 
-  type DiscountCartItem = { id: string; price: number; quantity: number; variantId: string };
   const prepared = await withCheckoutStage("AGENT_CHECKOUT_PREPARE", () => createStorefrontOrder(
     db,
     data,
     options.requestUrl,
-    (storeDb, code, total, items, phone, customerId) => isDiscountValid(
-      storeDb,
-      code,
-      total,
-      items as DiscountCartItem[],
-      phone,
-      "",
-      undefined,
-      customerId,
-    ),
-    (storeDb, discount, total, items, shipping, applicableIds, restricted) => calculateDiscountAmount(
-      storeDb,
-      discount as { id: string; type: string; valueType: string; discountValue: number },
-      total,
-      items as DiscountCartItem[],
-      shipping,
-      applicableIds,
-      authority.currency.currencyCode,
-      restricted,
-    ),
     { orderId: attempt.orderId, checkoutToken: attempt.checkoutToken },
     authority.cartValidation,
     authority.deliveryPreflight,
@@ -446,7 +423,6 @@ export async function submitAgentStorefrontCheckout(
       code: authority.currency.currencyCode,
       decimalPlaces: getDecimalPlaces(authority.currency.currencyCode),
     },
-    undefined,
     createTrustedStorefrontCheckoutPolicySnapshot({
       partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
       authorityRevision: authority.authorityRevision,
@@ -470,7 +446,7 @@ export async function submitAgentStorefrontCheckout(
   const gatewayAmountIssue = getCheckoutGatewayPrecommitIssue({
     paymentMethod: input.paymentMethod,
     currencyCode: prepared.taxQuote.currencyCode,
-    totalAmount: prepared.totalAmount,
+    totalAmountMinor: prepared.taxQuote.totalMinor,
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
@@ -483,9 +459,9 @@ export async function submitAgentStorefrontCheckout(
     orderStatus: prepared.commitPayload.orderData.status,
     paymentMethod: prepared.paymentMethod,
     paymentStatus: prepared.commitPayload.orderData.paymentStatus,
-    totalAmount: prepared.totalAmount,
+    totalAmount: fromMinor(prepared.taxQuote.totalMinor, prepared.taxQuote.decimalPlaces),
     totalAmountMinor: prepared.taxQuote.totalMinor,
-    taxAmount: prepared.taxQuote.taxMinor / (10 ** prepared.taxQuote.decimalPlaces),
+    taxAmount: fromMinor(prepared.taxQuote.taxMinor, prepared.taxQuote.decimalPlaces),
     taxAmountMinor: prepared.taxQuote.taxMinor,
     taxLabel: prepared.taxQuote.displayLabel,
     pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,

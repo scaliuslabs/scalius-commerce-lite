@@ -138,7 +138,7 @@ export function LocationSelector() {
   }, [areaValue, areas, form]);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-3">
       <FormField
         control={form.control}
         name="city"
@@ -184,7 +184,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No city selected
                 </SelectItem>
@@ -248,7 +248,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No zone selected
                 </SelectItem>
@@ -308,7 +308,7 @@ export function LocationSelector() {
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-xl bg-background">
+              <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
                   No area selected
                 </SelectItem>

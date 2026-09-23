@@ -14,10 +14,10 @@ function createApp() {
   history.run("hist_other", "cus_other", 1_700_000_000);
   const order = sqlite.prepare(`INSERT INTO orders (
     id, customer_id, customer_name, customer_phone, shipping_address, city, zone,
-    total_amount, shipping_charge, payment_method, status, payment_status,
-    paid_amount, balance_due, currency_code, currency_decimal_places, created_at, updated_at, deleted_at
+    total_amount_minor, shipping_amount_minor, payment_method, status, payment_status,
+    paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places, created_at, updated_at, deleted_at
   ) VALUES (?, ?, 'Buyer', '+8801700000000', 'Address', 'city', 'zone',
-    100, 0, 'cod', 'pending', 'unpaid', 0, 100, 'BDT', 2, ?, ?, ?)`);
+    10000, 0, 'cod', 'pending', 'unpaid', 0, 10000, 'BDT', 2, ?, ?, ?)`);
   for (let index = 0; index < 7; index += 1) {
     order.run(`ord_${index}`, "cus_1", 1_700_000_000 + index, 1_700_000_000 + index, index === 6 ? 1_700_000_100 : null);
   }

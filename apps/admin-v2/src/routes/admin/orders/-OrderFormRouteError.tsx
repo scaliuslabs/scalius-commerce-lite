@@ -1,39 +1,34 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { useMessages } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
+import { resourceMessages } from "~/i18n/resource";
 
-export function OrderFormRouteError({
-  title,
-  description,
-  error,
-  reset,
-}: {
-  title: string;
-  description: string;
-  error: Error;
-  reset: () => void;
-}) {
+/** Create/Edit order load failure: server message, Try again, Back to orders. */
+export function OrderFormRouteError({ error, reset }: { error: Error; reset: () => void }) {
+  const t = useMessages(orderFormMessages);
+  const r = useMessages(resourceMessages);
   return (
-    <section
-      role="alert"
-      className="mx-4 mt-8 max-w-xl rounded-lg border bg-card p-5 shadow-sm sm:mx-auto"
-    >
-      <h1 className="text-base font-semibold">{title}</h1>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-        {description}
-      </p>
-      {error.message ? (
-        <p className="mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          {error.message}
-        </p>
-      ) : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" size="sm" onClick={reset}>
-          Try again
+    <Card role="alert">
+      <CardHeader>
+        <CardTitle>{t("loadFailed")}</CardTitle>
+        {error.message ? <CardDescription>{error.message}</CardDescription> : null}
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        <Button type="button" onClick={reset}>
+          {r("retry")}
         </Button>
-        <Button asChild type="button" size="sm" variant="outline">
-          <Link to="/admin/orders">Back to orders</Link>
+        <Button asChild variant="outline">
+          <Link to="/admin/orders">{t("backToOrders")}</Link>
         </Button>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

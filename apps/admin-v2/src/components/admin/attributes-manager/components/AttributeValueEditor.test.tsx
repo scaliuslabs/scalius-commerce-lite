@@ -6,7 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttributeValuesPayload } from "~/lib/api-query-options/attributes";
 import { queryKeys } from "~/lib/query-keys";
+import { translate } from "~/i18n";
+import { attributeValueMessages } from "~/i18n/attributes";
 import { AttributeValueEditor } from "./AttributeValueEditor";
+
+const l = (key: keyof typeof attributeValueMessages.en, vars?: Record<string, string>) => translate(attributeValueMessages, key, vars);
 
 const api = vi.hoisted(() => ({
   read: vi.fn(), add: vi.fn(), rename: vi.fn(), remove: vi.fn(),
@@ -100,11 +104,11 @@ describe("attribute value commands", () => {
   }
   async function begin(kind: "add" | "rename") {
     await render();
-    await click(button(kind === "add" ? "Add Value" : "Rename Original"));
-    const field = input(kind === "add" ? "New attribute value" : "New value for Original");
+    await click(button(kind === "add" ? l("addValue") : l("rename", { value: "Original" })));
+    const field = input(kind === "add" ? l("newValue") : l("renameField", { value: "Original" }));
     await type(field, "Submitted");
-    return { field, save: button(kind === "add" ? "Save new value" : "Save rename for Original"),
-      cancel: button(kind === "add" ? "Cancel adding value" : "Cancel rename for Original") };
+    return { field, save: button(kind === "add" ? l("saveNewValue") : l("saveRename", { value: "Original" })),
+      cancel: button(kind === "add" ? l("cancelNewValue") : l("cancelRename", { value: "Original" })) };
   }
 
   for (const kind of ["add", "rename"] as const) {
@@ -113,19 +117,19 @@ describe("attribute value commands", () => {
       const { field, save, cancel } = await begin(kind);
       await click(save);
       expect(isDisabled(field)).toBe(true);
-      expect(isDisabled(input("Search attribute values"))).toBe(true);
+      expect(isDisabled(input(l("searchValues")))).toBe(true);
       expect(isDisabled(cancel)).toBe(true);
       await click(cancel);
       await act(async () => { key(field, "Escape"); });
-      await click(button("Close"));
+      await click(button(l("close")));
       expect(api.close).not.toHaveBeenCalled();
       expect(field.isConnected).toBe(true);
       expect(field.value).toBe("Submitted");
       const refresh = deferred<AttributeValuesPayload>(); api.read.mockReturnValueOnce(refresh.promise);
       await act(async () => { pending.resolve({}); }); await settle();
-      expect(isDisabled(input("Search attribute values"))).toBe(true);
+      expect(isDisabled(input(l("searchValues")))).toBe(true);
       await act(async () => { refresh.resolve(stored); }); await settle();
-      expect(isDisabled(input("Search attribute values"))).toBe(false);
+      expect(isDisabled(input(l("searchValues")))).toBe(false);
       expect(field.isConnected).toBe(false);
       expect(api.success).toHaveBeenCalledTimes(1);
       expect(api.error).not.toHaveBeenCalled();
@@ -152,19 +156,19 @@ describe("attribute value commands", () => {
 
   it("keeps deletion confirmation busy, prevents duplicate commands, and allows retry after failure", async () => {
     const pending = deferred<object>(); api.remove.mockReturnValueOnce(pending.promise);
-    await render(); await click(button("Delete Original"));
-    const confirm = button("Delete");
+    await render(); await click(button(l("delete", { value: "Original" })));
+    const confirm = button(l("deleteConfirm"));
     await act(async () => { confirm.click(); confirm.click(); }); await settle();
     expect(api.remove).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
-    expect(button("Deleting...").disabled).toBe(true);
-    expect(button("Cancel").disabled).toBe(true);
-    await act(async () => { key(button("Cancel"), "Escape"); });
+    expect(button(l("deleting")).disabled).toBe(true);
+    expect(button(l("cancel")).disabled).toBe(true);
+    await act(async () => { key(button(l("cancel")), "Escape"); });
     expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     await act(async () => { pending.reject(new Error("Delete unavailable")); }); await settle();
-    expect(button("Delete").disabled).toBe(false);
+    expect(button(l("deleteConfirm")).disabled).toBe(false);
     expect(api.error).toHaveBeenCalledTimes(1);
-    await click(button("Delete"));
+    await click(button(l("deleteConfirm")));
     expect(api.remove).toHaveBeenCalledTimes(2);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
@@ -176,10 +180,10 @@ describe("attribute value commands", () => {
     expect(api.add).toHaveBeenCalledTimes(1);
     expect(api.success).toHaveBeenCalledTimes(1);
     expect(api.error).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Could not load attribute values");
-    expect(isDisabled(button("Retry"))).toBe(false);
-    await click(button("Retry"));
-    expect(document.body.textContent).not.toContain("Could not load attribute values");
+    expect(document.body.textContent).toContain(l("loadFailed"));
+    expect(isDisabled(button(l("retry")))).toBe(false);
+    await click(button(l("retry")));
+    expect(document.body.textContent).not.toContain(l("loadFailed"));
     expect(api.add).toHaveBeenCalledTimes(1);
   });
 
@@ -187,8 +191,8 @@ describe("attribute value commands", () => {
     const pending = deferred<object>(); api.add.mockReturnValueOnce(pending.promise);
     const { save } = await begin("add"); await click(save);
     await render(null); await render("attribute-b");
-    await click(button("Add Value"));
-    const field = input("New attribute value"); await type(field, "New editor draft");
+    await click(button(l("addValue")));
+    const field = input(l("newValue")); await type(field, "New editor draft");
     await act(async () => { pending.resolve({}); }); await settle();
     expect(field.isConnected).toBe(true);
     expect(field.value).toBe("New editor draft");
@@ -218,7 +222,7 @@ describe("attribute value commands", () => {
 
     if (closeMethod === "Cancel") {
       const close = [...dialog.querySelectorAll("button")].find(
-        (button) => button.textContent?.trim() === "Close",
+        (button) => button.textContent?.trim() === l("close"),
       )!;
       act(() => close.click());
     } else {

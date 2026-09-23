@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { GatewayStatus, MethodKey } from "./payment-gateway-utils";
 import {
   getEligibleDefaultPaymentMethods,
   getPaymentMethodFlowEligibility,
   getPaymentMethodFlowExclusionReason,
   getPaymentMethodOutcome,
-  type PaymentMethodEnvironment,
+  type GatewayStatus,
+  type MethodKey,
 } from "./payment-method-outcome";
 
 const readyStatus: GatewayStatus = {
@@ -21,7 +21,6 @@ function outcome(options: {
   status?: GatewayStatus;
   selected?: boolean;
   flowAllowed?: boolean;
-  environment?: PaymentMethodEnvironment;
   eligibilityIssue?: string | null;
 }) {
   return getPaymentMethodOutcome({
@@ -29,32 +28,18 @@ function outcome(options: {
     status: options.status,
     checkoutSelected: options.selected ?? true,
     flowAllowed: options.flowAllowed ?? true,
-    environment: options.environment,
     eligibilityIssue: options.eligibilityIssue,
   });
 }
 
 describe("payment method merchant outcome matrix", () => {
   it.each([
-    { selected: true, flowAllowed: true, state: "visible", checkout: "Visible", effective: true },
-    { selected: false, flowAllowed: true, state: "ready_hidden", checkout: "Hidden", effective: false },
-    { selected: true, flowAllowed: false, state: "hidden_by_flow", checkout: "Hidden by flow", effective: false },
-  ] as const)(
-    "projects COD selected=$selected flowAllowed=$flowAllowed as $state",
-    ({ selected, flowAllowed, state, checkout, effective }) => {
-      const result = outcome({ method: "cod", selected, flowAllowed });
-
-      expect(result).toMatchObject({
-        state,
-        checkoutLabel: checkout,
-        effective,
-        setupLabel: "Not required",
-        providerLabel: "Always available",
-        environmentLabel: "Not applicable",
-        healthLabel: "Not applicable",
-      });
-    },
-  );
+    { selected: true, flowAllowed: true, state: "visible", effective: true },
+    { selected: false, flowAllowed: true, state: "ready_hidden", effective: false },
+    { selected: true, flowAllowed: false, state: "hidden_by_flow", effective: false },
+  ] as const)("projects COD selected=$selected flowAllowed=$flowAllowed as $state", ({ selected, flowAllowed, state, effective }) => {
+    expect(outcome({ method: "cod", selected, flowAllowed })).toMatchObject({ state, effective, canSelect: true });
+  });
 
   it("does not claim buyer visibility when the saved checkout flow is unavailable", () => {
     expect(getPaymentMethodOutcome({
@@ -62,116 +47,22 @@ describe("payment method merchant outcome matrix", () => {
       status: readyStatus,
       checkoutSelected: true,
       flowAllowed: undefined,
-      environment: "test",
-    })).toMatchObject({
-      state: "flow_unknown",
-      label: "Flow unavailable",
-      checkoutLabel: "Unavailable",
-      effective: false,
-    });
+    })).toMatchObject({ state: "flow_unknown", effective: false });
   });
 
-  it.each([
-    ["Stripe", "stripe"],
-    ["SSLCommerz", "sslcommerz"],
-  ] as const)("fails %s closed when provider setup or enablement is incomplete", (_label, method) => {
-    const disabled = outcome({
-      method,
-      status: { ...readyStatus, enabled: false, providerEnabled: false, usable: false },
-    });
-    const missing = outcome({
-      method,
-      status: {
-        configured: false,
-        enabled: true,
-        providerEnabled: true,
-        usable: false,
-        missingFields: ["credential"],
-        blockedReason: `${_label} needs a credential before it can be shown at checkout.`,
-      },
-    });
-    const placeholder = outcome({
-      method,
-      status: {
-        configured: false,
-        enabled: true,
-        providerEnabled: true,
-        usable: false,
-        blockedReason: `${_label} credential looks like a placeholder.`,
-      },
-    });
-
-    expect(disabled).toMatchObject({ state: "provider_off", checkoutLabel: "Hidden", effective: false });
-    expect(missing).toMatchObject({
-      state: "needs_setup",
-      checkoutLabel: "Hidden",
-      effective: false,
-      description: `${_label} needs a credential before it can be shown at checkout.`,
-    });
-    expect(placeholder).toMatchObject({
-      state: "needs_setup",
-      checkoutLabel: "Hidden",
-      effective: false,
-      description: `${_label} credential looks like a placeholder.`,
-    });
-  });
-
-  it.each([
-    ["Stripe test", "stripe", "test", "Test mode"],
-    ["Stripe live", "stripe", "live", "Live mode"],
-    ["Stripe mismatch", "stripe", "mixed", "Key mismatch"],
-    ["SSLCommerz sandbox", "sslcommerz", "test", "Test mode"],
-    ["SSLCommerz live", "sslcommerz", "live", "Live mode"],
-  ] as const)("labels the supported environment for %s", (_label, method, environment, expected) => {
-    expect(outcome({ method, status: readyStatus, environment }).environmentLabel).toBe(expected);
-  });
-
-  it.each([
-    { selected: false, flowAllowed: true, state: "ready_hidden", checkout: "Hidden" },
-    { selected: true, flowAllowed: false, state: "hidden_by_flow", checkout: "Hidden by flow" },
-    { selected: true, flowAllowed: true, state: "visible", checkout: "Visible" },
-  ] as const)(
-    "separates checkout selection/flow eligibility from provider readiness ($state)",
-    ({ selected, flowAllowed, state, checkout }) => {
-      expect(outcome({
-        method: "stripe",
-        status: readyStatus,
-        selected,
-        flowAllowed,
-        environment: "test",
-      })).toMatchObject({ state, checkoutLabel: checkout });
-    },
-  );
-
-  it("does not present unsupported provider health checks as passing", () => {
-    expect(outcome({ method: "stripe", status: readyStatus })).toMatchObject({
-      healthLabel: "Not checked",
-      setupLabel: "Complete",
-      effective: true,
-    });
+  it.each(["stripe", "sslcommerz"] as const)("fails %s closed when provider setup or enablement is incomplete", (method) => {
+    expect(outcome({ method, status: { ...readyStatus, enabled: false, providerEnabled: false, usable: false } }))
+      .toMatchObject({ state: "provider_off", effective: false, canSelect: false });
+    expect(outcome({ method, status: { configured: false, enabled: true, providerEnabled: true, usable: false } }))
+      .toMatchObject({ state: "needs_setup", effective: false, canSelect: false });
+    expect(outcome({ method, status: undefined })).toMatchObject({ state: "needs_setup", effective: false });
+    expect(outcome({ method, status: { ...readyStatus, usable: false } }))
+      .toMatchObject({ state: "blocked", effective: false, canSelect: false });
   });
 
   it("blocks an otherwise-ready gateway when store-level eligibility fails", () => {
-    expect(outcome({
-      method: "sslcommerz",
-      status: readyStatus,
-      eligibilityIssue: "SSLCommerz checkout requires BDT. Current store currency: USD.",
-    })).toMatchObject({
-      state: "blocked",
-      label: "Blocked",
-      checkoutLabel: "Unavailable",
-      canSelect: false,
-      effective: false,
-      description: "SSLCommerz checkout requires BDT. Current store currency: USD.",
-    });
-  });
-
-  it("does not imply that cash on delivery has an external connection to probe", () => {
-    expect(outcome({ method: "cod" })).toMatchObject({
-      healthLabel: "Not applicable",
-      setupLabel: "Not required",
-      providerLabel: "Always available",
-    });
+    expect(outcome({ method: "sslcommerz", status: readyStatus, eligibilityIssue: "currency" }))
+      .toMatchObject({ state: "blocked", canSelect: false, effective: false });
   });
 
   it.each([
@@ -187,24 +78,18 @@ describe("payment method merchant outcome matrix", () => {
     ["Conflicting COD-only advance / COD", "cod", "guest_cod_only", true, 200, false],
     ["Conflicting COD-only advance / Stripe", "stripe", "guest_cod_only", true, 200, false],
   ] as const)("projects flow eligibility for %s", (_label, method, checkoutMode, partialPaymentEnabled, partialPaymentAmount, expected) => {
-    expect(getPaymentMethodFlowEligibility(method, {
-      checkoutMode,
-      partialPaymentEnabled,
-      partialPaymentAmount,
-    })).toBe(expected);
+    expect(getPaymentMethodFlowEligibility(method, { checkoutMode, partialPaymentEnabled, partialPaymentAmount })).toBe(expected);
   });
 
-  it("explains invalid and flow-hidden methods without reviving an excluded provider", () => {
-    expect(getPaymentMethodFlowExclusionReason("stripe", {
-      checkoutMode: "all",
-      partialPaymentEnabled: true,
-      partialPaymentAmount: 0,
-    })).toContain("advance amount is invalid");
-    expect(getPaymentMethodFlowExclusionReason("sslcommerz", {
-      checkoutMode: "guest_cod_only",
-      partialPaymentEnabled: true,
-      partialPaymentAmount: 200,
-    })).toContain("conflicts with an online advance");
+  it("explains invalid and flow-hidden methods", () => {
+    expect(getPaymentMethodFlowExclusionReason("stripe", { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 0 }))
+      .toBe("advanceInvalid");
+    expect(getPaymentMethodFlowExclusionReason("sslcommerz", { checkoutMode: "guest_cod_only", partialPaymentEnabled: true, partialPaymentAmount: 200 }))
+      .toBe("codOnlyWithAdvance");
+    expect(getPaymentMethodFlowExclusionReason("cod", { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 200 }))
+      .toBe("codHiddenByAdvance");
+    expect(getPaymentMethodFlowExclusionReason("cod", { checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 }))
+      .toBeNull();
   });
 
   it("chooses defaults only from ready, selected methods allowed by the flow", () => {
@@ -219,26 +104,13 @@ describe("payment method merchant outcome matrix", () => {
       statuses,
       selectedMethods: new Set(methods),
       flowAllowed: (method: MethodKey) => method !== "cod",
-      eligibilityIssue: (method: MethodKey) => method === "sslcommerz" ? "Unsupported currency" : null,
+      eligibilityIssue: (method: MethodKey) => (method === "sslcommerz" ? "Unsupported currency" : null),
     };
 
     expect(getEligibleDefaultPaymentMethods(input)).toEqual(["stripe"]);
     expect(getEligibleDefaultPaymentMethods({
       ...input,
-      statuses: {
-        ...statuses,
-        stripe: { ...readyStatus, providerEnabled: false, enabled: false, usable: false },
-      },
+      statuses: { ...statuses, stripe: { ...readyStatus, providerEnabled: false, enabled: false, usable: false } },
     })).toEqual([]);
-  });
-
-  it.each([
-    ["Stripe missing", "stripe", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
-    ["Stripe provider off", "stripe", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
-    ["Stripe blocked", "stripe", { ...readyStatus, usable: false, blockedReason: "Key mismatch" }, "blocked"],
-    ["SSLCommerz missing", "sslcommerz", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
-    ["SSLCommerz provider off", "sslcommerz", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
-  ] as const)("keeps setup/provider truth separate for %s", (_label, method, status, state) => {
-    expect(outcome({ method, status })).toMatchObject({ state, effective: false, healthLabel: "Not checked" });
   });
 });

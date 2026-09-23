@@ -16,9 +16,9 @@ export async function ensurePendingPaymentPlanForSession(
     .values({
       id: crypto.randomUUID(),
       orderId: order.id,
-      totalAmount: policy.orderTotal,
-      depositAmount: policy.depositAmount,
-      balanceDue: policy.balanceDue,
+      totalAmountMinor: policy.orderTotalMinor,
+      depositAmountMinor: policy.depositAmountMinor,
+      balanceDueMinor: policy.balanceDueMinor,
       status: PaymentPlanStatus.PENDING,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,

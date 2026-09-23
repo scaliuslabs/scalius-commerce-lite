@@ -2,6 +2,8 @@ import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from
 import * as OrdersService from "@scalius/core/modules/orders";
 import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "@scalius/core/modules/products/products.money";
+import { fromMinor } from "@scalius/shared/money";
 import {
     createOrderSchema,
     quoteManualOrderSchema,
@@ -388,7 +390,7 @@ app.openapi(catalogProductsRoute, async (c) => {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
-        activeOnly: true,
+        status: "active",
         sort: "name",
         order: "asc",
         agentSummary: true,
@@ -1196,7 +1198,7 @@ app.openapi(getItemsRoute, async (c) => {
             variantId: orderItems.variantId,
             variantLabel: orderItems.variantLabel,
             quantity: orderItems.quantity,
-            price: orderItems.price,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
             fulfillmentStatus: orderItems.fulfillmentStatus,
             unitPriceMinor: orderItems.unitPriceMinor,
             lineSubtotalMinor: orderItems.lineSubtotalMinor,
@@ -1205,11 +1207,13 @@ app.openapi(getItemsRoute, async (c) => {
             taxAmountMinor: orderItems.taxAmountMinor,
         })
         .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .where(eq(orderItems.orderId, orderId))
         .leftJoin(media, eq(orderItems.productImageMediaId, media.id));
 
-    return ok(c, items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
+    return ok(c, items.map(({ productImageObjectKey, productImageStatus, currencyDecimalPlaces, ...item }) => ({
         ...item,
+        price: fromMinor(item.unitPriceMinor, currencyDecimalPlaces),
         productImage:
             productImageObjectKey &&
             (productImageStatus === "ready" || productImageStatus === "trashed")
@@ -1252,11 +1256,13 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [payments, plan, refundAttemptViews, paymentWebhookIssues, paymentSessionAttemptViews] = await Promise.all([
+    const [order, payments, plan, refundAttemptViews, paymentWebhookIssues, paymentSessionAttemptViews] = await Promise.all([
+        db.select({ currencyDecimalPlaces: orders.currencyDecimalPlaces }).from(orders)
+            .where(eq(orders.id, orderId)).get(),
         db.select({
             id: orderPayments.id,
             orderId: orderPayments.orderId,
-            amount: orderPayments.amount,
+            amountMinor: orderPayments.amountMinor,
             currency: orderPayments.currency,
             paymentMethod: orderPayments.paymentMethod,
             paymentType: orderPayments.paymentType,
@@ -1275,9 +1281,17 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
         listOrderPaymentSessionAttempts(db, orderId),
     ]);
 
+    const amount = (minor: number) => fromMinor(minor, order?.currencyDecimalPlaces ?? 2);
     return ok(c, {
-        payments,
-        plan: plan ?? null,
+        payments: payments.map(({ amountMinor, ...payment }) => ({ ...payment, amount: amount(amountMinor) })),
+        plan: plan
+            ? (({ totalAmountMinor, depositAmountMinor, balanceDueMinor, ...facts }) => ({
+                ...facts,
+                totalAmount: amount(totalAmountMinor),
+                depositAmount: amount(depositAmountMinor),
+                balanceDue: amount(balanceDueMinor),
+            }))(plan)
+            : null,
         refundAttempts: refundAttemptViews,
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         paymentWebhookIssues,
@@ -1493,7 +1507,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
     const orderId = c.req.valid("param").id;
     const db = c.get("db");
 
-    const [order] = await db
+    const [[orderRow], storeDecimalPlaces] = await Promise.all([db
         .select({
             id: orders.id,
             version: orders.version,
@@ -1505,16 +1519,24 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             zone: orders.zone,
             area: orders.area,
             notes: orders.notes,
-            discountAmount: orders.discountAmount,
-            shippingCharge: orders.shippingCharge,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            discountAmountMinor: orders.discountAmountMinor,
+            shippingAmountMinor: orders.shippingAmountMinor,
             status: orders.status,
             createdAt: orders.createdAt,
             updatedAt: orders.updatedAt,
         })
         .from(orders)
-        .where(eq(orders.id, orderId));
+        .where(eq(orders.id, orderId)), readStoreDecimalPlaces(db)]);
 
-    if (!order) throw new NotFoundError("Order not found");
+    if (!orderRow) throw new NotFoundError("Order not found");
+    const { currencyDecimalPlaces, discountAmountMinor, shippingAmountMinor, ...orderFacts } = orderRow;
+    const orderAmount = (minor: number) => fromMinor(minor, currencyDecimalPlaces);
+    const order = {
+        ...orderFacts,
+        discountAmount: orderAmount(discountAmountMinor),
+        shippingCharge: orderAmount(shippingAmountMinor),
+    };
 
     let fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
     if (!fullEditReadiness) throw new NotFoundError("Order not found");
@@ -1527,7 +1549,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             productId: orderItems.productId,
             variantId: orderItems.variantId,
             quantity: orderItems.quantity,
-            price: orderItems.price,
+            unitPriceMinor: orderItems.unitPriceMinor,
             productName: orderItems.productName,
             variantLabel: orderItems.variantLabel,
         })
@@ -1545,12 +1567,12 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             .select({
                 id: products.id,
                 name: products.name,
-                price: products.price,
+                priceMinor: products.priceMinor,
                 isActive: products.isActive,
                 deletedAt: products.deletedAt,
-                discountPercentage: products.discountPercentage,
+                discountBps: products.discountBps,
                 discountType: products.discountType,
-                discountAmount: products.discountAmount,
+                discountAmountMinor: products.discountAmountMinor,
             })
             .from(products)
             .where(sql`${products.id} IN (
@@ -1571,7 +1593,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         allVariants.map((variant) => variant.id),
     );
     const variantsWithOptions = allVariants.map((variant) => ({
-        ...variant,
+        ...presentCatalogPrice(variant, storeDecimalPlaces),
         selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
     }));
     const variantsByProductId = new Map<
@@ -1608,7 +1630,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
     }
 
     const productsWithVariants = allProducts.map((product) => ({
-        ...product,
+        ...presentCatalogPrice(product, storeDecimalPlaces),
         variants: variantsByProductId.get(product.id) ?? [],
     }));
 
@@ -1625,7 +1647,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
-                price: item.price,
+                price: orderAmount(item.unitPriceMinor),
             })),
         },
     });

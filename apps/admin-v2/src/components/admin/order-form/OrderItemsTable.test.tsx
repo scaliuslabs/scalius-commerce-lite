@@ -14,16 +14,6 @@ const testState = vi.hoisted(() => ({
     },
   ],
   setValue: vi.fn(),
-  updateOrderItems: vi.fn(),
-}));
-
-vi.mock("~/components/ui/table", () => ({
-  Table: (props: React.TableHTMLAttributes<HTMLTableElement>) => <table {...props} />,
-  TableBody: (props: React.HTMLAttributes<HTMLTableSectionElement>) => <tbody {...props} />,
-  TableCell: (props: React.TdHTMLAttributes<HTMLTableCellElement>) => <td {...props} />,
-  TableHead: (props: React.ThHTMLAttributes<HTMLTableCellElement>) => <th {...props} />,
-  TableHeader: (props: React.HTMLAttributes<HTMLTableSectionElement>) => <thead {...props} />,
-  TableRow: (props: React.HTMLAttributes<HTMLTableRowElement>) => <tr {...props} />,
 }));
 
 vi.mock("~/components/ui/button", () => ({
@@ -36,8 +26,7 @@ vi.mock("~/components/ui/button", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
-  ShoppingBag: () => null,
-  Trash: () => null,
+  Trash2: () => null,
 }));
 
 vi.mock("./OrderFormContext", () => ({
@@ -49,19 +38,17 @@ vi.mock("./OrderFormContext", () => ({
     },
     products: [],
     isEdit: false,
+    usesQuote: true,
     manualQuote: { isCurrent: false, data: null },
   }),
 }));
 
-vi.mock("~/store/orderStore", () => ({
-  updateOrderItems: testState.updateOrderItems,
-}));
-
 vi.mock("~/hooks/use-currency", () => ({
-  useCurrency: () => ({ symbol: "৳" }),
+  useCurrency: () => ({ fmt: (n: number) => `৳${n}` }),
 }));
 
 import { OrderItemsTable } from "./OrderItemsTable";
+import { exceededStockMessage } from "./manual-order-stock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -88,7 +75,6 @@ describe("OrderItemsTable", () => {
       },
     ];
     testState.setValue.mockReset();
-    testState.updateOrderItems.mockReset();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -99,7 +85,7 @@ describe("OrderItemsTable", () => {
     host.remove();
   });
 
-  it("updates the exact line from either responsive quantity control", async () => {
+  it("updates the exact line from its quantity control", async () => {
     await act(async () => root.render(
       <OrderItemsTable
         resolvedProductsById={{
@@ -128,7 +114,7 @@ describe("OrderItemsTable", () => {
     const inputs = host.querySelectorAll<HTMLInputElement>(
       'input[aria-label="Quantity for Studio Lamp"]',
     );
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(1);
 
     await act(async () => setInputValue(inputs[0]!, "4"));
 
@@ -142,7 +128,6 @@ describe("OrderItemsTable", () => {
       shouldDirty: true,
       shouldValidate: true,
     });
-    expect(testState.updateOrderItems).toHaveBeenCalledWith(expectedItems);
   });
 
   it("does not let a staged line exceed the tracked SKU snapshot", async () => {
@@ -183,9 +168,6 @@ describe("OrderItemsTable", () => {
     await act(async () => setInputValue(input, "8"));
 
     expect(testState.setValue).not.toHaveBeenCalled();
-    expect(testState.updateOrderItems).not.toHaveBeenCalled();
-    expect(host.textContent).toContain(
-      "Only 7 units are available for this order.",
-    );
+    expect(host.textContent).toContain(exceededStockMessage(7));
   });
 });

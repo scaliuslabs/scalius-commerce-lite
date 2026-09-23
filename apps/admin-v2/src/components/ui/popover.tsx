@@ -3,15 +3,11 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 
 import { cn } from "@scalius/shared/utils";
 
-function Popover({
-  ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
 }
 
-function PopoverTrigger({
-  ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
+function PopoverTrigger(props: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
@@ -23,7 +19,6 @@ function PopoverContent({
   collisionPadding = 16,
   sticky = "partial",
   avoidCollisions = true,
-  style,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
@@ -35,12 +30,8 @@ function PopoverContent({
         collisionPadding={collisionPadding}
         sticky={sticky}
         avoidCollisions={avoidCollisions}
-        style={{
-          maxHeight: "min(24rem, var(--radix-popover-content-available-height))",
-          ...style,
-        }}
         className={cn(
-          "z-[9999] max-h-[var(--radix-popover-content-available-height)] w-72 overflow-y-auto rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=closed]:invisible data-[state=closed]:pointer-events-none",
+          "z-50 max-h-[min(24rem,var(--radix-popover-content-available-height))] w-72 overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground shadow-popover outline-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible",
           className,
         )}
         {...props}
@@ -49,10 +40,4 @@ function PopoverContent({
   );
 }
 
-function PopoverAnchor({
-  ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
-  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />;
-}
-
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };
+export { Popover, PopoverTrigger, PopoverContent };

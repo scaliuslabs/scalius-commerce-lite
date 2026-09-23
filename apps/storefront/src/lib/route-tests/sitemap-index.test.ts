@@ -4,16 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSitemapProducts: vi.fn(),
-  getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/products", () => ({
   getSitemapProducts: mocks.getSitemapProducts,
-}));
-
-vi.mock("@/lib/api", () => ({
-  getSeoSettings: mocks.getSeoSettings,
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
@@ -25,10 +20,6 @@ import { GET } from "../../pages/sitemap.xml";
 describe("sitemap index route", () => {
   beforeEach(() => {
     mocks.getSitemapProducts.mockReset();
-    mocks.getSeoSettings.mockReset();
-    mocks.getSeoSettings.mockResolvedValue({
-      discovery: undefined,
-    });
     mocks.getRuntimeStorefrontUrl.mockReturnValue(
       "https://storefront.example.test",
     );
@@ -111,35 +102,5 @@ describe("sitemap index route", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("<sitemapindex");
     expect(body).not.toContain("<lastmod>");
-  });
-
-  it("omits disabled sitemap sections without reading product counts", async () => {
-    mocks.getSeoSettings.mockResolvedValueOnce({
-      discovery: {
-        sitemap: {
-          enabled: true,
-          staticPages: false,
-          products: false,
-          categories: false,
-          collections: true,
-          pages: false,
-          articles: false,
-        },
-      },
-    });
-
-    const response = await GET({} as never);
-    const body = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
-    expect(body).toContain(
-      "https://storefront.example.test/sitemap-collections.xml",
-    );
-    expect(body).not.toContain("sitemap-static.xml");
-    expect(body).not.toContain("sitemap-products.xml");
-    expect(body).not.toContain("sitemap-categories.xml");
-    expect(body).not.toContain("sitemap-pages.xml");
-    expect(body).not.toContain("sitemap-articles.xml");
   });
 });

@@ -146,14 +146,14 @@ function createMockQueue() {
 export function seedProduct(overrides: Partial<{
   id: string;
   name: string;
-  price: number;
+  priceMinor: number;
   stock: number;
   status: string;
 }> = {}) {
   return {
     id: overrides.id ?? `prod_${Math.random().toString(36).slice(2, 10)}`,
     name: overrides.name ?? "Test Product",
-    price: overrides.price ?? 1000,
+    priceMinor: overrides.priceMinor ?? 100_000,
     stock: overrides.stock ?? 100,
     status: overrides.status ?? "active",
   };
@@ -199,32 +199,34 @@ export function seedOrder(overrides: Partial<{
   paymentStatus: string;
   paymentMethod: string;
   fulfillmentStatus: string;
-  totalAmount: number;
-  paidAmount: number;
-  balanceDue: number;
+  totalAmountMinor: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
   inventoryAction: string;
   inventoryPool: string;
   customerId: string;
   customerName: string;
   customerPhone: string;
 }> = {}) {
-  const totalAmount = overrides.totalAmount ?? 2500;
+  const totalAmountMinor = overrides.totalAmountMinor ?? 250_000;
   return {
     id: overrides.id ?? `ORD-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
     status: overrides.status ?? "pending",
     paymentStatus: overrides.paymentStatus ?? "unpaid",
     paymentMethod: overrides.paymentMethod ?? "cod",
     fulfillmentStatus: overrides.fulfillmentStatus ?? "pending",
-    totalAmount,
-    paidAmount: overrides.paidAmount ?? 0,
-    balanceDue: overrides.balanceDue ?? totalAmount,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
+    totalAmountMinor,
+    paidAmountMinor: overrides.paidAmountMinor ?? 0,
+    balanceDueMinor: overrides.balanceDueMinor ?? totalAmountMinor,
     inventoryAction: overrides.inventoryAction ?? "none",
     inventoryPool: overrides.inventoryPool ?? "regular",
     customerId: overrides.customerId ?? `cust_${Math.random().toString(36).slice(2, 10)}`,
     customerName: overrides.customerName ?? "Test Customer",
     customerPhone: overrides.customerPhone ?? "+8801700000000",
-    shippingCharge: 60,
-    discountAmount: 0,
+    shippingAmountMinor: 6_000,
+    discountAmountMinor: 0,
     shippingAddress: "123 Test Street",
     city: "dhaka",
     zone: "zone1",
@@ -242,7 +244,7 @@ export function seedOrderItem(overrides: Partial<{
   productId: string;
   variantId: string | null;
   quantity: number;
-  price: number;
+  unitPriceMinor: number;
 }> = {}) {
   return {
     id: overrides.id ?? `item_${Math.random().toString(36).slice(2, 10)}`,
@@ -250,7 +252,7 @@ export function seedOrderItem(overrides: Partial<{
     productId: overrides.productId ?? `prod_${Math.random().toString(36).slice(2, 10)}`,
     variantId: overrides.variantId ?? `var_${Math.random().toString(36).slice(2, 10)}`,
     quantity: overrides.quantity ?? 2,
-    price: overrides.price ?? 500,
+    unitPriceMinor: overrides.unitPriceMinor ?? 50_000,
     fulfillmentStatus: "pending",
     createdAt: Math.floor(Date.now() / 1000),
   };
@@ -262,7 +264,6 @@ export function seedCustomer(overrides: Partial<{
   phone: string;
   email: string | null;
   totalOrders: number;
-  totalSpent: number;
 }> = {}) {
   return {
     id: overrides.id ?? `cust_${Math.random().toString(36).slice(2, 10)}`,
@@ -270,7 +271,6 @@ export function seedCustomer(overrides: Partial<{
     phone: overrides.phone ?? "+8801700000000",
     email: overrides.email ?? null,
     totalOrders: overrides.totalOrders ?? 0,
-    totalSpent: overrides.totalSpent ?? 0,
     lastOrderAt: null,
     createdAt: Math.floor(Date.now() / 1000),
     updatedAt: Math.floor(Date.now() / 1000),

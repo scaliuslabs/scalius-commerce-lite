@@ -1,442 +1,155 @@
-import { useMemo, useCallback, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Button } from "~/components/ui/button";
-import { PlusCircle, Trash2, Layers } from "lucide-react";
-import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
+import { useMemo } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Layers3 } from "lucide-react";
+import {
+  postApiV1AdminCollectionsBulkActivate,
+  postApiV1AdminCollectionsBulkDeactivate,
+  postApiV1AdminCollectionsBulkDelete,
+  postApiV1AdminCollectionsBulkRestore,
+  postApiV1AdminCollectionsReorder,
+} from "@scalius/api-client/sdk";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
+import { createListSearchValidator } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { collectionsQueryOptions } from "~/lib/api-query-options/collections";
+import { apiData } from "~/lib/api";
+import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
-import {
-  useUpdateCollection,
-  useDeleteCollection,
-  usePermanentDeleteCollection,
-  useRestoreCollection,
-  useBulkDeleteCollections,
-  useReorderCollections,
-} from "~/lib/api-mutations/collections";
-import { DataTable } from "~/components/admin/data-table/DataTable";
-import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
-import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import {
-  getCollectionColumns,
-  type CollectionItem,
-} from "~/components/admin/data-table/columns/collection-columns";
+import { collectionsQueryOptions, type CollectionSummaryDto } from "~/lib/api-query-options/collections";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
-import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { Button } from "~/components/ui/button";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
+import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { sortHeader } from "~/components/admin/resource/columns";
+import { translate, useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
-  { sort: "sortOrder", order: "asc" },
+  { sort: "sortOrder", order: "asc", limit: 50 },
 );
 
-function mapParams(deps: ReturnType<typeof validateCollectionSearch>): Parameters<typeof collectionsQueryOptions>[0] {
-  return {
-    page: deps.page,
-    limit: deps.limit,
-    search: deps.search || undefined,
-    sort: deps.sort,
-    order: deps.order,
-    trashed: deps.trashed ? ("true" as const) : undefined,
-  };
+function listQuery(search: ReturnType<typeof validateCollectionSearch>) {
+  return collectionsQueryOptions({
+    page: search.page,
+    limit: search.limit,
+    search: search.search || undefined,
+    sort: search.sort,
+    order: search.order,
+    trashed: search.trashed ? "true" : undefined,
+  });
 }
 
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
-  staleTime: 1000 * 60 * 2,
-  loader: async ({ context: { queryClient }, deps }) => {
-    await warmRouteQuery(queryClient, collectionsQueryOptions(mapParams(deps)));
-  },
-  head: ({ match }) => ({
-    meta: [
-      {
-        title: `${match.search.trashed ? "Collections Trash" : "Collections"} | Scalius Admin`,
-      },
-    ],
-  }),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
 });
 
+const INVALIDATE = [queryKeys.collections.all];
+const ids = (rows: CollectionSummaryDto[]) => rows.map((row) => row.id);
+
 function CollectionsPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate();
-  const showTrashed = search.trashed;
-  const { collections: collectionActions } = useCatalogActionPermissions();
+  const t = useMessages(catalogMessages);
+  const { collections: can } = useCatalogActionPermissions();
+  const update = useResourceMutation(
+    (action: { kind: "activate" | "deactivate"; ids: string[] } | { kind: "reorder"; items: Array<{ id: string; sortOrder: number; expectedVersion: number }> }) =>
+      action.kind === "reorder"
+        ? apiData(postApiV1AdminCollectionsReorder({ body: { items: action.items } }))
+        : inChunks(action.ids, (ids) =>
+            action.kind === "activate"
+              ? apiData(postApiV1AdminCollectionsBulkActivate({ body: { ids } }))
+              : apiData(postApiV1AdminCollectionsBulkDeactivate({ body: { ids } })),
+          ),
+    INVALIDATE,
+  );
+  const editTo = (row: CollectionSummaryDto) => (can.canEdit ? `/admin/collections/${row.id}/edit` : undefined);
 
-  // Mutations
-  const updateMutation = useUpdateCollection();
-  const deleteMutation = useDeleteCollection();
-  const permanentDeleteMutation = usePermanentDeleteCollection();
-  const restoreMutation = useRestoreCollection();
-  const bulkDeleteMutation = useBulkDeleteCollections();
-  const reorderMutation = useReorderCollections();
-  const [deleteRequest, setDeleteRequest] = useState<{
-    ids: string[];
-    permanent: boolean;
-  } | null>(null);
-  const isDeletePending =
-    deleteMutation.isPending ||
-    permanentDeleteMutation.isPending ||
-    bulkDeleteMutation.isPending;
-
-  // Track which IDs are currently being saved (for inline edit spinner)
-  const savingIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (updateMutation.isPending && updateMutation.variables) {
-      ids.add(updateMutation.variables.id);
-    }
-    return ids;
-  }, [updateMutation.isPending, updateMutation.variables]);
-
-  // Column action callbacks
-  const handleUpdateName = useCallback(
-    (id: string, expectedVersion: number, name: string) => {
-      if (!collectionActions.canEdit) return;
-      updateMutation.mutate({ id, expectedVersion, name });
+  const columns = useMemo<ColumnDef<CollectionSummaryDto, unknown>[]>(() => [
+    {
+      accessorKey: "name",
+      header: sortHeader(t("collection")),
+      meta: { mobile: "primary" },
+      cell: ({ row }) => <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>,
     },
-    [collectionActions.canEdit, updateMutation],
-  );
-
-  const handleToggleActive = useCallback(
-    (id: string, expectedVersion: number, isActive: boolean) => {
-      if (!collectionActions.canToggleStatus) return;
-      updateMutation.mutate({ id, expectedVersion, isActive });
+    {
+      id: "products",
+      header: t("products"),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => {
+        const config = normalizeCollectionConfig(row.original.config);
+        return (
+          <span className="text-muted-foreground">
+            {config.source === "dynamic"
+              ? t("autoFromCategories", { count: config.categoryIds.length })
+              : config.productIds.length === 1 ? t("productCountOne") : t("handPicked", { count: config.productIds.length })}
+            {config.showOnHomepage ? ` · ${t("onHomepage")}` : ""}
+          </span>
+        );
+      },
     },
-    [collectionActions.canToggleStatus, updateMutation],
-  );
-
-  const handleEdit = useCallback(
-    (id: string) => {
-      if (!collectionActions.canEdit) return;
-      void navigate({ to: "/admin/collections/$collectionId/edit", params: { collectionId: id } });
+    {
+      accessorKey: "isActive",
+      header: sortHeader(t("status")),
+      meta: { mobile: "status" },
+      cell: ({ row }) => (
+        <StatusBadge tone={row.original.isActive ? "success" : "neutral"}>{t(row.original.isActive ? "active" : "inactive")}</StatusBadge>
+      ),
     },
-    [collectionActions.canEdit, navigate],
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, search.trashed, can.canEdit]);
 
-  const handleDelete = useCallback(
-    (id: string) => {
-      if (!collectionActions.canDelete) return;
-      setDeleteRequest({ ids: [id], permanent: false });
-    },
-    [collectionActions.canDelete],
-  );
-
-  const handleRestore = useCallback(
-    (id: string) => {
-      if (!collectionActions.canRestore) return;
-      restoreMutation.mutate(id);
-    },
-    [collectionActions.canRestore, restoreMutation],
-  );
-
-  const handlePermanentDelete = useCallback(
-    (id: string) => {
-      if (!collectionActions.canPermanentDelete) return;
-      setDeleteRequest({ ids: [id], permanent: true });
-    },
-    [collectionActions.canPermanentDelete],
-  );
-
-  // Columns
-  const columns = useMemo(
-    () =>
-      getCollectionColumns({
-        showTrashed,
-        savingIds,
-        canSelect: collectionActions.canBulkDelete,
-        canEdit: collectionActions.canEdit,
-        canDelete: collectionActions.canDelete,
-        canRestore: collectionActions.canRestore,
-        canPermanentDelete: collectionActions.canPermanentDelete,
-        canToggleStatus: collectionActions.canToggleStatus,
-        onUpdateName: handleUpdateName,
-        onToggleActive: handleToggleActive,
-        onEdit: handleEdit,
-        onDelete: handleDelete,
-        onRestore: handleRestore,
-        onPermanentDelete: handlePermanentDelete,
-      }),
-    [
-      showTrashed,
-      savingIds,
-      collectionActions,
-      handleUpdateName,
-      handleToggleActive,
-      handleEdit,
-      handleDelete,
-      handleRestore,
-      handlePermanentDelete,
-    ],
-  );
-
-  // Data selector
-  const dataSelector = useMemo(() => createDataSelector<CollectionItem>("collections"), []);
-
-  // URL param updaters
-  const onPaginationChange = useCallback(
-    (page: number, limit: number) => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          page,
-          limit,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  const onSortingChange = useCallback(
-    (sort: string, order: "asc" | "desc") => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          sort,
-          order,
-          page: 1,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  const onSearchChange = useCallback(
-    (value: string) => {
-      void navigate({
-        search: ((prev: Record<string, unknown>) => ({
-          ...prev,
-          search: value || undefined,
-          page: 1,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
-  // Server table
-  const { table, error, isFetching, isLoading, refetch, pagination, selectedIds, clearSelection } =
-    useServerTable<CollectionItem>({
-      columns,
-      queryOptions: collectionsQueryOptions(mapParams(search)),
-      dataSelector,
-      currentPage: search.page,
-      currentLimit: search.limit,
-      currentSort: search.sort,
-      currentOrder: search.order,
-      onPaginationChange,
-      onSortingChange,
-    });
-
-  // Bulk action handlers
-  const handleBulkDelete = useCallback(() => {
-    if (!collectionActions.canBulkDelete || selectedIds.length === 0) return;
-    setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed });
-  }, [
-    collectionActions.canBulkDelete,
-    selectedIds,
-    showTrashed,
-  ]);
-
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteRequest || deleteRequest.ids.length === 0) return;
-    const close = () => setDeleteRequest(null);
-
-    if (deleteRequest.ids.length > 1) {
-      bulkDeleteMutation.mutate(
-        {
-          ids: deleteRequest.ids,
-          permanent: deleteRequest.permanent,
-        },
-        {
-          onSuccess: () => {
-            clearSelection();
-            close();
-          },
-        },
-      );
-      return;
-    }
-
-    const id = deleteRequest.ids[0]!;
-    if (deleteRequest.permanent) {
-      permanentDeleteMutation.mutate(id, { onSuccess: close });
-    } else {
-      deleteMutation.mutate(id, { onSuccess: close });
-    }
-  }, [
-    bulkDeleteMutation,
-    clearSelection,
-    deleteMutation,
-    deleteRequest,
-    permanentDeleteMutation,
-  ]);
-
-  const loadedCollectionCount = table.getRowModel().rows.length;
-  const hasCompleteOrderedSet =
-    pagination.page === 1 &&
-    pagination.total === loadedCollectionCount;
-
-  // Reorder is safe only when every collection is loaded. Re-numbering a
-  // paginated slice would create duplicate global sort orders.
-  const isDragEnabled =
-    !showTrashed &&
-    collectionActions.canReorder &&
-    search.sort === "sortOrder" &&
-    search.order === "asc" &&
-    !search.search &&
-    pagination.total <= 90 &&
-    hasCompleteOrderedSet;
-
-  const handleReorder = useCallback(
-    (oldIndex: number, newIndex: number) => {
-      if (!collectionActions.canReorder) return;
-      const rows = table.getRowModel().rows;
-      // Build the new sort order based on the reordered positions
-      const items = rows.map((r) => r.original);
-      const [movedItem] = items.splice(oldIndex, 1);
-      items.splice(newIndex, 0, movedItem);
-      const reorderData = items.map((item, idx) => ({
-        id: item.id,
-        sortOrder: idx,
-        expectedVersion: item.version,
-      }));
-      reorderMutation.mutate({ items: reorderData });
-    },
-    [collectionActions.canReorder, table, reorderMutation],
-  );
-
-  // Toolbar
-  const toolbar = (
-    <DataTableToolbar
-      searchValue={search.search}
-      onSearchChange={onSearchChange}
-      searchPlaceholder="Search collections..."
-      selectedCount={selectedIds.length}
-      bulkActions={collectionActions.canBulkDelete ? (
-        <Button
-          variant={showTrashed ? "destructive" : "outline"}
-          size="sm"
-          onClick={handleBulkDelete}
-          disabled={Boolean(error)}
-          className={
-            !showTrashed
-              ? "text-destructive border-destructive hover:bg-destructive/10"
-              : undefined
-          }
-        >
-          <Trash2 className="h-4 w-4 mr-1.5" />
-          {showTrashed
-            ? `Delete (${selectedIds.length})`
-            : `Trash (${selectedIds.length})`}
-        </Button>
-      ) : undefined}
-      actions={
-        <div className="flex items-center gap-2">
-          <Link
-            to="/admin/collections"
-            search={showTrashed ? {} : { trashed: true }}
-          >
-            <Button variant="outline" size="sm">
-              {showTrashed ? (
-                <>
-                  <Layers className="mr-2 h-4 w-4" />
-                  View Active
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  View Trash
-                </>
-              )}
-            </Button>
-          </Link>
-          {!showTrashed && collectionActions.canCreate && (
-            <Link to="/admin/collections/new">
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                New Collection
-              </Button>
-            </Link>
-          )}
-        </div>
-      }
-    />
-  );
+  // Drag to reorder in display order (the list kit also requires every row loaded).
+  const reorderable =
+    can.canReorder && !search.trashed && !search.search && search.sort === "sortOrder" && search.order === "asc";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {showTrashed ? "Collections Trash" : "Collections"}
-        </h1>
-        <p className="text-muted-foreground">
-          {showTrashed
-            ? "View, restore, or permanently delete trashed collections."
-            : isDragEnabled
-              ? "Drag collections to change their display order on your store."
-              : !showTrashed &&
-                  search.sort === "sortOrder" &&
-                  search.order === "asc" &&
-                  !search.search &&
-                  pagination.total > loadedCollectionCount
-                ? "Reordering is available when the complete collection list is shown on one page."
-              : "Organize your products into curated collections."}
-        </p>
-      </div>
-
-      <DataTable
-        table={table}
-        isFetching={isFetching}
-        isLoading={isLoading}
-        error={error}
-        onRetry={() => void refetch()}
-        toolbar={toolbar}
-        itemLabel="collections"
-        sortable={isDragEnabled}
-        onReorder={handleReorder}
-        emptyState={{
-          icon: Layers,
-          title: search.search
-            ? "No collections found"
-            : showTrashed
-              ? "Trash is empty"
-              : "No collections yet",
-          description: search.search
-            ? "Try adjusting your search query."
-            : showTrashed
-              ? "Deleted collections will appear here."
-              : "Create your first collection to get started.",
-          action:
-            !showTrashed && collectionActions.canCreate && !search.search ? (
-              <Button
-                onClick={() =>
-                  void navigate({ to: "/admin/collections/new" })
-                }
-              >
-                <PlusCircle className="h-4 w-4 mr-2" />
-                New Collection
-              </Button>
-            ) : undefined,
-        }}
-      />
-
-      <ConfirmDialog
-        open={deleteRequest !== null}
-        onOpenChange={(open) => {
-          if (!open && !isDeletePending) setDeleteRequest(null);
-        }}
-        title={deleteRequest?.permanent
-          ? `Delete ${deleteRequest.ids.length === 1 ? "collection" : `${deleteRequest.ids.length} collections`} permanently?`
-          : `Move ${deleteRequest?.ids.length === 1 ? "collection" : `${deleteRequest?.ids.length ?? 0} collections`} to trash?`}
-        description={deleteRequest?.permanent
-          ? "This cannot be undone. Collections that are still required by storefront navigation or promotions may be blocked by the server."
-          : "The collection will leave the storefront and can be restored later."}
-        confirmLabel={deleteRequest?.permanent ? "Delete permanently" : "Move to trash"}
-        loadingLabel={deleteRequest?.permanent ? "Deleting…" : "Moving…"}
-        isLoading={isDeletePending}
-        onConfirm={handleConfirmDelete}
-      />
-    </div>
+    <ResourceListPage<CollectionSummaryDto>
+      title={t("collections")}
+      actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
+      search={search}
+      query={listQuery(search)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
+      dataKey="collections"
+      columns={columns}
+      invalidate={INVALIDATE}
+      empty={{ icon: Layers3, title: t("collectionsEmptyTitle"), description: t("collectionsEmptyBody") }}
+      rowTo={editTo}
+      rowLabel={(row) => row.name}
+      sortable={reorderable}
+      onReorder={(from, to, rows) => {
+        const next = [...rows];
+        const [moved] = next.splice(from, 1);
+        if (!moved) return;
+        next.splice(to, 0, moved);
+        update.mutate({
+          variables: { kind: "reorder", items: next.map((row, index) => ({ id: row.id, sortOrder: index, expectedVersion: row.version })) },
+          success: t("reordered"),
+        });
+      }}
+      bulkActions={can.canToggleStatus ? (rows, done) => (
+        <>
+          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "activate", ids: ids(rows) }, success: t("activated") }, { onSuccess: done })}>
+            {t("activate")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "deactivate", ids: ids(rows) }, success: t("deactivated") }, { onSuccess: done })}>
+            {t("deactivate")}
+          </Button>
+        </>
+      ) : undefined}
+      lifecycle={{
+        canTrash: can.canDelete,
+        canRestore: can.canRestore,
+        canDelete: can.canPermanentDelete,
+        run: (action, rows) =>
+          action === "restore"
+            ? apiData(postApiV1AdminCollectionsBulkRestore({ body: { ids: ids(rows) } }))
+            : apiData(postApiV1AdminCollectionsBulkDelete({ body: { collectionIds: ids(rows), permanent: action === "delete" } })),
+      }}
+    />
   );
 }

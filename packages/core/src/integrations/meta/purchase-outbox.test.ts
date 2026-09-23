@@ -18,11 +18,13 @@ const baseOrder = {
     customerEmail: "buyer@example.com",
     city: "dhaka",
     cityName: "Dhaka",
-    totalAmount: 1500,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
+    totalAmountMinor: 150_000,
     status: OrderStatus.PENDING,
     paymentMethod: PaymentMethod.COD,
     paymentStatus: PaymentStatus.UNPAID,
-    paidAmount: 0,
+    paidAmountMinor: 0,
     deletedAt: null,
 };
 
@@ -35,11 +37,10 @@ describe("Meta Purchase outbox event building", () => {
         const event = buildMetaPurchaseEvent({
             order: baseOrder,
             items: [
-                { productId: "prod_1", variantId: "var_1", quantity: 2, price: 500 },
-                { productId: "prod_2", variantId: null, quantity: 1, price: 500 },
+                { productId: "prod_1", variantId: "var_1", quantity: 2, unitPriceMinor: 50_000 },
+                { productId: "prod_2", variantId: null, quantity: 1, unitPriceMinor: 50_000 },
             ],
             storefrontUrl: "https://shop.example/",
-            currency: "BDT",
             eventTime: 1_800_000_000,
         });
 
@@ -61,6 +62,10 @@ describe("Meta Purchase outbox event building", () => {
             custom_data: {
                 value: 1500,
                 currency: "BDT",
+                contents: [
+                    { id: "var_1", quantity: 2, item_price: 500 },
+                    { id: "prod_2", quantity: 1, item_price: 500 },
+                ],
                 content_ids: ["var_1", "prod_2"],
                 content_type: "product_group",
                 order_id: "order_1",
@@ -116,13 +121,13 @@ describe("Meta Purchase outbox event building", () => {
             ...baseOrder,
             paymentMethod: PaymentMethod.STRIPE,
             paymentStatus: PaymentStatus.PAID,
-            paidAmount: 1500,
+            paidAmountMinor: 150_000,
         })).toBe(true);
         expect(isOrderEligibleForMetaPurchase({
             ...baseOrder,
             paymentMethod: PaymentMethod.SSLCOMMERZ,
             paymentStatus: PaymentStatus.PARTIAL,
-            paidAmount: 150,
+            paidAmountMinor: 15_000,
         })).toBe(true);
         expect(isOrderEligibleForMetaPurchase({
             ...baseOrder,

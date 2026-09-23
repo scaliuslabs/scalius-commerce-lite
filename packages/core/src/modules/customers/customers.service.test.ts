@@ -12,12 +12,10 @@ import {
   decodeCustomerOrdersCursor,
   deleteCustomer,
   encodeCustomerOrdersCursor,
-  getCustomerSpendContribution,
-  getCustomerVisibleBalanceDue,
+  getCustomerVisibleBalanceDueMinor,
   listCustomers,
   permanentlyDeleteCustomer,
   projectCustomerOrderNotifications,
-  summarizeCustomerAccountOrders,
 } from "./customers.service";
 
 interface CapturedListQuery {
@@ -84,7 +82,8 @@ const customerListRow = {
   areaName: "area_missing",
   accountClaimedAt: null,
   totalOrders: 2,
-  totalSpent: 250,
+  totalSpentMinor: 25_000,
+  spendDecimalPlaces: 2,
   lastOrderAt: 1_780_000_100,
   createdAt: 1_780_000_000,
   updatedAt: 1_780_000_200,
@@ -102,6 +101,7 @@ describe("admin customer list location projection", () => {
     expect(batch).toHaveBeenCalledTimes(1);
     expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
     expect(result.customers[0]).toMatchObject({
+      totalSpent: 250,
       city: "city_nondeleted",
       cityName: "Dhaka",
       zone: "zone_deleted",
@@ -157,11 +157,11 @@ describe("admin customer commerce metrics", () => {
     const metrics = buildCustomerOrderMetricsProjection();
     const dialect = new SQLiteSyncDialect();
     const totalOrders = dialect.sqlToQuery(metrics.totalOrders);
-    const totalSpent = dialect.sqlToQuery(metrics.totalSpent);
+    const totalSpent = dialect.sqlToQuery(metrics.totalSpentMinor);
 
     expect(totalOrders.sql).toContain('count("orders"."id")');
-    expect(totalSpent.sql).toContain('"orders"."paid_amount"');
-    expect(totalSpent.sql).not.toContain('"orders"."total_amount"');
+    expect(totalSpent.sql).toContain('"orders"."paid_amount_minor"');
+    expect(totalSpent.sql).not.toContain('"orders"."total_amount_minor"');
     expect(totalSpent.sql).not.toContain("partially_refunded");
   });
 
@@ -261,18 +261,6 @@ describe("customers service session revocation", () => {
 });
 
 describe("customer account order money projection", () => {
-  it("keeps the repeated price projection provider-safe before saved minor-unit fields", () => {
-    const projection = buildCustomerOrderItemDetailProjection();
-    const dialect = new SQLiteSyncDialect();
-    const unitPriceSql = dialect.sqlToQuery(projection.unitPrice.sql).sql;
-
-    expect(unitPriceSql).toContain('"order_items"."price"');
-    expect(projection.unitPrice.fieldAlias).toBe("unitPrice");
-    expect(projection.price).not.toBe(projection.unitPrice);
-    expect(Object.keys(projection).indexOf("unitPrice"))
-      .toBeLessThan(Object.keys(projection).indexOf("unitPriceMinor"));
-  });
-
   it("hides actionable balance due for closed or refunded customer-visible states", () => {
     for (const status of [
       OrderStatus.CANCELLED,
@@ -280,100 +268,38 @@ describe("customer account order money projection", () => {
       OrderStatus.REFUNDED,
       OrderStatus.PARTIALLY_REFUNDED,
     ]) {
-      expect(getCustomerVisibleBalanceDue({
+      expect(getCustomerVisibleBalanceDueMinor({
         status,
         paymentStatus: PaymentStatus.UNPAID,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
+        balanceDueMinor: 100,
       })).toBe(0);
     }
 
-    expect(getCustomerVisibleBalanceDue({
+    expect(getCustomerVisibleBalanceDueMinor({
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.REFUNDED,
-      totalAmount: 100,
-      paidAmount: 0,
-      balanceDue: 100,
+      balanceDueMinor: 100,
     })).toBe(0);
 
-    expect(getCustomerVisibleBalanceDue({
+    expect(getCustomerVisibleBalanceDueMinor({
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.FAILED,
-      totalAmount: 100,
-      paidAmount: 0,
-      balanceDue: 100,
+      balanceDueMinor: 100,
     })).toBe(0);
   });
 
-  it("keeps stored active balances with a safe computed fallback", () => {
-    expect(getCustomerVisibleBalanceDue({
+  it("keeps stored active balances", () => {
+    expect(getCustomerVisibleBalanceDueMinor({
       status: OrderStatus.CONFIRMED,
       paymentStatus: PaymentStatus.PARTIAL,
-      totalAmount: 100,
-      paidAmount: 40,
-      balanceDue: 60,
+      balanceDueMinor: 60,
     })).toBe(60);
 
-    expect(getCustomerVisibleBalanceDue({
-      status: OrderStatus.PENDING,
-      paymentStatus: PaymentStatus.UNPAID,
-      totalAmount: 100,
-      paidAmount: 25,
-      balanceDue: null,
-    })).toBe(75);
-
-    expect(getCustomerVisibleBalanceDue({
+    expect(getCustomerVisibleBalanceDueMinor({
       status: OrderStatus.INCOMPLETE,
       paymentStatus: PaymentStatus.FAILED,
-      totalAmount: 100,
-      paidAmount: 0,
-      balanceDue: 100,
+      balanceDueMinor: 100,
     })).toBe(100);
-  });
-
-  it("summarizes lifetime account stats independently from displayed order pages", () => {
-    const visibleOrders = [
-      {
-        status: OrderStatus.PENDING,
-        paymentStatus: PaymentStatus.UNPAID,
-        totalAmount: 100,
-        paidAmount: 0,
-        balanceDue: 100,
-      },
-    ];
-    const allOrders = [
-      ...visibleOrders,
-      {
-        status: OrderStatus.DELIVERED,
-        paymentStatus: PaymentStatus.PAID,
-        totalAmount: 500,
-        paidAmount: 500,
-        balanceDue: 0,
-      },
-      {
-        status: OrderStatus.REFUNDED,
-        paymentStatus: PaymentStatus.REFUNDED,
-        totalAmount: 300,
-        paidAmount: 0,
-        balanceDue: 300,
-      },
-      {
-        status: OrderStatus.PARTIALLY_REFUNDED,
-        paymentStatus: PaymentStatus.PARTIAL,
-        totalAmount: 400,
-        paidAmount: 250,
-        balanceDue: 0,
-      },
-    ];
-
-    expect(visibleOrders.reduce((sum, order) => sum + getCustomerSpendContribution(order), 0)).toBe(0);
-    expect(summarizeCustomerAccountOrders(allOrders)).toEqual({
-      totalOrders: 4,
-      totalSpent: 750,
-      completedOrders: 1,
-      pendingOrders: 1,
-    });
   });
 });
 

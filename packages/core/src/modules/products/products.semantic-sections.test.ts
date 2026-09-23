@@ -13,13 +13,13 @@ import {
 function seedMaximumProduct(sqlite: DatabaseSync) {
     sqlite.prepare(`INSERT INTO categories(id, name, slug) VALUES (?, ?, ?)`).run("cat_semantic", "Semantic", "semantic");
     sqlite.prepare(`INSERT INTO products (
-        id, name, description, price, category_id, slug, meta_title, meta_description,
+        id, name, description, price_minor, category_id, slug, meta_title, meta_description,
         canonical_path, product_condition, aggregate_revision, created_at, updated_at,
-        discount_percentage, discount_type, discount_amount
+        discount_bps, discount_type, discount_amount_minor
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        "prod_semantic", "Bounded product", "d".repeat(100_000), 125,
+        "prod_semantic", "Bounded product", "d".repeat(100_000), 12_500,
         "cat_semantic", "bounded-product", "m".repeat(30_000), "e".repeat(40_000),
-        "/products/bounded-product", "new", 7, 1_700_000_000, 1_700_000_001, 10, "percentage", 0,
+        "/products/bounded-product", "new", 7, 1_700_000_000, 1_700_000_001, 1_000, "percentage", 0,
     );
     sqlite.prepare(`INSERT INTO product_rich_content (id, product_id, title, content, sort_order) VALUES (?, ?, ?, ?, ?)`).run(
         "prc_semantic", "prod_semantic", "t".repeat(100_000), "c".repeat(100_000), 0,
@@ -40,8 +40,8 @@ function seedMaximumProduct(sqlite: DatabaseSync) {
     const valueInsert = sqlite.prepare(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position)
         VALUES (?, 'popt_size', ?, ?, ?)`);
     const variantInsert = sqlite.prepare(`INSERT INTO product_variants (
-        id, product_id, option_combination_key, sku, price, stock, discount_type, discount_percentage, created_at, updated_at
-    ) VALUES (?, 'prod_semantic', ?, ?, 125, ?, 'percentage', 0, ?, ?)`);
+        id, product_id, option_combination_key, sku, price_minor, stock, discount_type, discount_bps, created_at, updated_at
+    ) VALUES (?, 'prod_semantic', ?, ?, 12500, ?, 'percentage', 0, ?, ?)`);
     const selectionInsert = sqlite.prepare(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, 'popt_size', ?)`);
     for (let index = 0; index < 150; index += 1) {
         valueInsert.run(`pval_${index}`, `Size ${index}`, `size ${index}`, index);

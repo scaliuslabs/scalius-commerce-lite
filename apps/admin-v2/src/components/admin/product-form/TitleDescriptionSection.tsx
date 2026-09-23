@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { lazy, Suspense } from "react";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import {
   FormControl,
   FormField,
@@ -8,10 +8,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { RichContent } from "@/components/ui/rich-content";
 import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
 const AdditionalInfoManager = lazy(() =>
@@ -20,106 +23,86 @@ const AdditionalInfoManager = lazy(() =>
   })),
 );
 
-type RichContentItem = NonNullable<ProductFormValues["additionalInfo"]>[number];
-
-interface TitleDescriptionSectionProps {
+interface SectionProps {
   form: UseFormReturn<ProductFormValues>;
+  /** Viewers see saved rich text instead of an editor. */
+  readOnly: boolean;
 }
 
-export function TitleDescriptionSection({
-  form,
-}: TitleDescriptionSectionProps) {
-  const [activeTab, setActiveTab] = useState("description");
-
+export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
+  const t = useMessages(productMessages);
   return (
-    <Card className="overflow-hidden">
-      <div className="p-4">
+    <Card>
+      <CardContent className="space-y-4 pt-6">
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium">
-                Title <span className="text-destructive">*</span>
-              </FormLabel>
+              <FormLabel>{t("title")}</FormLabel>
               <FormControl>
-                <Input
-                  placeholder="Product title"
-                  className="min-h-11 md:min-h-9"
-                  {...field}
-                />
+                <Input placeholder={t("titlePlaceholder")} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-      </div>
-
-      <div className="border-t">
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="w-full"
-        >
-          <TabsList className="h-11 w-full justify-start rounded-none border-b bg-transparent p-0 md:h-9">
-            <TabsTrigger
-              value="description"
-              className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
-            >
-              Description
-            </TabsTrigger>
-            <TabsTrigger
-              value="additional"
-              className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
-            >
-              Additional Sections
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="description" className="p-3 m-0">
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <DeferredTiptapEditor
-                      content={field.value || ""}
-                      onChange={field.onChange}
-                      placeholder="Describe your product..."
-                      ariaLabel="Product description"
-                      compact={true}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("description")}</FormLabel>
+              {readOnly ? (
+                <RichContent content={field.value ?? ""} variant="compact" />
+              ) : (
+                <FormControl>
+                  <DeferredTiptapEditor
+                    content={field.value || ""}
+                    onChange={field.onChange}
+                    ariaLabel={t("description")}
+                    compact
+                  />
+                </FormControl>
               )}
-            />
-          </TabsContent>
-
-          <TabsContent value="additional" className="p-3 m-0">
-            {activeTab === "additional" ? (
-              <Suspense fallback={<LoadingFallback height="h-36" />}>
-                <FormField
-                  control={form.control}
-                  name="additionalInfo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <AdditionalInfoManager
-                        initialContent={(field.value as RichContentItem[]) || []}
-                        onContentChange={(newContent) => {
-                          field.onChange(newContent);
-                        }}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </Suspense>
-            ) : null}
-          </TabsContent>
-        </Tabs>
-      </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </CardContent>
     </Card>
+  );
+}
+
+/** Extra tabs on the product page, such as size guide or care. */
+export function AdditionalSectionsCard({ form, readOnly }: SectionProps) {
+  const t = useMessages(productMessages);
+  const sections = useWatch({ control: form.control, name: "additionalInfo" }) ?? [];
+  if (readOnly && sections.length === 0) return null;
+
+  return (
+    <CollapsibleCard title={t("additionalSections")} defaultOpen={readOnly || sections.length > 0}>
+      {readOnly ? (
+        sections.map((section) => (
+          <div key={section.id} className="space-y-1">
+            <h4 className="text-body font-medium">{section.title}</h4>
+            <RichContent content={section.content} variant="compact" />
+          </div>
+        ))
+      ) : (
+        <Suspense fallback={<LoadingFallback height="h-36" />}>
+          <FormField
+            control={form.control}
+            name="additionalInfo"
+            render={({ field }) => (
+              <FormItem>
+                <AdditionalInfoManager initialContent={field.value ?? []} onContentChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </Suspense>
+      )}
+    </CollapsibleCard>
   );
 }

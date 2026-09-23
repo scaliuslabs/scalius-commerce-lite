@@ -151,7 +151,7 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
   attempt: AtomicCheckoutAttempt,
   options: {
     paymentMethod: string;
-    totalAmount: number;
+    totalAmountMinor: number;
     response: TResponse;
   },
 ): Promise<PreparedAtomicCheckoutAttemptCommit> {
@@ -178,7 +178,7 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
       orderId: attempt.orderId,
       status: "committed",
       paymentMethod: options.paymentMethod,
-      totalAmount: options.totalAmount,
+      totalAmountMinor: options.totalAmountMinor,
       responsePayload,
       attempts: 1,
       claimId: null,
@@ -192,7 +192,7 @@ export async function prepareAtomicCheckoutAttemptCommit<TResponse>(
       set: {
         status: "committed",
         paymentMethod: options.paymentMethod,
-        totalAmount: options.totalAmount,
+        totalAmountMinor: options.totalAmountMinor,
         responsePayload,
         attempts: sql`${checkoutAttempts.attempts} + 1`,
         claimId: null,

@@ -11,6 +11,8 @@ import {
 import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
+import { fromMinor } from "@scalius/shared/money";
 import { executeInventoryOperation } from "./inventory-operations";
 import {
   loadProductMediaProjections,
@@ -94,7 +96,7 @@ export async function lookupByBarcodeOrSku(
     variantImageId: productVariants.imageId,
     variantSku: productVariants.sku,
     variantLabel: variantOptionLabelSql(productVariants.id),
-    variantPrice: productVariants.price,
+    variantPriceMinor: productVariants.priceMinor,
     variantStock: productVariants.stock,
     variantReservedStock: productVariants.reservedStock,
     variantBarcode: productVariants.barcode,
@@ -103,8 +105,9 @@ export async function lookupByBarcodeOrSku(
     productId: products.id,
     productName: products.name,
     productSlug: products.slug,
-    productPrice: products.price,
+    productPriceMinor: products.priceMinor,
     productIsActive: products.isActive,
+    storeCurrencyCode: storeCurrencyCodeSql(),
   };
 
   let variant = await db
@@ -142,6 +145,7 @@ export async function lookupByBarcodeOrSku(
   if (!variant) return null;
 
   const mediaMap = await loadProductMediaProjections(db, [variant.productId]);
+  const decimalPlaces = storeDecimalPlacesFromCode(variant.storeCurrencyCode);
   const image = resolveSkuImageRepresentation(
     mediaMap.get(variant.productId) ?? [],
     variant.variantImageId,
@@ -152,7 +156,7 @@ export async function lookupByBarcodeOrSku(
       id: variant.variantId,
       sku: variant.variantSku,
       optionLabel: variant.variantLabel,
-      price: variant.variantPrice,
+      price: fromMinor(variant.variantPriceMinor, decimalPlaces),
       stock: variant.variantStock,
       reservedStock: variant.variantReservedStock,
       available: variant.variantStock - variant.variantReservedStock,
@@ -164,7 +168,7 @@ export async function lookupByBarcodeOrSku(
       id: variant.productId,
       name: variant.productName,
       slug: variant.productSlug,
-      price: variant.productPrice,
+      price: fromMinor(variant.productPriceMinor, decimalPlaces),
       isActive: variant.productIsActive,
       imageUrl: image?.url ?? null,
       imageMediaId: image?.mediaId ?? null,

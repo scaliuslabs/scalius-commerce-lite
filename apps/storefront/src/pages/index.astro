@@ -27,7 +27,6 @@ if (!layoutData || !homepageData) {
 }
 
 const seo = homepageData?.seo ?? {
-  siteTitle: null as string | null,
   homepageTitle: null as string | null,
   homepageMetaDescription: null as string | null,
 };
@@ -45,12 +44,10 @@ const presentation = homepageData.presentation;
 const firstCollection = activeCollections[0] ?? null;
 const remainingCollections = activeCollections.slice(1);
 
-const homepageTitle =
-  seo.homepageTitle || seo.siteTitle || "Welcome to Our Store";
+const homepageTitle = seo.homepageTitle || "Welcome to Our Store";
 const homepageMetaDescription =
   seo.homepageMetaDescription || "Find the best products here.";
 const homepageHeading =
-  seo.siteTitle?.trim() ||
   layoutData.business?.companyName?.trim() ||
   layoutData.business?.legalName?.trim() ||
   homepageTitle;

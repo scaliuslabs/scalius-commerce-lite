@@ -1,136 +1,82 @@
 import JsBarcode from "jsbarcode";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  FileText,
-  Minus,
-  Plus,
-  Printer,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { postApiV1AdminInventoryLabelsPreview } from "@scalius/api-client/sdk";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { useCurrency } from "@/hooks/use-currency";
-import { useDebounce } from "@/hooks/use-debounce";
-import { postApiV1AdminInventoryLabelsPreview } from "@scalius/api-client/sdk";
-import { apiData } from "@/lib/api";
-import { fetchInventory } from "@/lib/api-query-options/inventory";
+} from "~/components/ui/select";
+import { Skeleton } from "~/components/ui/skeleton";
+import { Switch } from "~/components/ui/switch";
+import { useCurrency } from "~/hooks/use-currency";
+import { useDebounce } from "~/hooks/use-debounce";
+import { apiData } from "~/lib/api";
+import { fetchInventory, type InventoryLabelVariant } from "~/lib/api-query-options/inventory";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { cn } from "@scalius/shared/utils";
-import { adminCalendarDateKey } from "~/lib/admin-time";
+import { formatNumber, useMessages } from "~/i18n";
+import { inventoryMessages } from "~/i18n/inventory";
+import { resourceMessages } from "~/i18n/resource";
 import {
   buildLabelCopies,
-  clampLabelAlignmentMm,
-  clampLabelPreviewPageIndex,
-  DEFAULT_LABEL_PRINT_ALIGNMENT,
+  countLabelPages,
   DEFAULT_LABEL_CONTENT,
-  formatLabelPrintAlignment,
-  formatLabelCount,
-  formatPageCount,
   findCompatibleLabelPreset,
   getBarcodeFitIssue,
   getBarcodeQuietZoneModules,
-  getLabelInventorySummary,
-  getNonPrintingLabelVariantIds,
   getLabelPreset,
-  getLabelPresetIssue,
   getLabelShortcutQuantity,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
-  MAX_LABEL_ALIGNMENT_MM,
   MAX_LABEL_SKUS,
-  orderLabelVariants,
-  paginateLabelCopies,
   resolveBarcodeSymbol,
   type BarcodeSymbol,
   type LabelContentOptions,
-  type LabelCopy,
-  type LabelOrder,
-  type LabelPageCell,
-  type LabelPreset,
   type LabelPresetId,
-  type LabelPrintAlignment,
   type LabelQuantityShortcut,
 } from "./barcode-label-model";
-import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
-const LABEL_PREFERENCE_KEY = "scalius:barcode-label-preferences:v1";
+const PREFERENCE_KEY = "scalius:barcode-label-preferences:v1";
+const CONTENT_OPTIONS = ["showProduct", "showVariant", "showSku", "showPrice"] as const;
 
-type BarcodeLabelWorkspaceProps = {
-  selectedVariantIds: string[];
-  onSelectedVariantIdsChange: (ids: string[]) => void;
-};
+type Preferences = { presetId: LabelPresetId; content: LabelContentOptions };
 
-type ArtifactFormat = "csv" | "html" | "pdf";
-
-const DEFAULT_CUSTOM_PRESET: LabelPreset = { ...getLabelPreset("custom") };
-
-function MillimetreInput({
-  id,
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id} className="text-[11px] font-normal text-muted-foreground">{label}</Label>
-      <div className="relative">
-        <Input
-          id={id}
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(event) => {
-            const next = event.target.valueAsNumber;
-            if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next)));
-          }}
-          className="h-11 pr-8 text-sm tabular-nums sm:h-8"
-        />
-        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mm</span>
-      </div>
-    </div>
-  );
+function readPreferences(): Preferences {
+  const fallback: Preferences = { presetId: "a4", content: DEFAULT_LABEL_CONTENT };
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PREFERENCE_KEY) ?? "{}") as Partial<Preferences>;
+    return {
+      presetId: LABEL_PRESETS.some((preset) => preset.id === saved.presetId) ? saved.presetId! : fallback.presetId,
+      content: { ...DEFAULT_LABEL_CONTENT, ...saved.content },
+    };
+  } catch {
+    return fallback;
+  }
 }
 
-function BarcodeGraphic({
-  symbol,
-  compact = false,
-}: {
-  symbol: BarcodeSymbol;
-  compact?: boolean;
-}) {
+function variantName(variant: Pick<InventoryLabelVariant, "productName" | "optionLabel">): string {
+  return variant.optionLabel ? `${variant.productName} · ${variant.optionLabel}` : variant.productName;
+}
+
+function BarcodeGraphic({ symbol }: { symbol: BarcodeSymbol }) {
+  const t = useMessages(inventoryMessages);
   const ref = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
@@ -144,9 +90,9 @@ function BarcodeGraphic({
         marginLeft: quietZone.left * 2,
         marginRight: quietZone.right * 2,
         width: 2,
-        height: compact ? 32 : 54,
-        background: "#ffffff",
-        lineColor: "#09090b",
+        height: 54,
+        background: "transparent",
+        lineColor: "currentColor",
       });
       ref.current.setAttribute("preserveAspectRatio", "xMidYMid meet");
       ref.current.removeAttribute("width");
@@ -154,219 +100,63 @@ function BarcodeGraphic({
     } catch {
       ref.current.replaceChildren();
     }
-  }, [compact, symbol]);
+  }, [symbol]);
 
   if (!symbol.format || symbol.error) {
-    return (
-      <div className="grid h-10 place-items-center rounded border border-dashed border-amber-400 bg-amber-50 px-2 text-center text-[9px] font-medium text-amber-800">
-        Barcode unavailable
-      </div>
-    );
+    return <p className="py-3 text-body text-muted-foreground">{t("noBarcode")}</p>;
   }
-
-  return <svg ref={ref} aria-label={`Barcode ${symbol.displayValue}`} className="block h-auto max-h-full w-full" />;
+  return <svg ref={ref} aria-label={t("barcode", { value: symbol.displayValue })} className="block h-12 w-full" />;
 }
 
-function LabelArtwork({
-  copy,
-  content,
-  price,
-  compact,
-}: {
-  copy: LabelCopy;
-  content: LabelContentOptions;
-  price: string;
-  compact: boolean;
-}) {
-  const { variant, symbol } = copy;
+/** Placeholder rows the same height as a loaded row (two text lines, py-3). */
+function LoadingRows({ count }: { count: number }) {
+  const t = useMessages(inventoryMessages);
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center overflow-hidden bg-white px-[1.5mm] py-[1mm] text-[#09090b]">
-      <div className="min-h-0 flex-1">
-        <BarcodeGraphic symbol={symbol} compact={compact} />
-      </div>
-      <div className="mt-[0.4mm] truncate text-center font-mono text-[7pt] leading-none tracking-tight">
-        {symbol.displayValue}
-      </div>
-      <div className="mt-[0.6mm] min-w-0 text-center leading-tight">
-        {content.showProduct ? (
-          <div className={cn("truncate font-semibold", compact ? "text-[6.5pt]" : "text-[7.5pt]")}>{variant.productName}</div>
-        ) : null}
-        {content.showVariant && variant.optionLabel ? (
-          <div className={cn("truncate text-zinc-600", compact ? "text-[5.5pt]" : "text-[6.5pt]")}>{variant.optionLabel}</div>
-        ) : null}
-        <div className={cn("flex min-w-0 items-center justify-center gap-[1.5mm] text-zinc-700", compact ? "text-[5.5pt]" : "text-[6.5pt]") }>
-          {content.showSku ? <span className="truncate font-mono">{variant.sku}</span> : null}
-          {content.showPrice ? <span className="shrink-0 font-semibold">{price}</span> : null}
-        </div>
-      </div>
-    </div>
+    <ul role="status" aria-label={t("loading")} className="divide-y">
+      {Array.from({ length: Math.max(1, count) }, (_, row) => (
+        <li key={row} className="space-y-1 py-3">
+          <Skeleton className="h-5 w-2/3" />
+          <Skeleton className="h-5 w-1/2" />
+        </li>
+      ))}
+    </ul>
   );
 }
 
-function QuantityControl({
-  value,
-  onChange,
-  label,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  label: string;
-}) {
-  return (
-    <div className="flex h-11 items-center overflow-hidden rounded-md border bg-background sm:h-8">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        className="grid h-full w-11 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:w-8"
-        aria-label={`Decrease labels for ${label}`}
-      >
-        <Minus className="h-3.5 w-3.5" />
-      </button>
-      <Input
-        type="number"
-        min={0}
-        max={MAX_LABEL_COPIES}
-        value={value}
-        onChange={(event) => onChange(Math.max(0, Math.min(MAX_LABEL_COPIES, Math.trunc(event.target.valueAsNumber || 0))))}
-        aria-label={`Label quantity for ${label}`}
-        className="h-full w-16 rounded-none border-x border-y-0 px-1 text-center text-sm tabular-nums shadow-none focus-visible:ring-0 sm:w-14"
-      />
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(MAX_LABEL_COPIES, value + 1))}
-        className="grid h-full w-11 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:w-8"
-        aria-label={`Increase labels for ${label}`}
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-function PaperPreview({
-  page,
-  preset,
-  content,
-  formatPrice,
-  startOffset,
-  onStartOffsetChange,
-  canSetStartOffset,
-}: {
-  page: LabelPageCell[];
-  preset: LabelPreset;
-  content: LabelContentOptions;
-  formatPrice: (price: number | string) => string;
-  startOffset: number;
-  onStartOffsetChange: (value: number) => void;
-  canSetStartOffset: boolean;
-}) {
-  const capacity = preset.columns * preset.rows;
-  const cells = Array.from({ length: capacity }, (_, index) => page[index] ?? null);
-  return (
-    <div className="mx-auto w-full max-w-[310px]">
-      <div
-        className="grid overflow-hidden border border-zinc-300 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-        style={{
-          aspectRatio: `${preset.pageWidthMm}/${preset.pageHeightMm}`,
-          gridTemplateColumns: `repeat(${preset.columns}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${preset.rows}, minmax(0, 1fr))`,
-          gap: preset.thermal ? 0 : "2px",
-          padding: preset.thermal ? "5px" : "10px",
-        }}
-        aria-label={`Preview of ${preset.name}`}
-      >
-        {cells.map((copy, index) => (
-          <button
-            type="button"
-            key={copy?.key ?? `preview-empty-${index}`}
-            className={cn(
-              "group relative min-h-0 overflow-hidden bg-white text-left focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
-              preset.cropMarks && "border border-dashed border-zinc-300",
-              canSetStartOffset && index === startOffset && capacity > 1 && "ring-2 ring-inset ring-emerald-500",
-              !canSetStartOffset && "cursor-default",
-            )}
-            aria-label={canSetStartOffset ? `Start printing at cell ${index + 1}` : `Preview cell ${index + 1}`}
-            aria-pressed={canSetStartOffset ? index === startOffset : undefined}
-            disabled={capacity <= 1 || !canSetStartOffset}
-            onClick={() => onStartOffsetChange(index)}
-          >
-            {copy ? (
-              <LabelArtwork copy={copy} content={content} price={formatPrice(copy.variant.effectivePrice)} compact />
-            ) : capacity > 1 ? (
-              <span className="grid h-full place-items-center text-[8px] text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">{index + 1}</span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+type BarcodeLabelWorkspaceProps = {
+  selectedVariantIds: string[];
+  onSelectedVariantIdsChange: (ids: string[]) => void;
+};
 
 export function BarcodeLabelWorkspace({
   selectedVariantIds,
   onSelectedVariantIdsChange,
 }: BarcodeLabelWorkspaceProps) {
-  const { formatPrice } = useCurrency();
+  const t = useMessages(inventoryMessages);
+  const r = useMessages(resourceMessages);
+  const { fmt } = useCurrency();
+  const [preferences, setPreferences] = useState(readPreferences);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [searchPage, setSearchPage] = useState(1);
   const search = useDebounce(searchInput, 250);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [presetId, setPresetId] = useState<LabelPresetId>("a4-cut-3x8");
-  const [customPreset, setCustomPreset] = useState<LabelPreset>(DEFAULT_CUSTOM_PRESET);
-  const [startOffset, setStartOffset] = useState(0);
-  const [previewPageIndex, setPreviewPageIndex] = useState(0);
-  const [content, setContent] = useState<LabelContentOptions>(DEFAULT_LABEL_CONTENT);
-  const [labelOrder, setLabelOrder] = useState<LabelOrder>("selected");
-  const [alignment, setAlignment] = useState<LabelPrintAlignment>(DEFAULT_LABEL_PRINT_ALIGNMENT);
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const [artifactBusy, setArtifactBusy] = useState<ArtifactFormat | null>(null);
-  const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const { presetId, content } = preferences;
+  const preset = getLabelPreset(presetId);
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(LABEL_PREFERENCE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as {
-          presetId?: LabelPresetId;
-          content?: Partial<LabelContentOptions>;
-          customPreset?: Partial<LabelPreset>;
-          alignment?: Partial<LabelPrintAlignment>;
-          labelOrder?: LabelOrder;
-        };
-        if (LABEL_PRESETS.some((preset) => preset.id === parsed.presetId)) setPresetId(parsed.presetId!);
-        if (parsed.content) setContent((current) => ({ ...current, ...parsed.content }));
-        if (["selected", "product", "sku"].includes(parsed.labelOrder ?? "")) setLabelOrder(parsed.labelOrder!);
-        if (parsed.customPreset) {
-          setCustomPreset((current) => ({ ...current, ...parsed.customPreset, id: "custom", name: current.name, detail: current.detail }));
-        }
-        if (parsed.alignment) {
-          setAlignment({
-            xMm: clampLabelAlignmentMm(parsed.alignment.xMm ?? 0),
-            yMm: clampLabelAlignmentMm(parsed.alignment.yMm ?? 0),
-          });
-        }
-      }
+      window.localStorage.setItem(PREFERENCE_KEY, JSON.stringify(preferences));
     } catch {
-      // Device-local preferences are optional; printing remains available.
-    } finally {
-      setPreferencesLoaded(true);
+      // Blocked storage only forgets the choice for next time.
     }
-  }, []);
-
-  useEffect(() => {
-    if (!preferencesLoaded) return;
-    try {
-      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset, alignment, labelOrder }));
-    } catch {
-      // Ignore blocked or exhausted local storage.
-    }
-  }, [alignment, content, customPreset, labelOrder, preferencesLoaded, presetId]);
+  }, [preferences]);
 
   const previewQuery = useQuery({
     queryKey: ["inventory", "label-preview", selectedVariantIds],
-    queryFn: () => apiData(postApiV1AdminInventoryLabelsPreview({
-      body: { variantIds: selectedVariantIds },
-    })),
+    queryFn: () => apiData(postApiV1AdminInventoryLabelsPreview({ body: { variantIds: selectedVariantIds } })),
     enabled: selectedVariantIds.length > 0,
     staleTime: 30_000,
   });
@@ -381,598 +171,396 @@ export function BarcodeLabelWorkspace({
       sort: "productName",
       order: "asc",
     }),
+    enabled: pickerOpen,
     staleTime: 30_000,
   });
 
-  const selectedVariants = useMemo(
-    () => previewQuery.data?.variants ?? [],
-    [previewQuery.data],
-  );
-  const orderedSelectedVariants = useMemo(
-    () => orderLabelVariants(selectedVariants, labelOrder),
-    [labelOrder, selectedVariants],
-  );
+  const selectedVariants = useMemo(() => previewQuery.data?.variants ?? [], [previewQuery.data]);
   useEffect(() => {
-    if (selectedVariants.length === 0) return;
     setQuantities((current) => {
-      const next = { ...current };
-      for (const variant of selectedVariants) {
-        if (next[variant.id] === undefined) next[variant.id] = 1;
-      }
-      return next;
+      const missing = selectedVariants.filter((variant) => current[variant.id] === undefined);
+      return missing.length === 0
+        ? current
+        : { ...current, ...Object.fromEntries(missing.map((variant) => [variant.id, 1])) };
     });
   }, [selectedVariants]);
 
-  const preset = presetId === "custom" ? customPreset : getLabelPreset(presetId);
-  const capacity = preset.columns * preset.rows;
-  const presetIssue = getLabelPresetIssue(preset);
-  useEffect(() => {
-    setStartOffset((current) => Math.min(current, Math.max(0, capacity - 1)));
-  }, [capacity]);
-  const copies = useMemo(() => buildLabelCopies(orderedSelectedVariants, quantities), [orderedSelectedVariants, quantities]);
-  const pages = useMemo(
-    () => paginateLabelCopies(copies.slice(0, MAX_LABEL_COPIES), preset, startOffset),
-    [copies, preset, startOffset],
-  );
-  useEffect(() => {
-    setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current, pages.length));
-  }, [pages.length]);
-  const previewPage = pages[previewPageIndex] ?? pages[0];
-  const activeFitIssues = useMemo(() => selectedVariants.flatMap((variant) => {
-    if (presetIssue) return [];
+  const copies = useMemo(() => buildLabelCopies(selectedVariants, quantities), [selectedVariants, quantities]);
+  const fitIssues = useMemo(() => new Map(selectedVariants.flatMap((variant) => {
     if ((quantities[variant.id] ?? 0) <= 0) return [];
-    const symbol = resolveBarcodeSymbol(variant.barcode, variant.barcodeType);
-    const issue = getBarcodeFitIssue(symbol, preset);
-    return issue ? [{ variant, issue }] : [];
-  }), [preset, presetIssue, quantities, selectedVariants]);
-  const activeSymbols = useMemo(() => selectedVariants
-    .filter((variant) => (quantities[variant.id] ?? 0) > 0)
-    .map((variant) => resolveBarcodeSymbol(variant.barcode, variant.barcodeType)), [quantities, selectedVariants]);
-  const compatiblePreset = useMemo(() => activeFitIssues.length > 0
-    ? findCompatibleLabelPreset(activeSymbols, preset)
-    : null, [activeFitIssues.length, activeSymbols, preset]);
-  const tooManyCopies = copies.length > MAX_LABEL_COPIES;
-  const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
-  const canExportLabelData = copies.length > 0
-    && !tooManyCopies
-    && copies.every((copy) => !copy.symbol.error);
-  const printReadiness = presetIssue
-    ? "Fix format"
-    : tooManyCopies
-      ? "Reduce quantities"
-      : activeFitIssues.length > 0
-        ? "Choose wider stock"
-        : copies.length > 0
-          ? preset.name
-          : "Select a SKU";
+    const issue = getBarcodeFitIssue(resolveBarcodeSymbol(variant.barcode, variant.barcodeType), preset);
+    return issue ? [[variant.id, issue] as const] : [];
+  })), [preset, quantities, selectedVariants]);
+  const compatiblePreset = fitIssues.size > 0
+    ? findCompatibleLabelPreset(
+        selectedVariants
+          .filter((variant) => (quantities[variant.id] ?? 0) > 0)
+          .map((variant) => resolveBarcodeSymbol(variant.barcode, variant.barcodeType)),
+        preset,
+      )
+    : null;
+  const tooMany = copies.length > MAX_LABEL_COPIES;
+  const canPrint = copies.length > 0 && !tooMany && fitIssues.size === 0;
+  const labelCount = Math.min(copies.length, MAX_LABEL_COPIES);
+  const pageCount = countLabelPages(labelCount, preset);
+  const firstCopy = copies[0];
   const pickerVariants = pickerQuery.data?.variants ?? [];
-  const pickerPagination = pickerQuery.data?.pagination;
-  const nonPrintingVariantIds = useMemo(
-    () => getNonPrintingLabelVariantIds(selectedVariants, quantities),
-    [quantities, selectedVariants],
-  );
+  const pickerPages = pickerQuery.data?.pagination?.totalPages ?? 1;
 
-  const removeVariantsFromJob = (ids: readonly string[]) => {
-    if (ids.length === 0) return;
-    const removed = new Set(ids);
-    setQuantities((current) => Object.fromEntries(
-      Object.entries(current).filter(([id]) => !removed.has(id)),
-    ));
-    onSelectedVariantIdsChange(selectedVariantIds.filter((id) => !removed.has(id)));
-  };
+  const setContent = (key: keyof LabelContentOptions, value: boolean) =>
+    setPreferences((current) => ({ ...current, content: { ...current.content, [key]: value } }));
 
-  const clearJob = () => {
-    setQuantities({});
-    setStartOffset(0);
-    setPreviewPageIndex(0);
-    onSelectedVariantIdsChange([]);
-  };
-
-  const updateSelected = (id: string, selected: boolean) => {
+  const toggleVariant = (id: string, selected: boolean) => {
     if (selected) {
-      if (selectedVariantIds.length >= MAX_LABEL_SKUS || selectedVariantIds.includes(id)) return;
-      onSelectedVariantIdsChange([...selectedVariantIds, id]);
+      if (selectedVariantIds.length < MAX_LABEL_SKUS && !selectedVariantIds.includes(id)) {
+        onSelectedVariantIdsChange([...selectedVariantIds, id]);
+      }
       return;
     }
-    removeVariantsFromJob([id]);
+    setQuantities((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    onSelectedVariantIdsChange(selectedVariantIds.filter((candidate) => candidate !== id));
   };
 
   const setAllQuantities = (mode: LabelQuantityShortcut) => {
-    setQuantities((current) => Object.fromEntries(selectedVariants.map((variant) => [
-      variant.id,
-      getLabelShortcutQuantity(variant, current[variant.id] ?? 1, mode),
-    ]).concat(Object.entries(current).filter(([id]) => !selectedVariants.some((variant) => variant.id === id)))));
+    setQuantities((current) => ({
+      ...current,
+      ...Object.fromEntries(selectedVariants.map((variant) => [
+        variant.id,
+        getLabelShortcutQuantity(variant, current[variant.id] ?? 1, mode),
+      ])),
+    }));
   };
 
-  const requestArtifact = async (format: ArtifactFormat, mode: "job" | "test" = "job") => {
-    if (artifactBusy || (format === "csv" ? !canExportLabelData : !canPrint)) return;
-    const artifactWindow = format === "html" ? window.open("about:blank", "_blank") : null;
-    if (format === "html" && !artifactWindow) {
-      setArtifactError("Allow pop-ups to open the printable label artifact.");
+  const print = async () => {
+    if (printing || !canPrint) return;
+    // Open the tab inside the click so pop-up blockers allow it.
+    const printWindow = window.open("about:blank", "_blank");
+    if (!printWindow) {
+      setPrintError(t("popupBlocked"));
       return;
     }
-    if (artifactWindow) artifactWindow.opener = null;
-    setArtifactError(null);
-    setArtifactBusy(format);
+    printWindow.opener = null;
+    setPrintError(null);
+    setPrinting(true);
     try {
+      const variantIds = selectedVariants.map((variant) => variant.id);
       const response = await fetch(withDashboardBasePath("/api/v1/admin/inventory/labels/artifact"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          format,
-          mode,
-          variantIds: selectedVariantIds,
-          quantities,
-          order: labelOrder,
+          format: "html",
+          mode: "job",
+          variantIds,
+          quantities: Object.fromEntries(variantIds.map((id) => [id, quantities[id] ?? 0])),
+          order: "selected",
           preset,
-          startOffset,
-          alignment,
+          startOffset: 0,
+          alignment: { xMm: 0, yMm: 0 },
           content,
         }),
       });
-      if (!response.ok) throw new Error(`Label artifact failed with ${response.status}`);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      if (format === "html") {
-        artifactWindow!.location.href = url;
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } else {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `barcode-labels-${adminCalendarDateKey()}.${format}`;
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-      }
+      if (!response.ok) throw new Error(t("printFailed"));
+      const url = URL.createObjectURL(await response.blob());
+      printWindow.location.href = url;
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error: unknown) {
-      artifactWindow?.close();
-      setArtifactError(error instanceof Error ? error.message : "Label artifact generation failed.");
+      printWindow.close();
+      setPrintError(error instanceof Error ? error.message : t("printFailed"));
     } finally {
-      setArtifactBusy(null);
+      setPrinting(false);
     }
   };
 
   return (
-    <>
-      <div className="label-workspace-screen mx-auto max-w-[1440px] space-y-3 px-2 pb-24 sm:px-4 sm:pb-8">
-        <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <Button asChild variant="ghost" size="icon" className="mt-0.5 h-11 w-11 shrink-0 sm:h-8 sm:w-8">
-              <Link to="/admin/inventory" search={{ section: "variants" }} aria-label="Back to inventory">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight">Barcode labels</h1>
-              <p className="text-sm text-muted-foreground">Select exact SKUs, set counts, and print a ready-to-cut sheet or thermal roll.</p>
-            </div>
-          </div>
-          <div className="hidden items-center gap-2 self-end sm:flex sm:self-auto">
-            <div className="hidden text-right text-xs text-muted-foreground sm:block">
-              <div>{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))}</div>
-              <div>{formatPageCount(pages.length)}</div>
-            </div>
-            <Button type="button" variant="outline" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html", "test")}>
-              <FileText className="mr-1.5 h-3.5 w-3.5" /> Test page
-            </Button>
-            <Button type="button" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html")}>
-              <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("pdf")}>
-              <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
-            </Button>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <PageHeader title={t("labelsTitle")} backTo="/admin/inventory" />
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_370px]">
-          <div className="min-w-0 space-y-3">
-            <Card>
-              <CardHeader className="flex-col items-start justify-between gap-2 space-y-0 px-3 py-2.5 sm:flex-row sm:items-center">
-                <div>
-                  <CardTitle className="text-sm">Selected SKUs <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">{selectedVariantIds.length}/{MAX_LABEL_SKUS}</Badge></CardTitle>
-                </div>
-                {selectedVariants.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Match tracked SKUs to on-hand stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Match tracked SKUs to available stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("available")}>Available</Button>
-                    {nonPrintingVariantIds.length > 0 ? (
-                      <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Remove SKUs with zero labels from this print job" onClick={() => removeVariantsFromJob(nonPrintingVariantIds)}>
-                        Remove {nonPrintingVariantIds.length} zero
-                      </Button>
-                    ) : null}
-                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs text-muted-foreground hover:text-destructive sm:h-7 sm:px-2" title="Start a new empty label job without changing products or inventory" onClick={clearJob}>Clear job</Button>
-                  </div>
-                ) : null}
-              </CardHeader>
-              <CardContent className="border-t p-0">
-                {previewQuery.isError ? (
-                  <div className="p-6 text-center text-sm text-destructive">Selected SKU details could not be loaded.</div>
-                ) : previewQuery.isLoading ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">Loading selected SKUs…</div>
-                ) : selectedVariants.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <p className="text-sm font-medium">No SKUs selected</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Use the picker below. Each saved SKU already has its own scan identity.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {selectedVariants.map((variant) => {
-                      const symbol = resolveBarcodeSymbol(variant.barcode, variant.barcodeType);
-                      const fitIssue = (quantities[variant.id] ?? 0) > 0 ? getBarcodeFitIssue(symbol, preset) : null;
-                      return (
-                        <div key={variant.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center gap-1.5">
-                              <span className="truncate text-sm font-medium">{variant.productName}</span>
-                              {variant.optionLabel ? <span className="truncate text-xs text-muted-foreground">· {variant.optionLabel}</span> : null}
-                            </div>
-                            <div className="mt-0.5 grid min-w-0 gap-0.5 text-[11px] text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2">
-                              <span className="truncate font-mono" title={variant.sku}>{variant.sku}</span>
-                              <span className="truncate font-mono" title={variant.barcode ?? "No barcode"}>{variant.barcode ?? "No barcode"}</span>
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span className="shrink-0">{variant.barcodeType?.toUpperCase() ?? "UNPRINTABLE"}</span>
-                                <span className="truncate">{getLabelInventorySummary(variant)}</span>
-                              </span>
-                            </div>
-                            {fitIssue ? <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">{fitIssue}</p> : null}
-                          </div>
-                          <div className="flex items-center justify-end gap-1 sm:contents">
-                            <QuantityControl
-                              value={quantities[variant.id] ?? 1}
-                              label={`${variant.productName} ${variant.optionLabel ?? variant.sku}`}
-                              onChange={(value) => setQuantities((current) => ({ ...current, [variant.id]: value }))}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-8 sm:w-8"
-                              aria-label={`Remove ${variant.productName} ${variant.optionLabel ?? variant.sku}`}
-                              onClick={() => updateSelected(variant.id, false)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {previewQuery.data?.missingVariantIds.length ? (
-                  <div className="border-t bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-                    {previewQuery.data.missingVariantIds.length} selected {previewQuery.data.missingVariantIds.length === 1 ? "SKU is" : "SKUs are"} no longer printable and were skipped.
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            {presetIssue ? (
-              <div className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {presetIssue}
-              </div>
-            ) : tooManyCopies ? (
-              <div className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> A print job is limited to {MAX_LABEL_COPIES} labels. Reduce the quantities before printing.
-              </div>
-            ) : activeFitIssues.length > 0 ? (
-              <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{activeFitIssues.length} {activeFitIssues.length === 1 ? "barcode does" : "barcodes do"} not safely fit this format. Choose a wider label or set that SKU’s count to zero.</span>
-                </div>
-                {compatiblePreset ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-11 shrink-0 border-amber-400 bg-white px-3 text-xs text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900 sm:h-7 sm:px-2"
-                    onClick={() => setPresetId(compatiblePreset.id)}
-                  >
-                    Use {compatiblePreset.name}
-                  </Button>
-                ) : null}
-              </div>
-            ) : copies.length > 0 ? (
-              <div className="flex gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                <Check className="mt-0.5 h-4 w-4 shrink-0" /> Ready. Print a test page at Actual size / 100%, then scan its first label before the full batch.
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>
+                {t("labels")}{" "}
+                <span className="text-body font-normal text-muted-foreground">
+                  {t("labelsOf", { count: selectedVariantIds.length, max: MAX_LABEL_SKUS })}
+                </span>
+              </CardTitle>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                <Plus />
+                {t("addVariants")}
+              </Button>
+            </div>
+            {selectedVariants.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAllQuantities("one")}>{t("oneEach")}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAllQuantities("onHand")}>{t("matchOnHand")}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAllQuantities("available")}>{t("matchAvailable")}</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setQuantities({});
+                    onSelectedVariantIdsChange([]);
+                  }}
+                >
+                  {t("clearAll")}
+                </Button>
               </div>
             ) : null}
-
-            <Card>
-              <CardHeader className="px-3 py-2.5">
-                <CardTitle className="text-sm">Add SKUs</CardTitle>
-              </CardHeader>
-              <CardContent className="border-t p-0">
-                <div className="border-b p-2.5">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="search"
-                      value={searchInput}
-                      onChange={(event) => { setSearchInput(event.target.value); setSearchPage(1); }}
-                      placeholder="Find product, SKU, or barcode…"
-                      aria-label="Find SKUs for barcode labels"
-                      className="h-11 pl-8 text-sm sm:h-8"
-                    />
-                  </div>
-                </div>
-                {pickerQuery.isError ? (
-                  <div className="p-5 text-center text-sm text-destructive">SKUs could not be loaded.</div>
-                ) : pickerQuery.isLoading ? (
-                  <div className="p-5 text-center text-sm text-muted-foreground">Loading SKUs…</div>
-                ) : pickerVariants.length === 0 ? (
-                  <div className="p-5 text-center text-sm text-muted-foreground">No matching SKUs.</div>
-                ) : (
-                  <div className="divide-y">
-                    {pickerVariants.map((variant) => {
-                      const selected = selectedVariantIds.includes(variant.id);
-                      return (
-                        <label key={variant.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-muted/50">
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={(checked) => updateSelected(variant.id, checked === true)}
-                            aria-label={`${selected ? "Remove" : "Add"} ${variant.productName} ${variant.optionLabel || variant.sku}`}
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{variant.productName}</span>
-                            <span className="block truncate text-xs text-muted-foreground">{variant.optionLabel || "Default SKU"} · <span className="font-mono">{variant.sku}</span></span>
-                          </span>
-                          {selected ? <Check className="h-4 w-4 text-emerald-600" /> : <Plus className="h-4 w-4 text-muted-foreground" />}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-                {pickerPagination && pickerPagination.totalPages > 1 ? (
-                  <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
-                    <span>{pickerPagination.total} SKUs</span>
-                    <div className="flex items-center gap-1">
-                      <Button type="button" variant="outline" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={searchPage <= 1} onClick={() => setSearchPage((page) => Math.max(1, page - 1))} aria-label="Previous SKU page"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                      <span className="min-w-16 text-center">{searchPage} / {pickerPagination.totalPages}</span>
-                      <Button type="button" variant="outline" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={searchPage >= pickerPagination.totalPages} onClick={() => setSearchPage((page) => Math.min(pickerPagination.totalPages, page + 1))} aria-label="Next SKU page"><ChevronRight className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </div>
-
-          <aside className="min-w-0 space-y-3 xl:sticky xl:top-3 xl:self-start">
-            <Card>
-              <CardHeader className="px-3 py-2.5"><CardTitle className="text-sm">Format</CardTitle></CardHeader>
-              <CardContent className="space-y-3 border-t p-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="barcode-label-preset" className="text-xs">Paper or roll</Label>
-                  <Select value={presetId} onValueChange={(value) => setPresetId(value as LabelPresetId)}>
-                    <SelectTrigger id="barcode-label-preset" className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {LABEL_PRESETS.map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.detail}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="barcode-label-order" className="text-xs">Label order</Label>
-                  <Select value={labelOrder} onValueChange={(value) => setLabelOrder(value as LabelOrder)}>
-                    <SelectTrigger id="barcode-label-order" className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="selected">As selected</SelectItem>
-                      <SelectItem value="product">Product and variant A–Z</SelectItem>
-                      <SelectItem value="sku">SKU A–Z</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {presetId === "custom" ? (
-                  <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 p-2.5">
-                    <MillimetreInput id="custom-page-width" label="Page width" value={customPreset.pageWidthMm} min={20} max={320} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, pageWidthMm: value }))} />
-                    <MillimetreInput id="custom-page-height" label="Page height" value={customPreset.pageHeightMm} min={15} max={450} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, pageHeightMm: value }))} />
-                    <div className="space-y-1">
-                      <Label htmlFor="custom-columns" className="text-[11px] font-normal text-muted-foreground">Columns</Label>
-                      <Input id="custom-columns" type="number" min={1} max={10} value={customPreset.columns} onChange={(event) => setCustomPreset((current) => ({ ...current, columns: Math.max(1, Math.min(10, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-11 text-sm tabular-nums sm:h-8" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="custom-rows" className="text-[11px] font-normal text-muted-foreground">Rows</Label>
-                      <Input id="custom-rows" type="number" min={1} max={20} value={customPreset.rows} onChange={(event) => setCustomPreset((current) => ({ ...current, rows: Math.max(1, Math.min(20, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-11 text-sm tabular-nums sm:h-8" />
-                    </div>
-                    <MillimetreInput id="custom-margin-x" label="Side margin" value={customPreset.marginXmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginXmm: value }))} />
-                    <MillimetreInput id="custom-margin-y" label="Vertical margin" value={customPreset.marginYmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginYmm: value }))} />
-                    <MillimetreInput id="custom-gap-x" label="Column gap" value={customPreset.gapXmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapXmm: value }))} />
-                    <MillimetreInput id="custom-gap-y" label="Row gap" value={customPreset.gapYmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapYmm: value }))} />
-                    <div className="col-span-2 flex items-center justify-between border-t pt-2">
-                      <Label htmlFor="custom-crop-marks" className="text-xs font-normal">Cut guides</Label>
-                      <Switch id="custom-crop-marks" checked={customPreset.cropMarks} onCheckedChange={(cropMarks) => setCustomPreset((current) => ({ ...current, cropMarks }))} />
-                    </div>
-                  </div>
-                ) : null}
-                {capacity > 1 ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2">
-                      <div className="min-w-0">
-                        <Label htmlFor="barcode-start-cell" className="text-xs">Start at cell</Label>
-                        <p className="truncate text-[10px] text-muted-foreground">{startOffset === 0 ? "New sheet" : `Leave the first ${startOffset} ${startOffset === 1 ? "cell" : "cells"} blank`}</p>
+          </CardHeader>
+          <CardContent>
+            {previewQuery.isError ? (
+              <p className="text-body text-destructive">{r("loadFailed")}</p>
+            ) : previewQuery.isLoading ? (
+              <LoadingRows count={Math.min(selectedVariantIds.length, 5)} />
+            ) : selectedVariants.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-body font-medium">{t("noneSelected")}</p>
+                <p className="text-body text-muted-foreground">{t("noneSelectedHint")}</p>
+              </div>
+            ) : (
+              <ul className="divide-y">
+                {selectedVariants.map((variant) => {
+                  const name = variantName(variant);
+                  const issue = fitIssues.get(variant.id);
+                  return (
+                    <li key={variant.id} className="flex flex-wrap items-center gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-body font-medium">{name}</p>
+                        <p className="truncate text-body text-muted-foreground">
+                          <span className="font-mono">{variant.sku}</span>
+                          {" · "}
+                          {variant.barcode ? <span className="font-mono">{variant.barcode}</span> : t("noBarcode")}
+                          {" · "}
+                          {variant.trackInventory
+                            ? t("stockSummary", { onHand: variant.stock, available: variant.available })
+                            : t("notTracked")}
+                        </p>
+                        {issue ? (
+                          <p className="text-body text-destructive">
+                            {t(issue === "tooWide" ? "barcodeTooWide" : "barcodeUnprintable")}
+                          </p>
+                        ) : null}
                       </div>
                       <Input
-                        id="barcode-start-cell"
                         type="number"
-                        min={1}
-                        max={capacity}
-                        value={startOffset + 1}
-                        onChange={(event) => setStartOffset(Math.max(0, Math.min(capacity - 1, Math.trunc(event.target.valueAsNumber || 1) - 1)))}
-                        className="h-11 w-20 text-center text-sm tabular-nums sm:h-8"
+                        min={0}
+                        max={MAX_LABEL_COPIES}
+                        inputMode="numeric"
+                        className="w-20"
+                        aria-label={t("labelsFor", { name })}
+                        value={quantities[variant.id] ?? 1}
+                        onChange={(event) => {
+                          const value = Math.max(0, Math.min(MAX_LABEL_COPIES, Math.trunc(event.target.valueAsNumber || 0)));
+                          setQuantities((current) => ({ ...current, [variant.id]: value }));
+                        }}
                       />
-                    </div>
-                    {startOffset > 0 ? (
-                      <p className="flex gap-1.5 px-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400" role="note">
-                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                        Do not re-feed cut, damaged, or adhesive sheets unless the sheet maker and printer allow it.
-                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("removeFor", { name })}
+                        onClick={() => toggleVariant(variant.id, false)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {previewQuery.data?.missingVariantIds.length ? (
+              <p className="pt-3 text-body text-muted-foreground">
+                {t("skipped", { count: previewQuery.data.missingVariantIds.length })}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("labelSize")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select
+                value={presetId}
+                onValueChange={(value) => setPreferences((current) => ({ ...current, presetId: value as LabelPresetId }))}
+              >
+                <SelectTrigger className="w-full" aria-label={t("labelSize")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LABEL_PRESETS.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>{t(`preset_${candidate.id}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <fieldset className="space-y-3">
+                <legend className="pb-2 text-body font-medium">{t("showOnLabel")}</legend>
+                {CONTENT_OPTIONS.map((key) => (
+                  <div key={key} className="flex items-center justify-between gap-2">
+                    <Label htmlFor={`label-content-${key}`}>{t(key)}</Label>
+                    <Switch
+                      id={`label-content-${key}`}
+                      checked={content[key]}
+                      onCheckedChange={(checked) => setContent(key, checked)}
+                    />
+                  </div>
+                ))}
+              </fieldset>
+
+              <div className="space-y-2 border-t pt-4">
+                <p className="text-body font-medium" aria-live="polite">
+                  {labelCount === 1 ? t("labelCountOne") : t("labelCount", { count: labelCount })}
+                  {" · "}
+                  {pageCount === 1 ? t("pageCountOne") : t("pageCount", { count: pageCount })}
+                </p>
+                {tooMany ? (
+                  <p className="text-body text-destructive">{t("tooManyLabels", { max: MAX_LABEL_COPIES })}</p>
+                ) : fitIssues.size > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-body text-destructive">{t("fitIssues", { count: fitIssues.size })}</p>
+                    {compatiblePreset ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPreferences((current) => ({ ...current, presetId: compatiblePreset.id }))}
+                      >
+                        {t("usePreset", { name: t(`preset_${compatiblePreset.id}`) })}
+                      </Button>
                     ) : null}
                   </div>
-                ) : null}
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3">
-                  {([
-                    ["showProduct", "Product"],
-                    ["showVariant", "Variant"],
-                    ["showSku", "SKU"],
-                    ["showPrice", "Selling price"],
-                  ] as const).map(([key, label]) => (
-                    <div key={key} className="flex items-center justify-between gap-2">
-                      <Label htmlFor={`label-content-${key}`} className="text-xs font-normal">{label}</Label>
-                      <Switch id={`label-content-${key}`} checked={content[key]} onCheckedChange={(checked) => setContent((current) => ({ ...current, [key]: checked }))} />
-                    </div>
-                  ))}
-                </div>
-                <details className="group border-t pt-3">
-                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden sm:min-h-0">
-                    <span className="flex items-center gap-1">
-                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                      Print alignment
-                    </span>
-                    <span className="max-w-[210px] truncate font-normal text-muted-foreground">
-                      {formatLabelPrintAlignment(alignment)}
-                    </span>
-                  </summary>
-                  <div className="mt-2 rounded-md border bg-muted/20 p-2.5">
-                    <div className="grid grid-cols-2 gap-2">
-                      <MillimetreInput
-                        id="barcode-alignment-x"
-                        label="Horizontal"
-                        value={alignment.xMm}
-                        min={-MAX_LABEL_ALIGNMENT_MM}
-                        max={MAX_LABEL_ALIGNMENT_MM}
-                        step={0.5}
-                        onChange={(xMm) => setAlignment((current) => ({ ...current, xMm: clampLabelAlignmentMm(xMm) }))}
-                      />
-                      <MillimetreInput
-                        id="barcode-alignment-y"
-                        label="Vertical"
-                        value={alignment.yMm}
-                        min={-MAX_LABEL_ALIGNMENT_MM}
-                        max={MAX_LABEL_ALIGNMENT_MM}
-                        step={0.5}
-                        onChange={(yMm) => setAlignment((current) => ({ ...current, yMm: clampLabelAlignmentMm(yMm) }))}
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                      <span>Positive moves right or down. Adjust only after a test sheet.</span>
-                      {(alignment.xMm !== 0 || alignment.yMm !== 0) ? (
-                        <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-[10px] sm:h-6 sm:px-1.5" onClick={() => setAlignment(DEFAULT_LABEL_PRINT_ALIGNMENT)}>
-                          Reset
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </details>
-                <details className="group border-t pt-3">
-                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden sm:min-h-0">
-                    <span className="flex items-center gap-1">
-                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                      External label software
-                    </span>
-                    <span className="font-normal text-muted-foreground">CSV merge</span>
-                  </summary>
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-md border bg-muted/20 p-2.5">
-                    <span className="min-w-0 text-[10px] leading-4 text-muted-foreground">
-                      One row per label, in this job's order.
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-11 shrink-0 px-3 text-xs sm:h-7 sm:px-2"
-                      disabled={!canExportLabelData || artifactBusy !== null}
-                      onClick={() => void requestArtifact("csv")}
-                    >
-                      <Download className="mr-1.5 h-3.5 w-3.5" /> Download CSV
-                    </Button>
-                  </div>
-                </details>
-                <div className="rounded-md bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
-                  <div className="flex items-center justify-between"><span>Page</span><span className="font-medium text-foreground">{preset.pageWidthMm} × {preset.pageHeightMm} mm</span></div>
-                  <div className="mt-1 flex items-center justify-between"><span>Labels per page</span><span className="font-medium text-foreground">{preset.columns * preset.rows}</span></div>
-                  {startOffset > 0 ? <div className="mt-1 flex items-center justify-between"><span>First label</span><span className="font-medium text-foreground">Cell {startOffset + 1}</span></div> : null}
-                  <div className="mt-1 flex items-center justify-between"><span>Output</span><span className="font-medium text-foreground">{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))} · {formatPageCount(pages.length)}</span></div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex-row items-center justify-between space-y-0 px-3 py-2.5">
-                <CardTitle className="text-sm">Page preview</CardTitle>
-                {pages.length > 1 ? (
-                  <div className="flex items-center gap-1" aria-label="Preview page navigation">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 sm:h-7 sm:w-7"
-                      disabled={previewPageIndex === 0}
-                      onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current - 1, pages.length))}
-                      aria-label="Preview previous label page"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="min-w-14 text-center text-[11px] tabular-nums text-muted-foreground">
-                      {previewPageIndex + 1} / {pages.length}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 sm:h-7 sm:w-7"
-                      disabled={previewPageIndex >= pages.length - 1}
-                      onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current + 1, pages.length))}
-                      aria-label="Preview next label page"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
                 ) : (
-                  <span className="text-[11px] text-muted-foreground">{capacity > 1 ? "Click a cell to start" : "Print at 100%"}</span>
+                  <p className="text-body text-muted-foreground">{t("printHint")}</p>
                 )}
-              </CardHeader>
-              <CardContent className="border-t bg-zinc-100 p-4 dark:bg-zinc-950">
-                {previewPage?.length ? (
-                  <PaperPreview
-                    page={previewPage}
-                    preset={preset}
-                    content={content}
-                    formatPrice={formatPrice}
-                    startOffset={startOffset}
-                    onStartOffsetChange={setStartOffset}
-                    canSetStartOffset={previewPageIndex === 0}
-                  />
-                ) : <div className="grid aspect-[210/297] place-items-center border border-dashed bg-white text-center text-xs text-zinc-500">Select a SKU and set at least one label.</div>}
-              </CardContent>
-            </Card>
+                {printError ? <p role="alert" className="text-body text-destructive">{printError}</p> : null}
+                <Button type="button" className="w-full" disabled={!canPrint || printing} onClick={() => void print()}>
+                  <Printer />
+                  {printing ? t("preparing") : t("print")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-          </aside>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("preview")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {firstCopy ? (
+                <div
+                  className={cn(
+                    "flex flex-col justify-center gap-1 overflow-hidden rounded-md bg-muted p-3 text-center",
+                    preset.id === "a4" ? "aspect-2/1" : "aspect-3/2",
+                  )}
+                >
+                  <BarcodeGraphic symbol={firstCopy.symbol} />
+                  <p className="truncate font-mono text-body">{firstCopy.symbol.displayValue}</p>
+                  {content.showProduct ? <p className="truncate text-body font-medium">{firstCopy.variant.productName}</p> : null}
+                  {content.showVariant && firstCopy.variant.optionLabel ? (
+                    <p className="truncate text-body">{firstCopy.variant.optionLabel}</p>
+                  ) : null}
+                  {content.showSku || content.showPrice ? (
+                    <p className="truncate text-body">
+                      {[
+                        content.showSku ? firstCopy.variant.sku : null,
+                        content.showPrice ? fmt(firstCopy.variant.effectivePrice) : null,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-body text-muted-foreground">{t("previewEmpty")}</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_hsl(var(--foreground))] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:hidden">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-2">
-          <div className="mr-auto min-w-0" aria-live="polite">
-            <div className="truncate text-xs font-medium">
-              {formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))} · {formatPageCount(pages.length)}
-            </div>
-            <div className="truncate text-[11px] text-muted-foreground">{printReadiness}</div>
-            {artifactError ? <div className="truncate text-[11px] text-destructive">{artifactError}</div> : null}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("addVariants")}</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="search"
+            value={searchInput}
+            onChange={(event) => {
+              setSearchInput(event.target.value);
+              setSearchPage(1);
+            }}
+            placeholder={t("searchVariants")}
+            aria-label={r("search")}
+          />
+          <div className="max-h-96 overflow-y-auto">
+            {pickerQuery.isError ? (
+              <p className="py-4 text-body text-destructive">{r("loadFailed")}</p>
+            ) : pickerQuery.isLoading ? (
+              <LoadingRows count={5} />
+            ) : pickerVariants.length === 0 ? (
+              <p className="py-4 text-body text-muted-foreground">{r("noResults")}</p>
+            ) : (
+              <ul className="divide-y">
+                {pickerVariants.map((variant) => {
+                  const selected = selectedVariantIds.includes(variant.id);
+                  const name = `${variant.productName ?? t("unknownProduct")} · ${variant.optionLabel || t("defaultVariant")}`;
+                  return (
+                    <li key={variant.id}>
+                      <label className="flex cursor-pointer items-center gap-3 py-3">
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={(checked) => toggleVariant(variant.id, checked === true)}
+                          aria-label={t("toggleVariant", { name })}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-body font-medium">{name}</span>
+                          <span className="block truncate font-mono text-body text-muted-foreground">{variant.sku}</span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html", "test")}>
-            <FileText className="mr-1.5 h-3.5 w-3.5" /> Test
-          </Button>
-          <Button type="button" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("html")}>
-            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print
-          </Button>
-          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint || artifactBusy !== null} onClick={() => void requestArtifact("pdf")}>
-            <Download className="h-3.5 w-3.5" /><span className="sr-only">Download PDF</span>
-          </Button>
-        </div>
-      </div>
-
-    </>
+          <DialogFooter className="items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={r("previous")}
+                disabled={searchPage <= 1}
+                onClick={() => setSearchPage((page) => Math.max(1, page - 1))}
+              >
+                <ChevronLeft />
+              </Button>
+              <span className="text-body text-muted-foreground">
+                {t("pickerPage", { page: searchPage, pages: formatNumber(pickerPages) })}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={r("next")}
+                disabled={searchPage >= pickerPages}
+                onClick={() => setSearchPage((page) => Math.min(pickerPages, page + 1))}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+            <Button type="button" onClick={() => setPickerOpen(false)}>{r("confirm")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

@@ -128,7 +128,7 @@ The dashboard is a static SPA served by the API Worker on the dashboard hostname
 - `apps/api/src/dashboard/auth.ts` owns `<dashboard>/api/auth/*`: Better Auth (sign-in, 2FA, sessions, password reset, identity handoff) plus the dashboard wrappers (reset-session cookie, blocked sign-up/change-password/2FA-disable routes, trusted-device refusal, D1 retries, 2FA-verified session marking). Every request must come from the dashboard origin.
 - `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same signed-cookie D1 lookup as the admin middleware. `session.permissions` is present only once every gate (password set, 2FA enrolled when required, 2FA verified) has passed.
 - `apps/admin-v2/src/lib/auth-guards.ts` turns that state into route redirects: `/auth/setup` when no admin exists, `/auth/login` when signed out, `/auth/forgot-password` when `mustChangePassword`, `/auth/setup-2fa` when invited-admin enrollment is pending, `/auth/two-factor` when the session is not verified.
-- Page-level protection: the `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
+- Page-level protection: the `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/account` are always accessible.
 
 ## API Worker Auth (Hono)
 

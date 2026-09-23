@@ -11,7 +11,6 @@ import { buildDiscountValidationBody } from "@/lib/cart/browser-api";
  * Validates a discount code against the current cart state.
  *
  * @param code The discount code to validate.
- * @param total The current subtotal of the cart.
  * @param items The items currently in the cart.
  * @param shippingCost The calculated shipping cost.
  * @param customerPhone The customer's phone number, for per-customer usage checks.
@@ -19,7 +18,6 @@ import { buildDiscountValidationBody } from "@/lib/cart/browser-api";
  */
 export async function validateDiscount(
   code: string,
-  total?: number,
   items?: CartItem[],
   shippingCost?: number,
   customerPhone?: string,
@@ -31,7 +29,6 @@ export async function validateDiscount(
   try {
     const body = buildDiscountValidationBody(
       code,
-      total,
       items,
       shippingCost,
       customerPhone,

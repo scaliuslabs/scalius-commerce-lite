@@ -16,7 +16,7 @@ function setup(race?: (sqlite: DatabaseSync) => void) {
         },
     });
     harness.sqlite.exec(`
-        INSERT INTO products (id, name, price, slug) VALUES ('prod_1', 'Example', 10, 'example');
+        INSERT INTO products (id, name, price_minor, slug) VALUES ('prod_1', 'Example', 1000, 'example');
         INSERT INTO product_attributes (id, name, slug, deleted_at) VALUES
             ('attr_1', 'Color', 'color', NULL),
             ('attr_2', 'Size', 'size', 1700000000);

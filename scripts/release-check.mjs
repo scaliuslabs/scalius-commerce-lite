@@ -33,12 +33,14 @@ const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
 const UCP_FORBIDDEN_CAPABILITY_PATTERN = /\b(?:checkout|carts?|orders?|payments?|payment_handlers)\b/i;
 const UCP_AGENT_HEADER = 'profile="https://release-check.scalius.com/.well-known/ucp"';
+// The storefront always emits every section; only the static one must be non-empty.
 const SITEMAP_SECTION_ENDPOINTS = [
-  { endpoint: "/sitemap-static.xml", policyKey: "staticPages", label: "static pages sitemap" },
-  { endpoint: "/sitemap-products.xml?page=1", policyKey: "products", label: "products sitemap" },
-  { endpoint: "/sitemap-categories.xml", policyKey: "categories", label: "categories sitemap" },
-  { endpoint: "/sitemap-collections.xml", policyKey: "collections", label: "collections sitemap" },
-  { endpoint: "/sitemap-pages.xml", policyKey: "pages", label: "CMS pages sitemap" },
+  { endpoint: "/sitemap-static.xml", label: "static pages sitemap", requireLoc: true },
+  { endpoint: "/sitemap-products.xml?page=1", label: "products sitemap", requireLoc: false },
+  { endpoint: "/sitemap-categories.xml", label: "categories sitemap", requireLoc: false },
+  { endpoint: "/sitemap-collections.xml", label: "collections sitemap", requireLoc: false },
+  { endpoint: "/sitemap-pages.xml", label: "CMS pages sitemap", requireLoc: false },
+  { endpoint: "/sitemap-articles.xml", label: "articles sitemap", requireLoc: false },
 ];
 const FEED_ENDPOINTS = [
   {
@@ -62,28 +64,8 @@ const STOREFRONT_CACHE_HEADER_PATHS = [
 ];
 const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
   source: "strict-default",
-  sitemap: Object.freeze({
-    enabled: true,
-    staticPages: true,
-    products: true,
-    categories: true,
-    collections: true,
-    pages: true,
-  }),
   feeds: Object.freeze({
     productCatalogEnabled: true,
-  }),
-  robots: Object.freeze({
-    advertiseSitemap: true,
-  }),
-  structuredData: Object.freeze({
-    organization: true,
-    websiteSearch: true,
-    products: true,
-    productGroups: true,
-    offerShippingDetails: true,
-    breadcrumbs: true,
-    collections: true,
   }),
 });
 
@@ -382,71 +364,15 @@ function getSeoSettingsPayload(payload) {
 function parseSeoDiscoveryPolicyPayload(payload) {
   const settings = getSeoSettingsPayload(payload);
   const discovery = isRecord(settings?.discovery) ? settings.discovery : null;
-  const sitemap = isRecord(discovery?.sitemap) ? discovery.sitemap : null;
   const feeds = isRecord(discovery?.feeds) ? discovery.feeds : null;
-  const robots = isRecord(discovery?.robots) ? discovery.robots : null;
-  const structuredData = isRecord(discovery?.structuredData)
-    ? discovery.structuredData
-    : null;
+  const productCatalogEnabled = readBoolean(feeds, "productCatalogEnabled");
+  if (typeof productCatalogEnabled !== "boolean") return null;
 
-  if (!sitemap || !feeds || !robots || !structuredData) return null;
-
-  const parsed = {
-    source: "public-seo",
-    sitemap: {
-      enabled: readBoolean(sitemap, "enabled"),
-      staticPages: readBoolean(sitemap, "staticPages"),
-      products: readBoolean(sitemap, "products"),
-      categories: readBoolean(sitemap, "categories"),
-      collections: readBoolean(sitemap, "collections"),
-      pages: readBoolean(sitemap, "pages"),
-    },
-    feeds: {
-      productCatalogEnabled: readBoolean(feeds, "productCatalogEnabled"),
-    },
-    robots: {
-      advertiseSitemap: readBoolean(robots, "advertiseSitemap"),
-    },
-    structuredData: {
-      organization: readBoolean(structuredData, "organization"),
-      websiteSearch: readBoolean(structuredData, "websiteSearch"),
-      products: readBoolean(structuredData, "products"),
-      productGroups: readBoolean(structuredData, "productGroups"),
-      offerShippingDetails: readBoolean(structuredData, "offerShippingDetails"),
-      breadcrumbs: readBoolean(structuredData, "breadcrumbs"),
-      collections: readBoolean(structuredData, "collections"),
-    },
-  };
-
-  const complete =
-    Object.values(parsed.sitemap).every((value) => typeof value === "boolean") &&
-    typeof parsed.feeds.productCatalogEnabled === "boolean" &&
-    typeof parsed.robots.advertiseSitemap === "boolean" &&
-    Object.values(parsed.structuredData).every((value) => typeof value === "boolean");
-
-  return complete ? parsed : null;
-}
-
-function countEnabledSitemapSections(policy) {
-  if (!policy.sitemap.enabled) return 0;
-  return SITEMAP_SECTION_ENDPOINTS.filter(({ policyKey }) => policy.sitemap[policyKey]).length;
+  return { source: "public-seo", feeds: { productCatalogEnabled } };
 }
 
 function summarizeSeoDiscoveryPolicy(policy) {
-  const enabledSections = countEnabledSitemapSections(policy);
-  const feedStatus = policy.feeds.productCatalogEnabled ? "feed enabled" : "feed disabled";
-  const robotsStatus =
-    policy.sitemap.enabled && policy.robots.advertiseSitemap
-      ? "robots advertises sitemap"
-      : "robots sitemap advertisement disabled";
-  const productSchemaStatus = policy.structuredData.products
-    ? "Product schema enabled"
-    : "Product schema disabled";
-  const globalSchemaStatus =
-    policy.structuredData.organization || policy.structuredData.websiteSearch
-      ? "global schema enabled"
-      : "global schema disabled";
-  return `sitemap ${policy.sitemap.enabled ? `${enabledSections} sections enabled` : "disabled"}, ${feedStatus}, ${robotsStatus}, ${productSchemaStatus}, ${globalSchemaStatus}`;
+  return policy.feeds.productCatalogEnabled ? "feed enabled" : "feed disabled";
 }
 
 function strictSeoPolicyResult(url, reason, extra = {}) {
@@ -454,10 +380,7 @@ function strictSeoPolicyResult(url, reason, extra = {}) {
     source: STRICT_SEO_DISCOVERY_POLICY.source,
     url: redactUrl(url),
     reason,
-    sitemap: STRICT_SEO_DISCOVERY_POLICY.sitemap,
     feeds: STRICT_SEO_DISCOVERY_POLICY.feeds,
-    robots: STRICT_SEO_DISCOVERY_POLICY.robots,
-    structuredData: STRICT_SEO_DISCOVERY_POLICY.structuredData,
     ...extra,
   };
 }
@@ -556,10 +479,7 @@ async function fetchSeoDiscoveryPolicy(options, { fetchImpl, logger }) {
         statusCode: response.statusCode,
         durationMs: response.durationMs,
         summary: summarizeSeoDiscoveryPolicy(policy),
-        sitemap: policy.sitemap,
         feeds: policy.feeds,
-        robots: policy.robots,
-        structuredData: policy.structuredData,
       },
     };
   } catch (error) {
@@ -736,15 +656,7 @@ export function evaluateRequiredDocs({
   };
 }
 
-export function evaluateRobotsTxt(
-  body,
-  {
-    storefrontOrigin,
-    expectedSitemapUrl,
-    requireSitemap = true,
-    allowSitemap = true,
-  } = {},
-) {
+export function evaluateRobotsTxt(body, { storefrontOrigin, expectedSitemapUrl } = {}) {
   const sitemapUrls = [];
   const errors = [];
 
@@ -753,7 +665,6 @@ export function evaluateRobotsTxt(
     if (!match) continue;
     const value = decodeXml(match[1]);
     sitemapUrls.push(value);
-    if (!allowSitemap) continue;
     if (!isHttpUrl(value)) {
       errors.push(`robots sitemap URL is not absolute http(s): ${value}`);
     } else if (!isSameOrigin(value, storefrontOrigin)) {
@@ -763,10 +674,8 @@ export function evaluateRobotsTxt(
     }
   }
 
-  if (!allowSitemap && sitemapUrls.length > 0) {
-    errors.push("robots.txt must not advertise Sitemap URLs when policy disables sitemap advertisement.");
-  } else if (requireSitemap && sitemapUrls.length === 0) {
-    errors.push("robots.txt must advertise at least one absolute Sitemap URL.");
+  if (sitemapUrls.length !== 1) {
+    errors.push(`robots.txt must advertise exactly one Sitemap URL (found ${sitemapUrls.length}).`);
   }
 
   return {
@@ -810,26 +719,16 @@ export function evaluateSitemapXml(body, {
   };
 }
 
-export function evaluateSitemapIndexPolicy(locs, { policy, storefrontOrigin } = {}) {
-  const errors = [];
-  const sitemapPolicy = policy?.sitemap;
-  if (!sitemapPolicy?.enabled) {
-    return { ok: true, errors };
-  }
-
-  for (const loc of locs) {
-    if (!isHttpUrl(loc) || (storefrontOrigin && !isSameOrigin(loc, storefrontOrigin))) {
-      continue;
-    }
-
-    const parsed = new URL(loc);
-    const section = SITEMAP_SECTION_ENDPOINTS.find(({ endpoint }) =>
-      new URL(endpoint, "https://example.invalid").pathname === parsed.pathname
-    );
-    if (section && !sitemapPolicy[section.policyKey]) {
-      errors.push(`sitemap index must not advertise disabled ${section.label}: ${loc}`);
-    }
-  }
+export function evaluateSitemapIndexSections(locs, { storefrontOrigin } = {}) {
+  const advertisedPaths = new Set(
+    locs
+      .filter((loc) => isHttpUrl(loc) && (!storefrontOrigin || isSameOrigin(loc, storefrontOrigin)))
+      .map((loc) => new URL(loc).pathname),
+  );
+  const errors = SITEMAP_SECTION_ENDPOINTS
+    .filter(({ endpoint }) =>
+      !advertisedPaths.has(new URL(endpoint, "https://example.invalid").pathname))
+    .map(({ label }) => `sitemap index must advertise the ${label}.`);
 
   return {
     ok: errors.length === 0,
@@ -1248,10 +1147,7 @@ function validateWebsiteSchema(node, { storefrontOrigin }, errors) {
   }
 }
 
-export function evaluateHomepageJsonLdHtml(html, {
-  storefrontOrigin,
-  policy,
-} = {}) {
+export function evaluateHomepageJsonLdHtml(html, { storefrontOrigin } = {}) {
   const errors = [];
   const scripts = extractJsonLdScripts(html);
   const parsedRoots = [];
@@ -1271,13 +1167,6 @@ export function evaluateHomepageJsonLdHtml(html, {
   const nestedReturnPolicyCount = onlineStoreNodes.filter((node) =>
     node.hasMerchantReturnPolicy !== undefined
   ).length;
-
-  if (policy?.structuredData?.organization === false && onlineStoreNodes.length > 0) {
-    errors.push("OnlineStore JSON-LD emitted while organization schema is disabled.");
-  }
-  if (policy?.structuredData?.websiteSearch === false && websiteNodes.length > 0) {
-    errors.push("WebSite JSON-LD emitted while website search schema is disabled.");
-  }
 
   for (const node of onlineStoreNodes) {
     validateOnlineStoreSchema(node, { storefrontOrigin }, errors);
@@ -1966,7 +1855,6 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     status >= 200 && status < 300);
   checks.homepageStructuredData = evaluateHomepageJsonLdHtml(homepage.body, {
     storefrontOrigin,
-    policy,
   });
   if (!checks.homepageStructuredData.ok) {
     throw new Error(
@@ -1987,12 +1875,9 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
   requireStatus(robots, "Storefront /robots.txt", (status) => status >= 200 && status < 300);
   const robotsCache = evaluateDiscoveryCacheHeaders(robots.headers, { label: "robots.txt" });
   if (!robotsCache.ok) throw new Error(`robots.txt cache headers failed: ${robotsCache.errors.join("; ")}`);
-  const robotsShouldAdvertiseSitemap = policy.sitemap.enabled && policy.robots.advertiseSitemap;
   checks.robots = evaluateRobotsTxt(robots.body, {
     storefrontOrigin,
     expectedSitemapUrl: buildUrl(options.storefrontUrl, "/sitemap.xml"),
-    requireSitemap: robotsShouldAdvertiseSitemap,
-    allowSitemap: robotsShouldAdvertiseSitemap,
   });
   if (!checks.robots.ok) throw new Error(`robots.txt failed: ${checks.robots.errors.join("; ")}`);
   responses.robots = {
@@ -2037,44 +1922,18 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     return evaluation;
   };
 
-  const enabledSitemapSectionCount = countEnabledSitemapSections(policy);
-  if (policy.sitemap.enabled) {
-    const sitemapIndexEvaluation = await verifySitemapEndpoint("/sitemap.xml", {
-      requireLoc: enabledSitemapSectionCount > 0,
-    });
-    const sitemapIndexPolicy = evaluateSitemapIndexPolicy(sitemapIndexEvaluation.locs, {
-      policy,
-      storefrontOrigin,
-    });
-    if (!sitemapIndexPolicy.ok) {
-      throw new Error(`sitemap index failed: ${sitemapIndexPolicy.errors.join("; ")}`);
-    }
-  } else {
-    responses.sitemaps["/sitemap.xml"] = {
-      status: "skipped",
-      reason: "Global sitemap disabled by public SEO policy.",
-    };
+  const sitemapIndexEvaluation = await verifySitemapEndpoint("/sitemap.xml", {
+    requireLoc: true,
+  });
+  const sitemapIndexSections = evaluateSitemapIndexSections(sitemapIndexEvaluation.locs, {
+    storefrontOrigin,
+  });
+  if (!sitemapIndexSections.ok) {
+    throw new Error(`sitemap index failed: ${sitemapIndexSections.errors.join("; ")}`);
   }
 
-  for (const { endpoint, policyKey, label } of SITEMAP_SECTION_ENDPOINTS) {
-    if (!policy.sitemap.enabled) {
-      responses.sitemaps[endpoint] = {
-        status: "skipped",
-        reason: "Global sitemap disabled by public SEO policy.",
-      };
-      continue;
-    }
-    if (!policy.sitemap[policyKey]) {
-      responses.sitemaps[endpoint] = {
-        status: "skipped",
-        reason: `${label} disabled by public SEO policy.`,
-      };
-      continue;
-    }
-
-    await verifySitemapEndpoint(endpoint, {
-      requireLoc: policyKey === "staticPages",
-    });
+  for (const { endpoint, requireLoc } of SITEMAP_SECTION_ENDPOINTS) {
+    await verifySitemapEndpoint(endpoint, { requireLoc });
   }
 
   responses.feeds = {};
@@ -2179,17 +2038,12 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
     }
   }
 
-  const checkedSitemapCount = Object.values(responses.sitemaps)
-    .filter((result) => result.status !== "skipped").length;
-  const skippedSitemapCount = Object.values(responses.sitemaps)
-    .filter((result) => result.status === "skipped").length;
+  const checkedSitemapCount = Object.keys(responses.sitemaps).length;
   const feedSummary = policy.feeds.productCatalogEnabled
     ? `canonical feed (${checks.feed.itemCount} items), compatibility feed (${checks.compatibilityFeed.itemCount} items)`
     : "catalog feeds skipped by policy";
   logger?.log(
-    `PASS discovery: robots, ${checkedSitemapCount} sitemap checks` +
-    `${skippedSitemapCount ? ` (${skippedSitemapCount} skipped by policy)` : ""}, ` +
-    `${feedSummary}.`,
+    `PASS discovery: robots, ${checkedSitemapCount} sitemap checks, ${feedSummary}.`,
   );
 
   return {
@@ -2203,7 +2057,7 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
 
 async function checkDiscoveredProductRoute(
   options,
-  { fetchImpl, productUrl, logger, requireProductJsonLd = true },
+  { fetchImpl, productUrl, logger },
 ) {
   if (!productUrl) {
     logger?.warn("WARN product route: skipped because discovery did not expose a storefront product URL.");
@@ -2224,18 +2078,6 @@ async function checkDiscoveredProductRoute(
     accept: "text/html, */*;q=0.8",
   });
   requireStatus(response, "Discovered storefront product route", (status) => status >= 200 && status < 300);
-  if (!requireProductJsonLd) {
-    logger?.log("PASS product route: returned 2xx; Product JSON-LD skipped by public SEO policy.");
-    return {
-      url: productUrl,
-      statusCode: response.statusCode,
-      durationMs: response.durationMs,
-      schema: {
-        status: "skipped",
-        reason: "Product JSON-LD disabled by public SEO policy.",
-      },
-    };
-  }
 
   const schemaEvaluation = evaluateProductJsonLdHtml(response.body, {
     storefrontOrigin,
@@ -2513,8 +2355,6 @@ export async function runReleaseCheck(options, {
       fetchImpl,
       productUrl: discovery.firstStorefrontItemUrl,
       logger,
-      requireProductJsonLd:
-        discovery.policy?.structuredData?.products !== false,
     }));
 
   result.status = "passed";

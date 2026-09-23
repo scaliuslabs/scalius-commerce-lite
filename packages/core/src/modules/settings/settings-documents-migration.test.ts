@@ -361,10 +361,9 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
     config: { categoryRail: { enabled: true, title: "Shop by category", categoryIds: ["cat_1"] } },
   });
   expect(await getSeoSettings(db)).toEqual({
-    siteTitle: "Shop",
     homepageTitle: "Home",
     homepageMetaDescription: "Everything nearby",
-    robotsTxt: "User-agent: *",
+    socialImage: "",
     discovery: parseSeoDiscoverySettings(JSON.stringify({ sitemap: { products: false }, feeds: { title: "Feed" } })),
     returnPolicy: parseSeoReturnPolicySettings(JSON.stringify({
       enabled: true,

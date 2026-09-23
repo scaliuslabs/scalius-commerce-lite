@@ -113,18 +113,18 @@ export async function addLiveCheckoutHotFixture(
     await connection.batch([
       {
         sql: `INSERT INTO products
-                (id, name, description, price, slug, no_index,
+                (id, name, description, price_minor, slug, no_index,
                  exclude_from_sitemap, exclude_from_product_feed, is_active)
               VALUES (?, ?, 'Synthetic isolated hot-contention fixture.',
-                      2499, ?, 1, 1, 1, 1)`,
+                      249900, ?, 1, 1, 1, 1)`,
         args: [productId, `Disposable Atomic Hot Fixture ${options.suffix}`, slug],
       },
       {
         sql: `INSERT INTO product_variants
-                (id, product_id, option_combination_key, sku, price, stock,
+                (id, product_id, option_combination_key, sku, price_minor, stock,
                  reserved_stock, preorder_stock, is_default, track_inventory,
                  stock_version)
-              VALUES (?, ?, NULL, ?, 2499, ?, 0, 0, 1, 1, 1)`,
+              VALUES (?, ?, NULL, ?, 249900, ?, 0, 0, 1, 1, 1)`,
         args: [variantId, productId, sku, options.stock],
       },
     ], "immediate");

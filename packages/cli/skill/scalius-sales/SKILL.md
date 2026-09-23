@@ -1,6 +1,6 @@
 ---
 name: scalius-sales
-description: Operate Scalius sales and customer lifecycles safely. Use for orders, customer lookup and history, discounts and promotions, fulfillment and shipments, cancellations, returns, refunds, payment status and capture, failed-payment recovery, and related entity actions.
+description: Operate Scalius sales and customer lifecycles safely. Use for orders, customer lookup and history, discounts (code and automatic), fulfillment and shipments, cancellations, returns, refunds, payment status and capture, failed-payment recovery, and related entity actions.
 ---
 
 # Scalius Sales
@@ -18,7 +18,7 @@ Use the dashboard audience for merchant actions. Keep buyer requests on the stor
 ## Preserve sales authority
 
 - Resolve one exact target through a bounded list before loading or changing it. Paginate when needed; never treat a partial page as complete.
-- Read the current state and revision before fulfillment, cancellation, return, refund, promotion, or payment writes. On conflict, reread and reconcile; never retry stale input blindly.
+- Read the current state and revision before fulfillment, cancellation, return, refund, discount, or payment writes. On conflict, reread and reconcile; never retry stale input blindly.
 - Supply an idempotency key only when the selected operation supports or requires it. Reuse it only for an exact replay; use a new key when any material input changes.
 - Confirm financial actions explicitly. If provider output is lost or uncertain, reread local payment/refund state and use only the reviewed recovery or reconciliation path; never issue a second capture or refund speculatively.
 - Distinguish merchant/manual fulfillment from saved-provider shipment creation. Verify resulting fulfillment and shipment state.

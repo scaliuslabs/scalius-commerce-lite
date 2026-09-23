@@ -522,6 +522,17 @@ function renderAuthoritativeCartQuote(
     elements.taxStatus.classList.add("hidden");
   }
 
+  // Earned Buy X get Y: the buyer still has to add the free item.
+  const offers = document.getElementById("discountOffers");
+  if (offers) {
+    offers.replaceChildren(...quote.discountOffers.map((offer) => {
+      const item = document.createElement("li");
+      item.textContent = formatCheckoutLanguageText(activeCheckoutCopy().freeItemOfferText, { offer });
+      return item;
+    }));
+    offers.classList.toggle("hidden", quote.discountOffers.length === 0);
+  }
+
   const discountRow = document.getElementById("discountRow");
   const discountAmount = document.getElementById("discountAmount");
   if (discountRow && discountAmount) {
@@ -1118,7 +1129,6 @@ async function handleApplyDiscount() {
   try {
     const result = await validateDiscount(
       code,
-      totalAmount,
       Object.values(items),
       shippingCost,
       customerPhone,

@@ -8,7 +8,6 @@ import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 
 const pageParam = Number(Astro.url.searchParams.get("page") ?? "1");
@@ -40,13 +39,12 @@ const description = tag
   ? `Articles tagged ${tag}.`
   : "Stories, guides, and updates from our store.";
 const title = tag ? `${tag} articles` : "Blog";
-const discovery = normalizeSeoDiscoverySettings(layoutData.seo?.discovery);
 const tags = [...new Set(articles.flatMap((article) => article.tags))].sort(
   (a, b) => a.localeCompare(b),
 );
 
 const blogJsonLd =
-  discovery.structuredData.articles && canonicalUrl && !isFilteredView
+  canonicalUrl && !isFilteredView
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "Blog",

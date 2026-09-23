@@ -143,6 +143,21 @@ export function isLoopbackUrl(value: unknown): boolean {
   return parsed ? LOOPBACK_HOSTS.has(parsed.hostname) : false;
 }
 
+/**
+ * A media URL the storefront may show: credential-free HTTPS, or plain HTTP
+ * only on a loopback host so local development media (http://localhost) works.
+ */
+export function isPublicMediaUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password) return false;
+    return parsed.protocol === "https:" || (parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname));
+  } catch {
+    return false;
+  }
+}
+
 export function isInternalServiceUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
   try {

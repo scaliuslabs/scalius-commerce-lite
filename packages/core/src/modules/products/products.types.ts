@@ -75,9 +75,16 @@ export const updateVariantSchema = variantMutationSchema.extend({
 // Types
 // ─────────────────────────────────────────
 
-export interface ProductWithDetails extends Product {
+/** Stored catalog money columns replaced by the decimal HTTP fields. */
+export type CatalogMoneyView<T> = Omit<T, "priceMinor" | "discountBps" | "discountAmountMinor"> & {
+    price: number;
+    discountPercentage: number;
+    discountAmount: number;
+};
+
+export interface ProductWithDetails extends CatalogMoneyView<Product> {
     category: { name: string };
-    variants: Array<ProductVariant & { selectedOptions: SelectedProductOption[] }>;
+    variants: Array<CatalogMoneyView<ProductVariant> & { selectedOptions: SelectedProductOption[] }>;
     options: ProductOptionDefinitionRecord[];
     media: ProductMediaProjection[];
     additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;

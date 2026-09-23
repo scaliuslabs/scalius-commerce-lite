@@ -1,30 +1,14 @@
 import { z } from "zod";
-import {
-  isValidResourceCanonicalPath,
-  normalizeCanonicalPathInput,
-} from "@scalius/shared/seo-canonical";
+import { translate } from "~/i18n";
+import { collectionFormMessages } from "~/i18n/collection-form";
 
-const canonicalPathSchema = z
-  .string()
-  .nullable()
-  .transform((value) => normalizeCanonicalPathInput(value))
-  .refine(
-    (value) =>
-      value === null || isValidResourceCanonicalPath("collection", value),
-    {
-      message:
-        "Use a reachable collection route such as /collections/col_1.",
-    },
-  );
+/** Messages resolve when validation runs, so they follow the current language. */
+const message = (key: keyof typeof collectionFormMessages.en) => ({
+  error: () => translate(collectionFormMessages, key),
+});
 
-const productIdSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(180)
-  .refine((id) => id.startsWith("prod_"), {
-    message: "Select a product, not a category.",
-  });
+/** The most products or categories one collection can hold (one D1 lookup). */
+export const MAX_MEMBERSHIP_IDS = 90;
 
 export interface Category {
   id: string;
@@ -42,39 +26,26 @@ export interface Product {
   primaryImage?: string | null;
 }
 
-export const collectionPresentations = [
-  {
-    value: "grid",
-    label: "Featured grid",
-    description: "Compact product grid with an optional featured product",
-  },
-  {
-    value: "carousel",
-    label: "Carousel",
-    description: "Horizontal scrolling product carousel",
-  },
-] as const;
-
 export const collectionFormSchema = z.object({
   id: z.string().optional(),
   version: z.number().int().min(1).optional(),
-  name: z
-    .string()
-    .min(3, "Collection name must be at least 3 characters")
-    .max(100, "Collection name must be less than 100 characters"),
-  description: z.string().trim().max(100_000, "Introduction is too long").nullable().default(null),
-  content: z.string().trim().max(100_000, "Content is too long").nullable().default(null),
+  name: z.string().min(3, message("nameTooShort")).max(100, message("nameTooLong")),
+  description: z.string().trim().max(100_000, message("textTooLong")).nullable().default(null),
+  content: z.string().trim().max(100_000, message("textTooLong")).nullable().default(null),
   presentation: z.enum(["grid", "carousel"]),
   isActive: z.boolean(),
-  canonicalPath: canonicalPathSchema,
+  // Not edited here: saved values round-trip unchanged and the API validates them.
+  canonicalPath: z.string().nullable(),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  metaTitle: z.string().trim().max(70, "Meta title must be 70 characters or fewer").nullable().default(null),
-  metaDescription: z.string().trim().max(200, "Meta description must be 200 characters or fewer").nullable().default(null),
+  metaTitle: z.string().trim().max(70, message("metaTitleTooLong")).nullable().default(null),
+  metaDescription: z.string().trim().max(200, message("metaDescriptionTooLong")).nullable().default(null),
   config: z.object({
     source: z.enum(["manual", "dynamic"]),
-    categoryIds: z.array(z.string().trim().min(1).max(180)).max(90),
-    productIds: z.array(productIdSchema).max(90),
+    categoryIds: z.array(z.string().trim().min(1).max(180)).max(MAX_MEMBERSHIP_IDS),
+    productIds: z
+      .array(z.string().trim().min(1).max(180).refine((id) => id.startsWith("prod_"), message("productOnly")))
+      .max(MAX_MEMBERSHIP_IDS),
     featuredProductId: z.string().trim().max(180).optional(),
     showOnHomepage: z.boolean(),
     maxProducts: z.number().int().min(1).max(24),
@@ -87,14 +58,14 @@ export const collectionFormSchema = z.object({
     ctx.addIssue({
       code: "custom",
       path: ["config", "productIds"],
-      message: "Add at least one product before publishing a manual collection.",
+      message: translate(collectionFormMessages, "needProducts"),
     });
   }
   if (value.config.source === "dynamic" && value.config.categoryIds.length === 0) {
     ctx.addIssue({
       code: "custom",
       path: ["config", "categoryIds"],
-      message: "Select at least one category before publishing a dynamic collection.",
+      message: translate(collectionFormMessages, "needCategories"),
     });
   }
 });

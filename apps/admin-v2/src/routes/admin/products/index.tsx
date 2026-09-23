@@ -1,163 +1,128 @@
-import { lazy, Suspense, useState, useMemo, useCallback } from "react";
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useCallback, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate, stripSearchParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Plus,
-  Package,
-  Trash2,
-  Eye,
-  Image as ImageIcon,
-  Tag,
-  ShoppingBag,
-} from "lucide-react";
+import { Package } from "lucide-react";
 import {
   createDataSelector,
   createListSearchValidator,
+  normalizeOptionalEnumSearchParam,
   normalizeSearchString,
   type ListSearchParams,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import {
-  productsQueryOptions,
-  productStatsQueryOptions,
-} from "~/lib/api-query-options/products";
+import { productsQueryOptions, type ProductsQuery } from "~/lib/api-query-options/products";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import {
+  useBulkDeleteProducts,
   useDeleteProduct,
   usePermanentDeleteProduct,
   useRestoreProduct,
-  useBulkDeleteProducts,
 } from "~/lib/api-mutations/products";
 import { useCurrency } from "~/hooks/use-currency";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
-import {
-  getProductColumns,
-  type ProductListItem,
-} from "~/components/admin/data-table/columns/product-columns";
-import { ProductToolbar } from "~/components/admin/data-table/toolbars/ProductToolbar";
-import { Card, CardContent, CardHeader, CardDescription } from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-import { StatCard } from "~/components/admin/shared/StatCard";
+import type { Row } from "~/components/admin/data-table/table-config";
+import { getProductColumns, type ProductListItem } from "~/components/admin/product-list/product-columns";
+import { ProductToolbar } from "~/components/admin/product-list/ProductToolbar";
 import { ProductMobileRow } from "~/components/admin/product-list/ProductMobileRow";
-import type { Row } from "@/components/admin/data-table/table-config";
+import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
+import { useIsMobile } from "~/hooks/use-mobile";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { IndexTabs } from "~/components/admin/resource/IndexTabs";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { Button } from "~/components/ui/button";
+import { translate, useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 
-const ProductDeleteDialog = lazy(() =>
-  import("./-ProductDeleteDialog").then((module) => ({
-    default: module.ProductDeleteDialog,
-  })),
-);
-
-// ── Search schema ─────────────────────────────────────────────────
+const PRODUCT_STATUSES = ["active", "draft"] as const;
+type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+type ProductTab = "all" | ProductStatus | "trash";
 
 const baseSearchValidator = createListSearchValidator(
-  ["name", "price", "category", "createdAt", "updatedAt"] as const,
+  ["updatedAt", "createdAt", "name", "price"] as const,
   { sort: "updatedAt" },
 );
 
-type ProductSort = "name" | "price" | "category" | "createdAt" | "updatedAt";
-
-type SearchParams = ListSearchParams<ProductSort> & {
+type SearchParams = ListSearchParams<"updatedAt" | "createdAt" | "name" | "price"> & {
   category: string;
+  status?: ProductStatus;
 };
 
 function validateProductSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
   return {
     ...baseSearchValidator(search),
     category: normalizeSearchString(search.category, "all"),
+    status: normalizeOptionalEnumSearchParam(search.status, PRODUCT_STATUSES),
   };
 }
 
-// ── Map search params to API params ───────────────────────────────
-
-function mapParams(deps: SearchParams): Parameters<typeof productsQueryOptions>[0] {
+function mapParams(search: SearchParams): ProductsQuery {
   return {
-    page: deps.page,
-    limit: deps.limit,
-    search: deps.search || undefined,
-    category: deps.category !== "all" ? deps.category : undefined,
-    sort: deps.sort,
-    order: deps.order,
-    trashed: deps.trashed ? ("true" as const) : undefined,
+    page: search.page,
+    limit: search.limit,
+    search: search.search || undefined,
+    category: search.category !== "all" ? search.category : undefined,
+    sort: search.sort,
+    order: search.order,
+    trashed: search.trashed ? "true" : undefined,
+    status: search.trashed ? undefined : search.status,
   };
 }
-
-// ── Route definition ──────────────────────────────────────────────
 
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: validateProductSearch,
+  search: {
+    middlewares: [stripSearchParams({
+      page: 1, limit: 10, search: "", sort: "updatedAt", order: "desc", trashed: false, category: "all",
+    })],
+  },
   loaderDeps: ({ search }) => search,
   staleTime: 1000 * 60 * 2,
   loader: async ({ context: { queryClient }, deps }) => {
     await warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps)));
-
     if (typeof window !== "undefined") {
       void queryClient.prefetchQuery(categoryFormOptionsQueryOptions());
-      void queryClient.prefetchQuery(productStatsQueryOptions());
     }
   },
-  head: ({ match }) => ({
-    meta: [
-      {
-        title: `${match.search.trashed ? "Trash" : "Products"} | Scalius Admin`,
-      },
-    ],
-  }),
+  head: () => ({ meta: [{ title: `${translate(productMessages, "products")} | Scalius Admin` }] }),
   component: ProductsPage,
   errorComponent: RouteErrorComponent,
 });
 
-// ── Interfaces ────────────────────────────────────────────────────
-
-interface ProductStats {
-  totalProducts: number;
-  activeProducts: number;
-  productsWithImages: number;
-  categoriesCount: number;
-}
-
-interface Category {
-  id: string;
-  name: string;
-}
-
-// ── Page component ────────────────────────────────────────────────
+type DeleteTarget = { kind: "single"; product: ProductListItem } | { kind: "bulk" };
 
 function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { formatPrice } = useCurrency();
-  const { products: productActions } = useCatalogActionPermissions();
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
+  const { fmt } = useCurrency();
+  const { products: can } = useCatalogActionPermissions();
   const showTrashed = search.trashed;
+  const tab: ProductTab = showTrashed ? "trash" : search.status ?? "all";
+  const isFiltered = Boolean(search.search) || search.category !== "all";
+  const isMobile = useIsMobile();
 
-  // ── Queries ───────────────────────────────────────────────────
-  const { data: catData } = useQuery(categoryFormOptionsQueryOptions());
-  const { data: statsData } = useQuery(productStatsQueryOptions());
+  const { data: categoryData } = useQuery(categoryFormOptionsQueryOptions());
+  const categories = categoryData?.categories ?? [];
 
-  const categories = useMemo(
-    () => (catData?.categories ?? []) as Category[],
-    [catData],
-  );
-
-  const stats = statsData as unknown as ProductStats | null;
-
-  // ── Mutations ─────────────────────────────────────────────────
   const deleteMut = useDeleteProduct();
   const permanentDeleteMut = usePermanentDeleteProduct();
   const restoreMut = useRestoreProduct();
   const bulkDeleteMut = useBulkDeleteProducts();
+  // The target outlives `deleteOpen` so the dialog text stays put while it closes.
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const askToDelete = useCallback((target: DeleteTarget) => {
+    setDeleteTarget(target);
+    setDeleteOpen(true);
+  }, []);
 
-  // ── Dialogs ───────────────────────────────────────────────────
-  const [productToDelete, setProductToDelete] =
-    useState<ProductListItem | null>(null);
-  const [isConfirmBulkDeleteOpen, setIsConfirmBulkDeleteOpen] = useState(false);
-
-  // ── Navigation helpers ────────────────────────────────────────
-
-  const handleNavigate = useCallback(
+  const updateSearch = useCallback(
     (updates: Partial<SearchParams>) => {
       void navigate({
         to: "/admin/products",
@@ -167,113 +132,47 @@ function ProductsPage() {
     [navigate],
   );
 
-  const onSearchChange = useCallback(
-    (value: string) => handleNavigate({ search: value, page: 1 }),
-    [handleNavigate],
-  );
-
-  const onCategoryChange = useCallback(
-    (value: string) => handleNavigate({ category: value, page: 1 }),
-    [handleNavigate],
-  );
-
-  const onPaginationChange = useCallback(
-    (page: number, limit: number) => handleNavigate({ page, limit }),
-    [handleNavigate],
-  );
-
-  const onSortingChange = useCallback(
-    (sort: string, order: "asc" | "desc") =>
-      handleNavigate({ sort: sort as SearchParams["sort"], order }),
-    [handleNavigate],
-  );
-
-  // ── Action handlers ───────────────────────────────────────────
-
-  const handleView = useCallback(
-    (id: string) => {
-      void navigate({
-        to: "/admin/products/$productId",
-        params: { productId: id },
-      });
+  const openProduct = useCallback(
+    (product: ProductListItem) => {
+      void navigate({ to: "/admin/products/$productId/edit", params: { productId: product.id } });
     },
     [navigate],
   );
 
-  const handleEdit = useCallback(
-    (id: string) => {
-      if (!productActions.canEdit) return;
-      void navigate({
-        to: "/admin/products/$productId/edit",
-        params: { productId: id },
-      });
-    },
-    [navigate, productActions.canEdit],
-  );
-
-  const handleDelete = useCallback(
+  const restoreProduct = useCallback(
     (product: ProductListItem) => {
-      if (productActions.canDelete) setProductToDelete(product);
+      if (!can.canRestore) return;
+      restoreMut.mutate({ id: product.id, expectedAggregateRevision: product.aggregateRevision });
     },
-    [productActions.canDelete],
+    [can.canRestore, restoreMut],
   );
 
-  const handleRestore = useCallback(
-    (product: ProductListItem) => {
-      if (productActions.canRestore) {
-        restoreMut.mutate({
-          id: product.id,
-          expectedAggregateRevision: product.aggregateRevision,
-        });
-      }
-    },
-    [restoreMut, productActions.canRestore],
+  const askDelete = useCallback(
+    (product: ProductListItem) => askToDelete({ kind: "single", product }),
+    [askToDelete],
   );
-
-  const handlePermanentDelete = useCallback(
-    (product: ProductListItem) => {
-      if (productActions.canPermanentDelete) setProductToDelete(product);
-    },
-    [productActions.canPermanentDelete],
-  );
-
-  // ── Columns ───────────────────────────────────────────────────
 
   const columns = useMemo(
     () =>
       getProductColumns({
         showTrashed,
-        formatPrice,
-        canSelect: productActions.canBulkDelete,
-        canEdit: productActions.canEdit,
-        canDelete: productActions.canDelete,
-        canRestore: productActions.canRestore,
-        canPermanentDelete: productActions.canPermanentDelete,
-        onView: handleView,
-        onEdit: handleEdit,
-        onDelete: handleDelete,
-        onRestore: handleRestore,
-        onPermanentDelete: handlePermanentDelete,
+        fmt,
+        canSelect: can.canBulkDelete,
+        canEdit: can.canEdit,
+        canDelete: can.canDelete,
+        canRestore: can.canRestore,
+        canPermanentDelete: can.canPermanentDelete,
+        onOpen: openProduct,
+        onDelete: askDelete,
+        onRestore: restoreProduct,
+        onPermanentDelete: askDelete,
       }),
-    [
-      showTrashed,
-      formatPrice,
-      productActions,
-      handleView,
-      handleEdit,
-      handleDelete,
-      handleRestore,
-      handlePermanentDelete,
-    ],
+    [showTrashed, fmt, can, openProduct, askDelete, restoreProduct],
   );
-
-  // ── Data selector ─────────────────────────────────────────────
 
   const dataSelector = useMemo(() => createDataSelector<ProductListItem>("products"), []);
 
-  // ── Server table ──────────────────────────────────────────────
-
-  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection, deselectIds } =
+  const { table, error, isFetching, isLoading, refetch, selectedRows, clearSelection, deselectIds } =
     useServerTable({
       columns,
       queryOptions: productsQueryOptions(mapParams(search)),
@@ -282,287 +181,175 @@ function ProductsPage() {
       currentLimit: search.limit,
       currentSort: search.sort,
       currentOrder: search.order,
-      onPaginationChange,
-      onSortingChange,
+      onPaginationChange: (page, limit) => updateSearch({ page, limit }),
+      onSortingChange: () => undefined,
     });
 
-  // ── Bulk actions ──────────────────────────────────────────────
-
-  const isActionLoading =
-    deleteMut.isPending ||
-    permanentDeleteMut.isPending ||
-    restoreMut.isPending ||
-    bulkDeleteMut.isPending;
-
-  const handleConfirmSingleDelete = useCallback(() => {
-    if (!productToDelete) return;
-    const claim = {
-      id: productToDelete.id,
-      expectedAggregateRevision: productToDelete.aggregateRevision,
-    };
-    setProductToDelete(null);
-    if (showTrashed) {
-      if (!productActions.canPermanentDelete) return;
-      permanentDeleteMut.mutate(claim);
-    } else {
-      if (!productActions.canDelete) return;
-      deleteMut.mutate(claim);
+  const confirmDelete = () => {
+    const target = deleteTarget;
+    setDeleteOpen(false);
+    if (!target) return;
+    if (target.kind === "single") {
+      const claim = { id: target.product.id, expectedAggregateRevision: target.product.aggregateRevision };
+      if (showTrashed && can.canPermanentDelete) permanentDeleteMut.mutate(claim);
+      if (!showTrashed && can.canDelete) deleteMut.mutate(claim);
+      return;
     }
-  }, [
-    productToDelete,
-    showTrashed,
-    productActions.canDelete,
-    productActions.canPermanentDelete,
-    deleteMut,
-    permanentDeleteMut,
-  ]);
-
-  const handleBulkDelete = useCallback(() => {
-    if (productActions.canBulkDelete && selectedIds.length > 0) {
-      setIsConfirmBulkDeleteOpen(true);
-    }
-  }, [productActions.canBulkDelete, selectedIds]);
-
-  const confirmBulkDelete = useCallback(() => {
-    if (!productActions.canBulkDelete || selectedIds.length === 0) return;
-    setIsConfirmBulkDeleteOpen(false);
-    const selectedProducts = table
-      .getSelectedRowModel()
-      .rows.map((row) => row.original);
+    if (!can.canBulkDelete || selectedRows.length === 0) return;
     bulkDeleteMut.mutate(
       {
-        products: selectedProducts.map((product) => ({
+        products: selectedRows.map((product) => ({
           id: product.id,
           expectedAggregateRevision: product.aggregateRevision,
         })),
         permanent: showTrashed,
       },
       {
-        onSuccess: (result) => {
-          if (showTrashed) deselectIds(result.deletedIds);
-          else clearSelection();
-        },
+        // Products blocked from permanent delete stay selected in Trash.
+        onSuccess: (result) => (showTrashed ? deselectIds(result.deletedIds) : clearSelection()),
       },
     );
-  }, [
-    productActions.canBulkDelete,
-    selectedIds,
-    table,
-    showTrashed,
-    bulkDeleteMut,
-    clearSelection,
-    deselectIds,
-  ]);
+  };
 
-  const isProductDeleteDialogOpen = !!productToDelete || isConfirmBulkDeleteOpen;
-
-  // ── Stats display ─────────────────────────────────────────────
-
-  const displayStats: ProductStats = useMemo(() => {
-    if (stats) return stats;
-    return {
-      totalProducts: 0,
-      activeProducts: 0,
-      productsWithImages: 0,
-      categoriesCount: categories.length,
-    };
-  }, [stats, categories.length]);
-
-  // ── Toolbar ───────────────────────────────────────────────────
-
-  const toolbar = (
-    <ProductToolbar
-      searchValue={search.search}
-      onSearchChange={onSearchChange}
-      categories={categories}
-      selectedCategory={search.category}
-      onCategoryChange={onCategoryChange}
-      selectedCount={selectedIds.length}
-      showTrashed={showTrashed}
-      onBulkDelete={handleBulkDelete}
-      isBulkDeleting={bulkDeleteMut.isPending}
-      canBulkDelete={productActions.canBulkDelete}
-      bulkActionsDisabled={Boolean(error)}
-    />
-  );
+  const deleteTitle = deleteTarget?.kind === "single"
+    ? t(showTrashed ? "deleteOneTitle" : "trashOneTitle", { name: deleteTarget.product.name })
+    : t(showTrashed ? "deleteManyTitle" : "trashManyTitle", { count: selectedRows.length });
 
   const mobileCardRenderer = useCallback(
-    (row: Row<ProductListItem>) => {
-      const product = row.original;
-      return (
-        <ProductMobileRow
-          product={product}
-          selected={row.getIsSelected()}
-          showTrashed={showTrashed}
-          canSelect={productActions.canBulkDelete}
-          canEdit={productActions.canEdit}
-          canDelete={productActions.canDelete}
-          canRestore={productActions.canRestore}
-          canPermanentDelete={productActions.canPermanentDelete}
-          formatPrice={formatPrice}
-          onSelectedChange={(selected) => row.toggleSelected(selected)}
-          onView={() => handleView(product.id)}
-          onEdit={() => handleEdit(product.id)}
-          onDelete={() => handleDelete(product)}
-          onRestore={() => handleRestore(product)}
-          onPermanentDelete={() => handlePermanentDelete(product)}
-        />
-      );
-    },
-    [
-      showTrashed,
-      productActions,
-      formatPrice,
-      handleView,
-      handleEdit,
-      handleDelete,
-      handleRestore,
-      handlePermanentDelete,
-    ],
+    (row: Row<ProductListItem>) => (
+      <ProductMobileRow
+        product={row.original}
+        selected={row.getIsSelected()}
+        showTrashed={showTrashed}
+        canSelect={can.canBulkDelete}
+        canEdit={can.canEdit}
+        canDelete={can.canDelete}
+        canRestore={can.canRestore}
+        canPermanentDelete={can.canPermanentDelete}
+        fmt={fmt}
+        onSelectedChange={(selected) => row.toggleSelected(selected)}
+        onOpen={() => openProduct(row.original)}
+        onDelete={() => askDelete(row.original)}
+        onRestore={() => restoreProduct(row.original)}
+        onPermanentDelete={() => askDelete(row.original)}
+      />
+    ),
+    [showTrashed, can, fmt, openProduct, askDelete, restoreProduct],
   );
 
-  // ── Render ────────────────────────────────────────────────────
+  const addProductButton = can.canCreate ? (
+    <Button asChild>
+      <Link to="/admin/products/new">{t("addProduct")}</Link>
+    </Button>
+  ) : null;
 
   return (
     <>
-      <Card className="border-none shadow-none">
-        {/* Header */}
-        <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div>
-              <h1 className="text-base font-semibold tracking-tight">
-                {showTrashed ? "Trash" : "Products"}
-              </h1>
-              <CardDescription className="mt-0 text-xs text-muted-foreground">
-                {showTrashed
-                  ? "View and manage deleted products."
-                  : `Manage your product catalog. ${table.getRowCount()} total products.`}
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-11 text-xs text-muted-foreground hover:text-foreground sm:h-7"
-              >
-                <Link
-                  to="/admin/products"
-                  search={showTrashed ? undefined : { trashed: true }}
-                >
-                  {showTrashed ? (
-                    <>
-                      <Package className="h-3.5 w-3.5 mr-1" /> View Active
-                      Products
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> View Trash
-                    </>
-                  )}
-                </Link>
-              </Button>
-              {!showTrashed && productActions.canCreate && (
-                <Button size="sm" className="h-11 text-xs sm:h-7" asChild>
-                  <Link to="/admin/products/new">
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add Product
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </div>
+      <PageHeader
+        title={t("products")}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/admin/inventory/labels">{t("printLabels")}</Link>
+            </Button>
+            {addProductButton}
+          </>
+        }
+      />
 
-          {stats && !showTrashed && (
-            <div className="mt-2 grid grid-cols-2 gap-1.5 lg:grid-cols-4">
-              <StatCard
-                title="Total Products"
-                value={displayStats.totalProducts}
-                icon={ShoppingBag}
-                iconBgColor="bg-blue-100 dark:bg-blue-900/30"
-                iconTextColor="text-blue-600 dark:text-blue-400"
-              />
-              <StatCard
-                title="Active Products"
-                value={displayStats.activeProducts}
-                icon={Eye}
-                iconBgColor="bg-green-100 dark:bg-green-900/30"
-                iconTextColor="text-green-600 dark:text-green-400"
-              />
-              <StatCard
-                title="With Images"
-                value={displayStats.productsWithImages}
-                icon={ImageIcon}
-                iconBgColor="bg-orange-100 dark:bg-orange-900/30"
-                iconTextColor="text-orange-600 dark:text-orange-400"
-              />
-              <StatCard
-                title="Categories"
-                value={displayStats.categoriesCount}
-                icon={Tag}
-                iconBgColor="bg-purple-100 dark:bg-purple-900/30"
-                iconTextColor="text-purple-600 dark:text-purple-400"
-              />
-            </div>
-          )}
-        </CardHeader>
+      <div className="overflow-clip rounded-xl bg-card shadow-card">
+        <IndexTabs<ProductTab>
+          label={t("products")}
+          value={tab}
+          onChange={(next) =>
+            updateSearch({
+              page: 1,
+              trashed: next === "trash" ? true : undefined,
+              status: next === "active" || next === "draft" ? next : undefined,
+            })
+          }
+          tabs={[
+            { value: "all", label: r("all") },
+            { value: "active", label: t("statusActive") },
+            { value: "draft", label: t("statusDraft") },
+            { value: "trash", label: r("trash") },
+          ]}
+        />
+        <DataTable
+          variant="bare"
+          getRowHref={search.trashed ? undefined : (product) => `/admin/products/${product.id}/edit`}
+          table={table}
+          isFetching={isFetching}
+          isLoading={isLoading}
+          error={error}
+          onRetry={() => void refetch()}
+          itemLabel={t("products")}
+          mobileCardRenderer={mobileCardRenderer}
+          toolbar={<div className="px-2 pt-2"><ProductToolbar
+              searchValue={search.search}
+              onSearchChange={(value) => updateSearch({ search: value, page: 1 })}
+              categories={categories}
+              selectedCategory={search.category}
+              onCategoryChange={(value) => updateSearch({ category: value, page: 1 })}
+              sortValue={`${search.sort}:${search.order}`}
+              onSortChange={(value) => {
+                const [sort, order] = value.split(":") as [SearchParams["sort"], SearchParams["order"]];
+                updateSearch({ sort, order, page: 1 });
+              }}
+              // Phones use the bottom selection bar instead of the toolbar's bulk button.
+              selectedCount={isMobile ? 0 : selectedRows.length}
+              showTrashed={showTrashed}
+              onBulkDelete={() => askToDelete({ kind: "bulk" })}
+              isBulkDeleting={bulkDeleteMut.isPending}
+              canBulkDelete={can.canBulkDelete}
+              bulkActionsDisabled={Boolean(error)}
+            /></div>}
+          emptyState={
+            showTrashed
+              ? { icon: Package, title: r("trashEmpty"), description: t("trashEmptyHint") }
+              : isFiltered || tab !== "all"
+                ? {
+                    icon: Package,
+                    title: r("noResults"),
+                    description: r("noResultsHint"),
+                    action: (
+                      <Button
+                        variant="outline"
+                        onClick={() => updateSearch({ search: "", category: "all", status: undefined, page: 1 })}
+                      >
+                        {t("clearFilters")}
+                      </Button>
+                    ),
+                  }
+                : { icon: Package, title: t("emptyTitle"), description: t("emptyHint"), action: addProductButton }
+          }
+        />
+      </div>
 
-        {/* Table */}
-        <CardContent className="p-0 px-2 sm:px-3 pt-3">
-          <DataTable
-            table={table}
-            isFetching={isFetching}
-            isLoading={isLoading}
-            error={error}
-            onRetry={() => void refetch()}
-            toolbar={toolbar}
-            itemLabel="products"
-            mobileCardRenderer={mobileCardRenderer}
-            emptyState={{
-              icon: Package,
-              title: showTrashed
-                ? "Trash is empty."
-                : search.search || search.category !== "all"
-                  ? "No products match your criteria."
-                  : "No products created yet.",
-              description: showTrashed
-                ? "Products moved to trash will appear here."
-                : undefined,
-              action:
-                !showTrashed &&
-                productActions.canCreate &&
-                !search.search &&
-                search.category === "all" ? (
-                  <Button size="sm" asChild className="h-11 text-xs sm:h-7">
-                    <Link to="/admin/products/new">
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Add First Product
-                    </Link>
-                  </Button>
-                ) : undefined,
-            }}
-          />
-        </CardContent>
-      </Card>
+      <SelectionSheet count={isMobile ? selectedRows.length : 0} clearLabel={t("clearSelection")} onClear={clearSelection}>
+        {can.canBulkDelete ? (
+          <Button
+            type="button"
+            variant={showTrashed ? "destructive" : "outline"}
+            disabled={bulkDeleteMut.isPending || Boolean(error)}
+            onClick={() => askToDelete({ kind: "bulk" })}
+          >
+            {showTrashed ? r("deletePermanently") : r("moveToTrash")}
+          </Button>
+        ) : null}
+      </SelectionSheet>
 
-      {isProductDeleteDialogOpen &&
-        (showTrashed
-          ? productActions.canPermanentDelete || productActions.canBulkDelete
-          : productActions.canDelete || productActions.canBulkDelete) && (
-        <Suspense fallback={null}>
-          <ProductDeleteDialog
-            showTrashed={showTrashed}
-            productToDelete={productToDelete}
-            isBulkDeleteOpen={isConfirmBulkDeleteOpen}
-            selectedCount={selectedIds.length}
-            isActionLoading={isActionLoading}
-            onCloseSingle={() => setProductToDelete(null)}
-            onBulkOpenChange={setIsConfirmBulkDeleteOpen}
-            onConfirmSingle={handleConfirmSingleDelete}
-            onConfirmBulk={confirmBulkDelete}
-          />
-        </Suspense>
-      )}
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={deleteTitle}
+        description={showTrashed ? r("deleteBody") : r("trashBody")}
+        confirmLabel={showTrashed ? r("deletePermanently") : r("moveToTrash")}
+        cancelLabel={r("cancel")}
+        loadingLabel={r("working")}
+        variant={showTrashed ? "destructive" : "default"}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }

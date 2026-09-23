@@ -1,18 +1,10 @@
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
-import { Trash, ShoppingBag } from "lucide-react";
-import type { OrderItem } from "./types";
+import { Trash2 } from "lucide-react";
+import type { OrderItem, Product } from "./types";
 import { useOrderForm } from "./OrderFormContext";
-import { updateOrderItems } from "~/store/orderStore";
 import { useCurrency } from "~/hooks/use-currency";
-import type { Product } from "./types";
+import { useMessages } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
 import { orderItemVariantLabel } from "./order-item-presentation";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
 import {
@@ -27,214 +19,92 @@ interface OrderItemsTableProps {
   resolvedVariantsById?: Record<string, ProductVariant>;
 }
 
+/** The order's lines: product, variant, quantity, line total and remove. */
 export function OrderItemsTable({
   resolvedProductsById = {},
   resolvedVariantsById = {},
 }: OrderItemsTableProps) {
-  const { form, products, isEdit, isAmend, manualQuote } = useOrderForm();
-  const { symbol } = useCurrency();
+  const { form, products, isEdit, usesQuote, manualQuote } = useOrderForm();
+  const { fmt } = useCurrency();
+  const t = useMessages(orderFormMessages);
+  const items = form.watch("items") as OrderItem[];
 
-  // Directly get the items from the form state.
-  // We'll use form.watch() to re-render the component when items change.
-  const items = form.watch("items");
-
-  const rows = (items as OrderItem[]).map((item, index) => {
-    const product = resolvedProductsById[item.productId]
-      ?? products.find((candidate) => candidate.id === item.productId);
-    const variant = item.variantId
-      ? resolvedVariantsById[item.variantId] ?? product?.variants.find(
-          (candidate) => candidate.id === item.variantId,
-        )
-      : undefined;
-    const quotedLine = (!isEdit || isAmend) && manualQuote.isCurrent
-      ? manualQuote.data?.lines.find((line) =>
-          line.index === index
-          && line.productId === item.productId
-          && line.variantId === item.variantId
-          && line.quantity === item.quantity)
-      : undefined;
-    const maximumQuantity = isEdit
-      ? null
-      : remainingStockForNewOrderLine(variant, items as OrderItem[], index);
-
-    return {
-      item,
-      index,
-      product,
-      variant,
-      unitPrice: quotedLine?.unitPrice ?? item.price,
-      lineSubtotal: quotedLine?.lineSubtotal ?? item.price * item.quantity,
-      maximumQuantity,
-    };
-  });
-
-  const handleRemoveItem = (index: number) => {
-    const currentItems = [...form.getValues("items")];
-    currentItems.splice(index, 1);
-    form.setValue("items", currentItems, { shouldDirty: true, shouldValidate: true });
-    updateOrderItems(currentItems);
-  };
+  const setItems = (next: OrderItem[]) =>
+    form.setValue("items", next, { shouldDirty: true, shouldValidate: true });
 
   const handleQuantityChange = (index: number, quantity: number) => {
     const currentItems = [...form.getValues("items")];
     const currentItem = currentItems[index];
     if (!currentItem || currentItem.quantity === quantity) return;
     currentItems[index] = { ...currentItem, quantity };
-    form.setValue("items", currentItems, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    updateOrderItems(currentItems);
+    setItems(currentItems);
   };
 
-  const emptyState = (
-    <div className="flex flex-col items-center gap-2 px-3 py-8 text-center text-muted-foreground">
-      <div className="rounded-full bg-muted p-3">
-        <ShoppingBag className="h-6 w-6" />
+  if (items.length === 0) {
+    return (
+      <div className="space-y-1 border-t pt-6 pb-2 text-center">
+        <p className="text-body font-medium">{t("noItems")}</p>
+        <p className="text-body text-muted-foreground">{t("noItemsHint")}</p>
       </div>
-      <div>
-        <p className="font-medium">No items added yet</p>
-        <p className="text-sm">Search for a product to begin.</p>
-      </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="mt-3">
-      <div className="hidden overflow-hidden rounded-md border md:block">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Product</TableHead>
-            <TableHead>Variant</TableHead>
-            <TableHead>Quantity</TableHead>
-            <TableHead>Unit Price</TableHead>
-            <TableHead>Total</TableHead>
-            <TableHead className="w-[70px] text-right">Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                className="p-0"
-              >
-                {emptyState}
-              </TableCell>
-            </TableRow>
-          ) : (
-            rows.map(({
-              item,
-              index,
-              product,
-              variant,
-              unitPrice,
-              lineSubtotal,
-              maximumQuantity,
-            }) => (
-                <TableRow key={`${item.productId}-${item.variantId ?? "sku"}-${index}`}>
-                  <TableCell className="font-medium">
-                    {product?.name ?? "Unknown Product"}
-                  </TableCell>
-                  <TableCell>
-                    {orderItemVariantLabel(variant)}
-                  </TableCell>
-                  <TableCell>
-                    <OrderItemQuantityInput
-                      quantity={item.quantity}
-                      itemName={product?.name ?? "item"}
-                      onQuantityChange={(quantity) =>
-                        handleQuantityChange(index, quantity)}
-                      maxQuantity={maximumQuantity ?? undefined}
-                      maximumExceededMessage={maximumQuantity === null
-                        ? undefined
-                        : exceededStockMessage(maximumQuantity)}
-                    />
-                  </TableCell>
-                  <TableCell>{symbol}{unitPrice.toLocaleString()}</TableCell>
-                  <TableCell className="font-medium">
-                    {symbol}{lineSubtotal.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveItem(index)}
-                      className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                      aria-label={`Remove ${product?.name ?? "item"}`}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-      </div>
+    <ul className="divide-y border-t">
+      {items.map((item, index) => {
+        const product = resolvedProductsById[item.productId]
+          ?? products.find((candidate) => candidate.id === item.productId);
+        const variant = item.variantId
+          ? resolvedVariantsById[item.variantId]
+            ?? product?.variants.find((candidate) => candidate.id === item.variantId)
+          : undefined;
+        const quotedLine = usesQuote && manualQuote.isCurrent
+          ? manualQuote.data?.lines.find((line) =>
+              line.index === index
+              && line.productId === item.productId
+              && line.variantId === item.variantId
+              && line.quantity === item.quantity)
+          : undefined;
+        const maximumQuantity = isEdit
+          ? null
+          : remainingStockForNewOrderLine(variant, items, index);
+        const name = product?.name ?? t("unknownProduct");
 
-      <div className="overflow-hidden rounded-md border md:hidden">
-        {rows.length === 0 ? emptyState : rows.map(({
-          item,
-          index,
-          product,
-          variant,
-          unitPrice,
-          lineSubtotal,
-          maximumQuantity,
-        }) => (
-          <div
+        return (
+          <li
             key={`${item.productId}-${item.variantId ?? "sku"}-${index}`}
-            className="border-b p-3 last:border-b-0"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-medium">
-                  {product?.name ?? "Unknown Product"}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {orderItemVariantLabel(variant)}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleRemoveItem(index)}
-                className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive/90"
-                aria-label={`Remove ${product?.name ?? "item"}`}
-              >
-                <Trash className="h-4 w-4" />
-              </Button>
+            <div className="min-w-0 flex-1 basis-40">
+              <p className="truncate text-body font-medium">{name}</p>
+              <p className="truncate text-body text-muted-foreground">
+                {orderItemVariantLabel(variant)} · {fmt(quotedLine?.unitPrice ?? item.price)}
+              </p>
             </div>
-            <dl className="mt-2 grid grid-cols-3 gap-2 text-sm">
-              <div>
-                <dt className="text-[11px] text-muted-foreground">Qty</dt>
-                <dd className="mt-1">
-                  <OrderItemQuantityInput
-                    quantity={item.quantity}
-                    itemName={product?.name ?? "item"}
-                    onQuantityChange={(quantity) =>
-                      handleQuantityChange(index, quantity)}
-                    maxQuantity={maximumQuantity ?? undefined}
-                    maximumExceededMessage={maximumQuantity === null
-                      ? undefined
-                      : exceededStockMessage(maximumQuantity)}
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[11px] text-muted-foreground">Unit</dt>
-                <dd>{symbol}{unitPrice.toLocaleString()}</dd>
-              </div>
-              <div className="text-right">
-                <dt className="text-[11px] text-muted-foreground">Total</dt>
-                <dd className="font-medium">{symbol}{lineSubtotal.toLocaleString()}</dd>
-              </div>
-            </dl>
-          </div>
-        ))}
-      </div>
-    </div>
+            <OrderItemQuantityInput
+              quantity={item.quantity}
+              itemName={name}
+              onQuantityChange={(quantity) => handleQuantityChange(index, quantity)}
+              maxQuantity={maximumQuantity ?? undefined}
+              maximumExceededMessage={maximumQuantity === null
+                ? undefined
+                : exceededStockMessage(maximumQuantity)}
+            />
+            <p className="min-w-20 text-right text-body font-medium">
+              {fmt(quotedLine?.lineSubtotal ?? item.price * item.quantity)}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setItems(form.getValues("items").filter((_, i) => i !== index))}
+              aria-label={t("remove", { name })}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

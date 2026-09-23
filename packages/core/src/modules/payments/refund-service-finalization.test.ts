@@ -68,12 +68,14 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
         orderId: "order_1",
         refundPaymentId: "refund_1",
         providerRefundId: "re_1",
-        amount: 100,
+        amountMinor: 10_000,
         currency: "BDT",
       }],
       {
         id: "order_1",
-        totalAmount: 100,
+        totalAmountMinor: 10_000,
+        currencyCode: "BDT",
+        currencyDecimalPlaces: 2,
         status: OrderStatus.PROCESSING,
         version: 7,
       },
@@ -81,12 +83,14 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
         {
           paymentType: "full",
           status: PaymentRecordStatus.SUCCEEDED,
-          amount: 100,
+          amountMinor: 10_000,
+          currency: "BDT",
         },
         {
           paymentType: "refund",
           status: PaymentRecordStatus.REFUNDED,
-          amount: 100,
+          amountMinor: 10_000,
+          currency: "BDT",
         },
       ],
     ]);
@@ -107,8 +111,8 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
     });
     expect(updateSets[0]).toMatchObject({ status: PaymentRecordStatus.REFUNDED });
     expect(updateSets[1]).toMatchObject({
-      paidAmount: 0,
-      balanceDue: 100,
+      paidAmountMinor: 0,
+      balanceDueMinor: 10_000,
       paymentStatus: PaymentStatus.REFUNDED,
       status: OrderStatus.CANCELLED,
     });

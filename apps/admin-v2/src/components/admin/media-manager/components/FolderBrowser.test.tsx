@@ -8,87 +8,76 @@ import type { MediaFolder } from "../types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const folders: MediaFolder[] = [
-  {
-    id: "folder_active",
-    name: "A long active folder",
-    version: 1,
-    createdAt: new Date("2026-07-21T00:00:00Z"),
-    updatedAt: new Date("2026-07-21T00:00:00Z"),
-    deletedAt: null,
-  },
-];
+const folder: MediaFolder = {
+  id: "folder_active",
+  name: "Eid campaign",
+  version: 1,
+  createdAt: new Date("2026-07-21T00:00:00Z"),
+  updatedAt: new Date("2026-07-21T00:00:00Z"),
+  deletedAt: null,
+};
 
-describe("FolderBrowser layout", () => {
+function button(name: string): HTMLButtonElement | HTMLElement {
+  const found = [...document.querySelectorAll<HTMLElement>("button, [role='menuitem']")].find(
+    (element) => element.getAttribute("aria-label") === name || element.textContent?.trim() === name,
+  );
+  if (!found) throw new Error(`Not found: ${name}`);
+  return found;
+}
+
+describe("FolderBrowser", () => {
   let host: HTMLDivElement;
   let root: Root;
-  const scrollIntoView = vi.fn();
+  const onFolderDelete = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
-    scrollIntoView.mockReset();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
-    });
+    onFolderDelete.mockClear();
   });
 
   afterEach(() => {
     act(() => root.unmount());
-    host.remove();
-    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    document.body.innerHTML = "";
   });
 
-  it("keeps the complete current folder group visible after route restoration", () => {
+  function render(currentFolderId: string | null | "all") {
     act(() => root.render(
       <FolderBrowser
-        folders={folders}
-        currentFolderId="folder_active"
+        folders={[folder]}
+        currentFolderId={currentFolderId}
         onFolderSelect={vi.fn()}
         onFolderCreate={vi.fn()}
         onFolderRename={vi.fn()}
-        onFolderDelete={vi.fn()}
+        onFolderDelete={onFolderDelete}
       />,
     ));
+  }
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
-    const currentButton = host.querySelector('button[aria-current="page"]');
-    expect(currentButton?.textContent).toContain("A long active folder");
-    expect(currentButton?.parentElement?.querySelector('button[aria-label="Actions for A long active folder"]')).toBeTruthy();
-  });
-
-  it("keeps folder actions from shrinking behind long labels", () => {
-    act(() => root.render(
-      <FolderBrowser
-        folders={folders}
-        currentFolderId="all"
-        onFolderSelect={vi.fn()}
-        onFolderCreate={vi.fn()}
-        onFolderRename={vi.fn()}
-        onFolderDelete={vi.fn()}
-      />,
-    ));
-
-    const actionButtons = host.querySelectorAll(
-      'button[aria-label="Actions for A long active folder"]',
-    );
-
-    expect(actionButtons).toHaveLength(2);
-    actionButtons.forEach((button) => {
-      expect(button.classList.contains("shrink-0")).toBe(true);
+  function openMenu() {
+    act(() => {
+      button("Folder actions").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
+  }
 
-    const desktopNavigation = host.querySelectorAll(
-      'nav[aria-label="Media folders"]',
-    )[1];
-    const desktopAction = desktopNavigation?.querySelector(
-      'button[aria-label="Actions for A long active folder"]',
-    );
+  it("deletes the open folder only after the merchant confirms", () => {
+    render("folder_active");
+    openMenu();
+    act(() => button("Delete folder").click());
 
-    expect(desktopNavigation?.classList.contains("overflow-y-auto")).toBe(true);
-    expect(desktopAction?.parentElement?.classList.contains("min-w-0")).toBe(true);
-    expect(desktopAction?.parentElement?.classList.contains("w-full")).toBe(true);
+    expect(onFolderDelete).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Delete folder 'Eid campaign'?");
+
+    const confirm = [...document.querySelectorAll('[role="alertdialog"] button')].find((item) => item.textContent === "Delete folder");
+    act(() => (confirm as HTMLButtonElement).click());
+    expect(onFolderDelete).toHaveBeenCalledWith(folder);
+  });
+
+  it("offers only New folder when no single folder is open", () => {
+    render("all");
+    openMenu();
+    expect(button("New folder")).toBeTruthy();
+    expect(() => button("Delete folder")).toThrow();
   });
 });

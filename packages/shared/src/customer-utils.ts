@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
-import { addPrices } from "./price-utils";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
 // the checkout phone country picker) without its own libphonenumber dependency.
@@ -155,14 +154,10 @@ export const phoneNumberSchema = /* @__PURE__ */ z
  */
 export function calculateCustomerStats(
   orders: {
-    paidAmount: number;
     createdAt: Date | number;
   }[],
 ) {
   const totalOrders = orders.length;
-  const totalSpent = addPrices(
-    ...orders.map((order) => Math.max(0, Number(order.paidAmount) || 0)),
-  );
   const lastOrderAt =
     orders.length > 0
       ? Math.max(
@@ -178,7 +173,6 @@ export function calculateCustomerStats(
 
   return {
     totalOrders,
-    totalSpent,
     lastOrderAt: lastOrderAt ? new Date(lastOrderAt) : null,
   };
 }

@@ -1,93 +1,75 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { AlertCircle, CheckCircle2, Loader2, Lock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
+import { useMessages } from "~/i18n";
+import { authMessages, type AuthMessageKey } from "~/i18n/auth";
+import { authFailureMessage, newPasswordError, readAuthFailure, type AuthMessage } from "./auth-error";
+import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
 
-function getResetError(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "Could not reset the password. Request a new reset link and try again.";
+type Step = "checking" | "form" | "expired" | "done";
+
+/**
+ * The reset link carries its one-time proof in the URL fragment, which the
+ * browser never sends to a server or in a Referer. It is removed from the
+ * address bar at once and exchanged for a short-lived HttpOnly cookie; the
+ * new password is then posted on its own.
+ */
+function exchangeResetProof(): Promise<boolean> {
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+  window.history.replaceState(null, "", window.location.pathname);
+  if (!token) return Promise.resolve(false);
+  return fetch(withDashboardBasePath("/api/auth/reset-session"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  })
+    .then((response) => response.ok)
+    .catch(() => false);
 }
 
 export function ResetPasswordForm() {
-  const [resetSessionReady, setResetSessionReady] = useState(false);
-  const [tokenReady, setTokenReady] = useState(false);
+  const t = useMessages(authMessages);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const exchange = useRef<Promise<boolean> | null>(null);
+  const [step, setStep] = useState<Step>("checking");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<AuthMessageKey | null>(null);
+  const [failure, setFailure] = useState<AuthMessage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-  const isHydrated = useHydrated();
-  const resetExchangeRef = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
     let active = true;
-    if (!resetExchangeRef.current) {
-      const fragment = new URLSearchParams(window.location.hash.slice(1));
-      const token = fragment.get("token");
-
-      // The reset proof is accepted only from the fragment, which browsers do
-      // not send in the document request or Referer header. Remove it before
-      // exchanging it for the short-lived HttpOnly reset-session cookie.
-      window.history.replaceState(null, "", window.location.pathname);
-      resetExchangeRef.current = token
-        ? fetch(withDashboardBasePath("/api/auth/reset-session"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
-          })
-            .then((response) => response.ok)
-            .catch(() => false)
-        : Promise.resolve(false);
-    }
-
-    void resetExchangeRef.current.then((ready) => {
-      if (!active) return;
-      setResetSessionReady(ready);
-      setTokenReady(true);
-    });
-
+    const check = () => {
+      // One exchange per link, even when React mounts the effect twice.
+      exchange.current ??= exchangeResetProof();
+      void exchange.current.then((ready) => {
+        if (active) setStep(ready ? "form" : "expired");
+      });
+    };
+    // A new link opened in this same tab only changes the fragment.
+    const onHashChange = () => {
+      if (!window.location.hash) return;
+      exchange.current = null;
+      setStep("checking");
+      check();
+    };
+    check();
+    window.addEventListener("hashchange", onHashChange);
     return () => {
       active = false;
+      window.removeEventListener("hashchange", onHashChange);
     };
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-
-    if (!resetSessionReady) {
-      setError("This reset link is invalid or has expired.");
-      return;
-    }
-
-    if (password.length < 12) {
-      setError("Password must be at least 12 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
+    if (isLoading) return;
+    const error = newPasswordError(password);
+    setFieldError(error);
+    setFailure(null);
+    if (error) return passwordRef.current?.focus();
 
     setIsLoading(true);
     try {
@@ -96,154 +78,86 @@ export function ResetPasswordForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword: password }),
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { message?: string } | null;
-        throw new Error(body?.message || "This reset link is invalid or expired.");
+      if (response.ok) {
+        setStep("done");
+        return;
       }
-      setPassword("");
-      setConfirmPassword("");
-      setIsComplete(true);
-    } catch (resetError) {
-      setPassword("");
-      setConfirmPassword("");
-      setError(getResetError(resetError));
+      const body: unknown = await response.json().catch(() => null);
+      const { code } = readAuthFailure({ status: response.status, error: body });
+      if (code === "INVALID_TOKEN" || code === "INVALID_RESET_SESSION") return setStep("expired");
+      if (code === "PASSWORD_TOO_SHORT" || code === "PASSWORD_TOO_LONG") {
+        setFieldError(code === "PASSWORD_TOO_SHORT" ? "passwordTooShort" : "passwordTooLong");
+        return passwordRef.current?.focus();
+      }
+      setFailure(authFailureMessage({ status: response.status }, () => null, response.headers.get("X-Retry-After")));
+    } catch (requestError) {
+      setFailure(authFailureMessage(requestError, () => null));
     } finally {
+      setPassword("");
       setIsLoading(false);
     }
   }
 
-  if (!tokenReady) {
+  if (step === "checking") {
     return (
-      <Card className="w-full border-0 bg-transparent shadow-none">
-        <CardContent className="flex items-center justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+      <div role="status" className="flex items-center gap-2 py-8 text-body text-muted-foreground">
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        {t("checkingLink")}
+      </div>
     );
   }
 
-  if (isComplete) {
+  if (step === "expired") {
     return (
-      <Card className="w-full border-0 bg-transparent shadow-none">
-        <CardHeader className="space-y-4 px-0 pt-0 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-            <CheckCircle2 className="h-7 w-7" />
-          </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Password updated
-            </CardTitle>
-            <CardDescription>
-              You can now sign in with your new password.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <Button asChild className="h-11 w-full">
-            <Link to="/auth/login">Back to sign in</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={t("linkExpiredTitle")} description={t("linkExpiredBody")} />
+        <Button asChild className="w-full">
+          <Link to="/auth/forgot-password">{t("requestNewLink")}</Link>
+        </Button>
+        <Link to="/auth/login" className={linkClassName}>
+          {t("backToSignIn")}
+        </Link>
+      </div>
     );
   }
 
-  const invalidToken = !resetSessionReady;
+  if (step === "done") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={t("passwordChangedTitle")} description={t("passwordChangedBody")} />
+        <Button asChild className="w-full">
+          <Link to="/auth/login" replace>
+            {t("signIn")}
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
+  const passwordMessage = fieldError ? t(fieldError) : null;
   return (
-    <Card className="w-full border-0 bg-transparent shadow-none">
-      <CardHeader className="space-y-2 px-0 pt-0 text-center">
-        <CardTitle className="text-2xl font-semibold tracking-tight">
-          Reset password
-        </CardTitle>
-        <CardDescription>
-          Choose a new password for your admin account.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-0 pb-0">
-        {invalidToken ? (
-          <div className="space-y-4">
-            <div
-              role="alert"
-              className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-            >
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>This reset link is invalid or has expired.</span>
-            </div>
-            <Button asChild className="h-11 w-full">
-              <Link to="/auth/forgot-password">Request a new link</Link>
-            </Button>
-          </div>
-        ) : (
-          <form
-            method="post"
-            action="/auth/reset-password"
-            onSubmit={handleSubmit}
-            className="space-y-4"
-            noValidate
-          >
-            {error && (
-              <div
-                role="alert"
-                className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-              >
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter a strong password"
-                  autoComplete="new-password"
-                  required
-                  disabled={!isHydrated || isLoading}
-                  className="h-11 pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Confirm your password"
-                  autoComplete="new-password"
-                  required
-                  disabled={!isHydrated || isLoading}
-                  className="h-11 pl-10"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="h-11 w-full"
-              disabled={!isHydrated || isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                "Update password"
-              )}
-            </Button>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-6">
+      <AuthHeader title={t("resetTitle")} description={t("resetDescription")} />
+      <form method="post" action="/auth/reset-password" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <AuthAlert message={failure} />
+        <Field id="new-password" label={t("newPassword")} error={passwordMessage} hint={t("passwordHint")}>
+          <PasswordInput
+            ref={passwordRef}
+            id="new-password"
+            autoComplete="new-password"
+            autoFocus
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setFieldError(null);
+            }}
+            {...describedBy("new-password", passwordMessage, t("passwordHint"))}
+          />
+        </Field>
+        <Button type="submit" className="w-full" loading={isLoading}>
+          {t("savePassword")}
+        </Button>
+      </form>
+    </div>
   );
 }

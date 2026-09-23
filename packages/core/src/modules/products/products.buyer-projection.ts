@@ -2,6 +2,7 @@ import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { effectivePriceMinorSql } from "./products.money";
 
 /**
  * Builds the one-row-per-product pricing projection used by buyer catalog lists.
@@ -29,43 +30,42 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
         THEN 1 ELSE 0
     END`;
     const skuHasDiscount = sql<number>`CASE
-        WHEN ${pricingSku.discountType} = 'flat' AND ${pricingSku.discountAmount} > 0 THEN 1
-        WHEN ${pricingSku.discountType} = 'percentage' AND ${pricingSku.discountPercentage} > 0 THEN 1
+        WHEN ${pricingSku.discountType} = 'flat' AND ${pricingSku.discountAmountMinor} > 0 THEN 1
+        WHEN ${pricingSku.discountType} = 'percentage' AND ${pricingSku.discountBps} > 0 THEN 1
         ELSE 0
     END`;
-    const effectivePrice = sql<number>`CASE
-        WHEN ${pricingSku.discountType} = 'flat' AND ${pricingSku.discountAmount} > 0
-            THEN MAX(${pricingSku.price} - ${pricingSku.discountAmount}, 0)
-        WHEN ${pricingSku.discountType} = 'percentage' AND ${pricingSku.discountPercentage} > 0
-            THEN ${pricingSku.price} * (1 - ${pricingSku.discountPercentage} / 100.0)
-        WHEN ${pricingProduct.discountType} = 'flat' AND ${pricingProduct.discountAmount} > 0
-            THEN MAX(${pricingSku.price} - ${pricingProduct.discountAmount}, 0)
-        WHEN ${pricingProduct.discountType} = 'percentage' AND ${pricingProduct.discountPercentage} > 0
-            THEN ${pricingSku.price} * (1 - ${pricingProduct.discountPercentage} / 100.0)
-        ELSE ${pricingSku.price}
-    END`;
+    const effectivePrice = effectivePriceMinorSql({
+        priceMinor: sql`${pricingSku.priceMinor}`,
+        discountType: sql`${pricingSku.discountType}`,
+        discountBps: sql`${pricingSku.discountBps}`,
+        discountAmountMinor: sql`${pricingSku.discountAmountMinor}`,
+    }, {
+        discountType: sql`${pricingProduct.discountType}`,
+        discountBps: sql`${pricingProduct.discountBps}`,
+        discountAmountMinor: sql`${pricingProduct.discountAmountMinor}`,
+    });
     const resolvedDiscountType = sql<string | null>`CASE
         WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountType}
         ELSE ${pricingProduct.discountType}
     END`;
-    const resolvedDiscountPercentage = sql<number | null>`CASE
-        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountPercentage}
-        ELSE ${pricingProduct.discountPercentage}
+    const resolvedDiscountBps = sql<number>`CASE
+        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountBps}
+        ELSE ${pricingProduct.discountBps}
     END`;
-    const resolvedDiscountAmount = sql<number | null>`CASE
-        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountAmount}
-        ELSE ${pricingProduct.discountAmount}
+    const resolvedDiscountAmountMinor = sql<number>`CASE
+        WHEN ${skuHasDiscount} = 1 THEN ${pricingSku.discountAmountMinor}
+        ELSE ${pricingProduct.discountAmountMinor}
     END`;
 
     const rankedSkus = db
         .select({
             productId: pricingSku.productId,
             skuId: pricingSku.id,
-            basePrice: pricingSku.price,
-            effectivePrice: effectivePrice.as("buyer_effective_price"),
+            basePriceMinor: pricingSku.priceMinor,
+            effectivePriceMinor: effectivePrice.as("buyer_effective_price"),
             discountType: resolvedDiscountType.as("buyer_discount_type"),
-            discountPercentage: resolvedDiscountPercentage.as("buyer_discount_percentage"),
-            discountAmount: resolvedDiscountAmount.as("buyer_discount_amount"),
+            discountBps: resolvedDiscountBps.as("buyer_discount_bps"),
+            discountAmountMinor: resolvedDiscountAmountMinor.as("buyer_discount_amount"),
             availableForSale: sql<number>`MAX(${skuAvailable}) OVER (
                 PARTITION BY ${pricingSku.productId}
             )`.as("buyer_available_for_sale"),
@@ -75,10 +75,10 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
                 THEN 1 ELSE 0
             END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_customer_options"),
             hasAnyDiscount: sql<number>`MAX(CASE
-                WHEN ${effectivePrice} < ${pricingSku.price} THEN 1 ELSE 0
+                WHEN ${effectivePrice} < ${pricingSku.priceMinor} THEN 1 ELSE 0
             END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_any_discount"),
             hasAvailableDiscount: sql<number>`MAX(CASE
-                WHEN ${skuAvailable} = 1 AND ${effectivePrice} < ${pricingSku.price} THEN 1 ELSE 0
+                WHEN ${skuAvailable} = 1 AND ${effectivePrice} < ${pricingSku.priceMinor} THEN 1 ELSE 0
             END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_available_discount"),
             maxAvailableEffectivePrice: sql<number | null>`MAX(CASE
                 WHEN ${skuAvailable} = 1 THEN ${effectivePrice} ELSE NULL
@@ -115,11 +115,11 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
         .select({
             productId: rankedSkus.productId,
             skuId: rankedSkus.skuId,
-            basePrice: rankedSkus.basePrice,
-            effectivePrice: sql<number>`${rankedSkus.effectivePrice}`.as("buyer_effective_price"),
+            basePriceMinor: rankedSkus.basePriceMinor,
+            effectivePriceMinor: sql<number>`${rankedSkus.effectivePriceMinor}`.as("buyer_effective_price"),
             discountType: sql<string | null>`${rankedSkus.discountType}`.as("buyer_discount_type"),
-            discountPercentage: sql<number | null>`${rankedSkus.discountPercentage}`.as("buyer_discount_percentage"),
-            discountAmount: sql<number | null>`${rankedSkus.discountAmount}`.as("buyer_discount_amount"),
+            discountBps: sql<number>`${rankedSkus.discountBps}`.as("buyer_discount_bps"),
+            discountAmountMinor: sql<number>`${rankedSkus.discountAmountMinor}`.as("buyer_discount_amount"),
             availableForSale: sql<number>`${rankedSkus.availableForSale}`.as("buyer_available_for_sale"),
             hasCustomerOptions: sql<number>`${rankedSkus.hasCustomerOptions}`.as("buyer_has_customer_options"),
             hasDiscount: sql<number>`CASE
@@ -127,7 +127,7 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
                     THEN ${rankedSkus.hasAvailableDiscount}
                 ELSE ${rankedSkus.hasAnyDiscount}
             END`.as("buyer_has_discount"),
-            maxBuyerPrice: sql<number>`CASE
+            maxBuyerPriceMinor: sql<number>`CASE
                 WHEN ${rankedSkus.availableForSale} = 1
                     THEN ${rankedSkus.maxAvailableEffectivePrice}
                 ELSE ${rankedSkus.maxEffectivePrice}
@@ -144,13 +144,13 @@ export type BuyerCatalogPricingProjection = ReturnType<
 
 /**
  * True when at least one SKU in the same buyer pool used for card pricing is
- * inside the requested effective-price range. This avoids the common min/max
- * shortcut where a product with only 50 and 150 SKUs incorrectly matches an
- * 80–120 filter.
+ * inside the requested effective-price range (minor units). This avoids the
+ * common min/max shortcut where a product with only 50 and 150 SKUs
+ * incorrectly matches an 80–120 filter.
  */
 export function buyerCatalogHasSkuInPriceRange(
-    minPrice?: number,
-    maxPrice?: number,
+    minPriceMinor?: number | SQL<number>,
+    maxPriceMinor?: number | SQL<number>,
 ): SQL {
     const buyerFilterAvailable = sql.raw("(buyer_filter_sku.stock - buyer_filter_sku.reserved_stock)");
     const buyerAvailableSkuAvailable = sql.raw(
@@ -160,19 +160,18 @@ export function buyerCatalogHasSkuInPriceRange(
         buyer_filter_sku.track_inventory = 0
         OR ${buyerFilterAvailable} > 0
     )`;
-    const effectivePrice = sql`CASE
-        WHEN buyer_filter_sku.discount_type = 'flat' AND buyer_filter_sku.discount_amount > 0
-            THEN MAX(buyer_filter_sku.price - buyer_filter_sku.discount_amount, 0)
-        WHEN buyer_filter_sku.discount_type = 'percentage' AND buyer_filter_sku.discount_percentage > 0
-            THEN buyer_filter_sku.price * (1 - buyer_filter_sku.discount_percentage / 100.0)
-        WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0
-            THEN MAX(buyer_filter_sku.price - ${products.discountAmount}, 0)
-        WHEN ${products.discountType} = 'percentage' AND ${products.discountPercentage} > 0
-            THEN buyer_filter_sku.price * (1 - ${products.discountPercentage} / 100.0)
-        ELSE buyer_filter_sku.price
-    END`;
-    const lowerBound = minPrice === undefined ? sql`` : sql`AND ${effectivePrice} >= ${minPrice}`;
-    const upperBound = maxPrice === undefined ? sql`` : sql`AND ${effectivePrice} <= ${maxPrice}`;
+    const effectivePrice = effectivePriceMinorSql({
+        priceMinor: sql.raw("buyer_filter_sku.price_minor"),
+        discountType: sql.raw("buyer_filter_sku.discount_type"),
+        discountBps: sql.raw("buyer_filter_sku.discount_bps"),
+        discountAmountMinor: sql.raw("buyer_filter_sku.discount_amount_minor"),
+    }, {
+        discountType: sql`${products.discountType}`,
+        discountBps: sql`${products.discountBps}`,
+        discountAmountMinor: sql`${products.discountAmountMinor}`,
+    });
+    const lowerBound = minPriceMinor === undefined ? sql`` : sql`AND ${effectivePrice} >= ${minPriceMinor}`;
+    const upperBound = maxPriceMinor === undefined ? sql`` : sql`AND ${effectivePrice} <= ${maxPriceMinor}`;
 
     return sql`EXISTS (
         SELECT 1

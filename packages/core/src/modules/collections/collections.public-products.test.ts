@@ -7,13 +7,13 @@ describe("public collection product resolution", () => {
         const { sqlite, db } = createSqliteD1Database();
         sqlite.exec(`
             INSERT INTO categories (id, name, slug, status) VALUES ('cat_1', 'Shoes', 'shoes', 'published');
-            INSERT INTO products (id, name, price, slug, category_id, is_active) VALUES
-                ('p_visible', 'Visible', 10, 'visible', 'cat_1', 1),
-                ('p_no_sku', 'No SKU', 10, 'no-sku', 'cat_1', 1),
-                ('p_inactive', 'Inactive', 10, 'inactive', 'cat_1', 0);
-            INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory) VALUES
-                ('v_visible', 'p_visible', 'VIS-1', 10, 0, 0, 1, 0),
-                ('v_inactive', 'p_inactive', 'INA-1', 10, 0, 0, 1, 0);
+            INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
+                ('p_visible', 'Visible', 1000, 'visible', 'cat_1', 1),
+                ('p_no_sku', 'No SKU', 1000, 'no-sku', 'cat_1', 1),
+                ('p_inactive', 'Inactive', 1000, 'inactive', 'cat_1', 0);
+            INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+                ('v_visible', 'p_visible', 'VIS-1', 1000, 0, 0, 1, 0),
+                ('v_inactive', 'p_inactive', 'INA-1', 1000, 0, 0, 1, 0);
         `);
         const allProducts = ["p_visible", "p_no_sku", "p_inactive"];
 

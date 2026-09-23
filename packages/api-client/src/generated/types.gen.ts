@@ -2251,20 +2251,19 @@ export type PostApiV1DiscountsValidateData = {
          */
         code: string;
         /**
-         * Merchandise subtotal before delivery
-         */
-        total?: number;
-        /**
          * Cart items
          */
         items?: Array<{
+            /**
+             * Product id
+             */
             id: string;
             price: number;
             quantity: number;
             variantId?: string;
         }>;
         /**
-         * Shipping cost
+         * Delivery charge
          */
         shippingCost?: number;
         /**
@@ -2315,14 +2314,15 @@ export type PostApiV1DiscountsValidateResponses = {
             discount?: {
                 id: string;
                 code: string;
-                type: string;
+                type: 'code';
                 discountValue: number;
-                [key: string]: unknown;
             };
             discountAmount?: number;
-            message?: string;
+            error?: string;
+            /**
+             * The code has a per-customer limit: ask for the phone number.
+             */
             requiresCustomerPhone?: boolean;
-            [key: string]: unknown;
         };
     };
 };
@@ -2503,7 +2503,6 @@ export type GetApiV1StorefrontHomepageResponses = {
         success: true;
         data: {
             seo: {
-                siteTitle: string | null;
                 homepageTitle: string | null;
                 homepageMetaDescription: string | null;
             };
@@ -2874,34 +2873,12 @@ export type GetApiV1StorefrontLayoutResponses = {
             };
             seo: {
                 discovery: {
-                    sitemap: {
-                        enabled: boolean;
-                        staticPages: boolean;
-                        products: boolean;
-                        categories: boolean;
-                        collections: boolean;
-                        pages: boolean;
-                        articles: boolean;
-                    };
                     feeds: {
                         productCatalogEnabled: boolean;
                         includeUnavailableProducts: boolean;
                         variantStrategy: 'products' | 'variants';
                         title: string;
                         description: string;
-                    };
-                    robots: {
-                        advertiseSitemap: boolean;
-                    };
-                    structuredData: {
-                        organization: boolean;
-                        websiteSearch: boolean;
-                        products: boolean;
-                        productGroups: boolean;
-                        offerShippingDetails: boolean;
-                        breadcrumbs: boolean;
-                        collections: boolean;
-                        articles: boolean;
                     };
                 };
                 returnPolicy: {
@@ -2913,6 +2890,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                     returnMethod: 'mail' | 'in_store' | 'both';
                     policyUrl: string;
                 };
+                socialImage: string;
             };
             platform: {
                 storefrontUrl: string;
@@ -9616,39 +9594,16 @@ export type GetApiV1SeoResponses = {
     200: {
         success: true;
         data: {
-            siteTitle: string | null;
-            homepageTitle: string | null;
-            homepageMetaDescription: string | null;
-            robotsTxt: string | null;
+            homepageTitle: string;
+            homepageMetaDescription: string;
+            socialImage: string;
             discovery: {
-                sitemap: {
-                    enabled: boolean;
-                    staticPages: boolean;
-                    products: boolean;
-                    categories: boolean;
-                    collections: boolean;
-                    pages: boolean;
-                    articles: boolean;
-                };
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
                     variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
-                };
-                robots: {
-                    advertiseSitemap: boolean;
-                };
-                structuredData: {
-                    organization: boolean;
-                    websiteSearch: boolean;
-                    products: boolean;
-                    productGroups: boolean;
-                    offerShippingDetails: boolean;
-                    breadcrumbs: boolean;
-                    collections: boolean;
-                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -11962,6 +11917,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 baseAmountMinor: number;
                 feeWaived: boolean;
             };
+            /**
+             * Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet.
+             */
+            discountOffers: Array<string>;
             items: Array<{
                 cartKey?: string | null;
                 productId: string;
@@ -17390,34 +17349,8 @@ export type GetApiV1AdminDiscountsData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Page number
-         */
-        page?: number | null;
-        /**
-         * Items per page
-         */
-        limit?: number | null;
-        /**
-         * Search term
-         */
-        search?: string;
-        /**
-         * Filter by discount type
-         */
-        type?: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
-        /**
-         * Show trashed items
-         */
-        trashed?: string;
-        /**
-         * Sort field
-         */
-        sort?: string;
-        /**
-         * Sort order
-         */
-        order?: string;
+        limit?: number;
+        includeDeleted?: string;
     };
     url: '/api/v1/admin/discounts';
 };
@@ -17495,37 +17428,65 @@ export type GetApiV1AdminDiscountsError = GetApiV1AdminDiscountsErrors[keyof Get
 
 export type GetApiV1AdminDiscountsResponses = {
     /**
-     * Discount list with pagination
+     * Discounts, most recently updated first
      */
     200: {
         success: true;
         data: {
             discounts: Array<{
                 id: string;
-                code: string;
                 revision: number;
-                type: string;
-                valueType: string;
-                discountValue: number;
-                minPurchaseAmount: number | null;
-                minQuantity: number | null;
-                maxUsesPerOrder: number | null;
-                maxUses: number | null;
-                limitOnePerCustomer: boolean;
-                customerSegment: string | null;
-                startDate: string | number;
-                endDate: NullableTimestamp;
-                isActive: boolean;
-                createdAt: string | number;
-                updatedAt: string | number;
-                deletedAt: NullableTimestamp;
+                name: string;
+                title: string | null;
+                method: 'automatic' | 'code';
+                status: 'draft' | 'active' | 'paused' | 'archived';
+                priority: number;
+                conflictPolicy: 'best';
+                combinesWith: {
+                    product: boolean;
+                    order: boolean;
+                    shipping: boolean;
+                };
+                startsAtEpochSeconds: number | null;
+                endsAtEpochSeconds: number | null;
+                timezone: string;
+                maxRedemptions: number | null;
+                maxRedemptionsPerCustomer: number | null;
+                maxDiscountSpendMinor: number | null;
+                budgetCurrencyCode: string | null;
+                /**
+                 * Orders that used this discount.
+                 */
+                redemptionCount: number;
+                customerRedemptionCount: number;
+                /**
+                 * Total savings given, in minor units.
+                 */
+                discountSpendMinor: number;
+                createdAtEpochSeconds: number;
+                updatedAtEpochSeconds: number;
+                deletedAtEpochSeconds: number | null;
+                codes: Array<{
+                    code: string;
+                    isActive: boolean;
+                }>;
+                conditions: Array<{
+                    id: string;
+                    kind: 'minimum_merchandise_subtotal' | 'minimum_item_quantity';
+                    config: {
+                        [key: string]: unknown;
+                    };
+                }>;
+                effects: Array<{
+                    id: string;
+                    kind: 'percentage_off' | 'fixed_amount_off' | 'free';
+                    target: 'line' | 'order' | 'shipping';
+                    allocation: 'across' | 'once';
+                    config: {
+                        [key: string]: unknown;
+                    };
+                }>;
             }>;
-            pagination: {
-                page: number;
-                limit: number;
-                total: number;
-                totalPages: number;
-            };
         };
     };
 };
@@ -17534,24 +17495,81 @@ export type GetApiV1AdminDiscountsResponse = GetApiV1AdminDiscountsResponses[key
 
 export type PostApiV1AdminDiscountsData = {
     body: {
-        code: string;
-        type: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
-        valueType: 'percentage' | 'fixed_amount' | 'free';
-        discountValue: number;
-        minPurchaseAmount?: number | null;
-        minQuantity?: number | null;
-        maxUsesPerOrder?: number | null;
-        maxUses?: number | null;
-        limitOnePerCustomer?: boolean;
-        combineWithProductDiscounts?: boolean;
-        combineWithOrderDiscounts?: boolean;
-        combineWithShippingDiscounts?: boolean;
-        customerSegment?: string | null;
-        startDate: string | string | number;
-        endDate?: string | string | number | unknown;
-        isActive?: boolean;
-        appliesToProducts?: Array<string>;
-        appliesToCollections?: Array<string>;
+        name: string;
+        title?: string | null;
+        method: 'automatic' | 'code';
+        priority?: number;
+        conflictPolicy?: 'best';
+        combinesWith?: {
+            product: boolean;
+            order: boolean;
+            shipping: boolean;
+        };
+        startsAtEpochSeconds?: number | null;
+        endsAtEpochSeconds?: number | null;
+        timezone?: string;
+        maxRedemptions?: number | null;
+        maxRedemptionsPerCustomer?: number | null;
+        maxDiscountSpendMinor?: number | null;
+        budgetCurrencyCode?: string | null;
+        codes?: Array<{
+            code: string;
+            isActive?: boolean;
+        }>;
+        conditions?: Array<{
+            kind: 'minimum_merchandise_subtotal';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                shippingOnly?: boolean;
+            };
+        } | {
+            kind: 'minimum_item_quantity';
+            config: {
+                quantity: number;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+            };
+        }>;
+        effects: Array<{
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'percentage_off';
+            config: {
+                basisPoints: number;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                buy?: {
+                    quantity?: number;
+                    amountMinor?: number;
+                    currencyCode?: string;
+                    productIds?: Array<string>;
+                    collectionIds?: Array<string>;
+                };
+                getQuantity?: number;
+                maxUsesPerOrder?: number;
+            };
+        } | {
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'fixed_amount_off';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                eachItem?: boolean;
+            };
+        } | {
+            kind: 'free';
+            target: 'shipping';
+            allocation: 'once';
+            config: {
+                [key: string]: never;
+            };
+        }>;
     };
     path?: never;
     query?: never;
@@ -17642,30 +17660,32 @@ export type PostApiV1AdminDiscountsError = PostApiV1AdminDiscountsErrors[keyof P
 
 export type PostApiV1AdminDiscountsResponses = {
     /**
-     * Discount created
+     * Draft discount created
      */
     201: {
         success: true;
         data: {
             id: string;
             revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
         };
     };
 };
 
 export type PostApiV1AdminDiscountsResponse = PostApiV1AdminDiscountsResponses[keyof PostApiV1AdminDiscountsResponses];
 
-export type PostApiV1AdminDiscountsBulkDeleteData = {
+export type DeleteApiV1AdminDiscountsByIdData = {
     body: {
-        discountIds: Array<string>;
-        permanent?: boolean;
+        expectedRevision: number;
     };
-    path?: never;
+    path: {
+        id: string;
+    };
     query?: never;
-    url: '/api/v1/admin/discounts/bulk-delete';
+    url: '/api/v1/admin/discounts/{id}';
 };
 
-export type PostApiV1AdminDiscountsBulkDeleteErrors = {
+export type DeleteApiV1AdminDiscountsByIdErrors = {
     /**
      * Validation error
      */
@@ -17699,55 +17719,10 @@ export type PostApiV1AdminDiscountsBulkDeleteErrors = {
             details?: unknown;
         };
     };
-};
-
-export type PostApiV1AdminDiscountsBulkDeleteError = PostApiV1AdminDiscountsBulkDeleteErrors[keyof PostApiV1AdminDiscountsBulkDeleteErrors];
-
-export type PostApiV1AdminDiscountsBulkDeleteResponses = {
     /**
-     * No content
+     * Not found
      */
-    204: void;
-};
-
-export type PostApiV1AdminDiscountsBulkDeleteResponse = PostApiV1AdminDiscountsBulkDeleteResponses[keyof PostApiV1AdminDiscountsBulkDeleteResponses];
-
-export type PostApiV1AdminDiscountsBulkRestoreData = {
-    body: {
-        discountIds: Array<string>;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/discounts/bulk-restore';
-};
-
-export type PostApiV1AdminDiscountsBulkRestoreErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
+    404: {
         success: false;
         error: {
             code: string;
@@ -17766,33 +17741,10 @@ export type PostApiV1AdminDiscountsBulkRestoreErrors = {
             details?: unknown;
         };
     };
-};
-
-export type PostApiV1AdminDiscountsBulkRestoreError = PostApiV1AdminDiscountsBulkRestoreErrors[keyof PostApiV1AdminDiscountsBulkRestoreErrors];
-
-export type PostApiV1AdminDiscountsBulkRestoreResponses = {
     /**
-     * No content
+     * Rate limit exceeded
      */
-    204: void;
-};
-
-export type PostApiV1AdminDiscountsBulkRestoreResponse = PostApiV1AdminDiscountsBulkRestoreResponses[keyof PostApiV1AdminDiscountsBulkRestoreResponses];
-
-export type DeleteApiV1AdminDiscountsByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/discounts/{id}';
-};
-
-export type DeleteApiV1AdminDiscountsByIdErrors = {
-    /**
-     * Unauthorized
-     */
-    401: {
+    429: {
         success: false;
         error: {
             code: string;
@@ -17801,9 +17753,9 @@ export type DeleteApiV1AdminDiscountsByIdErrors = {
         };
     };
     /**
-     * Forbidden
+     * Server error
      */
-    403: {
+    500: {
         success: false;
         error: {
             code: string;
@@ -17906,29 +17858,63 @@ export type GetApiV1AdminDiscountsByIdError = GetApiV1AdminDiscountsByIdErrors[k
 
 export type GetApiV1AdminDiscountsByIdResponses = {
     /**
-     * Discount details
+     * Discount
      */
     200: {
         success: true;
         data: {
             id: string;
-            code: string;
             revision: number;
-            type: string;
-            valueType: string;
-            discountValue: number;
-            minPurchaseAmount: number | null;
-            minQuantity: number | null;
-            maxUsesPerOrder: number | null;
-            maxUses: number | null;
-            limitOnePerCustomer: boolean;
-            customerSegment: string | null;
-            startDate: string | number;
-            endDate: NullableTimestamp;
-            isActive: boolean;
-            createdAt: string | number;
-            updatedAt: string | number;
-            deletedAt: NullableTimestamp;
+            name: string;
+            title: string | null;
+            method: 'automatic' | 'code';
+            status: 'draft' | 'active' | 'paused' | 'archived';
+            priority: number;
+            conflictPolicy: 'best';
+            combinesWith: {
+                product: boolean;
+                order: boolean;
+                shipping: boolean;
+            };
+            startsAtEpochSeconds: number | null;
+            endsAtEpochSeconds: number | null;
+            timezone: string;
+            maxRedemptions: number | null;
+            maxRedemptionsPerCustomer: number | null;
+            maxDiscountSpendMinor: number | null;
+            budgetCurrencyCode: string | null;
+            /**
+             * Orders that used this discount.
+             */
+            redemptionCount: number;
+            customerRedemptionCount: number;
+            /**
+             * Total savings given, in minor units.
+             */
+            discountSpendMinor: number;
+            createdAtEpochSeconds: number;
+            updatedAtEpochSeconds: number;
+            deletedAtEpochSeconds: number | null;
+            codes: Array<{
+                code: string;
+                isActive: boolean;
+            }>;
+            conditions: Array<{
+                id: string;
+                kind: 'minimum_merchandise_subtotal' | 'minimum_item_quantity';
+                config: {
+                    [key: string]: unknown;
+                };
+            }>;
+            effects: Array<{
+                id: string;
+                kind: 'percentage_off' | 'fixed_amount_off' | 'free';
+                target: 'line' | 'order' | 'shipping';
+                allocation: 'across' | 'once';
+                config: {
+                    [key: string]: unknown;
+                };
+            }>;
         };
     };
 };
@@ -17937,26 +17923,82 @@ export type GetApiV1AdminDiscountsByIdResponse = GetApiV1AdminDiscountsByIdRespo
 
 export type PutApiV1AdminDiscountsByIdData = {
     body: {
-        code: string;
-        type: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
-        valueType: 'percentage' | 'fixed_amount' | 'free';
-        discountValue: number;
-        minPurchaseAmount?: number | null;
-        minQuantity?: number | null;
-        maxUsesPerOrder?: number | null;
-        maxUses?: number | null;
-        limitOnePerCustomer?: boolean;
-        combineWithProductDiscounts?: boolean;
-        combineWithOrderDiscounts?: boolean;
-        combineWithShippingDiscounts?: boolean;
-        customerSegment?: string | null;
-        startDate: string | string | number;
-        endDate?: string | string | number | unknown;
-        isActive?: boolean;
-        appliesToProducts?: Array<string>;
-        appliesToCollections?: Array<string>;
-        id: string;
         expectedRevision: number;
+        name: string;
+        title?: string | null;
+        method: 'automatic' | 'code';
+        priority?: number;
+        conflictPolicy?: 'best';
+        combinesWith?: {
+            product: boolean;
+            order: boolean;
+            shipping: boolean;
+        };
+        startsAtEpochSeconds?: number | null;
+        endsAtEpochSeconds?: number | null;
+        timezone?: string;
+        maxRedemptions?: number | null;
+        maxRedemptionsPerCustomer?: number | null;
+        maxDiscountSpendMinor?: number | null;
+        budgetCurrencyCode?: string | null;
+        codes?: Array<{
+            code: string;
+            isActive?: boolean;
+        }>;
+        conditions?: Array<{
+            kind: 'minimum_merchandise_subtotal';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                shippingOnly?: boolean;
+            };
+        } | {
+            kind: 'minimum_item_quantity';
+            config: {
+                quantity: number;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+            };
+        }>;
+        effects: Array<{
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'percentage_off';
+            config: {
+                basisPoints: number;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                buy?: {
+                    quantity?: number;
+                    amountMinor?: number;
+                    currencyCode?: string;
+                    productIds?: Array<string>;
+                    collectionIds?: Array<string>;
+                };
+                getQuantity?: number;
+                maxUsesPerOrder?: number;
+            };
+        } | {
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'fixed_amount_off';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+                productIds?: Array<string>;
+                collectionIds?: Array<string>;
+                eachItem?: boolean;
+            };
+        } | {
+            kind: 'free';
+            target: 'shipping';
+            allocation: 'once';
+            config: {
+                [key: string]: never;
+            };
+        }>;
     };
     path: {
         id: string;
@@ -18056,949 +18098,14 @@ export type PutApiV1AdminDiscountsByIdResponses = {
         data: {
             id: string;
             revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
         };
     };
 };
 
 export type PutApiV1AdminDiscountsByIdResponse = PutApiV1AdminDiscountsByIdResponses[keyof PutApiV1AdminDiscountsByIdResponses];
 
-export type DeleteApiV1AdminDiscountsByIdPermanentData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/discounts/{id}/permanent';
-};
-
-export type DeleteApiV1AdminDiscountsByIdPermanentErrors = {
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminDiscountsByIdPermanentError = DeleteApiV1AdminDiscountsByIdPermanentErrors[keyof DeleteApiV1AdminDiscountsByIdPermanentErrors];
-
-export type DeleteApiV1AdminDiscountsByIdPermanentResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminDiscountsByIdPermanentResponse = DeleteApiV1AdminDiscountsByIdPermanentResponses[keyof DeleteApiV1AdminDiscountsByIdPermanentResponses];
-
-export type PostApiV1AdminDiscountsByIdToggleStatusData = {
-    body: {
-        isActive: boolean;
-        expectedRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/discounts/{id}/toggle-status';
-};
-
-export type PostApiV1AdminDiscountsByIdToggleStatusErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminDiscountsByIdToggleStatusError = PostApiV1AdminDiscountsByIdToggleStatusErrors[keyof PostApiV1AdminDiscountsByIdToggleStatusErrors];
-
-export type PostApiV1AdminDiscountsByIdToggleStatusResponses = {
-    /**
-     * Discount status toggled
-     */
-    200: {
-        success: true;
-        data: {
-            id: string;
-            revision: number;
-            isActive: boolean;
-        };
-    };
-};
-
-export type PostApiV1AdminDiscountsByIdToggleStatusResponse = PostApiV1AdminDiscountsByIdToggleStatusResponses[keyof PostApiV1AdminDiscountsByIdToggleStatusResponses];
-
-export type PostApiV1AdminDiscountsByIdRestoreData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/discounts/{id}/restore';
-};
-
-export type PostApiV1AdminDiscountsByIdRestoreErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminDiscountsByIdRestoreError = PostApiV1AdminDiscountsByIdRestoreErrors[keyof PostApiV1AdminDiscountsByIdRestoreErrors];
-
-export type PostApiV1AdminDiscountsByIdRestoreResponses = {
-    /**
-     * Discount restored
-     */
-    200: {
-        success: true;
-        data: {
-            [key: string]: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminDiscountsByIdRestoreResponse = PostApiV1AdminDiscountsByIdRestoreResponses[keyof PostApiV1AdminDiscountsByIdRestoreResponses];
-
-export type GetApiV1AdminPromotionsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        limit?: number;
-        includeDeleted?: string;
-    };
-    url: '/api/v1/admin/promotions';
-};
-
-export type GetApiV1AdminPromotionsErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminPromotionsError = GetApiV1AdminPromotionsErrors[keyof GetApiV1AdminPromotionsErrors];
-
-export type GetApiV1AdminPromotionsResponses = {
-    /**
-     * Promotions
-     */
-    200: {
-        success: true;
-        data: {
-            promotions: Array<{
-                id: string;
-                revision: number;
-                name: string;
-                title: string | null;
-                method: 'automatic' | 'code';
-                status: 'draft' | 'active' | 'paused' | 'archived';
-                priority: number;
-                conflictPolicy: 'best';
-                startsAtEpochSeconds: number | null;
-                endsAtEpochSeconds: number | null;
-                timezone: string;
-                maxRedemptions: number | null;
-                maxRedemptionsPerCustomer: number | null;
-                maxDiscountSpendMinor: number | null;
-                budgetCurrencyCode: string | null;
-                redemptionCount: number;
-                customerRedemptionCount: number;
-                discountSpendMinor: number;
-                /**
-                 * Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them.
-                 */
-                redemptionBudgetPolicy: 'committed_orders_never_released';
-                createdAtEpochSeconds: number;
-                updatedAtEpochSeconds: number;
-                deletedAtEpochSeconds: number | null;
-                codes: Array<{
-                    code: string;
-                    isActive: boolean;
-                }>;
-                conditions: Array<{
-                    id: string;
-                    kind: string;
-                    config: {
-                        [key: string]: unknown;
-                    };
-                }>;
-                effects: Array<{
-                    id: string;
-                    kind: string;
-                    target: string;
-                    allocation: string;
-                    config: {
-                        [key: string]: unknown;
-                    };
-                }>;
-            }>;
-        };
-    };
-};
-
-export type GetApiV1AdminPromotionsResponse = GetApiV1AdminPromotionsResponses[keyof GetApiV1AdminPromotionsResponses];
-
-export type PostApiV1AdminPromotionsData = {
-    body: {
-        name: string;
-        title?: string | null;
-        method: 'automatic' | 'code';
-        priority?: number;
-        conflictPolicy?: 'best';
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
-        timezone?: string;
-        maxRedemptions?: number | null;
-        maxRedemptionsPerCustomer?: number | null;
-        maxDiscountSpendMinor?: number | null;
-        budgetCurrencyCode?: string | null;
-        codes?: Array<{
-            code: string;
-            isActive?: boolean;
-        }>;
-        conditions?: Array<{
-            kind: 'minimum_merchandise_subtotal';
-            config: {
-                amountMinor: number;
-                currencyCode: string;
-            };
-        } | {
-            kind: 'minimum_item_quantity';
-            config: {
-                quantity: number;
-            };
-        }>;
-        effects: Array<{
-            target: 'line' | 'order' | 'shipping';
-            allocation: 'across' | 'once';
-            kind: 'percentage_off';
-            config: {
-                basisPoints: number;
-            };
-        } | {
-            target: 'line' | 'order' | 'shipping';
-            allocation: 'across' | 'once';
-            kind: 'fixed_amount_off';
-            config: {
-                amountMinor: number;
-                currencyCode: string;
-            };
-        } | {
-            kind: 'free';
-            target: 'shipping';
-            allocation: 'once';
-            config: {
-                [key: string]: never;
-            };
-        }>;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/promotions';
-};
-
-export type PostApiV1AdminPromotionsErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminPromotionsError = PostApiV1AdminPromotionsErrors[keyof PostApiV1AdminPromotionsErrors];
-
-export type PostApiV1AdminPromotionsResponses = {
-    /**
-     * Promotion draft created
-     */
-    201: {
-        success: true;
-        data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
-        };
-    };
-};
-
-export type PostApiV1AdminPromotionsResponse = PostApiV1AdminPromotionsResponses[keyof PostApiV1AdminPromotionsResponses];
-
-export type DeleteApiV1AdminPromotionsByIdData = {
-    body: {
-        expectedRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/promotions/{id}';
-};
-
-export type DeleteApiV1AdminPromotionsByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminPromotionsByIdError = DeleteApiV1AdminPromotionsByIdErrors[keyof DeleteApiV1AdminPromotionsByIdErrors];
-
-export type DeleteApiV1AdminPromotionsByIdResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminPromotionsByIdResponse = DeleteApiV1AdminPromotionsByIdResponses[keyof DeleteApiV1AdminPromotionsByIdResponses];
-
-export type GetApiV1AdminPromotionsByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/promotions/{id}';
-};
-
-export type GetApiV1AdminPromotionsByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminPromotionsByIdError = GetApiV1AdminPromotionsByIdErrors[keyof GetApiV1AdminPromotionsByIdErrors];
-
-export type GetApiV1AdminPromotionsByIdResponses = {
-    /**
-     * Promotion
-     */
-    200: {
-        success: true;
-        data: {
-            id: string;
-            revision: number;
-            name: string;
-            title: string | null;
-            method: 'automatic' | 'code';
-            status: 'draft' | 'active' | 'paused' | 'archived';
-            priority: number;
-            conflictPolicy: 'best';
-            startsAtEpochSeconds: number | null;
-            endsAtEpochSeconds: number | null;
-            timezone: string;
-            maxRedemptions: number | null;
-            maxRedemptionsPerCustomer: number | null;
-            maxDiscountSpendMinor: number | null;
-            budgetCurrencyCode: string | null;
-            redemptionCount: number;
-            customerRedemptionCount: number;
-            discountSpendMinor: number;
-            /**
-             * Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them.
-             */
-            redemptionBudgetPolicy: 'committed_orders_never_released';
-            createdAtEpochSeconds: number;
-            updatedAtEpochSeconds: number;
-            deletedAtEpochSeconds: number | null;
-            codes: Array<{
-                code: string;
-                isActive: boolean;
-            }>;
-            conditions: Array<{
-                id: string;
-                kind: string;
-                config: {
-                    [key: string]: unknown;
-                };
-            }>;
-            effects: Array<{
-                id: string;
-                kind: string;
-                target: string;
-                allocation: string;
-                config: {
-                    [key: string]: unknown;
-                };
-            }>;
-        };
-    };
-};
-
-export type GetApiV1AdminPromotionsByIdResponse = GetApiV1AdminPromotionsByIdResponses[keyof GetApiV1AdminPromotionsByIdResponses];
-
-export type PutApiV1AdminPromotionsByIdData = {
-    body: {
-        expectedRevision: number;
-        name: string;
-        title?: string | null;
-        method: 'automatic' | 'code';
-        priority?: number;
-        conflictPolicy?: 'best';
-        startsAtEpochSeconds?: number | null;
-        endsAtEpochSeconds?: number | null;
-        timezone?: string;
-        maxRedemptions?: number | null;
-        maxRedemptionsPerCustomer?: number | null;
-        maxDiscountSpendMinor?: number | null;
-        budgetCurrencyCode?: string | null;
-        codes?: Array<{
-            code: string;
-            isActive?: boolean;
-        }>;
-        conditions?: Array<{
-            kind: 'minimum_merchandise_subtotal';
-            config: {
-                amountMinor: number;
-                currencyCode: string;
-            };
-        } | {
-            kind: 'minimum_item_quantity';
-            config: {
-                quantity: number;
-            };
-        }>;
-        effects: Array<{
-            target: 'line' | 'order' | 'shipping';
-            allocation: 'across' | 'once';
-            kind: 'percentage_off';
-            config: {
-                basisPoints: number;
-            };
-        } | {
-            target: 'line' | 'order' | 'shipping';
-            allocation: 'across' | 'once';
-            kind: 'fixed_amount_off';
-            config: {
-                amountMinor: number;
-                currencyCode: string;
-            };
-        } | {
-            kind: 'free';
-            target: 'shipping';
-            allocation: 'once';
-            config: {
-                [key: string]: never;
-            };
-        }>;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/promotions/{id}';
-};
-
-export type PutApiV1AdminPromotionsByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PutApiV1AdminPromotionsByIdError = PutApiV1AdminPromotionsByIdErrors[keyof PutApiV1AdminPromotionsByIdErrors];
-
-export type PutApiV1AdminPromotionsByIdResponses = {
-    /**
-     * Promotion draft updated
-     */
-    200: {
-        success: true;
-        data: {
-            id: string;
-            revision: number;
-            status: 'draft' | 'active' | 'paused' | 'archived';
-        };
-    };
-};
-
-export type PutApiV1AdminPromotionsByIdResponse = PutApiV1AdminPromotionsByIdResponses[keyof PutApiV1AdminPromotionsByIdResponses];
-
-export type PostApiV1AdminPromotionsByIdPreviewData = {
+export type PostApiV1AdminDiscountsByIdPreviewData = {
     body: {
         expectedRevision: number;
         customerId?: string | null;
@@ -19010,6 +18117,7 @@ export type PostApiV1AdminPromotionsByIdPreviewData = {
                 variantId: string;
                 unitPriceMinor: number;
                 quantity: number;
+                collectionIds?: Array<string>;
             }>;
             shippingAmountMinor: number;
             submittedCodes: Array<string>;
@@ -19020,10 +18128,10 @@ export type PostApiV1AdminPromotionsByIdPreviewData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/promotions/{id}/preview';
+    url: '/api/v1/admin/discounts/{id}/preview';
 };
 
-export type PostApiV1AdminPromotionsByIdPreviewErrors = {
+export type PostApiV1AdminDiscountsByIdPreviewErrors = {
     /**
      * Validation error
      */
@@ -19103,11 +18211,11 @@ export type PostApiV1AdminPromotionsByIdPreviewErrors = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdPreviewError = PostApiV1AdminPromotionsByIdPreviewErrors[keyof PostApiV1AdminPromotionsByIdPreviewErrors];
+export type PostApiV1AdminDiscountsByIdPreviewError = PostApiV1AdminDiscountsByIdPreviewErrors[keyof PostApiV1AdminDiscountsByIdPreviewErrors];
 
-export type PostApiV1AdminPromotionsByIdPreviewResponses = {
+export type PostApiV1AdminDiscountsByIdPreviewResponses = {
     /**
-     * Deterministic promotion evaluation
+     * Deterministic evaluation
      */
     200: {
         success: true;
@@ -19122,9 +18230,9 @@ export type PostApiV1AdminPromotionsByIdPreviewResponses = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdPreviewResponse = PostApiV1AdminPromotionsByIdPreviewResponses[keyof PostApiV1AdminPromotionsByIdPreviewResponses];
+export type PostApiV1AdminDiscountsByIdPreviewResponse = PostApiV1AdminDiscountsByIdPreviewResponses[keyof PostApiV1AdminDiscountsByIdPreviewResponses];
 
-export type PostApiV1AdminPromotionsByIdActivateData = {
+export type PostApiV1AdminDiscountsByIdActivateData = {
     body: {
         expectedRevision: number;
     };
@@ -19132,10 +18240,10 @@ export type PostApiV1AdminPromotionsByIdActivateData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/promotions/{id}/activate';
+    url: '/api/v1/admin/discounts/{id}/activate';
 };
 
-export type PostApiV1AdminPromotionsByIdActivateErrors = {
+export type PostApiV1AdminDiscountsByIdActivateErrors = {
     /**
      * Validation error
      */
@@ -19215,11 +18323,11 @@ export type PostApiV1AdminPromotionsByIdActivateErrors = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdActivateError = PostApiV1AdminPromotionsByIdActivateErrors[keyof PostApiV1AdminPromotionsByIdActivateErrors];
+export type PostApiV1AdminDiscountsByIdActivateError = PostApiV1AdminDiscountsByIdActivateErrors[keyof PostApiV1AdminDiscountsByIdActivateErrors];
 
-export type PostApiV1AdminPromotionsByIdActivateResponses = {
+export type PostApiV1AdminDiscountsByIdActivateResponses = {
     /**
-     * Promotion activated
+     * Activate a discount
      */
     200: {
         success: true;
@@ -19231,9 +18339,9 @@ export type PostApiV1AdminPromotionsByIdActivateResponses = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdActivateResponse = PostApiV1AdminPromotionsByIdActivateResponses[keyof PostApiV1AdminPromotionsByIdActivateResponses];
+export type PostApiV1AdminDiscountsByIdActivateResponse = PostApiV1AdminDiscountsByIdActivateResponses[keyof PostApiV1AdminDiscountsByIdActivateResponses];
 
-export type PostApiV1AdminPromotionsByIdPauseData = {
+export type PostApiV1AdminDiscountsByIdPauseData = {
     body: {
         expectedRevision: number;
     };
@@ -19241,10 +18349,10 @@ export type PostApiV1AdminPromotionsByIdPauseData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/promotions/{id}/pause';
+    url: '/api/v1/admin/discounts/{id}/pause';
 };
 
-export type PostApiV1AdminPromotionsByIdPauseErrors = {
+export type PostApiV1AdminDiscountsByIdPauseErrors = {
     /**
      * Validation error
      */
@@ -19324,11 +18432,11 @@ export type PostApiV1AdminPromotionsByIdPauseErrors = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdPauseError = PostApiV1AdminPromotionsByIdPauseErrors[keyof PostApiV1AdminPromotionsByIdPauseErrors];
+export type PostApiV1AdminDiscountsByIdPauseError = PostApiV1AdminDiscountsByIdPauseErrors[keyof PostApiV1AdminDiscountsByIdPauseErrors];
 
-export type PostApiV1AdminPromotionsByIdPauseResponses = {
+export type PostApiV1AdminDiscountsByIdPauseResponses = {
     /**
-     * Promotion paused
+     * Deactivate a discount
      */
     200: {
         success: true;
@@ -19340,7 +18448,7 @@ export type PostApiV1AdminPromotionsByIdPauseResponses = {
     };
 };
 
-export type PostApiV1AdminPromotionsByIdPauseResponse = PostApiV1AdminPromotionsByIdPauseResponses[keyof PostApiV1AdminPromotionsByIdPauseResponses];
+export type PostApiV1AdminDiscountsByIdPauseResponse = PostApiV1AdminDiscountsByIdPauseResponses[keyof PostApiV1AdminDiscountsByIdPauseResponses];
 
 export type GetApiV1AdminMediaData = {
     body?: never;
@@ -30759,39 +29867,16 @@ export type GetApiV1AdminSettingsSeoResponses = {
     200: {
         success: true;
         data: {
-            siteTitle: string;
             homepageTitle: string;
             homepageMetaDescription: string;
-            robotsTxt: string;
+            socialImage: string;
             discovery: {
-                sitemap: {
-                    enabled: boolean;
-                    staticPages: boolean;
-                    products: boolean;
-                    categories: boolean;
-                    collections: boolean;
-                    pages: boolean;
-                    articles: boolean;
-                };
                 feeds: {
                     productCatalogEnabled: boolean;
                     includeUnavailableProducts: boolean;
                     variantStrategy: 'products' | 'variants';
                     title: string;
                     description: string;
-                };
-                robots: {
-                    advertiseSitemap: boolean;
-                };
-                structuredData: {
-                    organization: boolean;
-                    websiteSearch: boolean;
-                    products: boolean;
-                    productGroups: boolean;
-                    offerShippingDetails: boolean;
-                    breadcrumbs: boolean;
-                    collections: boolean;
-                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -30811,39 +29896,16 @@ export type GetApiV1AdminSettingsSeoResponse = GetApiV1AdminSettingsSeoResponses
 
 export type PostApiV1AdminSettingsSeoData = {
     body: {
-        siteTitle?: string;
         homepageTitle?: string;
         homepageMetaDescription?: string;
-        robotsTxt?: string;
+        socialImage?: string;
         discovery?: {
-            sitemap?: {
-                enabled?: boolean;
-                staticPages?: boolean;
-                products?: boolean;
-                categories?: boolean;
-                collections?: boolean;
-                pages?: boolean;
-                articles?: boolean;
-            };
             feeds?: {
                 productCatalogEnabled?: boolean;
                 includeUnavailableProducts?: boolean;
                 variantStrategy?: 'products' | 'variants';
                 title?: string;
                 description?: string;
-            };
-            robots?: {
-                advertiseSitemap?: boolean;
-            };
-            structuredData?: {
-                organization?: boolean;
-                websiteSearch?: boolean;
-                products?: boolean;
-                productGroups?: boolean;
-                offerShippingDetails?: boolean;
-                breadcrumbs?: boolean;
-                collections?: boolean;
-                articles?: boolean;
             };
         };
         returnPolicy?: {
@@ -43642,6 +42704,10 @@ export type GetApiV1AdminProductsData = {
          * Show trashed items
          */
         trashed?: 'true' | 'false';
+        /**
+         * Active (on sale) or draft products only
+         */
+        status?: 'active' | 'draft';
         /**
          * Compact lists omit rich descriptions
          */

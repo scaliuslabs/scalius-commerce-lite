@@ -42,10 +42,9 @@ describe("admin shell access", () => {
     };
 
     expect(canAccessAdminPath("/admin/products", productViewer)).toBe(true);
-    expect(canAccessAdminPath("/admin/products/abc", productViewer)).toBe(true);
-    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(
-      false,
-    );
+    // One product page: viewers can open it; saving still needs products.edit.
+    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(true);
+    expect(canAccessAdminPath("/admin/orders/abandoned", productViewer)).toBe(false);
     expect(canAccessAdminPath("/admin/products/new", productViewer)).toBe(
       false,
     );
@@ -53,7 +52,7 @@ describe("admin shell access", () => {
 
   it("allows the account page to any authenticated user with admin access", () => {
     expect(
-      canAccessAdminPath("/admin/settings/account", {
+      canAccessAdminPath("/admin/account", {
         isSuperAdmin: false,
         hasAdminAccess: true,
         permissions: new Set([PERMISSIONS.PRODUCTS_VIEW]),
@@ -99,7 +98,7 @@ describe("admin shell access", () => {
 
   it("allows super admins through mapped routes", () => {
     expect(
-      canAccessAdminPath("/admin/settings/cache", {
+      canAccessAdminPath("/admin/settings/advanced", {
         isSuperAdmin: true,
         hasAdminAccess: true,
         permissions: new Set(),
@@ -118,14 +117,17 @@ describe("admin shell access", () => {
       "/admin/collections/collection-123/edit",
       "/admin/orders/order-123",
       "/admin/orders/order-123/edit",
-      "/admin/customers/customer-123/history",
-      "/admin/discounts/discount-123/edit",
-      "/admin/promotions/promotion-123/edit",
-      "/admin/analytics/report-123/edit",
+      "/admin/customers/customer-123/edit",
+      "/admin/discounts/new",
+      "/admin/discounts/promo_123",
       "/admin/pages/page-123/edit",
       "/admin/articles/article-123/edit",
-      "/admin/settings/account",
-      "/admin/settings/cache",
+      "/admin/account",
+      "/admin/settings",
+      "/admin/settings/store",
+      "/admin/settings/users",
+      "/admin/settings/shipping",
+      "/admin/settings/apps",
       "/admin/settings/taxes",
       "/admin/experimental",
     ];

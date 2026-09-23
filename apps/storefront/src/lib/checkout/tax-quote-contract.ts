@@ -77,6 +77,8 @@ export interface CheckoutTaxQuote {
   totalMinor: number;
   totalAmount: number;
   shippingMethod: TaxQuoteShippingMethod;
+  /** Earned Buy X get Y discounts whose free item is not in the cart yet. */
+  discountOffers: string[];
   items: TaxQuoteItem[];
 }
 
@@ -321,6 +323,10 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     fail();
   }
 
+  const offers = data.discountOffers ?? [];
+  if (!Array.isArray(offers) || offers.length > 3) fail();
+  const discountOffers = offers.map((offer) => requiredString(offer, 160));
+
   if (!Array.isArray(data.items) || data.items.length === 0) fail();
   if (data.items.length > TAX_QUOTE_MAX_ITEMS) fail();
   const items = data.items.map(parseQuoteItem);
@@ -355,6 +361,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     totalMinor,
     totalAmount,
     shippingMethod,
+    discountOffers,
     items,
   };
 }

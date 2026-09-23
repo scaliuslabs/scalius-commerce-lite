@@ -106,7 +106,7 @@ type LookupRow = {
   variantImageId: string | null;
   variantSku: string;
   variantLabel: string | null;
-  variantPrice: number;
+  variantPriceMinor: number;
   variantStock: number;
   variantReservedStock: number;
   variantBarcode: string | null;
@@ -115,8 +115,9 @@ type LookupRow = {
   productId: string;
   productName: string;
   productSlug: string;
-  productPrice: number;
+  productPriceMinor: number;
   productIsActive: boolean;
+  storeCurrencyCode: string | null;
 };
 
 const lookupRow: LookupRow = {
@@ -124,7 +125,7 @@ const lookupRow: LookupRow = {
   variantImageId: null,
   variantSku: "SKU-1",
   variantLabel: "Size: M / Color: Red",
-  variantPrice: 120,
+  variantPriceMinor: 12_000,
   variantStock: 8,
   variantReservedStock: 2,
   variantBarcode: "AbC-123",
@@ -133,8 +134,9 @@ const lookupRow: LookupRow = {
   productId: "product_1",
   productName: "Main Product",
   productSlug: "main-product",
-  productPrice: 100,
+  productPriceMinor: 10_000,
   productIsActive: true,
+  storeCurrencyCode: null,
 };
 
 function createLookupDbMock(options: {

@@ -1,406 +1,165 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
-import {
-  AlertCircle,
-  Laptop,
-  Loader2,
-  LockKeyhole,
-  LogOut,
-  MonitorSmartphone,
-  RefreshCw,
-  ShieldCheck,
-  ShieldQuestion,
-  Smartphone,
-  Tablet,
-} from "lucide-react";
+import { AlertCircle, Laptop, MonitorSmartphone, Smartphone, Tablet } from "lucide-react";
 import { toast } from "sonner";
-
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "~/components/ui/alert-dialog";
+import { deleteApiV1AdminAuthSessions, deleteApiV1AdminAuthSessionsByCommandId } from "@scalius/api-client/sdk";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { getServerFnError } from "~/lib/api-helpers";
-import {
-  deleteApiV1AdminAuthSessions,
-  deleteApiV1AdminAuthSessionsByCommandId,
-} from "@scalius/api-client/sdk";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
 import {
   accountSessionsQueryOptions,
   type AccountSession,
   type AccountSessionsResponse,
 } from "~/lib/api-query-options/auth-management";
 import { queryKeys } from "~/lib/query-keys";
-import { formatAdminDate } from "~/lib/admin-time";
+import { formatDateTime, useMessages } from "~/i18n";
+import { accountMessages } from "~/i18n/account";
 
-function formatSessionRelativeDate(value: string): string {
+const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Laptop, unknown: MonitorSmartphone } as const;
+
+function when(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return formatDistanceToNow(date, { addSuffix: true });
+  return Number.isNaN(date.getTime()) ? "—" : formatDateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
-function formatSessionDate(value: string): string {
-  return formatAdminDate(value) ?? "Unknown";
-}
-
-function SessionDeviceIcon({ type }: { type: AccountSession["deviceType"] }) {
-  if (type === "mobile") return <Smartphone aria-hidden="true" />;
-  if (type === "tablet") return <Tablet aria-hidden="true" />;
-  if (type === "desktop") return <Laptop aria-hidden="true" />;
-  return <MonitorSmartphone aria-hidden="true" />;
-}
-
-function AccountSessionsLoading() {
-  return (
-    <div className="divide-y" role="status" aria-label="Loading active sessions">
-      {[0, 1].map((item) => (
-        <div key={item} className="flex items-center gap-3 p-4">
-          <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-44 max-w-full" />
-            <Skeleton className="h-3 w-64 max-w-full" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-interface AccountSessionRowProps {
-  session: AccountSession;
-  actionDisabled: boolean;
-  revoking: boolean;
-  onRevoke: (commandId: string) => void;
-}
-
-function AccountSessionRow({
-  session,
-  actionDisabled,
-  revoking,
-  onRevoke,
-}: AccountSessionRowProps) {
-  return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/45 text-muted-foreground [&_svg]:h-4 [&_svg]:w-4">
-        <SessionDeviceIcon type={session.deviceType} />
-      </div>
-
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className="truncate text-sm font-medium">{session.deviceLabel}</p>
-          {session.current && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-              Current
-            </Badge>
-          )}
-          {session.impersonated && (
-            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-              Impersonated
-            </Badge>
-          )}
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Active {formatSessionRelativeDate(session.lastActiveAt)}
-          {session.networkHint ? ` · Network ${session.networkHint}` : ""}
-          {` · Expires ${formatSessionDate(session.expiresAt)}`}
-        </p>
-        <div
-          className={
-            session.twoFactorVerified
-              ? "mt-1 flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400"
-              : "mt-1 flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400"
-          }
-        >
-          {session.twoFactorVerified ? (
-            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <ShieldQuestion className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {session.twoFactorVerified
-            ? "Two-factor verified for this session"
-            : "Two-factor not verified for this session"}
-        </div>
-      </div>
-
-      {session.current ? (
-        <div className="col-start-2 flex min-h-9 items-center gap-1.5 justify-self-start text-xs font-medium text-muted-foreground sm:col-start-3 sm:row-start-1 sm:justify-self-end">
-          <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
-          Protected
-        </div>
-      ) : (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="col-start-2 min-h-11 justify-self-start sm:col-start-3 sm:row-start-1 sm:min-h-9 sm:justify-self-end"
-              disabled={actionDisabled}
-            >
-              {revoking ? (
-                <Loader2 className="animate-spin" aria-hidden="true" />
-              ) : (
-                <LogOut aria-hidden="true" />
-              )}
-              Sign out
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-w-sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Sign out this device?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {session.deviceLabel} will need to sign in and complete
-                two-factor authentication again.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="min-h-11 sm:min-h-9">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                className="min-h-11 sm:min-h-9"
-                onClick={() => onRevoke(session.commandId)}
-              >
-                Sign out device
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-    </div>
-  );
-}
-
+/** Signed-in devices: where this account is signed in, with sign out per device or for all others. */
 export function AccountSessions() {
+  const t = useMessages(accountMessages);
   const queryClient = useQueryClient();
   const sessionsQuery = useQuery(accountSessionsQueryOptions());
+  const [confirm, setConfirm] = useState<AccountSession | "others" | null>(null);
   const sessions = sessionsQuery.data?.sessions ?? [];
-  const otherSessionCount = sessions.filter((session) => !session.current).length;
-  const canRevokeOthers = otherSessionCount > 0 || Boolean(sessionsQuery.data?.hasMore);
+  const canSignOutOthers = sessions.some((session) => !session.current) || Boolean(sessionsQuery.data?.hasMore);
 
-  const revokeOne = useMutation({
-    mutationFn: (commandId: string) =>
-      apiData(deleteApiV1AdminAuthSessionsByCommandId({ path: { commandId } })),
-    onSuccess: async (_result, commandId) => {
-      queryClient.setQueryData<AccountSessionsResponse>(
-        queryKeys.auth.sessions(),
-        (current) =>
-          current
-            ? {
-                ...current,
-                sessions: current.sessions.filter(
-                  (session) => session.commandId !== commandId,
-                ),
-              }
-            : current,
-      );
-      toast.success("Device signed out");
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.auth.sessions(),
-      });
+  const settle = () => void queryClient.invalidateQueries({ queryKey: queryKeys.auth.sessions() });
+  const keep = (filter: (session: AccountSession) => boolean, hasMore?: boolean) =>
+    queryClient.setQueryData<AccountSessionsResponse>(queryKeys.auth.sessions(), (current) =>
+      current ? { sessions: current.sessions.filter(filter), hasMore: hasMore ?? current.hasMore } : current,
+    );
+
+  const signOutOne = useMutation({
+    mutationFn: (commandId: string) => apiData(deleteApiV1AdminAuthSessionsByCommandId({ path: { commandId } })),
+    onSuccess: (_result, commandId) => {
+      keep((session) => session.commandId !== commandId);
+      toast.success(t("deviceSignedOut"));
     },
-    onError: (error) => {
-      toast.error(getServerFnError(error, "Could not sign out this device"));
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.auth.sessions(),
-      });
-    },
+    onError: (error) => toast.error(getServerFnError(error, t("signOutFailed"))),
+    onSettled: settle,
   });
 
-  const revokeOthers = useMutation({
+  const signOutOthers = useMutation({
     mutationFn: () => apiData(deleteApiV1AdminAuthSessions()),
-    onSuccess: async (result) => {
-      queryClient.setQueryData<AccountSessionsResponse>(
-        queryKeys.auth.sessions(),
-        (current) =>
-          current
-            ? {
-                sessions: current.sessions.filter((session) => session.current),
-                hasMore: false,
-              }
-            : current,
-      );
-      toast.success(
-        result.revokedCount === 0
-          ? "No other signed-in devices were found"
-          : `${result.revokedCount} ${result.revokedCount === 1 ? "device" : "devices"} signed out`,
-      );
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.auth.sessions(),
-      });
+    onSuccess: (result) => {
+      keep((session) => session.current, false);
+      const count = result.revokedCount;
+      toast.success(count === 0 ? t("noOtherDevices") : count === 1 ? t("devicesSignedOutOne") : t("devicesSignedOutMany", { count }));
     },
-    onError: (error) => {
-      toast.error(getServerFnError(error, "Could not sign out other devices"));
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.auth.sessions(),
-      });
-    },
+    onError: (error) => toast.error(getServerFnError(error, t("signOutFailed"))),
+    onSettled: settle,
   });
+
+  const pending = signOutOne.isPending || signOutOthers.isPending;
+  const loadFailed = Boolean(sessionsQuery.error) || (sessionsQuery.isSuccess && sessions.length === 0);
 
   return (
-    <Card className="max-w-4xl rounded-xl shadow-none">
-      <CardHeader className="gap-3 border-b p-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
-        <div className="min-w-0 space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MonitorSmartphone className="h-4 w-4" aria-hidden="true" />
-            Active sessions
-            {!sessionsQuery.isPending && !sessionsQuery.error && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                {sessionsQuery.data?.hasMore
-                  ? `${sessions.length}+`
-                  : sessions.length}
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Review where this account is signed in and remove devices you no
-            longer recognize.
-          </CardDescription>
-        </div>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 w-full shrink-0 sm:min-h-9 sm:w-auto"
-              disabled={
-                !canRevokeOthers ||
-                revokeOne.isPending ||
-                revokeOthers.isPending
-              }
-            >
-              {revokeOthers.isPending ? (
-                <Loader2 className="animate-spin" aria-hidden="true" />
-              ) : (
-                <LogOut aria-hidden="true" />
-              )}
-              Sign out other devices
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-w-sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Sign out every other device?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Your current session will stay active. Every other device must
-                sign in and complete two-factor authentication again.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="min-h-11 sm:min-h-9">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                className="min-h-11 sm:min-h-9"
-                onClick={() => revokeOthers.mutate()}
-              >
-                Sign out other devices
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("devices")}</CardTitle>
+        <CardDescription>{t("devicesHelp")}</CardDescription>
       </CardHeader>
-
-      <CardContent className="p-0">
+      <CardContent>
         {sessionsQuery.isPending ? (
-          <AccountSessionsLoading />
-        ) : sessionsQuery.error ? (
-          <div role="alert" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2">
-              <AlertCircle
-                className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
-                aria-hidden="true"
-              />
-              <div>
-                <p className="text-sm font-medium">Sessions are unavailable</p>
-                <p className="text-xs text-muted-foreground">
-                  Device access cannot be changed until the session list loads.
-                </p>
+          <ul className="flex flex-col gap-4" aria-busy="true" aria-label={t("loadingDevices")}>
+            {[0, 1].map((item) => (
+              <li key={item} className="flex items-center gap-3">
+                <Skeleton className="size-5" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-56 max-w-full" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : loadFailed ? (
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {t("devicesLoadFailed")}
+                <Button type="button" variant="outline" size="sm" loading={sessionsQuery.isFetching} onClick={() => void sessionsQuery.refetch()}>
+                  {t("retry")}
+                </Button>
               </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 shrink-0 sm:min-h-9"
-              onClick={() => void sessionsQuery.refetch()}
-              disabled={sessionsQuery.isFetching}
-            >
-              <RefreshCw
-                className={sessionsQuery.isFetching ? "animate-spin" : ""}
-                aria-hidden="true"
-              />
-              Retry
-            </Button>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
-            <div>
-              <p className="text-sm font-medium">No active session was returned</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Retry before changing device access.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 sm:min-h-9"
-              onClick={() => void sessionsQuery.refetch()}
-              disabled={sessionsQuery.isFetching}
-            >
-              <RefreshCw
-                className={sessionsQuery.isFetching ? "animate-spin" : ""}
-                aria-hidden="true"
-              />
-              Retry
-            </Button>
-          </div>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <>
-            <div className="divide-y">
-              {sessions.map((session) => (
-                <AccountSessionRow
-                  key={session.commandId}
-                  session={session}
-                  actionDisabled={revokeOne.isPending || revokeOthers.isPending}
-                  revoking={
-                    revokeOne.isPending &&
-                    revokeOne.variables === session.commandId
-                  }
-                  onRevoke={(commandId) => revokeOne.mutate(commandId)}
-                />
-              ))}
-            </div>
-            {sessionsQuery.data?.hasMore && (
-              <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
-                Only the 25 most recent sessions are shown. “Sign out other
-                devices” still revokes every other session.
-              </p>
-            )}
-          </>
+          <ul className="flex flex-col divide-y">
+            {sessions.map((session) => {
+              const Icon = DEVICE_ICONS[session.deviceType] ?? MonitorSmartphone;
+              return (
+                <li key={session.commandId} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="flex h-lh items-center text-muted-foreground">
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-body font-medium">{session.deviceLabel}</span>
+                      {session.current ? <Badge variant="info">{t("thisDevice")}</Badge> : null}
+                      {session.impersonated ? <Badge variant="attention">{t("openedByAdmin")}</Badge> : null}
+                    </span>
+                    <span className="text-body text-muted-foreground">
+                      {t("lastActive", { time: when(session.lastActiveAt) })}
+                      {session.networkHint ? ` · ${t("network", { hint: session.networkHint })}` : ""}
+                    </span>
+                  </div>
+                  {!session.current ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      loading={signOutOne.isPending && signOutOne.variables === session.commandId}
+                      onClick={() => setConfirm(session)}
+                    >
+                      {t("signOut")}
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         )}
+        {sessionsQuery.data?.hasMore ? <p className="pt-3 text-body text-muted-foreground">{t("moreDevices")}</p> : null}
       </CardContent>
+      <CardFooter className="justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!canSignOutOthers || loadFailed || pending}
+          loading={signOutOthers.isPending}
+          onClick={() => setConfirm("others")}
+        >
+          {t("signOutOthers")}
+        </Button>
+      </CardFooter>
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(open) => !open && setConfirm(null)}
+        title={confirm === "others" ? t("signOutOthersTitle") : t("signOutOneTitle", { device: confirm?.deviceLabel ?? "" })}
+        description={t(confirm === "others" ? "signOutOthersBody" : "signOutOneBody")}
+        confirmLabel={t(confirm === "others" ? "signOutOthers" : "signOut")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => {
+          if (confirm === "others") signOutOthers.mutate();
+          else if (confirm) signOutOne.mutate(confirm.commandId);
+          setConfirm(null);
+        }}
+      />
     </Card>
   );
 }

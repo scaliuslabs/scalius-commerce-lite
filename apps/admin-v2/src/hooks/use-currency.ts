@@ -1,18 +1,16 @@
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
-import { formatPrice } from "@scalius/shared/currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { formatNumber, useLocale } from "~/i18n";
 
-const DEFAULT_SYMBOL = "\u09F3";
+const DEFAULT_SYMBOL = "৳";
 const DEFAULT_CODE = "BDT";
 
-/**
- * Thin wrapper around TanStack Query for currency settings.
- * Replaces the previous hand-rolled singleton + listener + localStorage cache.
- * TanStack Query handles deduplication, caching, and background refresh.
- */
+/** Store currency plus a money formatter for the dashboard language. */
 export function useCurrency() {
   const { data } = useQuery(currencySettingsQueryOptions());
+  const locale = useLocale();
 
   const symbol =
     (data as Record<string, unknown> | undefined)?.currencySymbol as string ??
@@ -22,8 +20,19 @@ export function useCurrency() {
     DEFAULT_CODE;
 
   const fmt = useCallback(
-    (price: number | string) => formatPrice(price, { symbol, code }),
-    [symbol, code],
+    (price: number | string) => {
+      const value = Number(price);
+      const amount = Number.isFinite(value) ? value : 0;
+      const digits = getDecimalPlaces(code);
+      const formatted = formatNumber(Math.abs(amount), {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
+      return `${amount < 0 ? "-" : ""}${symbol}${formatted}`;
+    },
+    // `locale` changes the output of formatNumber.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [symbol, code, locale],
   );
 
   return { symbol, code, fmt, formatPrice: fmt };

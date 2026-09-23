@@ -1,232 +1,104 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Shield, ShieldAlert, ShieldCheck, LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { getServerFnError } from "@/lib/api-helpers";
 import type { FraudLookupData } from "@/lib/api-query-options/fraud-checker";
 import { postApiV1AdminFraudCheckerLookup } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
+import { formatNumber, useMessages } from "~/i18n";
+import { orderListMessages } from "~/i18n/order-list";
 
 type RiskLevel = NonNullable<FraudLookupData["riskLevel"]>;
 
-interface FraudCheckIndicatorProps {
-  phone: string;
-  orderId: string;
-  initialOpen?: boolean;
+function deliveryRate(data: FraudLookupData): number {
+  const total = data.total_parcels ?? 0;
+  return total > 0 ? ((data.total_delivered ?? 0) / total) * 100 : 0;
 }
 
-export function FraudCheckIndicator({
-  phone,
-  initialOpen = false,
-}: FraudCheckIndicatorProps) {
-  const [isOpen, setIsOpen] = useState(initialOpen);
-  const [isLoading, setIsLoading] = useState(false);
-  const [fraudData, setFraudData] = useState<FraudLookupData | null>(null);
-  const [hasRequestedFraudData, setHasRequestedFraudData] = useState(false);
+function riskLevel(data: FraudLookupData): RiskLevel {
+  if (data.riskLevel) return data.riskLevel;
+  if ((data.total_parcels ?? 0) === 0) return "unknown";
+  const rate = deliveryRate(data);
+  return rate >= 80 ? "low" : rate >= 50 ? "medium" : "high";
+}
 
-  const handleCheck = useCallback(async () => {
-    setHasRequestedFraudData(true);
-    setIsLoading(true);
-    try {
-      const result = await apiData(postApiV1AdminFraudCheckerLookup({ body: { phone } }));
-      setFraudData(result);
-    } catch (error) {
-      toast.error("Check Failed", { description: getServerFnError(error, "Failed to check fraud data") });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [phone]);
-
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
-  };
-
-  useEffect(() => {
-    if (isOpen && !hasRequestedFraudData && !isLoading) {
-      void handleCheck();
-    }
-  }, [handleCheck, hasRequestedFraudData, isLoading, isOpen]);
-
-  const getDeliveryRate = () => {
-    if (!fraudData?.total_parcels) return 0;
-    return ((fraudData.total_delivered ?? 0) / fraudData.total_parcels) * 100;
-  };
-
-  const getRiskLevel = (): RiskLevel => {
-    if (!fraudData) return "unknown";
-    if (fraudData.riskLevel) return fraudData.riskLevel;
-    const deliveryRate =
-      (fraudData.total_parcels ?? 0) > 0 ? getDeliveryRate() : 0;
-
-    if ((fraudData.total_parcels ?? 0) === 0) return "unknown";
-    if (deliveryRate >= 80) return "low";
-    if (deliveryRate >= 50) return "medium";
-    return "high";
-  };
-
-  const getStatusIcon = () => {
-    if (!fraudData) return <Shield className="h-4 w-4" />;
-
-    const riskLevel = getRiskLevel();
-    if (riskLevel === "low") {
-      return <ShieldCheck className="h-4 w-4 text-green-600" />;
-    } else if (riskLevel === "medium") {
-      return <Shield className="h-4 w-4 text-yellow-600" />;
-    } else if (riskLevel === "high") {
-      return <ShieldAlert className="h-4 w-4 text-red-600" />;
-    }
-
-    return <Shield className="h-4 w-4 text-gray-600" />;
-  };
-
-  const getStatusColor = () => {
-    if (!fraudData) return "text-gray-600";
-    const riskLevel = getRiskLevel();
-
-    if (riskLevel === "low") return "text-green-600";
-    if (riskLevel === "medium") return "text-yellow-600";
-    if (riskLevel === "high") return "text-red-600";
-    return "text-gray-600";
-  };
+/** The customer's courier delivery history (delivered vs cancelled parcels). */
+export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger: ReactNode }) {
+  const t = useMessages(orderListMessages);
+  const [open, setOpen] = useState(true);
+  const { data, error, isFetching, refetch } = useQuery({
+    queryKey: ["fraud-checker", "lookup", phone],
+    queryFn: () => apiData(postApiV1AdminFraudCheckerLookup({ body: { phone } })),
+    enabled: open,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
 
   return (
-    <Popover open={isOpen} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          title="Check fraud data"
-        >
-          {getStatusIcon()}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 z-50 bg-[var(--popover)] text-[var(--popover-foreground)]" align="start">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm">Fraud Check Results</h4>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCheck}
-              disabled={isLoading}
-              className="h-6 px-2 text-xs"
-            >
-              {isLoading ? (
-                <LoaderCircle className="h-3 w-3 animate-spin" />
-              ) : (
-                "Refresh"
-              )}
-            </Button>
-          </div>
-
-          {isLoading && !fraudData ? (
-            <div className="flex items-center justify-center py-8">
-              <LoaderCircle className="animate-spin h-6 w-6 text-[var(--muted-foreground)]" />
-            </div>
-          ) : fraudData ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded bg-[var(--muted)] p-2">
-                  <p className="text-xs text-[var(--muted-foreground)]">Total</p>
-                  <p className="text-lg font-semibold">{fraudData.total_parcels ?? 0}</p>
-                </div>
-                <div className="rounded bg-green-50 dark:bg-green-900/20 p-2">
-                  <p className="text-xs text-green-600 dark:text-green-400">Delivered</p>
-                  <p className="text-lg font-semibold text-green-700 dark:text-green-300">
-                    {fraudData.total_delivered ?? 0}
-                  </p>
-                </div>
-                <div className="rounded bg-red-50 dark:bg-red-900/20 p-2">
-                  <p className="text-xs text-red-600 dark:text-red-400">Cancelled</p>
-                  <p className="text-lg font-semibold text-red-700 dark:text-red-300">
-                    {fraudData.total_cancel ?? 0}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded bg-[var(--muted)] p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[var(--muted-foreground)]">Risk</span>
-                  <span className={`text-sm font-semibold capitalize ${getStatusColor()}`}>
-                    {getRiskLevel()}
-                  </span>
-                </div>
-                {(fraudData.provider_status || fraudData.customer_tag) && (
-                  <div className="mt-2 space-y-1 text-xs text-[var(--muted-foreground)]">
-                    <p>Status: {fraudData.provider_status || fraudData.customer_tag}</p>
-                  </div>
-                )}
-              </div>
-
-              {(fraudData.total_parcels ?? 0) > 0 && (
-                <div className="rounded bg-[var(--muted)] p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      Delivery Rate
-                    </span>
-                    <span className={`text-sm font-semibold ${getStatusColor()}`}>
-                      {getDeliveryRate().toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${getDeliveryRate() >= 80
-                          ? "bg-green-500"
-                          : getDeliveryRate() >= 50
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                        }`}
-                      style={{
-                        width: `${getDeliveryRate()}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {fraudData.apis && Object.keys(fraudData.apis).length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-[var(--muted-foreground)]">
-                    Courier Breakdown
-                  </p>
-                  {Object.entries(fraudData.apis).map(([courier, data]) => (
-                    <div key={courier} className="rounded border border-[var(--border)] p-2">
-                      <p className="text-xs font-medium mb-1">{courier}</p>
-                      <div className="grid grid-cols-3 gap-1 text-xs">
-                        <div>
-                          <span className="text-[var(--muted-foreground)]">Total: </span>
-                          <span className="font-medium">{data.total_parcels}</span>
-                        </div>
-                        <div>
-                          <span className="text-green-600">Delivered: </span>
-                          <span className="font-medium">{data.total_delivered_parcels}</span>
-                        </div>
-                        <div>
-                          <span className="text-red-600">Cancelled: </span>
-                          <span className="font-medium">{data.total_cancelled_parcels}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <p className="text-xs text-[var(--muted-foreground)] text-center">
-                Data for: {phone}
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--muted-foreground)] text-center py-4">
-              Click to check fraud data
-            </p>
-          )}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="start" className="w-80 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-body font-medium">{t("deliveryHistory")}</p>
+          <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
+            {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
+          </Button>
         </div>
+        {error ? (
+          <p className="text-body text-destructive">{getServerFnError(error, t("historyFailed"))}</p>
+        ) : !data ? (
+          <LoaderCircle className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          <>
+            <dl className="grid grid-cols-3 gap-2 text-center">
+              {([
+                ["parcels", data.total_parcels],
+                ["delivered", data.total_delivered],
+                ["cancelled", data.total_cancel],
+              ] as const).map(([key, value]) => (
+                <div key={key}>
+                  <dt className="text-body text-muted-foreground">{t(key)}</dt>
+                  <dd className="text-heading-lg font-semibold">{formatNumber(value ?? 0)}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="space-y-1">
+              <div className="flex justify-between text-body">
+                <span className="text-muted-foreground">{t("risk")}</span>
+                <span className={riskLevel(data) === "high" ? "font-medium text-destructive" : "font-medium"}>
+                  {t(`risk.${riskLevel(data)}`)}
+                </span>
+              </div>
+              {(data.total_parcels ?? 0) > 0 ? (
+                <>
+                  <div className="flex justify-between text-body">
+                    <span className="text-muted-foreground">{t("deliveryRate")}</span>
+                    <span>{formatNumber(deliveryRate(data), { maximumFractionDigits: 1 })}%</span>
+                  </div>
+                  <Progress value={deliveryRate(data)} />
+                </>
+              ) : null}
+            </div>
+            {data.apis && Object.keys(data.apis).length > 0 ? (
+              <ul className="divide-y border-t text-body">
+                {Object.entries(data.apis).map(([courier, row]) => (
+                  <li key={courier} className="flex justify-between gap-2 py-2">
+                    <span className="font-medium">{courier}</span>
+                    <span className="text-muted-foreground">
+                      {t("courierRow", {
+                        delivered: row.total_delivered_parcels,
+                        total: row.total_parcels,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

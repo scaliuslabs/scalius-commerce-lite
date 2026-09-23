@@ -9,33 +9,28 @@ import type {
 import type { ManualOrderQuotePayload } from "@/lib/api-query-options/orders";
 import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
 
-// Define the shape of the context state
-interface OrderFormContextType {
+interface OrderFormState {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
+  /** Editing a saved order (full edit or amendment). */
   isEdit: boolean;
-  isAmend: boolean;
+  /** Totals come from the server quote (create and amend); full edit has none. */
+  usesQuote: boolean;
   locations: {
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
     areas: DeliveryLocation[];
   };
-  setLocations: React.Dispatch<React.SetStateAction<{
-    cities: DeliveryLocation[];
-    zones: DeliveryLocation[];
-    areas: DeliveryLocation[];
-  }>>;
-  isLoading: {
-    zones: boolean;
-    areas: boolean;
-  };
-  setIsLoading: React.Dispatch<React.SetStateAction<{
-    zones: boolean;
-    areas: boolean;
-  }>>;
+  isLoading: { zones: boolean; areas: boolean };
   loadZones: (cityId: string) => Promise<void>;
   loadAreas: (zoneId: string) => Promise<void>;
-  isSubmitting: boolean;
+  /** Totals from the form values, shown until a current server quote exists. */
+  localTotals: {
+    subtotal: number;
+    shipping: number;
+    discount: number;
+    total: number;
+  };
   manualQuote: {
     data: ManualOrderQuotePayload | null;
     isCurrent: boolean;
@@ -45,135 +40,75 @@ interface OrderFormContextType {
     canRetry: boolean;
     retry: () => void;
   };
-  refs: {
-    customerNameRef: React.RefObject<HTMLInputElement | null>;
-    customerPhoneRef: React.RefObject<HTMLInputElement | null>;
-    customerEmailRef: React.RefObject<HTMLInputElement | null>;
-    shippingAddressRef: React.RefObject<HTMLTextAreaElement | null>;
-    cityButtonRef: React.RefObject<HTMLButtonElement | null>;
-    zoneButtonRef: React.RefObject<HTMLButtonElement | null>;
-    areaButtonRef: React.RefObject<HTMLButtonElement | null>;
-    notesRef: React.RefObject<HTMLTextAreaElement | null>;
-    productSearchButtonRef: React.RefObject<HTMLButtonElement | null>;
-    shippingChargeRef: React.RefObject<HTMLInputElement | null>;
-    discountAmountRef: React.RefObject<HTMLInputElement | null>;
-    statusButtonRef: React.RefObject<HTMLButtonElement | null>;
-    submitButtonRef: React.RefObject<HTMLButtonElement | null>;
-    addItemButtonRef: React.RefObject<HTMLButtonElement | null>;
-  };
-  handleKeyDown: (
-    e: React.KeyboardEvent,
-    nextElementRef?: React.RefObject<HTMLElement | null>,
-  ) => void;
 }
 
-// Create the context with a null default value
+type Ref<T> = React.RefObject<T | null>;
+
+interface OrderFormContextType extends OrderFormState {
+  refs: {
+    customerNameRef: Ref<HTMLInputElement>;
+    customerPhoneRef: Ref<HTMLInputElement>;
+    customerEmailRef: Ref<HTMLInputElement>;
+    shippingAddressRef: Ref<HTMLTextAreaElement>;
+    cityButtonRef: Ref<HTMLButtonElement>;
+    zoneButtonRef: Ref<HTMLButtonElement>;
+    areaButtonRef: Ref<HTMLButtonElement>;
+    notesRef: Ref<HTMLTextAreaElement>;
+    productSearchButtonRef: Ref<HTMLButtonElement>;
+    shippingChargeRef: Ref<HTMLInputElement>;
+    discountAmountRef: Ref<HTMLInputElement>;
+    addItemButtonRef: Ref<HTMLButtonElement>;
+  };
+  /** Enter moves focus to the next field (and opens it when it is a picker). */
+  handleKeyDown: (e: React.KeyboardEvent, next?: Ref<HTMLElement>) => void;
+}
+
 const OrderFormContext = createContext<OrderFormContextType | null>(null);
 
-// Create a provider component
-interface OrderFormProviderProps {
-  children: React.ReactNode;
-  form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
-  products: Product[];
-  isEdit: boolean;
-  isAmend: boolean;
-  locations: {
-    cities: DeliveryLocation[];
-    zones: DeliveryLocation[];
-    areas: DeliveryLocation[];
-  };
-  setLocations: React.Dispatch<React.SetStateAction<{
-    cities: DeliveryLocation[];
-    zones: DeliveryLocation[];
-    areas: DeliveryLocation[];
-  }>>;
-  isLoading: {
-    zones: boolean;
-    areas: boolean;
-  };
-  setIsLoading: React.Dispatch<React.SetStateAction<{
-    zones: boolean;
-    areas: boolean;
-  }>>;
-  loadZones: (cityId: string) => Promise<void>;
-  loadAreas: (zoneId: string) => Promise<void>;
-  isSubmitting: boolean;
-  manualQuote: OrderFormContextType["manualQuote"];
-}
-
-export const OrderFormProvider: React.FC<OrderFormProviderProps> = ({
+export function OrderFormProvider({
   children,
-  ...props
-}) => {
-  // All refs for keyboard navigation are centralized here
-  const customerNameRef = useRef<HTMLInputElement>(null);
-  const customerPhoneRef = useRef<HTMLInputElement>(null);
-  const customerEmailRef = useRef<HTMLInputElement>(null);
-  const shippingAddressRef = useRef<HTMLTextAreaElement>(null);
-  const cityButtonRef = useRef<HTMLButtonElement>(null);
-  const zoneButtonRef = useRef<HTMLButtonElement>(null);
-  const areaButtonRef = useRef<HTMLButtonElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const productSearchButtonRef = useRef<HTMLButtonElement>(null);
-  const shippingChargeRef = useRef<HTMLInputElement>(null);
-  const discountAmountRef = useRef<HTMLInputElement>(null);
-  const statusButtonRef = useRef<HTMLButtonElement>(null);
-  const submitButtonRef = useRef<HTMLButtonElement>(null);
-  const addItemButtonRef = useRef<HTMLButtonElement>(null);
-
+  ...state
+}: OrderFormState & { children: React.ReactNode }) {
   const refs = {
-    customerNameRef,
-    customerPhoneRef,
-    customerEmailRef,
-    shippingAddressRef,
-    cityButtonRef,
-    zoneButtonRef,
-    areaButtonRef,
-    notesRef,
-    productSearchButtonRef,
-    shippingChargeRef,
-    discountAmountRef,
-    statusButtonRef,
-    submitButtonRef,
-    addItemButtonRef,
+    customerNameRef: useRef<HTMLInputElement>(null),
+    customerPhoneRef: useRef<HTMLInputElement>(null),
+    customerEmailRef: useRef<HTMLInputElement>(null),
+    shippingAddressRef: useRef<HTMLTextAreaElement>(null),
+    cityButtonRef: useRef<HTMLButtonElement>(null),
+    zoneButtonRef: useRef<HTMLButtonElement>(null),
+    areaButtonRef: useRef<HTMLButtonElement>(null),
+    notesRef: useRef<HTMLTextAreaElement>(null),
+    productSearchButtonRef: useRef<HTMLButtonElement>(null),
+    shippingChargeRef: useRef<HTMLInputElement>(null),
+    discountAmountRef: useRef<HTMLInputElement>(null),
+    addItemButtonRef: useRef<HTMLButtonElement>(null),
   };
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-    nextElementRef?: React.RefObject<HTMLElement | null>,
-  ) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      nextElementRef?.current?.focus();
-      // Special handling for combobox/popover triggers to open them on Enter
-      if (
-        nextElementRef?.current &&
-        (nextElementRef.current.getAttribute("role") === "combobox" ||
-          nextElementRef.current.getAttribute("aria-haspopup") === "listbox")
-      ) {
-        nextElementRef.current.click();
-      }
+  const handleKeyDown = (e: React.KeyboardEvent, next?: Ref<HTMLElement>) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    const element = next?.current;
+    element?.focus();
+    if (
+      element
+      && (element.getAttribute("role") === "combobox"
+        || element.getAttribute("aria-haspopup") === "listbox")
+    ) {
+      element.click();
     }
   };
 
-  const value = {
-    ...props,
-    refs,
-    handleKeyDown,
-  };
-
   return (
-    <OrderFormContext.Provider value={value}>
+    <OrderFormContext.Provider value={{ ...state, refs, handleKeyDown }}>
       {children}
     </OrderFormContext.Provider>
   );
-};
+}
 
-// Custom hook for easily consuming the context in child components
-export const useOrderForm = () => {
+export function useOrderForm() {
   const context = useContext(OrderFormContext);
   if (!context) {
     throw new Error("useOrderForm must be used within an OrderFormProvider");
   }
   return context;
-};
+}

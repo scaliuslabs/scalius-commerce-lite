@@ -1,37 +1,24 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorSetup } from "~/components/auth/TwoFactorSetup";
+import { translate } from "~/i18n";
+import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/setup-2fa")({
   beforeLoad: async () => {
     const { session } = await readDashboardSession();
-
-    // No session -> login
-    if (!session) {
-      throw redirect({ to: "/auth/login" });
-    }
-
-    if (session.user.mustChangePassword) {
-      throw redirect({ to: "/auth/forgot-password" });
-    }
-
-    // 2FA already enabled
+    if (!session) throw redirect({ to: "/auth/login" });
+    if (session.user.mustChangePassword) throw redirect({ to: "/auth/forgot-password" });
     if (session.user.twoFactorEnabled) {
-      if (session.twoFactorVerified) {
-        throw redirect({ to: "/admin" });
-      }
-      throw redirect({ to: "/auth/two-factor" });
+      throw redirect({ to: session.twoFactorVerified ? "/admin" : "/auth/two-factor" });
     }
-
     return { userEmail: session.user.email };
   },
-  head: () => ({
-    meta: [{ title: "Setup Two-Factor Authentication - Scalius Admin" }],
-  }),
+  head: () => ({ meta: [{ title: `${translate(authMessages, "setupTwoFactorTitle")} · Scalius` }] }),
   component: Setup2faPage,
 });
 
 function Setup2faPage() {
-  const { userEmail } = Route.useRouteContext() as { userEmail: string };
+  const { userEmail } = Route.useRouteContext();
   return <TwoFactorSetup userEmail={userEmail} />;
 }

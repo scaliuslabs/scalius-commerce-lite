@@ -1,20 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CameraOff, Flashlight, FlashlightOff, Keyboard, Search, Camera } from "lucide-react";
 import type { Html5Qrcode as Html5QrcodeInstance } from "html5-qrcode";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { useMessages } from "~/i18n";
+import { scannerMessages } from "~/i18n/scanner";
 
 interface BarcodeScannerProps {
   onScan: (code: string, format: string) => void;
   isActive: boolean;
   showTorchButton?: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const SCAN_CONFIG = {
   fps: 15,
@@ -26,15 +20,12 @@ const SCAN_CONFIG = {
 const DEBOUNCE_MS = 2000;
 const READER_ID = "barcode-scanner-reader";
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function BarcodeScanner({
   onScan,
   isActive,
   showTorchButton = true,
 }: BarcodeScannerProps) {
+  const t = useMessages(scannerMessages);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
@@ -197,136 +188,90 @@ export function BarcodeScanner({
   };
 
   return (
-    <div className="relative h-full flex flex-col bg-black">
-      {/* Camera viewfinder — fills available space */}
-      <div className="relative flex-1 min-h-0">
+    <div className="relative flex h-full flex-col bg-background">
+      <div className="relative min-h-0 flex-1">
         <div
           id={READER_ID}
           className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
         />
 
-        {/* Crosshair / scan frame overlay */}
-        {cameraReady && (
+        {cameraReady ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            {/* Outer dim mask */}
-            <div className="relative" style={{ width: 280, height: 90 }}>
-              {/* Scan region border */}
-              <div className="absolute inset-0 border-2 border-white/20 rounded-lg" />
-
-              {/* Corner brackets */}
-              <div className="absolute -top-0.5 -left-0.5 h-5 w-5 border-t-[3px] border-l-[3px] border-emerald-400 rounded-tl-md" />
-              <div className="absolute -top-0.5 -right-0.5 h-5 w-5 border-t-[3px] border-r-[3px] border-emerald-400 rounded-tr-md" />
-              <div className="absolute -bottom-0.5 -left-0.5 h-5 w-5 border-b-[3px] border-l-[3px] border-emerald-400 rounded-bl-md" />
-              <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 border-b-[3px] border-r-[3px] border-emerald-400 rounded-br-md" />
-
-              {/* Animated scan line */}
-              <div
-                className="absolute left-2 right-2 h-0.5 bg-emerald-400/60"
-                style={{
-                  animation: "scanline 2s ease-in-out infinite",
-                  top: "50%",
-                }}
-              />
+            <div className="relative h-24 w-72 rounded-lg border-2 border-primary/40">
+              <div className="absolute inset-x-2 top-1/2 h-0.5 animate-pulse bg-primary" />
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Camera error */}
-        {cameraError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-6 text-center">
-            <CameraOff className="mb-3 h-12 w-12 text-zinc-500" />
-            <p className="text-sm text-zinc-400">{cameraError}</p>
-            <p className="mt-2 text-xs text-zinc-600">
-              Use manual input or a USB scanner
-            </p>
+        {cameraError ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card p-6 text-center">
+            <CameraOff className="mb-3 size-12 text-muted-foreground" />
+            <p className="text-body text-muted-foreground">{cameraError}</p>
+            <p className="mt-2 text-body text-muted-foreground">{t("cameraHelp")}</p>
           </div>
-        )}
+        ) : null}
 
-        {/* Not active placeholder */}
-        {!isActive && !cameraError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900">
-            <Camera className="mb-2 h-8 w-8 text-zinc-600" />
-            <p className="text-sm text-zinc-500">Camera paused</p>
+        {!isActive && !cameraError ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card text-muted-foreground">
+            <Camera className="mb-2 size-8" />
+            <p className="text-body">{t("cameraPaused")}</p>
           </div>
-        )}
+        ) : null}
 
-        {/* Action buttons overlaid on camera */}
-        {cameraReady && isActive && (
-          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-            {/* Torch */}
-            {showTorchButton && torchSupported ? (
+        {cameraReady && isActive ? (
+          <>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+              {showTorchButton && torchSupported ? (
+                <button
+                  type="button"
+                  onClick={toggleTorch}
+                  className="flex h-12 items-center gap-2 rounded-full bg-background/60 px-4 text-body backdrop-blur-sm active:bg-background/80"
+                  aria-label={t(torchOn ? "torchOff" : "torchOn")}
+                >
+                  {torchOn ? <FlashlightOff className="size-5" /> : <Flashlight className="size-5" />}
+                  <span>{t("torch")}</span>
+                </button>
+              ) : (
+                <div />
+              )}
               <button
                 type="button"
-                onClick={toggleTorch}
-                className="flex h-12 items-center gap-2 rounded-full bg-black/60 px-4 text-sm text-white backdrop-blur-sm active:bg-black/80"
-                aria-label={torchOn ? "Turn off flashlight" : "Turn on flashlight"}
+                onClick={() => setShowManual(!showManual)}
+                className="flex h-12 items-center gap-2 rounded-full bg-background/60 px-4 text-body backdrop-blur-sm active:bg-background/80"
               >
-                {torchOn ? (
-                  <FlashlightOff className="h-5 w-5" />
-                ) : (
-                  <Flashlight className="h-5 w-5" />
-                )}
-                <span>Torch</span>
+                <Keyboard className="size-5" />
+                <span>{t("typeCode")}</span>
               </button>
-            ) : (
-              <div />
-            )}
-
-            {/* Manual entry */}
-            <button
-              type="button"
-              onClick={() => setShowManual(!showManual)}
-              className="flex h-12 items-center gap-2 rounded-full bg-black/60 px-4 text-sm text-white backdrop-blur-sm active:bg-black/80"
-              aria-label="Manual barcode input"
-            >
-              <Keyboard className="h-5 w-5" />
-              <span>Manual</span>
-            </button>
-          </div>
-        )}
-
-        {/* Scanning indicator */}
-        {cameraReady && isActive && (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 backdrop-blur-sm">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            <span className="text-xs text-emerald-400 font-medium">Scanning</span>
-          </div>
-        )}
+            </div>
+            <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-background/60 px-3 py-1 backdrop-blur-sm">
+              <span className="size-2 animate-pulse rounded-full bg-primary" />
+              <span className="text-body font-medium">{t("scanning")}</span>
+            </div>
+          </>
+        ) : null}
       </div>
 
-      {/* Manual input form */}
-      {showManual && (
-        <form
-          method="post"
-          onSubmit={handleManualSubmit}
-          className="flex items-center gap-2 bg-zinc-900 px-3 py-3"
-          noValidate
-        >
+      {showManual ? (
+        <form method="post" onSubmit={handleManualSubmit} className="flex items-center gap-2 bg-card px-3 py-3" noValidate>
           <input
             type="text"
             value={manualInput}
             onChange={(e) => setManualInput(e.target.value)}
-            placeholder="Type or paste barcode..."
+            placeholder={t("codePlaceholder")}
+            aria-label={t("codePlaceholder")}
             autoFocus
-            className="h-12 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
+            className="h-12 flex-1 rounded-lg border bg-muted px-4 text-body placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
           <button
             type="submit"
             disabled={manualInput.trim().length === 0}
-            className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-600 text-white disabled:opacity-40 active:bg-emerald-700"
+            aria-label={t("find")}
+            className="flex size-12 items-center justify-center rounded-lg bg-primary text-primary-foreground active:opacity-80 disabled:opacity-40"
           >
-            <Search className="h-5 w-5" />
+            <Search className="size-5" />
           </button>
         </form>
-      )}
-
-      {/* Scanline animation keyframes */}
-      <style>{`
-        @keyframes scanline {
-          0%, 100% { top: 20%; opacity: 0.4; }
-          50% { top: 80%; opacity: 0.8; }
-        }
-      `}</style>
+      ) : null}
     </div>
   );
 }

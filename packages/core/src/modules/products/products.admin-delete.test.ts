@@ -95,7 +95,6 @@ describe("admin product permanent delete inventory guards", () => {
     it("rejects single permanent product delete when a SKU has inventory history", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
-            [{ count: 0 }],
             [{ id: "var_history" }],
             [{ count: 1 }],
         ]);
@@ -111,10 +110,8 @@ describe("admin product permanent delete inventory guards", () => {
     it("keeps blocked history rows in trash while deleting unrelated safe rows", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
-            [{ count: 0 }],
             [{ id: "var_history" }],
             [{ count: 1 }],
-            [{ count: 0 }],
             [{ count: 0 }],
             [{ id: "var_clean" }],
             [{ count: 0 }],
@@ -148,7 +145,6 @@ describe("admin product permanent delete inventory guards", () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 1 }],
             [{ count: 0 }],
-            [{ count: 0 }],
             [{ id: "var_clean" }],
             [{ count: 0 }],
         ]);
@@ -178,7 +174,6 @@ describe("admin product permanent delete inventory guards", () => {
     it("clears low-stock alerts before deleting variants during single no-history permanent delete", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
-            [{ count: 0 }],
             [{ id: "var_clean" }],
             [{ count: 0 }],
         ]);
@@ -196,9 +191,7 @@ describe("admin product permanent delete inventory guards", () => {
     it("clears low-stock alerts before deleting variants during bulk no-history permanent delete", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
-            [{ count: 0 }],
             [{ id: "var_clean_1" }],
-            [{ count: 0 }],
             [{ count: 0 }],
             [{ count: 0 }],
             [{ id: "var_clean_2" }],
@@ -225,7 +218,6 @@ describe("admin product permanent delete inventory guards", () => {
             id: `var_${index}`,
         }));
         const { db, batchCalls } = createProductDeleteDb([
-            [{ count: 0 }],
             [{ count: 0 }],
             variantRows,
             [{ count: 0 }],

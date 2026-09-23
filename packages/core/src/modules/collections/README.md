@@ -102,7 +102,7 @@ resolved separately by ID and retained independently of picker pages.
 
 ## Product Resolution
 
-The service provides product resolution for the storefront, computing `discountedPrice` for each product using `calculateDiscountedPrice()` from `@scalius/shared/price-utils`.
+The service provides product resolution for the storefront, computing `discountedPrice` for each product from the integer buyer-pricing projection (`products.money`).
 
 ### Types
 
@@ -124,5 +124,5 @@ dynamic collections require a category.
 
 - `@scalius/database` -- `collections`, `products`, `categories`, `productVariants`, `productMedia`, and `media`; image-only collection surfaces use the shared product image representation resolver
 - `@scalius/core/errors` -- `NotFoundError`
-- `@scalius/shared/price-utils` -- `calculateDiscountedPrice()`
+- `../products/products.money` -- buyer pricing in minor units, presented as decimals
 - `nanoid` -- ID generation (no prefix)

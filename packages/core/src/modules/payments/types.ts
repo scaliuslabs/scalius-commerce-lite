@@ -1,5 +1,4 @@
-// Shared payment types. Order amounts in the database are MAJOR units; provider
-// adapters (gateways/port.ts) exchange integer minor units at their boundary.
+// Shared payment types. Every stored and computed amount is integer minor units.
 
 export type { PaymentType } from "./gateways/port";
 import type { PaymentType } from "./gateways/port";
@@ -17,7 +16,8 @@ export interface InitCODTrackingParams {
 export interface RecordCODCollectionParams {
   orderId: string;
   collectedBy: string; // Courier name or employee ID
-  collectedAmount: number;
+  /** Integer minor units of the order currency. */
+  collectedAmountMinor: number;
   receiptUrl?: string;
 }
 
@@ -35,8 +35,8 @@ export interface ProcessPaymentParams {
   orderId: string;
   /** Gateway id (registry key); stored as order_payments.payment_method. */
   provider: string;
-  /** Major units in the order currency. */
-  amount: number;
+  /** Integer minor units in the order currency. */
+  amountMinor: number;
   currency: string;
   /** Omitted when the provider did not bind one; the kernel infers it from the amount. */
   paymentType?: PaymentType;

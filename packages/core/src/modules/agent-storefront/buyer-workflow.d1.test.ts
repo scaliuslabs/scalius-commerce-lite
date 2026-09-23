@@ -32,10 +32,10 @@ describe("agent storefront checkout submission on D1 storage", () => {
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
              ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);
-      INSERT INTO shipping_methods (id, name, fee, is_active) VALUES ('ship_1', 'Standard', 60, 1);
-      INSERT INTO products (id, name, slug, price, is_active) VALUES ('prod_1', 'Tea', 'tea', 100, 1);
-      INSERT INTO product_variants (id, product_id, sku, price, stock, is_default, track_inventory)
-      VALUES ('variant_1', 'prod_1', 'TEA-1', 100, 10, 1, 1);
+      INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('ship_1', 'Standard', 6000, 1);
+      INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tea', 'tea', 10000, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+      VALUES ('variant_1', 'prod_1', 'TEA-1', 10000, 10, 1, 1);
       INSERT INTO user (id, name, email) VALUES ('owner_1', 'Owner', 'owner@example.com');
       INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, preset, permissions_json,
         risk_ceiling, status, expires_at)
@@ -84,8 +84,8 @@ describe("agent storefront checkout submission on D1 storage", () => {
   }
 
   it.each([
-    ["a SKU price", "UPDATE product_variants SET price = 120"],
-    ["a shipping fee", "UPDATE shipping_methods SET fee = 80"],
+    ["a SKU price", "UPDATE product_variants SET price_minor = 12000"],
+    ["a shipping fee", "UPDATE shipping_methods SET fee_minor = 8000"],
   ])("refuses a reviewed quote made stale by %s change, then commits the refreshed quote", async (_change, sqlText) => {
     const reviewed = await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT);
     sqlite.exec(sqlText);
@@ -97,7 +97,8 @@ describe("agent storefront checkout submission on D1 storage", () => {
     const refreshed = await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT);
     const result = await submit({ expectedQuoteFingerprint: refreshed.quoteFingerprint });
     expect(result.response).toMatchObject({ status: "complete", contextRevision: 3, totalAmount: refreshed.totalAmount });
-    expect(sqlite.prepare("SELECT total_amount FROM orders").get()).toEqual({ total_amount: refreshed.totalAmount });
+    expect(sqlite.prepare("SELECT total_amount_minor FROM orders").get())
+      .toEqual({ total_amount_minor: Math.round(refreshed.totalAmount * 100) });
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants").get()).toEqual({ reserved_stock: 2 });
     expect(sqlite.prepare("SELECT revision, cart_json FROM agent_storefront_contexts").get())
       .toEqual({ revision: 3, cart_json: "[]" });

@@ -1,94 +1,111 @@
-import { OpenAPIHono, z } from "@hono/zod-openapi";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-    listDiscounts: vi.fn(),
-    getDiscountById: vi.fn(),
-    createDiscount: vi.fn(),
-    updateDiscount: vi.fn(),
-    deleteDiscount: vi.fn(),
-    bulkDeleteDiscounts: vi.fn(),
-    restoreDiscounts: vi.fn(),
-    permanentlyDeleteDiscount: vi.fn(),
-    setDiscountActiveStatus: vi.fn(),
+    activatePromotion: vi.fn(),
+    pausePromotion: vi.fn(),
+    createPromotionDraft: vi.fn(),
+    getPromotionAggregate: vi.fn(),
+    getPromotionOrderUsage: vi.fn(),
+    bumpCacheGeneration: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/discounts", () => ({
-    listDiscounts: mocks.listDiscounts,
-    getDiscountById: mocks.getDiscountById,
-    createDiscount: mocks.createDiscount,
-    updateDiscount: mocks.updateDiscount,
-    deleteDiscount: mocks.deleteDiscount,
-    bulkDeleteDiscounts: mocks.bulkDeleteDiscounts,
-    restoreDiscounts: mocks.restoreDiscounts,
-    permanentlyDeleteDiscount: mocks.permanentlyDeleteDiscount,
-    setDiscountActiveStatus: mocks.setDiscountActiveStatus,
-    createDiscountSchema: z.object({}).passthrough(),
-    updateDiscountSchema: z.object({ id: z.string().optional() }).passthrough(),
+vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
+    ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),
+    activatePromotion: mocks.activatePromotion,
+    pausePromotion: mocks.pausePromotion,
+    createPromotionDraft: mocks.createPromotionDraft,
+    getPromotionAggregate: mocks.getPromotionAggregate,
+    getPromotionOrderUsage: mocks.getPromotionOrderUsage,
+}));
+
+vi.mock("../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { adminDiscountRoutes } from "./discounts";
 
-function createTestApp(
-    permissions = new Set([PERMISSIONS.DISCOUNTS_TOGGLE_STATUS]),
-) {
-    const db = { id: "db" };
+function draftBody(overrides: Record<string, unknown> = {}) {
+    return {
+        name: "SAVE10",
+        method: "code",
+        codes: [{ code: "save10" }],
+        effects: [{ kind: "percentage_off", target: "order", allocation: "once", config: { basisPoints: 1_000 } }],
+        ...overrides,
+    };
+}
+
+function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
     });
     app.use("*", async (c, next) => {
-        c.set("db", db as never);
-        c.set("adminPermissions", permissions);
+        c.set("db", {} as never);
         await next();
     });
     app.route("/admin/discounts", adminDiscountRoutes);
-    return { app, db };
+    return app;
 }
 
+const json = (body: unknown, method = "POST") => ({
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+});
+
 describe("admin discount routes", () => {
-    afterEach(() => {
+    beforeEach(() => {
         vi.clearAllMocks();
+        mocks.createPromotionDraft.mockResolvedValue({ id: "promo_1", revision: 1, status: "draft" });
+        mocks.getPromotionOrderUsage.mockResolvedValue({ redemptionCount: 2, discountSpendMinor: 3_000 });
     });
 
-    it("passes lifecycle authority separately from ordinary create permission", async () => {
-        mocks.createDiscount.mockResolvedValue({ id: "disc_1", revision: 1 });
-        const { app, db } = createTestApp(new Set());
-
-        const response = await app.request("/api/v1/admin/discounts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ isActive: false }),
-        });
-
-        expect(response.status).toBe(201);
-        expect(mocks.createDiscount).toHaveBeenCalledWith(
-            db,
-            expect.objectContaining({ isActive: false }),
-            { canToggleStatus: false },
-        );
+    it("creates code and automatic drafts with normalized codes and default combinations", async () => {
+        const app = createTestApp();
+        expect((await app.request("/api/v1/admin/discounts", json(draftBody()))).status).toBe(201);
+        expect(mocks.createPromotionDraft).toHaveBeenLastCalledWith({}, expect.objectContaining({
+            method: "code",
+            codes: [{ code: "SAVE10", isActive: true }],
+            combinesWith: { product: false, order: false, shipping: false },
+        }));
+        const automatic = await app.request("/api/v1/admin/discounts", json(draftBody({
+            name: "Free delivery weekend",
+            method: "automatic",
+            codes: [],
+            effects: [{ kind: "free", target: "shipping", allocation: "once", config: {} }],
+        })));
+        expect(automatic.status).toBe(201);
+        const limitedAutomatic = await app.request("/api/v1/admin/discounts", json(draftBody({
+            method: "automatic", codes: [], maxRedemptions: 10,
+        })));
+        expect(limitedAutomatic.status).toBe(400);
+        expect(mocks.createPromotionDraft).toHaveBeenCalledTimes(2);
     });
 
-    it("forwards the editor revision claim on full rule updates", async () => {
-        mocks.updateDiscount.mockResolvedValue({ id: "disc_1", revision: 6 });
-        const { app, db } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/discounts/disc_1", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ expectedRevision: 5, isActive: false }),
-        });
-
+    it("reports order usage for code and automatic discounts", async () => {
+        const app = createTestApp();
+        mocks.getPromotionAggregate.mockResolvedValue({ id: "promo_1", redemptionCount: 0, discountSpendMinor: 0 });
+        const response = await app.request("/api/v1/admin/discounts/promo_1");
         expect(response.status).toBe(200);
-        expect(mocks.updateDiscount).toHaveBeenCalledWith(
-            db,
-            "disc_1",
-            expect.objectContaining({ expectedRevision: 5 }),
-            { canToggleStatus: true },
-        );
+        await expect(response.json()).resolves.toMatchObject({
+            data: { id: "promo_1", redemptionCount: 2, discountSpendMinor: 3_000 },
+        });
+    });
+
+    it("requires a revision claim to activate or deactivate, and refreshes the storefront cache", async () => {
+        const app = createTestApp();
+        for (const command of ["activate", "pause"]) {
+            expect((await app.request(`/api/v1/admin/discounts/promo_1/${command}`, json({}))).status).toBe(400);
+        }
+        expect(mocks.activatePromotion).not.toHaveBeenCalled();
+        mocks.activatePromotion.mockResolvedValue({ id: "promo_1", revision: 2, status: "active" });
+        const response = await app.request("/api/v1/admin/discounts/promo_1/activate", json({ expectedRevision: 1 }));
+        expect(response.status).toBe(200);
+        expect(mocks.activatePromotion).toHaveBeenCalledWith({}, "promo_1", 1);
+        expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
     });
 });

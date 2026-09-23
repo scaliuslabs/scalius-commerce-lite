@@ -46,9 +46,9 @@ describe("AlertDialogAction", () => {
     const [destructive, primary] = Array.from(
       document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'),
     );
-    expect(destructive?.className).toContain("from-destructive");
+    expect(destructive?.className).toContain("bg-destructive");
     expect(destructive?.className).toContain("text-destructive-foreground");
-    expect(destructive?.className).not.toContain("from-primary");
-    expect(primary?.className).toContain("from-primary");
+    expect(destructive?.className).not.toContain("bg-primary");
+    expect(primary?.className).toContain("bg-primary");
   });
 });

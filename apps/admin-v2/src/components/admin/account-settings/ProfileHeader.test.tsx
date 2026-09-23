@@ -12,7 +12,8 @@ import {
 } from "vitest";
 
 import { ProfileHeader } from "./ProfileHeader";
-import type { User } from "./AccountSettingsContainer";
+import { SaveBarProvider, SaveErrorBanner } from "../shared/SaveBar";
+import type { User } from "./ProfileHeader";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -58,7 +59,7 @@ const currentUser: User = {
   twoFactorEnabled: true,
 };
 
-describe("ProfileHeader display-name editing", () => {
+describe("ProfileHeader profile card", () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -85,13 +86,18 @@ describe("ProfileHeader display-name editing", () => {
 
   function renderProfileHeader(user: User = currentUser) {
     act(() => {
-      root.render(<ProfileHeader user={user} />);
+      root.render(
+        <SaveBarProvider>
+          <SaveErrorBanner />
+          <ProfileHeader user={user} />
+        </SaveBarProvider>,
+      );
     });
   }
 
   function buttonNamed(label: string) {
-    const button = Array.from(host.querySelectorAll("button")).find((node) =>
-      normalizeText(node.textContent).includes(label),
+    const button = Array.from(document.querySelectorAll("button")).find((node) =>
+      normalizeText(node.textContent) === label,
     );
 
     if (!button) {
@@ -103,19 +109,17 @@ describe("ProfileHeader display-name editing", () => {
 
   function queryButtonNamed(label: string) {
     return (
-      Array.from(host.querySelectorAll("button")).find((node) =>
-        normalizeText(node.textContent).includes(label),
+      Array.from(document.querySelectorAll("button")).find((node) =>
+        normalizeText(node.textContent) === label,
       ) ?? null
     );
   }
 
-  function displayNameInput() {
-    const input = host.querySelector<HTMLInputElement>(
-      'input[aria-label="Display name"]',
-    );
+  function nameInput() {
+    const input = host.querySelector<HTMLInputElement>("#profile-name");
 
     if (!input) {
-      throw new Error("Expected display name input");
+      throw new Error("Expected the name input");
     }
 
     return input;
@@ -149,87 +153,72 @@ describe("ProfileHeader display-name editing", () => {
     }
   }
 
-  it("opens editing with current user data and reachable save/cancel controls", () => {
+  it("shows the saved profile and no save bar until something changes", () => {
     renderProfileHeader();
 
-    expect(host.querySelector("h2")?.textContent).toBe(currentUser.name);
+    expect(nameInput().value).toBe(currentUser.name);
     expect(host.textContent).toContain(currentUser.email);
-
-    act(() => {
-      click(buttonNamed("Edit profile"));
-    });
-
-    const input = displayNameInput();
-    const cancelButton = buttonNamed("Cancel");
-    const saveButton = buttonNamed("Save profile");
-
-    expect(input.value).toBe(currentUser.name);
-    expect(host.textContent).toContain(currentUser.email);
-    expect(cancelButton.disabled).toBe(false);
-    expect(saveButton.disabled).toBe(true);
-    expect(saveButton.parentElement).toBe(cancelButton.parentElement);
-    expect(saveButton.closest("[data-profile-edit-actions]")).toBe(
-      cancelButton.closest("[data-profile-edit-actions]"),
-    );
-    expect(
-      saveButton.closest("[data-profile-edit-actions]")?.className,
-    ).toContain("min-h-11");
+    expect(queryButtonNamed("Save")).toBeNull();
+    expect(queryButtonNamed("Discard")).toBeNull();
   });
 
-  it("restores the prior display name on cancel without saving", () => {
+  it("discards an edited name without saving", async () => {
     renderProfileHeader();
 
-    act(() => {
-      click(buttonNamed("Edit profile"));
-    });
+    act(() => setInputValue(nameInput(), "Temporary Name"));
+    expect(buttonNamed("Save").disabled).toBe(false);
 
-    act(() => {
-      setInputValue(displayNameInput(), "Temporary Name");
-    });
+    act(() => click(buttonNamed("Discard")));
+    await flushReactUpdates();
+    act(() => click(buttonNamed("Discard changes")));
+    await flushReactUpdates();
 
-    expect(displayNameInput().value).toBe("Temporary Name");
-    expect(buttonNamed("Save profile").disabled).toBe(false);
-
-    act(() => {
-      click(buttonNamed("Cancel"));
-    });
-
-    expect(host.querySelector("h2")?.textContent).toBe(currentUser.name);
-    expect(host.textContent).toContain(currentUser.email);
-    expect(queryButtonNamed("Save profile")).toBeNull();
-    expect(host.querySelector('input[aria-label="Display name"]')).toBeNull();
+    expect(nameInput().value).toBe(currentUser.name);
+    expect(queryButtonNamed("Save")).toBeNull();
     expect(updateProfileMock).not.toHaveBeenCalled();
   });
 
-  it("saves the trimmed display name while preserving the current profile image", async () => {
+  it("refuses a one-character name without calling the API", async () => {
+    renderProfileHeader();
+
+    act(() => setInputValue(nameInput(), " A "));
+    act(() => click(buttonNamed("Save")));
+    await flushReactUpdates();
+
+    expect(updateProfileMock).not.toHaveBeenCalled();
+    expect(nameInput().getAttribute("aria-invalid")).toBe("true");
+    expect(host.textContent).toContain("Enter at least 2 characters.");
+  });
+
+  it("saves the trimmed name while preserving the current profile image", async () => {
     updateProfileMock.mockResolvedValueOnce({
       user: { name: "Arobi Owner", image: currentUser.image },
     });
     renderProfileHeader();
 
-    act(() => {
-      click(buttonNamed("Edit profile"));
-    });
-
-    act(() => {
-      setInputValue(displayNameInput(), "  Arobi Owner  ");
-    });
-
-    act(() => {
-      click(buttonNamed("Save profile"));
-    });
+    act(() => setInputValue(nameInput(), "  Arobi Owner  "));
+    act(() => click(buttonNamed("Save")));
     await flushReactUpdates();
 
     expect(updateProfileMock).toHaveBeenCalledWith({
-      body: {
-        name: "Arobi Owner",
-        image: currentUser.image,
-      },
+      body: { name: "Arobi Owner", image: currentUser.image },
     });
-    expect(host.querySelector("h2")?.textContent).toBe("Arobi Owner");
-    expect(queryButtonNamed("Save profile")).toBeNull();
-    expect(buttonNamed("Edit profile")).toBeTruthy();
-    expect(toastMock.success).toHaveBeenCalledWith("Profile saved");
+    expect(nameInput().value).toBe("Arobi Owner");
+    expect(queryButtonNamed("Save")).toBeNull();
+    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
     expect(refreshAdminRouteContextMock).toHaveBeenCalledWith(routerMock);
+  });
+
+  it("keeps the edit and shows the error when the save fails", async () => {
+    updateProfileMock.mockRejectedValueOnce(new Error("Profile service unavailable"));
+    renderProfileHeader();
+
+    act(() => setInputValue(nameInput(), "Arobi Owner"));
+    act(() => click(buttonNamed("Save")));
+    await flushReactUpdates();
+
+    expect(nameInput().value).toBe("Arobi Owner");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Profile: Profile service unavailable");
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 });

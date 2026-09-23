@@ -12,10 +12,10 @@ import {
 function createFixture(stock: number) {
   const fixture = createSqliteD1Database({ foreignKeys: true });
   fixture.sqlite.exec(`
-    INSERT INTO products (id, name, slug, price, is_active)
-    VALUES ('product_hot', 'Hot product', 'product-hot', 100, 1);
-    INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, preorder_stock, track_inventory, stock_version, is_default)
-    VALUES ('variant_hot', 'product_hot', 'HOT-1', 100, ${stock}, 0, 0, 1, 1, 1);
+    INSERT INTO products (id, name, slug, price_minor, is_active)
+    VALUES ('product_hot', 'Hot product', 'product-hot', 10000, 1);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, preorder_stock, track_inventory, stock_version, is_default)
+    VALUES ('variant_hot', 'product_hot', 'HOT-1', 10000, ${stock}, 0, 0, 1, 1, 1);
   `);
   return fixture;
 }

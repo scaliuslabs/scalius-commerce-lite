@@ -3,8 +3,7 @@ import { taxClasses, taxRates, taxSettings } from "@scalius/database/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getCurrencyConfig } from "../settings";
 import { calculateTaxQuote } from "./calculator";
-import { buildStorefrontDiscountAllocation, type StorefrontDiscountType } from "./discount-allocation";
-import { toMinorUnits } from "./money";
+import { buildStorefrontDiscountAllocation } from "./discount-allocation";
 import type {
     TaxDestination,
     TaxDiscountAllocationInput,
@@ -131,7 +130,7 @@ export interface StorefrontTaxQuoteLineInput {
     lineId: string;
     productId: string;
     variantId: string;
-    unitPrice: number;
+    unitPriceMinor: number;
     quantity: number;
     taxClassId: string | null;
 }
@@ -139,11 +138,10 @@ export interface StorefrontTaxQuoteLineInput {
 export interface StorefrontTaxQuoteInput {
     destination: TaxDestination;
     lines: StorefrontTaxQuoteLineInput[];
-    shippingAmount: number;
-    discountAmount: number;
-    discountType: StorefrontDiscountType | null;
-    applicableProductIds?: readonly string[];
-    /** Exact evaluator allocation for typed promotions; mutually exclusive with legacy discount metadata. */
+    shippingMinor: number;
+    /** Manual order-level discount (admin orders), in minor units. */
+    discountMinor?: number;
+    /** Exact allocation of the applied storefront discount. */
     promotionDiscountAllocation?: TaxDiscountAllocationInput;
     currency?: { code: string; decimalPlaces: number };
 }
@@ -188,16 +186,13 @@ export async function calculateStorefrontTaxQuote(
         lineId: line.lineId,
         productId: line.productId,
         variantId: line.variantId,
-        unitPriceMinor: toMinorUnits(line.unitPrice, currency.decimalPlaces),
+        unitPriceMinor: line.unitPriceMinor,
         quantity: line.quantity,
         taxClassId: line.taxClassId,
     }));
 
-    if (
-        input.promotionDiscountAllocation
-        && (input.discountType !== null || input.applicableProductIds !== undefined)
-    ) {
-        throw new ValidationError("Promotion allocations cannot be combined with legacy discount metadata.");
+    if (input.promotionDiscountAllocation && input.discountMinor) {
+        throw new ValidationError("A discount allocation cannot be combined with a manual discount.");
     }
     const discount = input.promotionDiscountAllocation
         ? {
@@ -208,12 +203,8 @@ export async function calculateStorefrontTaxQuote(
             allocation: input.promotionDiscountAllocation,
         }
         : buildStorefrontDiscountAllocation({
-            decimalPlaces: currency.decimalPlaces,
-            discountAmount: input.discountAmount,
-            discountType: input.discountType,
-            applicableProductIds: input.applicableProductIds,
+            discountMinor: input.discountMinor ?? 0,
             lines: input.lines,
-            shippingAmount: input.shippingAmount,
         });
 
     return calculateTaxQuote({
@@ -224,7 +215,7 @@ export async function calculateStorefrontTaxQuote(
         rates: authority.rates,
         destination: input.destination,
         lines,
-        shippingMinor: toMinorUnits(input.shippingAmount, currency.decimalPlaces),
+        shippingMinor: input.shippingMinor,
         discountMinor: discount.discountMinor,
         discountAllocation: discount.allocation,
     });

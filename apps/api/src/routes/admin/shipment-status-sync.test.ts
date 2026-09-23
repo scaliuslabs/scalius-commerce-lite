@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DeliveryShipment } from "@scalius/database/schema";
+import type { ShipmentView } from "@scalius/core/modules/delivery/delivery.service";
 
 const mocks = vi.hoisted(() => ({
   checkShipmentStatus: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
 
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
-function shipment(overrides: Partial<DeliveryShipment> = {}): DeliveryShipment {
+function shipment(overrides: Partial<ShipmentView> = {}): ShipmentView {
   return {
     id: "ship_1",
     orderId: "order_1",

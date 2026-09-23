@@ -1,89 +1,63 @@
-/* Direct styling for rich content elements */
-.rich-content h1 {
+/* Rich text: the read-only RichContent view and the TipTap editor share one look. */
+:is(.rich-content, .ProseMirror) :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 650;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+
+:is(.rich-content, .ProseMirror) h1 {
   font-size: 1.5rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
 }
 
-.rich-content h2 {
+:is(.rich-content, .ProseMirror) h2 {
   font-size: 1.25rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
 }
 
-.rich-content h3 {
+:is(.rich-content, .ProseMirror) h3 {
   font-size: 1.125rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
 }
 
-.rich-content h4,
-.rich-content h5,
-.rich-content h6 {
+:is(.rich-content, .ProseMirror) :is(h4, h5, h6) {
   font-size: 1rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
 }
 
-.rich-content p {
-  margin-bottom: 1rem;
+:is(.rich-content, .ProseMirror) p {
+  margin-bottom: 0.75rem;
   line-height: 1.6;
 }
 
-.rich-content a {
-  color: var(--primary);
-  text-decoration: none;
-}
-
-.rich-content a:hover {
+:is(.rich-content, .ProseMirror) a {
+  color: var(--link);
   text-decoration: underline;
 }
 
-.rich-content strong {
-  font-weight: 600;
+:is(.rich-content, .ProseMirror) strong {
+  font-weight: 650;
 }
 
-.rich-content em {
-  font-style: italic;
-}
-
-.rich-content u {
-  text-decoration: underline;
-}
-
-.rich-content s {
-  text-decoration: line-through;
-}
-
-/* List styling */
-.rich-content ul {
+:is(.rich-content, .ProseMirror) ul {
   list-style-type: disc;
   padding-left: 1.5rem;
-  margin-bottom: 1rem;
-  margin-top: 1rem;
+  margin: 0.75rem 0;
 }
 
-.rich-content ol {
+:is(.rich-content, .ProseMirror) ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
-  margin-bottom: 1rem;
-  margin-top: 1rem;
+  margin: 0.75rem 0;
 }
 
-.rich-content li {
+:is(.rich-content, .ProseMirror) li {
   margin-bottom: 0.25rem;
 }
 
-.rich-content li p {
-  margin-bottom: 0.5rem;
+:is(.rich-content, .ProseMirror) li p {
+  margin-bottom: 0.25rem;
 }
 
-/* Blockquote styling */
-.rich-content blockquote {
+:is(.rich-content, .ProseMirror) blockquote {
   border-left: 4px solid var(--border);
   padding-left: 1rem;
   font-style: italic;
@@ -91,16 +65,15 @@
   color: var(--muted-foreground);
 }
 
-/* Code styling */
-.rich-content code {
+:is(.rich-content, .ProseMirror) code {
   background-color: var(--muted);
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
-  font-size: 0.875em;
-  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
 }
 
-.rich-content pre {
+:is(.rich-content, .ProseMirror) pre {
   background-color: var(--muted);
   padding: 1rem;
   border-radius: 0.5rem;
@@ -108,81 +81,155 @@
   margin: 1rem 0;
 }
 
-.rich-content pre code {
+:is(.rich-content, .ProseMirror) pre code {
   background-color: transparent;
   padding: 0;
-  border-radius: 0;
 }
 
-/* Table styling */
-.rich-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-  table-layout: fixed;
-}
-
-.rich-content th,
-.rich-content td {
-  border: 1px solid var(--border);
-  padding: 0.5rem;
-  vertical-align: top;
-}
-
-.rich-content th {
-  background-color: var(--muted);
-}
-
-/* Images inside table cells should be constrained */
-.rich-content td img,
-.rich-content th img {
-  max-width: 100%;
-  height: auto;
-  margin: 0;
-}
-
-/* Prevent excessive spacing inside table cells */
-.rich-content td > *:first-child,
-.rich-content th > *:first-child {
-  margin-top: 0;
-}
-
-.rich-content td > *:last-child,
-.rich-content th > *:last-child {
-  margin-bottom: 0;
-}
-
-/* Horizontal rule */
-.rich-content hr {
+:is(.rich-content, .ProseMirror) hr {
   margin: 1.5rem 0;
   border: 0;
   border-top: 1px solid var(--border);
 }
 
-/* Image styling */
-.rich-content img {
-  border-radius: 0.375rem;
-  margin: 1rem 0;
+:is(.rich-content, .ProseMirror) img {
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
   max-width: 100%;
   height: auto;
 }
 
-/* Video embed styling */
-.rich-content :where(.rich-video-embed, div[data-youtube-video]) {
+:is(.rich-content, .ProseMirror) table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.rich-content table {
+  table-layout: fixed;
+}
+
+:is(.rich-content, .ProseMirror) :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  vertical-align: top;
+  position: relative;
+}
+
+:is(.rich-content, .ProseMirror) th {
+  font-weight: 650;
+  text-align: left;
+  background-color: var(--muted);
+}
+
+:is(.rich-content, .ProseMirror) :is(td, th) img {
+  margin: 0;
+}
+
+:is(.rich-content, .ProseMirror) :is(td, th) > :first-child {
+  margin-top: 0;
+}
+
+:is(.rich-content, .ProseMirror) :is(td, th) > :last-child {
+  margin-bottom: 0;
+}
+
+:is(.rich-content, .ProseMirror) :where(.rich-video-embed, div[data-youtube-video]) {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  max-width: 100%;
   margin: 1rem 0;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
 }
 
-.rich-content :where(.rich-video-embed, div[data-youtube-video]) iframe {
+:is(.rich-content, .ProseMirror) :where(.rich-video-embed, div[data-youtube-video]) iframe {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
-  border-radius: 0.375rem;
+}
+
+/* Editor only. */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+}
+
+.ProseMirror .selectedCell {
+  background-color: var(--accent);
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background-color: var(--ring);
+  z-index: 20;
+}
+
+.ProseMirror .resize-cursor {
+  cursor: col-resize;
+}
+
+.ProseMirror .resizable-image-wrapper {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror .resizable-image-wrapper:is(.align-left, .align-center, .align-right) {
+  display: block;
+}
+
+.ProseMirror .resizable-image-wrapper.align-center {
+  text-align: center;
+}
+
+.ProseMirror .resizable-image-wrapper.align-right {
+  text-align: right;
+}
+
+.ProseMirror .resizable-image-wrapper img {
+  display: inline-block;
+  margin: 0;
+}
+
+.ProseMirror .resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--ring);
+  border: 2px solid var(--card);
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.ProseMirror .resize-handle.right {
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.ProseMirror .resize-handle.bottom-right {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
 }

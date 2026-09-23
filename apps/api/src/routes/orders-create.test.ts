@@ -36,8 +36,7 @@ const mocks = vi.hoisted(() => ({
   getActivePaymentMethods: vi.fn(),
   getCurrencySettings: vi.fn(),
   calculateStorefrontTaxQuote: vi.fn(),
-  isDiscountValid: vi.fn(),
-  calculateDiscountAmount: vi.fn(),
+  quoteStorefrontDiscount: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
 
@@ -127,14 +126,10 @@ vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
   };
 });
 
-vi.mock("@scalius/core/modules/discounts/discounts.eligibility", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@scalius/core/modules/discounts/discounts.eligibility")>();
-  return {
-    ...actual,
-    isDiscountValid: mocks.isDiscountValid,
-    calculateDiscountAmount: mocks.calculateDiscountAmount,
-  };
-});
+vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/promotions")>()),
+  quoteStorefrontDiscount: mocks.quoteStorefrontDiscount,
+}));
 
 import { orderRoutes } from "./orders";
 
@@ -191,8 +186,7 @@ beforeEach(() => {
     usdExchangeRate: "1",
   });
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
-  mocks.isDiscountValid.mockResolvedValue({ valid: false });
-  mocks.calculateDiscountAmount.mockResolvedValue(0);
+  mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, snapshot: null, taxAllocation: undefined, offers: [] });
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
@@ -225,11 +219,11 @@ beforeEach(() => {
     valid: true,
     issues: [],
     items: [],
-    subtotal: 0,
+    subtotalMinor: 0,
     hasFreeDeliveryProduct: false,
   });
   mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
-    shippingCharge: 60,
+    shippingMinor: 6_000,
     shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
     cityName: "Dhaka",
     zoneName: "Mirpur",
@@ -518,7 +512,7 @@ describe("cart validation preflight", () => {
         },
       ],
       items: [],
-      subtotal: 0,
+      subtotalMinor: 0,
       hasFreeDeliveryProduct: false,
     });
     const { app, kv } = createTestApp();
@@ -611,7 +605,6 @@ describe("cart validation preflight", () => {
         zone: "zone_1",
         area: null,
         shippingMethodId: "ship_1",
-        currencyCode: "BDT",
       },
       expect.objectContaining({ valid: true }),
     );
@@ -672,14 +665,14 @@ describe("authoritative tax quote", () => {
         productId: "product_1",
         variantId: "variant_1",
         quantity: 1,
-        unitPrice: 100,
+        unitPriceMinor: 10_000,
         productName: "Authoritative product",
         variantLabel: "Large",
         freeDelivery: false,
         availableQuantity: 4,
         taxClassId: "taxc_standard",
       }],
-      subtotal: 100,
+      subtotalMinor: 10_000,
       hasFreeDeliveryProduct: false,
     });
     mocks.calculateStorefrontTaxQuote.mockResolvedValue({
@@ -773,10 +766,10 @@ describe("authoritative tax quote", () => {
       expect.anything(),
       expect.objectContaining({
         lines: [expect.objectContaining({
-          unitPrice: 100,
+          unitPriceMinor: 10_000,
           taxClassId: "taxc_standard",
         })],
-        shippingAmount: 60,
+        shippingMinor: 6_000,
       }),
     );
   });
@@ -786,6 +779,7 @@ describe("authoritative tax quote", () => {
       currencyCode: "JPY",
       decimalPlaces: 0,
       unitPrice: 100,
+      unitPriceMinor: 100,
       subtotal: 200,
       subtotalMinor: 200,
       shippingMinor: 60,
@@ -795,6 +789,7 @@ describe("authoritative tax quote", () => {
       currencyCode: "KWD",
       decimalPlaces: 3,
       unitPrice: 1.235,
+      unitPriceMinor: 1_235,
       subtotal: 2.47,
       subtotalMinor: 2_470,
       shippingMinor: 60_000,
@@ -806,6 +801,7 @@ describe("authoritative tax quote", () => {
       currencyCode,
       decimalPlaces,
       unitPrice,
+      unitPriceMinor,
       subtotal,
       subtotalMinor,
       shippingMinor,
@@ -825,7 +821,7 @@ describe("authoritative tax quote", () => {
           productId: "product_1",
           variantId: "variant_1",
           quantity: 2,
-          unitPrice,
+          unitPriceMinor,
           productName: "Currency product",
           variantLabel: null,
           freeDelivery: false,
@@ -833,7 +829,7 @@ describe("authoritative tax quote", () => {
           availableQuantity: 4,
           taxClassId: null,
         }],
-        subtotal,
+        subtotalMinor: currencyCode === "JPY" ? 200 : 2_470,
         hasFreeDeliveryProduct: false,
       });
       mocks.calculateStorefrontTaxQuote.mockResolvedValue({
@@ -889,14 +885,14 @@ describe("authoritative tax quote", () => {
       expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          lines: [expect.objectContaining({ unitPrice, quantity: 2 })],
+          lines: [expect.objectContaining({ unitPriceMinor, quantity: 2 })],
           currency: { code: currencyCode, decimalPlaces },
         }),
       );
     },
   );
 
-  it("passes validated product discount scope to the shared quote service", async () => {
+  it("passes the applied discount allocation to the shared tax quote service", async () => {
     mocks.getCustomerBySession.mockResolvedValue({
       token: "session_quote_owner",
       email: "buyer@example.com",
@@ -915,7 +911,7 @@ describe("authoritative tax quote", () => {
         productId: "product_1",
         variantId: "variant_1",
         quantity: 1,
-        unitPrice: 100,
+        unitPriceMinor: 10_000,
         productName: "Product",
         variantLabel: null,
         freeDelivery: false,
@@ -923,21 +919,11 @@ describe("authoritative tax quote", () => {
         availableQuantity: 2,
         taxClassId: "taxc_1",
       }],
-      subtotal: 100,
+      subtotalMinor: 10_000,
       hasFreeDeliveryProduct: false,
     });
-    mocks.isDiscountValid.mockResolvedValue({
-      valid: true,
-      discount: {
-        id: "discount_1",
-        type: "amount_off_products",
-        valueType: "fixed_amount",
-        discountValue: 50,
-      },
-      applicableProductIds: new Set(["product_1"]),
-      hasProductRestrictions: true,
-    });
-    mocks.calculateDiscountAmount.mockResolvedValue(50);
+    const taxAllocation = { lines: [{ lineId: "cart:0:variant_1", amountMinor: 5_000 }], shippingMinor: 0 };
+    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: {}, snapshot: {}, taxAllocation, offers: ["Buy a tee, get a cap free"] });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -961,38 +947,24 @@ describe("authoritative tax quote", () => {
     );
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ data: { discountOffers: ["Buy a tee, get a cap free"] } });
     expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        discountAmount: 50,
-        discountType: "amount_off_products",
-        applicableProductIds: ["product_1"],
+      expect.objectContaining({ promotionDiscountAllocation: taxAllocation }),
+    );
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      code: "PRODUCT50",
+      customerId: "customer_quote_owner",
+      customerPhone: "+8801712345678",
+      cart: expect.objectContaining({
+        lines: [expect.objectContaining({ id: "cart:0:variant_1", productId: "product_1", quantity: 1 })],
+        shippingAmountMinor: 6_000,
       }),
-    );
-    expect(mocks.isDiscountValid).toHaveBeenCalledWith(
-      expect.anything(),
-      "PRODUCT50",
-      100,
-      expect.any(Array),
-      "+8801712345678",
-      "",
-      "BDT",
-      "customer_quote_owner",
-    );
+    }));
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(
       expect.anything(),
       "session_quote_owner",
       undefined,
-    );
-    expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.any(Number),
-      expect.any(Array),
-      60,
-      new Set(["product_1"]),
-      "BDT",
-      true,
     );
   });
 });
@@ -1241,11 +1213,11 @@ describe("checkout status recovery hints", () => {
 
 describe("create order currency parity", () => {
   it.each([
-    { currencyCode: "JPY", decimalPlaces: 0, unitPrice: 100, subtotal: 200, totalMinor: 260 },
-    { currencyCode: "KWD", decimalPlaces: 3, unitPrice: 1.235, subtotal: 2.47, totalMinor: 62_470 },
+    { currencyCode: "JPY", decimalPlaces: 0, unitPrice: 100, unitPriceMinor: 100, subtotal: 200, totalMinor: 260 },
+    { currencyCode: "KWD", decimalPlaces: 3, unitPrice: 1.235, unitPriceMinor: 1_235, subtotal: 2.47, totalMinor: 62_470 },
   ])(
     "keeps $currencyCode cart authority through order creation",
-    async ({ currencyCode, decimalPlaces, unitPrice, subtotal, totalMinor }) => {
+    async ({ currencyCode, decimalPlaces, unitPrice, unitPriceMinor, subtotal, totalMinor }) => {
       const cartValidation = {
         valid: true,
         issues: [],
@@ -1255,7 +1227,7 @@ describe("create order currency parity", () => {
           productId: "product_1",
           variantId: "variant_1",
           quantity: 2,
-          unitPrice,
+          unitPriceMinor,
           productName: "Currency product",
           variantLabel: null,
           freeDelivery: false,
@@ -1263,7 +1235,7 @@ describe("create order currency parity", () => {
           availableQuantity: 4,
           taxClassId: null,
         }],
-        subtotal,
+        subtotalMinor: currencyCode === "JPY" ? 200 : 2_470,
         hasFreeDeliveryProduct: false,
       };
       const quote = {
@@ -1284,7 +1256,6 @@ describe("create order currency parity", () => {
         checkoutToken: `chk_${currencyCode.toLowerCase()}`,
         orderId: `order_${currencyCode.toLowerCase()}`,
         paymentMethod: "cod",
-        totalAmount: subtotal + 60,
         taxQuote: quote,
         commitPayload: { orderData: { id: `order_${currencyCode.toLowerCase()}` } },
       });
@@ -1325,10 +1296,10 @@ describe("create order currency parity", () => {
       );
       expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ currencyCode }),
+        expect.objectContaining({ city: "city_1" }),
         cartValidation,
       );
-      expect(mocks.createStorefrontOrder.mock.calls[0]?.[6]).toBe(cartValidation);
+      expect(mocks.createStorefrontOrder.mock.calls[0]?.[4]).toBe(cartValidation);
     },
   );
 });
@@ -1467,24 +1438,21 @@ describe("create order commit/KV ordering", () => {
         expect.anything(),
         expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
         expect.any(String),
-        expect.any(Function),
-        expect.any(Function),
         {
           orderId: "order_1",
           checkoutToken: "chk_order_1",
         },
         expect.objectContaining({ valid: true }),
         expect.objectContaining({
-          shippingCharge: 60,
+          shippingMinor: 6_000,
           cityName: "Dhaka",
           zoneName: "Mirpur",
         }),
         undefined,
         { code: "BDT", decimalPlaces: 2 },
-        undefined,
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
-      );
+    );
     } finally {
       consoleError.mockRestore();
     }
@@ -1731,7 +1699,7 @@ describe("create order commit/KV ordering", () => {
         },
       ],
       items: [],
-      subtotal: 0,
+      subtotalMinor: 0,
       hasFreeDeliveryProduct: false,
     });
     mocks.limiter.limit.mockResolvedValue({ success: false });
@@ -2121,8 +2089,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.anything(),
       expect.anything(),
       expect.anything(),
@@ -2131,7 +2097,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       expect.anything(),
-      undefined,
       expect.anything(),
       expect.anything(),
     );
@@ -2210,8 +2175,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.objectContaining({
         orderId: "order_1",
         checkoutToken: "chk_order_1",
@@ -2223,7 +2186,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       { code: "BDT", decimalPlaces: 2 },
-      undefined,
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
     );
@@ -2260,8 +2222,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.anything(),
       expect.anything(),
       expect.anything(),
@@ -2270,7 +2230,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       expect.anything(),
-      undefined,
       expect.anything(),
       expect.anything(),
     );

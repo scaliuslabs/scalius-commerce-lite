@@ -1,62 +1,34 @@
 import {
-  DEFAULT_CURRENCY,
-  getDecimalPlaces,
   normalizeSupportedCurrencyCode,
+  getDecimalPlaces,
   type SupportedCurrencyCode,
 } from "@scalius/shared/currency";
-import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { ValidationError } from "@scalius/core/errors";
 
+/** The currency an order was committed in; its amounts are minor units of it. */
 export interface OrderCurrencySnapshot {
   code: SupportedCurrencyCode;
   decimalPlaces: number;
-  legacyFallback: boolean;
 }
 
 export interface OrderCurrencySnapshotSource {
-  currencyCode?: unknown;
-  currencyDecimalPlaces?: unknown;
-  code?: unknown;
-  decimalPlaces?: unknown;
+  currencyCode: unknown;
+  currencyDecimalPlaces: unknown;
 }
 
-function isStoredCurrencyPrecision(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3;
-}
-
-/**
- * Resolve the immutable currency snapshot stored with an order.
- * Only orders with both legacy snapshot columns absent fall back to BDT.
- */
+/** Validates the currency stored with an order; a corrupt snapshot fails closed. */
 export function resolveOrderCurrencySnapshot(
   source: OrderCurrencySnapshotSource,
 ): OrderCurrencySnapshot {
-  const rawCode = source.currencyCode ?? source.code;
-  const rawPrecision = source.currencyDecimalPlaces ?? source.decimalPlaces;
-  if (rawCode == null && rawPrecision == null) {
-    return {
-      code: "BDT",
-      decimalPlaces: DEFAULT_CURRENCY.decimalPlaces,
-      legacyFallback: true,
-    };
-  }
-
-  const code = normalizeSupportedCurrencyCode(rawCode);
+  const code = normalizeSupportedCurrencyCode(source.currencyCode);
   if (!code) {
     throw new ValidationError("Order currency snapshot is invalid. Repair the order before changing payment state.");
   }
-  if (rawPrecision == null) {
-    return {
-      code,
-      decimalPlaces: getDecimalPlaces(code),
-      legacyFallback: false,
-    };
-  }
-  if (!isStoredCurrencyPrecision(rawPrecision)) {
+  const decimalPlaces = source.currencyDecimalPlaces;
+  if (!Number.isInteger(decimalPlaces) || Number(decimalPlaces) < 0 || Number(decimalPlaces) > 3) {
     throw new ValidationError("Order currency precision is invalid. Repair the order before changing payment state.");
   }
-
-  return { code, decimalPlaces: rawPrecision, legacyFallback: false };
+  return { code, decimalPlaces: Number(decimalPlaces) };
 }
 
 export function createOrderCurrencySnapshot(currencyCode: unknown): OrderCurrencySnapshot {
@@ -64,23 +36,7 @@ export function createOrderCurrencySnapshot(currencyCode: unknown): OrderCurrenc
   if (!code) {
     throw new ValidationError("A supported order currency is required.");
   }
-  return {
-    code,
-    decimalPlaces: getDecimalPlaces(code),
-    legacyFallback: false,
-  };
-}
-
-export function roundOrderMoney(amount: number, currency: OrderCurrencySnapshot): number {
-  return roundPriceToPrecision(amount, currency.decimalPlaces);
-}
-
-export function orderMoneyEqual(
-  left: number,
-  right: number,
-  currency: OrderCurrencySnapshot,
-): boolean {
-  return roundOrderMoney(left, currency) === roundOrderMoney(right, currency);
+  return { code, decimalPlaces: getDecimalPlaces(code) };
 }
 
 export function assertOrderPaymentCurrency(
@@ -88,9 +44,6 @@ export function assertOrderPaymentCurrency(
   currency: OrderCurrencySnapshot,
   label = "Payment",
 ): void {
-  // Pre-snapshot legacy BDT orders may also predate a populated payment
-  // currency column. Never extend this compatibility rule to snapshotted orders.
-  if (value == null && currency.legacyFallback) return;
   if (normalizeSupportedCurrencyCode(value) !== currency.code) {
     throw new ValidationError(
       `${label} currency does not match the immutable order currency. Repair the payment ledger before continuing.`,

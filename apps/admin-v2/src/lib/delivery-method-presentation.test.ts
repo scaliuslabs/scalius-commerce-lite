@@ -14,38 +14,37 @@ const savedSummary = {
 };
 
 describe("delivery method presentation", () => {
-  it("shows the immutable selected method and waived configured fee", () => {
-    expect(resolveDeliveryMethodPresentation({
+  it("shows the saved method and the waived configured fee", () => {
+    const presentation = resolveDeliveryMethodPresentation({
       shippingMethodName: "Express Delivery",
       shippingMethodDescription: "Faster delivery for eligible areas.",
       shippingMethodBaseAmountMinor: 20_000,
       shippingFeeWaived: true,
-    }, savedSummary, "Shipping")).toEqual({
-      label: "Delivery · Express Delivery",
-      details: "Faster delivery for eligible areas. Configured fee BDT 200.00 was waived.",
-    });
+    }, savedSummary);
+    expect(presentation.label).toContain("Express Delivery");
+    expect(presentation.details).toContain("Faster delivery for eligible areas.");
+    expect(presentation.details).toContain("৳200.00");
   });
 
-  it("keeps the caller's historical fallback when no method snapshot exists", () => {
-    expect(resolveDeliveryMethodPresentation({
+  it("falls back to a plain delivery label when no method was saved", () => {
+    const presentation = resolveDeliveryMethodPresentation({
       shippingMethodName: null,
       shippingMethodDescription: null,
       shippingMethodBaseAmountMinor: null,
       shippingFeeWaived: null,
-    }, savedSummary, "Shipping")).toEqual({
-      label: "Shipping",
-      details: "",
-    });
+    }, savedSummary);
+    expect(presentation.details).toBe("");
+    expect(presentation.label).not.toContain("·");
   });
 
   it("does not invent a configured fee when saved money is unavailable", () => {
-    expect(resolveDeliveryMethodPresentation({
+    const presentation = resolveDeliveryMethodPresentation({
       shippingMethodName: "Collection Point",
       shippingMethodBaseAmountMinor: 5_000,
       shippingFeeWaived: true,
-    }, null)).toEqual({
-      label: "Delivery · Collection Point",
-      details: "Delivery fee was waived.",
-    });
+    }, null);
+    expect(presentation.label).toContain("Collection Point");
+    expect(presentation.details).not.toMatch(/\d/);
+    expect(presentation.details).not.toBe("");
   });
 });

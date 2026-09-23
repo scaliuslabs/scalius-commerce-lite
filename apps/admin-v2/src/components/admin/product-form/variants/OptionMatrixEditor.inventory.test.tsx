@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductVariant } from "@/lib/api-query-options/products";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "./option-matrix-editor-model";
 
@@ -74,7 +76,8 @@ describe("OptionMatrixEditor inventory for products without options", () => {
   }
 
   const trackCheckbox = () => host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;
-  const quantityInput = () => host.querySelector<HTMLInputElement>('input[aria-label="Quantity"]');
+  const quantityLabel = translate(productMessages, "quantity");
+  const quantityInput = () => host.querySelector<HTMLInputElement>(`input[aria-label="${quantityLabel}"]`);
 
   it("tracks quantity by default on a new product and sends it with the create request", async () => {
     const onDraftChange = vi.fn<(composition: ProductCreateComposition | null) => void>();
@@ -84,12 +87,10 @@ describe("OptionMatrixEditor inventory for products without options", () => {
         productPrice={250}
         images={[]}
         onDraftChange={onDraftChange}
-        onSaveRequest={vi.fn()}
-        productSaving={false}
       />,
     );
 
-    expect(host.textContent).toContain("Inventory");
+    expect(host.textContent).toContain(translate(productMessages, "inventory"));
     expect(trackCheckbox().getAttribute("aria-checked")).toBe("true");
     expect(onDraftChange).toHaveBeenLastCalledWith({ defaultSku: { trackInventory: true, stock: 0 } });
 
@@ -117,8 +118,6 @@ describe("OptionMatrixEditor inventory for products without options", () => {
         images={[]}
         aggregateRevision={3}
         onDirtyChange={onDirtyChange}
-        onSaveRequest={vi.fn()}
-        productSaving={false}
       />,
     );
 
@@ -178,13 +177,13 @@ describe("OptionMatrixEditor inventory for products without options", () => {
         variants={[sized("var_s", "pval_s", "S", 4), sized("var_m", "pval_m", "M", 9)]}
         images={[]}
         aggregateRevision={3}
-        onSaveRequest={vi.fn()}
-        productSaving={false}
       />,
     );
-    expect(host.textContent).not.toContain("Track quantity");
+    expect(host.textContent).not.toContain(translate(productMessages, "trackQuantity"));
 
-    const priceInput = host.querySelector<HTMLInputElement>('input[aria-label="Price"]')!;
+    const labelFor = (key: "priceFor" | "quantityFor") =>
+      `input[aria-label="${translate(productMessages, key, { name: "S" })}"]`;
+    const priceInput = host.querySelector<HTMLInputElement>(labelFor("priceFor"))!;
     await act(async () => {
       setInput(priceInput, "300");
       priceInput.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
@@ -196,7 +195,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
     expect(pricedRows.map((row) => row.price)).toEqual([300, 250]);
     expect(pricedRows.every((row) => !("stock" in row) && !("expectedStockVersion" in row))).toBe(true);
 
-    const stockInput = host.querySelector<HTMLInputElement>('input[aria-label="On-hand stock"]')!;
+    const stockInput = host.querySelector<HTMLInputElement>(labelFor("quantityFor"))!;
     await act(async () => {
       setInput(stockInput, "8");
       stockInput.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));

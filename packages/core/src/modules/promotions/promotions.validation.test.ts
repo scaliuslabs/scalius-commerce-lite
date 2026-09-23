@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    createMerchantPromotionDraftSchema,
     createPromotionDraftSchema,
     updatePromotionDraftSchema,
 } from "./promotions.validation";
@@ -62,17 +61,34 @@ describe("promotion draft validation", () => {
         }).success).toBe(false);
     });
 
-    it("keeps automatic rules out of the merchant API until checkout supports them", () => {
-        expect(createPromotionDraftSchema.safeParse({
+    it("accepts automatic discounts without usage limits only", () => {
+        const automatic = { ...validDraft(), method: "automatic" as const, codes: [] };
+        expect(createPromotionDraftSchema.safeParse(automatic).success).toBe(true);
+        expect(createPromotionDraftSchema.safeParse({ ...automatic, maxRedemptions: 5 }).success).toBe(false);
+    });
+
+    it("keeps product scope on product discounts and validates Buy X get Y", () => {
+        const scopedOrder = {
             ...validDraft(),
-            method: "automatic",
-            codes: [],
-        }).success).toBe(true);
-        expect(createMerchantPromotionDraftSchema.safeParse({
+            effects: [{ ...validDraft().effects[0]!, config: { basisPoints: 1_000, productIds: ["prod_1"] } }],
+        };
+        expect(createPromotionDraftSchema.safeParse(scopedOrder).success).toBe(false);
+        const bxgy = (config: Record<string, unknown>) => ({
             ...validDraft(),
-            method: "automatic",
-            codes: [],
-        }).success).toBe(false);
+            effects: [{ kind: "percentage_off" as const, target: "line" as const, allocation: "across" as const, config }],
+        });
+        expect(createPromotionDraftSchema.safeParse(bxgy({
+            basisPoints: 10_000, productIds: ["prod_2"], getQuantity: 1, buy: { quantity: 2, productIds: ["prod_1"] },
+        })).success).toBe(true);
+        expect(createPromotionDraftSchema.safeParse(bxgy({
+            basisPoints: 10_000, productIds: ["prod_2"], buy: { quantity: 2, productIds: ["prod_1"] },
+        })).success).toBe(false);
+        expect(createPromotionDraftSchema.safeParse(bxgy({
+            basisPoints: 10_000, productIds: ["prod_2"], getQuantity: 1, buy: { quantity: 2, amountMinor: 100, currencyCode: "BDT" },
+        })).success).toBe(false);
+        expect(createPromotionDraftSchema.safeParse(bxgy({
+            basisPoints: 1_000, productIds: Array.from({ length: 91 }, (_, index) => `prod_${index}`),
+        })).success).toBe(false);
     });
 
     it("rejects a spend budget that can never share a cart currency with its rules", () => {

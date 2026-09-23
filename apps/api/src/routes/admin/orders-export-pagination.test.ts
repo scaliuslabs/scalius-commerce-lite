@@ -20,11 +20,11 @@ describe("order CSV export pagination", () => {
         sqlite = migrated;
         const insert = sqlite.prepare(`INSERT INTO orders (
             id, customer_name, customer_phone, shipping_address, city, zone,
-            total_amount, shipping_charge, payment_method, status, payment_status,
-            paid_amount, balance_due, currency_code, currency_decimal_places,
+            total_amount_minor, shipping_amount_minor, payment_method, status, payment_status,
+            paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places,
             created_at, updated_at
         ) VALUES (?, 'Export buyer', ?, 'Test address', 'city', 'zone',
-            100, 0, 'sslcommerz', 'incomplete', 'unpaid', 0, 100, 'BDT', 2, ?, ?)`);
+            10000, 0, 'sslcommerz', 'incomplete', 'unpaid', 0, 10000, 'BDT', 2, ?, ?)`);
         ids.forEach((id, index) => {
             const timestamp = 1_700_000_000 + index;
             insert.run(id, index % 2 ? "+8801700000001" : "+8801700000000", timestamp, timestamp);
@@ -81,10 +81,10 @@ describe("order CSV export pagination", () => {
     });
 
     it("hydrates a 120-line order form within the D1 bound-parameter limit", async () => {
-        const product = sqlite.prepare("INSERT INTO products (id, name, price, slug) VALUES (?, ?, 1, ?)");
-        const variant = sqlite.prepare("INSERT INTO product_variants (id, product_id, sku, price, is_default) VALUES (?, ?, ?, 1, 1)");
+        const product = sqlite.prepare("INSERT INTO products (id, name, price_minor, slug) VALUES (?, ?, 100, ?)");
+        const variant = sqlite.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES (?, ?, ?, 100, 1)");
         const item = sqlite.prepare(
-            "INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, price) VALUES (?, 'export_001', ?, ?, 1, 1)",
+            "INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor) VALUES (?, 'export_001', ?, ?, 1, 100)",
         );
         for (let index = 0; index < 120; index += 1) {
             product.run(`product_${index}`, `Product ${index}`, `product-${index}`);

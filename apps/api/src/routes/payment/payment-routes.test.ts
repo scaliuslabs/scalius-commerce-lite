@@ -66,10 +66,8 @@ async function seed(options: { paymentMethod: string; enabledMethods: string[]; 
     shippingAddress: "House 1, Dhaka",
     city: "dhaka",
     zone: "zone_1",
-    totalAmount: 1500,
     totalAmountMinor: 150_000,
-    shippingCharge: 0,
-    balanceDue: 1500,
+    balanceDueMinor: 150_000,
     paymentMethod: options.paymentMethod,
     status: OrderStatus.INCOMPLETE,
     currencyCode: "BDT",
@@ -248,8 +246,8 @@ describe("a newly registered gateway: webhooks, returns, and queue application",
     expect(retried.length).toBeLessThanOrEqual(1);
     expect(await deliver(retried)).toEqual([]);
 
-    expect(sqlite.prepare("SELECT status, payment_status, paid_amount FROM orders").get())
-      .toEqual({ status: OrderStatus.PENDING, payment_status: PaymentStatus.PAID, paid_amount: 1500 });
+    expect(sqlite.prepare("SELECT status, payment_status, paid_amount_minor FROM orders").get())
+      .toEqual({ status: OrderStatus.PENDING, payment_status: PaymentStatus.PAID, paid_amount_minor: 150_000 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE status = 'succeeded'").get()).toEqual({ n: 1 });
     expect(sqlite.prepare("SELECT status FROM webhook_events ORDER BY id").all())
       .toEqual([{ status: "processed" }, { status: "processed" }]);

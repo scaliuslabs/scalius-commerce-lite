@@ -31,6 +31,9 @@ import {
   putApiV1AdminOrdersByIdStatus,
   putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
 } from "@scalius/api-client/sdk";
+import { translate } from "~/i18n";
+import { orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { apiData, type ApiBody, type ApiResult } from "../api";
 import type {
   ApproveOrderReturnInput,
@@ -60,6 +63,9 @@ export type ResolveUnknownShipmentInput = OrderShipmentRef &
     externalId?: string;
     trackingId?: string;
   };
+
+const msg = (key: OrderDetailMessageKey, vars?: Record<string, string | number>) =>
+  translate(orderDetailMessages, key, vars);
 
 const ORDER_CATALOG_PRODUCTS_QUERY_PREFIX = [
   "orders",
@@ -104,25 +110,30 @@ function firstBulkShipFailureReason(result: BulkShipOrdersPayload) {
 
 function toastBulkShipResult(result: BulkShipOrdersPayload) {
   if (result.successCount === result.totalProcessed) {
-    toast.success(`${result.successCount} shipments created successfully.`);
+    toast.success(msg("toast.bulkShipped"), {
+      description: msg("toast.bulkShippedDetail", { count: result.successCount }),
+    });
     return;
   }
 
   const reason = firstBulkShipFailureReason(result);
   if (result.successCount > 0) {
     toast.warning(
-      `${result.successCount} of ${result.totalProcessed} shipments created.`,
+      msg("toast.bulkShippedSome"),
       {
-        description: reason
-          ? `${result.failureCount} failed. First issue: ${reason}`
-          : `${result.failureCount} selected order(s) still need shipment.`,
+        description: msg(reason ? "toast.bulkShipFirstIssue" : "toast.bulkShipRemaining", {
+          done: result.successCount,
+          total: result.totalProcessed,
+          count: result.failureCount,
+          reason: reason ?? "",
+        }),
       },
     );
     return;
   }
 
-  toast.error("Shipment failed", {
-    description: reason ?? "No selected orders could be shipped.",
+  toast.error(msg("toast.bulkShipFailed"), {
+    description: reason ?? msg("toast.bulkShipNone"),
   });
 }
 
@@ -135,7 +146,7 @@ export function useCreateOrder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Confirmed order created");
+      toast.success(msg("toast.orderCreated"));
     },
   });
 }
@@ -157,11 +168,11 @@ export function useConfirmManualOrderAmendment() {
       invalidateDashboardQueries(queryClient);
       invalidateOrderInventoryQueries(queryClient);
       await router.invalidate().catch(() => undefined);
-      toast.success("Order amendment confirmed");
+      toast.success(msg("toast.orderUpdated"));
     },
     onError: (err) => {
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to confirm amendment"));
+      toast.error(getServerFnError(err, msg("toast.saveFailed")));
     },
   });
 }
@@ -181,11 +192,11 @@ export function useUpdateOrder() {
         queryKey: queryKeys.orders.formData(variables.id),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Order updated");
+      toast.success(msg("toast.orderUpdated"));
     },
     onError: (err) => {
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to update order"));
+      toast.error(getServerFnError(err, msg("toast.saveFailed")));
     },
   });
 }
@@ -202,10 +213,14 @@ export function useUpdateOrderStatus() {
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(`Order status updated to ${variables.status}`);
+      toast.success(msg("toast.statusUpdated"), {
+        description: msg("toast.statusDetail", {
+          status: orderStatusLabel((key, vars) => translate(orderMessages, key, vars), variables.status),
+        }),
+      });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update order status")),
+      toast.error(getServerFnError(err, msg("toast.statusFailed"))),
   });
 }
 
@@ -225,7 +240,7 @@ export function useCreateOrderShipment() {
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Shipment created");
+      toast.success(msg("toast.courierBooked"));
     },
     onError: (err, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
@@ -236,7 +251,7 @@ export function useCreateOrderShipment() {
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to create shipment"));
+      toast.error(getServerFnError(err, msg("toast.bookFailed")));
     },
   });
 }
@@ -260,7 +275,7 @@ export function useBulkShipOrders() {
     onError: (err, variables) => {
       invalidateBulkShipOrderQueries(queryClient, variables.orderIds);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to create shipments"));
+      toast.error(getServerFnError(err, msg("toast.bulkShipError")));
     },
   });
 }
@@ -281,13 +296,11 @@ export function useCreateFulfillmentShipment() {
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Fulfillment shipment created");
+      toast.success(msg("toast.fulfilled"));
     },
     onError: (err) => {
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(
-        getServerFnError(err, "Failed to create fulfillment shipment"),
-      );
+      toast.error(getServerFnError(err, msg("toast.fulfillFailed")));
     },
   });
 }
@@ -310,19 +323,11 @@ export function useRefundOrder() {
       if (result.isFullRefund) {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.success(
-        result.manualSettlementRecorded
-          ? "Manual cash refund recorded"
-          : "Refund processed",
-      );
-      if (result.sideEffectErrors > 0) {
-        toast.warning("Refund saved; follow-up needs attention", {
-          description: "The financial refund is complete, but cache refresh or customer notification should be checked.",
-        });
-      }
+      toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
+      if (result.sideEffectErrors > 0) toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to process refund")),
+      toast.error(getServerFnError(err, msg("toast.refundFailed"))),
   });
 }
 
@@ -341,7 +346,7 @@ export function useIssueOrderPaymentRecoveryLink() {
       });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create recovery link")),
+      toast.error(getServerFnError(err, msg("toast.recoveryLinkFailed"))),
   });
 }
 
@@ -364,25 +369,13 @@ export function useReconcileRefundAttempt() {
       if (result.status === "finalized") {
         invalidateOrderInventoryQueries(queryClient);
       }
-      if (result.status === "finalized") {
-        toast.success("Refund recovery finalized");
-      } else if (result.status === "failed") {
-        toast.warning("Refund attempt marked failed");
-      } else {
-        toast.info("Refund recovery checked", {
-          description: result.reason
-            ? `Current state: ${result.reason.replace(/_/g, " ")}`
-            : "The attempt is still waiting for a final outcome.",
-        });
-      }
-      if (result.sideEffectErrors > 0) {
-        toast.warning("Recovery side effects need another refresh", {
-          description: "Order data was updated, but cache or notification follow-up needs another check.",
-        });
-      }
+      if (result.status === "finalized") toast.success(msg("toast.refundCheckDone"));
+      else if (result.status === "failed") toast.warning(msg("toast.refundCheckFailed"));
+      else toast.info(msg("toast.refundCheckPending"));
+      if (result.sideEffectErrors > 0) toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to check refund recovery")),
+      toast.error(getServerFnError(err, msg("toast.refundCheckError"))),
   });
 }
 
@@ -403,13 +396,13 @@ export function useReconcileShipment() {
         queryKey: queryKeys.orders.shipments(variables.orderId),
       });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Shipment recovery repaired", {
+      toast.success(msg("toast.shipmentRepaired"), {
         description: result.message,
       });
     },
     onError: (err) => {
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to repair shipment recovery"));
+      toast.error(getServerFnError(err, msg("toast.shipmentRepairFailed")));
     },
   });
 }
@@ -429,10 +422,10 @@ export function useLookupUnknownShipment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Courier shipment confirmed", { description: result.message });
+      toast.success(msg("toast.courierChecked"), { description: result.message });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Courier lookup did not resolve the shipment")),
+      toast.error(getServerFnError(err, msg("toast.courierCheckFailed"))),
   });
 }
 
@@ -450,10 +443,10 @@ export function useResolveUnknownShipment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
       if (result.status === "repaired") invalidateOrderInventoryQueries(queryClient);
-      toast.success("Courier confirmation recorded", { description: result.message });
+      toast.success(msg("toast.courierRecorded"), { description: result.message });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to resolve unknown courier outcome")),
+      toast.error(getServerFnError(err, msg("toast.courierRecordFailed"))),
   });
 }
 
@@ -481,13 +474,16 @@ export function useUpdateOrderCod() {
       if (variables.action === "collected") {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.success("COD action recorded");
+      toast.success(msg(
+        variables.action === "collected" ? "toast.codCollected"
+          : variables.action === "failed" ? "toast.codFailed" : "toast.codReturned",
+      ));
     },
     onError: (err, variables) => {
       if (variables.action === "collected") {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.error(getServerFnError(err, "Failed to record COD action"));
+      toast.error(getServerFnError(err, msg("toast.saveFailedShort")));
     },
   });
 }
@@ -503,18 +499,11 @@ export function useRetryOrderNotification() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.notifications(variables.orderId),
       });
-      if (result.enqueued) {
-        toast.success("Notification retry queued");
-        return;
-      }
-      toast.info("Notification retry scheduled", {
-        description: result.skippedReason
-          ? `Current state: ${result.skippedReason.replace(/_/g, " ")}`
-          : undefined,
-      });
+      if (result.enqueued) toast.success(msg("toast.messageQueued"));
+      else toast.info(msg("toast.messageLater"));
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to retry notification")),
+      toast.error(getServerFnError(err, msg("toast.messageFailed"))),
   });
 }
 
@@ -534,18 +523,11 @@ export function useResendOrderNotification() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.notifications(variables.orderId),
       });
-      if (result.enqueued) {
-        toast.success("Notification resend queued");
-        return;
-      }
-      toast.info("Notification resend scheduled", {
-        description: result.skippedReason
-          ? `Current state: ${result.skippedReason.replace(/_/g, " ")}`
-          : undefined,
-      });
+      if (result.enqueued) toast.success(msg("toast.messageQueued"));
+      else toast.info(msg("toast.messageLater"));
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to send notification again")),
+      toast.error(getServerFnError(err, msg("toast.messageFailed"))),
   });
 }
 
@@ -567,7 +549,7 @@ export function useResolveOrderSupportRequest() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.returns(variables.orderId),
       });
-      toast.success("Customer request updated");
+      toast.success(msg("toast.requestUpdated"));
     },
     onError: (err, variables) => {
       queryClient.invalidateQueries({
@@ -576,7 +558,7 @@ export function useResolveOrderSupportRequest() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.returns(variables.orderId),
       });
-      toast.error(getServerFnError(err, "Failed to update customer request"));
+      toast.error(getServerFnError(err, msg("toast.requestFailed")));
     },
   });
 }
@@ -598,11 +580,11 @@ export function useCreateOrderReturn() {
       apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success("Return requested");
+      toast.success(msg("toast.returnRequested"));
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, "Failed to request return"));
+      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -617,11 +599,11 @@ export function useApproveOrderReturn() {
       })),
     onSuccess: (result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success(result.status === "rejected" ? "Return rejected" : "Return approved");
+      toast.success(msg(result.status === "rejected" ? "toast.returnRejected" : "toast.returnApproved"));
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, "Failed to decide return"));
+      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -639,14 +621,14 @@ export function useReceiveOrderReturn() {
       if (variables.lines.some((line) => line.restockQuantity > 0)) {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.success(result.status === "completed" ? "Return received" : "Receipt recorded");
+      toast.success(msg(result.status === "completed" ? "toast.returnReceived" : "toast.receiptRecorded"));
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       if (variables.lines.some((line) => line.restockQuantity > 0)) {
         invalidateOrderInventoryQueries(queryClient);
       }
-      toast.error(getServerFnError(err, "Failed to record receipt"));
+      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -661,11 +643,11 @@ export function useCancelOrderReturn() {
       })),
     onSuccess: (_result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success("Return cancelled");
+      toast.success(msg("toast.returnCancelled"));
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, "Failed to cancel return"));
+      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -680,12 +662,12 @@ export function useReconcileOrderReturn() {
     onSuccess: (_result, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success("Receipt recovery completed");
+      toast.success(msg("toast.receiptRecorded"));
     },
     onError: (err, variables) => {
       invalidateOrderReturnQueries(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, "Failed to recover receipt"));
+      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -699,10 +681,10 @@ export function useRestoreOrder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(input.id) });
-      toast.success("Order restored");
+      toast.success(msg("toast.orderRestored"));
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore order")),
+      toast.error(getServerFnError(err, msg("toast.restoreFailed"))),
   });
 }
 
@@ -714,9 +696,11 @@ export function useArchiveOrders() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
-      toast.success(`${variables.orders.length} order${variables.orders.length === 1 ? "" : "s"} archived`);
+      toast.success(msg("toast.archived"), {
+        description: msg("toast.archivedDetail", { count: variables.orders.length }),
+      });
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to archive orders")),
+      toast.error(getServerFnError(err, msg("toast.archiveFailed"))),
   });
 }

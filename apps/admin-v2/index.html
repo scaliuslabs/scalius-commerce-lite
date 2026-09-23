@@ -9,13 +9,22 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>Scalius Admin</title>
     <link rel="icon" href="/favicon.png" />
-    <script>(function(){var t="light";try{t=localStorage.getItem("theme")||"light"}catch(e){}if(t==="dark"){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}document.documentElement.style.colorScheme=t})()</script>
+    <!-- Theme and language before first paint: the saved choice, else the system theme. -->
+    <script>(function(){var d=document.documentElement,t=null,l=null;try{t=localStorage.getItem("theme");l=localStorage.getItem("scalius.dashboard.locale")}catch(e){}d.classList.toggle("dark",t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches);if(l==="bn")d.lang="bn"})()</script>
+    <!-- Until the stylesheet arrives: the page colour (--background in both
+         themes) and, when the first load takes over a second, a quiet spinner. -->
+    <style>
+      html{background:#f1f1f1}html.dark{background:#1a1a1a}
+      #boot{position:fixed;inset:0;display:grid;place-items:center;animation:boot-in 0s 1s both}
+      #boot::after{content:"";width:20px;height:20px;border:2px solid #8a8a8a;border-top-color:transparent;border-radius:50%;animation:boot-spin .8s linear infinite}
+      @keyframes boot-in{from{visibility:hidden}}@keyframes boot-spin{to{transform:rotate(360deg)}}
+    </style>
     <script type="module" src="/src/main.tsx"></script>
   </head>
-  <body class="min-h-screen bg-background font-sans antialiased">
-    <!-- Nothing protected renders until the session is known: this blank shell
-         stays until the first route (and its guard) has resolved. -->
-    <div id="root"></div>
+  <body>
+    <!-- Nothing protected renders until the session is known: only the boot
+         spinner shows until the first route (and its guard) has resolved. -->
+    <div id="root"><div id="boot" role="status" aria-label="Loading"></div></div>
     <noscript>The Scalius dashboard needs JavaScript.</noscript>
   </body>
 </html>

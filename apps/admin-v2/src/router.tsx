@@ -1,91 +1,23 @@
-import { useEffect, type ReactNode } from "react";
-import { createRouter, Link } from "@tanstack/react-router";
+import { type ReactNode } from "react";
+import { createRouter, rootRouteId, useMatch, type ErrorComponentProps } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import { createAdminQueryClient } from "./lib/admin-query-client";
-import {
-  isRecoverableRouteLoadError,
-  reloadRecoverableRouteOnce,
-  RECOVERABLE_ROUTE_RELOAD_KEY,
-} from "./lib/recoverable-route-error";
+import { NotFoundState, RouteErrorComponent } from "./lib/route-error";
 import { getAdminScrollRestorationKey } from "./lib/admin-scroll-restoration";
 import { getDashboardBasePath } from "./lib/dashboard-base-path";
 
+// Not-found and error states render where the failure happened: inside the
+// admin shell or the sign-in card while those layouts stand, full page when
+// the root, or the shell's own session guard, is what failed.
 function DefaultNotFoundComponent() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-background text-foreground">
-      <div className="w-full max-w-sm text-center space-y-4">
-        <p className="text-6xl font-bold text-muted-foreground">404</p>
-        <h1 className="text-xl font-semibold">Page Not Found</h1>
-        <p className="text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <Link
-          to="/admin"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          Back to Dashboard
-        </Link>
-      </div>
-    </div>
-  );
+  const routeId = useMatch({ strict: false, select: (match) => match.routeId });
+  return <NotFoundState fullPage={routeId === rootRouteId} />;
 }
 
-function DefaultErrorComponent({ error }: { error: Error }) {
-  const recoverableLoadError = isRecoverableRouteLoadError(error);
-
-  useEffect(() => {
-    if (!recoverableLoadError) return;
-
-    reloadRecoverableRouteOnce({
-      error,
-      pathname: window.location.pathname,
-      storage: window.sessionStorage,
-      reload: () => window.location.reload(),
-    });
-  }, [error, recoverableLoadError]);
-
-  const handleReload = () => {
-    window.sessionStorage.removeItem(RECOVERABLE_ROUTE_RELOAD_KEY);
-    window.location.reload();
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-background text-foreground">
-      <div className="w-full max-w-sm text-center space-y-4">
-        <p className="text-6xl font-bold text-muted-foreground">500</p>
-        <h1 className="text-xl font-semibold">
-          {recoverableLoadError ? "Update Needed" : "Something Went Wrong"}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {recoverableLoadError
-            ? "The dashboard was updated while this tab was open. Reload to continue."
-            : "An unexpected error occurred. Please try again or contact support if the problem persists."}
-        </p>
-        {import.meta.env.DEV && error?.message && (
-          <pre className="mt-4 rounded-md bg-muted p-3 text-left text-xs text-muted-foreground overflow-auto max-h-40">
-            {error.message}
-          </pre>
-        )}
-        {recoverableLoadError ? (
-          <button
-            type="button"
-            onClick={handleReload}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Reload
-          </button>
-        ) : (
-          <Link
-            to="/admin"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Back to Dashboard
-          </Link>
-        )}
-      </div>
-    </div>
-  );
+function DefaultErrorComponent(props: ErrorComponentProps) {
+  const routeId = useMatch({ strict: false, select: (match) => match.routeId });
+  return <RouteErrorComponent {...props} fullPage={routeId === rootRouteId || routeId === "/admin"} />;
 }
 
 export function getRouter() {

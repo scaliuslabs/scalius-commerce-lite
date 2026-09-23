@@ -56,7 +56,6 @@ export {
   validatePositiveQuantity,
   validateSignedStockAdjustment,
   validateAbsoluteStockCount,
-  calculateFinalPrice,
 } from "./validation";
 export type { StockOperationResult, ReservationEntry } from "./types";
 export * from "./inventory.service";

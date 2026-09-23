@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   abandonedCheckoutRouteStateToQuery,
-  validateAbandonedCheckoutSearch,
+  validateAbandonedCheckoutSearch as validateTypedSearch,
 } from "./abandoned-checkout-route-state";
+
+const validateAbandonedCheckoutSearch = (search: Record<string, unknown>) =>
+  validateTypedSearch(search as Parameters<typeof validateTypedSearch>[0]);
 
 describe("abandoned checkout route state", () => {
   it("normalizes malformed and unbounded URL values", () => {

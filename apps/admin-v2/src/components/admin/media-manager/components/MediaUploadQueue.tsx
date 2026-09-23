@@ -1,6 +1,8 @@
 import { AlertCircle, Check, Pause, Play, RotateCcw, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
 import type { UploadQueueItem } from "../types";
 
 interface MediaUploadQueueProps {
@@ -11,51 +13,94 @@ interface MediaUploadQueueProps {
   onClearFinished: () => void;
 }
 
-const statusLabel: Record<UploadQueueItem["status"], string> = {
-  queued: "Waiting",
-  initiating: "Starting",
-  uploading: "Uploading",
-  paused: "Paused",
-  completing: "Finalizing",
-  complete: "Ready",
-  failed: "Needs attention",
-  cancelled: "Cancelled",
-};
+const STATUS_KEYS = {
+  queued: "statusQueued",
+  initiating: "statusStarting",
+  uploading: "statusUploading",
+  paused: "statusPaused",
+  completing: "statusFinishing",
+  complete: "statusDone",
+  failed: "statusFailed",
+  cancelled: "statusCancelled",
+} as const satisfies Record<UploadQueueItem["status"], string>;
 
+const ACTIVE = new Set<UploadQueueItem["status"]>(["queued", "initiating", "uploading", "completing"]);
+
+/** Upload progress for each file; resumable uploads keep their place across pause and retry. */
 export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFinished }: MediaUploadQueueProps) {
+  const t = useMessages(mediaMessages);
   if (!queue.length) return null;
+  const count = (test: (item: UploadQueueItem) => boolean) => queue.filter(test).length;
+  const active = count((item) => ACTIVE.has(item.status));
+  const complete = count((item) => item.status === "complete");
+  const failed = count((item) => item.status === "failed");
   const finished = queue.some((item) => item.status === "complete" || item.status === "cancelled");
-  const activeCount = queue.filter((item) => ["queued", "initiating", "uploading", "completing"].includes(item.status)).length;
-  const completeCount = queue.filter((item) => item.status === "complete").length;
-  const attentionCount = queue.filter((item) => item.status === "failed").length;
+  const announce = [
+    active === 1 ? t("activeOne") : active ? t("activeMany", { count: active }) : t("activeNone"),
+    complete === 1 ? t("doneOne") : complete ? t("doneMany", { count: complete }) : "",
+    failed === 1 ? t("failedOne") : failed ? t("failedMany", { count: failed }) : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <section aria-label="Upload queue" className="border-b bg-muted/20 px-3 py-2">
-      <p className="sr-only" aria-live="polite">
-        {activeCount ? `${activeCount} upload${activeCount === 1 ? "" : "s"} in progress.` : "No uploads in progress."}{" "}
-        {completeCount ? `${completeCount} upload${completeCount === 1 ? "" : "s"} ready.` : ""}{" "}
-        {attentionCount ? `${attentionCount} upload${attentionCount === 1 ? " needs" : "s need"} attention.` : ""}
-      </p>
-      <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· Keep this tab open</span></p>
-        {finished && <Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-7" onClick={onClearFinished}>Clear finished</Button>}
+    <section aria-label={t("uploads")} className="border-b px-3 py-2">
+      <p className="sr-only" aria-live="polite">{announce}</p>
+      <div className="flex min-h-9 items-center justify-between gap-2">
+        <p className="text-body">
+          <span className="font-medium">{t("uploads")}</span>
+          {active ? <span className="text-muted-foreground"> · {t("keepTabOpen")}</span> : null}
+        </p>
+        {finished ? <Button type="button" variant="ghost" size="sm" onClick={onClearFinished}>{t("clearFinished")}</Button> : null}
       </div>
-      <div className="grid gap-1.5 lg:grid-cols-2">
+      <ul className="grid gap-2 lg:grid-cols-2">
         {queue.map((item) => (
-          <div key={item.id} className="rounded-md border bg-background px-2.5 py-2">
+          <li key={item.id} className="flex flex-col gap-1.5 rounded-lg border px-3 py-2">
             <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2"><p className="truncate text-xs font-medium">{item.file.name}</p><span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel[item.status]}</span></div>
-                <Progress className="mt-1.5 h-1" value={item.progress} aria-label={`${item.file.name} upload progress`} />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex items-baseline gap-2 text-body">
+                  <span className="min-w-0 flex-1 truncate font-medium">{item.file.name}</span>
+                  <span className="shrink-0 text-muted-foreground">{t(STATUS_KEYS[item.status])}</span>
+                </div>
+                <Progress value={item.progress} aria-label={t("progressFor", { name: item.file.name })} />
               </div>
-              {["initiating", "uploading"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onPause(item.id)} aria-label={`Pause ${item.file.name}`}><Pause className="h-3.5 w-3.5" /></Button>}
-              {["paused", "failed"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onResume(item.id)} aria-label={`${item.status === "failed" ? "Retry" : "Resume"} ${item.file.name}`}>{item.status === "failed" ? <RotateCcw className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}</Button>}
-              {item.status === "complete" ? <Check className="h-4 w-4 text-emerald-600" /> : !["cancelled", "completing"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onCancel(item.id)} aria-label={`Cancel ${item.file.name}`}><X className="h-3.5 w-3.5" /></Button>}
+              {item.status === "initiating" || item.status === "uploading" ? (
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => onPause(item.id)} aria-label={t("pauseFile", { name: item.file.name })}>
+                  <Pause aria-hidden="true" />
+                </Button>
+              ) : null}
+              {item.status === "paused" || item.status === "failed" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onResume(item.id)}
+                  aria-label={t(item.status === "failed" ? "retryFile" : "resumeFile", { name: item.file.name })}
+                >
+                  {item.status === "failed" ? <RotateCcw aria-hidden="true" /> : <Play aria-hidden="true" />}
+                </Button>
+              ) : null}
+              {item.status === "complete" ? (
+                <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
+              ) : item.status !== "cancelled" && item.status !== "completing" ? (
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => onCancel(item.id)} aria-label={t("cancelFile", { name: item.file.name })}>
+                  <X aria-hidden="true" />
+                </Button>
+              ) : null}
             </div>
-            {item.error && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-destructive"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.failedPart ? `Part ${item.failedPart}: ` : ""}{item.error}</p>}
-            {item.warning && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400" role="status"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.warning}</p>}
-          </div>
+            {item.error ? (
+              <p className="flex items-start gap-1.5 text-body text-destructive">
+                <span className="flex h-lh items-center"><AlertCircle className="size-4 shrink-0" aria-hidden="true" /></span>
+                {item.error}
+              </p>
+            ) : null}
+            {item.warning ? (
+              <p className="flex items-start gap-1.5 text-body text-warning" role="status">
+                <span className="flex h-lh items-center"><AlertCircle className="size-4 shrink-0" aria-hidden="true" /></span>
+                {item.warning}
+              </p>
+            ) : null}
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }

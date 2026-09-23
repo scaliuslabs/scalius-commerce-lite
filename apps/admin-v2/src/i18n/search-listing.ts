@@ -1,0 +1,41 @@
+import { defineMessages } from "./index";
+
+/** The shared "Search engine listing" card on products, collections, categories and pages. */
+export const searchListingMessages = defineMessages({
+  en: {
+    title: "Search engine listing",
+    edit: "Edit search engine listing",
+    empty_product: "Add a title and description to see how this product might appear in a search engine listing.",
+    empty_collection: "Add a title and description to see how this collection might appear in a search engine listing.",
+    empty_category: "Add a title and description to see how this category might appear in a search engine listing.",
+    empty_page: "Add a title and description to see how this page might appear in a search engine listing.",
+    empty_blogPost: "Add a title and description to see how this blog post might appear in a search engine listing.",
+    pageTitle: "Page title",
+    metaDescription: "Meta description",
+    urlHandle: "URL handle",
+    charactersUsed: "{count} of {limit} characters used",
+    hide: "Hide from search engines",
+    hideHelp: "People with the link can still visit it.",
+    hiddenNote: "Hidden from search engines.",
+    excludeFromFeed: "Leave out of Facebook and Google product ads",
+    excludeFromFeedHelp: "It stays on your store.",
+  },
+  bn: {
+    title: "সার্চ ইঞ্জিন লিস্টিং",
+    edit: "সার্চ ইঞ্জিন লিস্টিং এডিট করুন",
+    empty_product: "সার্চ ইঞ্জিনে এই প্রোডাক্ট কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    empty_collection: "সার্চ ইঞ্জিনে এই কালেকশন কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    empty_category: "সার্চ ইঞ্জিনে এই ক্যাটাগরি কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    empty_page: "সার্চ ইঞ্জিনে এই পেজ কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    empty_blogPost: "সার্চ ইঞ্জিনে এই ব্লগ পোস্ট কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    pageTitle: "পেজের টাইটেল",
+    metaDescription: "মেটা বর্ণনা",
+    urlHandle: "URL হ্যান্ডেল",
+    charactersUsed: "{limit} অক্ষরের মধ্যে {count}টি ব্যবহার হয়েছে",
+    hide: "সার্চ ইঞ্জিন থেকে লুকান",
+    hideHelp: "যাদের কাছে লিংক আছে তারা এখনও দেখতে পারবেন।",
+    hiddenNote: "সার্চ ইঞ্জিন থেকে লুকানো।",
+    excludeFromFeed: "Facebook ও Google প্রোডাক্ট বিজ্ঞাপনে রাখবেন না",
+    excludeFromFeedHelp: "আপনার স্টোরে থাকবে।",
+  },
+});

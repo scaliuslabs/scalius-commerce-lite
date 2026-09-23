@@ -1,365 +1,116 @@
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useHydrated } from "~/hooks/use-hydrated";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useMessages } from "~/i18n";
+import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { resourceMessages } from "~/i18n/resource";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import {
-  AlertTriangle,
-  Bell,
-  CheckCircle2,
-  ChevronDown,
-  Clock,
-  Loader2,
-  Mail,
-  MessageCircle,
-  RefreshCw,
-  Send,
-  Smartphone,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
-import { orderNotificationsQueryOptions } from "@/lib/api-query-options/orders";
-import {
-  useResendOrderNotification,
-  useRetryOrderNotification,
-} from "@/lib/api-mutations/orders";
-import { useHydrated } from "@/hooks/use-hydrated";
-import type { OrderNotificationOutboxDto } from "@/lib/api-query-options/orders";
+  orderNotificationsQueryOptions,
+  type OrderNotificationOutboxDto,
+} from "~/lib/api-query-options/orders";
+import { useResendOrderNotification, useRetryOrderNotification } from "~/lib/api-mutations/orders";
 import {
   buildReceiptDisplayGroups,
-  deliveryAttemptLabel,
   describeNotificationIssue,
-  outboxAttemptLabel,
   summarizeNotificationDelivery,
-  type OrderNotificationReceiptDisplayGroup,
-} from "@/lib/order-notification-display";
-import type { Order, OrderTimestamp } from "./types";
+} from "~/lib/order-notification-display";
 import { formatOrderTimestamp } from "./formatters";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { statusBadgeVariant } from "./status-badges";
+import type { Order } from "./types";
 
-const STATUS_STYLES: Record<string, string> = {
-  sent: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
-  accepted: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
-  delivered: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100",
-  queued: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
-  enqueueing: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
-  processing: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
-  pending: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
-  failed: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
-  dead_lettered: "border-red-200 bg-red-50 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100",
-  skipped: "border-muted bg-muted/40 text-muted-foreground",
-  partial: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100",
-};
+const RETRYABLE = new Set(["failed", "pending", "dead_lettered"]);
 
-const CHANNEL_ICONS: Record<string, React.ElementType> = {
-  email: Mail,
-  sms: Smartphone,
-  whatsapp: MessageCircle,
-  push: Bell,
-};
-
-let resendRequestFallbackCounter = 0;
-
-function humanize(value: string): string {
-  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatTimestamp(value: OrderTimestamp | null | undefined): string | null {
-  return formatOrderTimestamp(value);
-}
-
-function statusClass(status: string): string {
-  return STATUS_STYLES[status] ?? "border-border bg-muted/40 text-muted-foreground";
-}
-
-function outboxTimestamp(outbox: OrderNotificationOutboxDto): string | null {
-  return formatTimestamp(outbox.sentAt ?? outbox.queuedAt ?? outbox.createdAt);
-}
-
-function canRetry(outbox: OrderNotificationOutboxDto): boolean {
-  return outbox.status === "failed" || outbox.status === "pending" || outbox.status === "dead_lettered";
-}
-
-function canResend(outbox: OrderNotificationOutboxDto): boolean {
-  return outbox.status === "sent";
-}
-
-function createResendRequestId(): string {
-  const webCrypto = globalThis.crypto;
-  if (typeof webCrypto?.randomUUID === "function") {
-    return webCrypto.randomUUID();
-  }
-
-  if (typeof webCrypto?.getRandomValues === "function") {
-    const bytes = new Uint8Array(16);
-    webCrypto.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = Array.from(bytes, (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    );
-    return [
-      hex.slice(0, 4).join(""),
-      hex.slice(4, 6).join(""),
-      hex.slice(6, 8).join(""),
-      hex.slice(8, 10).join(""),
-      hex.slice(10, 16).join(""),
-    ].join("-");
-  }
-
-  resendRequestFallbackCounter += 1;
-  return [
-    "resend",
-    Date.now().toString(36),
-    resendRequestFallbackCounter.toString(36),
-    Math.random().toString(36).slice(2),
-  ].join("-");
-}
-
-function ReceiptRow({ group }: { group: OrderNotificationReceiptDisplayGroup }) {
-  const Icon = CHANNEL_ICONS[group.channel] ?? Send;
-  const timestamp = formatTimestamp(group.latestTimestamp);
-
-  return (
-    <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
-      <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-medium text-foreground">{humanize(group.channel)}</span>
-          <Badge variant="outline" className={statusClass(group.status)}>
-            {humanize(group.status)}
-          </Badge>
-          {group.provider !== group.channel ? (
-            <span className="text-muted-foreground">{group.provider}</span>
-          ) : null}
-        </div>
-        <div className="break-words text-muted-foreground">
-          {group.recipientLabel}
-          {group.providerStatus ? ` • ${group.providerStatus}` : ""}
-        </div>
-        {group.showLastError && (
-          <div className="line-clamp-2 text-red-600 dark:text-red-300" title={group.lastError ?? undefined}>
-            {group.lastError}
-          </div>
-        )}
-      </div>
-      <div className="text-left text-muted-foreground sm:text-right">
-        <div title={`${group.totalAttempts} recorded attempt${group.totalAttempts === 1 ? "" : "s"}`}>
-          {deliveryAttemptLabel(group)}
-        </div>
-        {timestamp && <div>{timestamp}</div>}
-      </div>
-    </div>
-  );
-}
-
-function NotificationRow({
-  orderId,
-  notification,
-  canRetryNotifications,
-}: {
+function MessageRow({ orderId, message, canRetry }: {
   orderId: string;
-  notification: OrderNotificationOutboxDto;
-  canRetryNotifications: boolean;
+  message: OrderNotificationOutboxDto;
+  canRetry: boolean;
 }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   const retryMutation = useRetryOrderNotification();
   const resendMutation = useResendOrderNotification();
-  const timestamp = outboxTimestamp(notification);
-  const lastError = describeNotificationIssue(notification.lastError);
-  const attemptLabel = outboxAttemptLabel(notification);
-  const showOutboxError = Boolean(lastError && notification.receipts.length === 0);
-  const receiptGroups = buildReceiptDisplayGroups(notification.receipts);
-  const deliverySummary = summarizeNotificationDelivery(notification);
-  const retrying =
-    retryMutation.isPending &&
-    retryMutation.variables?.outboxId === notification.id;
-  const resending =
-    resendMutation.isPending &&
-    resendMutation.variables?.outboxId === notification.id;
+  const summary = summarizeNotificationDelivery(message);
+  const issue = message.receipts.length === 0 ? describeNotificationIssue(message.lastError) : null;
+  const receipts = buildReceiptDisplayGroups(message.receipts);
+  const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
+  const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
+  const sentAt = formatOrderTimestamp(message.sentAt ?? message.queuedAt ?? message.createdAt);
+  // Channel lines only when a channel failed; a clean send needs no detail.
+  const failedChannels = receipts.filter((group) => group.status === "failed" && group.lastError);
 
   return (
-    <div className="p-3 sm:px-4 sm:py-3">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium text-foreground">
-              {humanize(notification.notificationType)}
-            </span>
-            <Badge variant="outline" className={statusClass(deliverySummary.status)}>
-              {deliverySummary.label}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {timestamp ? <span>{timestamp}</span> : null}
-            {attemptLabel ? (
-              <span title={`${notification.attempts} recorded attempt${notification.attempts === 1 ? "" : "s"}`}>
-                {attemptLabel}
-              </span>
-            ) : null}
-          </div>
+    <li className="space-y-1 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-medium">{orderDetailLabel(t, "messages.type.", message.notificationType)}</span>
+          <Badge variant={statusBadgeVariant(summary.status)}>{orderDetailLabel(t, "messages.status.", summary.status)}</Badge>
+          {sentAt ? <span className="text-muted-foreground">{sentAt}</span> : null}
         </div>
-        <div className="flex items-center gap-2">
-          {canRetryNotifications && canRetry(notification) && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-11 w-11 gap-1.5 p-0 sm:h-8 sm:w-auto sm:px-3"
-              aria-label={`Retry ${humanize(notification.notificationType)}`}
-              title={`Retry ${humanize(notification.notificationType)}`}
-              disabled={retrying}
-              onClick={() => retryMutation.mutate({ orderId, outboxId: notification.id })}
-            >
-              {retrying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              <span className="sr-only sm:not-sr-only">Retry</span>
-            </Button>
-          )}
-          {canRetryNotifications && canResend(notification) && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-11 w-11 gap-1.5 p-0 sm:h-8 sm:w-auto sm:px-3"
-              aria-label={`Send ${humanize(notification.notificationType)} again`}
-              title={`Send ${humanize(notification.notificationType)} again`}
-              disabled={resending}
-              onClick={() =>
-                resendMutation.mutate({
-                  orderId,
-                  outboxId: notification.id,
-                  resendRequestId: createResendRequestId(),
-                })
-              }
-            >
-              {resending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              <span className="sr-only sm:not-sr-only">Send again</span>
-            </Button>
-          )}
-        </div>
+        {canRetry && RETRYABLE.has(message.status) ? (
+          <Button type="button" size="sm" variant="outline" disabled={retrying} onClick={() => retryMutation.mutate({ orderId, outboxId: message.id })}>
+            {r("retry")}
+          </Button>
+        ) : null}
+        {canRetry && message.status === "sent" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={resending}
+            onClick={() => resendMutation.mutate({ orderId, outboxId: message.id, resendRequestId: crypto.randomUUID() })}
+          >
+            {t("messages.sendAgain")}
+          </Button>
+        ) : null}
       </div>
-
-      {showOutboxError && (
-        <div
-          className="mt-2 line-clamp-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
-          title={lastError ?? undefined}
-        >
-          {lastError}
-        </div>
-      )}
-
-      {receiptGroups.length > 0 ? (
-        <details className="group mt-2">
-          <summary className="flex min-h-9 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 rounded-md text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-            {receiptGroups.map((group) => {
-              const Icon = CHANNEL_ICONS[group.channel] ?? Send;
-              return (
-                <span
-                  key={group.key}
-                  className="inline-flex min-w-0 items-center gap-1.5"
-                >
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium text-foreground">{humanize(group.channel)}</span>
-                  <span className="text-muted-foreground">{humanize(group.status)}</span>
-                </span>
-              );
-            })}
-            <span className="sr-only">Delivery details</span>
-            <ChevronDown className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="mt-2 space-y-2">
-            {receiptGroups.map((group) => (
-              <ReceiptRow key={group.key} group={group} />
-            ))}
-          </div>
-        </details>
-      ) : null}
-    </div>
+      {issue ? <p className="line-clamp-3 text-destructive">{issue}</p> : null}
+      {failedChannels.map((group) => (
+        <p key={group.key} className="text-destructive">
+          {orderDetailLabel(t, "messages.channel.", group.channel)}: {group.lastError}
+        </p>
+      ))}
+    </li>
   );
 }
 
+/** Messages sent to the customer about this order, with retry and resend. */
 export function OrderNotificationsCard({ order }: { order: Order }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   const isHydrated = useHydrated();
-  const orderActions = useOrderActionPermissions();
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const canRetry = useOrderActionPermissions().canRetryOrderNotifications;
+  const query = useQuery({
     ...orderNotificationsQueryOptions(order.id),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
-  const notifications = data?.notifications ?? [];
-  const deliverySummaries = notifications.map(summarizeNotificationDelivery);
-  const failedCount = deliverySummaries.filter((item) => item.status === "failed").length;
-  const pendingCount = deliverySummaries.filter((item) => item.status === "pending").length;
+  const messages = query.data?.notifications ?? [];
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-        <CardTitle className="flex items-center justify-between gap-3 text-base">
-          <span className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            Notifications
-          </span>
-          <span className="flex items-center gap-2">
-            {failedCount > 0 && (
-              <Badge variant="outline" className={statusClass("failed")}>
-                <AlertTriangle className="mr-1 h-3 w-3" />
-                {failedCount} failed
-              </Badge>
-            )}
-            {pendingCount > 0 && (
-              <Badge variant="outline" className={statusClass("pending")}>
-                <Clock className="mr-1 h-3 w-3" />
-                {pendingCount} pending
-              </Badge>
-            )}
-          </span>
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("messages.title")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        {!isHydrated || isLoading ? (
-          <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading
+      <CardContent>
+        {!isHydrated || query.isLoading ? (
+          <p className="text-muted-foreground">{t("read.loading")}</p>
+        ) : query.isError ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-muted-foreground">{t("messages.loadFailed")}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void query.refetch()}>{r("retry")}</Button>
           </div>
-        ) : isError ? (
-          <div className="space-y-3 p-4">
-            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-300">
-              <AlertTriangle className="h-4 w-4" />
-              Notification history unavailable
-            </div>
-            <Button
-              className="min-h-11 sm:min-h-9"
-              variant="outline"
-              size="sm"
-              onClick={() => void refetch()}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4" />
-            No notification activity
-          </div>
+        ) : messages.length === 0 ? (
+          <p className="text-muted-foreground">{t("messages.empty")}</p>
         ) : (
-          <div className="divide-y divide-border">
-            {notifications.map((notification) => (
-              <NotificationRow
-                key={notification.id}
-                orderId={order.id}
-                notification={notification}
-                canRetryNotifications={orderActions.canRetryOrderNotifications}
-              />
+          <ul className="divide-y">
+            {messages.map((message) => (
+              <MessageRow key={message.id} orderId={order.id} message={message} canRetry={canRetry} />
             ))}
-          </div>
+          </ul>
         )}
       </CardContent>
     </Card>

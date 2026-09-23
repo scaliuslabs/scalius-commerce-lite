@@ -3,6 +3,8 @@ import type { Database } from "@scalius/database/client";
 import { refundAttempts } from "@scalius/database/schema";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "./refund-attempt-guard";
 import { paymentMethodLabel } from "./gateways/registry";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
 type RefundAttemptSeverity = "info" | "success" | "warning" | "danger";
@@ -15,7 +17,7 @@ export interface RefundAttemptVisibilityRow {
   sourcePaymentId: string;
   refundPaymentId: string;
   gateway: string;
-  amount: number;
+  amountMinor: number;
   currency: string;
   reason: string;
   refundReference: string;
@@ -197,7 +199,7 @@ export function formatRefundAttemptForVisibility(
   const base: OrderRefundAttemptView = {
     id: row.id,
     orderId: row.orderId,
-    amount: row.amount,
+    amount: fromMinor(row.amountMinor, getDecimalPlaces(row.currency)),
     currency: row.currency,
     gateway: row.gateway,
     status: audience === "customer" ? customerSafeStatus(row.status) : row.status,
@@ -247,7 +249,11 @@ export function summarizeActiveRefundOperation(
     return index >= 0 ? index : priority.length;
   };
   const primary = [...activeAttempts].sort((a, b) => rank(a.status) - rank(b.status))[0] ?? activeAttempts[0]!;
-  const amount = activeAttempts.reduce((sum, attempt) => sum + attempt.amount, 0);
+  const decimalPlaces = getDecimalPlaces(primary.currency);
+  const amount = fromMinor(
+    activeAttempts.reduce((sum, attempt) => sum + toMinor(attempt.amount, decimalPlaces), 0),
+    decimalPlaces,
+  );
 
   return {
     active: true,
@@ -317,7 +323,7 @@ export function selectActiveRefundAttemptRowsForOrders(
       sourcePaymentId: refundAttempts.sourcePaymentId,
       refundPaymentId: refundAttempts.refundPaymentId,
       gateway: refundAttempts.gateway,
-      amount: refundAttempts.amount,
+      amountMinor: refundAttempts.amountMinor,
       currency: refundAttempts.currency,
       reason: refundAttempts.reason,
       refundReference: refundAttempts.refundReference,
@@ -384,7 +390,7 @@ export async function listOrderRefundAttempts(
       sourcePaymentId: refundAttempts.sourcePaymentId,
       refundPaymentId: refundAttempts.refundPaymentId,
       gateway: refundAttempts.gateway,
-      amount: refundAttempts.amount,
+      amountMinor: refundAttempts.amountMinor,
       currency: refundAttempts.currency,
       reason: refundAttempts.reason,
       refundReference: refundAttempts.refundReference,

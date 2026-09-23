@@ -1,7 +1,11 @@
 import type { Database } from "@scalius/database/client";
-import type { DeliveryShipment } from "@scalius/database/schema";
 import { deliveryShipments } from "@scalius/database/schema";
-import { checkShipmentStatus, getDeliveryProvider, getShipment } from "@scalius/core/modules/delivery/delivery.service";
+import {
+  checkShipmentStatus,
+  getDeliveryProvider,
+  getShipment,
+  type ShipmentView,
+} from "@scalius/core/modules/delivery/delivery.service";
 import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
 import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
 import { eq } from "drizzle-orm";
@@ -18,7 +22,7 @@ type RequestContext = {
   executionCtx?: { waitUntil(promise: Promise<unknown>): void };
 };
 
-export type SyncedShipmentStatusPayload = Omit<DeliveryShipment, "lastChecked"> & {
+export type SyncedShipmentStatusPayload = Omit<ShipmentView, "lastChecked"> & {
   providerName: string | null;
   providerType: string | null;
   lastChecked: string;
@@ -35,7 +39,7 @@ export type SyncedShipmentStatusResult = {
 
 export async function checkAndSyncShipmentStatus(options: {
   db: Database;
-  shipment: DeliveryShipment;
+  shipment: ShipmentView;
   encryptionKey?: string;
   c: RequestContext;
   source: string;

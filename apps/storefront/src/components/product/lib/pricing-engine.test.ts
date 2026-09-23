@@ -54,9 +54,10 @@ describe("buyer variant pricing", () => {
 
     expect(kwd.finalPrice).toBe(1.111);
     expect(bdt.finalPrice).toBe(0.4);
+    // Stored prices are whole minor units (1.005 → 1.01); 10% off 1.01 rounds half-up to 0.91.
     expect(checkoutRoundingBoundary).toMatchObject({
       originalPrice: 1.01,
-      finalPrice: 0.9,
+      finalPrice: 0.91,
     });
     expect(defaultBdtPrecision.finalPrice).toBe(0.4);
     expect(formatPrice(kwd.finalPrice, "د.ك", 3)).toBe("د.ك1.111");

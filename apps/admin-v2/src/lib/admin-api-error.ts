@@ -23,11 +23,6 @@ export interface ProductRevisionConflict {
   currentRevision: number | null;
 }
 
-export interface DiscountRevisionConflict {
-  expectedRevision: number;
-  currentRevision: number | null;
-}
-
 export interface PromotionRevisionConflict {
   expectedRevision: number;
   currentRevision: number | null;
@@ -39,17 +34,6 @@ export interface CheckoutFlowRevisionConflict {
 }
 
 export interface CategoryRevisionConflict {
-  expectedRevision: number;
-  currentRevision: number | null;
-}
-
-export interface HeroSliderRevisionConflict {
-  expectedRevision: number;
-  currentRevision: number;
-}
-
-export interface SitePresentationRevisionConflict {
-  section: "header" | "footer";
   expectedRevision: number;
   currentRevision: number | null;
 }
@@ -284,43 +268,6 @@ export function readProductRevisionConflict(
   };
 }
 
-export function readDiscountRevisionConflict(
-  error: unknown,
-): DiscountRevisionConflict | null {
-  const parsed = readAdminApiError(error);
-  if (
-    parsed?.status !== 409 ||
-    parsed.code !== "DISCOUNT_REVISION_CONFLICT" ||
-    !parsed.details ||
-    typeof parsed.details !== "object"
-  ) {
-    return null;
-  }
-
-  const details = parsed.details as {
-    expectedRevision?: unknown;
-    currentRevision?: unknown;
-  };
-  if (
-    typeof details.expectedRevision !== "number" ||
-    !Number.isInteger(details.expectedRevision) ||
-    details.expectedRevision < 1 ||
-    !(
-      details.currentRevision === null ||
-      (typeof details.currentRevision === "number" &&
-        Number.isInteger(details.currentRevision) &&
-        details.currentRevision >= 1)
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    expectedRevision: details.expectedRevision,
-    currentRevision: details.currentRevision,
-  };
-}
-
 export function readPromotionRevisionConflict(
   error: unknown,
 ): PromotionRevisionConflict | null {
@@ -390,48 +337,6 @@ export function readCheckoutFlowRevisionConflict(
   }
 
   return {
-    expectedRevision: details.expectedRevision,
-    currentRevision: details.currentRevision,
-  };
-}
-
-export function readSitePresentationRevisionConflict(
-  error: unknown,
-  expectedSection?: "header" | "footer",
-): SitePresentationRevisionConflict | null {
-  const parsed = readAdminApiError(error);
-  if (
-    parsed?.status !== 409 ||
-    parsed.code !== "SITE_PRESENTATION_REVISION_CONFLICT" ||
-    !parsed.details ||
-    typeof parsed.details !== "object"
-  ) {
-    return null;
-  }
-
-  const details = parsed.details as {
-    section?: unknown;
-    expectedRevision?: unknown;
-    currentRevision?: unknown;
-  };
-  if (
-    (details.section !== "header" && details.section !== "footer") ||
-    (expectedSection !== undefined && details.section !== expectedSection) ||
-    typeof details.expectedRevision !== "number" ||
-    !Number.isInteger(details.expectedRevision) ||
-    details.expectedRevision < 0 ||
-    !(
-      details.currentRevision === null ||
-      (typeof details.currentRevision === "number" &&
-        Number.isInteger(details.currentRevision) &&
-        details.currentRevision >= 1)
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    section: details.section,
     expectedRevision: details.expectedRevision,
     currentRevision: details.currentRevision,
   };
@@ -514,38 +419,6 @@ export function readCategoryRevisionConflict(
     return null;
   }
 
-  return {
-    expectedRevision: details.expectedRevision,
-    currentRevision: details.currentRevision,
-  };
-}
-
-export function readHeroSliderRevisionConflict(
-  error: unknown,
-): HeroSliderRevisionConflict | null {
-  const parsed = readAdminApiError(error);
-  if (
-    parsed?.status !== 409 ||
-    parsed.code !== "HERO_SLIDER_REVISION_CONFLICT" ||
-    !parsed.details ||
-    typeof parsed.details !== "object"
-  ) {
-    return null;
-  }
-  const details = parsed.details as {
-    expectedRevision?: unknown;
-    currentRevision?: unknown;
-  };
-  if (
-    typeof details.expectedRevision !== "number" ||
-    !Number.isInteger(details.expectedRevision) ||
-    details.expectedRevision < 1 ||
-    typeof details.currentRevision !== "number" ||
-    !Number.isInteger(details.currentRevision) ||
-    details.currentRevision < 1
-  ) {
-    return null;
-  }
   return {
     expectedRevision: details.expectedRevision,
     currentRevision: details.currentRevision,

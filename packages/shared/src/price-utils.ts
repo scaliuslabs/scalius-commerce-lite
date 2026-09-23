@@ -1,9 +1,10 @@
 /**
- * Price arithmetic utilities powered by currency.js.
- * Eliminates floating-point drift across all price calculations.
+ * Decimal price helpers for browser code that renders HTTP (major-unit) prices.
+ * Server code stores and computes money in integer minor units (./money).
  */
 import Currency from "currency.js";
 import { getDecimalPlaces, getCurrencyCode } from "./currency";
+import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "./money";
 
 /**
  * Round a price to the correct decimal places for the given currency.
@@ -27,62 +28,9 @@ export function roundPriceToPrecision(
 }
 
 /**
- * Safe price addition that avoids float drift.
- */
-export function addPrices(...amounts: number[]): number {
-  return amounts.reduce((sum, amt) => Currency(sum).add(amt).value, 0);
-}
-
-/**
- * Safe price subtraction.
- */
-export function subtractPrice(a: number, b: number): number {
-  return Currency(a).subtract(b).value;
-}
-
-/**
- * Check if two prices are effectively equal.
- */
-export function pricesEqual(a: number, b: number): boolean {
-  return Currency(a).subtract(b).value === 0;
-}
-
-/**
- * Calculate discount amount from percentage, rounded.
- */
-export function calculatePercentageDiscount(
-  price: number,
-  percentage: number,
-): number {
-  return Currency(price).multiply(percentage / 100).value;
-}
-
-/**
- * Calculate the final price after applying a discount.
- * Supports both percentage and flat discount types.
- * Returns the original price if no valid discount is provided.
- */
-export function calculateDiscountedPrice(
-  price: number,
-  discountType: string | null,
-  discountPercentage: number | null,
-  discountAmount: number | null,
-): number {
-  if (!discountType) return price;
-  if (discountType === "percentage" && discountPercentage != null && discountPercentage > 0) {
-    return Currency(price)
-      .subtract(Currency(price).multiply(discountPercentage / 100))
-      .value;
-  }
-  if (discountType === "flat" && discountAmount != null && discountAmount > 0) {
-    return Math.max(Currency(price).subtract(discountAmount).value, 0);
-  }
-  return price;
-}
-
-/**
- * Apply a discount to the raw stored price, then round the final result at the
- * configured currency precision. This matches checkout quote validation.
+ * The discounted unit price of a decimal HTTP price, using the exact integer
+ * rule checkout applies (`discountedPriceMinor`), so displayed and charged
+ * prices always agree.
  */
 export function calculateDiscountedPriceAtPrecision(
   price: number,
@@ -91,21 +39,22 @@ export function calculateDiscountedPriceAtPrecision(
   discountAmount: number | null | undefined,
   precision: number,
 ): number {
-  let finalPrice = price;
-
-  if (
-    discountType === "percentage" &&
-    discountPercentage != null &&
-    discountPercentage > 0
-  ) {
-    finalPrice = price * (1 - discountPercentage / 100);
-  } else if (
-    discountType === "flat" &&
-    discountAmount != null &&
-    discountAmount > 0
-  ) {
-    finalPrice = price - discountAmount;
-  }
-
-  return roundPriceToPrecision(Math.max(finalPrice, 0), precision);
+  const places = Number.isInteger(precision) && precision >= 0 && precision <= 3 ? precision : 2;
+  // Amounts too large for integer minor units are not prices: the result is
+  // 0, which every caller already treats as "not sellable at a price".
+  const amount = (value: number | null | undefined): number | null => {
+    if (value == null || !Number.isFinite(value) || value <= 0) return 0;
+    try {
+      return toMinor(value, places);
+    } catch {
+      return null;
+    }
+  };
+  const priceMinor = amount(price);
+  const discountMinor = amount(discountAmount);
+  if (priceMinor === null || discountMinor === null) return 0;
+  return fromMinor(
+    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor),
+    places,
+  );
 }

@@ -7,26 +7,20 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import { AppError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateStorefrontCartItems, validateStorefrontDeliveryPreflight } from "@scalius/core/modules/orders";
+import {
+  presentStorefrontCartValidation,
+  presentStorefrontDeliveryPreflight,
+  validateStorefrontCartItems,
+  validateStorefrontDeliveryPreflight,
+} from "@scalius/core/modules/orders";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
-import {
-  calculateDiscountAmount,
-  isDiscountValid,
-} from "@scalius/core/modules/discounts/discounts.eligibility";
-import {
-  evaluateStorefrontPromotionCode,
-  resolvePromotionCustomerIdByPhone,
-} from "@scalius/core/modules/promotions";
+import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
-  fromMinorUnits,
-  toMinorUnits,
-  type StorefrontDiscountType,
-  type TaxDiscountAllocationInput,
 } from "@scalius/core/modules/tax";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -73,15 +67,24 @@ export interface AgentStorefrontContextView {
   updatedAt: string;
 }
 
-export interface AgentStorefrontCartProjection {
+type CartValidation = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
+type DeliveryPreflight = Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+
+/** Cart state in integer minor units of the store currency. */
+interface AgentStorefrontCartState {
   context: AgentStorefrontContextView;
   valid: boolean;
-  issues: Awaited<ReturnType<typeof validateStorefrontCartItems>>["issues"];
-  items: Awaited<ReturnType<typeof validateStorefrontCartItems>>["items"];
-  subtotal: number;
+  issues: CartValidation["issues"];
+  items: CartValidation["items"];
+  subtotalMinor: number;
   hasFreeDeliveryProduct: boolean;
-  delivery?: Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>>;
+  delivery?: DeliveryPreflight;
+  currencyCode: string;
+  decimalPlaces: number;
 }
+
+/** The decimal cart projection agents read. */
+export type AgentStorefrontCartProjection = ReturnType<typeof presentAgentStorefrontCart>;
 
 export interface AgentStorefrontCheckoutQuote {
   valid: true;
@@ -452,21 +455,19 @@ export async function setAgentStorefrontDelivery(
   if (current.revision !== expectedRevision) {
     throw new AgentStorefrontContextRevisionConflictError(contextId, expectedRevision, current.revision);
   }
-  const projection = await rehydrateAgentStorefrontCart(db, current);
-  if (!projection.valid) {
+  const cart = await loadAgentStorefrontCart(db, current);
+  if (!cart.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
-      itemIssues: projection.issues,
+      itemIssues: cart.issues,
     });
   }
   if (normalized.cityId && normalized.zoneId) {
-    const currency = await getCurrencySettings(db);
     await validateStorefrontDeliveryPreflight(db, {
       city: normalized.cityId,
       zone: normalized.zoneId,
       area: normalized.areaId,
       shippingMethodId: normalized.shippingMethodId,
-      currencyCode: currency.currencyCode,
-    }, projection);
+    }, cart);
   }
   const row = await mutateContext(db, {
     grantId,
@@ -505,10 +506,10 @@ async function resolveProductIdsForCart(
   }));
 }
 
-async function rehydrateAgentStorefrontCart(
+async function loadAgentStorefrontCart(
   db: Database,
   row: ContextRow,
-): Promise<AgentStorefrontCartProjection> {
+): Promise<AgentStorefrontCartState> {
   const cart = parseAgentStorefrontCartJson(row.cartJson);
   const identityLines = await resolveProductIdsForCart(db, cart);
   const currency = await getCurrencySettings(db);
@@ -516,7 +517,7 @@ async function rehydrateAgentStorefrontCart(
     currencyCode: currency.currencyCode,
   });
 
-  let delivery: Awaited<ReturnType<typeof validateStorefrontDeliveryPreflight>> | undefined;
+  let delivery: DeliveryPreflight | undefined;
   if (
     validation.valid
     && row.cityId
@@ -528,7 +529,6 @@ async function rehydrateAgentStorefrontCart(
       zone: row.zoneId,
       area: row.areaId,
       shippingMethodId: row.shippingMethodId,
-      currencyCode: currency.currencyCode,
     }, validation);
   }
 
@@ -537,10 +537,28 @@ async function rehydrateAgentStorefrontCart(
     valid: validation.valid,
     issues: validation.issues,
     items: validation.items,
-    subtotal: validation.subtotal,
+    subtotalMinor: validation.subtotalMinor,
     hasFreeDeliveryProduct: validation.hasFreeDeliveryProduct,
     ...(delivery ? { delivery } : {}),
+    currencyCode: currency.currencyCode,
+    decimalPlaces: getDecimalPlaces(currency.currencyCode),
   };
+}
+
+function presentAgentStorefrontCart(state: AgentStorefrontCartState) {
+  const { context, delivery, currencyCode: _currencyCode, decimalPlaces, ...cart } = state;
+  return {
+    context,
+    ...presentStorefrontCartValidation(cart, decimalPlaces),
+    ...(delivery ? { delivery: presentStorefrontDeliveryPreflight(delivery, decimalPlaces) } : {}),
+  };
+}
+
+async function rehydrateAgentStorefrontCart(
+  db: Database,
+  row: ContextRow,
+): Promise<AgentStorefrontCartProjection> {
+  return presentAgentStorefrontCart(await loadAgentStorefrontCart(db, row));
 }
 
 async function getLiveContextCustomerId(db: Database, row: ContextRow): Promise<string | null> {
@@ -573,69 +591,47 @@ async function getLiveContextCustomerPhone(db: Database, row: ContextRow): Promi
   return session?.phone ?? null;
 }
 
-async function assertAgentStorefrontDiscountValid(
+/** The one storefront discount path; throws the buyer-facing reason when the code fails. */
+async function quoteAgentStorefrontDiscount(
   db: Database,
   row: ContextRow,
-  normalizedCode: string,
-  customerPhone?: string,
-  currentProjection?: AgentStorefrontCartProjection,
-): Promise<void> {
-  const projection = currentProjection ?? await rehydrateAgentStorefrontCart(db, row);
-  if (!projection.valid || projection.items.length === 0) {
-    throw new ValidationError("Add valid available items before applying a discount.", {
-      itemIssues: projection.issues,
-    });
-  }
+  projection: AgentStorefrontCartState,
+  code: string | null,
+  customerPhone?: string | null,
+) {
   const currency = await getCurrencySettings(db);
-  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
-  const shippingAmount = projection.delivery?.shippingCharge ?? 0;
-  const effectiveCustomerPhone = customerPhone?.trim()
-    || await getLiveContextCustomerPhone(db, row)
-    || undefined;
-  const contextCustomerId = await getLiveContextCustomerId(db, row);
-  const customerId = contextCustomerId
-    ?? (effectiveCustomerPhone
-      ? await resolvePromotionCustomerIdByPhone(db, effectiveCustomerPhone)
-      : null);
-  const promotion = await evaluateStorefrontPromotionCode(db, {
-    code: normalizedCode,
-    customerId,
+  return quoteStorefrontDiscount(db, {
+    code,
+    customerId: await getLiveContextCustomerId(db, row),
+    customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
     cart: {
       currencyCode: currency.currencyCode,
       lines: projection.items.map((item) => ({
         id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
         productId: item.productId,
         variantId: item.variantId,
-        unitPriceMinor: toMinorUnits(item.unitPrice, decimalPlaces),
+        unitPriceMinor: item.unitPriceMinor,
         quantity: item.quantity,
       })),
-      shippingAmountMinor: toMinorUnits(shippingAmount, decimalPlaces),
-      evaluatedAtEpochSeconds: Math.floor(Date.now() / 1_000),
+      shippingAmountMinor: projection.delivery?.shippingMinor ?? 0,
     },
   });
-  if (promotion.matched) {
-    if (!promotion.valid) throw new ValidationError(promotion.message);
-    return;
+}
+
+async function assertAgentStorefrontDiscountValid(
+  db: Database,
+  row: ContextRow,
+  normalizedCode: string,
+  customerPhone?: string,
+  currentCart?: AgentStorefrontCartState,
+): Promise<void> {
+  const projection = currentCart ?? await loadAgentStorefrontCart(db, row);
+  if (!projection.valid || projection.items.length === 0) {
+    throw new ValidationError("Add valid available items before applying a discount.", {
+      itemIssues: projection.issues,
+    });
   }
-  const items = projection.items.map((item) => ({
-    id: item.productId,
-    price: item.unitPrice,
-    quantity: item.quantity,
-    variantId: item.variantId,
-  }));
-  const legacy = await isDiscountValid(
-    db,
-    normalizedCode,
-    projection.subtotal,
-    items,
-    effectiveCustomerPhone,
-    currency.currencySymbol,
-    currency.currencyCode,
-    customerId,
-  );
-  if (!legacy.valid) {
-    throw new ValidationError(legacy.error ?? "This discount is invalid or unavailable.");
-  }
+  await quoteAgentStorefrontDiscount(db, row, projection, normalizedCode, customerPhone);
 }
 
 export async function getAgentStorefrontCart(
@@ -656,22 +652,22 @@ export async function validateAgentStorefrontCheckout(
 ): Promise<AgentStorefrontCartProjection> {
   const now = options.now ?? new Date();
   const row = await loadActiveOwnedContext(db, grantId, contextId, now);
-  const projection = await rehydrateAgentStorefrontCart(db, row);
-  assertAgentStorefrontCheckoutProjection(projection);
+  const cart = await loadAgentStorefrontCart(db, row);
+  assertAgentStorefrontCheckoutProjection(cart);
   if (row.discountCode) {
     await assertAgentStorefrontDiscountValid(
       db,
       row,
       row.discountCode,
       options.customerPhone?.trim() || undefined,
-      projection,
+      cart,
     );
   }
-  return projection;
+  return presentAgentStorefrontCart(cart);
 }
 
 function assertAgentStorefrontCheckoutProjection(
-  projection: AgentStorefrontCartProjection,
+  projection: AgentStorefrontCartState,
 ): void {
   if (projection.context.cart.length === 0) {
     throw new ValidationError("Add at least one item before checkout.");
@@ -690,31 +686,6 @@ function assertAgentStorefrontCheckoutProjection(
   }
 }
 
-function buildPromotionAllocation(
-  allocations: Array<{
-    target: string;
-    lineId?: string | null;
-    discountAmountMinor: number;
-  }>,
-): TaxDiscountAllocationInput {
-  const lines = new Map<string, number>();
-  let shippingMinor = 0;
-  for (const allocation of allocations) {
-    if (allocation.target === "shipping") {
-      shippingMinor += allocation.discountAmountMinor;
-    } else if (allocation.lineId) {
-      lines.set(
-        allocation.lineId,
-        (lines.get(allocation.lineId) ?? 0) + allocation.discountAmountMinor,
-      );
-    }
-  }
-  return {
-    lines: [...lines.entries()].map(([lineId, amountMinor]) => ({ lineId, amountMinor })),
-    shippingMinor,
-  };
-}
-
 export async function quoteAgentStorefrontCheckout(
   db: Database,
   grantId: string,
@@ -722,99 +693,13 @@ export async function quoteAgentStorefrontCheckout(
   input: { customerPhone?: string | null; now?: Date } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
-  const projection = await rehydrateAgentStorefrontCart(db, row);
+  const projection = await loadAgentStorefrontCart(db, row);
   assertAgentStorefrontCheckoutProjection(projection);
   const delivery = projection.delivery!;
   const destination = projection.context.delivery;
-  const currency = await getCurrencySettings(db);
-  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
-  let discountAmount = 0;
-  let discountType: StorefrontDiscountType | null = null;
-  let applicableProductIds: string[] | undefined;
-  let promotionDiscountAllocation: TaxDiscountAllocationInput | undefined;
-
-  if (discountCode) {
-    const customerPhone = input.customerPhone?.trim()
-      || await getLiveContextCustomerPhone(db, row)
-      || undefined;
-    const contextCustomerId = await getLiveContextCustomerId(db, row);
-    const promotionCustomerId = contextCustomerId
-      ?? (customerPhone
-        ? await resolvePromotionCustomerIdByPhone(db, customerPhone)
-        : null);
-    const promotion = await evaluateStorefrontPromotionCode(db, {
-      code: discountCode,
-      customerId: promotionCustomerId,
-      cart: {
-        currencyCode: currency.currencyCode,
-        lines: projection.items.map((item) => ({
-          id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
-          productId: item.productId,
-          variantId: item.variantId,
-          unitPriceMinor: toMinorUnits(item.unitPrice, decimalPlaces),
-          quantity: item.quantity,
-        })),
-        shippingAmountMinor: toMinorUnits(delivery.shippingCharge, decimalPlaces),
-        evaluatedAtEpochSeconds: Math.floor(Date.now() / 1_000),
-      },
-    });
-    if (promotion.matched) {
-      if (!promotion.valid) throw new ValidationError(promotion.message);
-      promotionDiscountAllocation = buildPromotionAllocation(
-        promotion.evaluation.applied.allocations,
-      );
-      discountAmount = fromMinorUnits(
-        promotion.evaluation.applied.totalDiscountMinor,
-        decimalPlaces,
-      );
-    } else {
-      const items = projection.items.map((item) => ({
-        id: item.productId,
-        price: item.unitPrice,
-        quantity: item.quantity,
-        variantId: item.variantId,
-      }));
-      const validation = await isDiscountValid(
-        db,
-        discountCode,
-        projection.subtotal,
-        items,
-        customerPhone,
-        currency.currencySymbol,
-        currency.currencyCode,
-        promotionCustomerId,
-      );
-      if (!validation.valid || !validation.discount) {
-        throw new ValidationError(validation.error ?? "This discount is invalid or unavailable.");
-      }
-      if (!(["amount_off_products", "amount_off_order", "free_shipping"] as const)
-        .includes(validation.discount.type as StorefrontDiscountType)) {
-        throw new ValidationError("The discount configuration is invalid.");
-      }
-      discountType = validation.discount.type as StorefrontDiscountType;
-      if (discountType === "amount_off_products") {
-        if (
-          validation.hasProductRestrictions !== true
-          || !(validation.applicableProductIds instanceof Set)
-        ) {
-          throw new ValidationError("The product discount scope could not be verified.");
-        }
-        applicableProductIds = [...validation.applicableProductIds];
-      }
-      discountAmount = await calculateDiscountAmount(
-        db,
-        validation.discount,
-        roundPrice(projection.subtotal + delivery.shippingCharge, currency.currencyCode),
-        items,
-        delivery.shippingCharge,
-        validation.applicableProductIds,
-        currency.currencyCode,
-        Boolean(validation.hasProductRestrictions),
-      );
-    }
-  }
-
+  const discount = await quoteAgentStorefrontDiscount(db, row, projection, discountCode, input.customerPhone);
+  const currency = await getCurrencySettings(db);
   const quote = await calculateStorefrontTaxQuote(db, {
     destination: {
       city: destination.cityId!,
@@ -828,18 +713,15 @@ export async function quoteAgentStorefrontCheckout(
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       productId: item.productId,
       variantId: item.variantId,
-      unitPrice: item.unitPrice,
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
     })),
-    shippingAmount: delivery.shippingCharge,
-    discountAmount: roundPrice(discountAmount, currency.currencyCode),
-    discountType,
-    applicableProductIds,
-    promotionDiscountAllocation,
-    currency: { code: currency.currencyCode, decimalPlaces },
+    shippingMinor: delivery.shippingMinor,
+    promotionDiscountAllocation: discount.taxAllocation,
+    currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
   });
-  const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
+  const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,
     shippingMethodId: destination.shippingMethodId!,
@@ -870,7 +752,7 @@ export async function quoteAgentStorefrontCheckout(
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
+      unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),

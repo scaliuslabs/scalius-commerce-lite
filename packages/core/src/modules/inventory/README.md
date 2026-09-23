@@ -150,7 +150,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated current-product variants/alerts plus audit-preserving movement history; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
-| `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
+| `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()` |
 
 Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes call `bumpCacheGeneration(c)` after the write commits only when `findStockMutationAvailabilityTransitions()` reports an availability-band change; same-band writes leave public caches alone.
 
@@ -271,7 +271,6 @@ Transition preparation and low-stock projection refreshes use at most four concu
 
 - `@scalius/database` -- `productVariants`, `products`, `productMedia`, `media`, `inventoryMovements`, `productLowStockAlerts`, `orders`, `orderItems`, `InventoryPool`
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
-- `@scalius/shared/price-utils` -- `roundPrice()` (used in `calculateFinalPrice`)
 
 ## Known Gaps
 

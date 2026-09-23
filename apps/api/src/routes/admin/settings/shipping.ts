@@ -5,6 +5,8 @@ import { sql, eq, and, or, isNull, like, asc, desc } from "drizzle-orm";
 import { shippingMethods } from "@scalius/database/schema";
 import { isReady, readinessMessages } from "@scalius/shared/readiness";
 import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { NotFoundError, ConflictError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
@@ -58,6 +60,18 @@ const updateShippingMethodSchema = z.object({
     isActive: z.boolean().optional(),
     sortOrder: z.number().int().optional()
 });
+
+/** Shipping fees are stored in store-currency minor units; the API speaks decimals. */
+function presentShippingMethod<T extends { feeMinor: number }>(
+    { feeMinor, ...method }: T,
+    decimalPlaces: number,
+) {
+    return { ...method, fee: fromMinor(feeMinor, decimalPlaces) };
+}
+
+async function storeDecimalPlaces(db: Parameters<typeof getCurrencyConfig>[0]): Promise<number> {
+    return (await getCurrencyConfig(db)).decimalPlaces;
+}
 
 // ── List Shipping Methods ──
 
@@ -127,17 +141,16 @@ app.openapi(listRoute, async (c) => {
         const combinedWhereClause =
             whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-        const results = await db
+        const sortColumn = sortField === "fee"
+            ? shippingMethods.feeMinor
+            : shippingMethods[sortField as keyof typeof shippingMethods._.columns];
+        const [results, decimalPlaces] = await Promise.all([db
             .select()
             .from(shippingMethods)
             .where(combinedWhereClause)
-            .orderBy(
-                sortOrder === "asc"
-                    ? asc(shippingMethods[sortField as keyof typeof shippingMethods._.columns])
-                    : desc(shippingMethods[sortField as keyof typeof shippingMethods._.columns]),
-            )
+            .orderBy(sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn))
             .limit(limit)
-            .offset(offset);
+            .offset(offset), storeDecimalPlaces(db)]);
 
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
@@ -149,7 +162,7 @@ app.openapi(listRoute, async (c) => {
         const totalPages = Math.ceil(total / limit);
 
         return ok(c, {
-            shippingMethods: results,
+            shippingMethods: results.map((method) => presentShippingMethod(method, decimalPlaces)),
             pagination: {
                 page,
                 limit,
@@ -201,12 +214,13 @@ app.openapi(createRoute_, (async (c: AppRouteContext<typeof createRoute_>) => {
         }
 
         const newMethodId = "sm_" + nanoid();
+        const decimalPlaces = await storeDecimalPlaces(db);
         const [insertedMethod] = await db
             .insert(shippingMethods)
             .values({
                 id: newMethodId,
                 name,
-                fee,
+                feeMinor: toMinor(fee, decimalPlaces),
                 description,
                 isActive,
                 sortOrder,
@@ -216,7 +230,7 @@ app.openapi(createRoute_, (async (c: AppRouteContext<typeof createRoute_>) => {
             .returning();
 
         await bumpCacheGeneration(c);
-        return created(c, { shippingMethod: insertedMethod });
+        return created(c, { shippingMethod: presentShippingMethod(insertedMethod!, decimalPlaces) });
     } catch (error: unknown) {
         console.error("Error creating shipping method:", error);
         if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
@@ -255,7 +269,7 @@ app.openapi(getByIdRoute, (async (c: AppRouteContext<typeof getByIdRoute>) => {
             .get();
 
         if (!method) throw new NotFoundError("Shipping method not found");
-        return ok(c, { shippingMethod: method });
+        return ok(c, { shippingMethod: presentShippingMethod(method, await storeDecimalPlaces(db)) });
     } catch (error: unknown) {
         console.error(`Error fetching shipping method ${id}:`, error);
         throw error;
@@ -318,10 +332,13 @@ app.openapi(updateRoute, (async (c: AppRouteContext<typeof updateRoute>) => {
             }
         }
 
+        const decimalPlaces = await storeDecimalPlaces(db);
+        const { fee, ...fields } = data;
         const [updatedMethod] = await db
             .update(shippingMethods)
             .set({
-                ...data,
+                ...fields,
+                ...(fee === undefined ? {} : { feeMinor: toMinor(fee, decimalPlaces) }),
                 updatedAt: sql`(cast(strftime('%s','now') as int))`
             })
             .where(eq(shippingMethods.id, id))
@@ -332,7 +349,7 @@ app.openapi(updateRoute, (async (c: AppRouteContext<typeof updateRoute>) => {
         }
 
         await bumpCacheGeneration(c);
-        return ok(c, { shippingMethod: updatedMethod });
+        return ok(c, { shippingMethod: presentShippingMethod(updatedMethod, decimalPlaces) });
     } catch (error: unknown) {
         console.error(`Error updating shipping method ${id}:`, error);
         if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {

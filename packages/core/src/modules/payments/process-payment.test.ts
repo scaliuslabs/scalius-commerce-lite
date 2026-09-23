@@ -54,9 +54,8 @@ async function insertOrder(overrides: Partial<typeof orders.$inferInsert> = {}) 
     shippingAddress: "Dhaka",
     city: "dhaka",
     zone: "zone_1",
-    totalAmount: 100,
-    shippingCharge: 0,
-    balanceDue: 100,
+    totalAmountMinor: 100,
+    balanceDueMinor: 100,
     paymentMethod: "stripe",
     status: OrderStatus.INCOMPLETE,
     currencyCode: "BDT",
@@ -69,7 +68,7 @@ function confirm(overrides: Partial<ProcessPaymentParams> = {}) {
   return processPaymentConfirmed(db, {
     orderId: "order_1",
     provider: "stripe",
-    amount: 100,
+    amountMinor: 100,
     currency: "BDT",
     paymentType: "full",
     providerRef: "pi_1",
@@ -79,12 +78,12 @@ function confirm(overrides: Partial<ProcessPaymentParams> = {}) {
 }
 
 function order() {
-  return sqlite.prepare("SELECT status, payment_status, payment_method, paid_amount, balance_due FROM orders WHERE id = 'order_1'").get();
+  return sqlite.prepare("SELECT status, payment_status, payment_method, paid_amount_minor, balance_due_minor FROM orders WHERE id = 'order_1'").get();
 }
 
 function payments() {
   return sqlite.prepare(`
-    SELECT order_id, payment_method, payment_type, status, amount, provider_ref, provider_secondary_ref
+    SELECT order_id, payment_method, payment_type, status, amount_minor, provider_ref, provider_secondary_ref
     FROM order_payments ORDER BY created_at, id
   `).all();
 }
@@ -111,15 +110,15 @@ describe("confirmed payments", () => {
     expect(order()).toMatchObject({
       status: OrderStatus.PENDING,
       payment_status: PaymentStatus.PAID,
-      paid_amount: 100,
-      balance_due: 0,
+      paid_amount_minor: 100,
+      balance_due_minor: 0,
     });
     expect(payments()).toEqual([{
       order_id: "order_1",
       payment_method: "stripe",
       payment_type: "full",
       status: PaymentRecordStatus.SUCCEEDED,
-      amount: 100,
+      amount_minor: 100,
       provider_ref: "pi_1",
       provider_secondary_ref: "ch_1",
     }]);
@@ -132,11 +131,11 @@ describe("confirmed payments", () => {
 
     await expect(confirm()).resolves.toMatchObject({ success: true });
 
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 100 });
     expect(payments()).toEqual([expect.objectContaining({
       status: PaymentRecordStatus.SUCCEEDED,
       provider_ref: "pi_1",
-      amount: 100,
+      amount_minor: 100,
     })]);
   });
 
@@ -146,7 +145,7 @@ describe("confirmed payments", () => {
     await confirm({ orderId: "order_2" });
 
     await expect(confirm()).resolves.toMatchObject({ success: false, retryable: false });
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID, paid_amount: 0 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID, paid_amount_minor: 0 });
   });
 
   it("sends a provider currency that differs from the order snapshot to manual reconciliation", async () => {
@@ -160,7 +159,7 @@ describe("confirmed payments", () => {
   it("rejects a full payment whose amount differs from the order total", async () => {
     await insertOrder();
 
-    await expect(confirm({ amount: 99 })).resolves.toMatchObject({ success: false, retryable: false });
+    await expect(confirm({ amountMinor: 99 })).resolves.toMatchObject({ success: false, retryable: false });
     expect(payments()).toEqual([]);
   });
 
@@ -197,34 +196,34 @@ describe("confirmed payments", () => {
     await db.insert(paymentPlans).values({
       id: "plan_1",
       orderId: "order_1",
-      totalAmount: 100,
-      depositAmount: 25,
-      balanceDue: 75,
+      totalAmountMinor: 100,
+      depositAmountMinor: 25,
+      balanceDueMinor: 75,
       status: PaymentPlanStatus.PENDING,
     });
 
-    await expect(confirm({ paymentType: "balance", amount: 75, providerRef: "pi_early" }))
+    await expect(confirm({ paymentType: "balance", amountMinor: 75, providerRef: "pi_early" }))
       .resolves.toMatchObject({ success: false, retryable: false });
-    await expect(confirm({ paymentType: undefined, amount: 25, providerRef: "pi_deposit" }))
+    await expect(confirm({ paymentType: undefined, amountMinor: 25, providerRef: "pi_deposit" }))
       .resolves.toEqual({ success: true, paymentType: "deposit" });
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount: 25, balance_due: 75 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount_minor: 25, balance_due_minor: 75 });
 
-    await expect(confirm({ paymentType: "deposit", amount: 25, providerRef: "pi_again" }))
+    await expect(confirm({ paymentType: "deposit", amountMinor: 25, providerRef: "pi_again" }))
       .resolves.toMatchObject({ success: false, retryable: false });
-    await expect(confirm({ paymentType: "balance", amount: 75, providerRef: "pi_balance" }))
+    await expect(confirm({ paymentType: "balance", amountMinor: 75, providerRef: "pi_balance" }))
       .resolves.toEqual({ success: true, paymentType: "balance" });
 
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100, balance_due: 0 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 100, balance_due_minor: 0 });
     expect(sqlite.prepare("SELECT status FROM payment_plans WHERE id = 'plan_1'").get())
       .toEqual({ status: PaymentPlanStatus.COMPLETED });
     expect(payments().map((row) => (row as { provider_ref: string }).provider_ref).sort()).toEqual(["pi_balance", "pi_deposit"]);
   });
 
   it("applies money at the immutable order precision", async () => {
-    await insertOrder({ totalAmount: 1.235, balanceDue: 1.235, currencyCode: "KWD", currencyDecimalPlaces: 3 });
+    await insertOrder({ totalAmountMinor: 1235, balanceDueMinor: 1235, currencyCode: "KWD", currencyDecimalPlaces: 3 });
 
-    await expect(confirm({ amount: 1.235, currency: "KWD" })).resolves.toMatchObject({ success: true });
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 1.235, balance_due: 0 });
+    await expect(confirm({ amountMinor: 1235, currency: "KWD" })).resolves.toMatchObject({ success: true });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 1235, balance_due_minor: 0 });
   });
 });
 
@@ -234,15 +233,15 @@ describe("failed payments", () => {
     await db.insert(paymentPlans).values({
       id: "plan_1",
       orderId: "order_1",
-      totalAmount: 100,
-      depositAmount: 25,
-      balanceDue: 75,
+      totalAmountMinor: 100,
+      depositAmountMinor: 25,
+      balanceDueMinor: 75,
       status: PaymentPlanStatus.PENDING,
     });
     await db.insert(orderPayments).values({
       id: "pay_1",
       orderId: "order_1",
-      amount: 0,
+      amountMinor: 0,
       currency: "BDT",
       paymentMethod: "stripe",
       paymentType: "deposit",
@@ -260,19 +259,19 @@ describe("failed payments", () => {
   });
 
   it("records a balance failure without changing partial-payment truth", async () => {
-    await insertOrder({ status: OrderStatus.PENDING, paidAmount: 25, balanceDue: 75, paymentStatus: PaymentStatus.PARTIAL, version: 5 });
+    await insertOrder({ status: OrderStatus.PENDING, paidAmountMinor: 25, balanceDueMinor: 75, paymentStatus: PaymentStatus.PARTIAL, version: 5 });
     await db.insert(paymentPlans).values({
       id: "plan_1",
       orderId: "order_1",
-      totalAmount: 100,
-      depositAmount: 25,
-      balanceDue: 75,
+      totalAmountMinor: 100,
+      depositAmountMinor: 25,
+      balanceDueMinor: 75,
       status: PaymentPlanStatus.DEPOSIT_PAID,
     });
 
     await processPaymentFailed(db, "order_1", "sslcommerz", "val_balance");
 
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount: 25, balance_due: 75 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount_minor: 25, balance_due_minor: 75 });
     expect(payments()).toEqual([expect.objectContaining({
       status: PaymentRecordStatus.FAILED,
       payment_type: "balance",
@@ -284,15 +283,15 @@ describe("failed payments", () => {
   it("does not let a late failure overwrite success committed before its batch", async () => {
     sqlite.close();
     openDatabase((race) => {
-      race.prepare("UPDATE order_payments SET status = ?, amount = 100 WHERE id = 'pay_1'").run(PaymentRecordStatus.SUCCEEDED);
-      race.prepare("UPDATE orders SET payment_status = ?, paid_amount = 100, balance_due = 0, version = version + 1 WHERE id = 'order_1'")
+      race.prepare("UPDATE order_payments SET status = ?, amount_minor = 100 WHERE id = 'pay_1'").run(PaymentRecordStatus.SUCCEEDED);
+      race.prepare("UPDATE orders SET payment_status = ?, paid_amount_minor = 100, balance_due_minor = 0, version = version + 1 WHERE id = 'order_1'")
         .run(PaymentStatus.PAID);
     });
     await insertOrder({ status: OrderStatus.PENDING, version: 7 });
     await db.insert(orderPayments).values({
       id: "pay_1",
       orderId: "order_1",
-      amount: 0,
+      amountMinor: 0,
       currency: "BDT",
       paymentMethod: "stripe",
       paymentType: "full",
@@ -302,7 +301,7 @@ describe("failed payments", () => {
 
     await processPaymentFailed(db, "order_1", "stripe", "pi_race");
 
-    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100 });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 100 });
     expect(sqlite.prepare("SELECT status FROM order_payments WHERE id = 'pay_1'").get())
       .toEqual({ status: PaymentRecordStatus.SUCCEEDED });
   });

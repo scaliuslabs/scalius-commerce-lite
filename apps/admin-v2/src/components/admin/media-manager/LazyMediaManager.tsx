@@ -12,6 +12,8 @@ import {
 import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogTrigger } from "~/components/ui/dialog";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
 import type { MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
@@ -33,13 +35,15 @@ type TriggerElement = ReactElement<{
 
 function MediaManagerTriggerShell({
   trigger,
-  triggerLabel = "Choose image",
+  triggerLabel,
+  capability = "image",
   isLoading = false,
   onOpen,
-}: Pick<MediaManagerProps, "trigger" | "triggerLabel"> & {
+}: Pick<MediaManagerProps, "trigger" | "triggerLabel" | "capability"> & {
   isLoading?: boolean;
   onOpen: () => void;
 }) {
+  const t = useMessages(mediaMessages);
   if (isValidElement(trigger)) {
     const triggerElement = trigger as TriggerElement;
 
@@ -56,16 +60,9 @@ function MediaManagerTriggerShell({
   }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      className="min-h-11 w-full sm:min-h-10"
-      disabled={isLoading}
-      aria-busy={isLoading || undefined}
-      onClick={onOpen}
-    >
-      <Upload className="mr-2 h-4 w-4" />
-      {isLoading ? "Loading media…" : triggerLabel}
+    <Button type="button" variant="outline" className="w-full" loading={isLoading} onClick={onOpen}>
+      <Upload aria-hidden="true" />
+      {triggerLabel ?? t(capability === "image" ? "chooseImage" : capability === "video" ? "chooseVideo" : "chooseFile")}
     </Button>
   );
 }

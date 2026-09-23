@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    discountsCombine,
     evaluatePromotionCandidates,
     PROMOTION_EVALUATOR_VERSION,
     PromotionEvaluationInputError,
@@ -8,45 +9,45 @@ import {
     type PromotionEvaluationCart,
 } from "./promotions.evaluator";
 
-const evaluatedAtEpochSeconds = 1_800_000_000;
+const now = 1_800_000_000;
+const NONE = { product: false, order: false, shipping: false };
+const ALL = { product: true, order: true, shipping: true };
 
-function cart(
-    overrides: Partial<PromotionEvaluationCart> = {},
-): PromotionEvaluationCart {
+type Line = PromotionEvaluationCart["lines"][number];
+
+function line(id: string, unitPriceMinor: number, quantity: number, extra: Partial<Line> = {}): Line {
+    return { id, productId: `prod_${id}`, variantId: `var_${id}`, unitPriceMinor, quantity, collectionIds: [], ...extra };
+}
+
+function cart(overrides: Partial<PromotionEvaluationCart> = {}): PromotionEvaluationCart {
     return {
         currencyCode: "BDT",
-        lines: [
-            {
-                id: "line_a",
-                productId: "prod_a",
-                variantId: "var_a",
-                unitPriceMinor: 500,
-                quantity: 2,
-            },
-            {
-                id: "line_b",
-                productId: "prod_b",
-                variantId: "var_b",
-                unitPriceMinor: 500,
-                quantity: 1,
-            },
-        ],
+        lines: [line("a", 500, 2), line("b", 500, 1)],
         shippingAmountMinor: 100,
         submittedCodes: [],
-        evaluatedAtEpochSeconds,
+        evaluatedAtEpochSeconds: now,
         ...overrides,
     };
 }
 
-function candidate(overrides: Partial<PromotionCandidate> = {}): PromotionCandidate {
+type Effect = PromotionCandidate["effects"][number];
+
+const lineEffect = (config: Record<string, unknown>, kind: "percentage_off" | "fixed_amount_off" = "percentage_off") =>
+    ({ id: "eff_line", kind, target: "line", allocation: "across", config }) as Effect;
+const orderEffect = (config: Record<string, unknown>, kind: "percentage_off" | "fixed_amount_off" = "percentage_off") =>
+    ({ id: "eff_order", kind, target: "order", allocation: "once", config }) as Effect;
+const freeShipping = { id: "eff_ship", kind: "free", target: "shipping", allocation: "once", config: {} } as Effect;
+
+function candidate(id: string, effect: Effect, overrides: Partial<PromotionCandidate> = {}): PromotionCandidate {
     return {
-        id: "promo_default",
-        revision: 3,
-        name: "Default promotion",
+        id,
+        revision: 1,
+        name: id,
         method: "automatic",
         status: "active",
         priority: 100,
         conflictPolicy: "best",
+        combinesWith: NONE,
         startsAtEpochSeconds: null,
         endsAtEpochSeconds: null,
         maxRedemptions: null,
@@ -58,364 +59,291 @@ function candidate(overrides: Partial<PromotionCandidate> = {}): PromotionCandid
         discountSpendMinor: 0,
         codes: [],
         conditions: [],
-        effects: [
-            {
-                id: "effect_order",
-                kind: "percentage_off",
-                target: "order",
-                allocation: "once",
-                config: { basisPoints: 1_000 },
-            },
-        ],
+        effects: [effect],
         ...overrides,
     };
 }
 
-describe("promotion evaluator", () => {
-    it("evaluates an automatic percentage promotion into immutable allocation facts", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [candidate()],
-        });
+function evaluate(lines: PromotionEvaluationCart | Partial<PromotionEvaluationCart>, candidates: unknown[]) {
+    return evaluatePromotionCandidates({ cart: cart(lines), candidates });
+}
 
-        expect(result).toEqual({
-            evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
-            applied: {
-                promotionId: "promo_default",
-                promotionRevision: 3,
-                promotionName: "Default promotion",
+function lineDiscounts(result: ReturnType<typeof evaluate>): Record<string, number> {
+    const totals: Record<string, number> = {};
+    for (const allocation of result.applied?.allocations ?? []) {
+        const key = allocation.lineId ?? "shipping";
+        totals[key] = (totals[key] ?? 0) + allocation.discountAmountMinor;
+    }
+    return totals;
+}
+
+describe("discount evaluator", () => {
+    it("turns a product percentage into immutable per-line allocation facts", () => {
+        const result = evaluate({}, [candidate("p10", lineEffect({ basisPoints: 1_000 }))]);
+        expect(result.applied).toEqual({
+            totalDiscountMinor: 150,
+            discounts: [{
+                promotionId: "p10",
+                promotionRevision: 1,
+                promotionName: "p10",
                 method: "automatic",
                 promotionCode: null,
+                discountClass: "product",
                 totalDiscountMinor: 150,
-                allocations: [
-                    {
-                        promotionId: "promo_default",
-                        promotionRevision: 3,
-                        evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
-                        promotionName: "Default promotion",
-                        promotionCode: null,
-                        method: "automatic",
-                        effectId: "effect_order",
-                        effectKind: "percentage_off",
-                        target: "order",
-                        lineId: "line_a",
-                        quantity: 2,
-                        currencyCode: "BDT",
-                        baseAmountMinor: 1_000,
-                        discountAmountMinor: 100,
-                    },
-                    {
-                        promotionId: "promo_default",
-                        promotionRevision: 3,
-                        evaluatorVersion: PROMOTION_EVALUATOR_VERSION,
-                        promotionName: "Default promotion",
-                        promotionCode: null,
-                        method: "automatic",
-                        effectId: "effect_order",
-                        effectKind: "percentage_off",
-                        target: "order",
-                        lineId: "line_b",
-                        quantity: 1,
-                        currencyCode: "BDT",
-                        baseAmountMinor: 500,
-                        discountAmountMinor: 50,
-                    },
-                ],
-            },
-            rejected: [],
-            unmatchedCodes: [],
-        });
-    });
-
-    it("normalizes submitted codes and reports only codes unknown to every candidate", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart({ submittedCodes: [" save10 ", "not-a-code"] }),
-            candidates: [candidate({
-                id: "promo_code",
-                name: "Code promotion",
-                method: "code",
-                codes: [{ code: "SAVE10", isActive: true }],
-            })],
-        });
-
-        expect(result.applied).toMatchObject({
-            promotionId: "promo_code",
-            promotionCode: "SAVE10",
-            method: "code",
-        });
-        expect(result.unmatchedCodes).toEqual(["NOT-A-CODE"]);
-    });
-
-    it("requires every configured condition to pass", () => {
-        const promotion = candidate({
-            conditions: [
-                {
-                    id: "condition_subtotal",
-                    kind: "minimum_merchandise_subtotal",
-                    config: { amountMinor: 1_500, currencyCode: "BDT" },
-                },
-                {
-                    id: "condition_quantity",
-                    kind: "minimum_item_quantity",
-                    config: { quantity: 4 },
-                },
-            ],
-        });
-
-        const quantityFailure = evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [promotion],
-        });
-        expect(quantityFailure.applied).toBeNull();
-        expect(quantityFailure.rejected).toEqual([{
-            promotionId: "promo_default",
-            reason: "minimum_quantity_not_met",
-        }]);
-
-        const success = evaluatePromotionCandidates({
-            cart: cart({
-                lines: [
-                    {
-                        id: "line_a",
-                        productId: "prod_a",
-                        variantId: "var_a",
-                        unitPriceMinor: 500,
-                        quantity: 4,
-                    },
-                ],
-            }),
-            candidates: [promotion],
-        });
-        expect(success.applied?.totalDiscountMinor).toBe(200);
-    });
-
-    it("applies line, then order, then shipping effects with exact proportional allocation", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart({
-                lines: [
-                    {
-                        id: "line_a",
-                        productId: "prod_a",
-                        variantId: "var_a",
-                        unitPriceMinor: 100,
-                        quantity: 3,
-                    },
-                    {
-                        id: "line_b",
-                        productId: "prod_b",
-                        variantId: "var_b",
-                        unitPriceMinor: 200,
-                        quantity: 1,
-                    },
-                ],
-                shippingAmountMinor: 75,
-            }),
-            candidates: [candidate({
-                effects: [
-                    {
-                        id: "effect_shipping",
-                        kind: "free",
-                        target: "shipping",
-                        allocation: "once",
-                        config: {},
-                    },
-                    {
-                        id: "effect_order",
-                        kind: "percentage_off",
-                        target: "order",
-                        allocation: "once",
-                        config: { basisPoints: 1_000 },
-                    },
-                    {
-                        id: "effect_line",
-                        kind: "fixed_amount_off",
-                        target: "line",
-                        allocation: "across",
-                        config: { amountMinor: 101, currencyCode: "BDT" },
-                    },
-                ],
-            })],
-        });
-
-        expect(result.applied?.totalDiscountMinor).toBe(216);
-        expect(result.applied?.allocations.map((allocation) => ({
-            effect: allocation.effectId,
-            line: allocation.lineId,
-            base: allocation.baseAmountMinor,
-            discount: allocation.discountAmountMinor,
-        }))).toEqual([
-            { effect: "effect_line", line: "line_a", base: 300, discount: 61 },
-            { effect: "effect_line", line: "line_b", base: 200, discount: 40 },
-            { effect: "effect_order", line: "line_a", base: 239, discount: 24 },
-            { effect: "effect_order", line: "line_b", base: 160, discount: 16 },
-            { effect: "effect_shipping", line: null, base: 75, discount: 75 },
-        ]);
-    });
-
-    it("selects the greatest saving, then lower priority, then stable ID", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [
-                candidate({ id: "promo_z", priority: 20 }),
-                candidate({ id: "promo_b", priority: 10 }),
-                candidate({ id: "promo_a", priority: 10 }),
-                candidate({
-                    id: "promo_small",
-                    effects: [{
-                        id: "effect_small",
-                        kind: "fixed_amount_off",
-                        target: "order",
-                        allocation: "once",
-                        config: { amountMinor: 100, currencyCode: "BDT" },
-                    }],
-                }),
-            ],
-        });
-
-        expect(result.applied?.promotionId).toBe("promo_a");
-        expect(result.rejected).toEqual(expect.arrayContaining([
-            { promotionId: "promo_b", reason: "lower_savings", evaluatedSavingsMinor: 150 },
-            { promotionId: "promo_z", reason: "lower_savings", evaluatedSavingsMinor: 150 },
-            { promotionId: "promo_small", reason: "lower_savings", evaluatedSavingsMinor: 100 },
-        ]));
-    });
-
-    it("treats starts as inclusive and ends as exclusive", () => {
-        const atStart = candidate({
-            startsAtEpochSeconds: evaluatedAtEpochSeconds,
-            endsAtEpochSeconds: evaluatedAtEpochSeconds + 10,
-        });
-        expect(evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [atStart],
-        }).applied?.promotionId).toBe("promo_default");
-
-        expect(evaluatePromotionCandidates({
-            cart: cart({ evaluatedAtEpochSeconds: evaluatedAtEpochSeconds + 10 }),
-            candidates: [atStart],
-        }).rejected).toEqual([{
-            promotionId: "promo_default",
-            reason: "expired",
-        }]);
-    });
-
-    it("fails closed for malformed, duplicate, or currency-incompatible candidates", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [
-                candidate({ id: "promo_duplicate" }),
-                candidate({ id: "promo_duplicate" }),
-                candidate({
-                    id: "promo_currency",
-                    effects: [{
-                        id: "effect_currency",
-                        kind: "fixed_amount_off",
-                        target: "order",
-                        allocation: "once",
-                        config: { amountMinor: 100, currencyCode: "USD" },
-                    }],
-                }),
-                {
-                    ...candidate({ id: "promo_malformed" }),
-                    effects: [{
-                        id: "effect_invalid",
-                        kind: "free",
-                        target: "line",
-                        allocation: "across",
-                        config: {},
-                    }],
-                },
-            ],
-        });
-
-        expect(result.applied).toBeNull();
-        expect(result.rejected).toEqual(expect.arrayContaining([
-            { promotionId: "promo_duplicate", reason: "invalid_configuration" },
-            { promotionId: "promo_currency", reason: "effect_currency_mismatch" },
-            { promotionId: "promo_malformed", reason: "invalid_configuration" },
-        ]));
-    });
-
-    it("treats candidate identity as trimmed and rejects a duplicate only once", () => {
-        const result = evaluatePromotionCandidates({
-            cart: cart(),
-            candidates: [
-                candidate({ id: " promo_duplicate " }),
-                candidate({ id: "promo_duplicate" }),
-            ],
-        });
-
-        expect(result.applied).toBeNull();
-        expect(result.rejected).toEqual([{
-            promotionId: "promo_duplicate",
-            reason: "invalid_configuration",
-        }]);
-    });
-
-    it("returns stable code and rejection output regardless of input order", () => {
-        const codePromotion = candidate({
-            id: "promo_code",
-            method: "code",
-            codes: [
-                { code: "ZED10", isActive: true },
-                { code: "ALPHA10", isActive: true },
-            ],
-        });
-        const smallerPromotion = candidate({
-            id: "promo_smaller",
-            effects: [{
-                id: "effect_smaller",
-                kind: "fixed_amount_off",
-                target: "order",
-                allocation: "once",
-                config: { amountMinor: 50, currencyCode: "BDT" },
             }],
-        });
-        const inactivePromotion = candidate({
-            id: "promo_inactive",
-            status: "paused",
-        });
-
-        const forward = evaluatePromotionCandidates({
-            cart: cart({ submittedCodes: ["zed10", "unknown-z", "alpha10", "unknown-a"] }),
-            candidates: [codePromotion, smallerPromotion, inactivePromotion],
-        });
-        const reversed = evaluatePromotionCandidates({
-            cart: cart({ submittedCodes: ["unknown-a", "alpha10", "unknown-z", "zed10"] }),
-            candidates: [
-                inactivePromotion,
-                smallerPromotion,
-                {
-                    ...codePromotion,
-                    codes: [...codePromotion.codes].reverse(),
-                },
+            allocations: [
+                expect.objectContaining({ lineId: "a", quantity: 2, baseAmountMinor: 1_000, discountAmountMinor: 100, evaluatorVersion: PROMOTION_EVALUATOR_VERSION }),
+                expect.objectContaining({ lineId: "b", quantity: 1, baseAmountMinor: 500, discountAmountMinor: 50 }),
             ],
         });
-
-        expect(forward).toEqual(reversed);
-        expect(forward.applied?.promotionCode).toBe("ALPHA10");
-        expect(forward.unmatchedCodes).toEqual(["UNKNOWN-A", "UNKNOWN-Z"]);
     });
 
-    it("keeps merchandise allocations stable when cart lines arrive out of order", () => {
-        const forwardCart = cart();
-        const forward = evaluatePromotionCandidates({
-            cart: forwardCart,
-            candidates: [candidate()],
-        });
-        const reversed = evaluatePromotionCandidates({
-            cart: cart({ lines: [...forwardCart.lines].reverse() }),
-            candidates: [candidate()],
-        });
-
-        expect(forward).toEqual(reversed);
+    it("limits product discounts to chosen products and collections", () => {
+        const lines = [
+            line("a", 1_000, 1),
+            line("b", 1_000, 1, { collectionIds: ["col_summer"] }),
+            line("c", 1_000, 1),
+        ];
+        const byProduct = evaluate({ lines }, [candidate("p", lineEffect({ basisPoints: 5_000, productIds: ["prod_a"] }))]);
+        expect(lineDiscounts(byProduct)).toEqual({ a: 500 });
+        const byCollection = evaluate({ lines }, [candidate("c", lineEffect({ basisPoints: 5_000, collectionIds: ["col_summer"] }))]);
+        expect(lineDiscounts(byCollection)).toEqual({ b: 500 });
+        const either = evaluate({ lines }, [candidate("e", lineEffect({ basisPoints: 5_000, productIds: ["prod_c"], collectionIds: ["col_summer"] }))]);
+        expect(lineDiscounts(either)).toEqual({ b: 500, c: 500 });
+        const none = evaluate({ lines }, [candidate("n", lineEffect({ basisPoints: 5_000, productIds: ["prod_other"] }))]);
+        expect(none.applied).toBeNull();
+        expect(none.rejected).toEqual([{ promotionId: "n", reason: "no_savings" }]);
     });
 
-    it("rejects duplicate cart-line IDs before allocation", () => {
-        const duplicateLine = cart().lines[0]!;
-        expect(() => evaluatePromotionCandidates({
-            cart: cart({ lines: [duplicateLine, duplicateLine] }),
-            candidates: [candidate()],
-        })).toThrow(PromotionEvaluationInputError);
+    it("counts scoped requirements only over the chosen items", () => {
+        const scoped = candidate("s", lineEffect({ basisPoints: 1_000, productIds: ["prod_a"] }), {
+            conditions: [{ id: "c1", kind: "minimum_item_quantity", config: { quantity: 3, productIds: ["prod_a"] } }],
+        });
+        expect(evaluate({}, [scoped]).rejected).toEqual([{ promotionId: "s", reason: "minimum_quantity_not_met" }]);
+        const lines = [line("a", 500, 3), line("b", 500, 1)];
+        expect(lineDiscounts(evaluate({ lines }, [scoped]))).toEqual({ a: 150 });
+        const subtotal = candidate("t", orderEffect({ basisPoints: 1_000 }), {
+            conditions: [{ id: "c2", kind: "minimum_merchandise_subtotal", config: { amountMinor: 1_600, currencyCode: "BDT" } }],
+        });
+        expect(evaluate({}, [subtotal]).rejected).toEqual([{ promotionId: "t", reason: "minimum_subtotal_not_met" }]);
+    });
+
+    it("applies a fixed product amount once per order or to each item, never above the price", () => {
+        const lines = [line("a", 300, 2), line("b", 50, 1)];
+        const once = evaluate({ lines }, [candidate("once", lineEffect({ amountMinor: 100, currencyCode: "BDT" }, "fixed_amount_off"))]);
+        expect(once.applied?.totalDiscountMinor).toBe(100);
+        expect(lineDiscounts(once)).toEqual({ a: 92, b: 8 });
+        const each = evaluate({ lines }, [candidate("each", lineEffect({ amountMinor: 100, currencyCode: "BDT", eachItem: true }, "fixed_amount_off"))]);
+        expect(lineDiscounts(each)).toEqual({ a: 200, b: 50 });
+    });
+
+    it("combines discounts of different classes when either one allows it", () => {
+        const product = candidate("prod", lineEffect({ basisPoints: 1_000 }), { combinesWith: { product: false, order: true, shipping: false } });
+        const order = candidate("order", orderEffect({ amountMinor: 135, currencyCode: "BDT" }, "fixed_amount_off"));
+        const shipping = candidate("ship", freeShipping);
+        const result = evaluate({}, [product, order, shipping]);
+        // The product discount's own checkbox is enough to stack with the order discount.
+        expect(result.applied?.discounts.map(({ promotionId }) => promotionId)).toEqual(["prod", "order"]);
+        // The order discount applies to the subtotal left after the product discount.
+        expect(lineDiscounts(result)).toEqual({ a: 100 + 90, b: 50 + 45 });
+        expect(result.applied?.totalDiscountMinor).toBe(285);
+        expect(result.rejected).toEqual([{ promotionId: "ship", reason: "lower_savings", evaluatedSavingsMinor: 100 }]);
+
+        const withShipping = evaluate({}, [product, order, { ...shipping, combinesWith: { product: true, order: true, shipping: false } }]);
+        expect(withShipping.applied?.totalDiscountMinor).toBe(385);
+        expect(lineDiscounts(withShipping).shipping).toBe(100);
+        expect(discountsCombine(
+            { discountClass: "order", combinesWith: NONE },
+            { discountClass: "order", combinesWith: ALL },
+        )).toBe(false);
+    });
+
+    it("bundles free shipping with a product discount, checking its minimum after the discount", () => {
+        const bundle = (minimumMinor: number) => candidate("bundle", lineEffect({ basisPoints: 2_000 }), {
+            effects: [lineEffect({ basisPoints: 2_000 }), freeShipping],
+            conditions: [{ id: "c_ship", kind: "minimum_merchandise_subtotal", config: { amountMinor: minimumMinor, currencyCode: "BDT", shippingOnly: true } }],
+        });
+        // 1500 subtotal − 20% = 1200 after the discount.
+        const met = evaluate({}, [bundle(1_200)]);
+        expect(met.applied?.discounts).toEqual([expect.objectContaining({ promotionId: "bundle", totalDiscountMinor: 400 })]);
+        expect(lineDiscounts(met)).toEqual({ a: 200, b: 100, shipping: 100 });
+        const short = evaluate({}, [bundle(1_300)]);
+        expect(lineDiscounts(short)).toEqual({ a: 200, b: 100 });
+        // A standalone free-shipping minimum also counts what is left after other savings.
+        const product = candidate("prod", lineEffect({ basisPoints: 2_000 }), { combinesWith: ALL });
+        const shipping = (amountMinor: number) => candidate("ship", freeShipping, {
+            conditions: [{ id: "c", kind: "minimum_merchandise_subtotal", config: { amountMinor, currencyCode: "BDT" } }],
+        });
+        expect(lineDiscounts(evaluate({}, [product, shipping(1_200)])).shipping).toBe(100);
+        const blocked = evaluate({}, [product, shipping(1_300)]);
+        expect(lineDiscounts(blocked).shipping).toBeUndefined();
+        expect(blocked.rejected).toEqual([{ promotionId: "ship", reason: "minimum_subtotal_not_met", evaluatedSavingsMinor: 100 }]);
+    });
+
+    it("chooses the single best discount when they do not combine", () => {
+        const small = candidate("small", orderEffect({ basisPoints: 1_000 }));
+        const big = candidate("big", lineEffect({ basisPoints: 2_000 }));
+        const result = evaluate({}, [small, big]);
+        expect(result.applied?.discounts.map(({ promotionId }) => promotionId)).toEqual(["big"]);
+        expect(result.rejected).toEqual([{ promotionId: "small", reason: "lower_savings", evaluatedSavingsMinor: 150 }]);
+    });
+
+    it("breaks equal savings by lower priority, then id, regardless of input order", () => {
+        const a = candidate("zeta", orderEffect({ basisPoints: 1_000 }), { priority: 5 });
+        const b = candidate("alpha", orderEffect({ basisPoints: 1_000 }), { priority: 10 });
+        const c = candidate("beta", orderEffect({ basisPoints: 1_000 }), { priority: 10 });
+        for (const order of [[a, b, c], [c, b, a], [b, c, a]]) {
+            expect(evaluate({}, order).applied?.discounts[0]?.promotionId).toBe("zeta");
+        }
+        expect(evaluate({}, [b, c]).applied?.discounts[0]?.promotionId).toBe("alpha");
+    });
+
+    describe("buy X get Y", () => {
+        const bxgy = (config: Record<string, unknown>, id = "bxgy") => candidate(id, lineEffect({
+            basisPoints: 10_000,
+            collectionIds: ["col"],
+            getQuantity: 1,
+            buy: { quantity: 2, collectionIds: ["col"] },
+            ...config,
+        }));
+
+        it("gives the cheapest qualifying unit free once the customer buys enough", () => {
+            const lines = [
+                line("shirt", 1_000, 2, { collectionIds: ["col"] }),
+                line("socks", 200, 1, { collectionIds: ["col"] }),
+                line("hat", 5_000, 1),
+            ];
+            const result = evaluate({ lines }, [bxgy({})]);
+            expect(lineDiscounts(result)).toEqual({ socks: 200 });
+            // Two shirts are only the "buy" half: the customer still has to add the free item.
+            const notYet = evaluate({ lines: [line("shirt", 1_000, 2, { collectionIds: ["col"] })] }, [bxgy({})]);
+            expect(notYet.applied).toBeNull();
+            expect(notYet.rejected).toEqual([{ promotionId: "bxgy", reason: "get_items_missing" }]);
+            const tooFew = evaluate({ lines: [line("shirt", 1_000, 1, { collectionIds: ["col"] })] }, [bxgy({})]);
+            expect(tooFew.rejected).toEqual([{ promotionId: "bxgy", reason: "buy_requirement_not_met" }]);
+        });
+
+        it("repeats per set of items up to the per-order cap and never discounts a unit twice", () => {
+            const lines = [line("x", 100, 9, { collectionIds: ["col"] })];
+            expect(lineDiscounts(evaluate({ lines }, [bxgy({})]))).toEqual({ x: 300 });
+            expect(lineDiscounts(evaluate({ lines }, [bxgy({ maxUsesPerOrder: 2 })]))).toEqual({ x: 200 });
+            const half = evaluate({ lines }, [bxgy({ basisPoints: 5_000, maxUsesPerOrder: 1 })]);
+            expect(lineDiscounts(half)).toEqual({ x: 50 });
+        });
+
+        it("uses different buy and get products and an amount threshold", () => {
+            const lines = [
+                line("phone", 20_000, 1),
+                line("case", 1_500, 3),
+            ];
+            const rule = candidate("amount", lineEffect({
+                basisPoints: 10_000,
+                productIds: ["prod_case"],
+                getQuantity: 1,
+                buy: { amountMinor: 15_000, currencyCode: "BDT", productIds: ["prod_phone"] },
+            }));
+            expect(lineDiscounts(evaluate({ lines }, [rule]))).toEqual({ case: 1_500 });
+        });
+    });
+
+    it("never applies paused, draft, archived, not-yet-started, or ended discounts", () => {
+        const base = (id: string, overrides: Partial<PromotionCandidate>) =>
+            candidate(id, orderEffect({ basisPoints: 1_000 }), overrides);
+        const result = evaluate({}, [
+            base("paused", { status: "paused" }),
+            base("draft", { status: "draft" }),
+            base("archived", { status: "archived" }),
+            base("future", { startsAtEpochSeconds: now + 1 }),
+            base("ended", { endsAtEpochSeconds: now }),
+            base("starts-now", { startsAtEpochSeconds: now, endsAtEpochSeconds: now + 1 }),
+        ]);
+        expect(result.applied?.discounts.map(({ promotionId }) => promotionId)).toEqual(["starts-now"]);
+        expect(Object.fromEntries(result.rejected.map(({ promotionId, reason }) => [promotionId, reason]))).toEqual({
+            paused: "inactive", draft: "inactive", archived: "inactive", future: "not_started", ended: "expired",
+        });
+    });
+
+    it("applies codes only when submitted and enforces their usage limits", () => {
+        const code = candidate("code", orderEffect({ basisPoints: 1_000 }), {
+            method: "code",
+            codes: [{ code: "SAVE10", isActive: true }],
+            maxRedemptions: 5,
+            maxRedemptionsPerCustomer: 1,
+        });
+        expect(evaluate({}, [code]).rejected).toEqual([{ promotionId: "code", reason: "code_not_submitted" }]);
+        expect(evaluate({ submittedCodes: [" save10 "] }, [code]).applied?.discounts[0]?.promotionCode).toBe("SAVE10");
+        expect(evaluate({ submittedCodes: ["SAVE10"] }, [{ ...code, redemptionCount: 5 }]).rejected)
+            .toEqual([{ promotionId: "code", reason: "redemption_limit_reached" }]);
+        expect(evaluate({ submittedCodes: ["SAVE10"] }, [{ ...code, customerRedemptionCount: 1 }]).rejected)
+            .toEqual([{ promotionId: "code", reason: "customer_redemption_limit_reached" }]);
+        expect(evaluate({ submittedCodes: ["NOPE"] }, [code]).unmatchedCodes).toEqual(["NOPE"]);
+    });
+
+    it("rejects broken rules instead of guessing", () => {
+        const twoEffects = { ...candidate("two", orderEffect({ basisPoints: 1_000 })), effects: [orderEffect({ basisPoints: 1 }), lineEffect({ basisPoints: 1 })] };
+        const limitedAutomatic = candidate("auto", orderEffect({ basisPoints: 1_000 }), { maxRedemptions: 3 });
+        const scopedOrder = candidate("scoped", orderEffect({ basisPoints: 1_000, productIds: ["prod_a"] }));
+        const result = evaluate({}, [twoEffects, limitedAutomatic, scopedOrder, { id: "junk" }]);
+        expect(result.applied).toBeNull();
+        expect(result.rejected.map(({ reason }) => reason)).toEqual(Array(4).fill("invalid_configuration"));
+        expect(() => evaluatePromotionCandidates({ cart: { ...cart(), lines: [line("a", 1, 1), line("a", 1, 1)] }, candidates: [] }))
+            .toThrow(PromotionEvaluationInputError);
+    });
+
+    it("keeps money invariants and determinism across many random carts", () => {
+        let seed = 7;
+        const random = (max: number) => {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            return seed % max;
+        };
+        const collections = ["c1", "c2"];
+        for (let run = 0; run < 400; run += 1) {
+            const lines = Array.from({ length: 1 + random(5) }, (_, index) => line(`l${index}`, 1 + random(5_000), 1 + random(6), {
+                collectionIds: collections.filter(() => random(2) === 0),
+            }));
+            const combos = () => ({ product: random(2) === 0, order: random(2) === 0, shipping: random(2) === 0 });
+            const candidates = [
+                candidate("pct", lineEffect({ basisPoints: 1 + random(10_000), collectionIds: ["c1"] }), { combinesWith: combos() }),
+                candidate("fixed", lineEffect({ amountMinor: 1 + random(3_000), currencyCode: "BDT", eachItem: random(2) === 0 }, "fixed_amount_off"), { combinesWith: combos() }),
+                candidate("order", orderEffect({ amountMinor: 1 + random(20_000), currencyCode: "BDT" }, "fixed_amount_off"), { combinesWith: combos() }),
+                candidate("orderpct", orderEffect({ basisPoints: 1 + random(10_000) }), { combinesWith: combos(), priority: random(3) }),
+                candidate("ship", freeShipping, { combinesWith: combos() }),
+                candidate("bxgy", lineEffect({ basisPoints: 1 + random(10_000), collectionIds: ["c2"], getQuantity: 1 + random(2), buy: { quantity: 1 + random(3), collectionIds: ["c1"] } }), { combinesWith: combos() }),
+            ];
+            const input = cart({ lines, shippingAmountMinor: random(500) });
+            const result = evaluatePromotionCandidates({ cart: input, candidates });
+            const reversed = evaluatePromotionCandidates({
+                cart: { ...input, lines: [...lines].reverse() },
+                candidates: [...candidates].reverse(),
+            });
+            expect(reversed).toEqual(result);
+            if (!result.applied) continue;
+            const perLine = lineDiscounts(result);
+            for (const cartLine of lines) {
+                expect(perLine[cartLine.id] ?? 0).toBeLessThanOrEqual(cartLine.unitPriceMinor * cartLine.quantity);
+            }
+            expect(perLine.shipping ?? 0).toBeLessThanOrEqual(input.shippingAmountMinor);
+            const allocated = result.applied.allocations.reduce((sum, allocation) => {
+                expect(allocation.discountAmountMinor).toBeGreaterThan(0);
+                expect(Number.isInteger(allocation.discountAmountMinor)).toBe(true);
+                expect(allocation.discountAmountMinor).toBeLessThanOrEqual(allocation.baseAmountMinor);
+                return sum + allocation.discountAmountMinor;
+            }, 0);
+            expect(allocated).toBe(result.applied.totalDiscountMinor);
+            expect(result.applied.discounts.reduce((sum, { totalDiscountMinor }) => sum + totalDiscountMinor, 0)).toBe(allocated);
+            const classes = result.applied.discounts.map(({ discountClass }) => discountClass);
+            expect(new Set(classes).size).toBe(classes.length);
+            // Every pair of applied discounts may combine (either side allows it).
+            const byId = new Map(candidates.map((item) => [item.id, item]));
+            for (const left of result.applied.discounts) {
+                for (const right of result.applied.discounts) {
+                    if (left === right) continue;
+                    expect(discountsCombine(
+                        { discountClass: left.discountClass, combinesWith: byId.get(left.promotionId)!.combinesWith },
+                        { discountClass: right.discountClass, combinesWith: byId.get(right.promotionId)!.combinesWith },
+                    )).toBe(true);
+                }
+            }
+        }
     });
 });

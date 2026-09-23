@@ -6,16 +6,14 @@ import {
   Plus,
   Package,
   Hash,
-  Box,
   ArrowRightLeft,
   ChevronDown,
   AlertTriangle,
 } from "lucide-react";
+import { cn } from "@scalius/shared/utils";
+import { formatNumber, useMessages } from "~/i18n";
+import { scannerMessages } from "~/i18n/scanner";
 import type { ScannedProduct } from "./ScannerApp";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type AdjustmentReason =
   | "Receiving"
@@ -49,16 +47,13 @@ interface ManualSheetProps {
   onHaptic: (type: "light" | "warning") => void;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function ManualSheet({
   product,
   onSubmit,
   onCancel,
   onHaptic,
 }: ManualSheetProps) {
+  const t = useMessages(scannerMessages);
   const [adjustment, setAdjustment] = useState(0);
   const [isAbsolute, setIsAbsolute] = useState(false);
   const [absoluteValue, setAbsoluteValue] = useState("");
@@ -121,46 +116,28 @@ export function ManualSheet({
         product,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to adjust stock");
+      setError(err instanceof Error ? err.message : t("changeFailed"));
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    canSubmit,
-    isLargeAdjustment,
-    onHaptic,
-    onSubmit,
-    product,
-    isAbsolute,
-    absoluteValue,
-    adjustment,
-    reason,
-  ]);
+    // `t` only formats the fallback error text.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSubmit, isLargeAdjustment, onHaptic, onSubmit, product, isAbsolute, absoluteValue, adjustment, reason]);
 
   const available = product.stock - product.reserved;
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col justify-end">
-      {/* Backdrop */}
-      <div
-        className="flex-1 bg-black/40"
-        onClick={onCancel}
-      />
+      <div className="flex-1 bg-background/60" onClick={onCancel} />
 
-      {/* Sheet */}
-      <div
-        className="bg-zinc-900 rounded-t-2xl border-t border-zinc-700/50 max-h-[85dvh] overflow-y-auto"
-        style={{ animation: "slide-up 200ms ease-out" }}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-zinc-700" />
+      <div className="max-h-dvh overflow-y-auto rounded-t-2xl border-t bg-card animate-in slide-in-from-bottom duration-200">
+        <div className="flex justify-center pb-1 pt-3">
+          <div className="h-1 w-10 rounded-full bg-muted" />
         </div>
 
-        <div className="px-4 pb-6 space-y-4">
-          {/* Product info */}
+        <div className="space-y-4 px-4 pb-6">
           <div className="flex gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-zinc-800">
+            <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
               {product.productImage ? (
                 <img
                   src={product.productImage}
@@ -170,70 +147,38 @@ export function ManualSheet({
                   decoding="async"
                 />
               ) : (
-                <Package className="h-6 w-6 text-zinc-600" />
+                <Package className="size-6 text-muted-foreground" />
               )}
             </div>
-
             <div className="min-w-0 flex-1">
-              <h3 className="truncate text-base font-semibold text-white">
-                {product.productName}
-              </h3>
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-400 mt-0.5">
-                {product.optionLabel && (
-                  <span>{product.optionLabel}</span>
-                )}
-                <span className="flex items-center gap-1">
-                  <Hash className="h-3 w-3" />
+              <h3 className="truncate text-heading-md font-semibold">{product.productName}</h3>
+              <div className="mt-1 flex flex-wrap gap-x-3 text-body text-muted-foreground">
+                {product.optionLabel ? <span>{product.optionLabel}</span> : null}
+                <span className="flex items-center gap-1 font-mono">
+                  <Hash className="size-3" />
                   {product.sku}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Stock info */}
-          <div className="flex gap-4 rounded-lg bg-zinc-800/60 px-4 py-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Stock
+          <dl className="grid grid-cols-3 gap-2 rounded-lg bg-muted px-4 py-3">
+            {([
+              ["onHand", product.stock],
+              ["committed", product.reserved],
+              ["available", available],
+            ] as const).map(([key, value]) => (
+              <div key={key} className="space-y-1">
+                <dt className="text-body text-muted-foreground">{t(key)}</dt>
+                <dd className={cn("text-body font-medium tabular-nums", key === "available" && available <= 0 && "text-destructive")}>
+                  {formatNumber(value)}
+                </dd>
               </div>
-              <div className="flex items-center gap-1">
-                <Box className="h-4 w-4 text-zinc-400" />
-                <span className="text-lg font-bold tabular-nums text-white">
-                  {product.stock}
-                </span>
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Reserved
-              </div>
-              <span className="text-lg font-semibold tabular-nums text-zinc-300">
-                {product.reserved}
-              </span>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Available
-              </div>
-              <span
-                className={`text-lg font-semibold tabular-nums ${
-                  available <= 0
-                    ? "text-red-400"
-                    : available <= 5
-                      ? "text-amber-400"
-                      : "text-emerald-400"
-                }`}
-              >
-                {available}
-              </span>
-            </div>
-          </div>
+            ))}
+          </dl>
 
-          {/* Mode toggle: relative vs absolute */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-300">
-              {isAbsolute ? "Set Stock To" : "Adjust Stock"}
-            </span>
+            <span className="text-body font-medium">{t(isAbsolute ? "setStock" : "changeStock")}</span>
             <button
               type="button"
               onClick={() => {
@@ -241,163 +186,125 @@ export function ManualSheet({
                 setAdjustment(0);
                 setAbsoluteValue("");
               }}
-              className="flex items-center gap-1.5 rounded-full bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 active:bg-zinc-700"
+              className="flex h-11 items-center gap-2 rounded-full bg-muted px-4 text-body text-muted-foreground active:bg-accent"
             >
-              <ArrowRightLeft className="h-3 w-3" />
-              {isAbsolute ? "Relative" : "Set Stock"}
+              <ArrowRightLeft className="size-4" />
+              {t(isAbsolute ? "addOrRemove" : "exactCount")}
             </button>
           </div>
 
           {!isAbsolute ? (
             <>
-              {/* Quick adjust grid */}
-              <div className="grid grid-cols-6 gap-1.5">
+              <div className="grid grid-cols-6 gap-2">
                 {QUICK_BUTTONS.map((amt) => (
                   <button
                     key={amt}
                     type="button"
                     onClick={() => handleQuick(amt)}
-                    className={`flex h-12 items-center justify-center rounded-lg text-sm font-bold active:scale-95 transition-transform ${
-                      amt < 0
-                        ? "bg-red-500/15 text-red-400 active:bg-red-500/25"
-                        : "bg-emerald-500/15 text-emerald-400 active:bg-emerald-500/25"
-                    }`}
-                  >
-                    {amt < 0 ? (
-                      <Minus className="mr-0.5 h-3 w-3" />
-                    ) : (
-                      <Plus className="mr-0.5 h-3 w-3" />
+                    className={cn(
+                      "flex h-12 items-center justify-center rounded-lg text-body font-medium transition-transform active:scale-95",
+                      amt < 0 ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-foreground",
                     )}
-                    {Math.abs(amt)}
+                  >
+                    {amt < 0 ? <Minus className="size-3" /> : <Plus className="size-3" />}
+                    {formatNumber(Math.abs(amt))}
                   </button>
                 ))}
               </div>
 
-              {/* Current adjustment display */}
-              <div className="flex items-center justify-center gap-3 rounded-lg bg-zinc-800/60 py-3">
-                <span className="text-zinc-400 text-sm">
-                  {product.stock}
+              <div className="flex items-center justify-center gap-3 rounded-lg bg-muted py-3">
+                <span className="text-body text-muted-foreground">{formatNumber(product.stock)}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className={cn("text-body font-medium tabular-nums", adjustment === 0 && "text-muted-foreground", newStock < 0 && "text-destructive")}>
+                  {formatNumber(newStock)}
                 </span>
-                <span className="text-zinc-600">&rarr;</span>
-                <span
-                  className={`text-xl font-bold tabular-nums ${
-                    adjustment === 0
-                      ? "text-zinc-500"
-                      : newStock < 0
-                        ? "text-red-400"
-                        : "text-emerald-400"
-                  }`}
-                >
-                  {newStock}
-                </span>
-                {adjustment !== 0 && (
-                  <span
-                    className={`text-sm font-semibold ${
-                      adjustment > 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    ({adjustment > 0 ? "+" : ""}
-                    {adjustment})
+                {adjustment !== 0 ? (
+                  <span className={cn("text-body font-semibold", adjustment < 0 && "text-destructive")}>
+                    ({adjustment > 0 ? "+" : ""}{formatNumber(adjustment)})
                   </span>
-                )}
+                ) : null}
               </div>
             </>
           ) : (
-            /* Absolute mode input */
             <div className="space-y-2">
               <input
                 type="number"
                 value={absoluteValue}
                 onChange={(e) => setAbsoluteValue(e.target.value)}
-                placeholder="New stock level"
+                placeholder={t("newStock")}
+                aria-label={t("newStock")}
                 inputMode="numeric"
                 min={0}
                 autoFocus
-                className="h-14 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 text-center text-xl font-bold text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none"
+                className="h-14 w-full rounded-lg border bg-muted px-4 text-center text-body font-medium placeholder:text-muted-foreground focus:border-ring focus:outline-none"
               />
-              {absoluteValue !== "" && (
-                <div className="flex items-center justify-center gap-3 rounded-lg bg-zinc-800/60 py-2 text-sm">
-                  <span className="text-zinc-400">{product.stock}</span>
-                  <span className="text-zinc-600">&rarr;</span>
-                  <span className="font-bold text-emerald-400">
-                    {Number(absoluteValue) || 0}
-                  </span>
+              {absoluteValue !== "" ? (
+                <div className="flex items-center justify-center gap-3 rounded-lg bg-muted py-2 text-body">
+                  <span className="text-muted-foreground">{formatNumber(product.stock)}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-medium">{formatNumber(Number(absoluteValue) || 0)}</span>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
-          {/* Reason dropdown */}
           <div className="relative">
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value as AdjustmentReason)}
-              className="h-12 w-full appearance-none rounded-lg border border-zinc-700 bg-zinc-800 px-4 pr-10 text-sm text-white focus:border-emerald-500 focus:outline-none"
+              aria-label={t("reason")}
+              className="h-12 w-full appearance-none rounded-lg border bg-muted px-4 pr-10 text-body focus:border-ring focus:outline-none"
             >
-              {REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
+              {REASONS.map((value) => (
+                <option key={value} value={value}>{t(`reason_${value}`)}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
 
-          {/* Large adjustment warning */}
-          {isLargeAdjustment && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>
-                Large adjustment: {adjustment > 0 ? "+" : ""}{adjustment} units
+          {isLargeAdjustment ? (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">
+              <span className="flex h-5 shrink-0 items-center">
+                <AlertTriangle className="size-4" />
               </span>
+              <span>{t("largeChange", { change: `${adjustment > 0 ? "+" : ""}${formatNumber(adjustment)}` })}</span>
             </div>
-          )}
+          ) : null}
 
-          {/* Error */}
-          {error && (
-            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
-              {error}
-            </div>
-          )}
+          {error ? (
+            <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">{error}</div>
+          ) : null}
 
-          {/* Action buttons */}
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onCancel}
-              className="flex h-14 flex-1 items-center justify-center gap-2 rounded-lg bg-zinc-800 text-sm font-semibold text-zinc-300 active:bg-zinc-700"
+              className="flex h-14 flex-1 items-center justify-center gap-2 rounded-lg bg-muted text-body font-semibold active:bg-accent"
             >
-              <X className="h-4 w-4" />
-              Cancel
+              <X className="size-4" />
+              {t("cancel")}
             </button>
             <button
               type="button"
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="flex h-14 flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white disabled:opacity-40 active:bg-emerald-700"
+              className="flex h-14 flex-1 items-center justify-center gap-2 rounded-lg bg-primary text-body font-semibold text-primary-foreground active:opacity-80 disabled:opacity-40"
             >
               {isSubmitting ? (
                 <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
-                  Applying...
+                  <span className="size-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  {t("saving")}
                 </>
               ) : (
                 <>
-                  <Check className="h-4 w-4" />
-                  Apply
+                  <Check className="size-4" />
+                  {t("apply")}
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes slide-up {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

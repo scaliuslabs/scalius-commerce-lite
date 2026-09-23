@@ -22,6 +22,13 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { defaultProductSkuValues } from "./products.public-eligibility";
+import {
+    catalogPriceColumns,
+    presentCatalogPrice,
+    readStoreDecimalPlaces,
+    storeCurrencyCodeSql,
+    storeDecimalPlacesFromCode,
+} from "./products.money";
 import { executeProductAggregateMutationBatch } from "./products.aggregate-revision";
 import { updateProductMediaSection } from "./products.admin";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./products.media";
@@ -249,7 +256,7 @@ export async function getProductSemanticSection(
             id: products.id,
             aggregateRevision: products.aggregateRevision,
             name: products.name,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             categoryName: categories.name,
             slug: products.slug,
@@ -260,8 +267,8 @@ export async function getProductSemanticSection(
             productCondition: products.productCondition,
             isActive: products.isActive,
             discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
@@ -279,16 +286,18 @@ export async function getProductSemanticSection(
             additionalInfoCount: sql<number>`(SELECT count(*) FROM ${productRichContent} WHERE ${productRichContent.productId} = ${sql.raw('"products"."id"')})`,
             optionCount: sql<number>`(SELECT count(*) FROM ${productOptionDefinitions} WHERE ${productOptionDefinitions.productId} = ${sql.raw('"products"."id"')} AND ${productOptionDefinitions.deletedAt} IS NULL)`,
             variantCount: sql<number>`(SELECT count(*) FROM ${productVariants} WHERE ${productVariants.productId} = ${sql.raw('"products"."id"')} AND ${productVariants.deletedAt} IS NULL)`,
+            storeCurrencyCode: storeCurrencyCodeSql(),
         }).from(products).leftJoin(categories, eq(categories.id, products.categoryId))
             .where(eq(products.id, productId)).get();
         if (!row) return null;
+        const price = presentCatalogPrice(row, storeDecimalPlacesFromCode(row.storeCurrencyCode));
         return assertBoundedResult({
             section,
             aggregateRevision: row.aggregateRevision,
             product: {
                 id: row.id,
                 name: row.name,
-                price: row.price,
+                price: price.price,
                 categoryId: row.categoryId,
                 categoryName: row.categoryName ?? null,
                 slug: row.slug,
@@ -299,8 +308,8 @@ export async function getProductSemanticSection(
                 productCondition: row.productCondition,
                 isActive: row.isActive,
                 discountType: row.discountType,
-                discountPercentage: row.discountPercentage,
-                discountAmount: row.discountAmount,
+                discountPercentage: price.discountPercentage,
+                discountAmount: price.discountAmount,
                 freeDelivery: row.freeDelivery,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -464,14 +473,15 @@ export async function getProductSemanticSection(
         imageId: productVariants.imageId,
         weight: productVariants.weight,
         sku: productVariants.sku,
-        price: productVariants.price,
+        priceMinor: productVariants.priceMinor,
         stock: productVariants.stock,
         trackInventory: productVariants.trackInventory,
         barcode: productVariants.barcode,
         barcodeType: productVariants.barcodeType,
         discountType: productVariants.discountType,
-        discountPercentage: productVariants.discountPercentage,
-        discountAmount: productVariants.discountAmount,
+        discountBps: productVariants.discountBps,
+        discountAmountMinor: productVariants.discountAmountMinor,
+        storeCurrencyCode: storeCurrencyCodeSql(),
     }).from(productVariants).where(and(
         eq(productVariants.productId, productId),
         isNull(productVariants.deletedAt),
@@ -505,10 +515,10 @@ export async function getProductSemanticSection(
         values.push(selection);
         selectedByVariant.set(selection.variantId, values);
     }
-    const items = variants.map((variant) => {
+    const items = variants.map(({ storeCurrencyCode, ...variant }) => {
         const selectedOptions = (selectedByVariant.get(variant.id) ?? []).map(({ variantId: _variantId, ...selection }) => selection);
         return {
-            ...variant,
+            ...presentCatalogPrice(variant, storeDecimalPlacesFromCode(storeCurrencyCode)),
             selectedOptionValueIds: selectedOptions.map((option) => option.optionValueId),
             selectedOptions,
         };
@@ -541,14 +551,14 @@ async function updateBaseSection(
     expectedAggregateRevision: number,
     patch: ProductBasePatch,
 ) {
-    const current = await db.select({
+    const [current, decimalPlaces] = await Promise.all([db.select({
         name: products.name,
-        price: products.price,
+        priceMinor: products.priceMinor,
         categoryId: products.categoryId,
         isActive: products.isActive,
         discountType: products.discountType,
-        discountPercentage: products.discountPercentage,
-        discountAmount: products.discountAmount,
+        discountBps: products.discountBps,
+        discountAmountMinor: products.discountAmountMinor,
         freeDelivery: products.freeDelivery,
         canonicalPath: products.canonicalPath,
         noIndex: products.noIndex,
@@ -556,10 +566,15 @@ async function updateBaseSection(
         excludeFromProductFeed: products.excludeFromProductFeed,
         productCondition: products.productCondition,
         slug: products.slug,
-    }).from(products).where(eq(products.id, productId)).get();
+    }).from(products).where(eq(products.id, productId)).get(), readStoreDecimalPlaces(db)]);
     if (!current) return null;
-    const definedPatch = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
-    const next = { ...current, ...definedPatch } as typeof current;
+    const { price, discountPercentage, discountAmount, ...otherPatch } = patch;
+    const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
+    const next = {
+        ...current,
+        ...definedPatch,
+        ...catalogPriceColumns({ price, discountPercentage, discountAmount }, decimalPlaces),
+    } as typeof current;
     if (next.canonicalPath !== null && next.canonicalPath !== `/products/${next.slug}`) {
         throw new ValidationError("Canonical path must use this product's current slug until URL aliases are supported.");
     }
@@ -574,12 +589,12 @@ async function updateBaseSection(
 
     const mutationStatements: SQLiteBatchItem[] = [db.update(products).set({
         name: next.name,
-        price: next.price,
+        priceMinor: next.priceMinor,
         categoryId: next.categoryId,
         isActive: next.isActive,
         discountType: next.discountType ?? "percentage",
-        discountPercentage: (next.discountType ?? "percentage") === "percentage" ? next.discountPercentage : 0,
-        discountAmount: (next.discountType ?? "percentage") === "flat" ? next.discountAmount : 0,
+        discountBps: (next.discountType ?? "percentage") === "percentage" ? next.discountBps : 0,
+        discountAmountMinor: (next.discountType ?? "percentage") === "flat" ? next.discountAmountMinor : 0,
         freeDelivery: next.freeDelivery,
         canonicalPath: next.canonicalPath,
         noIndex: next.noIndex,
@@ -589,7 +604,7 @@ async function updateBaseSection(
         slug: next.slug,
     }).where(eq(products.id, productId))];
 
-    if (patch.price !== undefined || patch.isActive !== undefined) {
+    if (price !== undefined || patch.isActive !== undefined) {
         const topology = await db.select({
             total: sql<number>`count(*)`,
             defaultCount: sql<number>`sum(CASE WHEN ${productVariants.isDefault} = 1 THEN 1 ELSE 0 END)`,
@@ -608,13 +623,13 @@ async function updateBaseSection(
             throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
         }
         if (next.isActive && total === 0) {
-            mutationStatements.push(db.insert(productVariants).values(defaultProductSkuValues(productId, next.price)));
+            mutationStatements.push(db.insert(productVariants).values(defaultProductSkuValues(productId, next.priceMinor)));
         } else if (total === 1 && defaultCount === 1) {
             mutationStatements.push(db.update(productVariants).set({
-                price: next.price,
+                priceMinor: next.priceMinor,
                 discountType: "percentage",
-                discountPercentage: 0,
-                discountAmount: 0,
+                discountBps: 0,
+                discountAmountMinor: 0,
                 updatedAt: sql`unixepoch()`,
             }).where(and(
                 eq(productVariants.productId, productId),

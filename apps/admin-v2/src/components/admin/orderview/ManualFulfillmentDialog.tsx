@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Loader2, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -12,54 +11,37 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useCreateFulfillmentShipment } from "@/lib/api-mutations/orders";
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { resourceMessages } from "~/i18n/resource";
+import { useCreateFulfillmentShipment } from "~/lib/api-mutations/orders";
+import { getOrderItemName } from "./order-returns/shared";
 import type { Order, OrderItem } from "./types";
-import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 const FULFILLMENT_READY_ORDER_STATUSES = new Set(["confirmed", "shipped"]);
 const FULFILLABLE_ITEM_STATUSES = new Set(["pending", "picked", "packed"]);
-const SHIPPED_ITEM_STATUSES = new Set(["shipped", "delivered"]);
 
-interface ManualFulfillmentDialogProps {
-  order: Order;
+function isFulfillable(item: OrderItem) {
+  return FULFILLABLE_ITEM_STATUSES.has((item.fulfillmentStatus ?? "pending").toLowerCase());
 }
 
-function normalizeStatus(status?: string | null) {
-  return (status ?? "pending").toLowerCase();
+function optional(value: string) {
+  return value.trim() || undefined;
 }
 
-function formatStatus(status: string) {
-  return status
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getItemLabel(item: OrderItem) {
-  const variantParts = item.variantLabel ? [item.variantLabel] : [];
-  return variantParts.length > 0
-    ? `${item.productName ?? "Unnamed product"} (${variantParts.join(" / ")})`
-    : item.productName ?? "Unnamed product";
-}
-
-function isFulfillableItem(item: OrderItem) {
-  return FULFILLABLE_ITEM_STATUSES.has(normalizeStatus(item.fulfillmentStatus));
-}
-
-function cleanOptional(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps) {
-  const orderActions = useOrderActionPermissions();
+/** Own-courier fulfillment: pick the items handed to your own rider. */
+export function ManualFulfillmentDialog({ order }: { order: Order }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
+  const canManage = useOrderActionPermissions().canManageOrderShipments;
   const [open, setOpen] = useState(false);
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [courierName, setCourierName] = useState("Own courier");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [courierName, setCourierName] = useState(() => t("fulfill.defaultCourier"));
   const [trackingId, setTrackingId] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
   const [shipmentAmount, setShipmentAmount] = useState("");
@@ -67,279 +49,120 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
   const mutation = useCreateFulfillmentShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-
-  const fulfillableItems = useMemo(
-    () => order.items.filter(isFulfillableItem),
-    [order.items],
-  );
-  const fulfillableItemIds = useMemo(
-    () => fulfillableItems.map((item) => item.id),
-    [fulfillableItems],
-  );
-  const orderStatus = normalizeStatus(order.status);
-  const canCreateShipment =
-    orderActions.canManageOrderShipments &&
-    FULFILLMENT_READY_ORDER_STATUSES.has(orderStatus) &&
-    fulfillableItemIds.length > 0 &&
-    !refundLocked &&
-    !shipmentLocked;
-  const allFulfillableSelected =
-    fulfillableItemIds.length > 0 &&
-    fulfillableItemIds.every((id) => selectedItemIds.includes(id));
-  const isFinalShipment =
-    selectedItemIds.length > 0 &&
-    selectedItemIds.length === fulfillableItemIds.length;
+  const fulfillableIds = useMemo(() => order.items.filter(isFulfillable).map((item) => item.id), [order.items]);
+  const canCreate = canManage
+    && FULFILLMENT_READY_ORDER_STATUSES.has(order.status.toLowerCase())
+    && fulfillableIds.length > 0
+    && !refundLocked
+    && !shipmentLocked;
+  const isFinalShipment = selectedIds.length > 0 && selectedIds.length === fulfillableIds.length;
 
   useEffect(() => {
-    if (open) {
-      setSelectedItemIds(fulfillableItemIds);
-    }
-  }, [fulfillableItemIds, open]);
+    if (open) setSelectedIds(fulfillableIds);
+  }, [fulfillableIds, open]);
 
-  const toggleItem = (item: OrderItem, checked: boolean) => {
-    if (!isFulfillableItem(item)) return;
-    setSelectedItemIds((current) =>
-      checked
-        ? [...new Set([...current, item.id])]
-        : current.filter((id) => id !== item.id),
-    );
-  };
-
-  const toggleAll = (checked: boolean) => {
-    setSelectedItemIds(checked ? fulfillableItemIds : []);
+  const toggle = (item: OrderItem, checked: boolean) => {
+    if (!isFulfillable(item)) return;
+    setSelectedIds((current) => (checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)));
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!orderActions.canManageOrderShipments) {
-      toast.error("Fulfillment unavailable", {
-        description: "Your role can view orders but cannot manage shipments.",
-      });
-      return;
+    if (!canManage) return void toast.error(r("readOnly"));
+    if (refundLocked) return void toast.error(t("locked.refund"));
+    if (shipmentLocked) return void toast.error(t("locked.shipment"));
+    if (selectedIds.length === 0) return void toast.error(t("fulfill.selectItem"));
+    const amount = shipmentAmount.trim() ? Number(shipmentAmount) : undefined;
+    if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+      return void toast.error(t("fulfill.amountInvalid"));
     }
-    if (refundLocked) {
-      toast.error("Order locked", { description: "Complete or reconcile the active refund before creating fulfillments." });
-      return;
-    }
-    if (shipmentLocked) {
-      toast.error("Shipment recovery active", {
-        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before creating fulfillments.",
-      });
-      return;
-    }
-    if (selectedItemIds.length === 0) {
-      toast.error("Select at least one item");
-      return;
-    }
-
-    const parsedShipmentAmount =
-      shipmentAmount.trim().length > 0 ? Number(shipmentAmount) : undefined;
-    if (
-      parsedShipmentAmount !== undefined &&
-      (!Number.isFinite(parsedShipmentAmount) || parsedShipmentAmount < 0)
-    ) {
-      toast.error("Shipment amount must be zero or higher");
-      return;
-    }
-
     mutation.mutate(
       {
         orderId: order.id,
-        itemIds: selectedItemIds,
-        courierName: cleanOptional(courierName),
-        trackingId: cleanOptional(trackingId),
-        trackingUrl: cleanOptional(trackingUrl),
-        note: cleanOptional(note),
-        shipmentAmount: parsedShipmentAmount,
+        itemIds: selectedIds,
+        courierName: optional(courierName),
+        trackingId: optional(trackingId),
+        trackingUrl: optional(trackingUrl),
+        note: optional(note),
+        shipmentAmount: amount,
         isFinalShipment,
       },
-      {
-        onSuccess: () => setOpen(false),
-      },
+      { onSuccess: () => setOpen(false) },
     );
   };
 
-  const triggerTitle = canCreateShipment
-    ? "Create own courier fulfillment"
-    : !orderActions.canManageOrderShipments
-      ? "Requires shipment management permission"
-      : refundLocked
-      ? "Refund recovery is active"
-      : shipmentLocked
-      ? "Shipment recovery is active"
-      : "Confirm the order before fulfillment";
+  const blockedReason = canCreate
+    ? undefined
+    : !canManage ? r("readOnly")
+      : refundLocked ? t("locked.refund")
+        : shipmentLocked ? t("locked.shipment")
+          : t("fulfill.confirmFirst");
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !mutation.isPending && setOpen(nextOpen)}>
+    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && setOpen(next)}>
       <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11 w-full gap-2 sm:min-h-10"
-          disabled={!canCreateShipment}
-          title={triggerTitle}
-        >
-          <PackageCheck className="h-4 w-4" />
-          Own Courier
+        <Button type="button" variant="outline" className="w-full" disabled={!canCreate} title={blockedReason}>
+          {t("fulfill.open")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Own courier fulfillment</DialogTitle>
-          <DialogDescription className="sr-only">
-            Create a fulfillment shipment for selected order items.
-          </DialogDescription>
+          <DialogTitle>{t("fulfill.title")}</DialogTitle>
+          <DialogDescription>{t("fulfill.help")}</DialogDescription>
         </DialogHeader>
-
-        <form method="post" className="space-y-5" onSubmit={handleSubmit} noValidate>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="manual-fulfillment-all">Items</Label>
-              <div className="flex items-center gap-2">
-                <Badge variant={isFinalShipment ? "default" : "secondary"}>
-                  {isFinalShipment ? "Final" : "Partial"}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {selectedItemIds.length}/{fulfillableItemIds.length}
-                </span>
-              </div>
+        <form method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-body font-medium">{t("fulfill.items")}</p>
+              <Badge variant={isFinalShipment ? "secondary" : "outline"}>
+                {isFinalShipment ? t("fulfill.final") : t("fulfill.partial")}
+              </Badge>
             </div>
-
-            <div className="rounded-md border border-border">
-              <label
-                htmlFor="manual-fulfillment-all"
-                className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 text-sm"
-              >
-                <Checkbox
-                  id="manual-fulfillment-all"
-                  checked={allFulfillableSelected}
-                  onCheckedChange={(checked) => toggleAll(checked === true)}
-                  disabled={mutation.isPending || fulfillableItemIds.length === 0}
-                />
-                <span className="font-medium">All unshipped items</span>
-              </label>
-
-              <div className="max-h-56 overflow-y-auto">
-                {order.items.map((item) => {
-                  const status = normalizeStatus(item.fulfillmentStatus);
-                  const isFulfillable = isFulfillableItem(item);
-                  const isShipped = SHIPPED_ITEM_STATUSES.has(status);
-                  const checked = selectedItemIds.includes(item.id);
-
-                  return (
-                    <label
-                      key={item.id}
-                      htmlFor={`manual-fulfillment-item-${item.id}`}
-                      className="flex cursor-pointer items-start gap-3 border-b border-border px-3 py-3 last:border-b-0"
-                    >
-                      <Checkbox
-                        id={`manual-fulfillment-item-${item.id}`}
-                        checked={checked}
-                        onCheckedChange={(nextChecked) =>
-                          toggleItem(item, nextChecked === true)
-                        }
-                        disabled={!isFulfillable || mutation.isPending}
-                        className="mt-0.5"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {getItemLabel(item)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Qty {item.quantity}
-                        </span>
-                      </span>
-                      <Badge variant={isShipped ? "outline" : "secondary"}>
-                        {formatStatus(status)}
-                      </Badge>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            <ul className="divide-y rounded-md border">
+              {order.items.map((item) => (
+                <li key={item.id} className="flex items-start gap-3 px-3 py-2 text-body">
+                  <Checkbox
+                    id={`fulfill-item-${item.id}`}
+                    checked={selectedIds.includes(item.id)}
+                    onCheckedChange={(checked) => toggle(item, checked === true)}
+                    disabled={!isFulfillable(item) || mutation.isPending}
+                  />
+                  <Label htmlFor={`fulfill-item-${item.id}`} className="min-w-0 flex-1">
+                    {getOrderItemName(item)} × {item.quantity}
+                  </Label>
+                  {!isFulfillable(item) ? <Badge variant="outline">{t("fulfill.alreadySent")}</Badge> : null}
+                </li>
+              ))}
+            </ul>
           </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="manual-courier-name">Courier</Label>
-              <Input
-                id="manual-courier-name"
-                value={courierName}
-                onChange={(event) => setCourierName(event.target.value)}
-                disabled={mutation.isPending}
-                autoComplete="off"
-              />
+              <Label htmlFor="fulfill-courier">{t("shipments.courier")}</Label>
+              <Input id="fulfill-courier" value={courierName} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="manual-tracking-id">Tracking ID</Label>
-              <Input
-                id="manual-tracking-id"
-                value={trackingId}
-                onChange={(event) => setTrackingId(event.target.value)}
-                disabled={mutation.isPending}
-                autoComplete="off"
-              />
+              <Label htmlFor="fulfill-tracking">{t("shipments.trackingId")}</Label>
+              <Input id="fulfill-tracking" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="manual-tracking-url">Tracking URL</Label>
-              <Input
-                id="manual-tracking-url"
-                type="url"
-                value={trackingUrl}
-                onChange={(event) => setTrackingUrl(event.target.value)}
-                disabled={mutation.isPending}
-                autoComplete="off"
-              />
+              <Label htmlFor="fulfill-tracking-url">{t("fulfill.trackingUrl")}</Label>
+              <Input id="fulfill-tracking-url" type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="manual-shipment-amount">Shipment amount</Label>
-              <Input
-                id="manual-shipment-amount"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={shipmentAmount}
-                onChange={(event) => setShipmentAmount(event.target.value)}
-                disabled={mutation.isPending}
-              />
+              <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
+              <Input id="fulfill-amount" type="number" inputMode="decimal" min="0" step="0.01" value={shipmentAmount} onChange={(e) => setShipmentAmount(e.target.value)} disabled={mutation.isPending} />
             </div>
           </div>
-
           <div className="space-y-2">
-            <Label htmlFor="manual-shipment-note">Note</Label>
-            <Textarea
-              id="manual-shipment-note"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              disabled={mutation.isPending}
-              className="min-h-20"
-            />
+            <Label htmlFor="fulfill-note">{t("fulfill.note")}</Label>
+            <Textarea id="fulfill-note" value={note} onChange={(e) => setNote(e.target.value)} disabled={mutation.isPending} />
           </div>
-
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 sm:min-h-10"
-              onClick={() => setOpen(false)}
-              disabled={mutation.isPending}
-            >
-              Cancel
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={mutation.isPending}>
+              {r("cancel")}
             </Button>
-            <Button
-              type="submit"
-              className="min-h-11 sm:min-h-10"
-              disabled={
-                mutation.isPending ||
-                selectedItemIds.length === 0 ||
-                !canCreateShipment
-              }
-            >
-              {mutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Create Fulfillment
+            <Button type="submit" disabled={mutation.isPending || selectedIds.length === 0 || !canCreate}>
+              {t("fulfill.submit")}
             </Button>
           </DialogFooter>
         </form>

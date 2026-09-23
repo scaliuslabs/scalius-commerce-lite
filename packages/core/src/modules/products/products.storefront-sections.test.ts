@@ -51,22 +51,22 @@ function seedPublicSectionProduct(sqlite: DatabaseSync) {
     sqlite.prepare(`INSERT INTO categories (id, name, slug, status) VALUES (?, ?, ?, ?)`)
         .run("cat_public", "Public", "public", "published");
     sqlite.prepare(`INSERT INTO products (
-        id, name, description, price, category_id, slug, meta_title, meta_description,
+        id, name, description, price_minor, category_id, slug, meta_title, meta_description,
         canonical_path, product_condition, created_at, updated_at,
-        discount_percentage, discount_type, discount_amount
+        discount_bps, discount_type, discount_amount_minor
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-        "prod_public_sections", "Bounded public product", "d".repeat(100_000), 125,
+        "prod_public_sections", "Bounded public product", "d".repeat(100_000), 12_500,
         "cat_public", "bounded-public-product", "m".repeat(30_000), "e".repeat(40_000),
-        "/products/bounded-public-product", "new", 1_700_000_000, 1_700_000_001, 10, "percentage", 0,
+        "/products/bounded-public-product", "new", 1_700_000_000, 1_700_000_001, 1_000, "percentage", 0,
     );
     sqlite.prepare(`INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping)
         VALUES (?, ?, ?, ?, ?, ?)`).run("popt_size", "prod_public_sections", "Size", "size", 0, "size");
     const insertValue = sqlite.prepare(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position)
         VALUES (?, 'popt_size', ?, ?, ?)`);
     const insertVariant = sqlite.prepare(`INSERT INTO product_variants (
-        id, product_id, option_combination_key, sku, price, stock, low_stock_threshold,
-        discount_type, discount_percentage, created_at, updated_at
-    ) VALUES (?, 'prod_public_sections', ?, ?, 125, ?, 5, 'percentage', 0, ?, ?)`);
+        id, product_id, option_combination_key, sku, price_minor, stock, low_stock_threshold,
+        discount_type, discount_bps, created_at, updated_at
+    ) VALUES (?, 'prod_public_sections', ?, ?, 12500, ?, 5, 'percentage', 0, ?, ?)`);
     const insertAssignment = sqlite.prepare(`INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id)
         VALUES (?, 'popt_size', ?)`);
     for (let index = 0; index < 150; index += 1) {

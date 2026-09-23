@@ -25,27 +25,26 @@ const EVIDENCE: Array<[string, string, RegExp]> = [
   ["a checkout tax snapshot", `
     INSERT INTO order_tax_snapshots (
       order_id, currency_code, decimal_places, display_label, prices_include_tax,
-      shipping_taxed, subtotal_minor, shipping_minor, discount_minor, taxable_minor,
-      tax_minor, total_minor, settings_version, calculation_version,
+      shipping_taxed, settings_version, calculation_version,
       destination_snapshot, rate_snapshot
-    ) VALUES ('order_1', 'BDT', 2, 'Tax', 0, 0, 20000, 6000, 0, 0, 0, 26000, 1,
+    ) VALUES ('order_1', 'BDT', 2, 'Tax', 0, 0, 1,
       'tax-v1', '{}', '{}')`, TAX_LOCK],
   ["a payment row", `
-    INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status)
-    VALUES ('pay_1', 'order_1', 1, 'BDT', 'cod', 'full', 'pending')`, PAYMENT_LOCK],
+    INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
+    VALUES ('pay_1', 'order_1', 100, 'BDT', 'cod', 'full', 'pending')`, PAYMENT_LOCK],
   ["a shipment", `
     INSERT INTO delivery_shipments (id, order_id, provider_type, status)
     VALUES ('shipment_1', 'order_1', 'manual', 'pending')`, SHIPMENT_LOCK],
   ["a refund attempt", `
-    INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status)
+    INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
     VALUES
-      ('pay_source', 'order_other', 1, 'BDT', 'cod', 'full', 'completed'),
-      ('pay_refund', 'order_other', -1, 'BDT', 'cod', 'refund', 'pending');
+      ('pay_source', 'order_other', 100, 'BDT', 'cod', 'full', 'completed'),
+      ('pay_refund', 'order_other', -100, 'BDT', 'cod', 'refund', 'pending');
     INSERT INTO refund_attempts (
       id, attempt_key, refund_group_id, order_id, source_payment_id, refund_payment_id,
-      gateway, amount, currency, reason, request_hash, provider_idempotency_key, refund_reference
+      gateway, amount_minor, currency, reason, request_hash, provider_idempotency_key, refund_reference
     ) VALUES ('refund_1', 'attempt_1', 'group_1', 'order_1', 'pay_source', 'pay_refund',
-      'cod', 1, 'BDT', 'Test refund', 'hash_1', 'provider_key_1', 'reference_1')`, PAYMENT_LOCK],
+      'cod', 100, 'BDT', 'Test refund', 'hash_1', 'provider_key_1', 'reference_1')`, PAYMENT_LOCK],
   ["a return", `
     INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id)
     VALUES ('return_1', 'order_1', 'cancelled', 'Test return', 'admin', 'admin_1')`, RETURN_OR_INVOICE_LOCK],
@@ -59,17 +58,17 @@ const EVIDENCE: Array<[string, string, RegExp]> = [
 function insertOrder(sqlite: DatabaseSync, id: string): void {
   sqlite.exec(`
     INSERT INTO orders (
-      id, customer_name, customer_phone, shipping_address, city, zone, total_amount,
-      shipping_charge, discount_amount, currency_code, currency_decimal_places,
-      status, payment_method, payment_status, paid_amount, balance_due,
+      id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor,
+      shipping_amount_minor, discount_amount_minor, currency_code, currency_decimal_places,
+      status, payment_method, payment_status, paid_amount_minor, balance_due_minor,
       fulfillment_status, inventory_pool, inventory_action, version
     ) VALUES (
-      '${id}', 'Buyer', '+8801712345678', '123 Test Street, Dhaka', 'city_1', 'zone_1', 260,
-      60, 0, 'BDT', 2, 'confirmed', 'cod', 'unpaid', 0, 260,
+      '${id}', 'Buyer', '+8801712345678', '123 Test Street, Dhaka', 'city_1', 'zone_1', 26000,
+      6000, 0, 'BDT', 2, 'confirmed', 'cod', 'unpaid', 0, 26000,
       'pending', 'regular', 'reserved', 1
     );
-    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, price, product_name)
-    VALUES ('item_${id}', '${id}', 'product_1', 'variant_1', 2, 100, 'Test product');
+    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor, product_name)
+    VALUES ('item_${id}', '${id}', 'product_1', 'variant_1', 2, 10000, 'Test product');
   `);
 }
 
@@ -84,10 +83,10 @@ describe.each([
     sqlite = createMigratedSqlite({ provider: provider === "D1" ? "d1" : "turso" });
     db = open(sqlite);
     sqlite.exec(`
-      INSERT INTO products (id, name, slug, price, is_active)
-      VALUES ('product_1', 'Test product', 'test-product', 100, 1);
-      INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory)
-      VALUES ('variant_1', 'product_1', 'EDIT-SKU', 100, 10, 4, 1, 1);
+      INSERT INTO products (id, name, slug, price_minor, is_active)
+      VALUES ('product_1', 'Test product', 'test-product', 10000, 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
+      VALUES ('variant_1', 'product_1', 'EDIT-SKU', 10000, 10, 4, 1, 1);
     `);
     for (const id of ["order_1", "order_2", "order_other"]) insertOrder(sqlite, id);
   });

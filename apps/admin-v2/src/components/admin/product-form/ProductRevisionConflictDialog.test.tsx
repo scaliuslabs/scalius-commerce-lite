@@ -3,7 +3,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { translate } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { ProductRevisionConflictDialog } from "./ProductRevisionConflictDialog";
+
+const t = (key: ProductMessageKey) => translate(productMessages, key);
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -24,7 +28,7 @@ describe("ProductRevisionConflictDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a compact revision comparison and focuses the safe action", async () => {
+  it("keeps the edits by default and focuses the safe action", async () => {
     const keepDraft = vi.fn();
     await act(async () => {
       root.render(
@@ -43,11 +47,9 @@ describe("ProductRevisionConflictDialog", () => {
     });
 
     const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain("This product changed elsewhere");
-    expect(dialog?.textContent).toContain("Revision 7 · Not saved");
-    expect(dialog?.textContent).toContain("Revision 9");
+    expect(dialog?.textContent).toContain(t("conflictTitle"));
 
-    const keepButton = buttonNamed("Keep draft");
+    const keepButton = buttonNamed(t("keepMyEdits"));
     expect(document.activeElement).toBe(keepButton);
     act(() => keepButton.click());
     expect(keepDraft).toHaveBeenCalledTimes(1);
@@ -72,9 +74,8 @@ describe("ProductRevisionConflictDialog", () => {
       await Promise.resolve();
     });
 
-    expect(document.body.textContent).toContain("No longer available");
-    expect(document.body.textContent).toContain("cannot be saved");
-    const returnButton = buttonNamed("Return to products");
+    expect(document.body.textContent).toContain(t("conflictDeletedTitle"));
+    const returnButton = buttonNamed(t("backToProducts"));
     act(() => returnButton.click());
     expect(productUnavailable).toHaveBeenCalledTimes(1);
     expect(reloadLatest).not.toHaveBeenCalled();
@@ -100,7 +101,7 @@ describe("ProductRevisionConflictDialog", () => {
     });
 
     await act(async () => {
-      buttonNamed("Reload latest").click();
+      buttonNamed(t("loadLatest")).click();
       await Promise.resolve();
     });
     expect(reloadLatest).toHaveBeenCalledTimes(1);

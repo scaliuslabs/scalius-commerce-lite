@@ -11,42 +11,13 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 // Create an OpenAPIHono app for SEO routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-export interface SeoSettingsData {
-  siteTitle: string | null;
-  homepageTitle: string | null;
-  homepageMetaDescription: string | null;
-  robotsTxt: string | null;
-}
-
 const discoverySchema = z.object({
-  sitemap: z.object({
-    enabled: z.boolean(),
-    staticPages: z.boolean(),
-    products: z.boolean(),
-    categories: z.boolean(),
-    collections: z.boolean(),
-    pages: z.boolean(),
-    articles: z.boolean(),
-  }),
   feeds: z.object({
     productCatalogEnabled: z.boolean(),
     includeUnavailableProducts: z.boolean(),
     variantStrategy: z.enum(["products", "variants"]),
     title: z.string(),
     description: z.string(),
-  }),
-  robots: z.object({
-    advertiseSitemap: z.boolean(),
-  }),
-  structuredData: z.object({
-    organization: z.boolean(),
-    websiteSearch: z.boolean(),
-    products: z.boolean(),
-    productGroups: z.boolean(),
-    offerShippingDetails: z.boolean(),
-    breadcrumbs: z.boolean(),
-    collections: z.boolean(),
-    articles: z.boolean(),
   }),
 });
 
@@ -74,10 +45,9 @@ const getSeoSettingsRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z.object({
-              siteTitle: z.string().nullable(),
-              homepageTitle: z.string().nullable(),
-              homepageMetaDescription: z.string().nullable(),
-              robotsTxt: z.string().nullable(),
+              homepageTitle: z.string(),
+              homepageMetaDescription: z.string(),
+              socialImage: z.string(),
               discovery: discoverySchema,
               returnPolicy: returnPolicySchema,
             }),

@@ -11,7 +11,7 @@ export const DataTableLoadingOverlay = memo(function DataTableLoadingOverlay({ v
     <div
       role="status"
       aria-live="polite"
-      className="absolute inset-0 z-10 flex items-start justify-center bg-background/50 pt-20 backdrop-blur-[1px] transition-opacity"
+      className="absolute inset-0 z-10 flex items-start justify-center bg-background/50 pt-20 transition-opacity"
     >
       <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
       <span className="sr-only">Updating results</span>

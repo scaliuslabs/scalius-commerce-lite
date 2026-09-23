@@ -84,6 +84,7 @@ function taxQuote(
   return {
     valid: true,
     quoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+    discountOffers: [],
     displayLabel: "VAT",
     pricesIncludeTax: false,
     shippingTaxed: false,

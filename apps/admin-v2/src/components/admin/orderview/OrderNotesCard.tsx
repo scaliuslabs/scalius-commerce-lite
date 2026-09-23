@@ -1,30 +1,16 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
-import type { Order } from "./types";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
 
-interface OrderNotesCardProps {
-  order: Order;
-}
-
-export function OrderNotesCard({ order }: OrderNotesCardProps) {
-  // This component will not render if there are no notes,
-  // the logic is handled in the parent OrderView component.
-  if (!order.notes) {
-    return null;
-  }
-
+export function OrderNotesCard({ notes }: { notes: string }) {
+  const t = useMessages(orderDetailMessages);
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <AlertCircle className="h-4 w-4" />
-          Order Notes
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("notes.title")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4">
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-          {order.notes}
-        </p>
+      <CardContent>
+        <p className="whitespace-pre-wrap text-body text-muted-foreground">{notes}</p>
       </CardContent>
     </Card>
   );

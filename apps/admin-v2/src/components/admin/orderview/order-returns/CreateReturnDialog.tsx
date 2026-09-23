@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,23 +7,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useCreateOrderReturn } from "@/lib/api-mutations/orders";
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { resourceMessages } from "~/i18n/resource";
+import { useCreateOrderReturn } from "~/lib/api-mutations/orders";
 import {
   StableReturnCommandKey,
   getRemainingReturnableQuantities,
   type OrderReturnDto,
-} from "@/lib/order-return-workflow";
+} from "~/lib/order-return-workflow";
 import type { Order } from "../types";
-import {
-  createReturnCommandKey,
-  getOrderItemName,
-  parseReturnQuantity,
-} from "./shared";
+import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
 
+/** Request a return. This never refunds money or changes stock. */
 export function CreateReturnDialog({
   order,
   returns,
@@ -36,10 +35,9 @@ export function CreateReturnDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const remaining = useMemo(
-    () => getRemainingReturnableQuantities(order.items, returns),
-    [order.items, returns],
-  );
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
+  const remaining = useMemo(() => getRemainingReturnableQuantities(order.items, returns), [order.items, returns]);
   const eligibleItems = order.items.filter((item) => (remaining.get(item.id) ?? 0) > 0);
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -53,18 +51,9 @@ export function CreateReturnDialog({
 
   const submit = () => {
     if (!canSubmit) return;
-    const intent = {
-      expectedOrderVersion: order.version,
-      reason: reason.trim(),
-      notes: notes.trim() || null,
-      lines,
-    };
+    const intent = { expectedOrderVersion: order.version, reason: reason.trim(), notes: notes.trim() || null, lines };
     mutation.mutate(
-      {
-        orderId: order.id,
-        commandKey: commandKey.current.get("create", intent),
-        ...intent,
-      },
+      { orderId: order.id, commandKey: commandKey.current.get("create", intent), ...intent },
       {
         onSuccess: () => {
           commandKey.current.clear();
@@ -79,69 +68,58 @@ export function CreateReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Request a return</DialogTitle>
-          <DialogDescription>
-            Select shipped or delivered items. Requesting a return does not refund payment or change stock.
-          </DialogDescription>
+          <DialogTitle>{t("returns.new")}</DialogTitle>
+          <DialogDescription>{t("returns.newHelp")}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="return-reason" className="text-sm">Reason</Label>
+            <Label htmlFor="return-reason">{t("returns.reason")}</Label>
             <Input
               id="return-reason"
-              className="text-sm"
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Wrong size, damaged item, or another customer reason"
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t("returns.reasonPlaceholder")}
               maxLength={500}
             />
           </div>
-          <div className="overflow-hidden rounded-md border border-border">
-            <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-sm font-medium">
-              <span>Item</span>
-              <span>Quantity</span>
-            </div>
+          <ul className="divide-y rounded-md border">
             {eligibleItems.map((item) => {
               const max = remaining.get(item.id) ?? 0;
+              const name = getOrderItemName(item);
               return (
-                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
-                  <div className="min-w-0 text-sm">
-                    <p className="truncate font-medium">{getOrderItemName(item)}</p>
-                    <p className="text-muted-foreground">{max} available to return</p>
+                <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-body">
+                  <div className="min-w-0">
+                    <p className="font-medium">{name}</p>
+                    <p className="text-muted-foreground">{t("returns.available", { count: max })}</p>
                   </div>
                   <Input
                     type="number"
                     inputMode="numeric"
                     min={0}
                     max={max}
-                    className="h-9 text-sm"
-                    aria-label={`Return quantity for ${getOrderItemName(item)}`}
+                    className="w-20 shrink-0"
+                    aria-label={t("returns.returnQty", { name })}
                     value={quantities[item.id] ?? 0}
-                    onChange={(event) => setQuantities((current) => ({
+                    onChange={(e) => setQuantities((current) => ({
                       ...current,
-                      [item.id]: parseReturnQuantity(event.target.value, max),
+                      [item.id]: parseReturnQuantity(e.target.value, max),
                     }))}
                   />
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
           <div className="space-y-2">
-            <Label htmlFor="return-notes" className="text-sm">Internal notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
-            <Textarea id="return-notes" className="min-h-20 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} />
+            <Label htmlFor="return-notes">{t("returns.notes")}</Label>
+            <Textarea id="return-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-          <Button
-            type="button"
-            onClick={submit}
-            disabled={!canSubmit}
-          >
-            {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-            Request return
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
+          <Button type="button" onClick={submit} disabled={!canSubmit}>
+            {t("returns.request")}
           </Button>
         </DialogFooter>
       </DialogContent>

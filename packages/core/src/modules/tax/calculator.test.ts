@@ -4,7 +4,7 @@ import {
     buildStorefrontDiscountAllocation,
     buildStorefrontTaxAllocationLineId,
 } from "./discount-allocation";
-import { allocateMinorAmount, fromMinorUnits, toMinorUnits } from "./money";
+import { allocateMinorAmount } from "./money";
 import type { CalculateTaxQuoteInput, TaxRateDefinition } from "./types";
 
 const destination = {
@@ -65,15 +65,6 @@ function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuo
 }
 
 describe("tax minor-unit money", () => {
-    it("supports ISO-style zero, two, and three decimal currencies without float drift", () => {
-        expect(toMinorUnits(12.6, 0)).toBe(13);
-        expect(toMinorUnits(12.345, 2)).toBe(1_235);
-        expect(toMinorUnits(1.005, 2)).toBe(101);
-        expect(toMinorUnits(0.1 + 0.2, 2)).toBe(30);
-        expect(toMinorUnits(12.345, 3)).toBe(12_345);
-        expect(fromMinorUnits(12_345, 3)).toBe(12.345);
-    });
-
     it("uses deterministic largest-remainder allocation", () => {
         const allocated = allocateMinorAmount(2, [
             { key: "b", weightMinor: 1 },
@@ -225,18 +216,7 @@ describe("calculateTaxQuote", () => {
     });
 
     it("allocates free-shipping discounts only to shipping", () => {
-        const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 20,
-            discountType: "free_shipping",
-            lines: [{
-                lineId: "line-1",
-                productId: "product-1",
-                unitPrice: 100,
-                quantity: 1,
-            }],
-            shippingAmount: 20,
-        });
+        const discount = { discountMinor: 2_000, allocation: { lines: [], shippingMinor: 2_000 } };
         const quote = calculateTaxQuote(input({
             shippingMinor: 2_000,
             discountMinor: discount.discountMinor,
@@ -261,18 +241,10 @@ describe("calculateTaxQuote", () => {
     });
 
     it("keeps product-scoped discounts away from unrelated tax classes", () => {
-        const lines = [
-            { lineId: "line-low", productId: "product-low", unitPrice: 100, quantity: 1 },
-            { lineId: "line-high", productId: "product-high", unitPrice: 100, quantity: 1 },
-        ];
-        const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 50,
-            discountType: "amount_off_products",
-            applicableProductIds: ["product-low"],
-            lines,
-            shippingAmount: 0,
-        });
+        const discount = {
+            discountMinor: 5_000,
+            allocation: { lines: [{ lineId: "line-low", amountMinor: 5_000 }], shippingMinor: 0 },
+        };
         const quote = calculateTaxQuote(input({
             classes: [
                 { id: "class-low", name: "Low", isExempt: false },
@@ -306,15 +278,12 @@ describe("calculateTaxQuote", () => {
         const lowLineId = buildStorefrontTaxAllocationLineId(0, "variant-low");
         const highLineId = buildStorefrontTaxAllocationLineId(1, "variant-high");
         const storefrontLines = [
-            { lineId: lowLineId, productId: "product-low", unitPrice: 1, quantity: 1 },
-            { lineId: highLineId, productId: "product-high", unitPrice: 1, quantity: 1 },
+            { lineId: lowLineId, productId: "product-low", unitPriceMinor: 100, quantity: 1 },
+            { lineId: highLineId, productId: "product-high", unitPriceMinor: 100, quantity: 1 },
         ];
         const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 0.01,
-            discountType: "amount_off_order",
+            discountMinor: 1,
             lines: storefrontLines,
-            shippingAmount: 0,
         });
         const quoteInput = input({
             classes: [

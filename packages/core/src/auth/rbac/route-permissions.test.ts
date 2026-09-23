@@ -43,28 +43,19 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.PAGES_PUBLISH });
 
     expect(getRoutePermission(
-      "/api/v1/admin/discounts/disc_1",
+      "/api/v1/admin/discounts/promo_1",
       "PUT",
     )).toEqual({ permission: PERMISSIONS.DISCOUNTS_EDIT });
     expect(getRoutePermission(
-      "/api/v1/admin/discounts/disc_1/toggle-status",
-      "POST",
-    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
-
-    expect(getRoutePermission(
-      "/api/v1/admin/promotions/promo_1",
-      "PUT",
-    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_EDIT });
-    expect(getRoutePermission(
-      "/api/v1/admin/promotions/promo_1/preview",
+      "/api/v1/admin/discounts/promo_1/preview",
       "POST",
     )).toEqual({ permission: PERMISSIONS.DISCOUNTS_VIEW });
     expect(getRoutePermission(
-      "/api/v1/admin/promotions/promo_1/activate",
+      "/api/v1/admin/discounts/promo_1/activate",
       "POST",
     )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
     expect(getRoutePermission(
-      "/api/v1/admin/promotions/promo_1/pause",
+      "/api/v1/admin/discounts/promo_1/pause",
       "POST",
     )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
   });

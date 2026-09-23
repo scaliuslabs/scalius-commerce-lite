@@ -2,6 +2,8 @@ import * as React from "react";
 
 import { Input } from "~/components/ui/input";
 import { cn } from "@scalius/shared/utils";
+import { useMessages } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
 
 const MIN_ORDER_ITEM_QUANTITY = 1;
 const MAX_ORDER_ITEM_QUANTITY = 99;
@@ -48,6 +50,7 @@ export function OrderItemQuantityInput({
   disabled = false,
   className,
 }: OrderItemQuantityInputProps) {
+  const t = useMessages(orderFormMessages);
   const [draft, setDraft] = React.useState(String(quantity));
   const focusedRef = React.useRef(false);
   const focusStartQuantityRef = React.useRef(quantity);
@@ -84,12 +87,12 @@ export function OrderItemQuantityInput({
         max={effectiveMaximum}
         step={1}
         value={draft}
-        aria-label={`Quantity for ${itemName}`}
+        aria-label={t("quantityFor", { name: itemName })}
         aria-invalid={(!disabled && exceedsMaximum) || undefined}
         aria-describedby={ariaDescribedBy}
         placeholder={placeholder}
         disabled={disabled}
-        className={cn("h-8 w-20", className)}
+        className={cn("w-20", className)}
         onFocus={() => {
           focusedRef.current = true;
           focusStartQuantityRef.current = quantity;
@@ -152,7 +155,7 @@ export function OrderItemQuantityInput({
       {maximumDescriptionId ? (
         <p
           id={maximumErrorId}
-          className="mt-1 max-w-56 text-xs text-destructive"
+          className="mt-1 text-body text-destructive"
           role="alert"
         >
           {maximumExceededMessage}

@@ -12,6 +12,12 @@ import {
   buyerCatalogHasSkuInPriceRange,
 } from "../modules/products/products.buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
+import {
+  storeCurrencyCodeSql,
+  storeDecimalPlacesFromCode,
+  storeDecimalToMinorSql,
+} from "../modules/products/products.money";
+import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../integrations/storage";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
@@ -175,8 +181,12 @@ export async function search(
       typeof options?.minPrice === "number" ||
       typeof options?.maxPrice === "number"
     ) {
+      const bound = (value: number | undefined) =>
+        typeof value === "number" && Number.isFinite(value)
+          ? storeDecimalToMinorSql(Math.max(0, value))
+          : undefined;
       productConditions.push(
-        buyerCatalogHasSkuInPriceRange(options?.minPrice, options?.maxPrice),
+        buyerCatalogHasSkuInPriceRange(bound(options?.minPrice), bound(options?.maxPrice)),
       );
     }
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
@@ -189,15 +199,16 @@ export async function search(
         // looks up category IDs instead of products.
         id: sql<string>`${products.id}`.as("search_product_id"),
         name: sql<string>`${products.name}`.as("search_product_name"),
-        price: buyerPricing.basePrice,
-        discountedPrice: buyerPricing.effectivePrice,
-        maxBuyerPrice: buyerPricing.maxBuyerPrice,
+        basePriceMinor: buyerPricing.basePriceMinor,
+        effectivePriceMinor: buyerPricing.effectivePriceMinor,
+        maxBuyerPriceMinor: buyerPricing.maxBuyerPriceMinor,
         availableForSale: buyerPricing.availableForSale,
         hasVariants: buyerPricing.hasCustomerOptions,
         slug: sql<string>`${products.slug}`.as("search_product_slug"),
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
         categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
         imageProjection: buildSearchImageProjection(),
+        storeCurrencyCode: storeCurrencyCodeSql().as("search_store_currency_code"),
       })
       .from(products)
       .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
@@ -265,22 +276,28 @@ export async function search(
       pageQuery,
       categoryQuery,
     ]);
+    const decimalPlaces = storeDecimalPlacesFromCode(productsResult[0]?.storeCurrencyCode);
 
     // The image/poster projection is part of the indexed product query, so
     // predictive search does not wait on a second D1 round trip.
     const formattedProducts: ProductSearchResult[] = productsResult.map(({
-      maxBuyerPrice,
+      basePriceMinor,
+      effectivePriceMinor,
+      maxBuyerPriceMinor,
       availableForSale,
       hasVariants,
       imageProjection,
+      storeCurrencyCode: _storeCurrencyCode,
       ...product
     }) => {
       const image = parseSearchImageProjection(imageProjection);
       return {
         ...product,
+        price: fromMinor(basePriceMinor, decimalPlaces),
+        discountedPrice: fromMinor(effectivePriceMinor, decimalPlaces),
         availableForSale: Boolean(availableForSale),
         hasVariants: Boolean(hasVariants),
-        priceVaries: maxBuyerPrice > product.discountedPrice,
+        priceVaries: maxBuyerPriceMinor > effectivePriceMinor,
         imageUrl: image ? getCurrentMediaUrl(image.objectKey, image.variantWidth) : null,
         imageMediaId: image?.mediaId ?? null,
         imageAlt: image?.altText ?? null,

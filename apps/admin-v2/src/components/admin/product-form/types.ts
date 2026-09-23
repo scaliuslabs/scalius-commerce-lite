@@ -1,4 +1,3 @@
-// src/components/admin/product-form/types.ts
 import { z } from "zod";
 import {
   isValidResourceCanonicalPath,
@@ -9,6 +8,11 @@ import {
   PRODUCT_CONDITION_VALUES,
   type ProductCondition,
 } from "@scalius/shared/product-condition";
+import { translate } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
+
+/** Validation messages are read when validation runs, in the current language. */
+const msg = (key: ProductMessageKey) => ({ error: () => translate(productMessages, key) });
 
 const canonicalPathSchema = z
   .string()
@@ -16,9 +20,7 @@ const canonicalPathSchema = z
   .transform((value) => normalizeCanonicalPathInput(value))
   .refine(
     (value) => value === null || isValidResourceCanonicalPath("product", value),
-    {
-      message: "Use a reachable product route such as /products/main-shoe.",
-    },
+    msg("canonicalInvalid"),
   );
 
 export {
@@ -35,29 +37,14 @@ export interface Category {
 
 export const productFormSchema = z.object({
   id: z.string().optional(),
-  name: z
-    .string()
-    .min(3, "Product name must be at least 3 characters")
-    .max(100, "Product name must be less than 100 characters"),
-  description: z
-    .string()
-    .min(10, "Description must be at least 10 characters")
-    .nullable(),
-  price: z
-    .number()
-    .min(0, "Price must be greater than or equal to 0")
-    .max(1000000000000, "Price must be less than 1000000000000"),
-  categoryId: z.string().min(1, "Please select a category"),
+  name: z.string().min(3, msg("titleMin")).max(100, msg("titleMax")),
+  description: z.string().min(10, msg("descriptionMin")).nullable(),
+  price: z.number().min(0, msg("priceNegative")).max(1000000000000, msg("priceTooHigh")),
+  categoryId: z.string().min(1, msg("chooseCategoryError")),
   isActive: z.boolean(),
   discountType: z.enum(["percentage", "flat"]),
-  discountPercentage: z
-    .number()
-    .min(0, "Discount must be greater than or equal to 0")
-    .nullish(),
-  discountAmount: z
-    .number()
-    .min(0, "Discount amount must be greater than or equal to 0")
-    .nullish(),
+  discountPercentage: z.number().min(0, msg("discountNegative")).nullish(),
+  discountAmount: z.number().min(0, msg("discountNegative")).nullish(),
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
@@ -68,9 +55,9 @@ export const productFormSchema = z.object({
   productCondition: z.enum(PRODUCT_CONDITION_VALUES),
   slug: z
     .string()
-    .min(3, "Slug must be at least 3 characters")
-    .max(100, "Slug must be less than 100 characters")
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
+    .min(3, msg("webAddressInvalid"))
+    .max(100, msg("webAddressInvalid"))
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, msg("webAddressInvalid")),
   media: z.array(
     z.object({
       id: z.string(),
@@ -89,12 +76,12 @@ export const productFormSchema = z.object({
       sortOrder: z.number().int().nonnegative(),
       status: z.enum(["ready", "trashed"]),
     }),
-  ).max(250, "Attach at most 250 media items to a product"),
+  ).max(250, msg("mediaLimit")),
   attributes: z
     .array(
       z.object({
-        attributeId: z.string().min(1, "Please select an attribute."),
-        value: z.string().min(1, "Attribute value cannot be empty."),
+        attributeId: z.string().min(1, msg("chooseAttribute")),
+        value: z.string().min(1, msg("attributeNeedsValue")),
       }),
     )
     .optional(),
@@ -102,18 +89,18 @@ export const productFormSchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        title: z.string().min(1, "Title is required."),
-        content: z.string().min(10, "Content is required."),
+        title: z.string().min(1, msg("sectionTitleRequired")),
+        content: z.string().min(10, msg("sectionContentShort")),
       }),
     )
     .optional(),
   slugEdited: z.boolean().optional(),
 }).superRefine((data, ctx) => {
-  // Only enforce max 100 for percentage discounts — flat amounts can be any value
+  // Only percentage discounts have a ceiling; flat amounts can be any value.
   if (data.discountType === "percentage" && (data.discountPercentage ?? 0) > 100) {
     ctx.addIssue({
       code: "custom",
-      message: "Percentage discount must be less than or equal to 100",
+      message: translate(productMessages, "issuePercentRange"),
       path: ["discountPercentage"],
     });
   }
@@ -121,16 +108,16 @@ export const productFormSchema = z.object({
   const mediaIds = new Set<string>();
   data.media.forEach((item, index) => {
     if (associationIds.has(item.id)) {
-      ctx.addIssue({ code: "custom", path: ["media", index, "id"], message: "Each media association must be unique" });
+      ctx.addIssue({ code: "custom", path: ["media", index, "id"], message: translate(productMessages, "mediaDuplicate") });
     }
     if (mediaIds.has(item.mediaId)) {
-      ctx.addIssue({ code: "custom", path: ["media", index, "mediaId"], message: "The same asset can be attached only once" });
+      ctx.addIssue({ code: "custom", path: ["media", index, "mediaId"], message: translate(productMessages, "mediaDuplicate") });
     }
     associationIds.add(item.id);
     mediaIds.add(item.mediaId);
   });
   if (data.media.length > 0 && data.media.filter((item) => item.isPrimary).length !== 1) {
-    ctx.addIssue({ code: "custom", path: ["media"], message: "Choose exactly one featured media item" });
+    ctx.addIssue({ code: "custom", path: ["media"], message: translate(productMessages, "chooseMainMedia") });
   }
 });
 

@@ -2,7 +2,7 @@
 // Delivery domain tables: deliveryLocations, deliveryProviders, deliveryShipments.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
@@ -75,7 +75,8 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
     metadata: text("metadata"),
     lastChecked: integer("last_checked", { mode: "timestamp" }),
     shipmentItems: text("shipment_items"),
-    shipmentAmount: real("shipment_amount"),
+    /** Amount to collect for this shipment, in minor units of the order currency. */
+    shipmentAmountMinor: integer("shipment_amount_minor"),
     isFinalShipment: integer("is_final_shipment", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
