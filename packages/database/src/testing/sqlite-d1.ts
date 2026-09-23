@@ -34,15 +34,21 @@ type SerializableSqlite = DatabaseSync & {
 
 /**
  * Numbered migrations compiled for the provider as one script (cached per
- * process). `beforeMigration` stops before that file, for upgrade tests.
+ * process). `beforeMigration` stops before that file and `fromMigration`
+ * starts at one, so upgrade tests can seed old rows between the two.
  */
-export function compiledMigrationSql(provider: SqliteProvider = "d1", beforeMigration?: string): string {
-  const cacheKey = `${provider}:${beforeMigration ?? ""}`;
+export function compiledMigrationSql(
+  provider: SqliteProvider = "d1",
+  beforeMigration?: string,
+  fromMigration?: string,
+): string {
+  const cacheKey = `${provider}:${beforeMigration ?? ""}:${fromMigration ?? ""}`;
   const cached = compiledMigrations.get(cacheKey);
   if (cached !== undefined) return cached;
   const sql = readdirSync(migrationDirectory)
     .filter((name) => /^\d{4}_.+\.sql$/.test(name))
     .filter((name) => beforeMigration === undefined || name < beforeMigration)
+    .filter((name) => fromMigration === undefined || name >= fromMigration)
     .sort()
     .map((name) => compileSqliteMigrationForProvider(
       readFileSync(`${migrationDirectory}/${name}`, "utf8"),

@@ -2,7 +2,9 @@ import { asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
 import { orderItems, orders } from "@scalius/database/schema";
+import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./invoice-snapshot";
+import { orderMoneyAmounts, orderMoneySelection } from "./order-money";
 
 /**
  * Invoice-only order projection. This deliberately reads the product and
@@ -31,29 +33,21 @@ export async function readInvoiceOrderSource(
       cityName: orders.cityName,
       zoneName: orders.zoneName,
       areaName: orders.areaName,
-      totalAmount: orders.totalAmount,
-      shippingCharge: orders.shippingCharge,
-      discountAmount: orders.discountAmount,
+      ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
-      currencyDecimalPlaces: orders.currencyDecimalPlaces,
       subtotalAmountMinor: orders.subtotalAmountMinor,
-      shippingAmountMinor: orders.shippingAmountMinor,
       shippingMethodId: orders.shippingMethodId,
       shippingMethodName: orders.shippingMethodName,
       shippingMethodDescription: orders.shippingMethodDescription,
       shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
       shippingFeeWaived: orders.shippingFeeWaived,
-      discountAmountMinor: orders.discountAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
-      totalAmountMinor: orders.totalAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
       status: orders.status,
       paymentStatus: orders.paymentStatus,
       paymentMethod: orders.paymentMethod,
       fulfillmentStatus: orders.fulfillmentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
       deletedAt: sql<number | null>`CAST(${orders.deletedAt} AS INTEGER)`,
@@ -69,7 +63,6 @@ export async function readInvoiceOrderSource(
       productId: orderItems.productId,
       variantId: orderItems.variantId,
       quantity: orderItems.quantity,
-      price: orderItems.price,
       productName: orderItems.productName,
       variantLabel: orderItems.variantLabel,
       fulfillmentStatus: orderItems.fulfillmentStatus,
@@ -83,5 +76,13 @@ export async function readInvoiceOrderSource(
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
 
-  return { ...order, items };
+  const { paidAmountMinor: _paidAmountMinor, balanceDueMinor: _balanceDueMinor, ...orderFacts } = order;
+  return {
+    ...orderFacts,
+    ...orderMoneyAmounts(order),
+    items: items.map((item) => ({
+      ...item,
+      price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
+    })),
+  };
 }

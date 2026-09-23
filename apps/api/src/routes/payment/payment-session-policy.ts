@@ -2,121 +2,83 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { PaymentPlanStatus, PaymentStatus, paymentPlans } from "@scalius/database/schema";
 import { checkoutDocument } from "@scalius/core/modules/settings/documents";
-import { getUnpayableOrderReason } from "@scalius/core/modules/payments/payable-order";
+import { getUnpayableOrderReason, type PayableOrderState } from "@scalius/core/modules/payments/payable-order";
 import {
-  orderMoneyEqual,
   resolveOrderCurrencySnapshot,
-  roundOrderMoney,
   type OrderCurrencySnapshot,
 } from "@scalius/core/modules/payments/order-currency";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { ValidationError } from "../../utils/api-error";
 import type { CheckoutFlowSettings } from "./payment-method-allowlist";
 
 export type PaymentSessionType = "full" | "deposit" | "balance";
 
+/** Order money is integer minor units of the order's own currency. */
 export interface PaymentSessionOrder {
   id: string;
-  totalAmount: number;
-  totalAmountMinor?: number | null;
-  currencyCode?: string | null;
-  currencyDecimalPlaces?: number | null;
+  totalAmountMinor: number;
+  currencyCode: string;
+  currencyDecimalPlaces: number;
   status: string;
   paymentStatus: string;
-  paidAmount?: number | null;
-  balanceDue?: number | null;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
   deletedAt?: unknown | null;
 }
 
 export interface RequestedPaymentSession {
   paymentType?: PaymentSessionType;
+  /** Decimal major units, as sent over HTTP. */
   depositAmount?: number;
 }
 
+/** Amounts are minor units; `chargeAmount`/`depositAmount` are the decimal HTTP views. */
 export type PaymentSessionPolicy =
   | {
       paymentType: "deposit";
       chargeAmount: number;
-      chargeAmountMinor?: number;
-      orderTotal: number;
+      chargeAmountMinor: number;
+      orderTotalMinor: number;
       depositAmount: number;
-      balanceDue: number;
+      depositAmountMinor: number;
+      balanceDueMinor: number;
       requiresPlanCreation: boolean;
     }
   | {
       paymentType: "balance";
       chargeAmount: number;
-      chargeAmountMinor?: number;
-      balanceDue: number;
+      chargeAmountMinor: number;
     }
   | {
       paymentType: "full";
       chargeAmount: number;
-      chargeAmountMinor?: number;
+      chargeAmountMinor: number;
     };
 
-function assertPositiveAmount(
-  value: number,
-  label: string,
-  currency: OrderCurrencySnapshot,
-): number {
-  const amount = roundOrderMoney(Number(value), currency);
-  if (!Number.isFinite(amount) || amount <= 0) {
+function assertPositiveMinor(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) {
     throw new ValidationError(`${label} must be greater than zero`);
   }
-  return amount;
+  return Number(value);
 }
 
-function resolveOrderMoney(
-  order: PaymentSessionOrder,
-  currencySource?: OrderCurrencySnapshot,
-): {
-  amount: number;
-  amountMinor?: number;
-  currency: OrderCurrencySnapshot;
-} {
-  const currency = currencySource ?? resolveOrderCurrencySnapshot(order);
-  const amountMinor = order.totalAmountMinor;
-  const hasValidAmountMinor = Number.isSafeInteger(amountMinor) && amountMinor! > 0;
-
-  if (!currency.legacyFallback && !hasValidAmountMinor) {
-    throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
+function decimalToOrderMinor(amount: number, currency: OrderCurrencySnapshot, label: string): number {
+  try {
+    return toMinor(amount, currency.decimalPlaces);
+  } catch {
+    throw new ValidationError(`${label} is invalid`);
   }
-  if (currency.legacyFallback && amountMinor != null) {
-    throw new ValidationError("Order currency snapshot is incomplete. Payment cannot be started safely.");
-  }
-
-  if (hasValidAmountMinor) {
-    return {
-      amount: amountMinor! / 10 ** currency.decimalPlaces,
-      amountMinor: amountMinor!,
-      currency,
-    };
-  }
-  return {
-    amount: assertPositiveAmount(order.totalAmount, "Order total", currency),
-    currency,
-  };
-}
-
-function optionalMinorAmount(amount: number, currency: OrderCurrencySnapshot): number | undefined {
-  const normalizedAmount = roundOrderMoney(amount, currency);
-  const minor = Math.round(normalizedAmount * 10 ** currency.decimalPlaces);
-  return Number.isSafeInteger(minor) && minor > 0 ? minor : undefined;
 }
 
 type PartialPaymentSettings = Pick<CheckoutFlowSettings, "partialPaymentEnabled" | "partialPaymentAmount">;
 
-async function getPartialPaymentSettings(db: Database): Promise<PartialPaymentSettings> {
-  return checkoutDocument.read(db);
-}
-
 async function getPaymentPlan(db: Database, orderId: string) {
   return db
     .select({
-      totalAmount: paymentPlans.totalAmount,
-      depositAmount: paymentPlans.depositAmount,
-      balanceDue: paymentPlans.balanceDue,
+      totalAmountMinor: paymentPlans.totalAmountMinor,
+      depositAmountMinor: paymentPlans.depositAmountMinor,
+      balanceDueMinor: paymentPlans.balanceDueMinor,
       status: paymentPlans.status,
     })
     .from(paymentPlans)
@@ -124,7 +86,7 @@ async function getPaymentPlan(db: Database, orderId: string) {
     .get();
 }
 
-export function assertPaymentSessionOrderPayable(order: PaymentSessionOrder): void {
+export function assertPaymentSessionOrderPayable(order: PayableOrderState): void {
   const unpayableReason = getUnpayableOrderReason(order);
   if (unpayableReason) {
     throw new ValidationError(unpayableReason);
@@ -139,55 +101,51 @@ export async function resolvePaymentSessionPolicy(
   currencySource?: OrderCurrencySnapshot,
   getCurrentCurrencyCode?: () => Promise<string>,
 ): Promise<PaymentSessionPolicy> {
-  const orderMoney = resolveOrderMoney(order, currencySource);
-  const currency = orderMoney.currency;
-  const orderTotal = assertPositiveAmount(orderMoney.amount, "Order total", currency);
+  const currency = currencySource ?? resolveOrderCurrencySnapshot(order);
+  const orderTotalMinor = assertPositiveMinor(order.totalAmountMinor, "Order total");
+  const paidAmountMinor = Number(order.paidAmountMinor ?? 0);
+  const present = (minor: number) => fromMinor(minor, currency.decimalPlaces);
   let cachedPaymentSettings: PartialPaymentSettings | null | undefined = checkoutFlowSettings;
   const getPaymentSettings = async () => {
     if (cachedPaymentSettings !== undefined) return cachedPaymentSettings;
-    cachedPaymentSettings = await getPartialPaymentSettings(db);
+    cachedPaymentSettings = await checkoutDocument.read(db);
     return cachedPaymentSettings;
   };
-  let paymentPlanPromise: ReturnType<typeof getPaymentPlan> | undefined;
-  const getPlan = () => {
-    paymentPlanPromise ??= getPaymentPlan(db, order.id);
-    return paymentPlanPromise;
-  };
-  const assertCurrentPartialSettingsUseOrderCurrency = async () => {
-    const currentCode = normalizeSupportedCurrencyCode(
-      getCurrentCurrencyCode ? await getCurrentCurrencyCode() : null,
-    );
-    if (!currentCode || currentCode !== currency.code) {
-      throw new ValidationError(
-        "Partial-payment settings use a different currency than this order. Restore matching currency settings or repair the order with a verified saved payment plan.",
-      );
-    }
-  };
 
-  const getConfiguredDeposit = async (): Promise<{
-    enabled: boolean;
-    amount: number;
-  }> => {
+  const getConfiguredDepositMinor = async (): Promise<{ enabled: boolean; amountMinor: number }> => {
     const settings = await getPaymentSettings();
-    if (!settings?.partialPaymentEnabled) return { enabled: false, amount: 0 };
+    if (!settings?.partialPaymentEnabled) return { enabled: false, amountMinor: 0 };
 
     const rawAmount = Number(settings.partialPaymentAmount ?? 0);
-    if (!Number.isFinite(rawAmount)) {
+    if (!Number.isFinite(rawAmount) || rawAmount < 0) {
       throw new ValidationError("Configured deposit amount is invalid");
     }
     if (rawAmount > 0) {
-      // The setting has no currency column of its own: it belongs to the
-      // store's current currency and cannot safely be applied to a historical
-      // order from another currency.
-      await assertCurrentPartialSettingsUseOrderCurrency();
+      // The setting has no currency of its own: it belongs to the store's
+      // current currency and cannot be applied to an order in another one.
+      const currentCode = normalizeSupportedCurrencyCode(
+        getCurrentCurrencyCode ? await getCurrentCurrencyCode() : null,
+      );
+      if (!currentCode || currentCode !== currency.code) {
+        throw new ValidationError(
+          "Partial-payment settings use a different currency than this order. Restore matching currency settings or repair the order with a verified saved payment plan.",
+        );
+      }
     }
-    return {
-      enabled: true,
-      amount: roundOrderMoney(rawAmount, currency),
-    };
+    return { enabled: true, amountMinor: decimalToOrderMinor(rawAmount, currency, "Configured deposit amount") };
   };
 
-  const plan = await getPlan();
+  const plan = await getPaymentPlan(db, order.id);
+  const assertPlanMatchesOrder = (saved: NonNullable<typeof plan>) => {
+    const planTotal = assertPositiveMinor(saved.totalAmountMinor, "Payment plan total");
+    const planDeposit = assertPositiveMinor(saved.depositAmountMinor, "Payment plan deposit");
+    const planBalance = assertPositiveMinor(saved.balanceDueMinor, "Payment plan balance");
+    if (planTotal !== orderTotalMinor || planDeposit + planBalance !== orderTotalMinor) {
+      throw new ValidationError("Partial payment plan does not match the immutable order total");
+    }
+    return { planDeposit, planBalance };
+  };
+
   const paymentType = requested.paymentType ?? await (async (): Promise<PaymentSessionType> => {
     if (plan) {
       if (plan.status === PaymentPlanStatus.PENDING) return "deposit";
@@ -198,8 +156,8 @@ export async function resolvePaymentSessionPolicy(
       throw new ValidationError("Partial payment plan is already completed");
     }
 
-    const configured = await getConfiguredDeposit();
-    return configured.enabled && configured.amount > 0 && configured.amount < orderTotal
+    const configured = await getConfiguredDepositMinor();
+    return configured.enabled && configured.amountMinor > 0 && configured.amountMinor < orderTotalMinor
       ? "deposit"
       : "full";
   })();
@@ -209,13 +167,12 @@ export async function resolvePaymentSessionPolicy(
   }
 
   if (paymentType === "deposit") {
-    const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-    if (order.paymentStatus === PaymentStatus.PARTIAL || paidAmount > 0) {
+    if (order.paymentStatus === PaymentStatus.PARTIAL || paidAmountMinor > 0) {
       throw new ValidationError("Order already has a partial payment; use a balance payment");
     }
 
-    let depositAmount: number;
-    let balanceDue: number;
+    let depositAmountMinor: number;
+    let balanceDueMinor: number;
     if (plan) {
       if (plan.status === PaymentPlanStatus.CANCELLED) {
         throw new ValidationError("Partial payment plan is cancelled");
@@ -226,34 +183,24 @@ export async function resolvePaymentSessionPolicy(
       if (plan.status !== PaymentPlanStatus.PENDING) {
         throw new ValidationError("Deposit payment plan is not ready");
       }
-      const planTotal = assertPositiveAmount(plan.totalAmount, "Payment plan total", currency);
-      depositAmount = assertPositiveAmount(plan.depositAmount, "Payment plan deposit", currency);
-      balanceDue = assertPositiveAmount(plan.balanceDue, "Payment plan balance", currency);
-      if (
-        !orderMoneyEqual(planTotal, orderTotal, currency) ||
-        !orderMoneyEqual(
-          roundOrderMoney(depositAmount + balanceDue, currency),
-          orderTotal,
-          currency,
-        )
-      ) {
-        throw new ValidationError("Partial payment plan does not match the immutable order total");
-      }
+      const saved = assertPlanMatchesOrder(plan);
+      depositAmountMinor = saved.planDeposit;
+      balanceDueMinor = saved.planBalance;
     } else {
-      const configured = await getConfiguredDeposit();
-      depositAmount = configured.amount;
-      if (!configured.enabled || depositAmount <= 0) {
+      const configured = await getConfiguredDepositMinor();
+      depositAmountMinor = configured.amountMinor;
+      if (!configured.enabled || depositAmountMinor <= 0) {
         throw new ValidationError("Partial payment is not enabled for checkout");
       }
-      if (depositAmount >= orderTotal) {
+      if (depositAmountMinor >= orderTotalMinor) {
         throw new ValidationError("Configured deposit amount must be less than order total");
       }
-      balanceDue = roundOrderMoney(orderTotal - depositAmount, currency);
+      balanceDueMinor = orderTotalMinor - depositAmountMinor;
     }
 
     if (
       requested.depositAmount !== undefined &&
-      !orderMoneyEqual(requested.depositAmount, depositAmount, currency)
+      decimalToOrderMinor(requested.depositAmount, currency, "Deposit amount") !== depositAmountMinor
     ) {
       throw new ValidationError(
         plan
@@ -264,19 +211,18 @@ export async function resolvePaymentSessionPolicy(
 
     return {
       paymentType: "deposit",
-      chargeAmount: depositAmount,
-      chargeAmountMinor: optionalMinorAmount(depositAmount, currency),
-      orderTotal,
-      depositAmount,
-      balanceDue,
+      chargeAmount: present(depositAmountMinor),
+      chargeAmountMinor: depositAmountMinor,
+      orderTotalMinor,
+      depositAmount: present(depositAmountMinor),
+      depositAmountMinor,
+      balanceDueMinor,
       requiresPlanCreation: !plan,
     };
   }
 
   if (paymentType === "balance") {
-    const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-
-    if (!plan || order.paymentStatus !== PaymentStatus.PARTIAL || paidAmount <= 0) {
+    if (!plan || order.paymentStatus !== PaymentStatus.PARTIAL || paidAmountMinor <= 0) {
       throw new ValidationError("No partial payment has been recorded for this order");
     }
     if (plan.status === PaymentPlanStatus.CANCELLED || plan.status === PaymentPlanStatus.COMPLETED) {
@@ -286,74 +232,49 @@ export async function resolvePaymentSessionPolicy(
       throw new ValidationError("Deposit payment must be confirmed before balance payment");
     }
 
-    const planTotal = assertPositiveAmount(plan.totalAmount, "Payment plan total", currency);
-    const planDeposit = assertPositiveAmount(plan.depositAmount, "Payment plan deposit", currency);
-    const balanceDue = assertPositiveAmount(plan.balanceDue, "Payment plan balance", currency);
-    if (
-      !orderMoneyEqual(planTotal, orderTotal, currency) ||
-      !orderMoneyEqual(
-        roundOrderMoney(planDeposit + balanceDue, currency),
-        orderTotal,
-        currency,
-      )
-    ) {
-      throw new ValidationError("Partial payment plan does not match the immutable order total");
-    }
-    if (!orderMoneyEqual(planDeposit, paidAmount, currency)) {
+    const { planDeposit, planBalance } = assertPlanMatchesOrder(plan);
+    if (planDeposit !== paidAmountMinor) {
       throw new ValidationError("Payment plan deposit does not match the order payment state");
     }
-    const orderBalanceDue = roundOrderMoney(
-      Number(order.balanceDue ?? (orderTotal - paidAmount)),
-      currency,
-    );
-    if (!orderMoneyEqual(balanceDue, orderBalanceDue, currency)) {
+    if (planBalance !== Number(order.balanceDueMinor)) {
       throw new ValidationError("Payment plan balance does not match the order balance");
     }
-    const computedOutstanding = roundOrderMoney(orderTotal - paidAmount, currency);
-    if (!orderMoneyEqual(balanceDue, computedOutstanding, currency)) {
+    if (planBalance !== orderTotalMinor - paidAmountMinor) {
       throw new ValidationError("Payment plan balance does not match the order payment state");
     }
 
     return {
       paymentType: "balance",
-      chargeAmount: balanceDue,
-      chargeAmountMinor: optionalMinorAmount(balanceDue, currency),
-      balanceDue,
+      chargeAmount: present(planBalance),
+      chargeAmountMinor: planBalance,
     };
   }
 
-  if (paymentType === "full") {
-    if (plan) {
-      if (plan.status === PaymentPlanStatus.PENDING) {
-        throw new ValidationError("Order has an active partial payment plan; use a deposit payment.");
-      }
-      if (plan.status === PaymentPlanStatus.DEPOSIT_PAID) {
-        throw new ValidationError("Order has an outstanding balance; use a balance payment");
-      }
-      if (plan.status === PaymentPlanStatus.CANCELLED) {
-        throw new ValidationError("Partial payment plan is cancelled");
-      }
-      throw new ValidationError("Partial payment plan is already completed");
+  if (plan) {
+    if (plan.status === PaymentPlanStatus.PENDING) {
+      throw new ValidationError("Order has an active partial payment plan; use a deposit payment.");
     }
-
-    const configured = await getConfiguredDeposit();
-    if (configured.enabled && configured.amount > 0 && configured.amount < orderTotal) {
-      throw new ValidationError("Partial payment is enabled for checkout; use a deposit payment.");
+    if (plan.status === PaymentPlanStatus.DEPOSIT_PAID) {
+      throw new ValidationError("Order has an outstanding balance; use a balance payment");
     }
+    if (plan.status === PaymentPlanStatus.CANCELLED) {
+      throw new ValidationError("Partial payment plan is cancelled");
+    }
+    throw new ValidationError("Partial payment plan is already completed");
   }
 
-  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-  const balanceDue = roundOrderMoney(
-    Number(order.balanceDue ?? (orderTotal - paidAmount)),
-    currency,
-  );
-  if (order.paymentStatus === PaymentStatus.PARTIAL || (paidAmount > 0 && balanceDue > 0)) {
+  const configured = await getConfiguredDepositMinor();
+  if (configured.enabled && configured.amountMinor > 0 && configured.amountMinor < orderTotalMinor) {
+    throw new ValidationError("Partial payment is enabled for checkout; use a deposit payment.");
+  }
+
+  if (order.paymentStatus === PaymentStatus.PARTIAL || (paidAmountMinor > 0 && Number(order.balanceDueMinor) > 0)) {
     throw new ValidationError("Order has an outstanding balance; use a balance payment");
   }
 
   return {
     paymentType: "full",
-    chargeAmount: orderTotal,
-    chargeAmountMinor: orderMoney.amountMinor,
+    chargeAmount: present(orderTotalMinor),
+    chargeAmountMinor: orderTotalMinor,
   };
 }

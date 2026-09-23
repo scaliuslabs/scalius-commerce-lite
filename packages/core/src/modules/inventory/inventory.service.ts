@@ -3,7 +3,8 @@ import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
+import { readStoreDecimalPlaces, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
@@ -31,13 +32,13 @@ const MAX_MOVEMENT_CURSOR_LENGTH = 512;
 export const INVENTORY_LABEL_VARIANT_LIMIT = 150;
 
 type InventoryLabelPricingFacts = {
-    price: number;
+    priceMinor: number;
     variantDiscountType: string | null;
-    variantDiscountPercentage: number | null;
-    variantDiscountAmount: number | null;
+    variantDiscountBps: number;
+    variantDiscountAmountMinor: number;
     productDiscountType: string | null;
-    productDiscountPercentage: number | null;
-    productDiscountAmount: number | null;
+    productDiscountBps: number;
+    productDiscountAmountMinor: number;
 };
 
 /**
@@ -45,18 +46,18 @@ type InventoryLabelPricingFacts = {
  * A positive SKU discount takes precedence; otherwise the product discount
  * applies, matching checkout and the buyer catalog projection.
  */
-export function calculateInventoryLabelEffectivePrice(
+export function calculateInventoryLabelEffectivePriceMinor(
     facts: InventoryLabelPricingFacts,
 ): number {
     const hasVariantDiscount =
-        (facts.variantDiscountType === "percentage" && (facts.variantDiscountPercentage ?? 0) > 0)
-        || (facts.variantDiscountType === "flat" && (facts.variantDiscountAmount ?? 0) > 0);
+        (facts.variantDiscountType === "percentage" && facts.variantDiscountBps > 0)
+        || (facts.variantDiscountType === "flat" && facts.variantDiscountAmountMinor > 0);
 
-    return calculateDiscountedPrice(
-        facts.price,
+    return discountedPriceMinor(
+        facts.priceMinor,
         hasVariantDiscount ? facts.variantDiscountType : facts.productDiscountType,
-        hasVariantDiscount ? facts.variantDiscountPercentage : facts.productDiscountPercentage,
-        hasVariantDiscount ? facts.variantDiscountAmount : facts.productDiscountAmount,
+        hasVariantDiscount ? facts.variantDiscountBps : facts.productDiscountBps,
+        hasVariantDiscount ? facts.variantDiscountAmountMinor : facts.productDiscountAmountMinor,
     );
 }
 
@@ -265,6 +266,7 @@ export async function getInventoryLabelVariants(
     }
 
     const variantIdSet = JSON.stringify(variantIds);
+    const decimalPlacesRead = readStoreDecimalPlaces(db);
     const rows = await db
         .select({
             id: productVariants.id,
@@ -272,13 +274,13 @@ export async function getInventoryLabelVariants(
             productName: products.name,
             sku: productVariants.sku,
             optionLabel: variantOptionLabelSql(productVariants.id),
-            price: productVariants.price,
+            priceMinor: productVariants.priceMinor,
             variantDiscountType: productVariants.discountType,
-            variantDiscountPercentage: productVariants.discountPercentage,
-            variantDiscountAmount: productVariants.discountAmount,
+            variantDiscountBps: productVariants.discountBps,
+            variantDiscountAmountMinor: productVariants.discountAmountMinor,
             productDiscountType: products.discountType,
-            productDiscountPercentage: products.discountPercentage,
-            productDiscountAmount: products.discountAmount,
+            productDiscountBps: products.discountBps,
+            productDiscountAmountMinor: products.discountAmountMinor,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
             available: availableStockSql,
@@ -299,30 +301,25 @@ export async function getInventoryLabelVariants(
         .all();
 
     const rowById = new Map(rows.map((row) => [row.id, row]));
+    const decimalPlaces = await decimalPlacesRead;
     return {
         variants: variantIds.flatMap((id) => {
             const row = rowById.get(id);
             if (!row) return [];
             const {
-                variantDiscountType,
-                variantDiscountPercentage,
-                variantDiscountAmount,
-                productDiscountType,
-                productDiscountPercentage,
-                productDiscountAmount,
+                priceMinor,
+                variantDiscountType: _variantDiscountType,
+                variantDiscountBps: _variantDiscountBps,
+                variantDiscountAmountMinor: _variantDiscountAmountMinor,
+                productDiscountType: _productDiscountType,
+                productDiscountBps: _productDiscountBps,
+                productDiscountAmountMinor: _productDiscountAmountMinor,
                 ...variant
             } = row;
             return [{
                 ...variant,
-                effectivePrice: calculateInventoryLabelEffectivePrice({
-                    price: row.price,
-                    variantDiscountType,
-                    variantDiscountPercentage,
-                    variantDiscountAmount,
-                    productDiscountType,
-                    productDiscountPercentage,
-                    productDiscountAmount,
-                }),
+                price: fromMinor(priceMinor, decimalPlaces),
+                effectivePrice: fromMinor(calculateInventoryLabelEffectivePriceMinor(row), decimalPlaces),
             }];
         }),
         missingVariantIds: variantIds.filter((id) => !rowById.has(id)),
@@ -421,12 +418,13 @@ export async function getInventoryOverview(db: Database, params: {
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
                 optionLabel: variantOptionLabelSql(productVariants.id),
-                price: productVariants.price,
+                priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 available: availableSql,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 version: productVariants.version,
+                storeCurrencyCode: storeCurrencyCodeSql(),
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
@@ -459,7 +457,7 @@ export async function getInventoryOverview(db: Database, params: {
                 operationalSkuRowPredicate(),
             ));
 
-        const [variants, countRows, statsRows] = await db.batch([
+        const [variantRows, countRows, statsRows] = await db.batch([
             variantsQuery,
             countQuery,
             statsQuery,
@@ -468,7 +466,10 @@ export async function getInventoryOverview(db: Database, params: {
         const statsResult = statsRows[0];
 
         return {
-            variants,
+            variants: variantRows.map(({ priceMinor, storeCurrencyCode, ...variant }) => ({
+                ...variant,
+                price: fromMinor(priceMinor, storeDecimalPlacesFromCode(storeCurrencyCode)),
+            })),
             pagination: {
                 page,
                 limit,

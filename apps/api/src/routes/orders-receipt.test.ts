@@ -31,9 +31,6 @@ const orderRow = {
   customerId: "cust_internal",
   customerName: "Receipt Customer",
   shippingAddress: "123 Receipt Street",
-  totalAmount: 250,
-  shippingCharge: 50,
-  discountAmount: 10,
   currencyCode: "BDT",
   currencyDecimalPlaces: 2,
   subtotalAmountMinor: 21_000,
@@ -57,8 +54,8 @@ const orderRow = {
   status: "pending",
   paymentMethod: "sslcommerz",
   paymentStatus: "partial",
-  paidAmount: 100,
-  balanceDue: 150,
+  paidAmountMinor: 10_000,
+  balanceDueMinor: 15_000,
   fulfillmentStatus: "pending",
   createdAt: 1_700_000_000,
   updatedAt: 1_700_000_100,
@@ -70,7 +67,6 @@ const itemRows = [
     productId: "product_1",
     variantId: null,
     quantity: 2,
-    price: 100,
     productName: "Receipt Product",
     productImageObjectKey: "media/med_receipt_image.webp",
     productImageStatus: "trashed",
@@ -351,7 +347,7 @@ describe("order receipt route", () => {
         status: "pending",
         paymentStatus: "partial",
         fulfillmentStatus: "pending",
-        paidAmount: 100,
+        paidAmountMinor: 10_000,
       }),
     );
   });
@@ -370,8 +366,8 @@ describe("order receipt route", () => {
         orderRowOverride: {
           status,
           paymentStatus,
-          paidAmount: 0,
-          balanceDue: 250,
+          paidAmountMinor: 0,
+          balanceDueMinor: 25_000,
         },
       });
 
@@ -395,8 +391,8 @@ describe("order receipt route", () => {
       orderRowOverride: {
         status: "incomplete",
         paymentStatus: "failed",
-        paidAmount: 0,
-        balanceDue: 250,
+        paidAmountMinor: 0,
+        balanceDueMinor: 25_000,
       },
     });
 

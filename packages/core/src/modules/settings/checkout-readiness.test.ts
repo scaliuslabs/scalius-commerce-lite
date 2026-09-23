@@ -50,7 +50,7 @@ describe("customer checkout sign-in readiness", () => {
 
     it("blocks checkout when accounts are required and no sign-in channel is usable", async () => {
         const { db, sqlite } = await createAuthDb({ guestCheckoutEnabled: false });
-        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee, is_active) VALUES ('sm_1', 'Standard', 60, 1);
+        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_1', 'Standard', 6000, 1);
             INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
             VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
                    ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);`);

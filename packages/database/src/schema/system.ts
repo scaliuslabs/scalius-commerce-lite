@@ -2,7 +2,7 @@
 // System/platform tables: settings, analytics, adminFcmTokens,
 // shippingMethods, checkoutLanguages.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, unique, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
@@ -225,7 +225,8 @@ export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
 export const shippingMethods = sqliteTable("shipping_methods", {
     id: text("id").primaryKey(),
     name: text("name").notNull().unique(),
-    fee: real("fee").notNull().default(0),
+    /** Integer minor units of the store currency. */
+    feeMinor: integer("fee_minor").notNull().default(0),
     description: text("description"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),

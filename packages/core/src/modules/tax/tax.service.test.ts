@@ -40,12 +40,12 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
         lineId: "line_1",
         productId: "product_1",
         variantId: "variant_1",
-        unitPrice: 1.235,
+        unitPriceMinor: 1_235,
         quantity: 2,
         taxClassId: null,
       }],
-      shippingAmount: 0.001,
-      discountAmount: 0,
+      shippingMinor: 1,
+      discountMinor: 0,
       currency: { code: "KWD", decimalPlaces: 3 },
     });
 
@@ -63,8 +63,8 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
     await calculateStorefrontTaxQuote(createTaxDb(), {
       destination: { city: "city_1", zone: "zone_1", area: null },
       lines: [],
-      shippingAmount: 0,
-      discountAmount: 0,
+      shippingMinor: 0,
+      discountMinor: 0,
     });
 
     expect(mocks.getCurrencyConfig).toHaveBeenCalledOnce();

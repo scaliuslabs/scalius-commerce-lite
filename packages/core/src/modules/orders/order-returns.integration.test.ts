@@ -12,15 +12,15 @@ import {
 function createReturnDatabase() {
   const fixture = createSqliteD1Database({ foreignKeys: true });
   fixture.sqlite.exec(`
-    INSERT INTO products (id, name, slug, price) VALUES ('product_1', 'Returned product', 'returned-product', 100);
-    INSERT INTO product_variants (id, product_id, sku, price, is_default)
-      VALUES ('variant_1', 'product_1', 'RETURN-SKU', 100, 1);
+    INSERT INTO products (id, name, slug, price_minor) VALUES ('product_1', 'Returned product', 'returned-product', 10000);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, is_default)
+      VALUES ('variant_1', 'product_1', 'RETURN-SKU', 10000, 1);
     INSERT INTO orders (
       id, customer_name, customer_phone, shipping_address, city, zone,
-      total_amount, shipping_charge, status, version, inventory_pool
-    ) VALUES ('order_1', 'Buyer', '+8801700000000', 'Address', 'city', 'zone', 100, 0, 'shipped', 5, 'regular');
-    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, price, fulfillment_status)
-      VALUES ('item_1', 'order_1', 'product_1', 'variant_1', 1, 100, 'shipped');
+      total_amount_minor, shipping_amount_minor, status, version, inventory_pool
+    ) VALUES ('order_1', 'Buyer', '+8801700000000', 'Address', 'city', 'zone', 10000, 0, 'shipped', 5, 'regular');
+    INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, unit_price_minor, fulfillment_status)
+      VALUES ('item_1', 'order_1', 'product_1', 'variant_1', 1, 10000, 'shipped');
     INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id, version)
       VALUES ('return_1', 'order_1', 'requested', 'Changed mind', 'admin', 'admin_1', 1);
     INSERT INTO order_return_lines (id, return_id, order_id, order_item_id, variant_id, requested_quantity)

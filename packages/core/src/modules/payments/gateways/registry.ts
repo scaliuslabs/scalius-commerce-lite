@@ -4,6 +4,7 @@
 
 import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { toMinor } from "@scalius/shared/money";
 import type { PaymentGateway } from "./port";
 import { minorToMajorString } from "./port";
 import { sslcommerzGateway } from "./sslcommerz";
@@ -90,17 +91,20 @@ export function getGatewayAmountIssue(
 export function getCheckoutGatewayPrecommitIssue(input: {
   paymentMethod: string;
   currencyCode: string;
-  totalAmount: number;
+  totalAmountMinor: number;
   partialPaymentEnabled: boolean;
+  /** The advance-payment setting, a decimal amount. */
   partialPaymentAmount: number;
 }): string | null {
   const gateway = getPaymentGateway(input.paymentMethod);
   if (!gateway) return null;
   const currencyIssue = getPaymentMethodCurrencyIssue(gateway.id, input.currencyCode);
   if (currencyIssue) return currencyIssue;
-  const scale = 10 ** getDecimalPlaces(input.currencyCode);
-  const totalMinor = Math.round(Number(input.totalAmount) * scale);
-  const depositMinor = Math.round(Number(input.partialPaymentAmount) * scale);
+  const totalMinor = input.totalAmountMinor;
+  const deposit = Number(input.partialPaymentAmount);
+  const depositMinor = Number.isFinite(deposit) && deposit > 0
+    ? toMinor(deposit, getDecimalPlaces(input.currencyCode))
+    : 0;
   const chargeMinor = input.partialPaymentEnabled && depositMinor > 0 && depositMinor < totalMinor
     ? depositMinor
     : totalMinor;

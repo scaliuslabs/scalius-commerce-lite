@@ -4,6 +4,7 @@ import type { OrderNotificationType } from "@scalius/core/modules/notifications"
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
+import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -199,8 +200,21 @@ const getCodRoute = createRoute({
 
 app.openapi(getCodRoute, async (c) => {
     const orderId = c.req.valid("param").id;
-    const tracking = await c.get("db").select().from(codTracking).where(eq(codTracking.orderId, orderId)).get();
-    return ok(c, { tracking: tracking ?? null });
+    const row = await c.get("db").select({
+        tracking: codTracking,
+        currencyDecimalPlaces: orders.currencyDecimalPlaces,
+    }).from(codTracking)
+        .innerJoin(orders, eq(orders.id, codTracking.orderId))
+        .where(eq(codTracking.orderId, orderId))
+        .get();
+    if (!row) return ok(c, { tracking: null });
+    const { collectedAmountMinor, ...tracking } = row.tracking;
+    return ok(c, {
+        tracking: {
+            ...tracking,
+            collectedAmount: collectedAmountMinor === null ? null : fromMinor(collectedAmountMinor, row.currencyDecimalPlaces),
+        },
+    });
 });
 
 // ─── POST /:id/cod ───────────────────────────────────────────────────────────

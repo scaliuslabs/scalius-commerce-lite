@@ -2,17 +2,11 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
-import {
-    DEFAULT_CURRENCY,
-    getDecimalPlaces,
-    normalizeSupportedCurrencyCode,
-} from "@scalius/shared/currency";
-import { roundPrice } from "@scalius/shared/price-utils";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import {
     buildStorefrontTaxAllocationLineId,
     calculateStorefrontTaxQuote,
-    fromMinorUnits,
-    toMinorUnits,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
 import { quoteStorefrontDiscount } from "../promotions";
@@ -52,7 +46,7 @@ export interface StorefrontShippingMethodRow {
     id: string;
     name: string;
     description: string | null;
-    fee: number;
+    feeMinor: number;
     isActive: boolean;
     deletedAt: Date | number | null;
 }
@@ -62,11 +56,10 @@ export interface StorefrontDeliveryPreflightInput {
     zone: string;
     area?: string | null;
     shippingMethodId?: string | null;
-    currencyCode?: string | null;
 }
 
 export interface StorefrontDeliveryPreflightResult {
-    shippingCharge: number;
+    shippingMinor: number;
     shippingMethod: StorefrontOrderShippingMethodSnapshot;
     cityName: string;
     zoneName: string;
@@ -138,7 +131,7 @@ export function selectActiveStorefrontShippingMethodRowsByIds(
             id: shippingMethods.id,
             name: shippingMethods.name,
             description: shippingMethods.description,
-            fee: shippingMethods.fee,
+            feeMinor: shippingMethods.feeMinor,
             isActive: shippingMethods.isActive,
             deletedAt: shippingMethods.deletedAt,
         })
@@ -159,7 +152,6 @@ export function resolveStorefrontDeliveryPreflightFromRows(
     locationRows: readonly ActiveDeliveryLocationRow[],
     shippingMethodRows: readonly StorefrontShippingMethodRow[],
 ): StorefrontDeliveryPreflightResult {
-    const currencyCode = normalizeSupportedCurrencyCode(data.currencyCode) ?? DEFAULT_CURRENCY.code;
     const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
 
     const shippingMethod = shippingMethodRows[0] ?? null;
@@ -173,7 +165,7 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         throw new ValidationError("A valid active shipping method is required for this order.");
     }
 
-    const methodFee = Number(shippingMethod.fee);
+    const methodFeeMinor = shippingMethod.feeMinor;
     const methodName = typeof shippingMethod.name === "string"
         ? shippingMethod.name.trim()
         : "";
@@ -183,28 +175,23 @@ export function resolveStorefrontDeliveryPreflightFromRows(
             ? shippingMethod.description.trim() || null
             : null;
     if (
-        !Number.isFinite(methodFee)
-        || methodFee < 0
+        !Number.isSafeInteger(methodFeeMinor)
+        || methodFeeMinor < 0
         || !methodName
         || methodName.length > 100
         || (methodDescription?.length ?? 0) > 255
     ) {
         throw new ValidationError("Selected shipping method is misconfigured.");
     }
-    const roundedMethodFee = roundPrice(methodFee, currencyCode);
     const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct;
-    const shippingCharge = shippingFeeWaived ? 0 : roundedMethodFee;
 
     return markTrustedStorefrontDeliveryPreflightResult({
-        shippingCharge,
+        shippingMinor: shippingFeeWaived ? 0 : methodFeeMinor,
         shippingMethod: {
             id: shippingMethod.id,
             name: methodName,
             description: methodDescription,
-            baseAmountMinor: toMinorUnits(
-                roundedMethodFee,
-                getDecimalPlaces(currencyCode),
-            ),
+            baseAmountMinor: methodFeeMinor,
             feeWaived: shippingFeeWaived,
         },
         cityName: locationNames.cityName,
@@ -328,7 +315,7 @@ export async function createStorefrontOrder(
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
     const validatedItemByIndex = new Map(cartValidation.items.map((item) => [item.index, item]));
-    const verifiedShippingCharge = deliveryPreflight.shippingCharge;
+    const verifiedShippingMinor = deliveryPreflight.shippingMinor;
 
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
@@ -341,7 +328,7 @@ export async function createStorefrontOrder(
             productId: validatedItem.productId,
             variantId: validatedItem.variantId,
             quantity: validatedItem.quantity,
-            price: validatedItem.unitPrice,
+            unitPriceMinor: validatedItem.unitPriceMinor,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,
             inventoryTracked: validatedItem.inventoryTracked,
@@ -363,10 +350,10 @@ export async function createStorefrontOrder(
                 id: item.taxAllocationLineId,
                 productId: item.productId,
                 variantId: item.variantId,
-                unitPriceMinor: toMinorUnits(item.price, requestCurrency.decimalPlaces),
+                unitPriceMinor: item.unitPriceMinor,
                 quantity: item.quantity,
             })),
-            shippingAmountMinor: toMinorUnits(verifiedShippingCharge, requestCurrency.decimalPlaces),
+            shippingAmountMinor: verifiedShippingMinor,
         },
     });
     const taxQuoteInput = {
@@ -382,19 +369,17 @@ export async function createStorefrontOrder(
             lineId: item.taxAllocationLineId,
             productId: item.productId,
             variantId: item.variantId,
-            unitPrice: item.price,
+            unitPriceMinor: item.unitPriceMinor,
             quantity: item.quantity,
             taxClassId: item.taxClassId,
         })),
-        shippingAmount: verifiedShippingCharge,
+        shippingMinor: verifiedShippingMinor,
         promotionDiscountAllocation: discount.taxAllocation,
         currency: requestCurrency,
     };
     const taxQuote = taxAuthoritySnapshot
         ? await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput, taxAuthoritySnapshot)
         : await calculateStorefrontTaxQuote(storefrontDb, taxQuoteInput);
-    const normalizedDiscountAmount = fromMinorUnits(taxQuote.discountMinor, taxQuote.decimalPlaces);
-    const totalAmount = fromMinorUnits(taxQuote.totalMinor, taxQuote.decimalPlaces);
 
     // ------------------------------------------------------------------
     // PARTIAL PAYMENT SECURITY CHECK
@@ -434,14 +419,11 @@ export async function createStorefrontOrder(
             zoneName: deliveryPreflight.zoneName,
             areaName: deliveryPreflight.areaName,
             notes: data.notes,
-            totalAmount,
-            shippingCharge: verifiedShippingCharge,
             shippingMethodId: deliveryPreflight.shippingMethod.id,
             shippingMethodName: deliveryPreflight.shippingMethod.name,
             shippingMethodDescription: deliveryPreflight.shippingMethod.description,
             shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod.baseAmountMinor,
             shippingFeeWaived: deliveryPreflight.shippingMethod.feeWaived,
-            discountAmount: normalizedDiscountAmount,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
@@ -454,8 +436,8 @@ export async function createStorefrontOrder(
             status: data.paymentMethod === PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.INCOMPLETE,
             paymentMethod: data.paymentMethod,
             paymentStatus: PaymentStatus.UNPAID,
-            paidAmount: 0,
-            balanceDue: totalAmount,
+            paidAmountMinor: 0,
+            balanceDueMinor: taxQuote.totalMinor,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: cartValidation.items.some(item => item.inventoryTracked) ? "reserved" : "none",
@@ -474,7 +456,6 @@ export async function createStorefrontOrder(
                 productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity,
-                price: item.price,
                 productName: item.productName,
                 variantLabel: item.variantLabel,
                 inventoryTracked: item.inventoryTracked,
@@ -495,8 +476,16 @@ export async function createStorefrontOrder(
         checkoutToken,
         orderId,
         paymentMethod: data.paymentMethod,
-        totalAmount,
         taxQuote,
         commitPayload,
     };
+}
+
+/** Delivery preflight in the decimal HTTP contract. */
+export function presentStorefrontDeliveryPreflight(
+    delivery: StorefrontDeliveryPreflightResult,
+    decimalPlaces: number,
+) {
+    const { shippingMinor, ...rest } = delivery;
+    return { ...rest, shippingCharge: fromMinor(shippingMinor, decimalPlaces) };
 }

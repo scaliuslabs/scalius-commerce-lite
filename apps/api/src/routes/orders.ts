@@ -20,7 +20,9 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
-import { getCustomerVisibleBalanceDue } from "@scalius/core/modules/customers/customers.service";
+import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
@@ -44,6 +46,8 @@ import {
   sendOrderPaymentRecoveryOtp,
   assertStorefrontCheckoutPolicy,
   loadStorefrontCheckoutReads,
+  presentStorefrontCartValidation,
+  presentStorefrontDeliveryPreflight,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
   verifyOrderPaymentRecoveryOtp,
@@ -53,8 +57,6 @@ import {
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
-  fromMinorUnits,
-  toMinorUnits,
   type TaxQuote,
 } from "@scalius/core/modules/tax";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
@@ -794,21 +796,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customerId: orders.customerId,
       customerName: orders.customerName,
       shippingAddress: orders.shippingAddress,
-      totalAmount: orders.totalAmount,
-      shippingCharge: orders.shippingCharge,
-      discountAmount: orders.discountAmount,
+      ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
-      currencyDecimalPlaces: orders.currencyDecimalPlaces,
       subtotalAmountMinor: orders.subtotalAmountMinor,
-      shippingAmountMinor: orders.shippingAmountMinor,
       shippingMethodId: orders.shippingMethodId,
       shippingMethodName: orders.shippingMethodName,
       shippingMethodDescription: orders.shippingMethodDescription,
       shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
       shippingFeeWaived: orders.shippingFeeWaived,
-      discountAmountMinor: orders.discountAmountMinor,
       taxAmountMinor: orders.taxAmountMinor,
-      totalAmountMinor: orders.totalAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
       city: orders.city,
@@ -820,8 +816,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
       fulfillmentStatus: orders.fulfillmentStatus,
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`
@@ -841,7 +835,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         productId: orderItems.productId,
         variantId: orderItems.variantId,
         quantity: orderItems.quantity,
-        price: orderItems.price,
         productName: orderItems.productName,
         productImageObjectKey: publishedMediaObjectKey(),
         productImageStatus: media.status,
@@ -858,14 +851,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     getReceiptOrderSupportRequestStateForOrder(db, order),
   ]);
 
+  const money = orderMoneyAmounts(order);
   return ok(c, {
     order: {
       id: order.id,
       customerName: order.customerName,
       shippingAddress: order.shippingAddress,
-      totalAmount: order.totalAmount,
-      shippingCharge: order.shippingCharge,
-      discountAmount: order.discountAmount,
+      totalAmount: money.totalAmount,
+      shippingCharge: money.shippingCharge,
+      discountAmount: money.discountAmount,
       currencyCode: order.currencyCode,
       currencyDecimalPlaces: order.currencyDecimalPlaces,
       subtotalAmountMinor: order.subtotalAmountMinor,
@@ -889,12 +883,13 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       status: order.status,
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
-      paidAmount: order.paidAmount,
-      balanceDue: getCustomerVisibleBalanceDue(order),
+      paidAmount: money.paidAmount,
+      balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
         ...item,
+        price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
         productImage:
           productImageObjectKey &&
           (productImageStatus === "ready" || productImageStatus === "trashed")
@@ -1177,12 +1172,13 @@ app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const currency = await getCurrencySettings(db);
+  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
   });
   if (!result.valid || !data.city || !data.zone) {
-    return ok(c, result);
+    return ok(c, presentStorefrontCartValidation(result, decimalPlaces));
   }
 
   const delivery = await validateStorefrontDeliveryPreflight(
@@ -1192,11 +1188,13 @@ app.openapi(cartValidationRoute, async (c) => {
       zone: data.zone,
       area: data.area,
       shippingMethodId: data.shippingMethodId,
-      currencyCode: currency.currencyCode,
     },
     result,
   );
-  return ok(c, { ...result, delivery });
+  return ok(c, {
+    ...presentStorefrontCartValidation(result, decimalPlaces),
+    delivery: presentStorefrontDeliveryPreflight(delivery, decimalPlaces),
+  });
 });
 
 type TaxQuoteCartValidationResult = Awaited<ReturnType<typeof validateStorefrontCartItems>>;
@@ -1229,10 +1227,10 @@ async function resolveAuthoritativeTaxQuote(
         id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
         productId: item.productId,
         variantId: item.variantId,
-        unitPriceMinor: toMinorUnits(item.unitPrice, decimalPlaces),
+        unitPriceMinor: item.unitPriceMinor,
         quantity: item.quantity,
       })),
-      shippingAmountMinor: toMinorUnits(delivery.shippingCharge, decimalPlaces),
+      shippingAmountMinor: delivery.shippingMinor,
     },
   });
 
@@ -1249,11 +1247,11 @@ async function resolveAuthoritativeTaxQuote(
       lineId: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
       productId: item.productId,
       variantId: item.variantId,
-      unitPrice: item.unitPrice,
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
       taxClassId: item.taxClassId,
     })),
-    shippingAmount: delivery.shippingCharge,
+    shippingMinor: delivery.shippingMinor,
     promotionDiscountAllocation: discount.taxAllocation,
     currency: { code: currencyCode, decimalPlaces },
   });
@@ -1286,7 +1284,6 @@ app.openapi(taxQuoteRoute, async (c) => {
     zone: data.zone,
     area: data.area,
     shippingMethodId: data.shippingMethodId,
-    currencyCode: currency.currencyCode,
   }, cartValidation);
   const { quote, offers } = await resolveAuthoritativeTaxQuote(
     db,
@@ -1300,7 +1297,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     data,
     currency.currencyCode,
   );
-  const toAmount = (minor: number) => fromMinorUnits(minor, quote.decimalPlaces);
+  const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
@@ -1330,7 +1327,7 @@ app.openapi(taxQuoteRoute, async (c) => {
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
+      unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
     })),
@@ -1409,13 +1406,13 @@ function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: st
 function assertGatewayPrecommitReadiness(
   data: CreateOrderInput,
   checkoutSettings: CheckoutSettingsSnapshot,
-  totalAmount: number,
+  totalAmountMinor: number,
   currencyCode: string,
 ): void {
   const issue = getCheckoutGatewayPrecommitIssue({
     paymentMethod: data.paymentMethod,
     currencyCode,
-    totalAmount,
+    totalAmountMinor,
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
@@ -1596,7 +1593,7 @@ app.openapi(createOrderRoute, async (c) => {
     assertGatewayPrecommitReadiness(
       data,
       checkoutSettings,
-      result.totalAmount,
+      result.taxQuote.totalMinor,
       currency.currencyCode,
     );
     diagnostics?.mark("prepare");
@@ -1614,9 +1611,9 @@ app.openapi(createOrderRoute, async (c) => {
       statusToken: checkoutAttempt.statusToken,
       orderId: result.orderId,
       paymentMethod: result.paymentMethod,
-      totalAmount: result.totalAmount,
+      totalAmount: fromMinor(result.taxQuote.totalMinor, result.taxQuote.decimalPlaces),
       totalAmountMinor: result.taxQuote.totalMinor,
-      taxAmount: fromMinorUnits(result.taxQuote.taxMinor, result.taxQuote.decimalPlaces),
+      taxAmount: fromMinor(result.taxQuote.taxMinor, result.taxQuote.decimalPlaces),
       taxAmountMinor: result.taxQuote.taxMinor,
       taxLabel: result.taxQuote.displayLabel,
       pricesIncludeTax: result.taxQuote.pricesIncludeTax,

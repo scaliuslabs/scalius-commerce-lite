@@ -53,9 +53,6 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
       zoneName: "Mirpur",
       areaName: null,
       notes: null,
-      totalAmount: 200,
-      shippingCharge: 60,
-      discountAmount: 50,
       currencyCode: "BDT",
       currencyDecimalPlaces: 2,
       subtotalAmountMinor: 20_000,
@@ -73,8 +70,8 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
       status: "incomplete",
       paymentMethod: "stripe",
       paymentStatus: "unpaid",
-      paidAmount: 0,
-      balanceDue: 200,
+      paidAmountMinor: 0,
+      balanceDueMinor: 20_000,
       fulfillmentStatus: "pending",
       inventoryPool: "regular",
       inventoryAction: "reserved",
@@ -87,7 +84,6 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         productId: "prod_1",
         variantId: "variant_1",
         quantity: 2,
-        price: 100,
         productName: "Discounted Product",
         variantLabel: null,
         productImageMediaId: "med_order_snapshot",
@@ -276,13 +272,12 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(db.insertValues).toContainEqual(expect.objectContaining({
       phone: "+8801712345678",
       totalOrders: 1,
-      totalSpent: 0,
     }));
     expect(db.insertValues).toContainEqual(expect.objectContaining({
       id: "order_discount",
       customerId: result.customerId,
       accountOwnerCustomerId: null,
-      totalAmount: 200,
+      totalAmountMinor: 20_000,
     }));
   });
 

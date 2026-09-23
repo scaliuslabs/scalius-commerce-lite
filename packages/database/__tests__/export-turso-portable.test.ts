@@ -139,8 +139,8 @@ describe("portable Turso export", () => {
     try {
       const snapshot = await createProviderSchemaDatabase("turso", snapshotPath);
       snapshot.exec(`
-        INSERT INTO products (id, name, price, slug)
-        VALUES ('platform-product', 'Platform product', 1000, 'platform-product');
+        INSERT INTO products (id, name, price_minor, slug)
+        VALUES ('platform-product', 'Platform product', 100000, 'platform-product');
       `);
       snapshot.close();
       await appendFile(`${snapshotPath}-log`, "");

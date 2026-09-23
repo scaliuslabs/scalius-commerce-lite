@@ -28,14 +28,14 @@ function actionState(overrides: Partial<{
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
-  paidAmount: number;
+  paidAmountMinor: number;
 }> = {}) {
   return {
     id: "order_1",
     status: overrides.status ?? OrderStatus.PENDING,
     paymentStatus: overrides.paymentStatus ?? PaymentStatus.UNPAID,
     fulfillmentStatus: overrides.fulfillmentStatus ?? FulfillmentStatus.PENDING,
-    paidAmount: overrides.paidAmount ?? 0,
+    paidAmountMinor: overrides.paidAmountMinor ?? 0,
   };
 }
 
@@ -95,7 +95,7 @@ describe("order support request eligibility", () => {
       getCustomerOrderSupportRequestActions(actionState({
         status: OrderStatus.DELIVERED,
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 1200,
+        paidAmountMinor: 120_000,
       }), context()),
     ).eligible).toBe(true);
 
@@ -104,7 +104,7 @@ describe("order support request eligibility", () => {
       getCustomerOrderSupportRequestActions(actionState({
         status: OrderStatus.DELIVERED,
         paymentStatus: PaymentStatus.UNPAID,
-        paidAmount: 0,
+        paidAmountMinor: 0,
       }), context()),
     ).eligible).toBe(false);
     expect(actionByType(
@@ -112,7 +112,7 @@ describe("order support request eligibility", () => {
       getCustomerOrderSupportRequestActions(actionState({
         status: OrderStatus.CONFIRMED,
         paymentStatus: PaymentStatus.PAID,
-        paidAmount: 1200,
+        paidAmountMinor: 120_000,
       }), context()),
     ).eligible).toBe(false);
   });
@@ -127,7 +127,7 @@ describe("order support request eligibility", () => {
     const activeRefundActions = getCustomerOrderSupportRequestActions(actionState({
       status: OrderStatus.DELIVERED,
       paymentStatus: PaymentStatus.PAID,
-      paidAmount: 1200,
+      paidAmountMinor: 120_000,
     }), context({ hasActiveRefundOperation: true }));
     expect(activeRefundActions.every((action) => !action.eligible)).toBe(true);
     expect(activeRefundActions.every((action) => action.disabledReason?.includes("refund is already being processed"))).toBe(true);

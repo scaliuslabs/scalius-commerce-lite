@@ -11,7 +11,7 @@ import {
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
+import { fromMinor } from "@scalius/shared/money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type {
     StorefrontFeedProduct,
@@ -34,6 +34,16 @@ import {
     buyerCatalogHasSkuInPriceRange,
     type BuyerCatalogPricingProjection,
 } from "./products.buyer-projection";
+import {
+    buyerPricingSelection,
+    catalogDiscountedPrice,
+    effectivePriceMinorSql,
+    presentBuyerPricing,
+    presentCatalogPrice,
+    storeCurrencyCodeSql,
+    storeDecimalPlacesFromCode,
+    storeDecimalToMinorSql,
+} from "./products.money";
 import {
     loadProductOptions,
     loadVariantSelectedOptions,
@@ -66,13 +76,13 @@ const STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE = 90;
 type StorefrontProductListRow = {
     id: string;
     name: string;
-    price: number;
+    basePriceMinor: number;
     slug: string;
     discountType: string | null;
-    discountPercentage: number | null;
-    discountAmount: number | null;
-    discountedPrice: number;
-    maxBuyerPrice: number;
+    discountBps: number;
+    discountAmountMinor: number;
+    effectivePriceMinor: number;
+    maxBuyerPriceMinor: number;
     freeDelivery: boolean;
     categoryId: string | null;
     createdAt: number;
@@ -88,12 +98,12 @@ type StorefrontFeedProductListRow = {
     id: string;
     name: string;
     description: string | null;
-    price: number;
+    priceMinor: number;
     slug: string;
     canonicalPath: string | null;
     discountType: string | null;
-    discountPercentage: number | null;
-    discountAmount: number | null;
+    discountBps: number;
+    discountAmountMinor: number;
     freeDelivery: boolean;
     categoryId: string | null;
     excludeFromProductFeed: boolean;
@@ -145,9 +155,13 @@ type StorefrontSitemapProductRow = {
 
 type StorefrontFeedVariantRow = Omit<
     StorefrontFeedProductVariant,
-    "availabilityBand" | "deletedAt" | "selectedOptions" | "imageUrl" | "imageMediaId"
+    | "availabilityBand" | "deletedAt" | "selectedOptions" | "imageUrl" | "imageMediaId"
+    | "price" | "discountPercentage" | "discountAmount"
 > & {
     optionCombinationKey: string | null;
+    priceMinor: number;
+    discountBps: number;
+    discountAmountMinor: number;
     deletedAt: number | null;
 };
 
@@ -261,17 +275,28 @@ function buildProductLookupCondition(
     )`;
 }
 
+/** Decimal HTTP price-filter bounds in store minor units. */
+/** Decimal price filters as store minor units, resolved in SQL (no separate currency read). */
+function priceFilterBoundsMinor(params: Pick<StorefrontProductFilterInput, "minPrice" | "maxPrice">) {
+    const bound = (value: number | undefined) =>
+        value === undefined || !Number.isFinite(value) ? undefined : storeDecimalToMinorSql(Math.max(0, value));
+    return { minPriceMinor: bound(params.minPrice), maxPriceMinor: bound(params.maxPrice) };
+}
+
 function buildStorefrontProductConditions(
     db: Database,
-    params: StorefrontProductFilterInput,
+    params: Omit<StorefrontProductFilterInput, "minPrice" | "maxPrice"> & {
+        minPriceMinor?: SQL<number>;
+        maxPriceMinor?: SQL<number>;
+    },
     options: StorefrontProductConditionOptions = {},
     buyerPricing?: BuyerCatalogPricingProjection,
 ): SQL[] {
     const {
         category,
         search,
-        minPrice,
-        maxPrice,
+        minPriceMinor,
+        maxPriceMinor,
         freeDelivery,
         hasDiscount,
         ids,
@@ -293,22 +318,22 @@ function buildStorefrontProductConditions(
             ) ?? sql`0 = 1`,
         );
     }
-    if (buyerPricing && (minPrice !== undefined || maxPrice !== undefined)) {
-        conditions.push(buyerCatalogHasSkuInPriceRange(minPrice, maxPrice));
+    if (buyerPricing && (minPriceMinor !== undefined || maxPriceMinor !== undefined)) {
+        conditions.push(buyerCatalogHasSkuInPriceRange(minPriceMinor, maxPriceMinor));
     } else {
-        if (minPrice !== undefined) conditions.push(sql`${products.price} >= ${minPrice}`);
-        if (maxPrice !== undefined) conditions.push(sql`${products.price} <= ${maxPrice}`);
+        if (minPriceMinor !== undefined) conditions.push(sql`${products.priceMinor} >= ${minPriceMinor}`);
+        if (maxPriceMinor !== undefined) conditions.push(sql`${products.priceMinor} <= ${maxPriceMinor}`);
     }
     if (freeDelivery === "true") conditions.push(eq(products.freeDelivery, true));
     else if (freeDelivery === "false") conditions.push(eq(products.freeDelivery, false));
     if (hasDiscount === "true") {
         conditions.push(buyerPricing
             ? eq(buyerPricing.hasDiscount, 1)
-            : sql`(${products.discountPercentage} > 0 OR ${products.discountAmount} > 0)`);
+            : sql`(${products.discountBps} > 0 OR ${products.discountAmountMinor} > 0)`);
     } else if (hasDiscount === "false") {
         conditions.push(buyerPricing
             ? eq(buyerPricing.hasDiscount, 0)
-            : sql`(${products.discountPercentage} IS NULL OR ${products.discountPercentage} = 0) AND (${products.discountAmount} IS NULL OR ${products.discountAmount} = 0)`);
+            : sql`${products.discountBps} = 0 AND ${products.discountAmountMinor} = 0`);
     }
     if (ids) {
         const lookupTokens = parsePublicLookupTokens(ids);
@@ -324,14 +349,14 @@ function getStorefrontProductOrderBy(
     sort: StorefrontProductSort = "newest",
     buyerPricing?: BuyerCatalogPricingProjection,
 ) {
-    const productEffectivePrice = sql`CASE
-        WHEN ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN MAX(${products.price} - ${products.discountAmount}, 0)
-        WHEN ${products.discountPercentage} > 0 THEN ${products.price} * (1 - ${products.discountPercentage} / 100.0)
-        ELSE ${products.price}
-    END`;
+    const productDiscount = {
+        discountType: sql`${products.discountType}`,
+        discountBps: sql`${products.discountBps}`,
+        discountAmountMinor: sql`${products.discountAmountMinor}`,
+    };
     const effectivePriceSql = buyerPricing
-        ? sql`${buyerPricing.effectivePrice}`
-        : productEffectivePrice;
+        ? sql`${buyerPricing.effectivePriceMinor}`
+        : effectivePriceMinorSql({ priceMinor: sql`${products.priceMinor}`, ...productDiscount }, productDiscount);
 
     if (sort === "price-asc") {
         return effectivePriceSql;
@@ -348,14 +373,14 @@ function getStorefrontProductOrderBy(
     if (sort === "discount") {
         if (buyerPricing) {
             return desc(sql`CASE
-                WHEN ${buyerPricing.basePrice} > 0
-                    THEN (${buyerPricing.basePrice} - ${buyerPricing.effectivePrice}) / ${buyerPricing.basePrice} * 100
+                WHEN ${buyerPricing.basePriceMinor} > 0
+                    THEN (${buyerPricing.basePriceMinor} - ${buyerPricing.effectivePriceMinor}) * 10000 / ${buyerPricing.basePriceMinor}
                 ELSE 0
             END`);
         }
         return desc(sql`CASE
-            WHEN ${products.price} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmount} > 0 THEN ${products.discountAmount} / ${products.price} * 100
-            WHEN ${products.discountPercentage} > 0 THEN ${products.discountPercentage}
+            WHEN ${products.priceMinor} > 0 AND ${products.discountType} = 'flat' AND ${products.discountAmountMinor} > 0 THEN ${products.discountAmountMinor} * 10000 / ${products.priceMinor}
+            WHEN ${products.discountBps} > 0 THEN ${products.discountBps}
             ELSE 0
         END`);
     }
@@ -600,6 +625,7 @@ async function readStorefrontFeedAttributeMap(
 async function readStorefrontFeedVariantMap(
     db: Database,
     productIds: string[],
+    decimalPlaces: number,
     mediaMapPromise: Promise<Map<string, ProductMediaProjection[]>> =
         loadProductMediaProjections(db, productIds),
 ): Promise<Map<string, StorefrontFeedProductVariant[]>> {
@@ -627,15 +653,15 @@ async function readStorefrontFeedVariantMap(
                 sku: productVariants.sku,
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
-                price: productVariants.price,
+                priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
-                discountPercentage: productVariants.discountPercentage,
-                discountAmount: productVariants.discountAmount,
+                discountBps: productVariants.discountBps,
+                discountAmountMinor: productVariants.discountAmountMinor,
                 deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
             })
             .from(productVariants)
@@ -658,7 +684,7 @@ async function readStorefrontFeedVariantMap(
             row.imageId,
         );
         const variant = maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
-            ...row,
+            ...presentCatalogPrice(row, decimalPlaces),
             imageMediaId: resolvedImage?.mediaId ?? null,
             imageUrl: resolvedImage?.url ?? null,
             selectedOptions: selectedOptionMap.get(row.id) ?? [],
@@ -693,13 +719,10 @@ async function readStorefrontCatalogPage(
         sort = "newest",
         attributeFilters = [],
     } = params;
+    const priceBounds = priceFilterBoundsMinor(params);
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    const conditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
-    const priceRangeConditions = buildStorefrontProductConditions(db, {
-        ...params,
-        minPrice: undefined,
-        maxPrice: undefined,
-    }, {}, buyerPricing);
+    const conditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
+    const priceRangeConditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
     if (scope.condition) {
         conditions.push(scope.condition);
         priceRangeConditions.push(scope.condition);
@@ -713,13 +736,8 @@ async function readStorefrontCatalogPage(
         .select({
             id: products.id,
             name: products.name,
-            price: buyerPricing.basePrice,
+            ...buyerPricingSelection(buyerPricing),
             slug: products.slug,
-            discountType: buyerPricing.discountType,
-            discountPercentage: buyerPricing.discountPercentage,
-            discountAmount: buyerPricing.discountAmount,
-            discountedPrice: buyerPricing.effectivePrice,
-            maxBuyerPrice: buyerPricing.maxBuyerPrice,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
@@ -740,7 +758,7 @@ async function readStorefrontCatalogPage(
     }
 
     let countQuery = db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
@@ -755,8 +773,8 @@ async function readStorefrontCatalogPage(
 
     let priceRangeQuery = db
         .select({
-            min: sql<number | null>`MIN(${buyerPricing.effectivePrice})`,
-            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPrice})`,
+            min: sql<number | null>`MIN(${buyerPricing.effectivePriceMinor})`,
+            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPriceMinor})`,
         })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
@@ -785,6 +803,7 @@ async function readStorefrontCatalogPage(
         priceRangeQuery.get(),
         facetQuery.all() as Promise<PublicProductFacetRow[]>,
     ]);
+    const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
 
     const productIds = productsList.map((product) => product.id);
     const categoryIds = scope.fixedCategory
@@ -818,7 +837,7 @@ async function readStorefrontCatalogPage(
             product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
         );
         return {
-            ...product,
+            ...presentBuyerPricing(product, decimalPlaces),
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
@@ -828,7 +847,6 @@ async function readStorefrontCatalogPage(
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
-            priceVaries: product.maxBuyerPrice > product.discountedPrice,
         };
     });
 
@@ -836,8 +854,8 @@ async function readStorefrontCatalogPage(
         products: productsWithImages,
         pagination: getPagination(page, limit, totalCount?.count ?? 0),
         priceRange: {
-            min: rawPriceRange?.min ?? 0,
-            max: rawPriceRange?.max ?? 0,
+            min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
+            max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
         },
         facets: groupResultScopedFacets(facetRows, attributeFilters),
     };
@@ -874,7 +892,10 @@ export async function getStorefrontFeedProducts(
     }
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const feedCreatedAt = sql<number>`CAST(${products.createdAt} AS INTEGER)`;
-    const conditions = buildStorefrontProductConditions(db, params, {
+    const conditions = buildStorefrontProductConditions(db, {
+        ...params,
+        ...priceFilterBoundsMinor(params),
+    }, {
         includeLookupHandles: true,
         includeVariantLookups: true,
         includeCategorySearchMatches: true,
@@ -894,13 +915,13 @@ export async function getStorefrontFeedProducts(
             id: products.id,
             name: products.name,
             description: products.description,
-            price: products.price,
+            priceMinor: products.priceMinor,
             slug: products.slug,
             canonicalPath: products.canonicalPath,
             productCondition: products.productCondition,
             discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
@@ -908,6 +929,7 @@ export async function getStorefrontFeedProducts(
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: buyerPricing.hasCustomerOptions,
             availableForSale: buyerPricing.availableForSale,
+            storeCurrencyCode: storeCurrencyCodeSql(),
         })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
@@ -919,6 +941,7 @@ export async function getStorefrontFeedProducts(
         .all();
     const hasNextPage = scannedProducts.length > limit;
     const productsList = scannedProducts.slice(0, limit);
+    const decimalPlaces = storeDecimalPlacesFromCode(productsList[0]?.storeCurrencyCode);
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
     const mediaMapPromise = loadProductMediaProjections(db, productIds);
@@ -936,15 +959,16 @@ export async function getStorefrontFeedProducts(
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
-        readStorefrontFeedVariantMap(db, productIds, mediaMapPromise),
+        readStorefrontFeedVariantMap(db, productIds, decimalPlaces, mediaMapPromise),
         loadProductOptions(db, productIds),
     ]);
     const imageMap = productImageMapFromMedia(mediaMap);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map((product: StorefrontFeedProductListRow) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode: _storeCurrencyCode, ...product }) => {
         const imgData = imageMap.get(product.id);
         const category = product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
+        const price = presentCatalogPrice(product, decimalPlaces);
         return {
             id: product.id,
             name: product.name,
@@ -952,16 +976,11 @@ export async function getStorefrontFeedProducts(
             canonicalPath: product.canonicalPath,
             options: (optionMap.get(product.id) ?? []).map(({ values: _values, ...option }) => option),
             description: product.description,
-            price: product.price,
+            price: price.price,
             discountType: product.discountType,
-            discountPercentage: product.discountPercentage,
-            discountAmount: product.discountAmount,
-            discountedPrice: calculateDiscountedPrice(
-                product.price,
-                product.discountType,
-                product.discountPercentage,
-                product.discountAmount,
-            ),
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
+            discountedPrice: catalogDiscountedPrice(product, decimalPlaces),
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
@@ -1176,7 +1195,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             id: products.id,
             name: products.name,
             description: products.description,
-            price: products.price,
+            priceMinor: products.priceMinor,
             categoryId: products.categoryId,
             slug: products.slug,
             metaTitle: products.metaTitle,
@@ -1185,10 +1204,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             productCondition: products.productCondition,
             noIndex: products.noIndex,
             discountType: products.discountType,
-            discountPercentage: products.discountPercentage,
-            discountAmount: products.discountAmount,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             isActive: products.isActive,
+            storeCurrencyCode: storeCurrencyCodeSql(),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
@@ -1219,7 +1239,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .get();
 
     if (!productRow) return null;
-    const { category, ...product } = productRow;
+    const { category, storeCurrencyCode, ...product } = productRow;
+    const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
@@ -1236,7 +1257,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             imageId: productVariants.imageId,
             weight: productVariants.weight,
             sku: productVariants.sku,
-            price: productVariants.price,
+            priceMinor: productVariants.priceMinor,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
             isDefault: productVariants.isDefault,
@@ -1245,8 +1266,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
-            discountPercentage: productVariants.discountPercentage,
-            discountAmount: productVariants.discountAmount,
+            discountBps: productVariants.discountBps,
+            discountAmountMinor: productVariants.discountAmountMinor,
             createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
             deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
@@ -1279,12 +1300,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         promises.push(
             (async () => {
                 const relatedProds = await db.select({
-                    id: products.id, name: products.name, price: buyerPricing.basePrice,
-                    slug: products.slug, discountType: buyerPricing.discountType,
-                    discountPercentage: buyerPricing.discountPercentage,
-                    discountAmount: buyerPricing.discountAmount,
-                    discountedPrice: buyerPricing.effectivePrice,
-                    maxBuyerPrice: buyerPricing.maxBuyerPrice,
+                    id: products.id, name: products.name,
+                    ...buyerPricingSelection(buyerPricing),
+                    slug: products.slug,
                     hasVariants: buyerPricing.hasCustomerOptions,
                     availableForSale: buyerPricing.availableForSale,
                     freeDelivery: products.freeDelivery,
@@ -1305,13 +1323,12 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
                 return {
                     type: "relatedProducts",
-                    data: relatedProds.map(({ maxBuyerPrice, ...rp }) => {
+                    data: relatedProds.map((rp) => {
                         const imgData = relatedImageMap.get(rp.id);
                         return {
-                            ...rp,
+                            ...presentBuyerPricing(rp, decimalPlaces),
                             hasVariants: Boolean(rp.hasVariants),
                             availableForSale: Boolean(rp.availableForSale),
-                            priceVaries: maxBuyerPrice > rp.discountedPrice,
                             imageUrl: imgData?.url || null,
                             imageMediaId: imgData?.mediaId ?? null,
                             imageAlt: imgData?.alt || null,
@@ -1330,7 +1347,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
@@ -1358,7 +1375,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         loadVariantSelectedOptions(db, typedVariants.map((variant) => variant.id)),
     ]);
     const formattedVariants = typedVariants.map((variant) => {
-        const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(variant));
+        const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
+            presentCatalogPrice(variant, decimalPlaces),
+        ));
         const variantImage = resolveSkuImageRepresentation(mediaItems, v.imageId);
         return {
             ...v,
@@ -1370,9 +1389,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
     });
+    const productPrice = presentCatalogPrice(product, decimalPlaces);
     return {
         product: {
-            ...product,
+            ...productPrice,
             categoryId: category ? product.categoryId : null,
             hasVariants,
             imageUrl: productImage?.url ?? null,
@@ -1383,14 +1403,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
             options: optionMap.get(product.id) ?? [],
             discountType: product.discountType || "percentage",
-            discountPercentage: product.discountPercentage || 0,
-            discountAmount: product.discountAmount || 0,
             freeDelivery: product.freeDelivery || false,
             features: extractFeatures(product.description),
-            discountedPrice: calculateDiscountedPrice(
-                product.price, product.discountType,
-                product.discountPercentage, product.discountAmount,
-            ),
+            discountedPrice: catalogDiscountedPrice(product, decimalPlaces),
             attributes,
             additionalInfo,
         },
@@ -1428,6 +1443,7 @@ type StorefrontSearchProductVariant = {
 async function readStorefrontSearchVariantMap(
     db: Database,
     productIds: string[],
+    decimalPlaces: number,
 ): Promise<Map<string, StorefrontSearchProductVariant[]>> {
     const variantMap = new Map<string, StorefrontSearchProductVariant[]>();
     for (
@@ -1447,15 +1463,15 @@ async function readStorefrontSearchVariantMap(
                 imageId: productVariants.imageId,
                 weight: productVariants.weight,
                 sku: productVariants.sku,
-                price: productVariants.price,
+                priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
-                discountPercentage: productVariants.discountPercentage,
-                discountAmount: productVariants.discountAmount,
+                discountBps: productVariants.discountBps,
+                discountAmountMinor: productVariants.discountAmountMinor,
             })
             .from(productVariants)
             .where(and(
@@ -1469,7 +1485,7 @@ async function readStorefrontSearchVariantMap(
         for (const row of rows) {
             const variants = variantMap.get(row.productId) ?? [];
             variants.push(maskPublicBuyerAvailability(normalizeDefaultSkuOptions({
-                ...row,
+                ...presentCatalogPrice(row, decimalPlaces),
                 selectedOptions: selectedOptionMap.get(row.id) ?? [],
             })));
             variantMap.set(row.productId, variants);
@@ -1500,11 +1516,11 @@ export async function searchStorefrontProducts(
             .select({
                 id: products.id,
                 name: products.name,
-                price: products.price,
+                priceMinor: products.priceMinor,
                 slug: products.slug,
                 discountType: products.discountType,
-                discountPercentage: products.discountPercentage,
-                discountAmount: products.discountAmount,
+                discountBps: products.discountBps,
+                discountAmountMinor: products.discountAmountMinor,
                 freeDelivery: products.freeDelivery,
             })
             .from(products)
@@ -1512,27 +1528,28 @@ export async function searchStorefrontProducts(
             .orderBy(desc(products.updatedAt))
             .limit(limit)
             .offset(offset)
-            .all() as Promise<Array<{ id: string; name: string; price: number; slug: string; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; freeDelivery: boolean }>>,
+            .all(),
         db
-            .select({ count: sql<number>`count(*)` })
+            .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
             .from(products)
             .where(and(...conditions)),
     ]);
 
     const productIds = results.map((p) => p.id);
-    const count = Number((countResults[0] as { count: number } | undefined)?.count ?? 0);
+    const count = Number(countResults[0]?.count ?? 0);
     const totalPages = Math.ceil(count / limit);
 
+    const decimalPlaces = storeDecimalPlacesFromCode(countResults[0]?.storeCurrencyCode);
     const [imageMap, variantMap] = await Promise.all([
         readPrimaryProductImageMap(db, productIds),
-        readStorefrontSearchVariantMap(db, productIds),
+        readStorefrontSearchVariantMap(db, productIds, decimalPlaces),
     ]);
 
     return {
         data: results.map((product) => {
             const imgData = imageMap.get(product.id);
             return {
-                ...product,
+                ...presentCatalogPrice(product, decimalPlaces),
                 imageUrl: imgData?.url || null,
                 imageMediaId: imgData?.mediaId ?? null,
                 imageAlt: imgData?.alt || null,

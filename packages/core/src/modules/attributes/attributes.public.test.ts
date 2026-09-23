@@ -12,11 +12,11 @@ function setup() {
     const { sqlite } = harness;
     sqlite.exec("INSERT INTO categories (id, name, slug) VALUES ('cat_1', 'Shoes', 'shoes')");
     const product = (id: string, name: string, options: { active?: boolean; sku?: boolean } = {}) => {
-        sqlite.prepare("INSERT INTO products (id, name, price, slug, category_id, is_active) VALUES (?, ?, 10, ?, 'cat_1', ?)")
+        sqlite.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES (?, ?, 1000, ?, 'cat_1', ?)")
             .run(id, name, id, options.active === false ? 0 : 1);
         if (options.sku !== false) {
-            sqlite.prepare(`INSERT INTO product_variants (id, product_id, sku, price, stock, reserved_stock, is_default, track_inventory)
-                VALUES (?, ?, ?, 10, 0, 0, 1, 0)`).run(`var_${id}`, id, `SKU-${id}`);
+            sqlite.prepare(`INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
+                VALUES (?, ?, ?, 1000, 0, 0, 1, 0)`).run(`var_${id}`, id, `SKU-${id}`);
         }
     };
     const value = (productId: string, attributeId: string, text: string) => {

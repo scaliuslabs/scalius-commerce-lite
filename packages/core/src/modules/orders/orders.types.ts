@@ -246,7 +246,6 @@ export interface CreateStorefrontOrderResult {
     checkoutToken: string;
     orderId: string;
     paymentMethod: string;
-    totalAmount: number;
     taxQuote: TaxQuote;
     commitPayload: StorefrontOrderCommitPayload;
 }
@@ -286,14 +285,11 @@ export interface StorefrontOrderCommitPayload {
         zoneName: string | null;
         areaName: string | null;
         notes: string | null;
-        totalAmount: number;
-        shippingCharge: number;
         shippingMethodId: string;
         shippingMethodName: string;
         shippingMethodDescription: string | null;
         shippingMethodBaseAmountMinor: number;
         shippingFeeWaived: boolean;
-        discountAmount: number;
         currencyCode: string;
         currencyDecimalPlaces: number;
         subtotalAmountMinor: number;
@@ -306,8 +302,8 @@ export interface StorefrontOrderCommitPayload {
         status: string;
         paymentMethod: string;
         paymentStatus: string;
-        paidAmount: number;
-        balanceDue: number;
+        paidAmountMinor: number;
+        balanceDueMinor: number;
         fulfillmentStatus: string;
         inventoryPool: string;
         inventoryAction: string;
@@ -319,7 +315,6 @@ export interface StorefrontOrderCommitPayload {
         productId: string;
         variantId: string;
         quantity: number;
-        price: number;
         productName: string | null;
         variantLabel: string | null;
         inventoryTracked?: boolean;

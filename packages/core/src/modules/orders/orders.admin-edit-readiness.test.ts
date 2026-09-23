@@ -13,7 +13,7 @@ function editableOrder(
     return {
         status: "pending",
         paymentStatus: "unpaid",
-        paidAmount: 0,
+        paidAmountMinor: 0,
         fulfillmentStatus: "pending",
         shipmentClaimId: null,
         shipmentClaimExpiresAt: null,
@@ -49,8 +49,8 @@ describe("admin full-order edit readiness", () => {
     // Stored evidence rows (payment, refund, shipment, tax snapshot, return,
     // invoice) are covered end to end in orders.admin-full-edit-readiness.d1.test.ts.
     it.each([
-        { paymentStatus: "paid", paidAmount: 100 },
-        { paymentStatus: "unpaid", paidAmount: 1 },
+        { paymentStatus: "paid", paidAmountMinor: 10000 },
+        { paymentStatus: "unpaid", paidAmountMinor: 100 },
     ])("locks payment state: %o", (override) => {
         const result = buildAdminOrderFullEditReadiness(editableOrder(override));
         expect(result.allowed).toBe(false);
@@ -77,7 +77,7 @@ function amendableOrder(
         status: "confirmed",
         paymentMethod: "cod",
         paymentStatus: "unpaid",
-        paidAmount: 0,
+        paidAmountMinor: 0,
         fulfillmentStatus: "pending",
         inventoryAction: "reserved",
         shipmentClaimId: null,
@@ -108,7 +108,7 @@ describe("manual COD amendment readiness", () => {
     it.each([
         { isManualOrder: false },
         { paymentMethod: "stripe" },
-        { paymentStatus: "paid", paidAmount: 100 },
+        { paymentStatus: "paid", paidAmountMinor: 10000 },
         { hasPaymentSessionHistory: true },
         { hasPaymentPlan: true },
         { hasCleanCodTracking: false },

@@ -17,13 +17,13 @@ describe("checkout authority fence", () => {
   beforeEach(async () => {
     database = await createProviderSchemaDatabase("d1");
     database.exec(`
-      INSERT INTO products (id, name, price, slug, is_active)
-      VALUES ('product_fence', 'Fence product', 100, 'fence-product', 1);
+      INSERT INTO products (id, name, price_minor, slug, is_active)
+      VALUES ('product_fence', 'Fence product', 10000, 'fence-product', 1);
       INSERT INTO product_variants (
-        id, product_id, sku, price, stock, reserved_stock,
+        id, product_id, sku, price_minor, stock, reserved_stock,
         stock_version, track_inventory, is_default
       ) VALUES (
-        'variant_fence', 'product_fence', 'FENCE-1', 100, 100, 0,
+        'variant_fence', 'product_fence', 'FENCE-1', 10000, 100, 0,
         1, 1, 1
       );
     `);
@@ -43,7 +43,7 @@ describe("checkout authority fence", () => {
 
     database.exec(`
       UPDATE product_variants
-      SET price = 125, version = version + 1, updated_at = unixepoch()
+      SET price_minor = 12500, version = version + 1, updated_at = unixepoch()
       WHERE id = 'variant_fence';
     `);
     expect(revision(database)).toBe(beforeInventory + 1);
@@ -51,9 +51,9 @@ describe("checkout authority fence", () => {
     const beforeShipping = revision(database);
     database.exec(`
       INSERT INTO shipping_methods (
-        id, name, fee, is_active, sort_order, created_at, updated_at
+        id, name, fee_minor, is_active, sort_order, created_at, updated_at
       ) VALUES (
-        'shipping_fence', 'Fence shipping', 60, 1, 0, unixepoch(), unixepoch()
+        'shipping_fence', 'Fence shipping', 6000, 1, 0, unixepoch(), unixepoch()
       );
     `);
     expect(revision(database)).toBe(beforeShipping + 1);

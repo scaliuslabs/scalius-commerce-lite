@@ -36,14 +36,7 @@ import {
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
 import { computePaymentStateAfterPayment } from "./payment-state";
-import {
-  assertOrderPaymentCurrency,
-  orderMoneyEqual,
-  resolveOrderCurrencySnapshot,
-  roundOrderMoney,
-  type OrderCurrencySnapshot,
-  type OrderCurrencySnapshotSource,
-} from "./order-currency";
+import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
@@ -65,13 +58,13 @@ function isPaymentType(value: unknown): value is PaymentType {
 
 function inferFailedPaymentType(input: {
   existingPaymentType?: unknown;
-  paidAmount: number;
+  paidAmountMinor: number;
   paymentStatus: string;
   paymentPlanStatus?: string | null;
 }): PaymentType {
   if (isPaymentType(input.existingPaymentType)) return input.existingPaymentType;
   if (
-    input.paidAmount > 0 ||
+    input.paidAmountMinor > 0 ||
     input.paymentStatus === PaymentStatus.PARTIAL ||
     input.paymentPlanStatus === PaymentPlanStatus.DEPOSIT_PAID ||
     input.paymentPlanStatus === PaymentPlanStatus.COMPLETED
@@ -82,38 +75,17 @@ function inferFailedPaymentType(input: {
   return "full";
 }
 
-function paymentRecordMatchesAmount(
-  recordedAmount: number,
-  incomingAmount: number,
-  currency: OrderCurrencySnapshot,
-): boolean {
-  return orderMoneyEqual(recordedAmount, incomingAmount, currency);
-}
-
 function failedAttemptCanBePromoted(
-  record: { amount: number; status: string },
-  incomingAmount: number,
-  currency: OrderCurrencySnapshot,
+  record: { amountMinor: number; status: string },
+  incomingAmountMinor: number,
 ): boolean {
-  if (record.status === PaymentRecordStatus.FAILED) return true;
-  return paymentRecordMatchesAmount(record.amount, incomingAmount, currency);
-}
-
-function computedBalanceDue(order: {
-  totalAmount: number;
-  paidAmount: number | null;
-  balanceDue: number | null;
-}, currency: OrderCurrencySnapshot): number {
-  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-  const storedBalance = Number(order.balanceDue);
-  if (Number.isFinite(storedBalance)) return roundOrderMoney(storedBalance, currency);
-  return roundOrderMoney(Math.max(0, order.totalAmount - paidAmount), currency);
+  return record.status === PaymentRecordStatus.FAILED || record.amountMinor === incomingAmountMinor;
 }
 
 function isMetaPurchaseEligibleAfterPayment(input: {
   status: string;
   paymentStatus: string;
-  paidAmount: number;
+  paidAmountMinor: number;
   deletedAt?: Date | string | number | null;
 }): boolean {
   if (input.deletedAt) return false;
@@ -129,7 +101,7 @@ function isMetaPurchaseEligibleAfterPayment(input: {
   return (
     input.paymentStatus === PaymentStatus.PAID ||
     input.paymentStatus === PaymentStatus.PARTIAL ||
-    Number(input.paidAmount) > 0
+    input.paidAmountMinor > 0
   );
 }
 
@@ -138,8 +110,8 @@ function buildSuccessfulPaymentMetaOutboxCondition(input: {
   paymentId: string;
   nextVersion: number;
   newStatus: string;
-  newPaidAmount: number;
-  newBalanceDue: number;
+  newPaidAmountMinor: number;
+  newBalanceDueMinor: number;
   newPaymentStatus: string;
 }) {
   return sql`
@@ -148,8 +120,8 @@ function buildSuccessfulPaymentMetaOutboxCondition(input: {
       WHERE id = ${input.orderId}
         AND version = ${input.nextVersion}
         AND status = ${input.newStatus}
-        AND paid_amount = ${input.newPaidAmount}
-        AND balance_due = ${input.newBalanceDue}
+        AND paid_amount_minor = ${input.newPaidAmountMinor}
+        AND balance_due_minor = ${input.newBalanceDueMinor}
         AND payment_status = ${input.newPaymentStatus}
         AND deleted_at IS NULL
     )
@@ -162,20 +134,22 @@ function buildSuccessfulPaymentMetaOutboxCondition(input: {
   `;
 }
 
+interface PayableOrderMoney {
+  id: string;
+  totalAmountMinor: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
+  paymentStatus: string;
+}
+
 function validateFullPaymentState(
-  order: {
-    totalAmount: number;
-    paidAmount: number | null;
-    paymentStatus: string;
-  },
-  incomingAmount: number,
-  currency: OrderCurrencySnapshot,
+  order: PayableOrderMoney,
+  incomingAmountMinor: number,
 ): string | null {
-  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-  if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
+  if (order.paidAmountMinor > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
     return "Order has an outstanding balance; use a balance payment";
   }
-  if (!orderMoneyEqual(incomingAmount, order.totalAmount, currency)) {
+  if (incomingAmountMinor !== order.totalAmountMinor) {
     return "Full payment amount must match the order total";
   }
   return null;
@@ -183,26 +157,18 @@ function validateFullPaymentState(
 
 async function validateDepositPaymentState(
   db: Database,
-  order: {
-    id: string;
-    totalAmount: number;
-    paidAmount: number | null;
-    balanceDue: number | null;
-    paymentStatus: string;
-  },
-  incomingAmount: number,
-  currency: OrderCurrencySnapshot,
+  order: PayableOrderMoney,
+  incomingAmountMinor: number,
 ): Promise<string | null> {
-  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-  if (paidAmount > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
+  if (order.paidAmountMinor > 0 || order.paymentStatus === PaymentStatus.PARTIAL) {
     return "Order already has a partial payment; use a balance payment";
   }
 
   const plan = await db
     .select({
       status: paymentPlans.status,
-      depositAmount: paymentPlans.depositAmount,
-      balanceDue: paymentPlans.balanceDue,
+      depositAmountMinor: paymentPlans.depositAmountMinor,
+      balanceDueMinor: paymentPlans.balanceDueMinor,
     })
     .from(paymentPlans)
     .where(eq(paymentPlans.orderId, order.id))
@@ -220,15 +186,10 @@ async function validateDepositPaymentState(
   if (plan.status !== PaymentPlanStatus.PENDING) {
     return "Deposit payment plan is not ready";
   }
-  if (!orderMoneyEqual(incomingAmount, plan.depositAmount, currency)) {
+  if (incomingAmountMinor !== plan.depositAmountMinor) {
     return "Deposit payment amount must match the pending payment plan";
   }
-
-  const expectedBalance = roundOrderMoney(
-    Math.max(0, order.totalAmount - roundOrderMoney(incomingAmount, currency)),
-    currency,
-  );
-  if (!orderMoneyEqual(plan.balanceDue, expectedBalance, currency)) {
+  if (plan.balanceDueMinor !== Math.max(0, order.totalAmountMinor - incomingAmountMinor)) {
     return "Deposit payment plan balance does not match the order total";
   }
 
@@ -237,25 +198,17 @@ async function validateDepositPaymentState(
 
 async function validateBalancePaymentState(
   db: Database,
-  order: {
-    id: string;
-    totalAmount: number;
-    paidAmount: number | null;
-    balanceDue: number | null;
-    paymentStatus: string;
-  },
-  incomingAmount: number,
-  currency: OrderCurrencySnapshot,
+  order: PayableOrderMoney,
+  incomingAmountMinor: number,
 ): Promise<string | null> {
-  const paidAmount = roundOrderMoney(Number(order.paidAmount ?? 0), currency);
-  if (order.paymentStatus !== PaymentStatus.PARTIAL || paidAmount <= 0) {
+  if (order.paymentStatus !== PaymentStatus.PARTIAL || order.paidAmountMinor <= 0) {
     return "No partial payment has been recorded for this order";
   }
 
   const plan = await db
     .select({
       status: paymentPlans.status,
-      balanceDue: paymentPlans.balanceDue,
+      balanceDueMinor: paymentPlans.balanceDueMinor,
     })
     .from(paymentPlans)
     .where(eq(paymentPlans.orderId, order.id))
@@ -271,19 +224,17 @@ async function validateBalancePaymentState(
     return "Deposit payment must be confirmed before balance payment";
   }
 
-  const balanceDue = roundOrderMoney(Number(plan.balanceDue ?? order.balanceDue ?? 0), currency);
-  if (!Number.isFinite(balanceDue) || balanceDue <= 0) {
+  const balanceDueMinor = plan.balanceDueMinor;
+  if (balanceDueMinor <= 0) {
     return "No balance due";
   }
-  const orderBalanceDue = computedBalanceDue(order, currency);
-  if (!orderMoneyEqual(balanceDue, orderBalanceDue, currency)) {
+  if (balanceDueMinor !== order.balanceDueMinor) {
     return "Payment plan balance does not match the order balance";
   }
-  const computedOutstanding = roundOrderMoney(Math.max(0, order.totalAmount - paidAmount), currency);
-  if (!orderMoneyEqual(balanceDue, computedOutstanding, currency)) {
+  if (balanceDueMinor !== Math.max(0, order.totalAmountMinor - order.paidAmountMinor)) {
     return "Payment plan balance does not match the order payment state";
   }
-  if (!orderMoneyEqual(balanceDue, incomingAmount, currency)) {
+  if (balanceDueMinor !== incomingAmountMinor) {
     return "Balance payment amount must match the outstanding balance";
   }
 
@@ -292,64 +243,55 @@ async function validateBalancePaymentState(
 
 async function validateIncomingPaymentState(
   db: Database,
-  order: {
-    id: string;
-    totalAmount: number;
-    paidAmount: number | null;
-    balanceDue: number | null;
-    paymentStatus: string;
-  } & OrderCurrencySnapshotSource,
+  order: PayableOrderMoney,
   paymentType: string,
-  incomingAmount: number,
+  incomingAmountMinor: number,
 ): Promise<string | null> {
-  const currency = resolveOrderCurrencySnapshot(order);
   if (paymentType === "full") {
-    return validateFullPaymentState(order, incomingAmount, currency);
+    return validateFullPaymentState(order, incomingAmountMinor);
   }
   if (paymentType === "deposit") {
-    return validateDepositPaymentState(db, order, incomingAmount, currency);
+    return validateDepositPaymentState(db, order, incomingAmountMinor);
   }
   if (paymentType === "balance") {
-    return validateBalancePaymentState(db, order, incomingAmount, currency);
+    return validateBalancePaymentState(db, order, incomingAmountMinor);
   }
   return "Unsupported payment type";
 }
 
 async function inferPaymentType(
   db: Database,
-  order: { id: string; totalAmount: number; paidAmount: number | null; balanceDue: number | null },
-  amount: number,
-  currency: OrderCurrencySnapshot,
+  order: PayableOrderMoney,
+  amountMinor: number,
 ): Promise<PaymentType | null> {
   const plan = await db
-    .select({ depositAmount: paymentPlans.depositAmount, balanceDue: paymentPlans.balanceDue })
+    .select({ depositAmountMinor: paymentPlans.depositAmountMinor, balanceDueMinor: paymentPlans.balanceDueMinor })
     .from(paymentPlans)
     .where(eq(paymentPlans.orderId, order.id))
     .get();
-  const paidAmount = Number(order.paidAmount ?? 0);
-  if (plan && orderMoneyEqual(amount, plan.depositAmount, currency)) return "deposit";
-  const balanceDue = plan ? plan.balanceDue : computedBalanceDue(order, currency);
-  if (balanceDue > 0 && (plan || paidAmount > 0) && orderMoneyEqual(amount, balanceDue, currency)) return "balance";
-  if (orderMoneyEqual(amount, order.totalAmount, currency)) return "full";
+  if (plan && amountMinor === plan.depositAmountMinor) return "deposit";
+  const balanceDueMinor = plan ? plan.balanceDueMinor : order.balanceDueMinor;
+  if (balanceDueMinor > 0 && (plan || order.paidAmountMinor > 0) && amountMinor === balanceDueMinor) return "balance";
+  if (amountMinor === order.totalAmountMinor) return "full";
   return null;
 }
 
 /** A provider success may land on an order whose failed checkout switched to another online gateway. */
 function acceptsProviderPayment(
-  order: { paymentMethod: string; paymentStatus: string; paidAmount: number | null },
+  order: { paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
   provider: string,
 ): boolean {
   if (order.paymentMethod === provider) return true;
   return isOnlinePaymentMethod(order.paymentMethod) &&
     order.paymentStatus === PaymentStatus.FAILED &&
-    Number(order.paidAmount ?? 0) <= 0;
+    order.paidAmountMinor <= 0;
 }
 
 /**
  * Apply one provider-confirmed payment to its order.
  *
  * 1. Claims (or resumes) the order_payments row keyed by UNIQUE(provider, provider_ref)
- * 2. Updates order.paidAmount, order.paymentStatus, order.balanceDue with a version CAS
+ * 2. Updates order.paidAmountMinor, order.paymentStatus, order.balanceDueMinor with a version CAS
  * 3. Updates paymentPlans if applicable
  *
  * Idempotent: a provider reference is credited at most once. `retryable: false`
@@ -389,7 +331,10 @@ export async function processPaymentConfirmed(
     } catch (error) {
       return { success: false, retryable: false, error: error instanceof Error ? error.message : String(error) };
     }
-    const incomingAmount = roundOrderMoney(params.amount, currency);
+    const incomingAmountMinor = params.amountMinor;
+    if (!Number.isSafeInteger(incomingAmountMinor) || incomingAmountMinor < 0) {
+      return { success: false, retryable: false, error: "Provider payment amount is invalid" };
+    }
 
     // ── 0. Claim or resume the provider payment record ──
     // UNIQUE(provider, provider_ref) is the primary idempotency guarantee. We
@@ -400,7 +345,7 @@ export async function processPaymentConfirmed(
       .select({
         id: orderPayments.id,
         orderId: orderPayments.orderId,
-        amount: orderPayments.amount,
+        amountMinor: orderPayments.amountMinor,
         status: orderPayments.status,
         currency: orderPayments.currency,
       })
@@ -415,7 +360,7 @@ export async function processPaymentConfirmed(
         return { success: false, retryable: false, error: "Provider payment reference already belongs to another order" };
       }
       assertOrderPaymentCurrency(existing.currency, currency, "Existing provider payment");
-      if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
+      if (!failedAttemptCanBePromoted(existing, incomingAmountMinor)) {
         return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }
       if (existing.status === PaymentRecordStatus.SUCCEEDED) {
@@ -426,9 +371,9 @@ export async function processPaymentConfirmed(
     const initialOrder = await db
       .select({
         id: orders.id,
-        totalAmount: orders.totalAmount,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
+        totalAmountMinor: orders.totalAmountMinor,
+        paidAmountMinor: orders.paidAmountMinor,
+        balanceDueMinor: orders.balanceDueMinor,
         paymentMethod: orders.paymentMethod,
         paymentStatus: orders.paymentStatus,
         status: orders.status,
@@ -458,7 +403,7 @@ export async function processPaymentConfirmed(
       };
     }
 
-    const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmount, currency);
+    const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
     if (!paymentType) {
       return { success: false, retryable: false, error: "Confirmed payment amount does not match any payable amount on the order" };
     }
@@ -467,7 +412,7 @@ export async function processPaymentConfirmed(
       db,
       initialOrder,
       paymentType,
-      incomingAmount,
+      incomingAmountMinor,
     );
     if (initialPaymentStateError) {
       return { success: false, error: initialPaymentStateError, retryable: false };
@@ -479,7 +424,7 @@ export async function processPaymentConfirmed(
         await db.insert(orderPayments).values({
           id: paymentId,
           orderId: params.orderId,
-          amount: incomingAmount,
+          amountMinor: incomingAmountMinor,
           currency: currency.code,
           paymentMethod: params.provider,
           paymentType,
@@ -504,9 +449,9 @@ export async function processPaymentConfirmed(
         : await db
           .select({
             id: orders.id,
-            totalAmount: orders.totalAmount,
-            paidAmount: orders.paidAmount,
-            balanceDue: orders.balanceDue,
+            totalAmountMinor: orders.totalAmountMinor,
+            paidAmountMinor: orders.paidAmountMinor,
+            balanceDueMinor: orders.balanceDueMinor,
             paymentStatus: orders.paymentStatus,
             status: orders.status,
             inventoryPool: orders.inventoryPool,
@@ -532,7 +477,7 @@ export async function processPaymentConfirmed(
           db,
           order,
           paymentType,
-          incomingAmount,
+          incomingAmountMinor,
         );
         if (paymentStateError) {
           return { success: false, error: paymentStateError, retryable: false };
@@ -540,14 +485,13 @@ export async function processPaymentConfirmed(
       }
 
       const nextPaymentState = computePaymentStateAfterPayment({
-        totalAmount: order.totalAmount,
-        currentPaidAmount: order.paidAmount,
-        paymentAmount: incomingAmount,
-        currency,
+        totalAmountMinor: order.totalAmountMinor,
+        currentPaidAmountMinor: order.paidAmountMinor,
+        paymentAmountMinor: incomingAmountMinor,
       });
-      const newPaidAmount = nextPaymentState.paidAmount;
-      const newBalanceDue = nextPaymentState.balanceDue;
-      const isFullyPaid = orderMoneyEqual(newBalanceDue, 0, currency);
+      const newPaidAmountMinor = nextPaymentState.paidAmountMinor;
+      const newBalanceDueMinor = nextPaymentState.balanceDueMinor;
+      const isFullyPaid = newBalanceDueMinor === 0;
       const newPaymentStatus = nextPaymentState.paymentStatus;
       const newStatus = order.status === OrderStatus.INCOMPLETE ? OrderStatus.PENDING : order.status;
       const paymentPlanReadyPredicate = paymentType === "deposit"
@@ -555,15 +499,15 @@ export async function processPaymentConfirmed(
             SELECT 1 FROM payment_plans
             WHERE order_id = ${params.orderId}
               AND status = ${PaymentPlanStatus.PENDING}
-              AND round(deposit_amount, ${currency.decimalPlaces}) = round(${incomingAmount}, ${currency.decimalPlaces})
-              AND round(balance_due, ${currency.decimalPlaces}) = round(${newBalanceDue}, ${currency.decimalPlaces})
+              AND deposit_amount_minor = ${incomingAmountMinor}
+              AND balance_due_minor = ${newBalanceDueMinor}
           )`
         : paymentType === "balance"
           ? sql`EXISTS (
               SELECT 1 FROM payment_plans
               WHERE order_id = ${params.orderId}
                 AND status = ${PaymentPlanStatus.DEPOSIT_PAID}
-                AND round(balance_due, ${currency.decimalPlaces}) = round(${incomingAmount}, ${currency.decimalPlaces})
+                AND balance_due_minor = ${incomingAmountMinor}
             )`
           : sql`1 = 1`;
 
@@ -575,8 +519,8 @@ export async function processPaymentConfirmed(
         db.update(orders).set({
           status: newStatus,
           paymentMethod: params.provider,
-          paidAmount: newPaidAmount,
-          balanceDue: newBalanceDue,
+          paidAmountMinor: newPaidAmountMinor,
+          balanceDueMinor: newBalanceDueMinor,
           paymentStatus: newPaymentStatus,
           version: nextVersion,
           updatedAt: sql`unixepoch()`,
@@ -595,7 +539,7 @@ export async function processPaymentConfirmed(
           )`,
         )).returning({ id: orders.id }),
         db.update(orderPayments).set({
-          amount: incomingAmount,
+          amountMinor: incomingAmountMinor,
           currency: currency.code,
           paymentMethod: params.provider,
           paymentType,
@@ -611,8 +555,8 @@ export async function processPaymentConfirmed(
             SELECT 1 FROM orders
             WHERE id = ${params.orderId}
               AND version = ${nextVersion}
-              AND paid_amount = ${newPaidAmount}
-              AND balance_due = ${newBalanceDue}
+              AND paid_amount_minor = ${newPaidAmountMinor}
+              AND balance_due_minor = ${newBalanceDueMinor}
               AND payment_status = ${newPaymentStatus}
           )`,
         )).returning({ id: orderPayments.id }),
@@ -634,8 +578,8 @@ export async function processPaymentConfirmed(
                 SELECT 1 FROM orders
                 WHERE id = ${params.orderId}
                   AND version = ${nextVersion}
-                  AND paid_amount = ${newPaidAmount}
-                  AND balance_due = ${newBalanceDue}
+                  AND paid_amount_minor = ${newPaidAmountMinor}
+                  AND balance_due_minor = ${newBalanceDueMinor}
                   AND payment_status = ${newPaymentStatus}
               )`,
             ))
@@ -657,8 +601,8 @@ export async function processPaymentConfirmed(
                 SELECT 1 FROM orders
                 WHERE id = ${params.orderId}
                   AND version = ${nextVersion}
-                  AND paid_amount = ${newPaidAmount}
-                  AND balance_due = ${newBalanceDue}
+                  AND paid_amount_minor = ${newPaidAmountMinor}
+                  AND balance_due_minor = ${newBalanceDueMinor}
                   AND payment_status = ${newPaymentStatus}
               )`,
             ))
@@ -669,7 +613,7 @@ export async function processPaymentConfirmed(
       if (isMetaPurchaseEligibleAfterPayment({
         status: newStatus,
         paymentStatus: newPaymentStatus,
-        paidAmount: newPaidAmount,
+        paidAmountMinor: newPaidAmountMinor,
         deletedAt: order.deletedAt,
       })) {
         batchStatements.push(buildMetaPurchaseOutboxClaimInsert(db, {
@@ -680,8 +624,8 @@ export async function processPaymentConfirmed(
             paymentId: paymentId!,
             nextVersion,
             newStatus,
-            newPaidAmount,
-            newBalanceDue,
+            newPaidAmountMinor,
+            newBalanceDueMinor,
             newPaymentStatus,
           }),
         }));
@@ -764,7 +708,7 @@ export async function processPaymentFailed(
 
     const order = await db
       .select({
-        paidAmount: orders.paidAmount,
+        paidAmountMinor: orders.paidAmountMinor,
         paymentStatus: orders.paymentStatus,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -783,16 +727,16 @@ export async function processPaymentFailed(
 
     if (!order) return;
     assertNoActiveShipmentClaim(order);
-    const paidAmount = Number(order.paidAmount ?? 0);
+    const paidAmountMinor = order.paidAmountMinor;
     const paymentType = inferFailedPaymentType({
       existingPaymentType: existing?.paymentType,
-      paidAmount,
+      paidAmountMinor,
       paymentStatus: order.paymentStatus,
       paymentPlanStatus: order.paymentPlanStatus,
     });
     const shouldMarkOrderFailed = (
       order.paymentStatus === PaymentStatus.UNPAID &&
-      paidAmount <= 0
+      paidAmountMinor <= 0
     );
 
     // A prior invocation may have durably failed the attempt but stopped before
@@ -819,7 +763,7 @@ export async function processPaymentFailed(
         .where(and(
           eq(orders.id, orderId),
           eq(orders.paymentStatus, PaymentStatus.UNPAID),
-          sql`${orders.paidAmount} <= 0`,
+          sql`${orders.paidAmountMinor} <= 0`,
           noActiveShipmentClaimCondition(),
           sql`NOT EXISTS (
             SELECT 1
@@ -851,7 +795,7 @@ export async function processPaymentFailed(
         db.insert(orderPayments).values({
           id: crypto.randomUUID(),
           orderId,
-          amount: 0,
+          amountMinor: 0,
           currency: currency.code,
           paymentMethod: provider,
           paymentType,

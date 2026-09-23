@@ -62,10 +62,10 @@ function authorityRows(): Record<string, unknown>[][] {
       id: "product_1",
       name: "Product 1",
       isActive: 1,
-      price: 100,
-      discountPercentage: null,
+      priceMinor: 10_000,
+      discountBps: 0,
       discountType: null,
-      discountAmount: null,
+      discountAmountMinor: 0,
       freeDelivery: 0,
       taxClassId: null,
     }],
@@ -82,10 +82,10 @@ function authorityRows(): Record<string, unknown>[][] {
       allowPreorder: 0,
       allowBackorder: 0,
       backorderLimit: 0,
-      price: 100,
-      discountPercentage: null,
+      priceMinor: 10_000,
+      discountBps: 0,
       discountType: null,
-      discountAmount: null,
+      discountAmountMinor: 0,
       taxClassId: null,
       imageId: null,
     }],
@@ -98,7 +98,7 @@ function authorityRows(): Record<string, unknown>[][] {
       id: "shipping_1",
       name: "Standard delivery",
       description: "Delivered within 2–3 business days",
-      fee: 60,
+      feeMinor: 6_000,
       isActive: 1,
       deletedAt: null,
     }],
@@ -163,9 +163,9 @@ describe("storefront checkout authority read", () => {
       },
       allowedCountries: { allowedCountries: ["BD"], allowedCountriesMode: "include" },
       activePaymentMethods: { enabledMethods: ["cod"], defaultMethod: "cod" },
-      cartValidation: { valid: true, subtotal: 100 },
+      cartValidation: { valid: true, subtotalMinor: 10_000 },
       deliveryPreflight: {
-        shippingCharge: 60,
+        shippingMinor: 6_000,
         shippingMethod: {
           id: "shipping_1",
           name: "Standard delivery",
@@ -219,8 +219,8 @@ describe("storefront checkout authority read", () => {
     expect(snapshots).toHaveLength(200);
     expect(snapshots.every((snapshot) =>
       snapshot.cartValidation.valid
-      && snapshot.cartValidation.subtotal === 100
-      && snapshot.deliveryPreflight.shippingCharge === 60
+      && snapshot.cartValidation.subtotalMinor === 10_000
+      && snapshot.deliveryPreflight.shippingMinor === 6_000
     )).toBe(true);
     expect(isTrustedStorefrontTaxAuthority(snapshots[199]?.taxAuthority)).toBe(true);
   });

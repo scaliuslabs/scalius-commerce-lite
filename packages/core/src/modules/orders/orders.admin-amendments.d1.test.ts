@@ -43,28 +43,26 @@ describe("manual COD order amendments on D1 storage", () => {
       INSERT INTO tax_rates
         (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, is_active)
       VALUES ('tax_south', 'tax_standard', 'South tax', 1000, 'zone', 'zone_2', 'South', 1);
-      INSERT INTO products (id, name, slug, price, is_active)
+      INSERT INTO products (id, name, slug, price_minor, is_active)
       VALUES
-        ('product_1', 'Test product', 'test-product', 100, 1),
-        ('product_2', 'Swap product', 'swap-product', 125, 1);
+        ('product_1', 'Test product', 'test-product', 10000, 1),
+        ('product_2', 'Swap product', 'swap-product', 12500, 1);
       INSERT INTO product_variants
-        (id, product_id, sku, price, stock, reserved_stock, stock_version, is_default, track_inventory)
+        (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory)
       VALUES
-        ('variant_1', 'product_1', 'AMEND-SKU', 100, 10, 2, 1, 1, 1),
-        ('variant_2', 'product_2', 'AMEND-SWAP', 125, 5, 0, 0, 1, 1);
+        ('variant_1', 'product_1', 'AMEND-SKU', 10000, 10, 2, 1, 1, 1),
+        ('variant_2', 'product_2', 'AMEND-SWAP', 12500, 5, 0, 0, 1, 1);
       INSERT INTO orders (
         id, customer_name, customer_phone, customer_email, shipping_address,
-        city, zone, city_name, zone_name, total_amount, shipping_charge,
-        discount_amount, currency_code, currency_decimal_places,
+        city, zone, city_name, zone_name, currency_code, currency_decimal_places,
         subtotal_amount_minor, shipping_amount_minor, discount_amount_minor,
         tax_amount_minor, total_amount_minor, tax_label, prices_include_tax,
-        status, payment_method, payment_status, paid_amount, balance_due,
+        status, payment_method, payment_status, paid_amount_minor, balance_due_minor,
         fulfillment_status, inventory_pool, inventory_action, version
       ) VALUES (
         'order_1', 'Buyer', '+8801712345678', NULL, '123 Test Street, Dhaka',
-        'city_1', 'zone_1', 'Dhaka', 'North', 260, 60,
-        0, 'BDT', 2, 20000, 6000, 0, 0, 26000, 'Tax', 0,
-        'confirmed', 'cod', 'unpaid', 0, 260, 'pending', 'regular', 'reserved', 1
+        'city_1', 'zone_1', 'Dhaka', 'North', 'BDT', 2, 20000, 6000, 0, 0, 26000, 'Tax', 0,
+        'confirmed', 'cod', 'unpaid', 0, 26000, 'pending', 'regular', 'reserved', 1
       );
       INSERT INTO admin_order_create_attempts (
         id, actor_id, request_key_hash, request_hash, order_id, status, attempts
@@ -72,28 +70,25 @@ describe("manual COD order amendments on D1 storage", () => {
       INSERT INTO cod_tracking (id, order_id, cod_status)
       VALUES ('cod_1', 'order_1', 'pending');
       INSERT INTO order_items (
-        id, order_id, product_id, variant_id, quantity, price, product_name,
+        id, order_id, product_id, variant_id, quantity, product_name,
         inventory_tracked, unit_price_minor, line_subtotal_minor,
         discount_amount_minor, taxable_amount_minor, tax_amount_minor,
         fulfillment_status
       ) VALUES (
-        'item_1', 'order_1', 'product_1', 'variant_1', 2, 100, 'Test product',
+        'item_1', 'order_1', 'product_1', 'variant_1', 2, 'Test product',
         1, 10000, 20000, 0, 0, 0, 'pending'
       );
       INSERT INTO order_tax_snapshots (
         order_id, currency_code, decimal_places, display_label,
-        prices_include_tax, shipping_taxed, subtotal_minor, shipping_minor,
-        discount_minor, taxable_minor, tax_minor, total_minor, settings_version,
+        prices_include_tax, shipping_taxed, settings_version,
         calculation_version, destination_snapshot, rate_snapshot
       ) VALUES (
-        'order_1', 'BDT', 2, 'Tax', 0, 0, 20000, 6000, 0, 0, 0, 26000,
+        'order_1', 'BDT', 2, 'Tax', 0, 0,
         1, 'tax-v1', '{"city":"city_1","zone":"zone_1","area":null}', '{}'
       );
       INSERT INTO order_item_tax_snapshots (
-        order_item_id, order_id, unit_price_minor, quantity, gross_amount_minor,
-        discount_minor, taxable_amount_minor, tax_minor, prices_include_tax,
-        rate_snapshot
-      ) VALUES ('item_1', 'order_1', 10000, 2, 20000, 0, 0, 0, 0, '[]');
+        order_item_id, order_id, prices_include_tax, rate_snapshot
+      ) VALUES ('item_1', 'order_1', 0, '[]');
       INSERT INTO inventory_movements (
         id, variant_id, order_id, type, quantity, previous_stock, new_stock,
         ledger_version, pool, reservation_generation, stock_version_before,
@@ -185,14 +180,14 @@ describe("manual COD order amendments on D1 storage", () => {
       zone: "zone_2",
     }), "admin_1");
     expect(sqlite.prepare(`
-      SELECT zone, zone_name, tax_amount_minor, total_amount_minor, balance_due
+      SELECT zone, zone_name, tax_amount_minor, total_amount_minor, balance_due_minor
       FROM orders WHERE id = 'order_1'
     `).get()).toEqual({
       zone: "zone_2",
       zone_name: "South",
       tax_amount_minor: 2000,
       total_amount_minor: 28000,
-      balance_due: 280,
+      balance_due_minor: 28000,
     });
   });
 
@@ -218,7 +213,7 @@ describe("manual COD order amendments on D1 storage", () => {
     const preview = await previewManualOrderAmendment(db, "order_1", draft);
     const staleQuote = { ...draft, quoteFingerprint: preview.quoteFingerprint };
 
-    sqlite.exec("UPDATE product_variants SET price = 110 WHERE id = 'variant_1'");
+    sqlite.exec("UPDATE product_variants SET price_minor = 11000 WHERE id = 'variant_1'");
     await expect(confirmManualOrderAmendment(db, "order_1", staleQuote, "admin_1"))
       .rejects.toThrow(/prices or taxes changed.*refresh the quote/i);
     expect(sqlite.prepare("SELECT version FROM orders WHERE id = 'order_1'").get()).toEqual({ version: 1 });
@@ -227,7 +222,7 @@ describe("manual COD order amendments on D1 storage", () => {
     const refreshed = await previewManualOrderAmendment(db, "order_1", draft);
     const amendment = { ...draft, quoteFingerprint: refreshed.quoteFingerprint };
     const committed = await confirmManualOrderAmendment(db, "order_1", amendment, "admin_1");
-    sqlite.exec("UPDATE product_variants SET price = 120 WHERE id = 'variant_1'");
+    sqlite.exec("UPDATE product_variants SET price_minor = 12000 WHERE id = 'variant_1'");
     await expect(confirmManualOrderAmendment(db, "order_1", amendment, "admin_1"))
       .resolves.toEqual(committed);
   });
@@ -300,22 +295,22 @@ describe("manual COD order amendments on D1 storage", () => {
 
   it.each([
     ["inventory", `UPDATE product_variants SET stock_version = stock_version + 1 WHERE id = 'variant_1'`],
-    ["payment", `INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status) VALUES ('pay_1', 'order_1', 1, 'BDT', 'cod', 'full', 'pending')`],
-    ["collection", `UPDATE cod_tracking SET cod_status = 'collected', collected_amount = 260, collected_at = unixepoch() WHERE order_id = 'order_1'`],
+    ["payment", `INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status) VALUES ('pay_1', 'order_1', 100, 'BDT', 'cod', 'full', 'pending')`],
+    ["collection", `UPDATE cod_tracking SET cod_status = 'collected', collected_amount_minor = 26000, collected_at = unixepoch() WHERE order_id = 'order_1'`],
     ["shipment claim", `UPDATE orders SET shipment_claim_id = 'claim_1' WHERE id = 'order_1'`],
     ["shipment", `INSERT INTO delivery_shipments (id, order_id, provider_type, status) VALUES ('shipment_1', 'order_1', 'manual', 'pending')`],
     ["refund", `
-      INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status)
-      VALUES ('pay_source', 'order_1', 1, 'BDT', 'cod', 'full', 'completed');
-      INSERT INTO order_payments (id, order_id, amount, currency, payment_method, payment_type, status)
-      VALUES ('pay_refund', 'order_1', -1, 'BDT', 'cod', 'refund', 'pending');
+      INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
+      VALUES ('pay_source', 'order_1', 100, 'BDT', 'cod', 'full', 'completed');
+      INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
+      VALUES ('pay_refund', 'order_1', -100, 'BDT', 'cod', 'refund', 'pending');
       INSERT INTO refund_attempts (
         id, attempt_key, refund_group_id, order_id, source_payment_id,
-        refund_payment_id, gateway, amount, currency, reason, request_hash,
+        refund_payment_id, gateway, amount_minor, currency, reason, request_hash,
         provider_idempotency_key, refund_reference
       ) VALUES (
         'refund_1', 'attempt_1', 'group_1', 'order_1', 'pay_source',
-        'pay_refund', 'cod', 1, 'BDT', 'Test refund', 'hash_1',
+        'pay_refund', 'cod', 100, 'BDT', 'Test refund', 'hash_1',
         'provider_key_1', 'reference_1'
       )`],
     ["return", `INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id) VALUES ('return_1', 'order_1', 'requested', 'Test return', 'admin', 'admin_1')`],
@@ -364,21 +359,21 @@ describe("manual COD order amendments on D1 storage", () => {
   });
 
   it("commits a manual order with its reservation, COD tracking, customer stats and replay evidence exactly once", async () => {
-    sqlite.exec(`INSERT INTO customers (id, name, phone, total_orders, total_spent)
-      VALUES ('cust_1', 'Buyer', '+8801712345678', 4, 900)`);
+    sqlite.exec(`INSERT INTO customers (id, name, phone, total_orders)
+      VALUES ('cust_1', 'Buyer', '+8801712345678', 4)`);
     const { expectedVersion: _expectedVersion, ...draft } = input();
     const data = { ...draft, items: [{ productId: "product_1", variantId: "variant_1", quantity: 3 }] };
 
     const created = await ordersAdmin.createOrder(db, data, "admin_1");
     await expect(ordersAdmin.createOrder(db, data, "admin_1")).resolves.toEqual(created);
 
-    expect(sqlite.prepare("SELECT customer_id, total_amount, balance_due, payment_status, inventory_action FROM orders WHERE id = ?")
+    expect(sqlite.prepare("SELECT customer_id, total_amount_minor, balance_due_minor, payment_status, inventory_action FROM orders WHERE id = ?")
       .get(created.id)).toEqual({
-      customer_id: "cust_1", total_amount: 360, balance_due: 360, payment_status: "unpaid", inventory_action: "reserved",
+      customer_id: "cust_1", total_amount_minor: 36000, balance_due_minor: 36000, payment_status: "unpaid", inventory_action: "reserved",
     });
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
       .toEqual({ reserved_stock: 5 });
-    expect(sqlite.prepare("SELECT total_orders, total_spent FROM customers").get()).toEqual({ total_orders: 5, total_spent: 900 });
+    expect(sqlite.prepare("SELECT total_orders FROM customers").get()).toEqual({ total_orders: 5 });
     expect(sqlite.prepare("SELECT cod_status FROM cod_tracking WHERE order_id = ?").get(created.id)).toEqual({ cod_status: "pending" });
     expect(sqlite.prepare("SELECT status FROM admin_order_create_attempts WHERE order_id = ?").get(created.id))
       .toEqual({ status: "committed" });

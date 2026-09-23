@@ -66,10 +66,12 @@ function product(id: string, categoryId: string | null = null) {
         id,
         name: `Product ${id}`,
         slug: id,
-        price: 100,
+        basePriceMinor: 10_000,
+        effectivePriceMinor: 10_000,
+        maxBuyerPriceMinor: 10_000,
         discountType: null,
-        discountPercentage: null,
-        discountAmount: null,
+        discountBps: 0,
+        discountAmountMinor: 0,
         freeDelivery: false,
         categoryId,
         imageUrl: null,
@@ -103,7 +105,7 @@ function createCategoryBatchDb(options: {
                 if (
                     Object.hasOwn(statement.selection, "name")
                     && Object.hasOwn(statement.selection, "slug")
-                    && !Object.hasOwn(statement.selection, "price")
+                    && !Object.hasOwn(statement.selection, "basePriceMinor")
                 ) {
                     return options.categories;
                 }
@@ -189,7 +191,7 @@ describe("listCollectionProductOptions", () => {
             {
                 id: "prod_a",
                 name: "Alpha",
-                price: 100,
+                priceMinor: 10_000,
                 categoryId: "cat_a",
                 categoryName: "Category A",
                 isActive: true,
@@ -209,7 +211,7 @@ describe("listCollectionProductOptions", () => {
         });
 
         expect(result).toEqual({
-            products: rows.map((row) => ({ ...row, primaryImage: null })),
+            products: rows.map(({ priceMinor, ...row }) => ({ ...row, price: priceMinor / 100, primaryImage: null })),
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
         });
         expect(db.batch).toHaveBeenCalledTimes(1);

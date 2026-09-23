@@ -127,13 +127,13 @@ export function buildFixtureSql() {
     patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "110" }),
     patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     `INSERT INTO shipping_methods (
-      id, name, fee, description, is_active, sort_order, created_at, updated_at, deleted_at
+      id, name, fee_minor, description, is_active, sort_order, created_at, updated_at, deleted_at
     ) VALUES (
-      ${sqlString(fixture.shippingMethodId)}, 'OPS006 Standard Delivery', ${fixture.shippingCharge},
+      ${sqlString(fixture.shippingMethodId)}, 'OPS006 Standard Delivery', ${fixture.shippingCharge * 100},
       'Disposable local smoke shipping method', 1, 1, unixepoch(), unixepoch(), NULL
     )
     ON CONFLICT(id) DO UPDATE SET
-      fee = excluded.fee,
+      fee_minor = excluded.fee_minor,
       description = excluded.description,
       is_active = 1,
       sort_order = excluded.sort_order,
@@ -155,12 +155,12 @@ export function buildFixtureSql() {
       deleted_at = NULL,
       updated_at = unixepoch()`,
     `INSERT INTO products (
-      id, name, description, price, category_id, slug, meta_title, meta_description,
-      created_at, updated_at, deleted_at, is_active, discount_percentage,
-      discount_type, discount_amount, free_delivery
+      id, name, description, price_minor, category_id, slug, meta_title, meta_description,
+      created_at, updated_at, deleted_at, is_active, discount_bps,
+      discount_type, discount_amount_minor, free_delivery
     ) VALUES (
       ${sqlString(fixture.productId)}, ${sqlString(fixture.productName)},
-      'Disposable local smoke product. Safe to recreate.', ${fixture.price},
+      'Disposable local smoke product. Safe to recreate.', ${fixture.price * 100},
       ${sqlString(fixture.categoryId)}, 'ops006-smoke-product',
       'OPS006 Smoke Product', 'Disposable local smoke product',
       unixepoch(), unixepoch(), NULL, 1, 0, 'percentage', 0, 0
@@ -168,27 +168,27 @@ export function buildFixtureSql() {
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       description = excluded.description,
-      price = excluded.price,
+      price_minor = excluded.price_minor,
       category_id = excluded.category_id,
       slug = excluded.slug,
       meta_title = excluded.meta_title,
       meta_description = excluded.meta_description,
       deleted_at = NULL,
       is_active = 1,
-      discount_percentage = 0,
+      discount_bps = 0,
       discount_type = 'percentage',
-      discount_amount = 0,
+      discount_amount_minor = 0,
       free_delivery = 0,
       updated_at = unixepoch()`,
     `INSERT INTO product_variants (
-      id, product_id, option_combination_key, weight, sku, price, stock, reserved_stock,
+      id, product_id, option_combination_key, weight, sku, price_minor, stock, reserved_stock,
       preorder_stock, is_default, track_inventory, version, stock_version,
       low_stock_threshold, allow_preorder, preorder_date, preorder_message,
-      allow_backorder, backorder_limit, discount_percentage, discount_type,
-      discount_amount, barcode, barcode_type, created_at, updated_at, deleted_at
+      allow_backorder, backorder_limit, discount_bps, discount_type,
+      discount_amount_minor, barcode, barcode_type, created_at, updated_at, deleted_at
     ) VALUES (
       ${sqlString(fixture.variantId)}, ${sqlString(fixture.productId)}, NULL, NULL,
-      ${sqlString(fixture.variantSku)}, ${fixture.price}, 0, 0, 0, 1, 0, 1, 1,
+      ${sqlString(fixture.variantSku)}, ${fixture.price * 100}, 0, 0, 0, 1, 0, 1, 1,
       NULL, 0, NULL, NULL, 0, 0, 0, 'percentage', 0, NULL, NULL,
       unixepoch(), unixepoch(), NULL
     )
@@ -197,16 +197,16 @@ export function buildFixtureSql() {
       option_combination_key = NULL,
       weight = NULL,
       sku = excluded.sku,
-      price = excluded.price,
+      price_minor = excluded.price_minor,
       stock = 0,
       reserved_stock = 0,
       preorder_stock = 0,
       is_default = 1,
       track_inventory = 0,
       deleted_at = NULL,
-      discount_percentage = 0,
+      discount_bps = 0,
       discount_type = 'percentage',
-      discount_amount = 0,
+      discount_amount_minor = 0,
       updated_at = unixepoch()`,
   ].map((statement) => compactSql(statement)).join("; ");
 }
@@ -429,11 +429,10 @@ export function buildPaymentReadinessFixtureSql() {
         `INSERT INTO orders (
           id, customer_name, customer_phone, customer_email, shipping_address,
           city, zone, area, city_name, zone_name, area_name,
-          total_amount, shipping_charge, discount_amount,
           currency_code, currency_decimal_places, subtotal_amount_minor,
           shipping_amount_minor, discount_amount_minor, tax_amount_minor,
           total_amount_minor, status, notes,
-          payment_method, payment_status, paid_amount, balance_due,
+          payment_method, payment_status, paid_amount_minor, balance_due_minor,
           fulfillment_status, inventory_pool, inventory_action, version,
           created_at, updated_at, deleted_at
         ) VALUES (
@@ -443,30 +442,30 @@ export function buildPaymentReadinessFixtureSql() {
           'House 1, Road 10, Mirpur DOHS, Dhaka',
           ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
           'Dhaka', 'Mirpur', 'Section 10',
-          ${totalAmount}, ${fixture.shippingCharge}, 0,
           'BDT', 2, ${subtotalAmountMinor}, ${shippingAmountMinor}, 0, 0,
           ${totalAmountMinor}, 'incomplete',
           'Disposable local payment readiness smoke order.',
-          ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmount},
+          ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmountMinor},
           'pending', 'regular', 'none', 1, unixepoch(), unixepoch(), NULL
         )`,
         `INSERT INTO order_items (
-          id, order_id, product_id, variant_id, quantity, price,
-          product_name, variant_label, inventory_tracked, fulfillment_status, created_at
+          id, order_id, product_id, variant_id, quantity, unit_price_minor, line_subtotal_minor,
+          taxable_amount_minor, product_name, variant_label, inventory_tracked, fulfillment_status, created_at
         ) VALUES (
           ${sqlString(`ops006_item_${gateway.gateway}`)}, ${sqlString(gateway.orderId)},
           ${sqlString(fixture.productId)}, ${sqlString(fixture.variantId)},
-          1, ${fixture.price}, ${sqlString(fixture.productName)}, NULL, 0, 'pending', unixepoch()
+          1, ${subtotalAmountMinor}, ${subtotalAmountMinor}, ${subtotalAmountMinor},
+          ${sqlString(fixture.productName)}, NULL, 0, 'pending', unixepoch()
         )`,
         `INSERT INTO checkout_attempts (
           id, request_key, request_hash, checkout_token, order_id, status,
-          payment_method, total_amount, response_payload, attempts,
+          payment_method, total_amount_minor, response_payload, attempts,
           claim_id, claim_expires_at, last_error, created_at, updated_at
         ) VALUES (
           ${sqlString(`ops006_attempt_${gateway.gateway}`)}, ${sqlString(requestKey)},
           ${sqlString(`${requestKey}:hash`)}, ${sqlString(gateway.token)},
           ${sqlString(gateway.orderId)}, 'committed', ${sqlString(gateway.gateway)},
-          ${totalAmount}, ${sqlString(responsePayload)}, 1,
+          ${totalAmountMinor}, ${sqlString(responsePayload)}, 1,
           NULL, NULL, NULL, unixepoch(), unixepoch()
         )`,
       ];

@@ -2,7 +2,7 @@
 // Customer domain tables: customers, customerHistory, customerAuthOtpChallenges,
 // authOtpDeliveryReceipts, customerSessions.
 
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -25,7 +25,6 @@ export const customers = sqliteTable("customers", {
     profileCompletionRequiredAt: integer("profile_completion_required_at", { mode: "timestamp" }),
     profileCompletedAt: integer("profile_completed_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
-    totalSpent: real("total_spent").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

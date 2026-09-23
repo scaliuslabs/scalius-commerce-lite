@@ -4,7 +4,6 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { getCurrencyConfig } from "../settings";
 import { calculateTaxQuote } from "./calculator";
 import { buildStorefrontDiscountAllocation } from "./discount-allocation";
-import { toMinorUnits } from "./money";
 import type {
     TaxDestination,
     TaxDiscountAllocationInput,
@@ -131,7 +130,7 @@ export interface StorefrontTaxQuoteLineInput {
     lineId: string;
     productId: string;
     variantId: string;
-    unitPrice: number;
+    unitPriceMinor: number;
     quantity: number;
     taxClassId: string | null;
 }
@@ -139,9 +138,9 @@ export interface StorefrontTaxQuoteLineInput {
 export interface StorefrontTaxQuoteInput {
     destination: TaxDestination;
     lines: StorefrontTaxQuoteLineInput[];
-    shippingAmount: number;
-    /** Manual order-level discount (admin orders). */
-    discountAmount?: number;
+    shippingMinor: number;
+    /** Manual order-level discount (admin orders), in minor units. */
+    discountMinor?: number;
     /** Exact allocation of the applied storefront discount. */
     promotionDiscountAllocation?: TaxDiscountAllocationInput;
     currency?: { code: string; decimalPlaces: number };
@@ -187,12 +186,12 @@ export async function calculateStorefrontTaxQuote(
         lineId: line.lineId,
         productId: line.productId,
         variantId: line.variantId,
-        unitPriceMinor: toMinorUnits(line.unitPrice, currency.decimalPlaces),
+        unitPriceMinor: line.unitPriceMinor,
         quantity: line.quantity,
         taxClassId: line.taxClassId,
     }));
 
-    if (input.promotionDiscountAllocation && input.discountAmount) {
+    if (input.promotionDiscountAllocation && input.discountMinor) {
         throw new ValidationError("A discount allocation cannot be combined with a manual discount.");
     }
     const discount = input.promotionDiscountAllocation
@@ -204,8 +203,7 @@ export async function calculateStorefrontTaxQuote(
             allocation: input.promotionDiscountAllocation,
         }
         : buildStorefrontDiscountAllocation({
-            decimalPlaces: currency.decimalPlaces,
-            discountAmount: input.discountAmount ?? 0,
+            discountMinor: input.discountMinor ?? 0,
             lines: input.lines,
         });
 
@@ -217,7 +215,7 @@ export async function calculateStorefrontTaxQuote(
         rates: authority.rates,
         destination: input.destination,
         lines,
-        shippingMinor: toMinorUnits(input.shippingAmount, currency.decimalPlaces),
+        shippingMinor: input.shippingMinor,
         discountMinor: discount.discountMinor,
         discountAllocation: discount.allocation,
     });

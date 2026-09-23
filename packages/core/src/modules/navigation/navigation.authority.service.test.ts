@@ -45,7 +45,7 @@ describe("navigation authority D1 commands", () => {
   it("pages beyond the old 100-resource cap and hydrates unavailable selections", async () => {
     const db = createDatabase();
     const insertProduct = sqlite!.prepare(
-      "INSERT INTO products (id, name, slug, price, is_active, deleted_at) VALUES (?, ?, ?, 100, ?, ?)",
+      "INSERT INTO products (id, name, slug, price_minor, is_active, deleted_at) VALUES (?, ?, ?, 10000, ?, ?)",
     );
     for (let index = 1; index <= 125; index += 1) {
       const suffix = String(index).padStart(3, "0");

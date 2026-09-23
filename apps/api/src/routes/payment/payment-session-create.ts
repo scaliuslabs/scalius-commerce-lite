@@ -143,10 +143,9 @@ export function isPaymentSessionProcessingResult(
 
 type PaymentSessionOrderRow = {
   id: string;
-  totalAmount: number;
-  totalAmountMinor: number | null;
-  currencyCode: string | null;
-  currencyDecimalPlaces: number | null;
+  totalAmountMinor: number;
+  currencyCode: string;
+  currencyDecimalPlaces: number;
   customerId: string | null;
   accountOwnerCustomerId: string | null;
   customerName: string;
@@ -157,61 +156,31 @@ type PaymentSessionOrderRow = {
   status: string;
   paymentMethod: string;
   paymentStatus: string;
-  paidAmount: number;
-  balanceDue: number;
+  paidAmountMinor: number;
+  balanceDueMinor: number;
   version: number;
   deletedAt: Date | null;
   shipmentClaimId: string | null;
   shipmentClaimExpiresAt: Date | null;
 };
 
-type PaymentSessionOrderCurrencyFields = Pick<
-  PaymentSessionOrderRow,
-  "currencyCode" | "currencyDecimalPlaces" | "totalAmountMinor"
->;
-
 function resolveAuthoritativeOrderCurrency(
-  order: PaymentSessionOrderCurrencyFields,
+  order: Pick<PaymentSessionOrderRow, "currencyCode" | "currencyDecimalPlaces" | "totalAmountMinor">,
 ): OrderCurrencySnapshot {
   const currency = resolveOrderCurrencySnapshot(order);
-  if (currency.legacyFallback && order.totalAmountMinor != null) {
-    throw new ValidationError("Order currency snapshot is incomplete. Payment cannot be started safely.");
-  }
-  if (
-    !currency.legacyFallback &&
-    (!Number.isSafeInteger(order.totalAmountMinor) || Number(order.totalAmountMinor) <= 0)
-  ) {
+  if (!Number.isSafeInteger(order.totalAmountMinor) || order.totalAmountMinor <= 0) {
     throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
   }
   return currency;
 }
 
-function resolveAuthoritativeProviderMinorAmount(
-  policy: PaymentSessionPolicy,
-  currency: OrderCurrencySnapshot,
-): number {
-  if (Number.isSafeInteger(policy.chargeAmountMinor) && policy.chargeAmountMinor! > 0) {
-    return policy.chargeAmountMinor!;
-  }
-  if (!currency.legacyFallback) {
-    throw new ValidationError("Order payment amount snapshot is incomplete. Payment cannot be started safely.");
-  }
-  const amountMinor = Math.round(policy.chargeAmount * 10 ** currency.decimalPlaces);
-  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
-    throw new ValidationError("Payment amount must be greater than zero");
-  }
-  return amountMinor;
-}
-
 type GatewayPayableOrder = Pick<
   PaymentSessionOrderRow,
   | "id"
-  | "totalAmount"
   | "status"
   | "paymentMethod"
   | "paymentStatus"
-  | "paidAmount"
-  | "balanceDue"
+  | "paidAmountMinor"
   | "deletedAt"
   | "shipmentClaimId"
   | "shipmentClaimExpiresAt"
@@ -220,15 +189,14 @@ type GatewayPayableOrder = Pick<
 export type CustomerPaymentSessionRecoveryOrder = Pick<
   PaymentSessionOrderRow,
   | "id"
-  | "totalAmount"
   | "totalAmountMinor"
   | "currencyCode"
   | "currencyDecimalPlaces"
   | "status"
   | "paymentMethod"
   | "paymentStatus"
-  | "paidAmount"
-  | "balanceDue"
+  | "paidAmountMinor"
+  | "balanceDueMinor"
   | "deletedAt"
   | "shipmentClaimId"
   | "shipmentClaimExpiresAt"
@@ -308,7 +276,7 @@ async function createPaymentSessionForOrder(
     depositAmount: input.depositAmount,
   }, checkoutFlowSettings, orderCurrency, currentCurrency.getCode);
   const currency = orderCurrency.code;
-  const amountMinor = resolveAuthoritativeProviderMinorAmount(policy, orderCurrency);
+  const amountMinor = policy.chargeAmountMinor;
   const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
   if (amountIssue) throw new ValidationError(amountIssue);
 
@@ -323,7 +291,7 @@ async function createPaymentSessionForOrder(
     orderId: input.orderId,
     gateway: gateway.id,
     paymentType: policy.paymentType,
-    amount: policy.chargeAmount,
+    amountMinor,
     currency,
     ...identityProof(input.proof),
     requestContext: { amountMinor, orderVersion: order.version, ...urls },
@@ -523,7 +491,6 @@ async function loadPaymentSessionOrder(
   const order = await db
     .select({
       id: orders.id,
-      totalAmount: orders.totalAmount,
       totalAmountMinor: orders.totalAmountMinor,
       currencyCode: orders.currencyCode,
       currencyDecimalPlaces: orders.currencyDecimalPlaces,
@@ -537,8 +504,8 @@ async function loadPaymentSessionOrder(
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
-      paidAmount: orders.paidAmount,
-      balanceDue: orders.balanceDue,
+      paidAmountMinor: orders.paidAmountMinor,
+      balanceDueMinor: orders.balanceDueMinor,
       version: orders.version,
       deletedAt: orders.deletedAt,
       shipmentClaimId: orders.shipmentClaimId,
@@ -568,7 +535,7 @@ function assertOrderCanReachGatewayReadinessCheck(
     !isOnlinePaymentMethod(order.paymentMethod) ||
     !isOnlinePaymentMethod(expectedGateway) ||
     order.paymentStatus !== PaymentStatus.FAILED ||
-    Number(order.paidAmount ?? 0) > 0
+    order.paidAmountMinor > 0
   ) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
@@ -591,7 +558,7 @@ async function ensureOrderCanUseGateway(
 
   if (
     !options.replaceExistingAttempt &&
-    (order.paymentStatus !== PaymentStatus.FAILED || Number(order.paidAmount ?? 0) > 0)
+    (order.paymentStatus !== PaymentStatus.FAILED || order.paidAmountMinor > 0)
   ) {
     throw new ValidationError(`Order is not configured for ${label} payment`);
   }
@@ -611,7 +578,7 @@ async function ensureOrderCanUseGateway(
     if (
       order.status !== "incomplete" ||
       (order.paymentStatus !== PaymentStatus.UNPAID && order.paymentStatus !== PaymentStatus.FAILED) ||
-      Number(order.paidAmount ?? 0) > 0
+      order.paidAmountMinor > 0
     ) {
       throw new ValidationError("This checkout can no longer change payment method.");
     }
@@ -662,7 +629,7 @@ async function ensureOrderCanUseGateway(
         AND ${orders.status} = 'incomplete'
         AND ${orders.paymentMethod} = ${order.paymentMethod}
         AND ${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
-        AND ${orders.paidAmount} <= 0
+        AND ${orders.paidAmountMinor} <= 0
         AND ${orders.deletedAt} IS NULL
         AND (
           ${orders.shipmentClaimId} IS NULL
@@ -725,7 +692,7 @@ async function ensureOrderCanUseGateway(
           eq(orders.status, "incomplete"),
           eq(orders.paymentMethod, order.paymentMethod),
           sql`${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})`,
-          sql`${orders.paidAmount} <= 0`,
+          sql`${orders.paidAmountMinor} <= 0`,
           sql`${orders.deletedAt} IS NULL`,
         )),
       ]);
@@ -800,8 +767,10 @@ function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMeth
   return getPaymentGateway(order.paymentMethod)?.id ?? null;
 }
 
-function shouldRequestBalancePayment(order: Pick<PaymentSessionOrderRow, "paymentStatus" | "paidAmount" | "balanceDue">): boolean {
-  return order.paymentStatus === PaymentStatus.PARTIAL || (Number(order.paidAmount ?? 0) > 0 && Number(order.balanceDue ?? 0) > 0);
+function shouldRequestBalancePayment(
+  order: Pick<PaymentSessionOrderRow, "paymentStatus" | "paidAmountMinor" | "balanceDueMinor">,
+): boolean {
+  return order.paymentStatus === PaymentStatus.PARTIAL || (order.paidAmountMinor > 0 && order.balanceDueMinor > 0);
 }
 
 function inactiveRecovery(

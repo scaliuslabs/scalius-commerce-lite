@@ -383,8 +383,8 @@ export async function seedLiveCheckoutTarget(
       })),
       {
         sql: `INSERT INTO shipping_methods
-                (id, name, fee, description, is_active, sort_order)
-              VALUES (?, ?, 99, 'Synthetic load-test delivery', 1, 0)`,
+                (id, name, fee_minor, description, is_active, sort_order)
+              VALUES (?, ?, 9900, 'Synthetic load-test delivery', 1, 0)`,
         args: [fixture.shippingMethodId, `${identity.targetId} delivery`],
       },
       {
@@ -407,18 +407,18 @@ export async function seedLiveCheckoutTarget(
       },
       {
         sql: `INSERT INTO products
-                (id, name, description, price, slug, no_index,
+                (id, name, description, price_minor, slug, no_index,
                  exclude_from_sitemap, exclude_from_product_feed, is_active)
               VALUES (?, 'Disposable Atomic Spread Fixture',
-                      'Synthetic isolated load-test fixture.', 1999, ?, 1, 1, 1, 1)`,
+                      'Synthetic isolated load-test fixture.', 199900, ?, 1, 1, 1, 1)`,
         args: [fixture.spreadProductId, fixture.spreadSlug],
       },
       {
         sql: `INSERT INTO product_variants
-                (id, product_id, option_combination_key, sku, price, stock,
+                (id, product_id, option_combination_key, sku, price_minor, stock,
                  reserved_stock, preorder_stock, is_default, track_inventory,
                  stock_version)
-              VALUES (?, ?, NULL, ?, 1999, 0, 0, 0, 1, 0, 1)`,
+              VALUES (?, ?, NULL, ?, 199900, 0, 0, 0, 1, 0, 1)`,
         args: [
           fixture.spreadVariantId,
           fixture.spreadProductId,
@@ -427,18 +427,18 @@ export async function seedLiveCheckoutTarget(
       },
       {
         sql: `INSERT INTO products
-                (id, name, description, price, slug, no_index,
+                (id, name, description, price_minor, slug, no_index,
                  exclude_from_sitemap, exclude_from_product_feed, is_active)
               VALUES (?, 'Disposable Atomic Hot Fixture',
-                      'Synthetic isolated load-test fixture.', 2499, ?, 1, 1, 1, 1)`,
+                      'Synthetic isolated load-test fixture.', 249900, ?, 1, 1, 1, 1)`,
         args: [fixture.hotProductId, fixture.hotSlug],
       },
       {
         sql: `INSERT INTO product_variants
-                (id, product_id, option_combination_key, sku, price, stock,
+                (id, product_id, option_combination_key, sku, price_minor, stock,
                  reserved_stock, preorder_stock, is_default, track_inventory,
                  stock_version)
-              VALUES (?, ?, NULL, ?, 2499, 50, 0, 0, 1, 1, 1)`,
+              VALUES (?, ?, NULL, ?, 249900, 50, 0, 0, 1, 1, 1)`,
         args: [
           fixture.hotVariantId,
           fixture.hotProductId,

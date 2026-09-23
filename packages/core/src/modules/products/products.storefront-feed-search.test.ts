@@ -45,8 +45,8 @@ function insertProduct(input: {
 }): void {
     sqlite
         .prepare(
-            `INSERT INTO products (id, name, description, price, category_id, slug, created_at, updated_at)
-             VALUES (?, ?, '', 1000, ?, ?, ?, ?)`,
+            `INSERT INTO products (id, name, description, price_minor, category_id, slug, created_at, updated_at)
+             VALUES (?, ?, '', 100000, ?, ?, ?, ?)`,
         )
         .run(input.id, input.name, input.categoryId, input.slug, input.createdAt, input.createdAt);
     const mediaId = `media_${input.id}`;
@@ -60,8 +60,8 @@ function insertProduct(input: {
 function insertSimpleSku(productId: string): void {
     sqlite
         .prepare(
-            `INSERT INTO product_variants (id, product_id, sku, price, stock, is_default, track_inventory)
-             VALUES (?, ?, ?, 1000, 0, 1, 0)`,
+            `INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+             VALUES (?, ?, ?, 100000, 0, 1, 0)`,
         )
         .run(`var_default_${productId}`, productId, `SIMPLE-${productId}`);
 }
@@ -77,8 +77,8 @@ function insertMixedTopologySkus(productId: string): void {
                ('value_green', 'option_color', 'Green', 'green', 0);
     `);
     const statement = sqlite.prepare(
-        `INSERT INTO product_variants (id, product_id, option_combination_key, sku, price, stock, is_default, track_inventory)
-         VALUES (?, ?, ?, ?, 1000, 5, 0, 1)`,
+        `INSERT INTO product_variants (id, product_id, option_combination_key, sku, price_minor, stock, is_default, track_inventory)
+         VALUES (?, ?, ?, ?, 100000, 5, 0, 1)`,
     );
     statement.run("var_mixed_size", productId, "value_42", "MIXED-SIZE");
     statement.run(
@@ -505,8 +505,8 @@ describe("storefront feed category search", () => {
             insertAttribute(productId, material, values[1]);
             insertAttribute(productId, brand, values[2]);
         }
-        sqlite.prepare("UPDATE product_variants SET price = 500 WHERE product_id = 'prod_runner'").run();
-        sqlite.prepare("UPDATE product_variants SET price = 1500 WHERE product_id = 'prod_slip_on'").run();
+        sqlite.prepare("UPDATE product_variants SET price_minor = 50000 WHERE product_id = 'prod_runner'").run();
+        sqlite.prepare("UPDATE product_variants SET price_minor = 150000 WHERE product_id = 'prod_slip_on'").run();
 
         const result = await getStorefrontProducts(db, {
             category: "cat_shoes",
@@ -582,8 +582,8 @@ describe("storefront feed category search", () => {
         const membership = {
             productIds: ["prod_slip_on", "prod_runner", "prod_loafer"],
         };
-        sqlite.prepare("UPDATE product_variants SET price = 500 WHERE product_id = 'prod_runner'").run();
-        sqlite.prepare("UPDATE product_variants SET price = 1500 WHERE product_id = 'prod_slip_on'").run();
+        sqlite.prepare("UPDATE product_variants SET price_minor = 50000 WHERE product_id = 'prod_runner'").run();
+        sqlite.prepare("UPDATE product_variants SET price_minor = 150000 WHERE product_id = 'prod_slip_on'").run();
 
         const result = await getStorefrontCollectionProducts(db, membership, {
             page: 1,

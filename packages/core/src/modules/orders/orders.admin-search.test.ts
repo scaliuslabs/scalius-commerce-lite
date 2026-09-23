@@ -6,11 +6,11 @@ function setup() {
   const harness = createSqliteD1Database();
   harness.sqlite.exec(`
     INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone,
-      total_amount, shipping_charge, payment_method, status, payment_status, paid_amount, balance_due,
+      total_amount_minor, shipping_amount_minor, payment_method, status, payment_status, paid_amount_minor, balance_due_minor,
       currency_code, currency_decimal_places)
     VALUES
-      ('ORDERAAA111', 'Rahim Uddin', '+8801711111111', 'Mirpur', 'city', 'zone', 100, 0, 'cod', 'shipped', 'unpaid', 0, 100, 'BDT', 2),
-      ('ORDERBBB222', 'Karim Ali', '+8801822222222', 'Uttara', 'city', 'zone', 100, 0, 'cod', 'pending', 'unpaid', 0, 100, 'BDT', 2);
+      ('ORDERAAA111', 'Rahim Uddin', '+8801711111111', 'Mirpur', 'city', 'zone', 10000, 0, 'cod', 'shipped', 'unpaid', 0, 10000, 'BDT', 2),
+      ('ORDERBBB222', 'Karim Ali', '+8801822222222', 'Uttara', 'city', 'zone', 10000, 0, 'cod', 'pending', 'unpaid', 0, 10000, 'BDT', 2);
     INSERT INTO delivery_providers (id, name, type, credentials, config)
       VALUES ('provider', 'Steadfast', 'steadfast', '{}', '{}');
     INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status, external_id, tracking_id)

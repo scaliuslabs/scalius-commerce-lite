@@ -76,8 +76,9 @@ with a 60s `Cache-Control`; the storefront gets them in the `platform` block of
 `getCurrencyConfig(db)` returns `{ code, symbol, usdExchangeRate, decimalPlaces }`
 from the `currency` document; `decimalPlaces` comes from ISO 4217 via
 `getDecimalPlaces()` in `@scalius/shared/currency`. A missing document yields
-the BDT defaults; a relational read error throws. Once any product or order
-exists the currency code is locked (`isCurrencyCodeLocked`).
+the BDT defaults; a relational read error throws. Catalog, shipping and order
+amounts are stored as integer minor units of this currency, so once any product,
+shipping method or order exists the code is locked (`isCurrencyCodeLocked`).
 
 ## Notification channels
 

@@ -53,14 +53,14 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       { id: "city_local", name: "Synthetic City", type: "city", externalIds: '{"pathao":"1"}', metadata: "{}" },
       { id: "zone_local", name: "Synthetic Zone", type: "zone", parentId: "city_local", externalIds: '{"pathao":"2"}', metadata: "{}" },
     ]);
-    await db.insert(schema.products).values({ id: "product_local", name: "Synthetic product", slug: "synthetic-product", price: 100 });
-    await db.insert(schema.productVariants).values({ id: "variant_local", productId: "product_local", sku: "SYNTHETIC-924", price: 100, isDefault: true, trackInventory: false });
+    await db.insert(schema.products).values({ id: "product_local", name: "Synthetic product", slug: "synthetic-product", priceMinor: 10_000 });
+    await db.insert(schema.productVariants).values({ id: "variant_local", productId: "product_local", sku: "SYNTHETIC-924", priceMinor: 10_000, isDefault: true, trackInventory: false });
     await db.insert(schema.orders).values({
       id: "order_local", customerName: "Synthetic buyer", customerPhone: "+8801712345678", shippingAddress: "Synthetic audit address",
-      city: "city_local", zone: "zone_local", totalAmount: 160, shippingCharge: 60, balanceDue: 160,
+      city: "city_local", zone: "zone_local", totalAmountMinor: 16_000, subtotalAmountMinor: 10_000, shippingAmountMinor: 6_000, balanceDueMinor: 16_000,
       currencyCode: "BDT", currencyDecimalPlaces: 2, status: "confirmed", paymentMethod: "cod", paymentStatus: "unpaid",
     });
-    await db.insert(schema.orderItems).values({ id: "item_local", orderId: "order_local", productId: "product_local", variantId: "variant_local", quantity: 1, price: 100 });
+    await db.insert(schema.orderItems).values({ id: "item_local", orderId: "order_local", productId: "product_local", variantId: "variant_local", quantity: 1, unitPriceMinor: 10_000, lineSubtotalMinor: 10_000, taxableAmountMinor: 10_000 });
   });
   afterEach(() => { vi.unstubAllGlobals(); sqlite?.close(); });
 
@@ -414,7 +414,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
   if (providerType === "pathao") {
     it("advances only provider-less manual shipments from the merchant delivered command", async () => {
       sqlite.exec(`
-        UPDATE orders SET status = 'shipped', payment_method = 'stripe', payment_status = 'paid', paid_amount = 160, balance_due = 0;
+        UPDATE orders SET status = 'shipped', payment_method = 'stripe', payment_status = 'paid', paid_amount_minor = 16000, balance_due_minor = 0;
         UPDATE order_items SET fulfillment_status = 'shipped';
         INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status) VALUES
           ('courier_ship', 'order_local', 'provider_local', 'pathao', 'in_transit'),

@@ -4,7 +4,7 @@ import {
     buildStorefrontDiscountAllocation,
     buildStorefrontTaxAllocationLineId,
 } from "./discount-allocation";
-import { allocateMinorAmount, fromMinorUnits, toMinorUnits } from "./money";
+import { allocateMinorAmount } from "./money";
 import type { CalculateTaxQuoteInput, TaxRateDefinition } from "./types";
 
 const destination = {
@@ -65,15 +65,6 @@ function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuo
 }
 
 describe("tax minor-unit money", () => {
-    it("supports ISO-style zero, two, and three decimal currencies without float drift", () => {
-        expect(toMinorUnits(12.6, 0)).toBe(13);
-        expect(toMinorUnits(12.345, 2)).toBe(1_235);
-        expect(toMinorUnits(1.005, 2)).toBe(101);
-        expect(toMinorUnits(0.1 + 0.2, 2)).toBe(30);
-        expect(toMinorUnits(12.345, 3)).toBe(12_345);
-        expect(fromMinorUnits(12_345, 3)).toBe(12.345);
-    });
-
     it("uses deterministic largest-remainder allocation", () => {
         const allocated = allocateMinorAmount(2, [
             { key: "b", weightMinor: 1 },
@@ -287,12 +278,11 @@ describe("calculateTaxQuote", () => {
         const lowLineId = buildStorefrontTaxAllocationLineId(0, "variant-low");
         const highLineId = buildStorefrontTaxAllocationLineId(1, "variant-high");
         const storefrontLines = [
-            { lineId: lowLineId, productId: "product-low", unitPrice: 1, quantity: 1 },
-            { lineId: highLineId, productId: "product-high", unitPrice: 1, quantity: 1 },
+            { lineId: lowLineId, productId: "product-low", unitPriceMinor: 100, quantity: 1 },
+            { lineId: highLineId, productId: "product-high", unitPriceMinor: 100, quantity: 1 },
         ];
         const discount = buildStorefrontDiscountAllocation({
-            decimalPlaces: 2,
-            discountAmount: 0.01,
+            discountMinor: 1,
             lines: storefrontLines,
         });
         const quoteInput = input({

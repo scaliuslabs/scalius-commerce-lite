@@ -3,7 +3,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products/products.types";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
-import { fromMinorUnits, toMinorUnits } from "@scalius/core/modules/tax";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
 import { ok } from "../utils/api-response";
@@ -79,15 +79,15 @@ app.openapi(validateDiscountRoute, async (c) => {
           id: `cart:${index}:${variantId}`,
           productId: item.id,
           variantId,
-          unitPriceMinor: toMinorUnits(item.price, currency.decimalPlaces),
+          unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
           quantity: item.quantity,
         })),
-        shippingAmountMinor: toMinorUnits(shippingCost, currency.decimalPlaces),
+        shippingAmountMinor: toMinor(shippingCost, currency.decimalPlaces),
       },
     });
     const codeDiscount = quote.applied?.discounts.find(({ promotionCode }) => promotionCode !== null);
     if (!quote.applied || !codeDiscount) throw new ValidationError("This discount code is not valid.");
-    const discountAmount = fromMinorUnits(quote.applied.totalDiscountMinor, currency.decimalPlaces);
+    const discountAmount = fromMinor(quote.applied.totalDiscountMinor, currency.decimalPlaces);
     return ok(c, {
       valid: true,
       discount: {

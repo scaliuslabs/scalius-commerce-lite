@@ -30,10 +30,10 @@ function openStore(provider: "d1" | "turso"): Database {
     sqlite = createMigratedSqlite({ provider });
     sqlite.exec(`
         INSERT INTO categories (id, name, slug, status) VALUES ('cat_shoes', 'Shoes', 'shoes', 'published');
-        INSERT INTO products (id, name, slug, price, category_id) VALUES
-            ('prod_tee', 'Tee', 'tee', 500, NULL),
-            ('prod_cap', 'Cap', 'cap', 200, NULL),
-            ('prod_boot', 'Boot', 'boot', 2000, 'cat_shoes');
+        INSERT INTO products (id, name, slug, price_minor, category_id) VALUES
+            ('prod_tee', 'Tee', 'tee', 50000, NULL),
+            ('prod_cap', 'Cap', 'cap', 20000, NULL),
+            ('prod_boot', 'Boot', 'boot', 200000, 'cat_shoes');
         INSERT INTO collections (id, name, presentation, config, is_active) VALUES
             ('col_summer', 'Summer', 'grid', '{"source":"manual","productIds":["prod_cap"]}', 1),
             ('col_shoes', 'Shoes', 'grid', '{"source":"dynamic","categoryIds":["cat_shoes"]}', 1),
@@ -148,9 +148,9 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         await expect(quote(db, "ENDED")).rejects.toThrow("expired");
         const once = await live(db, { name: "Once", codes: [{ code: "ONCE" }], maxRedemptionsPerCustomer: 1, effects: [orderOff(1_000)] });
         sqlite!.exec(`
-            INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount, shipping_charge)
-            VALUES ('order_1', 'One', '+8801700000001', 'Address', 'city', 'zone', 100, 0);
-            INSERT INTO order_items (id, order_id, product_id, quantity, price) VALUES ('item_1', 'order_1', 'prod_tee', 1, 100);
+            INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor)
+            VALUES ('order_1', 'One', '+8801700000001', 'Address', 'city', 'zone', 10000, 0);
+            INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor) VALUES ('item_1', 'order_1', 'prod_tee', 1, 10000);
             INSERT INTO order_discount_allocations (id, order_id, order_item_id, promotion_id, effect_id, promotion_revision,
                 evaluator_version, method, promotion_name, promotion_code, effect_kind, target, currency_code,
                 base_amount_minor, discount_amount_minor, quantity)
@@ -205,9 +205,9 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
                 destination: { city: "c", zone: "z", area: null },
                 lines: cart.lines.map((line) => ({
                     lineId: line.id, productId: line.productId, variantId: line.variantId,
-                    unitPrice: line.unitPriceMinor / 100, quantity: line.quantity, taxClassId: null,
+                    unitPriceMinor: line.unitPriceMinor, quantity: line.quantity, taxClassId: null,
                 })),
-                shippingAmount: 60,
+                shippingMinor: 6_000,
                 promotionDiscountAllocation: discount.taxAllocation,
                 currency: { code: "BDT", decimalPlaces: 2 },
             });

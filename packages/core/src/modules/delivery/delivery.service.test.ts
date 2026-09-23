@@ -898,9 +898,10 @@ describe("delivery provider active-state authority", () => {
     const { db } = createSequentialSelectDb([
       [{
         id: "order_1",
-        totalAmount: 180,
-        paidAmount: 30,
-        balanceDue: 150,
+        currencyDecimalPlaces: 2,
+        totalAmountMinor: 18_000,
+        paidAmountMinor: 3_000,
+        balanceDueMinor: 15_000,
         city: "city_1",
         zone: "zone_1",
         area: null,
@@ -938,7 +939,7 @@ describe("delivery provider active-state authority", () => {
   it("does not create a shipment through an inactive provider", async () => {
     const provider = await readyPathaoProvider({ isActive: false });
     const { db, inserts } = createSequentialSelectDb([
-      [{ id: "order_1", totalAmount: 100, paidAmount: 0 }],
+      [{ id: "order_1", currencyDecimalPlaces: 2, totalAmountMinor: 10_000, paidAmountMinor: 0, balanceDueMinor: 10_000 }],
       [provider],
     ]);
 
@@ -964,7 +965,7 @@ describe("delivery provider active-state authority", () => {
       ),
     });
     const { db, inserts } = createSequentialSelectDb([
-      [{ id: "order_1", totalAmount: 100, paidAmount: 0 }],
+      [{ id: "order_1", currencyDecimalPlaces: 2, totalAmountMinor: 10_000, paidAmountMinor: 0, balanceDueMinor: 10_000 }],
       [provider],
     ]);
 
@@ -1034,8 +1035,10 @@ describe("delivery provider active-state authority", () => {
     const { db, inserts } = createSequentialSelectDb([
       [{
         id: "order_1",
-        totalAmount: 100,
-        paidAmount: 0,
+        currencyDecimalPlaces: 2,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         city: "city_1",
         zone: "zone_1",
         area: null,
@@ -1064,8 +1067,10 @@ describe("delivery provider active-state authority", () => {
     const { db, inserts } = createSequentialSelectDb([
       [{
         id: "order_1",
-        totalAmount: 100,
-        paidAmount: 0,
+        currencyDecimalPlaces: 2,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
         city: "city_1",
         zone: "zone_1",
         area: null,

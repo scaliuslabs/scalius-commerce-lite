@@ -1,9 +1,9 @@
-import { allocateMinorAmount, toMinorUnits } from "./money";
+import { allocateMinorAmount } from "./money";
 import type { TaxDiscountAllocationInput } from "./types";
 
 export interface StorefrontDiscountAllocationLine {
     lineId: string;
-    unitPrice: number;
+    unitPriceMinor: number;
     quantity: number;
 }
 
@@ -27,13 +27,15 @@ export function buildStorefrontTaxAllocationLineId(index: number, variantId: str
  * value. Storefront discounts come with their exact promotion allocation.
  */
 export function buildStorefrontDiscountAllocation(input: {
-    decimalPlaces: number;
-    discountAmount: number;
+    discountMinor: number;
     lines: StorefrontDiscountAllocationLine[];
 }): { discountMinor: number; allocation: TaxDiscountAllocationInput } {
-    const requestedMinor = toMinorUnits(input.discountAmount, input.decimalPlaces);
+    const requestedMinor = input.discountMinor;
+    if (!Number.isSafeInteger(requestedMinor) || requestedMinor < 0) {
+        throw new RangeError("Discount must be a non-negative minor-unit integer.");
+    }
     const weights = input.lines.map((line) => {
-        const weightMinor = toMinorUnits(line.unitPrice, input.decimalPlaces) * line.quantity;
+        const weightMinor = line.unitPriceMinor * line.quantity;
         if (!Number.isSafeInteger(weightMinor) || weightMinor < 0) {
             throw new RangeError("Discount allocation line total exceeds the safe integer range.");
         }

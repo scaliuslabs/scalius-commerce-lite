@@ -292,6 +292,6 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 - `notifications` module -- `sendOrderNotificationEmail()`, `sendOrderNotification()` (FCM push)
 - `@scalius/core/search` -- FTS5 for order search
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
-- `@scalius/shared/price-utils` -- `roundPrice`, `addPrices`, `subtractPrice`
+- `@scalius/shared/money` -- `toMinor`, `fromMinor`, `discountedPriceMinor` (all order money is integer minor units of the order currency)
 - `@scalius/shared/order-utils` -- `generateOrderId`
 - `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `calculateCustomerStats`

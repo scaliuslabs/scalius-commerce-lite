@@ -219,11 +219,11 @@ beforeEach(() => {
     valid: true,
     issues: [],
     items: [],
-    subtotal: 0,
+    subtotalMinor: 0,
     hasFreeDeliveryProduct: false,
   });
   mocks.validateStorefrontDeliveryPreflight.mockResolvedValue({
-    shippingCharge: 60,
+    shippingMinor: 6_000,
     shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
     cityName: "Dhaka",
     zoneName: "Mirpur",
@@ -512,7 +512,7 @@ describe("cart validation preflight", () => {
         },
       ],
       items: [],
-      subtotal: 0,
+      subtotalMinor: 0,
       hasFreeDeliveryProduct: false,
     });
     const { app, kv } = createTestApp();
@@ -605,7 +605,6 @@ describe("cart validation preflight", () => {
         zone: "zone_1",
         area: null,
         shippingMethodId: "ship_1",
-        currencyCode: "BDT",
       },
       expect.objectContaining({ valid: true }),
     );
@@ -666,14 +665,14 @@ describe("authoritative tax quote", () => {
         productId: "product_1",
         variantId: "variant_1",
         quantity: 1,
-        unitPrice: 100,
+        unitPriceMinor: 10_000,
         productName: "Authoritative product",
         variantLabel: "Large",
         freeDelivery: false,
         availableQuantity: 4,
         taxClassId: "taxc_standard",
       }],
-      subtotal: 100,
+      subtotalMinor: 10_000,
       hasFreeDeliveryProduct: false,
     });
     mocks.calculateStorefrontTaxQuote.mockResolvedValue({
@@ -767,10 +766,10 @@ describe("authoritative tax quote", () => {
       expect.anything(),
       expect.objectContaining({
         lines: [expect.objectContaining({
-          unitPrice: 100,
+          unitPriceMinor: 10_000,
           taxClassId: "taxc_standard",
         })],
-        shippingAmount: 60,
+        shippingMinor: 6_000,
       }),
     );
   });
@@ -780,6 +779,7 @@ describe("authoritative tax quote", () => {
       currencyCode: "JPY",
       decimalPlaces: 0,
       unitPrice: 100,
+      unitPriceMinor: 100,
       subtotal: 200,
       subtotalMinor: 200,
       shippingMinor: 60,
@@ -789,6 +789,7 @@ describe("authoritative tax quote", () => {
       currencyCode: "KWD",
       decimalPlaces: 3,
       unitPrice: 1.235,
+      unitPriceMinor: 1_235,
       subtotal: 2.47,
       subtotalMinor: 2_470,
       shippingMinor: 60_000,
@@ -800,6 +801,7 @@ describe("authoritative tax quote", () => {
       currencyCode,
       decimalPlaces,
       unitPrice,
+      unitPriceMinor,
       subtotal,
       subtotalMinor,
       shippingMinor,
@@ -819,7 +821,7 @@ describe("authoritative tax quote", () => {
           productId: "product_1",
           variantId: "variant_1",
           quantity: 2,
-          unitPrice,
+          unitPriceMinor,
           productName: "Currency product",
           variantLabel: null,
           freeDelivery: false,
@@ -827,7 +829,7 @@ describe("authoritative tax quote", () => {
           availableQuantity: 4,
           taxClassId: null,
         }],
-        subtotal,
+        subtotalMinor: currencyCode === "JPY" ? 200 : 2_470,
         hasFreeDeliveryProduct: false,
       });
       mocks.calculateStorefrontTaxQuote.mockResolvedValue({
@@ -883,7 +885,7 @@ describe("authoritative tax quote", () => {
       expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          lines: [expect.objectContaining({ unitPrice, quantity: 2 })],
+          lines: [expect.objectContaining({ unitPriceMinor, quantity: 2 })],
           currency: { code: currencyCode, decimalPlaces },
         }),
       );
@@ -909,7 +911,7 @@ describe("authoritative tax quote", () => {
         productId: "product_1",
         variantId: "variant_1",
         quantity: 1,
-        unitPrice: 100,
+        unitPriceMinor: 10_000,
         productName: "Product",
         variantLabel: null,
         freeDelivery: false,
@@ -917,7 +919,7 @@ describe("authoritative tax quote", () => {
         availableQuantity: 2,
         taxClassId: "taxc_1",
       }],
-      subtotal: 100,
+      subtotalMinor: 10_000,
       hasFreeDeliveryProduct: false,
     });
     const taxAllocation = { lines: [{ lineId: "cart:0:variant_1", amountMinor: 5_000 }], shippingMinor: 0 };
@@ -1211,11 +1213,11 @@ describe("checkout status recovery hints", () => {
 
 describe("create order currency parity", () => {
   it.each([
-    { currencyCode: "JPY", decimalPlaces: 0, unitPrice: 100, subtotal: 200, totalMinor: 260 },
-    { currencyCode: "KWD", decimalPlaces: 3, unitPrice: 1.235, subtotal: 2.47, totalMinor: 62_470 },
+    { currencyCode: "JPY", decimalPlaces: 0, unitPrice: 100, unitPriceMinor: 100, subtotal: 200, totalMinor: 260 },
+    { currencyCode: "KWD", decimalPlaces: 3, unitPrice: 1.235, unitPriceMinor: 1_235, subtotal: 2.47, totalMinor: 62_470 },
   ])(
     "keeps $currencyCode cart authority through order creation",
-    async ({ currencyCode, decimalPlaces, unitPrice, subtotal, totalMinor }) => {
+    async ({ currencyCode, decimalPlaces, unitPrice, unitPriceMinor, subtotal, totalMinor }) => {
       const cartValidation = {
         valid: true,
         issues: [],
@@ -1225,7 +1227,7 @@ describe("create order currency parity", () => {
           productId: "product_1",
           variantId: "variant_1",
           quantity: 2,
-          unitPrice,
+          unitPriceMinor,
           productName: "Currency product",
           variantLabel: null,
           freeDelivery: false,
@@ -1233,7 +1235,7 @@ describe("create order currency parity", () => {
           availableQuantity: 4,
           taxClassId: null,
         }],
-        subtotal,
+        subtotalMinor: currencyCode === "JPY" ? 200 : 2_470,
         hasFreeDeliveryProduct: false,
       };
       const quote = {
@@ -1254,7 +1256,6 @@ describe("create order currency parity", () => {
         checkoutToken: `chk_${currencyCode.toLowerCase()}`,
         orderId: `order_${currencyCode.toLowerCase()}`,
         paymentMethod: "cod",
-        totalAmount: subtotal + 60,
         taxQuote: quote,
         commitPayload: { orderData: { id: `order_${currencyCode.toLowerCase()}` } },
       });
@@ -1295,7 +1296,7 @@ describe("create order currency parity", () => {
       );
       expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ currencyCode }),
+        expect.objectContaining({ city: "city_1" }),
         cartValidation,
       );
       expect(mocks.createStorefrontOrder.mock.calls[0]?.[4]).toBe(cartValidation);
@@ -1443,7 +1444,7 @@ describe("create order commit/KV ordering", () => {
         },
         expect.objectContaining({ valid: true }),
         expect.objectContaining({
-          shippingCharge: 60,
+          shippingMinor: 6_000,
           cityName: "Dhaka",
           zoneName: "Mirpur",
         }),
@@ -1698,7 +1699,7 @@ describe("create order commit/KV ordering", () => {
         },
       ],
       items: [],
-      subtotal: 0,
+      subtotalMinor: 0,
       hasFreeDeliveryProduct: false,
     });
     mocks.limiter.limit.mockResolvedValue({ success: false });
