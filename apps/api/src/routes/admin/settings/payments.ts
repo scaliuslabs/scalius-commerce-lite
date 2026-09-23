@@ -19,12 +19,8 @@ import {
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
     isSSLCommerzPlaceholderCredential,
-    getPolarCheckoutReadiness,
-    getPolarSettings,
-    isPolarPlaceholderCredential,
     isStripeCheckoutUsable,
     isSSLCommerzCheckoutUsable,
-    isPolarCheckoutUsable,
 } from "@scalius/core/modules/payments/gateway-settings";
 import {
     saveSettingAggregate,
@@ -43,11 +39,10 @@ import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
-type OnlineGatewayId = "stripe" | "sslcommerz" | "polar";
+type OnlineGatewayId = "stripe" | "sslcommerz";
 const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
     stripe: "Stripe",
     sslcommerz: "SSLCommerz",
-    polar: "Polar",
 };
 const CHECKOUT_CACHE_GROUPS = ["checkout"];
 
@@ -104,11 +99,11 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 // VALIDATION SCHEMAS
 // ─────────────────────────────────────────
 const updateMethodsSchema = z.object({
-    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "polar", "cod"]))
+    enabledMethods: z.array(z.enum(["stripe", "sslcommerz", "cod"]))
         .min(1, "At least one payment method is required")
-        .max(4)
+        .max(3)
         .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
-    defaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"])
+    defaultMethod: z.enum(["stripe", "sslcommerz", "cod"])
 });
 
 const saveStripeSchema = z.object({
@@ -125,18 +120,9 @@ const saveSSLCommerzSchema = z.object({
     enabled: z.boolean().optional()
 });
 
-const savePolarSchema = z.object({
-    accessToken: z.string().optional(),
-    webhookSecret: z.string().optional(),
-    productId: z.string().optional(),
-    sandbox: z.boolean().optional(),
-    enabled: z.boolean().optional()
-});
-
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
 type StripeSettingsMap = Record<string, string | undefined>;
 type SSLCommerzSettingsMap = Record<string, string | undefined>;
-type PolarSettingsMap = Record<string, string | undefined>;
 
 async function readSettingsMap(db: Database, category: string): Promise<Record<string, string | undefined>> {
     const rows = await db
@@ -155,16 +141,8 @@ async function readSSLCommerzSettingsMap(db: Database): Promise<SSLCommerzSettin
     return readSettingsMap(db, "sslcommerz");
 }
 
-async function readPolarSettingsMap(db: Database): Promise<PolarSettingsMap> {
-    return readSettingsMap(db, "polar");
-}
-
 function hasStoredSSLCommerzAccount(map: SSLCommerzSettingsMap): boolean {
     return Boolean(map.store_id?.trim() && map.store_password?.trim());
-}
-
-function hasStoredPolarAccount(map: PolarSettingsMap): boolean {
-    return Boolean(map.access_token?.trim() && map.product_id?.trim());
 }
 
 function storedMarker(value: string | undefined): string {
@@ -260,20 +238,6 @@ function getEffectiveSSLCommerzCheckoutSettings(
     };
 }
 
-function getEffectivePolarCheckoutSettings(map: PolarSettingsMap, body: z.infer<typeof savePolarSchema>) {
-    const existingEnabled = map.enabled !== undefined
-        ? map.enabled !== "false"
-        : hasStoredPolarAccount(map);
-
-    return {
-        accessToken: effectivePlaceholderAwareSecretValue(body.accessToken, map.access_token, isPolarPlaceholderCredential),
-        webhookSecret: effectivePlaceholderAwareSecretValue(body.webhookSecret, map.webhook_secret, isPolarPlaceholderCredential),
-        productId: effectivePlainValue(body.productId, map.product_id),
-        sandbox: body.sandbox ?? map.sandbox !== "false",
-        enabled: body.enabled ?? existingEnabled,
-    };
-}
-
 function buildUpsertSettingStatement(db: Database, category: string, key: string, value: string) {
     return db
         .insert(settings)
@@ -311,7 +275,6 @@ const paymentMethodsResponseSchema = z.object({
     gatewayStatus: z.object({
         stripe: gatewayStatusSchema,
         sslcommerz: gatewayStatusSchema,
-        polar: gatewayStatusSchema,
         cod: gatewayStatusSchema,
     }),
 }).passthrough();
@@ -334,13 +297,12 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey);
     const rawConfig = gatewaySnapshot.preferences;
     const activeConfig = gatewaySnapshot.activePaymentMethods;
-    const { stripe: stripeSettings, sslcommerz: sslSettings, polar: polarSettings } =
+    const { stripe: stripeSettings, sslcommerz: sslSettings } =
         gatewaySnapshot.settings;
 
-    const [stripeMap, sslMap, polarMap, checkoutSettings, currencySettings] = await Promise.all([
+    const [stripeMap, sslMap, checkoutSettings, currencySettings] = await Promise.all([
         readStripeSettingsMap(db),
         readSSLCommerzSettingsMap(db),
-        readPolarSettingsMap(db),
         db
             .select({
                 checkoutMode: siteSettings.checkoutMode,
@@ -359,12 +321,6 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             storeId: sslMap.store_id ?? "",
             storePassword: storedMarker(sslMap.store_password),
             enabled: sslMap.enabled !== undefined ? sslMap.enabled !== "false" : hasStoredSSLCommerzAccount(sslMap),
-        });
-        const polarReadiness = getPolarCheckoutReadiness(polarSettings ?? {
-            accessToken: storedMarker(polarMap.access_token),
-            productId: polarMap.product_id ?? "",
-            webhookSecret: storedMarker(polarMap.webhook_secret),
-            enabled: polarMap.enabled !== undefined ? polarMap.enabled !== "false" : hasStoredPolarAccount(polarMap),
         });
 
         const flowSettings = {
@@ -419,13 +375,6 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                     checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
                     checkoutVisible: flowActiveMethods.includes("sslcommerz"),
                 },
-                polar: {
-                    ...polarReadiness,
-                    environment: getSandboxEnvironment(polarSettings?.sandbox ?? polarMap.sandbox !== "false"),
-                    providerEnabled: polarReadiness.enabled,
-                    checkoutSelected: rawConfig.enabledMethods.includes("polar"),
-                    checkoutVisible: flowActiveMethods.includes("polar"),
-                },
                 cod: {
                     configured: true,
                     enabled: true,
@@ -462,10 +411,9 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
 
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [stripeSettings, sslSettings, polarSettings, currencySettings] = await Promise.all([
+    const [stripeSettings, sslSettings, currencySettings] = await Promise.all([
         getStripeSettings(db, encKey),
         getSSLCommerzSettings(db, encKey),
-        getPolarSettings(db, encKey),
         getCurrencySettings(db),
     ]);
     const stripeReadiness = getStripeCheckoutReadiness(stripeSettings);
@@ -473,7 +421,6 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
     }
     const sslReadiness = getSSLCommerzCheckoutReadiness(sslSettings);
-    const polarReadiness = getPolarCheckoutReadiness(polarSettings);
     if (data.enabledMethods.includes("sslcommerz") && !sslReadiness.usable) {
         throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
     }
@@ -484,14 +431,10 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     if (data.enabledMethods.includes("sslcommerz") && sslCurrencyIssue) {
         throw new ValidationError(sslCurrencyIssue);
     }
-    if (data.enabledMethods.includes("polar") && !polarReadiness.usable) {
-        throw new ValidationError(polarReadiness.blockedReason ?? "Polar is not ready for checkout.");
-    }
     const credentialUsableMethods = data.enabledMethods.filter((method) => {
         if (method === "cod") return true;
         if (method === "stripe") return isStripeCheckoutUsable(stripeSettings);
         if (method === "sslcommerz") return isSSLCommerzCheckoutUsable(sslSettings);
-        if (method === "polar") return isPolarCheckoutUsable(polarSettings);
         return false;
     });
     const usableMethods = filterPaymentGatewayIdsForCurrency(
@@ -708,93 +651,6 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         await invalidateCheckoutCaches(c);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
-});
-
-// ─────────────────────────────────────────
-// POLAR
-// ─────────────────────────────────────────
-
-const polarSettingsResponseSchema = z.object({
-    accessToken: z.string(),
-    webhookSecret: z.string(),
-    productId: z.string(),
-    sandbox: z.boolean(),
-    enabled: z.boolean(),
-});
-
-const getPolarRoute = createRoute({
-    method: "get",
-    path: "/polar",
-    operationId: "dashboard.payments.polar_get",
-    tags: ["Admin - Settings"],
-    summary: "Get Polar settings",
-    responses: {
-        200: { description: "Polar settings", content: { "application/json": { schema: successEnvelope(polarSettingsResponseSchema) } } },
-        ...errorResponses,
-    }
-});
-
-app.openapi(getPolarRoute, async (c) => {
-    const db = c.get("db");
-        const rows = await db.select({ key: settings.key, value: settings.value }).from(settings).where(eq(settings.category, "polar")).all();
-        const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-
-        return ok(c, {
-            accessToken: map.access_token ? MASKED : "",
-            webhookSecret: map.webhook_secret ? MASKED : "",
-            productId: map.product_id ?? "",
-            sandbox: map.sandbox !== "false",
-            enabled: map.enabled !== undefined ? map.enabled !== "false" : hasStoredPolarAccount(map)
-        });
-});
-
-const savePolarRoute = createRoute({
-    method: "post",
-    path: "/polar",
-    operationId: "dashboard.payments.polar_update",
-    tags: ["Admin - Settings"],
-    summary: "Save Polar settings",
-    request: { body: { required: true, content: { "application/json": { schema: savePolarSchema } } } },
-    responses: {
-        200: { description: "Polar settings saved", content: { "application/json": { schema: messageResponse } } },
-        ...errorResponses,
-        503: serviceUnavailableResponse,
-    }
-});
-
-app.openapi(savePolarRoute, async (c) => {
-    const db = c.get("db");
-        const body = c.req.valid("json");
-        const writes: SettingAggregateWrite[] = [];
-        const existingMap = await readPolarSettingsMap(db);
-        const effectiveSettings = getEffectivePolarCheckoutSettings(existingMap, body);
-        const polarReadiness = getPolarCheckoutReadiness(effectiveSettings);
-        if (polarReadiness.enabled && !polarReadiness.configured) {
-            throw new ValidationError(polarReadiness.blockedReason ?? "Polar is not ready for checkout.");
-        }
-        const hasSecretWrite = Boolean(
-            (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) ||
-            (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()),
-        );
-        const encKey = hasSecretWrite
-            ? requireEncryptionKey(c.env as Record<string, unknown>)
-            : undefined;
-
-        if (body.enabled === false) {
-            await assertDisablingGatewayKeepsCheckoutFlow(db, c.env, "polar");
-        }
-
-        if (body.accessToken && body.accessToken !== MASKED && body.accessToken.trim()) writes.push({ category: "polar", key: "access_token", value: body.accessToken.trim(), encrypted: true });
-        if (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()) writes.push({ category: "polar", key: "webhook_secret", value: body.webhookSecret.trim(), encrypted: true });
-        if (body.productId && body.productId.trim()) writes.push({ category: "polar", key: "product_id", value: body.productId.trim() });
-        if (body.sandbox !== undefined) writes.push({ category: "polar", key: "sandbox", value: String(body.sandbox) });
-        if (body.enabled !== undefined) writes.push({ category: "polar", key: "enabled", value: String(body.enabled) });
-
-        await saveSettingAggregate(db, writes, encKey);
-
-        await invalidateCheckoutCaches(c);
-
-        return ok(c, { message: "Polar settings saved successfully" });
 });
 
 export { app as paymentSettingsRoutes };

@@ -1,14 +1,13 @@
 import type { ColumnDef } from "../table-config";
 import { Link } from "@tanstack/react-router";
 import { Tag } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 import type { Category } from "~/types/api-responses";
 import { getPlainText } from "~/lib/format-utils";
 import { Badge } from "~/components/ui/badge";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 /** Extended category type that includes the product count from list responses */
 export interface CategoryListItem extends Category {
@@ -56,10 +55,7 @@ export function getCategoryColumns(
             {category.imageUrl ? (
               <div className="h-11 w-11 rounded-lg overflow-hidden border bg-muted shrink-0">
                 <img
-                  src={getOptimizedImageUrl(
-                    category.imageUrl,
-                    ADMIN_IMAGE_PRESETS.categoryTile,
-                  )}
+                  src={mediaImageUrl(category.imageUrl, 160)}
                   alt={category.name}
                   className="h-full w-full object-cover"
                   loading="lazy"

@@ -13,8 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut, User, Shield, Loader2 } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "@/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { broadcastAdminSignOut } from "@/components/auth/AdminSessionSync";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 
@@ -68,7 +67,7 @@ export function UserMenu({ user }: UserMenuProps) {
           <Avatar className="w-8 h-8 ring-2 ring-primary/10 hover:ring-primary/20 transition-all duration-200">
             {user.image && (
               <AvatarImage
-                src={getOptimizedImageUrl(user.image, ADMIN_IMAGE_PRESETS.avatar)}
+                src={mediaImageUrl(user.image, 160)}
                 alt={user.name}
                 className="object-cover"
               />

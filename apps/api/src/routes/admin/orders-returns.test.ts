@@ -36,7 +36,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
 import { adminOrdersReturnRoutes } from "./orders-returns";
 
 const db = { name: "db" };
-const env = { ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() } } as unknown as Env;
+const env = { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
 const baseResult = {
     orderId: "order_1",
     returnId: "ret_1",

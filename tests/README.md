@@ -41,12 +41,8 @@ pnpm test:watch     # Watch mode
 
 ## Configuration
 
-`vitest.config.ts`:
-- **Globals**: enabled (`describe`, `it`, `expect` available without import)
-- **Setup**: `./tests/setup.ts` runs before all tests
-- **Include**: `tests/**/*.test.ts`
-- **Exclude**: `node_modules`, `dist`, `.wrangler`
-- **Aliases**: `@/`, `@modules/`, `@db/`, `@shared/` resolve to `../src/` paths
+These tests run under the repository-root `vitest.config.ts`. Import helpers from
+`./setup.ts` directly where a test needs them.
 
 ## Test Setup (`setup.ts`)
 

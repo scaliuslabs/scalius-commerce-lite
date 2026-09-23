@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from "react";
 import { Check, Eye, MoreHorizontal, Play, RotateCcw, Trash2 } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import {
@@ -32,9 +32,9 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
   const duration = formatDuration(file.durationMs);
   const dimensions = file.width && file.height ? `${file.width} × ${file.height}` : null;
   const previewUrl = isImage
-    ? getOptimizedImageUrl(file.url, { width: 480, height: 360, fit: "contain", quality: 82 })
+    ? mediaImageUrl(file.url, 480)
     : posterUrl
-      ? getOptimizedImageUrl(posterUrl, { width: 480, height: 360, fit: "contain", quality: 82 })
+      ? mediaImageUrl(posterUrl, 480)
       : null;
 
   return (

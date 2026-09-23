@@ -77,7 +77,7 @@ function createApp(order: OrderRow | null = {
   const env = {
     CACHE: {},
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
-    PAYMENT_EVENTS_QUEUE: queue,
+    JOBS_QUEUE: queue,
   } as never;
   return { app, db, env, queue };
 }

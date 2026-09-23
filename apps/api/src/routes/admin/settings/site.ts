@@ -984,26 +984,17 @@ app.openapi(createThemePreviewRoute, async (c) => {
 });
 
 // ─────────────────────────────────────────
-// MEDIA / IMAGE OPTIMIZATION
+// MEDIA DELIVERY
 // ─────────────────────────────────────────
 
 const MEDIA_HOST_MAX_LENGTH = 253;
 const MEDIA_HOST_LIST_MAX_COUNT = 24;
 
 const mediaOptimizationSchema = z.object({
-  enabled: z.boolean().default(true),
   canonicalCdnUrl: z.string().max(MEDIA_HOST_MAX_LENGTH).default("").refine(isValidMediaHostInput, {
     message:
       "Use a hostname only, without paths, queries, wildcards, or credentials.",
   }),
-  allowedImageHosts: z
-    .array(
-      z.string().max(MEDIA_HOST_MAX_LENGTH).refine(isValidMediaHostInput, {
-        message:
-          "Use hostnames only, without paths, queries, wildcards, or credentials.",
-      }),
-    ).max(MEDIA_HOST_LIST_MAX_COUNT)
-    .default([]),
   canonicalHostAliases: z
     .array(
       z.string().max(MEDIA_HOST_MAX_LENGTH).refine(isValidMediaHostInput, {
@@ -1018,12 +1009,7 @@ function projectMediaOptimizationSettings(
   settings: Awaited<ReturnType<typeof getMediaOptimizationSettings>>,
 ) {
   return {
-    enabled: settings.enabled,
     canonicalCdnUrl: settings.canonicalCdnUrl.slice(0, MEDIA_HOST_MAX_LENGTH),
-    allowedImageHosts: settings.allowedImageHosts.slice(
-      0,
-      MEDIA_HOST_LIST_MAX_COUNT,
-    ).map((host) => host.slice(0, MEDIA_HOST_MAX_LENGTH)),
     canonicalHostAliases: settings.canonicalHostAliases.slice(
       0,
       MEDIA_HOST_LIST_MAX_COUNT,
@@ -1038,7 +1024,7 @@ const getMediaOptimizationRoute = createRoute({
   method: "get",
   path: "/media",
   tags: ["Admin - Settings"],
-  summary: "Get media and image optimization settings",
+  summary: "Get media delivery host settings",
   operationId: "dashboard.settings.media_delivery_get",
   responses: {
     200: {
@@ -1063,7 +1049,7 @@ const saveMediaOptimizationRoute = createRoute({
   method: "post",
   path: "/media",
   tags: ["Admin - Settings"],
-  summary: "Save media and image optimization settings",
+  summary: "Save media delivery host settings",
   operationId: "dashboard.settings.media_delivery_update",
   request: {
     body: {

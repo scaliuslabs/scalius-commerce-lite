@@ -94,6 +94,7 @@ it("preserves joined media fields through object-shaped D1 batch results", async
             caption TEXT,
             width INTEGER,
             height INTEGER,
+            variant_width INTEGER,
             duration_ms INTEGER,
             poster_media_id TEXT,
             status TEXT NOT NULL
@@ -114,9 +115,9 @@ it("preserves joined media fields through object-shaped D1 batch results", async
         );
         INSERT INTO products VALUES ('product_1', 'Product 1');
         INSERT INTO media VALUES
-            ('media_image', 'image', 'media/image.webp', 'Image alt', NULL, 800, 800, NULL, NULL, 'ready'),
-            ('media_poster', 'image', 'media/poster.webp', 'Poster alt', NULL, 800, 800, NULL, NULL, 'ready'),
-            ('media_video', 'video', 'media/video.mp4', 'Video alt', NULL, 1280, 720, 2000, 'media_poster', 'ready');
+            ('media_image', 'image', 'media/image.webp', 'Image alt', NULL, 800, 800, NULL, NULL, NULL, 'ready'),
+            ('media_poster', 'image', 'media/poster.webp', 'Poster alt', NULL, 800, 800, 800, NULL, NULL, 'ready'),
+            ('media_video', 'video', 'media/video.mp4', 'Video alt', NULL, 1280, 720, NULL, 2000, 'media_poster', 'ready');
         INSERT INTO product_media VALUES
             ('pmed_video', 'product_1', 'media_video', 'Context video', 1, 0),
             ('pmed_image', 'product_1', 'media_image', 'Context image', 0, 1);
@@ -136,6 +137,7 @@ it("preserves joined media fields through object-shaped D1 batch results", async
             contextualAltText: "Context video",
             posterMediaId: "media_poster",
             posterObjectKey: "media/poster.webp",
+            posterVariantWidth: 800,
             posterKind: "image",
             posterStatus: "ready",
         }),

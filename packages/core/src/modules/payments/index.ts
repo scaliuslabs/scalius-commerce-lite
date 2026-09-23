@@ -18,7 +18,6 @@ export type { GatewayConfig } from "./factory";
 // --- Provider implementations ---
 export { StripeProvider } from "./stripe";
 export { SSLCommerzProvider } from "./sslcommerz";
-export { PolarProvider } from "./polar";
 export { CODProvider } from "./cod";
 
 // --- Domain types ---
@@ -32,10 +31,6 @@ export type {
   SSLCommerzSessionResult,
   SSLCommerzIPNPayload,
   SSLCommerzValidationResult,
-  CreatePolarCheckoutParams,
-  PolarCheckoutResult,
-  PolarRefundParams,
-  PolarRefundResult,
   InitCODTrackingParams,
   RecordCODCollectionParams,
   RecordCODFailureParams,
@@ -64,7 +59,6 @@ export type { PaymentGatewayId } from "./gateway-currency-policy";
 export {
   getStripeSettings,
   getSSLCommerzSettings,
-  getPolarSettings,
   getActivePaymentMethods,
   upsertSetting,
   upsertEncryptedSetting,
@@ -72,7 +66,6 @@ export {
 export type {
   StripeSettings,
   SSLCommerzSettings,
-  PolarSettings,
   PaymentMethodsConfig,
 } from "./gateway-settings";
 
@@ -88,7 +81,6 @@ export {
   getStripe,
 } from "./stripe";
 export { initSSLCommerzSession, validateSSLCommerzIPN, validateSSLCommerzPayment, initiateSSLCommerzRefund, querySSLCommerzRefundStatus } from "./sslcommerz";
-export { createPolarCheckout, createPolarRefund, findReusablePolarCheckout, listPolarRefunds, verifyPolarWebhook } from "./polar";
 export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---

@@ -39,6 +39,12 @@ export const media = sqliteTable("media", {
     caption: text("caption"),
     width: integer("width"),
     height: integer("height"),
+    /**
+     * Width of the largest pre-generated WebP rendition stored at
+     * `<object_key>/<width>.webp`; NULL means only the original exists.
+     * The smaller renditions follow `mediaVariantWidths()` in @scalius/shared.
+     */
+    variantWidth: integer("variant_width"),
     durationMs: integer("duration_ms"),
     posterMediaId: text("poster_media_id").references((): AnySQLiteColumn => media.id, { onDelete: "set null" }),
     folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
@@ -58,6 +64,7 @@ export const media = sqliteTable("media", {
     check("media_object_key_valid", sql`trim(${table.objectKey}) <> '' AND length(${table.objectKey}) <= 512`),
     check("media_size_positive", sql`${table.size} > 0`),
     check("media_dimensions_positive", sql`(${table.width} IS NULL OR ${table.width} > 0) AND (${table.height} IS NULL OR ${table.height} > 0)`),
+    check("media_variant_width_valid", sql`${table.variantWidth} IS NULL OR (${table.kind} = 'image' AND ${table.variantWidth} BETWEEN 1 AND 2400)`),
     check("media_duration_positive", sql`${table.durationMs} IS NULL OR ${table.durationMs} > 0`),
     check("media_status_valid", sql`${table.status} IN ('ready', 'trashed', 'deleting', 'deleted')`),
     check("media_lifecycle_timestamps_valid", sql`(

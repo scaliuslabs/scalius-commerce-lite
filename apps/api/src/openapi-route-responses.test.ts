@@ -37,7 +37,6 @@ describe("route OpenAPI error responses", () => {
     ["/api/v1/customer-auth/verify-otp", "post", ["503"]],
     ["/api/v1/admin/settings/stripe", "post", ["503"]],
     ["/api/v1/admin/settings/sslcommerz", "post", ["503"]],
-    ["/api/v1/admin/settings/polar", "post", ["503"]],
     ["/api/v1/admin/auth/users", "post", ["409", "503"]],
     ["/api/v1/admin/settings/checkout-languages", "post", ["400", "401", "403", "409", "500"]],
     ["/api/v1/admin/settings/checkout-languages/{id}", "put", ["400", "401", "403", "404", "409", "500"]],

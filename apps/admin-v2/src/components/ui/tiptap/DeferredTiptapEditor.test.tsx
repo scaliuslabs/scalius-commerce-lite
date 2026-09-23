@@ -10,10 +10,6 @@ vi.mock("~/components/admin/media-manager", () => ({
   MediaManager: () => null,
 }));
 
-vi.mock("@scalius/shared/image-optimizer", () => ({
-  getOptimizedImageUrl: (url: string) => url,
-}));
-
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

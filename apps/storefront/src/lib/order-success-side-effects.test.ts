@@ -35,7 +35,7 @@ describe("order success side effects", () => {
       sourcePath("lib", "checkout", "index.ts"),
       "utf8",
     );
-    const handlerSources = ["cod.ts", "sslcommerz.ts", "polar.ts", "stripe.ts"]
+    const handlerSources = ["cod.ts", "sslcommerz.ts", "stripe.ts"]
       .map((file) => readFileSync(sourcePath("lib", "checkout", "handlers", file), "utf8"))
       .join("\n");
 
@@ -140,7 +140,6 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("option.presentation.markSrc");
     expect(pageSource).toContain("option.presentation.buyerLabel");
     expect(retrySource).not.toContain("Pay online with SSLCommerz");
-    expect(retrySource).not.toContain("Pay online with Polar");
     expect(retrySource).not.toContain("Pay by card");
   });
 

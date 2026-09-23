@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Copy, Download, ImagePlus, Loader2, Play, RotateCcw } from "lucide-react";
-import { getOptimizedImageUrl, getOriginalImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl, mediaOriginalUrl } from "@scalius/shared/media-variants";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
@@ -84,7 +84,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
       // editor open with the merchant's values intact.
     } finally { setSaving(false); }
   };
-  const sourceUrl = file.kind === "image" ? getOriginalImageUrl(file.url) : file.url;
+  const sourceUrl = file.kind === "image" ? mediaOriginalUrl(file.url) : file.url;
   const duration = formatDuration(file.durationMs);
   return (
     <>
@@ -97,9 +97,9 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
         <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="relative flex min-h-0 flex-[0_0_15rem] items-center justify-center overflow-hidden bg-muted/50 p-3 md:flex-auto">
             {file.kind === "image" ? (
-              <img src={getOptimizedImageUrl(file.url)} alt={file.altText || file.filename} className="max-h-full max-w-full object-contain" />
+              <img src={mediaImageUrl(file.url, 960)} alt={file.altText || file.filename} className="max-h-full max-w-full object-contain" />
             ) : (
-              <VideoPlayer key={file.id} src={file.url} poster={posterUrl ? getOptimizedImageUrl(posterUrl) : undefined} playsInline preload="metadata" className="max-h-full max-w-full" aria-label={file.caption || file.filename} />
+              <VideoPlayer key={file.id} src={file.url} poster={posterUrl ? mediaImageUrl(posterUrl, 960) : undefined} playsInline preload="metadata" className="max-h-full max-w-full" aria-label={file.caption || file.filename} />
             )}
             <Button type="button" variant="secondary" size="icon" className="absolute left-3 top-1/2 h-11 w-11 -translate-y-1/2 sm:h-8 sm:w-8" disabled={index <= 0} onClick={() => requestNavigation(-1)} aria-label="Previous asset"><ChevronLeft className="h-4 w-4" /></Button>
             <Button type="button" variant="secondary" size="icon" className="absolute right-3 top-1/2 h-11 w-11 -translate-y-1/2 sm:h-8 sm:w-8" disabled={index < 0 || index >= files.length - 1} onClick={() => requestNavigation(1)} aria-label="Next asset"><ChevronRight className="h-4 w-4" /></Button>
@@ -111,7 +111,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
               {file.kind === "video" && (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Poster image</Label>
-                  {posterUrl || posterMediaId ? <div className="flex items-center gap-2 rounded-md border p-2">{posterUrl ? <img src={getOptimizedImageUrl(posterUrl)} alt="" className="h-10 w-14 rounded bg-muted object-contain" /> : <div className="flex h-10 w-14 items-center justify-center rounded bg-muted"><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>}<span className="min-w-0 flex-1 truncate text-xs">{poster?.filename ?? "Saved poster image"}</span><Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-8" onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>Remove</Button></div> : <div className="flex h-16 items-center justify-center rounded-md border border-dashed text-muted-foreground"><Play className="mr-2 h-4 w-4" /><span className="text-xs">No poster selected</span></div>}
+                  {posterUrl || posterMediaId ? <div className="flex items-center gap-2 rounded-md border p-2">{posterUrl ? <img src={mediaImageUrl(posterUrl, 160)} alt="" className="h-10 w-14 rounded bg-muted object-contain" /> : <div className="flex h-10 w-14 items-center justify-center rounded bg-muted"><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>}<span className="min-w-0 flex-1 truncate text-xs">{poster?.filename ?? "Saved poster image"}</span><Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-8" onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>Remove</Button></div> : <div className="flex h-16 items-center justify-center rounded-md border border-dashed text-muted-foreground"><Play className="mr-2 h-4 w-4" /><span className="text-xs">No poster selected</span></div>}
                   <MediaManager capability="image" onSelect={(image) => { setPoster(image); setPosterMediaId(image.id); setPosterUrl(image.url); }} trigger={<Button type="button" variant="outline" size="sm" className="h-11 w-full sm:h-8"><ImagePlus className="mr-1.5 h-3.5 w-3.5" />{posterMediaId ? "Change poster" : "Choose poster"}</Button>} />
                 </div>
               )}

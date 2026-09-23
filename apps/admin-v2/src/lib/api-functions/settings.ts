@@ -32,11 +32,6 @@ type ApiEnvelopeData<T> = T extends { success: true; data: infer D }
   ? D
   : never;
 export type MessagePayload = { message?: string };
-export type EmptyPayload = Record<string, never>;
-export type SettingsByCategoryInput = { category: string };
-export type UpdateSettingsByCategoryInput = SettingsByCategoryInput & {
-  settings: SettingsPayload;
-};
 
 export interface SocialLinkConfig {
   id: string;
@@ -152,10 +147,6 @@ export interface ThemeSettingsPayload {
   theme: StorefrontThemeSettings;
   revision: number;
 }
-export interface UpdateThemeSettingsInput {
-  expectedRevision: number;
-  theme: StorefrontThemeSettings;
-}
 export interface ThemeDraftPayload {
   theme: StorefrontThemeSettings;
   revision: number;
@@ -243,7 +234,7 @@ export interface UpdateAllowedCountriesInput {
   allowedCountries: string[];
   mode?: "include" | "exclude";
 }
-export type PaymentMethodKey = "stripe" | "sslcommerz" | "polar" | "cod";
+export type PaymentMethodKey = "stripe" | "sslcommerz" | "cod";
 export interface PaymentGatewayStatus {
   configured: boolean;
   enabled: boolean;
@@ -293,18 +284,6 @@ export interface AdminNotificationChannelsPayload {
 export interface UpdateAdminNotificationChannelsInput {
   channels: Record<string, string[]>;
 }
-
-export const getSettingsByCategory = createServerFn({ method: "GET" })
-  .validator((data: SettingsByCategoryInput) => data)
-  .handler(async ({ data }) => {
-    return apiGet<SettingsPayload>(`/settings/${data.category}`);
-  });
-
-export const updateSettingsByCategory = createServerFn({ method: "POST" })
-  .validator((data: UpdateSettingsByCategoryInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MessagePayload>(`/settings/${data.category}`, data.settings);
-  });
 
 export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -427,12 +406,6 @@ export const getThemeSettings = createServerFn({ method: "GET" }).handler(
     return apiGet<ThemeSettingsPayload>("/settings/theme");
   },
 );
-
-export const updateThemeSettings = createServerFn({ method: "POST" })
-  .validator((data: UpdateThemeSettingsInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<ThemeSettingsPayload & MessagePayload>("/settings/theme", data);
-  });
 
 export const getThemeWorkspace = createServerFn({ method: "GET" }).handler(
   async (): Promise<ThemeWorkspacePayload> => {

@@ -2,7 +2,6 @@
 import { getProductBySlug } from "@/lib/api";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { unwrapParagraphWrappedShortcodes } from "./shortcode-content";
-import { withOptimizedProductPageImages } from "./serialized-media";
 
 interface ProductShortcodeMatch {
   fullMatch: string;
@@ -61,7 +60,7 @@ export async function renderProductShortcode(
 
     // Encode as URI component for safe embedding in data attribute
     const props = encodeURIComponent(
-      JSON.stringify(withOptimizedProductPageImages(productData)),
+      JSON.stringify(productData),
     );
 
     // Render a placeholder div for the React component to hydrate into.

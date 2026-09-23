@@ -3,7 +3,6 @@ import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { sslcommerzHandler } from "./handlers/sslcommerz";
-import { polarHandler } from "./handlers/polar";
 import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -48,7 +47,6 @@ import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility"
 registerGateway(codHandler);
 registerGateway(stripeHandler);
 registerGateway(sslcommerzHandler);
-registerGateway(polarHandler);
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -314,15 +312,6 @@ function localizedGatewayPresentation(
         ...presentation,
         buyerLabel: checkoutCopy.onlinePaymentText,
         description: checkoutCopy.onlinePaymentDescriptionText,
-      };
-    case "polar":
-      return {
-        ...presentation,
-        buyerLabel: checkoutCopy.cardOrWalletText,
-        description: formatCheckoutLanguageText(
-          checkoutCopy.completeWithProviderText,
-          { provider: presentation.providerLabel ?? "Polar" },
-        ),
       };
     case "cod":
       return {
@@ -711,9 +700,9 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
 function paymentActionLabel(methodId: string): string {
   if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
   if (methodId === "cod") return checkoutCopy.placeOrderText;
-  if (methodId === "sslcommerz" || methodId === "polar") {
+  if (methodId === "sslcommerz") {
     return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
-      provider: methodId === "sslcommerz" ? "SSLCommerz" : "Polar",
+      provider: "SSLCommerz",
     });
   }
 
@@ -731,13 +720,8 @@ function paymentActionLabel(methodId: string): string {
 }
 
 function hostedRedirectMessage(methodId: string): string | null {
-  const provider = methodId === "sslcommerz"
-    ? "SSLCommerz"
-    : methodId === "polar"
-      ? "Polar"
-      : null;
-  return provider
-    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider })
+  return methodId === "sslcommerz"
+    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider: "SSLCommerz" })
     : null;
 }
 

@@ -27,10 +27,7 @@ describe("homepage carousel media boundaries", () => {
     expect(source).toContain("width={presentation.width}");
     expect(source).toContain("height={height}");
     expect(source).toContain("getHeroSlideObjectPosition(focalPoint)");
-    expect(source).toMatch(
-      /type === "desktop"\s*\?\s*index === 0\s*\?\s*90\s*:\s*80\s*:\s*index === 0\s*\?\s*75\s*:\s*70/,
-    );
-    expect(source).not.toContain('type === "desktop" ? (index === 0 ? 75');
+    expect(source).toContain("mediaImageUrl(image.url, presentation.width)");
   });
 
   it("reserves high image priority for the hero during the critical load", () => {

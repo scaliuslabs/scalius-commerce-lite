@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
 import { getClientIp } from "@scalius/shared/rate-limit";
-import { enforceRateLimit } from "../utils/rate-limit";
+import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
 import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/orders";
@@ -43,15 +43,9 @@ const saveAbandonedCheckoutRoute = createRoute({
 });
 
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
-  // Rate limit: 10 abandoned checkout saves per minute per IP. The native
-  // binding is preferred because the KV counter costs a write per request.
-  const allowed = await enforceRateLimit({
-    limiter: c.env.ABANDONED_CHECKOUT_RATE_LIMITER,
-    kv: c.env.CACHE as KVNamespace | undefined,
-    key: `abandoned:${getClientIp(c.req.raw)}`,
-    limit: 10,
-  });
-  if (!allowed) {
+  // The storefront saves a debounced snapshot as the buyer fills each checkout
+  // field, so one buyer legitimately sends several saves a minute.
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getClientIp(c.req.raw)))) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }
 

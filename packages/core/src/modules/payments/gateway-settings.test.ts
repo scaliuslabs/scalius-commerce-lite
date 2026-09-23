@@ -2,9 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   getActivePaymentMethods,
-  getPolarSettings,
-  getPolarCheckoutReadiness,
-  isPolarPlaceholderCredential,
   getSSLCommerzSettings,
   getSSLCommerzCheckoutReadiness,
   isSSLCommerzPlaceholderCredential,
@@ -28,7 +25,7 @@ function createDbReturningCategoryReads(
         where: () => ({
           all: async () => {
             if ("category" in projection) {
-              const categories = ["payment_methods", "stripe", "sslcommerz", "polar"];
+              const categories = ["payment_methods", "stripe", "sslcommerz"];
               return rowsByRead.flatMap((rows, index) => rows.map((row) => ({
                 ...row,
                 category: categories[index],
@@ -99,17 +96,10 @@ describe("payment gateway settings reads", () => {
     ]);
     const freshDb = createDbReturningCategoryReads([
       [
-        { key: "enabled_methods", value: JSON.stringify(["polar"]) },
-        { key: "default_method", value: "polar" },
+        { key: "enabled_methods", value: JSON.stringify(["stripe"]) },
+        { key: "default_method", value: "stripe" },
       ],
       [],
-      [],
-      [
-        { key: "access_token", value: "polar_token" },
-        { key: "product_id", value: "polar_product" },
-        { key: "webhook_secret", value: "polar_webhook" },
-        { key: "enabled", value: "true" },
-      ],
     ]);
 
     await expect(getActivePaymentMethods(oldDb as never)).resolves.toEqual({
@@ -181,27 +171,6 @@ describe("payment gateway settings reads", () => {
     });
   });
 
-  it("does not make Polar active without a webhook secret", async () => {
-    const db = createDbReturningCategoryReads([
-      [
-        { key: "enabled_methods", value: JSON.stringify(["polar"]) },
-        { key: "default_method", value: "polar" },
-      ],
-      [
-        { key: "access_token", value: "polar_token" },
-        { key: "product_id", value: "polar_product" },
-        { key: "enabled", value: "true" },
-      ],
-    ]);
-
-    await expect(
-      getActivePaymentMethods(db as never),
-    ).resolves.toEqual({
-      enabledMethods: [],
-      defaultMethod: "cod",
-    });
-  });
-
   it("does not make Stripe active when encrypted credentials cannot be decrypted", async () => {
     const key = Buffer.alloc(32, 8).toString("base64");
     const wrongKey = Buffer.alloc(32, 9).toString("base64");
@@ -244,18 +213,9 @@ describe("payment gateway settings reads", () => {
         { key: "enabled", value: "true" },
       ],
     ]);
-    const polarDb = createDbReturningCategoryReads([
-      [
-        { key: "access_token", value: `enc:${await encryptCredentials("polar_token", key)}` },
-        { key: "product_id", value: "polar_product" },
-        { key: "webhook_secret", value: `enc:${await encryptCredentials("polar_webhook", key)}` },
-        { key: "enabled", value: "true" },
-      ],
-    ]);
 
     const stripe = await getStripeSettings(stripeDb as never, wrongKey);
     const ssl = await getSSLCommerzSettings(sslDb as never, wrongKey);
-    const polar = await getPolarSettings(polarDb as never, wrongKey);
 
     expect(getStripeCheckoutReadiness(stripe)).toMatchObject({
       configured: false,
@@ -273,17 +233,9 @@ describe("payment gateway settings reads", () => {
         "SSLCommerz store password could not be decrypted with the configured credential key.",
       ],
     });
-    expect(getPolarCheckoutReadiness(polar)).toMatchObject({
-      configured: false,
-      usable: false,
-      credentialErrors: [
-        "Polar access token could not be decrypted with the configured credential key.",
-        "Polar webhook secret could not be decrypted with the configured credential key.",
-      ],
-    });
   });
 
-  it("reports exact SSLCommerz and Polar checkout readiness gaps", () => {
+  it("reports exact SSLCommerz checkout readiness gaps", () => {
     expect(getSSLCommerzCheckoutReadiness({
       storeId: "store_1",
       storePassword: "",
@@ -294,18 +246,6 @@ describe("payment gateway settings reads", () => {
       usable: false,
       missingFields: ["storePassword"],
       blockedReason: expect.stringContaining("store password"),
-    });
-    expect(getPolarCheckoutReadiness({
-      accessToken: "polar_token",
-      productId: "product_1",
-      webhookSecret: "",
-      enabled: true,
-    })).toMatchObject({
-      configured: false,
-      enabled: true,
-      usable: false,
-      missingFields: ["webhookSecret"],
-      blockedReason: expect.stringContaining("webhook secret"),
     });
   });
 
@@ -375,7 +315,7 @@ describe("payment gateway settings reads", () => {
         testMode: true,
         amountLimits: { currency: "BDT", min: 10, max: 500_000 },
       });
-    expect(getGatewayMeta("polar")?.getPublicConfig?.({ sandbox: false }))
+    expect(getGatewayMeta("sslcommerz")?.getPublicConfig?.({ sandbox: false }))
       .toMatchObject({ testMode: false });
   });
 
@@ -508,82 +448,6 @@ describe("payment gateway settings reads", () => {
     });
   });
 
-  it.each([
-    "dummy",
-    "placeholder",
-    "example",
-    "demo",
-    "test",
-    "polar_access_token",
-    "polar_product_id",
-    "polar_webhook_secret",
-    "your_polar_token",
-    "your_polar_access_token",
-    "your_polar_product_id",
-    "your_polar_webhook_secret",
-  ])("treats %s as a Polar placeholder credential", (value) => {
-    expect(isPolarPlaceholderCredential(` ${value.toUpperCase()} `)).toBe(true);
-  });
-
-  it("does not reject real-looking Polar test tokens by substring", () => {
-    expect(isPolarPlaceholderCredential("polar_oat_test_realishValue")).toBe(false);
-    expect(isPolarPlaceholderCredential("polar_token")).toBe(false);
-    expect(getPolarCheckoutReadiness({
-      accessToken: "polar_token",
-      productId: "prod_test_realish",
-      webhookSecret: "whsec_test",
-      enabled: true,
-    })).toMatchObject({
-      configured: true,
-      usable: false,
-      credentialErrors: [],
-      blockedReason:
-        "Polar does not support physical goods. Scalius buyer checkout currently handles shipped products.",
-    });
-  });
-
-  it("blocks Polar checkout readiness when credentials are placeholders", () => {
-    expect(getPolarCheckoutReadiness({
-      accessToken: "polar_access_token",
-      productId: "your_polar_product_id",
-      webhookSecret: "your_polar_webhook_secret",
-      enabled: true,
-    })).toMatchObject({
-      configured: false,
-      enabled: true,
-      usable: false,
-      missingFields: [],
-      credentialErrors: [
-        "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
-        "Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account.",
-        "Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account.",
-      ],
-      blockedReason: "Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.",
-    });
-  });
-
-  it("does not make Polar active with placeholder credentials", async () => {
-    const db = createDbReturningCategoryReads([
-      [
-        { key: "enabled_methods", value: JSON.stringify(["polar"]) },
-        { key: "default_method", value: "polar" },
-      ],
-      [
-        { key: "access_token", value: "your_polar_token" },
-        { key: "product_id", value: "polar_product_live" },
-        { key: "webhook_secret", value: "polar_webhook_live" },
-        { key: "enabled", value: "true" },
-      ],
-    ]);
-
-    await expect(
-      getActivePaymentMethods(db as never),
-    ).resolves.toEqual({
-      enabledMethods: [],
-      defaultMethod: "cod",
-    });
-  });
-
   it("keeps Stripe active when every checkout-required key is present", async () => {
     const db = createDbReturningCategoryReads([
       [
@@ -608,7 +472,7 @@ describe("payment gateway settings reads", () => {
 
   it("resolves the same strict gateway allowlist from one preloaded settings snapshot", async () => {
     const rows = [
-      { category: "payment_methods", key: "enabled_methods", value: JSON.stringify(["cod", "stripe", "sslcommerz", "polar"]) },
+      { category: "payment_methods", key: "enabled_methods", value: JSON.stringify(["cod", "stripe", "sslcommerz"]) },
       { category: "payment_methods", key: "default_method", value: "stripe" },
       { category: "stripe", key: "secret_key", value: "sk_live_snapshot_secret" },
       { category: "stripe", key: "publishable_key", value: "pk_live_snapshot_public" },
@@ -617,10 +481,6 @@ describe("payment gateway settings reads", () => {
       { category: "sslcommerz", key: "store_id", value: "sslcz_snapshot_store_123" },
       { category: "sslcommerz", key: "store_password", value: "sslcz_snapshot_password_123" },
       { category: "sslcommerz", key: "enabled", value: "true" },
-      { category: "polar", key: "access_token", value: "polar_oat_snapshot_real" },
-      { category: "polar", key: "product_id", value: "prod_snapshot_real" },
-      { category: "polar", key: "webhook_secret", value: "polar_whsec_snapshot_real" },
-      { category: "polar", key: "enabled", value: "true" },
     ];
 
     await expect(resolveActivePaymentMethodsFromRows(rows)).resolves.toEqual({

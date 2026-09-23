@@ -165,9 +165,9 @@ describe("rich-text editing document contract", () => {
     expect(imageHtml).toContain("max-width: 100%");
   });
 
-  it("keeps display width separate from intrinsic Cloudflare dimensions", () => {
+  it("keeps display width separate from intrinsic rendition dimensions", () => {
     const transformedImage =
-      "https://cloud.scalius.com/cdn-cgi/image/width=600,height=600,fit=contain/products/example.webp";
+      "https://cloud.scalius.com/media/media_example1.jpg/640.webp";
     const instance = createEditor();
     expect(
       instance.commands.setImage({
@@ -179,7 +179,6 @@ describe("rich-text editing document contract", () => {
     ).toBe(true);
 
     const savedHtml = sanitizeHtml(instance.getHTML());
-    expect(savedHtml).toContain('width="600"');
     expect(savedHtml).toContain("width: 50%");
 
     instance.commands.setContent(savedHtml);

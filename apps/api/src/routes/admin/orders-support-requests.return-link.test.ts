@@ -26,7 +26,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
 import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 
 const db = { name: "db" };
-const env = { ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() } } as unknown as Env;
+const env = { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
 
 function app() {
     const instance = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");

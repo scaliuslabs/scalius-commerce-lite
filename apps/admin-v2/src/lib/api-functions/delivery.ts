@@ -69,17 +69,6 @@ export interface DeliveryProviderWriteInput {
   isActive?: boolean;
 }
 
-export interface UpdateDeliveryProviderInput {
-  id: string;
-  update: {
-    name: string;
-    type: string;
-    credentials?: string | JsonRecord;
-    config?: string | JsonRecord;
-    isActive?: boolean;
-  };
-}
-
 export interface DeliveryProviderIdInput {
   id: string;
 }
@@ -203,21 +192,6 @@ export const getDeliveryProviders = createServerFn({ method: "GET" }).handler(
     throw new Error("Delivery provider list exceeded the supported page limit");
   },
 );
-
-export const createDeliveryProvider = createServerFn({ method: "POST" })
-  .validator((data: DeliveryProviderWriteInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<DeliveryProviderRecord>("/settings/delivery-providers", data);
-  });
-
-export const updateDeliveryProvider = createServerFn({ method: "POST" })
-  .validator((data: UpdateDeliveryProviderInput) => data)
-  .handler(async ({ data }) => {
-    return apiPut<DeliveryProviderRecord>("/settings/delivery-providers", {
-      id: data.id,
-      ...data.update,
-    });
-  });
 
 export const deleteDeliveryProvider = createServerFn({ method: "POST" })
   .validator((data: DeliveryProviderIdInput) => data)

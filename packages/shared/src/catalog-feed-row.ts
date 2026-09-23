@@ -20,13 +20,6 @@ export const CATALOG_FEED_MAX_ATTRIBUTES_PER_PRODUCT = 250;
 export const CATALOG_FEED_MAX_OPTIONS_PER_VARIANT = 10;
 export const CATALOG_FEED_MAX_REPORTED_OMISSIONS = 250;
 
-export const CATALOG_FEED_IMAGE_OPTIONS = {
-  width: 1200,
-  quality: 90,
-  format: "auto",
-  fit: "scale-down",
-} as const;
-
 export type CatalogFeedFormat = "google" | "meta";
 export type CatalogFeedVariantStrategy = "products" | "variants";
 export type CatalogFeedAvailability = "in_stock" | "out_of_stock";
@@ -43,18 +36,6 @@ export type CatalogFeedOptionStandardMapping =
   | "material"
   | "pattern"
   | "none";
-
-export interface CatalogFeedImageTransformOptions {
-  readonly width: 1200;
-  readonly quality: 90;
-  readonly format: "auto";
-  readonly fit: "scale-down";
-}
-
-export type CatalogFeedImageTransform = (
-  source: string,
-  options: CatalogFeedImageTransformOptions,
-) => string | null | undefined;
 
 export interface CatalogFeedSelectedOptionInput {
   name: string;
@@ -123,7 +104,8 @@ export interface ProjectCatalogFeedRowsInput {
   storefrontBaseUrl: string;
   currencyCode: string;
   policy: CatalogFeedProjectionPolicy;
-  transformImageUrl?: CatalogFeedImageTransform;
+  /** Resolves a persisted image source (bare key, CDN alias) to its public URL. */
+  resolveImageUrl?: (source: string) => string | null | undefined;
   maxReportedOmissions?: number;
 }
 
@@ -352,10 +334,7 @@ function imageLink(
   input: ProjectCatalogFeedRowsInput,
 ): string | null {
   return resolveCatalogDiscoveryImageUrl(source, input.storefrontBaseUrl, {
-    transformImageUrl: input.transformImageUrl
-      ? (imageUrl) =>
-        input.transformImageUrl!(imageUrl, CATALOG_FEED_IMAGE_OPTIONS)
-      : undefined,
+    resolveImageUrl: input.resolveImageUrl,
   });
 }
 

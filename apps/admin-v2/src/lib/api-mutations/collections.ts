@@ -2,14 +2,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteCollections,
-  bulkRestoreCollections,
-  createCollection,
   deleteCollection,
   deleteCollectionPermanent,
   reorderCollections,
   restoreCollection,
   updateCollection,
-  type CreateCollectionInput,
   type UpdateCollectionInput,
 } from "../api-functions/collections";
 import {
@@ -17,23 +14,6 @@ import {
   invalidateCollectionLookupQueries,
   queryKeys,
 } from "./shared";
-
-export function useCreateCollection() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateCollectionInput) => createCollection({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      invalidateCollectionLookupQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.formOptions(),
-      });
-      toast.success("Collection created");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create collection")),
-  });
-}
 
 export function useUpdateCollection() {
   const queryClient = useQueryClient();
@@ -146,22 +126,5 @@ export function useBulkDeleteCollections() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to delete collections")),
-  });
-}
-
-export function useBulkRestoreCollections() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { ids: string[] }) => bulkRestoreCollections({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });
-      invalidateCollectionLookupQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.collections.formOptions(),
-      });
-      toast.success(`${variables.ids.length} collection(s) restored`);
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore collections")),
   });
 }

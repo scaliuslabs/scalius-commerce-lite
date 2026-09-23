@@ -13,7 +13,7 @@ import { errorResponses, successEnvelope } from "../schemas/responses";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/cache-invalidation";
-import { enforceRateLimit } from "../utils/rate-limit";
+import { isWithinRateLimit } from "../utils/rate-limit";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 export const META_CAPI_BROWSER_CIRCUIT_KEY =
   "meta-capi:browser-events:circuit";
@@ -193,16 +193,8 @@ app.openapi(postEventRoute, async (c) => {
     }
   }
 
-  // Browser tracking fires on every page view, so this limit must not spend a
-  // KV write per event; the native binding is free and the KV counter is only
-  // the fallback for environments without it.
-  const allowed = await enforceRateLimit({
-    limiter: c.env.META_EVENTS_RATE_LIMITER,
-    kv,
-    key: `meta-events:${getClientIp(c.req.raw)}`,
-    limit: 120,
-  });
-  if (!allowed) {
+  // Browser tracking fires on every page view; the native limiter costs no KV.
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "meta-events", getClientIp(c.req.raw)))) {
     throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 

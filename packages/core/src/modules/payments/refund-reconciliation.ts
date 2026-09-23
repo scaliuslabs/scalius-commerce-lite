@@ -16,12 +16,8 @@ import {
   roundOrderMoney,
   type OrderCurrencySnapshot,
 } from "./order-currency";
+import { resolveStripeRefundProviderMoney } from "./refund-provider-money";
 import {
-  resolvePolarRefundProviderMoney,
-  resolveStripeRefundProviderMoney,
-} from "./refund-provider-money";
-import {
-  getPolarSettings,
   getSSLCommerzSettings,
   getStripeSettings,
 } from "./gateway-settings";
@@ -33,9 +29,6 @@ import type { StripeRefundSnapshot } from "./stripe";
 import {
   querySSLCommerzRefundStatus,
 } from "./sslcommerz";
-import {
-  listPolarRefunds,
-} from "./polar";
 import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
 import type { RefundNotificationFact } from "./refund-service";
 
@@ -74,10 +67,6 @@ type RefundAttemptProbeRow = Pick<
 
 interface RefundProviderReconciliationContext {
   currency: OrderCurrencySnapshot;
-  sourcePayment: {
-    amount: number;
-    metadata: string | null;
-  } | null;
 }
 
 type ProviderProbeOutcome =
@@ -273,9 +262,7 @@ async function assertRefundAttemptOrderCurrency(
   const ledgerRows = await db
     .select({
       id: orderPayments.id,
-      amount: orderPayments.amount,
       currency: orderPayments.currency,
-      metadata: orderPayments.metadata,
     })
     .from(orderPayments)
     .where(eq(orderPayments.orderId, attempt.orderId))
@@ -286,16 +273,7 @@ async function assertRefundAttemptOrderCurrency(
   if (!ledgerRows.some((payment) => payment.id === attempt.refundPaymentId)) {
     throw new Error(`Refund payment ${attempt.refundPaymentId} was not found for reconciliation.`);
   }
-  const sourcePayment = ledgerRows.find((payment) => payment.id === attempt.sourcePaymentId);
-  if (attempt.gateway === "polar" && !sourcePayment) {
-    throw new Error(`Polar source payment ${attempt.sourcePaymentId} was not found for reconciliation.`);
-  }
-  return {
-    currency,
-    sourcePayment: sourcePayment
-      ? { amount: sourcePayment.amount, metadata: sourcePayment.metadata }
-      : null,
-  };
+  return { currency };
 }
 
 async function claimRefundAttempt(
@@ -557,105 +535,6 @@ async function probeSSLCommerzRefund(
   return { outcome: "processing", providerRefundId: status.refundRefId, providerStatus: status.status, responsePayload: payload };
 }
 
-async function probePolarRefund(
-  db: Database,
-  attempt: RefundAttemptProbeRow,
-  context: RefundProviderReconciliationContext,
-  encryptionKey?: string,
-): Promise<ProviderProbeOutcome> {
-  const settings = await getPolarSettings(db, encryptionKey);
-  if (!settings?.accessToken) {
-    return { outcome: "unknown", error: "Polar is not configured for refund reconciliation", manualReview: true };
-  }
-
-  const result = await listPolarRefunds(settings, {
-    ...(attempt.providerRefundId ? { id: attempt.providerRefundId } : {}),
-    ...(!attempt.providerRefundId && attempt.sourceTransactionId ? { orderId: attempt.sourceTransactionId } : {}),
-    limit: 20,
-  });
-  if (!result.success) {
-    return { outcome: "unknown", error: result.error ?? "Polar refund probe failed" };
-  }
-
-  const refund = attempt.providerRefundId
-    ? result.refunds?.find((candidate) => candidate.id === attempt.providerRefundId)
-    : result.refunds?.find((candidate) => metadataMatchesAttempt(candidate.metadata, attempt));
-
-  if (!refund) {
-    return {
-      outcome: "unknown",
-      error: "No Polar refund matched this attempt. Manual review required before retrying.",
-      manualReview: true,
-    };
-  }
-  if (
-    attempt.sourceTransactionId &&
-    refund.orderId !== attempt.sourceTransactionId
-  ) {
-    return {
-      outcome: "unknown",
-      providerRefundId: refund.id,
-      providerStatus: refund.status,
-      error: "Polar refund source order does not match the local refund attempt.",
-      manualReview: true,
-    };
-  }
-
-  const expectedMoney = resolvePolarRefundProviderMoney(
-    attempt.amount,
-    context.currency,
-    context.sourcePayment!,
-  );
-  if (normalizeSupportedCurrencyCode(refund.currency) !== expectedMoney.currency) {
-    return {
-      outcome: "unknown",
-      providerRefundId: refund.id,
-      providerStatus: refund.status,
-      error: "Polar refund currency does not match the source payment currency.",
-      responsePayload: {
-        id: refund.id,
-        status: refund.status,
-        amount: refund.amount,
-        currency: refund.currency,
-        orderId: refund.orderId,
-      },
-      manualReview: true,
-    };
-  }
-  if (refund.amount !== expectedMoney.amountMinor) {
-    return {
-      outcome: "unknown",
-      providerRefundId: refund.id,
-      providerStatus: refund.status,
-      error: "Polar refund amount does not match the immutable local refund attempt.",
-      responsePayload: {
-        id: refund.id,
-        status: refund.status,
-        amount: refund.amount,
-        currency: refund.currency,
-        orderId: refund.orderId,
-      },
-      manualReview: true,
-    };
-  }
-
-  const payload = {
-    id: refund.id,
-    status: refund.status,
-    amount: refund.amount,
-    currency: refund.currency,
-    orderId: refund.orderId,
-  };
-
-  if (refund.status === "succeeded") {
-    return { outcome: "accepted", providerRefundId: refund.id, providerStatus: refund.status, responsePayload: payload };
-  }
-  if (refund.status === "failed" || refund.status === "canceled") {
-    return { outcome: "rejected", providerRefundId: refund.id, providerStatus: refund.status, responsePayload: payload };
-  }
-  return { outcome: "processing", providerRefundId: refund.id, providerStatus: refund.status, responsePayload: payload };
-}
-
 async function probeProviderRefund(
   db: Database,
   kv: KVNamespace | undefined,
@@ -668,8 +547,6 @@ async function probeProviderRefund(
       return probeStripeRefund(db, attempt, context, encryptionKey);
     case "sslcommerz":
       return probeSSLCommerzRefund(db, attempt, encryptionKey);
-    case "polar":
-      return probePolarRefund(db, attempt, context, encryptionKey);
     case "cod":
       return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
     default:

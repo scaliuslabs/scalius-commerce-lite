@@ -166,13 +166,6 @@ export interface AdjustInventoryResult {
   delta: number;
 }
 
-export interface StockAdjustInput {
-  operationKey: string;
-  variantId: string;
-  adjustment: number;
-  reason?: string;
-}
-
 export interface StockSetInput {
   operationKey: string;
   variantId: string;
@@ -220,12 +213,6 @@ export const adjustInventory = createServerFn({ method: "POST" })
       `/inventory/${variantId}/adjust`,
       body,
     );
-  });
-
-export const stockAdjust = createServerFn({ method: "POST" })
-  .validator((data: StockAdjustInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<AdjustInventoryResult>("/inventory/stock-adjust", data);
   });
 
 export const stockSet = createServerFn({ method: "POST" })

@@ -31,14 +31,12 @@ export interface PaymentMethodsData {
 }
 export interface StripeData { secretKey: string; publishableKey: string; webhookSecret: string; enabled: boolean; }
 export interface SSLCommerzData { storeId: string; storePassword: string; sandbox: boolean; enabled: boolean; }
-export interface PolarData { accessToken: string; webhookSecret: string; productId: string; sandbox: boolean; enabled: boolean; }
-export type MethodKey = "stripe" | "sslcommerz" | "polar" | "cod";
+export type MethodKey = "stripe" | "sslcommerz" | "cod";
 
 // --- Provider marks ---
 
 export const StripeMark = () => <OfficialProviderMark provider="stripe" />;
 export const SSLCommerzMark = () => <OfficialProviderMark provider="sslcommerz" />;
-export const PolarMark = () => <OfficialProviderMark provider="polar" />;
 export const CODIcon = () => (
   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" aria-hidden="true">
     <Banknote className="h-5 w-5" />
@@ -51,7 +49,6 @@ export const META: Record<MethodKey, {
 }> = {
   stripe: { label: "Stripe", desc: "Accept card payments globally", Mark: StripeMark, borderColor: "border-violet-500/20 dark:border-violet-500/10", headerBg: "bg-violet-50/50 dark:bg-violet-950/10" },
   sslcommerz: { label: "SSLCommerz", desc: "BD payments (bKash, Nagad, cards)", Mark: SSLCommerzMark, borderColor: "border-green-500/20 dark:border-green-500/10", headerBg: "bg-green-50/50 dark:bg-green-950/10" },
-  polar: { label: "Polar", desc: "Global digital payments", Mark: PolarMark, borderColor: "border-indigo-500/20 dark:border-indigo-500/10", headerBg: "bg-indigo-50/50 dark:bg-indigo-950/10" },
   cod: { label: "Cash on Delivery", desc: "Collect payment on delivery", Mark: CODIcon, borderColor: "border-green-500/20 dark:border-green-500/10", headerBg: "bg-green-50/50 dark:bg-green-950/10" },
 };
 

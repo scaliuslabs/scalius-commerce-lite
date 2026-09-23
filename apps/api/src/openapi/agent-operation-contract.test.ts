@@ -528,7 +528,6 @@ describe("agent operation contract", () => {
       "storefront.payment_stripe_intent.intent",
       "storefront.payment_stripe_reconcile.reconcile",
       "storefront.payment_sslcommerz_session.session",
-      "storefront.payment_polar_session.session",
     ] as const;
 
     for (const operationId of legacyStorefrontOperationIds) {
@@ -550,7 +549,6 @@ describe("agent operation contract", () => {
       "storefront.orders.orders",
       "storefront.payment_stripe_intent.intent",
       "storefront.payment_sslcommerz_session.session",
-      "storefront.payment_polar_session.session",
     ]) {
       expect(byId(manifest, operationId).sensitiveOutput).toBe(true);
     }

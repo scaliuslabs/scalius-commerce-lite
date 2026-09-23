@@ -477,10 +477,8 @@ function formCanonicalPhoneValue(): string | null {
   );
   if (!input) return null;
 
-  // PhoneField exposes only its validated E.164 value through this dataset.
-  // An empty Bangladesh control visibly contains the "+880" calling code, so
-  // falling back to that display value makes tax-quote construction fail
-  // synchronously before a request can be sent.
+  // The checkout phone field exposes only its validated E.164 value through
+  // this dataset; an incomplete number must never reach tax-quote input.
   if (input.dataset.e164Value !== undefined) {
     const canonical = input.dataset.e164Value.trim();
     return /^\+[1-9]\d{6,14}$/.test(canonical) ? canonical : null;
@@ -958,13 +956,7 @@ export async function renderCartItems() {
       const rawName = item.name || "";
       const safeName = escapeHtml(rawName);
       const safeImage = escapeHtml(
-        getProductImageUrl(item.image, {
-          width: 96,
-          height: 96,
-          quality: 75,
-          format: "auto",
-          fit: "contain",
-        }),
+        getProductImageUrl(item.image, 96),
       );
       const jsCartKey = inlineJsString(cartKey);
       const safeOptions = normalizeCartItemOptions(item.options)?.map(

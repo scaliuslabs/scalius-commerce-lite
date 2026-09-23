@@ -4,8 +4,7 @@ import { Button } from "~/components/ui/button";
 import { MediaManager } from "../media-manager";
 import { Trash2 } from "lucide-react";
 import type { LogoConfig, MediaFile } from "./types";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 interface BrandingSectionProps {
   logo: LogoConfig;
@@ -35,10 +34,7 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
             {logo.src ? (
               <div className="relative group border rounded-md p-2 bg-muted/30 aspect-2/1 flex items-center justify-center">
                 <img
-                  src={getOptimizedImageUrl(
-                    logo.src,
-                    ADMIN_IMAGE_PRESETS.brandLogo,
-                  )}
+                  src={mediaImageUrl(logo.src, 320)}
                   alt={logo.alt}
                   className="max-h-full max-w-full object-contain"
                 />

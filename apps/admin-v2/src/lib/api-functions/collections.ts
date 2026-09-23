@@ -248,12 +248,6 @@ export const bulkDeleteCollections = createServerFn({ method: "POST" })
     return apiPost<void>("/collections/bulk-delete", data);
   });
 
-export const bulkRestoreCollections = createServerFn({ method: "POST" })
-  .validator((data: { ids: string[] }) => data)
-  .handler(async ({ data }): Promise<void> => {
-    return apiPost<void>("/collections/bulk-restore", data);
-  });
-
 export const bulkActivateCollections = createServerFn({ method: "POST" })
   .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }): Promise<void> => {

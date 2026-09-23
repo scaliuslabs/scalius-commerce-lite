@@ -6,7 +6,7 @@ import {
   getAgentClientIp,
   withAgentNoStoreHeaders,
 } from "./limits";
-import { completeOAuthAuthorization, createOAuthProvider } from "./oauth";
+import { completeOAuthAuthorization, handleOAuthRequest } from "./oauth";
 import {
   DASHBOARD_MCP_PATH,
   DASHBOARD_OAUTH_PROTECTED_RESOURCE_METADATA_PATH,
@@ -181,7 +181,7 @@ export async function handleAgentAccessRequest(
     const completionRequestId = getOAuthCompletionRequestId(url.pathname);
     const response = completionRequestId
       ? await completeOAuthAuthorization(completionRequestId, env)
-      : await createOAuthProvider(env).fetch(boundedRequest, env, ctx);
+      : await handleOAuthRequest(boundedRequest, env, ctx);
     return withAgentNoStoreHeaders(response);
   } catch {
     return agentNoStoreResponse("Agent access request failed", { status: 409 });

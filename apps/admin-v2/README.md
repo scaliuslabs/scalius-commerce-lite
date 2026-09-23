@@ -47,10 +47,7 @@ request:
 |---------|------|---------|
 | `DB` | D1 | Database |
 | `API` | Service | → `scalius-api` Worker |
-| `CACHE` | KV | General caching |
-| `SESSION` | KV | Better Auth sessions |
-| `SHARED_AUTH_CACHE` | KV | Cross-worker auth cache |
-| `BUCKET` | R2 | Media storage |
+| `CACHE` | KV | Platform/settings cache, RBAC permission cache, scanner sessions (shared with the API) |
 | `EMAIL` | send_email | Cloudflare Email |
 
 ## Data flow
@@ -199,7 +196,6 @@ token is written.
 | `src/lib/api-functions/` | Typed domain server-function slices |
 | `src/lib/api-query-options/` | Domain queryOptions with per-domain staleTime |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
-| `src/lib/api.mutations.ts` | Compatibility re-export barrel for mutation hooks |
 | `src/lib/api.server.ts` | HTTP transport (service binding / fetch) |
 | `src/lib/admin-api-timeout.ts` | Read-only API timeout helper |
 | `src/lib/query-keys.ts` | Centralized query key factory |
@@ -211,7 +207,6 @@ token is written.
 | File | Purpose |
 |------|---------|
 | `hooks/use-entity-form-submit.ts` | Form submit with invalidation + navigation |
-| `hooks/use-delete-handler.ts` | Delete with query invalidation |
 | `hooks/use-settings-form.ts` | Settings forms (query + mutation + state sync) |
 | `components/admin/shared/FormContainer.tsx` | Form wrapper + UnsavedChangesGuard |
 | `components/admin/shared/UnsavedChangesGuard.tsx` | `useBlocker` + `beforeunload` |

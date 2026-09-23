@@ -18,7 +18,6 @@ or incomplete configurations fail closed.
   "./postgres-adapter": "./src/postgres-adapter.ts",
   "./postgres-checkout": "./src/postgres-checkout.ts",
   "./inventory-authority": "./src/inventory-authority.ts",
-  "./migration-control": "./src/migration-control.ts",
   "./migration-artifacts": "./src/migration-artifacts.ts",
   "./schema-contract": "./src/schema-contract.ts",
   "./portability": "./src/portability.ts",
@@ -36,7 +35,6 @@ import { getDb, schema } from "@scalius/database/client";
 import type { Database } from "@scalius/database/client";
 
 // Operator-facing migration building blocks
-import { advanceDatabaseMigrationCheckpoint } from "@scalius/database/migration-control";
 import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
 import { readDatabaseSchemaState } from "@scalius/database/schema-contract";
 import { createSqlitePortabilityManifest } from "@scalius/database/portability";
@@ -103,7 +101,7 @@ All enums follow the pattern: `const` object with `as const`, plus a derived uni
 | Enum | Values | Used By |
 |------|--------|---------|
 | `OrderStatus` | `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `refunded`, `returned`, `partially_refunded`, `incomplete` | `orders.status` |
-| `PaymentMethod` | `stripe`, `sslcommerz`, `polar`, `cod` | `orders.paymentMethod`, `orderPayments.paymentMethod` |
+| `PaymentMethod` | `stripe`, `sslcommerz`, `cod` | `orders.paymentMethod`, `orderPayments.paymentMethod` |
 | `PaymentStatus` | `unpaid`, `partial`, `paid`, `refunded`, `failed` | `orders.paymentStatus` |
 | `FulfillmentStatus` | `pending`, `partial`, `complete` | `orders.fulfillmentStatus` |
 | `InventoryPool` | `regular`, `preorder`, `backorder` | `orders.inventoryPool` |

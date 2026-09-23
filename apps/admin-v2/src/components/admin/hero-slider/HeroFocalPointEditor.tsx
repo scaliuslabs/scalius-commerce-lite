@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 import { Crosshair, RotateCcw } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   type HeroSlideFocalPoint,
@@ -41,12 +41,7 @@ export function HeroFocalPointEditor({
     });
   };
 
-  const source = getOptimizedImageUrl(imageUrl, {
-    width: 720,
-    height: null,
-    quality: 85,
-    fit: "scale-down",
-  });
+  const source = mediaImageUrl(imageUrl, 960);
 
   return (
     <Popover>

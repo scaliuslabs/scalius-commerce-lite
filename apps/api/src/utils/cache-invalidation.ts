@@ -238,7 +238,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   },
   media: {
     label: "Media",
-    description: "CDN host policy and image optimization settings",
+    description: "Media delivery host settings",
   },
   homepage: {
     label: "Homepage",
@@ -433,12 +433,6 @@ export const SETTINGS_CACHE_DEPENDENCIES = {
     strategy: "shared-projection",
     note: "Checkout plus provider cache.",
   },
-  polar: {
-    path: "/api/v1/admin/settings/polar",
-    groups: ["checkout"],
-    strategy: "shared-projection",
-    note: "Checkout plus provider cache.",
-  },
   shippingMethods: {
     path: "/api/v1/admin/settings/shipping-methods",
     groups: ["checkout", "product-schema"],
@@ -516,7 +510,6 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/payment-methods": ["checkout"],
   "/api/v1/admin/settings/stripe": ["checkout"],
   "/api/v1/admin/settings/sslcommerz": ["checkout"],
-  "/api/v1/admin/settings/polar": ["checkout"],
   "/api/v1/admin/settings/shipping-methods": ["checkout", "product-schema"],
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],

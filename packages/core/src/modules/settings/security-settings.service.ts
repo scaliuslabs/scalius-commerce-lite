@@ -2,9 +2,10 @@
 // The merchant-managed storefront CSP allow-list.
 //
 // The stored row and the KV mirror stay a bare comma-separated source list:
-// the storefront CSP handler and the Partytown proxy read that KV key
-// directly, so the raw codec keeps both byte-identical while storage,
-// validation, cache, and invalidation are declared once.
+// the storefront reads the row through the layout payload and the API
+// Partytown proxy reads the KV key, so the raw codec keeps both
+// byte-identical while storage, validation, cache, and invalidation are
+// declared once. Saves invalidate `layout`, which carries the storefront copy.
 
 import { z } from "zod";
 import {
@@ -25,7 +26,7 @@ export interface SecuritySettings extends Record<string, unknown> {
 
 /**
  * The mirror is written without an expiration: it is the read path for the
- * storefront CSP handler and the Partytown proxy, and a save rewrites it.
+ * API Partytown proxy, and a save rewrites it.
  */
 export const securitySettingsDocument = defineSettingsDocument<SecuritySettings>({
   category: SECURITY_SETTINGS_CATEGORY,

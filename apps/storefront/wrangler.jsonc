@@ -8,7 +8,7 @@
 		"disable_nodejs_process_v2"
 	],
 	"limits": {
-		"cpu_ms": 300000
+		"cpu_ms": 30000
 	},
 	// workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
 	"workers_dev": false,
@@ -28,8 +28,14 @@
 		"default": { "type": "worker", "cache": { "enabled": false } },
 		"CachedPublicStorefront": { "type": "worker", "cache": { "enabled": true } }
 	},
+	// Highest-volume, lowest-value logs (page renders): no invocation records
+	// and 10% of invocations keep their console output.
 	"observability": {
 		"enabled": true,
+		"logs": {
+			"invocation_logs": false,
+			"head_sampling_rate": 0.1
+		},
 		"traces": {
 			"enabled": true,
 			"head_sampling_rate": 0.01
@@ -44,12 +50,6 @@
 		"binding": "ASSETS",
 		"directory": "./dist"
 	},
-	"kv_namespaces": [
-		{
-			"binding": "SESSION",
-			"id": "7e26aa6f7fb344429379d845e5492cb4"
-		}
-	],
 	// Service binding to the standalone API worker (was "testdash" monolith)
 	"services": [
 		{

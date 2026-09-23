@@ -1,11 +1,10 @@
 ---
 // Optimized carousel component for best performance and LCP
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
-  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
   type HeroSlideFocalPoint,
 } from "@scalius/shared/hero-slider";
@@ -56,18 +55,9 @@ if (images.length === 0) return;
           const SlideFrame = image.link ? "a" : "div";
           const isExternal = image.link?.startsWith("https://");
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
-          const source = getOptimizedImageUrl(image.url, {
-            ...getHeroSlideImageTransform(type, focalPoint, {
-              quality:
-                type === "desktop"
-                  ? index === 0
-                    ? 90
-                    : 80
-                  : index === 0
-                    ? 75
-                    : 70,
-            }),
-          });
+          // One rendition at the authored slide width keeps the rendered
+          // <source> identical to the eager LCP preload in pages/index.astro.
+          const source = mediaImageUrl(image.url, presentation.width);
           return (
             <div
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}

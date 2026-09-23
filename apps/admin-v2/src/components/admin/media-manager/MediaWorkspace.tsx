@@ -4,6 +4,7 @@ import { cn } from "@scalius/shared/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { FolderBrowser, MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQueue } from "./components";
+import { OptimizeImagesButton } from "./components/OptimizeImagesButton";
 import type { useMediaManager } from "./hooks/useMediaManager";
 import type { LibraryMediaFile, MediaCapability, MediaFile } from "./types";
 
@@ -78,6 +79,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           )}
           <p className="sr-only">{limitHint}</p>
         </div>
+        {!picker && mm.view === "ready" && <OptimizeImagesButton onOptimized={() => void mm.refresh()} />}
         {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
         {onClose && <Button type="button" variant="ghost" size="sm" className="h-11 sm:h-8" onClick={onClose}>Close</Button>}
       </header>

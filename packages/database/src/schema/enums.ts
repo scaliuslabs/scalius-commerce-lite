@@ -20,7 +20,6 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 export const PaymentMethod = {
     STRIPE: "stripe",
     SSLCOMMERZ: "sslcommerz",
-    POLAR: "polar",
     COD: "cod",
 } as const;
 

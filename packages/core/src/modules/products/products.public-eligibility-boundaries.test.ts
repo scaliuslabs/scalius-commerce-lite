@@ -24,7 +24,7 @@ describe("public product eligibility boundaries", () => {
         const collectionsSource = readRepoFile("packages/core/src/modules/collections/collections.service.ts");
 
         expect(collectionsSource).toContain("publicCollectionProductConditions");
-        expect(collectionsSource.match(/publicCollectionProductConditions\(/g)?.length).toBeGreaterThanOrEqual(6);
+        expect(collectionsSource.match(/publicCollectionProductConditions\(/g)?.length).toBeGreaterThanOrEqual(4);
         expect(collectionsSource).not.toContain("eq(products.isActive, true), isNull(products.deletedAt)");
     });
 });

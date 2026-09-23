@@ -80,7 +80,7 @@ export interface AgentStorefrontCheckoutSubmitInput {
   customerEmail: string | null;
   shippingAddress: string;
   notes: string | null;
-  paymentMethod: "cod" | "stripe" | "sslcommerz" | "polar";
+  paymentMethod: "cod" | "stripe" | "sslcommerz";
 }
 
 export interface AgentStorefrontCheckoutSubmitView {

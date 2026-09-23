@@ -54,12 +54,6 @@ const paymentReadinessGateways = [
     token: "chk_ops006_sslcommerz",
     path: "/api/v1/payment/sslcommerz/session",
   },
-  {
-    gateway: "polar",
-    orderId: "ops006_order_polar",
-    token: "chk_ops006_polar",
-    path: "/api/v1/payment/polar/session",
-  },
 ];
 
 const defaults = {
@@ -417,7 +411,7 @@ function seedOtpFixture(config) {
 
 export function buildPaymentReadinessFixtureSql() {
   const orderIds = paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ");
-  const onlineMethods = ["stripe", "sslcommerz", "polar", "cod"];
+  const onlineMethods = ["stripe", "sslcommerz", "cod"];
 
   return [
     `DELETE FROM payment_session_attempts WHERE order_id IN (${orderIds})`,
@@ -426,7 +420,7 @@ export function buildPaymentReadinessFixtureSql() {
     `DELETE FROM order_items WHERE order_id IN (${orderIds})`,
     `DELETE FROM checkout_attempts WHERE order_id IN (${orderIds})`,
     `DELETE FROM orders WHERE id IN (${orderIds})`,
-    `DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz', 'polar')`,
+    `DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')`,
     `UPDATE site_settings SET
       checkout_mode = 'all',
       partial_payment_enabled = 1,

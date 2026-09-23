@@ -50,7 +50,7 @@ interface SessionData {
 }
 
 interface CustomerOrderPaymentSessionData {
-  gateway: "stripe" | "sslcommerz" | "polar";
+  gateway: "stripe" | "sslcommerz";
   paymentType: "full" | "deposit" | "balance";
   amount: number;
   currency: string;
@@ -79,7 +79,7 @@ function isCustomerOrderPaymentSession(value: unknown): value is CustomerOrderPa
   if (!value || typeof value !== "object") return false;
   const session = value as Partial<CustomerOrderPaymentSessionData>;
   return (
-    (session.gateway === "stripe" || session.gateway === "sslcommerz" || session.gateway === "polar") &&
+    (session.gateway === "stripe" || session.gateway === "sslcommerz") &&
     (session.paymentType === "full" || session.paymentType === "deposit" || session.paymentType === "balance")
   );
 }
@@ -485,7 +485,7 @@ export interface CustomerActiveRefundOperation {
 
 export interface CustomerPaymentRecovery {
   eligible: boolean;
-  gateway: "stripe" | "sslcommerz" | "polar" | null;
+  gateway: "stripe" | "sslcommerz" | null;
   paymentType: "full" | "deposit" | "balance" | null;
   amountDue: number;
   label: string | null;
@@ -783,7 +783,7 @@ export async function createCustomerOrderSupportRequest(
  * This endpoint never accepts or returns receipt tokens.
  */
 type CreateCustomerOrderPaymentSessionOptions = Pick<PaymentSessionRetryOptions, "onProcessing"> & {
-  gateway?: "stripe" | "sslcommerz" | "polar";
+  gateway?: "stripe" | "sslcommerz";
   replaceExistingAttempt?: boolean;
 };
 

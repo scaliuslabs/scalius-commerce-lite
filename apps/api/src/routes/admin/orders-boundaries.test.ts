@@ -198,9 +198,8 @@ describe("admin orders route boundaries", () => {
         expect(recoveryLinkRoute).not.toContain("tokenHash");
         expect(recoveryLinkRoute).not.toContain("writePaymentRecoveryReceiptHint");
         expect(recoveryLinkRoute).not.toContain("c.env.CACHE");
-        expect(recoveryLinkRoute).not.toContain("ORDER_NOTIFICATIONS_QUEUE");
+        expect(recoveryLinkRoute).not.toContain("JOBS_QUEUE");
         expect(recoveryLinkRoute).not.toContain("createSSLCommerzPaymentSession");
-        expect(recoveryLinkRoute).not.toContain("createPolarPaymentSession");
     });
 
     it("exposes sanitized payment-session attempt visibility on order payments", () => {

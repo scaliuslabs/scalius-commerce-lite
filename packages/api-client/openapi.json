@@ -10040,17 +10040,8 @@
                         "media": {
                           "type": "object",
                           "properties": {
-                            "enabled": {
-                              "type": "boolean"
-                            },
                             "canonicalCdnUrl": {
                               "type": "string"
-                            },
-                            "allowedImageHosts": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
                             },
                             "canonicalHostAliases": {
                               "type": "array",
@@ -10060,9 +10051,7 @@
                             }
                           },
                           "required": [
-                            "enabled",
                             "canonicalCdnUrl",
-                            "allowedImageHosts",
                             "canonicalHostAliases"
                           ]
                         },
@@ -10315,6 +10304,32 @@
                             "discovery",
                             "returnPolicy"
                           ]
+                        },
+                        "platform": {
+                          "type": "object",
+                          "properties": {
+                            "storefrontUrl": {
+                              "type": "string"
+                            },
+                            "apiUrl": {
+                              "type": "string"
+                            },
+                            "dashboardUrl": {
+                              "type": "string"
+                            },
+                            "mediaUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "storefrontUrl",
+                            "apiUrl",
+                            "dashboardUrl",
+                            "mediaUrl"
+                          ]
+                        },
+                        "cspAllowedDomains": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -10327,7 +10342,9 @@
                         "media",
                         "metaCapi",
                         "business",
-                        "seo"
+                        "seo",
+                        "platform",
+                        "cspAllowedDomains"
                       ]
                     }
                   },
@@ -10576,110 +10593,6 @@
         "x-scalius-rbac": {
           "type": "unmapped"
         }
-      }
-    },
-    "/api/v1/storefront/csp": {
-      "get": {
-        "tags": [
-          "Storefront"
-        ],
-        "summary": "Get CSP allowed domains configuration",
-        "responses": {
-          "200": {
-            "description": "CSP configuration",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "cspAllowedDomains": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "cspAllowedDomains"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "operationId": "storefront.storefront_csp.get_csp",
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "principals": [
-            "internal"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Storefront CSP-domain configuration is consumed by response middleware to build browser security headers, not as a semantic storefront read."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
       }
     },
     "/api/v1/platform": {
@@ -18100,8 +18013,7 @@
                     "enum": [
                       "cod",
                       "stripe",
-                      "sslcommerz",
-                      "polar"
+                      "sslcommerz"
                     ],
                     "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
                   }
@@ -24979,8 +24891,7 @@
                           "type": "string",
                           "enum": [
                             "stripe",
-                            "sslcommerz",
-                            "polar"
+                            "sslcommerz"
                           ]
                         },
                         "paymentType": {
@@ -26569,40 +26480,6 @@
                                   "id": {
                                     "type": "string",
                                     "enum": [
-                                      "polar"
-                                    ]
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "currencies": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "string"
-                                    },
-                                    "maxItems": 4
-                                  },
-                                  "sandbox": {
-                                    "type": "boolean"
-                                  },
-                                  "testMode": {
-                                    "type": "boolean"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "currencies",
-                                  "sandbox",
-                                  "testMode"
-                                ]
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string",
-                                    "enum": [
                                       "cod"
                                     ]
                                   },
@@ -26625,14 +26502,13 @@
                               }
                             ]
                           },
-                          "maxItems": 4
+                          "maxItems": 3
                         },
                         "activeDefaultMethod": {
                           "type": "string",
                           "enum": [
                             "stripe",
                             "sslcommerz",
-                            "polar",
                             "cod"
                           ]
                         },
@@ -30715,7 +30591,6 @@
                               "enum": [
                                 "stripe",
                                 "sslcommerz",
-                                "polar",
                                 null
                               ]
                             },
@@ -31658,8 +31533,7 @@
                     "type": "string",
                     "enum": [
                       "stripe",
-                      "sslcommerz",
-                      "polar"
+                      "sslcommerz"
                     ]
                   },
                   "replaceExistingAttempt": {
@@ -31786,49 +31660,6 @@
                             "gateway",
                             "hosted"
                           ]
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "paymentType": {
-                              "type": "string",
-                              "enum": [
-                                "full",
-                                "deposit",
-                                "balance"
-                              ]
-                            },
-                            "amount": {
-                              "type": "number"
-                            },
-                            "currency": {
-                              "type": "string"
-                            },
-                            "gateway": {
-                              "type": "string",
-                              "enum": [
-                                "polar"
-                              ]
-                            },
-                            "hosted": {
-                              "type": "object",
-                              "properties": {
-                                "gatewayUrl": {
-                                  "type": "string"
-                                },
-                                "checkoutId": {
-                                  "type": "string"
-                                }
-                              }
-                            }
-                          },
-                          "required": [
-                            "paymentType",
-                            "amount",
-                            "currency",
-                            "gateway",
-                            "hosted"
-                          ]
                         }
                       ]
                     }
@@ -31881,8 +31712,7 @@
                           "type": "string",
                           "enum": [
                             "stripe",
-                            "sslcommerz",
-                            "polar"
+                            "sslcommerz"
                           ]
                         },
                         "paymentType": {
@@ -44794,7 +44624,6 @@
                     "enum": [
                       "stripe",
                       "sslcommerz",
-                      "polar",
                       "cod"
                     ],
                     "default": "cod"
@@ -71077,6 +70906,19 @@
             "required": false,
             "name": "view",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "missing"
+              ],
+              "description": "`missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet."
+            },
+            "required": false,
+            "description": "`missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet.",
+            "name": "variants",
+            "in": "query"
           }
         ],
         "responses": {
@@ -71140,6 +70982,10 @@
                               },
                               "height": {
                                 "type": "number",
+                                "nullable": true
+                              },
+                              "variantWidth": {
+                                "type": "integer",
                                 "nullable": true
                               },
                               "durationMs": {
@@ -72167,6 +72013,10 @@
                             },
                             "height": {
                               "type": "number",
+                              "nullable": true
+                            },
+                            "variantWidth": {
+                              "type": "integer",
                               "nullable": true
                             },
                             "durationMs": {
@@ -73841,6 +73691,21 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "server",
+                "client"
+              ],
+              "default": "server",
+              "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save."
+            },
+            "required": false,
+            "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.",
+            "name": "variants",
+            "in": "query"
           }
         ],
         "responses": {
@@ -73902,6 +73767,10 @@
                             },
                             "height": {
                               "type": "number",
+                              "nullable": true
+                            },
+                            "variantWidth": {
+                              "type": "integer",
                               "nullable": true
                             },
                             "durationMs": {
@@ -74839,6 +74708,10 @@
                               "type": "number",
                               "nullable": true
                             },
+                            "variantWidth": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "durationMs": {
                               "type": "number",
                               "nullable": true
@@ -75322,6 +75195,10 @@
                             },
                             "height": {
                               "type": "number",
+                              "nullable": true
+                            },
+                            "variantWidth": {
+                              "type": "integer",
                               "nullable": true
                             },
                             "durationMs": {
@@ -75809,6 +75686,10 @@
                               "type": "number",
                               "nullable": true
                             },
+                            "variantWidth": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "durationMs": {
                               "type": "number",
                               "nullable": true
@@ -76192,6 +76073,867 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "media.upload"
+        }
+      }
+    },
+    "/api/v1/admin/media/{id}/variants": {
+      "post": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "Store pre-generated WebP renditions",
+        "description": "Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w160, w320 … and the master). The widths must be exactly those the dashboard pipeline derives from `width`. Replaces earlier renditions and switches the published media URL to the largest one.",
+        "operationId": "dashboard.media.variants_save",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "string"
+                  },
+                  "height": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renditions stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "file": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "filename": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "video"
+                              ]
+                            },
+                            "objectKey": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "number"
+                            },
+                            "mimeType": {
+                              "type": "string"
+                            },
+                            "altText": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "caption": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "width": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "height": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "variantWidth": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "posterMediaId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "posterUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "folderId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ready",
+                                "trashed",
+                                "deleting",
+                                "deleted"
+                              ]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "trashedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            },
+                            "deletedAt": {
+                              "$ref": "#/components/schemas/NullableTimestamp"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "filename",
+                            "url",
+                            "kind",
+                            "objectKey",
+                            "size",
+                            "mimeType",
+                            "posterUrl",
+                            "folderId",
+                            "status",
+                            "version",
+                            "createdAt",
+                            "updatedAt",
+                            "trashedAt",
+                            "deletedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "file"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "media.upload"
+        }
+      }
+    },
+    "/api/v1/admin/media/{id}/original": {
+      "get": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "Read the original upload bytes",
+        "description": "Same-origin read of the stored original so the dashboard can generate renditions for media uploaded before them.",
+        "operationId": "dashboard.media.original",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original media bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Binary original read for the dashboard's browser rendition pipeline; agents use the public media URL."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "media.view"
         }
       }
     },
@@ -110898,7 +111640,7 @@
         "tags": [
           "Admin - Settings"
         ],
-        "summary": "Get media and image optimization settings",
+        "summary": "Get media delivery host settings",
         "operationId": "dashboard.settings.media_delivery_get",
         "responses": {
           "200": {
@@ -110917,23 +111659,10 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "enabled": {
-                          "type": "boolean",
-                          "default": true
-                        },
                         "canonicalCdnUrl": {
                           "type": "string",
                           "maxLength": 253,
                           "default": ""
-                        },
-                        "allowedImageHosts": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 253
-                          },
-                          "maxItems": 24,
-                          "default": []
                         },
                         "canonicalHostAliases": {
                           "type": "array",
@@ -111218,7 +111947,7 @@
         "tags": [
           "Admin - Settings"
         ],
-        "summary": "Save media and image optimization settings",
+        "summary": "Save media delivery host settings",
         "operationId": "dashboard.settings.media_delivery_update",
         "requestBody": {
           "required": true,
@@ -111227,23 +111956,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "default": true
-                  },
                   "canonicalCdnUrl": {
                     "type": "string",
                     "maxLength": 253,
                     "default": ""
-                  },
-                  "allowedImageHosts": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 253
-                    },
-                    "maxItems": 24,
-                    "default": []
                   },
                   "canonicalHostAliases": {
                     "type": "array",
@@ -111276,23 +111992,10 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "enabled": {
-                          "type": "boolean",
-                          "default": true
-                        },
                         "canonicalCdnUrl": {
                           "type": "string",
                           "maxLength": 253,
                           "default": ""
-                        },
-                        "allowedImageHosts": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 253
-                          },
-                          "maxItems": 24,
-                          "default": []
                         },
                         "canonicalHostAliases": {
                           "type": "array",
@@ -117269,58 +117972,6 @@
                                 "enabled"
                               ]
                             },
-                            "polar": {
-                              "type": "object",
-                              "properties": {
-                                "configured": {
-                                  "type": "boolean"
-                                },
-                                "enabled": {
-                                  "type": "boolean"
-                                },
-                                "usable": {
-                                  "type": "boolean"
-                                },
-                                "missingFields": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "credentialErrors": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "blockedReason": {
-                                  "type": "string"
-                                },
-                                "providerEnabled": {
-                                  "type": "boolean"
-                                },
-                                "checkoutSelected": {
-                                  "type": "boolean"
-                                },
-                                "checkoutVisible": {
-                                  "type": "boolean"
-                                },
-                                "environment": {
-                                  "type": "string",
-                                  "enum": [
-                                    "test",
-                                    "live",
-                                    "mixed",
-                                    "unknown",
-                                    "not_applicable"
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "configured",
-                                "enabled"
-                              ]
-                            },
                             "cod": {
                               "type": "object",
                               "properties": {
@@ -117377,7 +118028,6 @@
                           "required": [
                             "stripe",
                             "sslcommerz",
-                            "polar",
                             "cod"
                           ]
                         }
@@ -117677,19 +118327,17 @@
                       "enum": [
                         "stripe",
                         "sslcommerz",
-                        "polar",
                         "cod"
                       ]
                     },
                     "minItems": 1,
-                    "maxItems": 4
+                    "maxItems": 3
                   },
                   "defaultMethod": {
                     "type": "string",
                     "enum": [
                       "stripe",
                       "sslcommerz",
-                      "polar",
                       "cod"
                     ]
                   }
@@ -119015,687 +119663,6 @@
         "responses": {
           "200": {
             "description": "SSLCommerz settings saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "security",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.edit"
-        }
-      }
-    },
-    "/api/v1/admin/settings/polar": {
-      "get": {
-        "operationId": "dashboard.payments.polar_get",
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Get Polar settings",
-        "responses": {
-          "200": {
-            "description": "Polar settings",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "accessToken": {
-                          "type": "string"
-                        },
-                        "webhookSecret": {
-                          "type": "string"
-                        },
-                        "productId": {
-                          "type": "string"
-                        },
-                        "sandbox": {
-                          "type": "boolean"
-                        },
-                        "enabled": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "accessToken",
-                        "webhookSecret",
-                        "productId",
-                        "sandbox",
-                        "enabled"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
-        }
-      },
-      "post": {
-        "operationId": "dashboard.payments.polar_update",
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Save Polar settings",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "accessToken": {
-                    "type": "string"
-                  },
-                  "webhookSecret": {
-                    "type": "string"
-                  },
-                  "productId": {
-                    "type": "string"
-                  },
-                  "sandbox": {
-                    "type": "boolean"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Polar settings saved",
             "content": {
               "application/json": {
                 "schema": {
@@ -143818,7 +143785,6 @@
                     "enum": [
                       "stripe",
                       "sslcommerz",
-                      "polar",
                       "cod"
                     ]
                   },
@@ -150660,8 +150626,7 @@
               "enum": [
                 "cod",
                 "stripe",
-                "sslcommerz",
-                "polar"
+                "sslcommerz"
               ],
               "description": "Filter by payment method"
             },
@@ -151692,8 +151657,7 @@
               "enum": [
                 "cod",
                 "stripe",
-                "sslcommerz",
-                "polar"
+                "sslcommerz"
               ]
             },
             "required": false,
@@ -152147,8 +152111,7 @@
               "enum": [
                 "cod",
                 "stripe",
-                "sslcommerz",
-                "polar"
+                "sslcommerz"
               ],
               "description": "Filter by payment gateway"
             },
@@ -153034,8 +152997,7 @@
               "enum": [
                 "cod",
                 "stripe",
-                "sslcommerz",
-                "polar"
+                "sslcommerz"
               ],
               "description": "Filter by payment gateway"
             },
@@ -155509,8 +155471,7 @@
                         "gateway": {
                           "type": "string",
                           "enum": [
-                            "sslcommerz",
-                            "polar"
+                            "sslcommerz"
                           ]
                         },
                         "paymentType": {
@@ -157732,10 +157693,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "polarCheckoutId": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "codCollectedBy": {
                                 "type": "string",
                                 "nullable": true
@@ -157789,7 +157746,6 @@
                               "sslcommerzTranId",
                               "sslcommerzValId",
                               "sslcommerzBankTranId",
-                              "polarCheckoutId",
                               "codCollectedBy",
                               "codCollectedAt",
                               "codReceiptUrl",
@@ -193268,7 +193224,6 @@
                                 "enum": [
                                   "stripe",
                                   "sslcommerz",
-                                  "polar",
                                   null
                                 ]
                               },
@@ -201986,8 +201941,7 @@
                           "type": "string",
                           "enum": [
                             "stripe",
-                            "sslcommerz",
-                            "polar"
+                            "sslcommerz"
                           ]
                         },
                         "paymentType": {
@@ -202901,8 +202855,7 @@
                           "type": "string",
                           "enum": [
                             "stripe",
-                            "sslcommerz",
-                            "polar"
+                            "sslcommerz"
                           ]
                         },
                         "paymentType": {
@@ -203260,520 +203213,6 @@
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Requires raw receipt proof and returns hosted SSLCommerz session material; use the secure storefront payment continuation."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
-    "/api/v1/payment/polar/session": {
-      "post": {
-        "tags": [
-          "Payments - Polar"
-        ],
-        "summary": "Create a Polar checkout session",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": false,
-            "name": "X-Receipt-Token",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "orderId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "depositAmount": {
-                    "type": "number",
-                    "minimum": 0,
-                    "exclusiveMinimum": true
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "full",
-                      "deposit",
-                      "balance"
-                    ]
-                  },
-                  "paymentType": {
-                    "type": "string",
-                    "enum": [
-                      "full",
-                      "deposit",
-                      "balance"
-                    ]
-                  },
-                  "customerName": {
-                    "type": "string"
-                  },
-                  "customerEmail": {
-                    "type": "string"
-                  },
-                  "customerPhone": {
-                    "type": "string"
-                  },
-                  "receiptToken": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "replaceExistingAttempt": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "orderId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Polar checkout session created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "gatewayUrl": {
-                          "type": "string"
-                        },
-                        "checkoutId": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Payment session creation is already processing",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "processing"
-                          ]
-                        },
-                        "retryable": {
-                          "type": "boolean",
-                          "enum": [
-                            true
-                          ]
-                        },
-                        "retryAfterSeconds": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "exclusiveMinimum": true
-                        },
-                        "orderId": {
-                          "type": "string"
-                        },
-                        "gateway": {
-                          "type": "string",
-                          "enum": [
-                            "stripe",
-                            "sslcommerz",
-                            "polar"
-                          ]
-                        },
-                        "paymentType": {
-                          "type": "string",
-                          "enum": [
-                            "full",
-                            "deposit",
-                            "balance"
-                          ]
-                        },
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "status",
-                        "retryable",
-                        "retryAfterSeconds",
-                        "orderId",
-                        "gateway",
-                        "paymentType",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "error"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {}
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "operationId": "storefront.payment_polar_session.session",
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "principals": [
-            "visitor",
-            "customer"
-          ],
-          "risk": "financial",
-          "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": true,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Requires raw receipt proof and returns hosted Polar checkout material; use the secure storefront payment continuation."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -205269,18 +204708,6 @@
                         {
                           "pointer": "/sslcommerz/checkoutVisible",
                           "alias": "sslVisible"
-                        },
-                        {
-                          "pointer": "/polar/configured",
-                          "alias": "polarConfigured"
-                        },
-                        {
-                          "pointer": "/polar/usable",
-                          "alias": "polarUsable"
-                        },
-                        {
-                          "pointer": "/polar/checkoutVisible",
-                          "alias": "polarVisible"
                         },
                         {
                           "pointer": "/cod/configured",
@@ -208285,8 +207712,7 @@
               "provider",
               "gateway",
               "sslcommerz",
-              "stripe",
-              "polar"
+              "stripe"
             ]
           ],
           "ignoreWhenNegated": true
@@ -208566,7 +207992,6 @@
           "dashboard.payments.methods_update",
           "dashboard.payments.stripe_update",
           "dashboard.payments.sslcommerz_update",
-          "dashboard.payments.polar_update",
           "dashboard.shipping_methods.create",
           "dashboard.shipping_methods.update",
           "dashboard.shipping_methods.trash",
@@ -211889,22 +211314,6 @@
           "workflowIds": [
             "dashboard.bangladesh-checkout-supported-setup",
             "dashboard.payment-methods"
-          ]
-        },
-        {
-          "operationId": "dashboard.payments.polar_get",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.payments.polar_get"
-          ]
-        },
-        {
-          "operationId": "dashboard.payments.polar_update",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.payments.polar_update"
           ]
         },
         {

@@ -242,17 +242,6 @@ export async function getDeliveryProviders(
 }
 
 /**
- * Get active providers from the database
- */
-export async function getActiveDeliveryProviders(db: Database) {
-  return db
-    .select()
-    .from(deliveryProviders)
-    .where(eq(deliveryProviders.isActive, true))
-    .orderBy(desc(deliveryProviders.updatedAt));
-}
-
-/**
  * Get provider by ID
  */
 export async function getDeliveryProvider(db: Database, id: string) {

@@ -414,32 +414,6 @@ export async function processPaymentConfirmed(
         paymentId = existing.id;
       }
     }
-    if (!paymentId && params.polarCheckoutId) {
-      const existing = await db
-        .select({
-          id: orderPayments.id,
-          amount: orderPayments.amount,
-          status: orderPayments.status,
-          currency: orderPayments.currency,
-        })
-        .from(orderPayments)
-        .where(and(
-          eq(orderPayments.orderId, params.orderId),
-          eq(orderPayments.polarCheckoutId, params.polarCheckoutId),
-        ))
-        .get();
-      if (existing) {
-        assertOrderPaymentCurrency(existing.currency, currency, "Existing Polar payment");
-        if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
-          return { success: false, error: "Existing Polar payment amount does not match webhook amount" };
-        }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
-          return { success: true, alreadyProcessed: true };
-        }
-        paymentId = existing.id;
-      }
-    }
-
     const initialOrder = await db
       .select({
         id: orders.id,
@@ -493,7 +467,6 @@ export async function processPaymentConfirmed(
           sslcommerzTranId: params.sslcommerzTranId ?? null,
           sslcommerzValId: params.sslcommerzValId ?? null,
           sslcommerzBankTranId: params.sslcommerzBankTranId ?? null,
-          polarCheckoutId: params.polarCheckoutId ?? null,
           metadata: params.metadata ? JSON.stringify(params.metadata) : null,
           createdAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
@@ -760,9 +733,7 @@ export async function processPaymentFailed(
           eq(orderPayments.orderId, orderId),
           gateway === "stripe"
             ? eq(orderPayments.stripePaymentIntentId, intentId)
-            : gateway === "sslcommerz"
-              ? eq(orderPayments.sslcommerzTranId, intentId)
-              : eq(orderPayments.polarCheckoutId, intentId),
+            : eq(orderPayments.sslcommerzTranId, intentId),
         ))
         .get();
 
@@ -871,7 +842,6 @@ export async function processPaymentFailed(
           status: PaymentRecordStatus.FAILED,
           stripePaymentIntentId: gateway === "stripe" ? (intentId ?? null) : null,
           sslcommerzTranId: gateway === "sslcommerz" ? (intentId ?? null) : null,
-          polarCheckoutId: gateway === "polar" ? (intentId ?? null) : null,
           createdAt: sql`unixepoch()`,
           updatedAt: sql`unixepoch()`,
         }).onConflictDoNothing(),

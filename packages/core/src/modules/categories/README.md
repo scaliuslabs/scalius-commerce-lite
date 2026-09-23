@@ -59,7 +59,6 @@ Shared content fields:
 | `getPublicCategories` | `(db)` | Published, non-trashed categories ordered by name |
 | `getPublicCategoryBySlug` | `(db, slug)` | Published category by slug; draft/internal/deleted return null |
 | `getPublicCategoryById` | `(db, id)` | Published category by ID; draft/internal/deleted return null |
-| `getPublicCategoryTree` | `(db)` | Delegates to `getPublicCategories()`. Named for nav use, extensible for future hierarchy. |
 
 ## Features
 

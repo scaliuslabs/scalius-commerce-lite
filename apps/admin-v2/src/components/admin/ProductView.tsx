@@ -34,7 +34,7 @@ import { cn } from "@scalius/shared/utils";
 import { RichContent } from "../ui/rich-content";
 import { VideoPlayer } from "../ui/video-player";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useCurrency } from "@/hooks/use-currency";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import type { ProductDetail, ProductMediaDetail } from "@/types/api-responses";
@@ -399,12 +399,7 @@ function ProductMediaPreview({ item, productName, featured = false }: {
   if (item.kind === "image") {
     return (
       <img
-        src={getOptimizedImageUrl(item.url, {
-          width: featured ? 960 : 240,
-          height: featured ? 960 : 240,
-          quality: featured ? 85 : 75,
-          fit: "contain",
-        })}
+        src={mediaImageUrl(item.url, featured ? 960 : 240)}
         alt={item.altText || productName}
         className="h-full w-full object-contain object-center"
         loading="lazy"
@@ -416,7 +411,7 @@ function ProductMediaPreview({ item, productName, featured = false }: {
     return (
       <VideoPlayer
         src={item.url}
-        poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}
+        poster={item.posterUrl ? mediaImageUrl(item.posterUrl, 640) : undefined}
         aria-label={item.altText || `${productName} video`}
         playsInline
         preload="metadata"
@@ -427,7 +422,7 @@ function ProductMediaPreview({ item, productName, featured = false }: {
     <>
       {item.posterUrl ? (
         <img
-          src={getOptimizedImageUrl(item.posterUrl, { width: 240, height: 240, quality: 75, fit: "contain" })}
+          src={mediaImageUrl(item.posterUrl, 240)}
           alt=""
           className="h-full w-full object-contain object-center"
           loading="lazy"

@@ -82,7 +82,7 @@ app.post("/", async (c) => {
     });
   }
 
-  const queue = c.env.PAYMENT_EVENTS_QUEUE;
+  const queue = c.env.JOBS_QUEUE;
   if (!queue && message) {
     await markWebhookEventFailed(db, eventId, { error: "Queue not available" });
     return c.json({ error: "Queue not available" }, 503);

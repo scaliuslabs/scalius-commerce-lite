@@ -36,39 +36,8 @@ const discountBadge = formatDiscountBadge(
   product.discountAmount,
 );
 
-const productImageUrl = getProductImageUrl(product.imageUrl, {
-  width: 400,
-  height: 400,
-  quality: 80,
-  format: "auto",
-  fit: "contain",
-});
-const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
-  {
-    descriptor: "240w",
-    width: 240,
-    height: 240,
-    quality: 78,
-    format: "auto",
-    fit: "contain",
-  },
-  {
-    descriptor: "400w",
-    width: 400,
-    height: 400,
-    quality: 80,
-    format: "auto",
-    fit: "contain",
-  },
-  {
-    descriptor: "640w",
-    width: 640,
-    height: 640,
-    quality: 82,
-    format: "auto",
-    fit: "contain",
-  },
-]);
+const productImageUrl = getProductImageUrl(product.imageUrl, 480);
+const productImageSrcSet = getProductImageSrcSet(product.imageUrl);
 ---
 
 <div
@@ -84,8 +53,8 @@ const productImageSrcSet = getProductImageSrcSet(product.imageUrl, [
     >
       <img
         src={productImageUrl}
-        srcset={productImageSrcSet || undefined}
-        sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
+        srcset={productImageSrcSet}
+        sizes="(max-width: 639px) calc(50vw - 1.5rem), (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
         alt={product.imageAlt || product.name}
         width={400}
         height={400}

@@ -32,12 +32,10 @@ function makeRetryOrder(overrides: Partial<{
 describe("order success payment retry", () => {
   it("recognizes callback outcomes while allowing pending hosted payment continuation", () => {
     expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
-    expect(isRetryableHostedPaymentMethod("polar")).toBe(true);
     expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
     expect(isHostedPaymentRetryResult("cancelled")).toBe(true);
     expect(isHostedPaymentRetryResult("failed")).toBe(true);
     expect(getOrderSuccessRetryEndpoint("sslcommerz")).toBe("/api/checkout/sslcommerz-session");
-    expect(getOrderSuccessRetryEndpoint("polar")).toBe("/api/checkout/polar-session");
     expect(getOrderSuccessRetryEndpoint("stripe")).toBe("/api/checkout/stripe-intent");
 
     expect(
@@ -52,7 +50,7 @@ describe("order success payment retry", () => {
   it("allows hosted payment-issue receipts even without a callback result", () => {
     expect(
       canRetryOrderSuccessPayment(
-        makeRetryOrder({ paymentMethod: "polar", paymentStatus: "failed" }),
+        makeRetryOrder({ paymentMethod: "stripe", paymentStatus: "failed" }),
         "payment_issue",
         null,
       ),
@@ -78,7 +76,6 @@ describe("order success payment retry", () => {
         "cancelled",
         [
           { id: "sslcommerz" },
-          { id: "polar" },
           { id: "stripe" },
           { id: "cod" },
         ],
@@ -102,7 +99,6 @@ describe("order success payment retry", () => {
         null,
         [
           { id: "sslcommerz" },
-          { id: "polar" },
           { id: "stripe" },
           { id: "cod" },
         ],
@@ -116,37 +112,11 @@ describe("order success payment retry", () => {
         requiresCardForm: false,
       },
       {
-        gateway: "polar",
-        endpoint: "/api/checkout/polar-session",
-        current: false,
-        label: "Card or digital wallet",
-        requiresCardForm: false,
-      },
-      {
         gateway: "stripe",
         endpoint: "/api/checkout/stripe-intent",
         current: false,
         label: "Credit or debit card",
         requiresCardForm: true,
-      },
-    ]);
-  });
-
-  it("allows a durable payment issue to switch away from a now-hidden current gateway", () => {
-    expect(
-      getOrderSuccessRetryOptions(
-        makeRetryOrder({ paymentStatus: "failed" }),
-        "payment_issue",
-        null,
-        [{ id: "polar" }],
-      ),
-    ).toEqual([
-      {
-        gateway: "polar",
-        endpoint: "/api/checkout/polar-session",
-        current: false,
-        label: "Card or digital wallet",
-        requiresCardForm: false,
       },
     ]);
   });

@@ -8,7 +8,7 @@ import type { AuthState } from "../api/customer-auth";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { readCheckoutFormDraft, syncCheckoutTransferSession, writeCheckoutFormDraft } from "../checkout/session-state";
 import { getEffectiveCartShippingFee } from "../../store/cart";
-import { validateStorefrontPhone } from "../phone-country-policy";
+import { initCheckoutPhoneField } from "../checkout/phone-field";
 import { storefrontSourcePath } from "../test-source-paths";
 
 // Execute the real cart draft/autofill listeners with a deferred session read.
@@ -44,7 +44,7 @@ function startCart() {
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
     findNamedCheckoutControl,
-    validateStorefrontPhone,
+    initCheckoutPhoneField,
     ENGLISH_CHECKOUT_LANGUAGE_DATA,
   };
   captureDraft = new Function(...Object.keys(dependencies), `${script}\nreturn persistCheckoutFormDraftNow;`)(...Object.values(dependencies));
@@ -151,7 +151,7 @@ describe("customer checkout prefill", () => {
     expect(locationPrefill).not.toHaveBeenCalled();
   });
 
-  it("preserves the canonical phone draft until PhoneField finishes hydration", async () => {
+  it("keeps the canonical phone draft while the phone control is still empty", async () => {
     writeCheckoutFormDraft({ customerPhone: customer.phone });
     startCart();
     document.dispatchEvent(new CustomEvent("cart-updated"));

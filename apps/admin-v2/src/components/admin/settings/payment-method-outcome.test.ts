@@ -74,7 +74,6 @@ describe("payment method merchant outcome matrix", () => {
   it.each([
     ["Stripe", "stripe"],
     ["SSLCommerz", "sslcommerz"],
-    ["Polar", "polar"],
   ] as const)("fails %s closed when provider setup or enablement is incomplete", (_label, method) => {
     const disabled = outcome({
       method,
@@ -123,8 +122,6 @@ describe("payment method merchant outcome matrix", () => {
     ["Stripe mismatch", "stripe", "mixed", "Key mismatch"],
     ["SSLCommerz sandbox", "sslcommerz", "test", "Test mode"],
     ["SSLCommerz live", "sslcommerz", "live", "Live mode"],
-    ["Polar sandbox", "polar", "test", "Test mode"],
-    ["Polar live", "polar", "live", "Live mode"],
   ] as const)("labels the supported environment for %s", (_label, method, environment, expected) => {
     expect(outcome({ method, status: readyStatus, environment }).environmentLabel).toBe(expected);
   });
@@ -183,7 +180,7 @@ describe("payment method merchant outcome matrix", () => {
     ["COD only / COD", "cod", "guest_cod_only", false, 0, true],
     ["COD only / Stripe", "stripe", "guest_cod_only", false, 0, false],
     ["Online only / COD", "cod", "gateways_only", false, 0, false],
-    ["Online only / Polar", "polar", "gateways_only", false, 0, true],
+    ["Online only / SSLCommerz", "sslcommerz", "gateways_only", false, 0, true],
     ["Advance / COD", "cod", "all", true, 200, false],
     ["Advance / SSLCommerz", "sslcommerz", "all", true, 200, true],
     ["Invalid zero advance / Stripe", "stripe", "all", true, 0, false],
@@ -203,7 +200,7 @@ describe("payment method merchant outcome matrix", () => {
       partialPaymentEnabled: true,
       partialPaymentAmount: 0,
     })).toContain("advance amount is invalid");
-    expect(getPaymentMethodFlowExclusionReason("polar", {
+    expect(getPaymentMethodFlowExclusionReason("sslcommerz", {
       checkoutMode: "guest_cod_only",
       partialPaymentEnabled: true,
       partialPaymentAmount: 200,
@@ -211,21 +208,28 @@ describe("payment method merchant outcome matrix", () => {
   });
 
   it("chooses defaults only from ready, selected methods allowed by the flow", () => {
-    const methods: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
+    const methods: MethodKey[] = ["stripe", "sslcommerz", "cod"];
     const statuses: Partial<Record<MethodKey, GatewayStatus>> = {
-      stripe: { ...readyStatus, providerEnabled: false, enabled: false, usable: false },
+      stripe: readyStatus,
       sslcommerz: readyStatus,
-      polar: readyStatus,
       cod: { configured: true, enabled: true, usable: true },
     };
-
-    expect(getEligibleDefaultPaymentMethods({
+    const input = {
       methods,
       statuses,
       selectedMethods: new Set(methods),
-      flowAllowed: (method) => method !== "cod",
-      eligibilityIssue: (method) => method === "sslcommerz" ? "Unsupported currency" : null,
-    })).toEqual(["polar"]);
+      flowAllowed: (method: MethodKey) => method !== "cod",
+      eligibilityIssue: (method: MethodKey) => method === "sslcommerz" ? "Unsupported currency" : null,
+    };
+
+    expect(getEligibleDefaultPaymentMethods(input)).toEqual(["stripe"]);
+    expect(getEligibleDefaultPaymentMethods({
+      ...input,
+      statuses: {
+        ...statuses,
+        stripe: { ...readyStatus, providerEnabled: false, enabled: false, usable: false },
+      },
+    })).toEqual([]);
   });
 
   it.each([
@@ -234,8 +238,6 @@ describe("payment method merchant outcome matrix", () => {
     ["Stripe blocked", "stripe", { ...readyStatus, usable: false, blockedReason: "Key mismatch" }, "blocked"],
     ["SSLCommerz missing", "sslcommerz", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
     ["SSLCommerz provider off", "sslcommerz", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
-    ["Polar missing", "polar", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
-    ["Polar provider off", "polar", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
   ] as const)("keeps setup/provider truth separate for %s", (_label, method, status, state) => {
     expect(outcome({ method, status })).toMatchObject({ state, effective: false, healthLabel: "Not checked" });
   });

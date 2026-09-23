@@ -170,7 +170,7 @@ describe("local post-sale smoke CLI", () => {
 
     expect(sql).toContain("DELETE FROM payment_session_attempts");
     expect(sql).toContain("DELETE FROM payment_plans");
-    expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz', 'polar')");
+    expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')");
     expect(sql).toContain("partial_payment_enabled = 1");
     expect(sql).toContain("partial_payment_amount = 150");
     expect(sql).toContain("currency_code, currency_decimal_places");
@@ -179,12 +179,10 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'incomplete'");
     expect(sql).toContain("'ops006_order_stripe'");
     expect(sql).toContain("'ops006_order_sslcommerz'");
-    expect(sql).toContain("'ops006_order_polar'");
     expect(sql).toContain("'chk_ops006_stripe'");
     expect(sql).toContain("'committed'");
     expect(sql).toContain("'payment_methods'");
     expect(sql).toContain("stripe");
     expect(sql).toContain("sslcommerz");
-    expect(sql).toContain("polar");
   });
 });

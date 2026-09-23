@@ -110,7 +110,7 @@ describe("Stripe webhook route", () => {
 
     const response = await postWebhook(app, {
       CACHE: kv,
-      PAYMENT_EVENTS_QUEUE: queue as unknown as Queue,
+      JOBS_QUEUE: queue as unknown as Queue,
     });
 
     expect(response.status).toBe(200);
@@ -174,7 +174,7 @@ describe("Stripe webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(200);
     expect(mocks.claimWebhookEvent).toHaveBeenCalledWith(
@@ -208,7 +208,7 @@ describe("Stripe webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(mocks.verifyStripeWebhook).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe("Stripe webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(400);
     expect(mocks.claimWebhookEvent).not.toHaveBeenCalled();
@@ -236,7 +236,7 @@ describe("Stripe webhook route", () => {
     const queue = { send: vi.fn().mockResolvedValue(undefined) };
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
     const body = await response.json() as { duplicate?: boolean; status?: string };
 
     expect(response.status).toBe(200);
@@ -249,7 +249,7 @@ describe("Stripe webhook route", () => {
     const queue = { send: vi.fn().mockRejectedValue(new Error("queue down")) };
     const app = createApp({ id: "db" });
 
-    const response = await postWebhook(app, { PAYMENT_EVENTS_QUEUE: queue as unknown as Queue });
+    const response = await postWebhook(app, { JOBS_QUEUE: queue as unknown as Queue });
 
     expect(response.status).toBe(503);
     expect(mocks.markWebhookEventFailed).toHaveBeenCalledWith(

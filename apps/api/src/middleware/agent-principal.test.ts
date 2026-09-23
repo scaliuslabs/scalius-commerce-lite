@@ -52,7 +52,7 @@ function testApp() {
 function env(): Env {
   return {
     AGENT_TOKEN_PEPPER: "pepper",
-    AGENT_RATE_LIMITER: {
+    RL_STANDARD: {
       limit: vi.fn().mockResolvedValue({ success: true }),
     },
   } as unknown as Env;

@@ -2853,9 +2853,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 };
             };
             media: {
-                enabled: boolean;
                 canonicalCdnUrl: string;
-                allowedImageHosts: Array<string>;
                 canonicalHostAliases: Array<string>;
             };
             metaCapi: {
@@ -2916,6 +2914,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                     policyUrl: string;
                 };
             };
+            platform: {
+                storefrontUrl: string;
+                apiUrl: string;
+                dashboardUrl: string;
+                mediaUrl: string;
+            };
+            cspAllowedDomains: string;
         };
     };
 };
@@ -2976,43 +2981,6 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
 };
 
 export type PostApiV1StorefrontThemePreviewResolveResponse = PostApiV1StorefrontThemePreviewResolveResponses[keyof PostApiV1StorefrontThemePreviewResolveResponses];
-
-export type GetApiV1StorefrontCspData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/storefront/csp';
-};
-
-export type GetApiV1StorefrontCspErrors = {
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1StorefrontCspError = GetApiV1StorefrontCspErrors[keyof GetApiV1StorefrontCspErrors];
-
-export type GetApiV1StorefrontCspResponses = {
-    /**
-     * CSP configuration
-     */
-    200: {
-        success: true;
-        data: {
-            cspAllowedDomains: string;
-        };
-    };
-};
-
-export type GetApiV1StorefrontCspResponse = GetApiV1StorefrontCspResponses[keyof GetApiV1StorefrontCspResponses];
 
 export type GetApiV1PlatformData = {
     body?: never;
@@ -4971,7 +4939,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         /**
          * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
          */
-        paymentMethod: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        paymentMethod: 'cod' | 'stripe' | 'sslcommerz';
     };
     headers?: {
         /**
@@ -7048,7 +7016,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartRes
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            gateway: 'stripe' | 'sslcommerz';
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -7441,17 +7409,11 @@ export type GetApiV1CheckoutConfigResponses = {
                     max: number;
                 };
             } | {
-                id: 'polar';
-                name: string;
-                currencies: Array<string>;
-                sandbox: boolean;
-                testMode: boolean;
-            } | {
                 id: 'cod';
                 name: string;
                 currencies: Array<string>;
             }>;
-            activeDefaultMethod?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+            activeDefaultMethod?: 'stripe' | 'sslcommerz' | 'cod';
             guestCheckoutEnabled: boolean;
             authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
             customerAuthPolicy: {
@@ -8616,7 +8578,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
             }>;
             paymentRecovery: {
                 eligible: boolean;
-                gateway: 'stripe' | 'sslcommerz' | 'polar' | null;
+                gateway: 'stripe' | 'sslcommerz' | null;
                 paymentType: 'full' | 'deposit' | 'balance' | null;
                 amountDue: number;
                 label: string | null;
@@ -8783,7 +8745,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponse = PostApiV1Cu
 
 export type PostApiV1CustomerAuthOrdersByIdPaymentSessionData = {
     body?: {
-        gateway?: 'stripe' | 'sslcommerz' | 'polar';
+        gateway?: 'stripe' | 'sslcommerz';
         replaceExistingAttempt?: boolean;
     };
     path: {
@@ -8913,15 +8875,6 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
                 gatewayUrl?: string;
                 sessionKey?: string;
             };
-        } | {
-            paymentType: 'full' | 'deposit' | 'balance';
-            amount: number;
-            currency: string;
-            gateway: 'polar';
-            hosted: {
-                gatewayUrl?: string;
-                checkoutId?: string;
-            };
         };
     };
     /**
@@ -8934,7 +8887,7 @@ export type PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses = {
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            gateway: 'stripe' | 'sslcommerz';
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -12257,7 +12210,7 @@ export type PostApiV1OrdersData = {
         discountCode?: string | null;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
     };
     path?: never;
@@ -19604,6 +19557,10 @@ export type GetApiV1AdminMediaData = {
         mimeType?: string;
         kind?: 'image' | 'video';
         view?: 'ready' | 'trash';
+        /**
+         * `missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet.
+         */
+        variants?: 'missing';
     };
     url: '/api/v1/admin/media';
 };
@@ -19709,6 +19666,7 @@ export type GetApiV1AdminMediaResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -19989,6 +19947,7 @@ export type PostApiV1AdminMediaUploadsImportUrlResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -20361,7 +20320,12 @@ export type PostApiV1AdminMediaUploadsByIdCompleteData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.
+         */
+        variants?: 'server' | 'client';
+    };
     url: '/api/v1/admin/media/uploads/{id}/complete';
 };
 
@@ -20477,6 +20441,7 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -20722,6 +20687,7 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -20851,6 +20817,7 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -20980,6 +20947,7 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                variantWidth?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
                 posterUrl: string | null;
@@ -20996,6 +20964,249 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
 };
 
 export type PostApiV1AdminMediaByIdRestoreResponse = PostApiV1AdminMediaByIdRestoreResponses[keyof PostApiV1AdminMediaByIdRestoreResponses];
+
+export type PostApiV1AdminMediaByIdVariantsData = {
+    body: {
+        width: string;
+        height: string;
+        [key: string]: Blob | File | string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/variants';
+};
+
+export type PostApiV1AdminMediaByIdVariantsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaByIdVariantsError = PostApiV1AdminMediaByIdVariantsErrors[keyof PostApiV1AdminMediaByIdVariantsErrors];
+
+export type PostApiV1AdminMediaByIdVariantsResponses = {
+    /**
+     * Renditions stored
+     */
+    200: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                variantWidth?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                posterUrl: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaByIdVariantsResponse = PostApiV1AdminMediaByIdVariantsResponses[keyof PostApiV1AdminMediaByIdVariantsResponses];
+
+export type GetApiV1AdminMediaByIdOriginalData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/original';
+};
+
+export type GetApiV1AdminMediaByIdOriginalErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdOriginalError = GetApiV1AdminMediaByIdOriginalErrors[keyof GetApiV1AdminMediaByIdOriginalErrors];
+
+export type GetApiV1AdminMediaByIdOriginalResponses = {
+    /**
+     * Original media bytes
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1AdminMediaByIdOriginalResponse = GetApiV1AdminMediaByIdOriginalResponses[keyof GetApiV1AdminMediaByIdOriginalResponses];
 
 export type DeleteApiV1AdminMediaByIdPermanentData = {
     body?: never;
@@ -30560,9 +30771,7 @@ export type GetApiV1AdminSettingsMediaResponses = {
     200: {
         success: true;
         data: {
-            enabled?: boolean;
             canonicalCdnUrl?: string;
-            allowedImageHosts?: Array<string>;
             canonicalHostAliases?: Array<string>;
         };
     };
@@ -30572,9 +30781,7 @@ export type GetApiV1AdminSettingsMediaResponse = GetApiV1AdminSettingsMediaRespo
 
 export type PostApiV1AdminSettingsMediaData = {
     body: {
-        enabled?: boolean;
         canonicalCdnUrl?: string;
-        allowedImageHosts?: Array<string>;
         canonicalHostAliases?: Array<string>;
     };
     path?: never;
@@ -30660,9 +30867,7 @@ export type PostApiV1AdminSettingsMediaResponses = {
     200: {
         success: true;
         data: {
-            enabled?: boolean;
             canonicalCdnUrl?: string;
-            allowedImageHosts?: Array<string>;
             canonicalHostAliases?: Array<string>;
             message: string;
         };
@@ -32302,18 +32507,6 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
-                polar: {
-                    configured: boolean;
-                    enabled: boolean;
-                    usable?: boolean;
-                    missingFields?: Array<string>;
-                    credentialErrors?: Array<string>;
-                    blockedReason?: string;
-                    providerEnabled?: boolean;
-                    checkoutSelected?: boolean;
-                    checkoutVisible?: boolean;
-                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
-                };
                 cod: {
                     configured: boolean;
                     enabled: boolean;
@@ -32336,8 +32529,8 @@ export type GetApiV1AdminSettingsPaymentMethodsResponse = GetApiV1AdminSettingsP
 
 export type PostApiV1AdminSettingsPaymentMethodsData = {
     body: {
-        enabledMethods: Array<'stripe' | 'sslcommerz' | 'polar' | 'cod'>;
-        defaultMethod: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+        enabledMethods: Array<'stripe' | 'sslcommerz' | 'cod'>;
+        defaultMethod: 'stripe' | 'sslcommerz' | 'cod';
     };
     path?: never;
     query?: never;
@@ -32834,211 +33027,6 @@ export type PostApiV1AdminSettingsSslcommerzResponses = {
 };
 
 export type PostApiV1AdminSettingsSslcommerzResponse = PostApiV1AdminSettingsSslcommerzResponses[keyof PostApiV1AdminSettingsSslcommerzResponses];
-
-export type GetApiV1AdminSettingsPolarData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/polar';
-};
-
-export type GetApiV1AdminSettingsPolarErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsPolarError = GetApiV1AdminSettingsPolarErrors[keyof GetApiV1AdminSettingsPolarErrors];
-
-export type GetApiV1AdminSettingsPolarResponses = {
-    /**
-     * Polar settings
-     */
-    200: {
-        success: true;
-        data: {
-            accessToken: string;
-            webhookSecret: string;
-            productId: string;
-            sandbox: boolean;
-            enabled: boolean;
-        };
-    };
-};
-
-export type GetApiV1AdminSettingsPolarResponse = GetApiV1AdminSettingsPolarResponses[keyof GetApiV1AdminSettingsPolarResponses];
-
-export type PostApiV1AdminSettingsPolarData = {
-    body: {
-        accessToken?: string;
-        webhookSecret?: string;
-        productId?: string;
-        sandbox?: boolean;
-        enabled?: boolean;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/polar';
-};
-
-export type PostApiV1AdminSettingsPolarErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Service unavailable
-     */
-    503: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsPolarError = PostApiV1AdminSettingsPolarErrors[keyof PostApiV1AdminSettingsPolarErrors];
-
-export type PostApiV1AdminSettingsPolarResponses = {
-    /**
-     * Polar settings saved
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsPolarResponse = PostApiV1AdminSettingsPolarResponses[keyof PostApiV1AdminSettingsPolarResponses];
 
 export type GetApiV1AdminSettingsCheckoutReadinessData = {
     body?: never;
@@ -39605,7 +39593,7 @@ export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         amount?: number;
         reason?: string;
-        gateway?: 'stripe' | 'sslcommerz' | 'polar' | 'cod';
+        gateway?: 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
     };
     path: {
@@ -41449,7 +41437,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Filter by payment method
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
         /**
          * Filter by fulfillment status
          */
@@ -41695,7 +41683,7 @@ export type GetApiV1AdminOrdersExportData = {
         status?: string;
         statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
         paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         archived?: 'true' | 'false';
@@ -41814,7 +41802,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
         /**
          * Sort field
          */
@@ -42036,7 +42024,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz' | 'polar';
+        paymentMethod?: 'cod' | 'stripe' | 'sslcommerz';
         /**
          * Filter by fulfillment status
          */
@@ -42788,7 +42776,7 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
             expiresAt: string | number | unknown;
             accessMode: 'buyer_verified_receipt';
             note: string;
-            gateway: 'sslcommerz' | 'polar';
+            gateway: 'sslcommerz';
             paymentType: 'full' | 'deposit' | 'balance' | null;
             depositAmount: number | null;
             paymentRecovery: {
@@ -43278,7 +43266,6 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 sslcommerzTranId: string | null;
                 sslcommerzValId: string | null;
                 sslcommerzBankTranId: string | null;
-                polarCheckoutId: string | null;
                 codCollectedBy: string | null;
                 codCollectedAt: string | number | unknown;
                 codReceiptUrl: string | null;
@@ -52890,7 +52877,7 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
                 total: number;
                 hasCustomerContact: boolean;
                 orderId: string | null;
-                paymentMethod: 'stripe' | 'sslcommerz' | 'polar' | null;
+                paymentMethod: 'stripe' | 'sslcommerz' | null;
                 paymentStatus: 'unpaid' | 'failed' | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -55510,7 +55497,7 @@ export type PostApiV1PaymentStripeIntentResponses = {
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            gateway: 'stripe' | 'sslcommerz';
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -55770,7 +55757,7 @@ export type PostApiV1PaymentSslcommerzSessionResponses = {
             retryable: true;
             retryAfterSeconds: number;
             orderId: string;
-            gateway: 'stripe' | 'sslcommerz' | 'polar';
+            gateway: 'stripe' | 'sslcommerz';
             paymentType: 'full' | 'deposit' | 'balance';
             message: string;
         };
@@ -55778,147 +55765,3 @@ export type PostApiV1PaymentSslcommerzSessionResponses = {
 };
 
 export type PostApiV1PaymentSslcommerzSessionResponse = PostApiV1PaymentSslcommerzSessionResponses[keyof PostApiV1PaymentSslcommerzSessionResponses];
-
-export type PostApiV1PaymentPolarSessionData = {
-    body?: {
-        orderId: string;
-        depositAmount?: number;
-        currency?: string;
-        type?: 'full' | 'deposit' | 'balance';
-        paymentType?: 'full' | 'deposit' | 'balance';
-        customerName?: string;
-        customerEmail?: string;
-        customerPhone?: string;
-        receiptToken?: string;
-        replaceExistingAttempt?: boolean;
-    };
-    headers?: {
-        'X-Receipt-Token'?: string;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/payment/polar/session';
-};
-
-export type PostApiV1PaymentPolarSessionErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Service unavailable
-     */
-    503: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1PaymentPolarSessionError = PostApiV1PaymentPolarSessionErrors[keyof PostApiV1PaymentPolarSessionErrors];
-
-export type PostApiV1PaymentPolarSessionResponses = {
-    /**
-     * Polar checkout session created
-     */
-    200: {
-        success: true;
-        data: {
-            gatewayUrl?: string;
-            checkoutId?: string;
-        };
-    };
-    /**
-     * Payment session creation is already processing
-     */
-    202: {
-        success: true;
-        data: {
-            status: 'processing';
-            retryable: true;
-            retryAfterSeconds: number;
-            orderId: string;
-            gateway: 'stripe' | 'sslcommerz' | 'polar';
-            paymentType: 'full' | 'deposit' | 'balance';
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1PaymentPolarSessionResponse = PostApiV1PaymentPolarSessionResponses[keyof PostApiV1PaymentPolarSessionResponses];

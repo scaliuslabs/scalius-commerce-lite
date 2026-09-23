@@ -171,7 +171,6 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptPaymentStatusNoPaymentDueText: "No payment due",
   orderReceiptPaymentMethodCardText: "Card (Stripe)",
   orderReceiptPaymentMethodSslcommerzText: "Online payment (SSLCommerz)",
-  orderReceiptPaymentMethodPolarText: "Online payment (Polar)",
   orderReceiptSaveAccountTitleText: "Save this order to your account",
   orderReceiptSavedAccountTitleText: "Order saved to your account",
   orderReceiptSaveAccountHelpText:
@@ -341,7 +340,6 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paySecurelyByCardText: "Pay securely by card",
   onlinePaymentText: "Pay online",
   onlinePaymentDescriptionText: "bKash, Nagad, cards and more",
-  cardOrWalletText: "Card or digital wallet",
   completeWithProviderText: "Complete payment with {provider}",
   cashOnDeliveryText: "Cash on delivery",
   payOnDeliveryText: "Pay when you receive your order",
@@ -532,7 +530,6 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptPaymentStatusNoPaymentDueText: "কোনো পেমেন্ট বাকি নেই",
   orderReceiptPaymentMethodCardText: "কার্ড (Stripe)",
   orderReceiptPaymentMethodSslcommerzText: "অনলাইন পেমেন্ট (SSLCommerz)",
-  orderReceiptPaymentMethodPolarText: "অনলাইন পেমেন্ট (Polar)",
   orderReceiptSaveAccountTitleText: "এই অর্ডারটি আপনার অ্যাকাউন্টে সংরক্ষণ করুন",
   orderReceiptSavedAccountTitleText: "অর্ডারটি আপনার অ্যাকাউন্টে সংরক্ষিত হয়েছে",
   orderReceiptSaveAccountHelpText:
@@ -699,7 +696,6 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paySecurelyByCardText: "কার্ড দিয়ে নিরাপদে পেমেন্ট করুন",
   onlinePaymentText: "অনলাইনে পেমেন্ট করুন",
   onlinePaymentDescriptionText: "বিকাশ, নগদ, কার্ড ও আরও অনেক পদ্ধতি",
-  cardOrWalletText: "কার্ড বা ডিজিটাল ওয়ালেট",
   completeWithProviderText: "{provider}-এর মাধ্যমে পেমেন্ট সম্পন্ন করুন",
   cashOnDeliveryText: "ক্যাশ অন ডেলিভারি",
   payOnDeliveryText: "অর্ডার পাওয়ার সময় মূল্য পরিশোধ করুন",

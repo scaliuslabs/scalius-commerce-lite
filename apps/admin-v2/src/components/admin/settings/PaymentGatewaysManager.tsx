@@ -12,13 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-    Loader2, CheckCircle2, ChevronDown, Zap, AlertTriangle, RefreshCw,
+    Loader2, CheckCircle2, ChevronDown, AlertTriangle, RefreshCw,
     ArrowUp, ArrowDown,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionContent } from "@/components/ui/accordion";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
@@ -26,7 +25,6 @@ import {
     type PaymentMethodsData,
     type StripeData,
     type SSLCommerzData,
-    type PolarData,
     META,
     MASKED,
     PasswordInput,
@@ -44,11 +42,9 @@ import {
     type PaymentMethodOutcome,
 } from "./payment-method-outcome";
 import {
-    polarDraftIsDirty,
     sslCommerzDraftIsDirty,
     stripeDraftIsDirty,
 } from "./payment-gateway-draft";
-import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
 import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
@@ -65,7 +61,7 @@ import {
 
 // --- Main Component ---
 
-const ALL_METHODS: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
+const ALL_METHODS: MethodKey[] = ["stripe", "sslcommerz", "cod"];
 
 function OutcomeBadge({ outcome }: { outcome: PaymentMethodOutcome }) {
     if (outcome.state === "visible") {
@@ -126,12 +122,6 @@ export default function PaymentGatewaysManager() {
     const [sslConf, setSslConf] = useState({ password: false });
     const [savingSsl, setSavingSsl] = useState(false);
 
-    const [polar, setPolar] = useState<PolarData>({ accessToken: "", webhookSecret: "", productId: "", sandbox: true, enabled: false });
-    const [savedPolar, setSavedPolar] = useState<PolarData | null>(null);
-    const [polarConf, setPolarConf] = useState({ token: false, webhook: false });
-    const [savingPolar, setSavingPolar] = useState(false);
-
-    const [showPolarHelp, setShowPolarHelp] = useState(false);
     const loadedGateways = useRef<Set<string>>(new Set());
     const [loadingGw, setLoadingGw] = useState<string | null>(null);
     const [gatewayLoadErrors, setGatewayLoadErrors] = useState<Partial<Record<MethodKey, string>>>({});
@@ -181,9 +171,6 @@ export default function PaymentGatewaysManager() {
             } else if (gw === "sslcommerz") {
                 const sd = d as unknown as SSLCommerzData;
                 setSsl(sd); setSavedSsl({ ...sd }); setSslConf({ password: !!sd.storePassword });
-            } else if (gw === "polar") {
-                const sd = d as unknown as PolarData;
-                setPolar(sd); setSavedPolar({ ...sd }); setPolarConf({ token: !!sd.accessToken, webhook: !!sd.webhookSecret });
             }
             loadedGateways.current.add(gw);
             return true;
@@ -297,16 +284,6 @@ export default function PaymentGatewaysManager() {
                 setSsl(committed);
                 setSavedSsl({ ...committed });
                 setSslConf({ password: Boolean(committed.storePassword) });
-            } else if (gw === "polar") {
-                const committed = {
-                    ...polar,
-                    accessToken: (polar.accessToken.trim() || polarConf.token) ? MASKED : "",
-                    webhookSecret: (polar.webhookSecret.trim() || polarConf.webhook) ? MASKED : "",
-                    productId: polar.productId.trim(),
-                };
-                setPolar(committed);
-                setSavedPolar({ ...committed });
-                setPolarConf({ token: Boolean(committed.accessToken), webhook: Boolean(committed.webhookSecret) });
             }
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() }),
@@ -401,8 +378,7 @@ export default function PaymentGatewaysManager() {
         if (method === "cod") return "not_applicable";
         if (!loadedGateways.current.has(method)) return methods.gatewayStatus[method]?.environment;
         if (method === "stripe") return getStripeCredentialEnvironment(stripe);
-        if (method === "sslcommerz") return ssl.sandbox ? "test" : "live";
-        return polar.sandbox ? "test" : "live";
+        return ssl.sandbox ? "test" : "live";
     };
     const getMethodOutcome = (method: MethodKey) => getPaymentMethodOutcome({
         method,
@@ -426,9 +402,8 @@ export default function PaymentGatewaysManager() {
     const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod || paymentMethodOrderChanged;
     const stripeDirty = loadedGateways.current.has("stripe") && stripeDraftIsDirty(stripe, savedStripe);
     const sslDirty = loadedGateways.current.has("sslcommerz") && sslCommerzDraftIsDirty(ssl, savedSsl);
-    const polarDirty = loadedGateways.current.has("polar") && polarDraftIsDirty(polar, savedPolar);
-    const anyGatewayDirty = stripeDirty || sslDirty || polarDirty;
-    const anySavePending = savingMethods || savingStripe || savingSsl || savingPolar;
+    const anyGatewayDirty = stripeDirty || sslDirty;
+    const anySavePending = savingMethods || savingStripe || savingSsl;
     const resetMethods = () => {
         setEnabledMethods(new Set(methods.enabledMethods));
         setMethodOrder(methods.enabledMethods);
@@ -696,10 +671,6 @@ export default function PaymentGatewaysManager() {
                                             <SSLForm s={ssl} set={setSsl} conf={sslConf} saving={savingSsl} dirty={sslDirty}
                                                 onReset={() => savedSsl && setSsl({ ...savedSsl })}
                                                 onSave={() => saveGw("sslcommerz", ssl, setSavingSsl)} />
-                                        ) : method === "polar" ? (
-                                            <PolarForm s={polar} set={setPolar} conf={polarConf} saving={savingPolar} dirty={polarDirty}
-                                                onReset={() => savedPolar && setPolar({ ...savedPolar })}
-                                                onSave={() => saveGw("polar", polar, setSavingPolar)} onHelp={() => setShowPolarHelp(true)} />
                                         ) : null}
                                     </AccordionContent>
                                 )}
@@ -708,16 +679,6 @@ export default function PaymentGatewaysManager() {
                     })}
                 </div>
             </Accordion>
-
-            <Dialog open={showPolarHelp} onOpenChange={setShowPolarHelp}>
-                <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5 text-indigo-600" /> Polar Setup Guide</DialogTitle>
-                        <DialogDescription>Follow these steps to integrate Polar with your store.</DialogDescription>
-                    </DialogHeader>
-                    <PolarSetupGuide />
-                </DialogContent>
-            </Dialog>
         </div>
         </>
     );

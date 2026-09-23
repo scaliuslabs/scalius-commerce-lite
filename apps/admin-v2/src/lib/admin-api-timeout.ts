@@ -13,12 +13,6 @@ export class AdminApiReadTimeoutError extends Error {
   }
 }
 
-export function isAdminApiReadTimeoutError(
-  error: unknown,
-): error is AdminApiReadTimeoutError {
-  return error instanceof AdminApiReadTimeoutError;
-}
-
 export function shouldTimeoutAdminApiMethod(method: string): boolean {
   const normalized = method.toUpperCase();
   return normalized === "GET" || normalized === "HEAD";

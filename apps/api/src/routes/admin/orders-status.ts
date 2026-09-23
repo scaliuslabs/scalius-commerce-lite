@@ -172,7 +172,7 @@ app.openapi(updateStatusRoute, async (c) => {
     if (result.notification) {
         await enqueueOrderNotificationMessage({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             message: {
                 type: "order.notification",
                 orderId: result.notification.orderId,
@@ -279,7 +279,7 @@ app.openapi(postCodRoute, async (c) => {
         if (order) {
             await enqueueOrderNotificationMessage({
                 db,
-                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+                queue: c.env.JOBS_QUEUE,
                 message: {
                     type: "order.notification",
                     orderId,
@@ -366,7 +366,7 @@ app.openapi(postFulfillRoute, async (c) => {
     await invalidateAvailabilityTransitions(db, availabilityTransitionVariantIds, c);
     await enqueueOrderStatusChangeNotification({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         statusChange,
         trackingId: typeof data.trackingId === "string" ? data.trackingId : null,
         source: "orders-manual-fulfillment",
@@ -475,7 +475,7 @@ app.openapi(createShipmentRoute, async (c) => {
     if (shipmentResult.shipment) {
         await enqueueOrderNotificationsForStatus({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderIds: [orderId],
             newStatus: "shipped",
         trackingByOrderId: createdShipmentRecord.trackingId
@@ -668,7 +668,7 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
@@ -727,7 +727,7 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
     if (result.status === "repaired" && RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
@@ -778,7 +778,7 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
         await enqueueOrderNotificationsForStatus({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId

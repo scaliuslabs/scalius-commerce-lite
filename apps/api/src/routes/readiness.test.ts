@@ -119,19 +119,10 @@ function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     DB: createDb(),
     CACHE: createKv(),
-    SHARED_AUTH_CACHE: createKv(),
-    OAUTH_KV: createKv(),
     BUCKET: createBucket(),
-    AGENT_ARTIFACTS: createBucket(),
-    PAYMENT_EVENTS_QUEUE: createQueue(),
-    ORDER_NOTIFICATIONS_QUEUE: createQueue(),
-    AUTH_OTP_QUEUE: createQueue(),
-    AGENT_RATE_LIMITER: createRateLimiter(),
-    SEARCH_RATE_LIMITER: createRateLimiter(),
-    ORDER_IP_RATE_LIMITER: createRateLimiter(),
-    ORDER_PHONE_RATE_LIMITER: createRateLimiter(),
-    META_EVENTS_RATE_LIMITER: createRateLimiter(),
-    ABANDONED_CHECKOUT_RATE_LIMITER: createRateLimiter(),
+    JOBS_QUEUE: createQueue(),
+    RL_STRICT: createRateLimiter(),
+    RL_STANDARD: createRateLimiter(),
     CHECKOUT_COORDINATOR: createCheckoutCoordinator(),
     // Installed secrets: the master secret plus the credential key.
     SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",
@@ -180,38 +171,30 @@ describe("API readiness route", () => {
     expect(json.checks).toMatchObject({
       d1: { status: "ok" },
       api_cache_kv: { status: "ok" },
-      shared_auth_kv: { status: "ok" },
-      oauth_kv: { status: "ok" },
       r2: { status: "ok" },
-      agent_artifacts_r2: { status: "ok" },
-      payment_events_queue: { status: "ok" },
-      order_notifications_queue: { status: "ok" },
-      auth_otp_queue: { status: "ok" },
+      jobs_queue: { status: "ok" },
       checkout_coordinator: { status: "ok" },
-      agent_rate_limiter: { status: "ok" },
-      search_rate_limiter: { status: "ok" },
-      order_ip_rate_limiter: { status: "ok" },
-      order_phone_rate_limiter: { status: "ok" },
-      meta_events_rate_limiter: { status: "ok" },
-      abandoned_checkout_rate_limiter: { status: "ok" },
+      rl_strict: { status: "ok" },
+      rl_standard: { status: "ok" },
       runtime_config: { status: "ok", detail: "required secrets installed" },
       platform_config: { status: "ok", detail: "platform origins configured" },
     });
-    expect(env.OAUTH_KV.get).toHaveBeenCalledWith(
+    expect(env.CACHE.get).toHaveBeenCalledWith(
       "__scalius:readyz:probe",
       { cacheTtl: 60 },
     );
-    expect(env.AGENT_ARTIFACTS.list).toHaveBeenCalledWith({ limit: 1 });
-    expect(env.AGENT_RATE_LIMITER.limit).not.toHaveBeenCalled();
+    expect(env.BUCKET.list).toHaveBeenCalledWith({ limit: 1 });
+    for (const retired of ["shared_auth_kv", "oauth_kv", "agent_artifacts_r2"]) {
+      expect(json.checks).not.toHaveProperty(retired);
+    }
+    expect(env.RL_STANDARD.limit).not.toHaveBeenCalled();
   });
 
-  it("fails closed when agent access bindings or the credential encryption key are missing", async () => {
+  it("fails closed when the standard limiter or the credential encryption key is missing", async () => {
     const app = createApp();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
-      OAUTH_KV: undefined as unknown as KVNamespace,
-      AGENT_ARTIFACTS: undefined as unknown as R2Bucket,
-      AGENT_RATE_LIMITER: undefined as unknown as RateLimit,
+      RL_STANDARD: undefined as unknown as RateLimit,
       CREDENTIAL_ENCRYPTION_KEY: "   ",
     });
 
@@ -225,15 +208,7 @@ describe("API readiness route", () => {
     expect(response.status).toBe(503);
     expect(json.success).toBe(false);
     expect(json.status).toBe("degraded");
-    expect(json.checks?.oauth_kv).toMatchObject({
-      status: "missing",
-      detail: "binding is not configured",
-    });
-    expect(json.checks?.agent_artifacts_r2).toMatchObject({
-      status: "missing",
-      detail: "binding is not configured",
-    });
-    expect(json.checks?.agent_rate_limiter).toMatchObject({
+    expect(json.checks?.rl_standard).toMatchObject({
       status: "missing",
       detail: "rate limit binding is not configured",
     });
@@ -322,8 +297,8 @@ describe("API readiness route", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
       DB: createDb({ fail: true }),
-      PAYMENT_EVENTS_QUEUE: undefined as unknown as Queue,
-      SEARCH_RATE_LIMITER: undefined as unknown as RateLimit,
+      JOBS_QUEUE: undefined as unknown as Queue,
+      RL_STRICT: undefined as unknown as RateLimit,
       SCALIUS_SECRET: "",
       CREDENTIAL_ENCRYPTION_KEY: "",
       PLATFORM_CONFIG: {
@@ -364,11 +339,11 @@ describe("API readiness route", () => {
       status: "error",
       detail: "D1 unavailable",
     });
-    expect(json.checks?.payment_events_queue).toMatchObject({
+    expect(json.checks?.jobs_queue).toMatchObject({
       status: "missing",
       detail: "queue binding is not configured",
     });
-    expect(json.checks?.search_rate_limiter).toMatchObject({
+    expect(json.checks?.rl_strict).toMatchObject({
       status: "missing",
       detail: "rate limit binding is not configured",
     });
@@ -393,8 +368,8 @@ describe("API readiness route", () => {
       cfRay: "readyz123-DAC",
       degradedChecks: [
         "d1:error",
-        "payment_events_queue:missing",
-        "search_rate_limiter:missing",
+        "jobs_queue:missing",
+        "rl_strict:missing",
         "runtime_config:missing",
         "platform_config:missing",
       ],
@@ -522,7 +497,7 @@ describe("API readiness route", () => {
   it("allows remote KV variance within the remote-storage readiness budget", async () => {
     vi.useFakeTimers();
     const app = createApp();
-    const env = createEnv({ SHARED_AUTH_CACHE: createKv({ delayMs: 4000 }) });
+    const env = createEnv({ CACHE: createKv({ delayMs: 4000 }) });
 
     try {
       const responsePromise = app.request("/api/v1/readyz", {}, env);
@@ -537,7 +512,7 @@ describe("API readiness route", () => {
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
       expect(json.status).toBe("ready");
-      expect(json.checks?.shared_auth_kv).toMatchObject({
+      expect(json.checks?.api_cache_kv).toMatchObject({
         status: "ok",
         detail: "read probe",
       });

@@ -23,18 +23,4 @@ describe("admin catalog image presentation boundaries", () => {
       expect(source).not.toContain("object-cover");
     },
   );
-
-  it("requests bounded contain transforms for the high-traffic catalog surfaces", () => {
-    const transformedSurfaces = productImageSurfaces.filter(({ source }) =>
-      source.includes("getOptimizedImageUrl"),
-    );
-
-    expect(transformedSurfaces.length).toBeGreaterThan(0);
-    for (const { source } of transformedSurfaces) {
-      expect(
-        source.includes('fit: "contain"') ||
-          source.includes("ADMIN_IMAGE_PRESETS.productMicro"),
-      ).toBe(true);
-    }
-  });
 });

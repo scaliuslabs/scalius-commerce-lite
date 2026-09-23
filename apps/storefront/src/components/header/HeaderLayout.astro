@@ -2,7 +2,7 @@
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search, Check, Copy } from "lucide-react";
 import type { HeaderData, SocialLink } from "@/lib/api";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
   getMobileHeaderLogoWidth,
   normalizeHeaderLogoWidth,
@@ -84,11 +84,9 @@ const expandedActionsXlWidth =
           {
             headerData.logo.src ? (
               <img
-                src={getOptimizedImageUrl(headerData.logo.src, {
-                  width: 240,
-                  height: 80,
-                  fit: "scale-down",
-                })}
+                src={mediaImageUrl(headerData.logo.src, 320)}
+                srcset={mediaImageSrcSet(headerData.logo.src)}
+                sizes={`(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px`}
                 alt={headerData.logo.alt}
                 class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-[max-height,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
                 style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}
@@ -167,14 +165,7 @@ const expandedActionsXlWidth =
                         {item.iconUrl ? (
                           <img
                             data-desktop-header-image
-                            data-deferred-src={getOptimizedImageUrl(
-                              item.iconUrl,
-                              {
-                                width: 32,
-                                height: 32,
-                                fit: "contain",
-                              },
-                            )}
+                            data-deferred-src={mediaImageUrl(item.iconUrl, 160)}
                             alt=""
                             aria-hidden="true"
                             class="w-4 h-4 object-contain"

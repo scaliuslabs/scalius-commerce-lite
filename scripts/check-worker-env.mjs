@@ -13,6 +13,32 @@ export const ALLOWED_WRANGLER_VARS = Object.freeze({
   "apps/api/wrangler.local.jsonc": Object.freeze(["LOCAL_MAILPIT_URL"]),
 });
 
+// The per-store resource shape: one KV namespace, one R2 bucket, one jobs
+// queue (plus its DLQ), two rate limiters. Other users share these by key
+// prefix; a new binding of these kinds needs an explicit architecture decision.
+export const ALLOWED_RESOURCE_BINDINGS = Object.freeze({
+  kv_namespaces: Object.freeze(["CACHE"]),
+  r2_buckets: Object.freeze(["BUCKET"]),
+  ratelimits: Object.freeze(["RL_STRICT", "RL_STANDARD"]),
+  queue_producers: Object.freeze(["JOBS_QUEUE"]),
+});
+
+export function collectResourceBindingViolations(configPath, config) {
+  const declared = {
+    kv_namespaces: (config?.kv_namespaces ?? []).map((entry) => entry.binding),
+    r2_buckets: (config?.r2_buckets ?? []).map((entry) => entry.binding),
+    ratelimits: (config?.ratelimits ?? []).map((entry) => entry.name),
+    queue_producers: (config?.queues?.producers ?? []).map((entry) => entry.binding),
+  };
+  return Object.entries(declared).flatMap(([kind, names]) => {
+    const extra = sorted(names.filter((name) => !ALLOWED_RESOURCE_BINDINGS[kind].includes(name)));
+    return extra.length === 0 ? [] : [
+      `${configPath} declares ${kind} ${extra.join(", ")}. `
+      + `Only ${ALLOWED_RESOURCE_BINDINGS[kind].join(", ")} may exist; share them by key prefix instead.`,
+    ];
+  });
+}
+
 // Installed secrets and optional provider selection shared by API + admin.
 const INSTALLED_SECRETS = ["SCALIUS_SECRET", "CREDENTIAL_ENCRYPTION_KEY"];
 const OPTIONAL_DATABASE_PROVIDER_ENV = [
@@ -35,7 +61,6 @@ export const apps = [
     extraEnv: [
       ...INSTALLED_SECRETS,
       ...OPTIONAL_DATABASE_PROVIDER_ENV,
-      "OAUTH_PROVIDER",
       // Derived at Worker entry from SCALIUS_SECRET (apps/api/src/runtime/runtime-env.ts).
       "BETTER_AUTH_SECRET",
       "JWT_SECRET",
@@ -354,6 +379,7 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
     for (const configPath of app.configs) {
       const config = readJsoncWith(configPath);
       errors.push(...collectWranglerVarsViolations(configPath, config));
+      errors.push(...collectResourceBindingViolations(configPath, config));
       for (const name of collectConfigNames(config)) {
         expected.add(name);
       }

@@ -96,7 +96,6 @@ async function getServerPaymentContext(db: Database, orderId: string): Promise<S
 const ONLINE_PAYMENT_METHODS = new Set<string>([
   PaymentMethod.STRIPE,
   PaymentMethod.SSLCOMMERZ,
-  PaymentMethod.POLAR,
 ]);
 
 function canAcceptLateSwitchedSslPayment(context: ServerPaymentContext): boolean {
@@ -357,7 +356,7 @@ app.post("/", async (c) => {
   if (isValid) {
     const result = await reconcileValidatedSSLCommerzSuccess({
       db,
-      queue: c.env.PAYMENT_EVENTS_QUEUE,
+      queue: c.env.JOBS_QUEUE,
       validation,
       requestedValId,
       source: "ipn",
@@ -405,7 +404,7 @@ app.post("/", async (c) => {
     return c.text("OK");
   }
 
-  const queue = c.env.PAYMENT_EVENTS_QUEUE;
+  const queue = c.env.JOBS_QUEUE;
   if (!queue) {
     await markWebhookEventFailed(db, eventId, { orderId, tranId, valId, error: "Queue not available" });
     return c.text("RETRY", 503);

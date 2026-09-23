@@ -161,8 +161,3 @@ export type FormStickyHeaderProps = FormActionBarProps & {
 export function FormStickyHeader(props: FormStickyHeaderProps) {
   return <FormActionBar {...props} />;
 }
-
-// No-op — breadcrumb removed (topbar handles navigation)
-export function FormBreadcrumb() {
-  return null;
-}

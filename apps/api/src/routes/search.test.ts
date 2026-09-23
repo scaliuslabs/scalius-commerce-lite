@@ -40,7 +40,7 @@ function createTestApp() {
 
 function createSearchEnv() {
   return {
-    SEARCH_RATE_LIMITER: {
+    RL_STANDARD: {
       limit: mocks.nativeRateLimit,
     },
   } as unknown as Env;
@@ -70,7 +70,7 @@ describe("public search route", () => {
     expect(response.status).toBe(200);
     expect(body.data?.query).toBe("Fresh Hilsa");
     expect(mocks.nativeRateLimit).toHaveBeenCalledWith({
-      key: "search:203.0.113.24",
+      key: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(mocks.search).toHaveBeenCalledWith(
       db,

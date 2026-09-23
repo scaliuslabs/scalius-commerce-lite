@@ -3,12 +3,11 @@ import { X, Type, Link as LinkIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import {
   HERO_SLIDE_PRESENTATION,
-  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
 } from "@scalius/shared/hero-slider";
 import type { SliderImage } from "./helpers";
@@ -61,13 +60,7 @@ export function SlideRow({
         style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
       >
         <img
-          src={getOptimizedImageUrl(
-            image.url,
-            getHeroSlideImageTransform(type, image.focalPoint, {
-              width: 560,
-              quality: 80,
-            }),
-          )}
+          src={mediaImageUrl(image.url, 640)}
           alt={image.title || "Slide"}
           className="h-full w-full object-cover"
           style={{ objectPosition: getHeroSlideObjectPosition(image.focalPoint) }}

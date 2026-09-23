@@ -216,7 +216,7 @@ app.openapi(sendOtpRoute, async (c) => {
   // Dispatch OTP delivery to queue
   if (result.queuePayload) {
     try {
-      await c.env.AUTH_OTP_QUEUE.send(result.queuePayload);
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
     } catch (error) {
       if (result.otpStorageKey) {
         if (result.deliveryKey) {
@@ -703,7 +703,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
 
 const customerPaymentRecoverySchema = z.object({
   eligible: z.boolean(),
-  gateway: z.enum(["stripe", "sslcommerz", "polar"]).nullable(),
+  gateway: z.enum(["stripe", "sslcommerz"]).nullable(),
   paymentType: z.enum(["full", "deposit", "balance"]).nullable(),
   amountDue: z.number(),
   label: z.string().nullable(),
@@ -1071,7 +1071,7 @@ app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
   const result = await createCustomerOrderSupportRequest(db, session.customerId, orderId, body);
   await enqueueOrderSupportRequestNotificationForOrder({
     db,
-    queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: c.env.JOBS_QUEUE,
     orderId,
     requestId: result.request.id,
     notificationType: "support_request_submitted",
@@ -1112,13 +1112,6 @@ const customerPaymentSessionSchema = z.discriminatedUnion("gateway", [
       sessionKey: z.string().optional(),
     }),
   }),
-  paymentSessionBaseSchema.extend({
-    gateway: z.literal("polar"),
-    hosted: z.object({
-      gatewayUrl: z.string().optional(),
-      checkoutId: z.string().optional(),
-    }),
-  }),
 ]);
 
 const createCustomerOrderPaymentSessionRoute = createRoute({
@@ -1134,7 +1127,7 @@ const createCustomerOrderPaymentSessionRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            gateway: z.enum(["stripe", "sslcommerz", "polar"]).optional(),
+            gateway: z.enum(["stripe", "sslcommerz"]).optional(),
             replaceExistingAttempt: z.boolean().optional(),
           }).strict(),
         },

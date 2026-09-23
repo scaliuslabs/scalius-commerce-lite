@@ -479,7 +479,7 @@ describe("order receipt route", () => {
           reason: "Please cancel before shipment",
         }),
       },
-      { CACHE: kv, ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() } } as never,
+      { CACHE: kv, JOBS_QUEUE: { send: vi.fn() } } as never,
     );
 
     expect(response.status).toBe(404);
@@ -506,7 +506,7 @@ describe("order receipt route", () => {
           message: "Ordered by mistake.",
         }),
       },
-      { CACHE: kv, ORDER_NOTIFICATIONS_QUEUE: queue } as never,
+      { CACHE: kv, JOBS_QUEUE: queue } as never,
     );
     const body = await response.json() as {
       data?: {

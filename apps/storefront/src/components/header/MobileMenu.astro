@@ -1,7 +1,7 @@
 ---
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
 interface Props {
@@ -312,11 +312,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                 {item.iconUrl ? (
                   <img
                     data-mobile-header-image
-                    data-deferred-src={getOptimizedImageUrl(item.iconUrl, {
-                      width: 32,
-                      height: 32,
-                      fit: "contain",
-                    })}
+                    data-deferred-src={mediaImageUrl(item.iconUrl, 160)}
                     alt=""
                     aria-hidden="true"
                     class="w-4 h-4 object-contain"

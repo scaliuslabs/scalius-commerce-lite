@@ -389,7 +389,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     const next = vi.fn().mockResolvedValue(undefined);
     const context = createContext("/api/v1/admin/products/summaries", "GET", {
       headers: { Authorization: `Bearer ${agentToken}` },
-      env: { AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) } },
+      env: { RL_STANDARD: { limit: vi.fn().mockResolvedValue({ success: true }) } },
     });
 
     await adminAuthMiddleware(context as never, next);
@@ -441,7 +441,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
         "Content-Length": "3",
       },
       body: new Uint8Array([1, 2, 3]),
-      env: { AGENT_RATE_LIMITER: rateLimiter },
+      env: { RL_STANDARD: rateLimiter },
     });
     const patNext = vi.fn(async () => {
       expect([...new Uint8Array(await patContext.req.raw.arrayBuffer())]).toEqual([1, 2, 3]);
@@ -476,7 +476,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     });
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
       headers: { Authorization: `Bearer ${agentToken}` },
-      env: { AGENT_RATE_LIMITER: rateLimiter },
+      env: { RL_STANDARD: rateLimiter },
     }) as never, vi.fn())).rejects.toMatchObject({ status: 403 });
 
     mocks.resolveAgentPrincipalFromBearer.mockResolvedValue({
@@ -485,7 +485,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     });
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
       headers: { Authorization: `Bearer ${agentToken}` },
-      env: { AGENT_RATE_LIMITER: rateLimiter },
+      env: { RL_STANDARD: rateLimiter },
     }) as never, vi.fn())).rejects.toMatchObject({
       status: 403,
       message: "Storefront credentials cannot access dashboard operations",
@@ -494,7 +494,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(null);
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
       headers: { Authorization: `Bearer ${agentToken}` },
-      env: { AGENT_RATE_LIMITER: rateLimiter },
+      env: { RL_STANDARD: rateLimiter },
     }) as never, vi.fn())).rejects.toMatchObject({ status: 401 });
 
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
@@ -534,7 +534,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
     const env = {
-      AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+      RL_STANDARD: { limit: vi.fn().mockResolvedValue({ success: true }) },
     };
 
     await expect(adminAuthMiddleware(createContext(path, "PUT", {
@@ -621,7 +621,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       },
       body: new Uint8Array(actual),
       env: {
-        AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+        RL_STANDARD: { limit: vi.fn().mockResolvedValue({ success: true }) },
       },
     }) as never, next)).rejects.toMatchObject({
       status: 400,
@@ -660,7 +660,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       { grantId: principal.grantId, credentialId: null, resource: "dashboard" },
     );
     expect(next).toHaveBeenCalledTimes(1);
-    expect((context.env as { AGENT_RATE_LIMITER?: unknown }).AGENT_RATE_LIMITER).toBeUndefined();
+    expect((context.env as { RL_STANDARD?: unknown }).RL_STANDARD).toBeUndefined();
   });
 
   it("rejects header spoofing and mixed request credentials on the internal lane", async () => {
@@ -738,7 +738,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await expect(adminAuthMiddleware(
       createContext("/api/v1/admin/products/summaries", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
-        env: { AGENT_RATE_LIMITER: rateLimiter },
+        env: { RL_STANDARD: rateLimiter },
       }) as never,
       next,
     )).rejects.toMatchObject({ status: 403, message: "Storefront credentials cannot access dashboard operations" });
@@ -747,7 +747,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await expect(adminAuthMiddleware(
       createContext("/api/v1/admin/products/summaries", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
-        env: { AGENT_RATE_LIMITER: rateLimiter },
+        env: { RL_STANDARD: rateLimiter },
       }) as never,
       next,
     )).rejects.toMatchObject({ status: 403, message: "You do not have permission to perform this action" });
@@ -780,7 +780,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await expect(adminAuthMiddleware(
       createContext("/api/v1/admin/products", "POST", {
         headers: { Authorization: `Bearer ${agentToken}` },
-        env: { AGENT_RATE_LIMITER: rateLimiter },
+        env: { RL_STANDARD: rateLimiter },
       }) as never,
       vi.fn(),
     )).rejects.toMatchObject({
@@ -792,7 +792,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     await adminAuthMiddleware(
       createContext("/api/v1/admin/analytics/health", "GET", {
         headers: { Authorization: `Bearer ${agentToken}` },
-        env: { AGENT_RATE_LIMITER: rateLimiter },
+        env: { RL_STANDARD: rateLimiter },
       }) as never,
       allowedNext,
     );

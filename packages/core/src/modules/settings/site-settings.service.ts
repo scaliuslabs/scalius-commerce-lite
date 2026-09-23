@@ -248,10 +248,9 @@ type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 const MEDIA_HOST_MAX_LENGTH = 253;
 const MEDIA_HOST_LIST_MAX_COUNT = 24;
 
+/** Media delivery hosts: the canonical CDN and older hosts rewritten to it. */
 export interface MediaOptimizationSettings {
-  enabled: boolean;
   canonicalCdnUrl: string;
-  allowedImageHosts: string[];
   canonicalHostAliases: string[];
 }
 
@@ -299,30 +298,16 @@ function normalizeHostList(value: unknown): string[] {
 export function parseMediaOptimizationSettings(
   value: string | null | undefined,
 ): MediaOptimizationSettings {
-  if (!value) {
-    return {
-      enabled: true,
-      canonicalCdnUrl: "",
-      allowedImageHosts: [],
-      canonicalHostAliases: [],
-    };
-  }
+  if (!value) return { canonicalCdnUrl: "", canonicalHostAliases: [] };
 
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     return {
-      enabled: parsed.enabled !== false,
       canonicalCdnUrl: normalizeMediaHost(parsed.canonicalCdnUrl),
-      allowedImageHosts: normalizeHostList(parsed.allowedImageHosts),
       canonicalHostAliases: normalizeHostList(parsed.canonicalHostAliases),
     };
   } catch {
-    return {
-      enabled: true,
-      canonicalCdnUrl: "",
-      allowedImageHosts: [],
-      canonicalHostAliases: [],
-    };
+    return { canonicalCdnUrl: "", canonicalHostAliases: [] };
   }
 }
 
@@ -1382,15 +1367,11 @@ export async function resolveThemePreviewSession(
 
 const mediaOptimizationDocumentSchema = z
   .object({
-    enabled: z.boolean(),
     canonicalCdnUrl: z.string().max(MEDIA_HOST_MAX_LENGTH),
-    allowedImageHosts: z.array(z.string().max(MEDIA_HOST_MAX_LENGTH)).max(MEDIA_HOST_LIST_MAX_COUNT),
     canonicalHostAliases: z.array(z.string().max(MEDIA_HOST_MAX_LENGTH)).max(MEDIA_HOST_LIST_MAX_COUNT),
   })
   .transform((value): MediaOptimizationSettings => ({
-    enabled: value.enabled,
     canonicalCdnUrl: normalizeMediaHost(value.canonicalCdnUrl),
-    allowedImageHosts: normalizeHostList(value.allowedImageHosts),
     canonicalHostAliases: normalizeHostList(value.canonicalHostAliases),
   }));
 
@@ -1406,9 +1387,7 @@ export const mediaOptimizationDocument = defineSettingsDocument<MediaOptimizatio
   label: "media optimization",
   schema: mediaOptimizationDocumentSchema,
   defaults: {
-    enabled: true,
     canonicalCdnUrl: "",
-    allowedImageHosts: [],
     canonicalHostAliases: [],
   },
   invalidationGroups: ["media"],

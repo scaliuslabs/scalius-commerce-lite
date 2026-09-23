@@ -7,13 +7,12 @@
  *
  * - Secrets: API_TOKEN and PURGE_TOKEN are derived from the master secret on
  *   every request (HKDF is cheap; nothing is retained in module globals).
- * - Origins: fetched once per request from the API's public /api/v1/platform
- *   endpoint through the transport (service binding in production, HTTP to the
- *   fixed local API port in `astro dev`). The API KV-caches that response, so
- *   the read is one bounded sub-request. Nothing is cached across requests.
- *   When the read fails, no API URL is seeded and API callers fail closed; the
- *   storefront origin falls back to the request origin so discovery output
- *   stays absolute.
+ * - Origins and merchant CSP sources: applied by the middleware from the
+ *   request's layout payload (`applyPlatformOrigins`), the same cached read
+ *   every page already makes, so there is no separate platform sub-request.
+ *   Until then, or when that read fails, no API URL is seeded and API callers
+ *   fail closed; the storefront origin stays the request origin so discovery
+ *   output stays absolute.
  *
  * SSR code reads these through the getters below instead of import.meta.env
  * (build-time only). Client-side imports get a no-op store, so every getter
@@ -24,7 +23,6 @@ import {
   normalizeDashboardUrl,
   normalizeMediaBaseUrl,
   normalizePlatformOriginUrl,
-  PLATFORM_CONFIG_PUBLIC_PATH,
   publicRequestOrigin,
 } from "@scalius/shared/platform-config";
 import {
@@ -33,9 +31,7 @@ import {
   RUNTIME_SECRET_PURPOSES,
   type MasterSecretEnvironment,
 } from "@scalius/shared/runtime-secrets";
-
-/** Bounded single sub-request: the API KV-caches this response. */
-const PLATFORM_CONFIG_FETCH_TIMEOUT_MS = 1_500;
+import type { LayoutData } from "./storefront";
 
 /** Bindings and secrets the middleware hands to the request runtime. */
 export interface RequestRuntimeEnv extends MasterSecretEnvironment {
@@ -55,9 +51,7 @@ export interface StorefrontRuntime {
   MEDIA_URL?: string;
   /** Admin dashboard origin. */
   DASHBOARD_URL?: string;
-  IMAGE_OPTIMIZATION_ENABLED?: boolean;
   IMAGE_CDN_BASE_URL?: string;
-  IMAGE_CDN_ALLOWED_HOSTS?: string[];
   IMAGE_CDN_CANONICAL_HOST_ALIASES?: string[];
   /** Absolute storefront origin; platform setting or the request origin. */
   STOREFRONT_URL?: string;
@@ -65,6 +59,10 @@ export interface StorefrontRuntime {
   API_TOKEN?: string;
   /** Derived token the API presents when purging the storefront cache. */
   PURGE_TOKEN?: string;
+  /** Merchant CSP sources from the layout payload (Settings -> Security). */
+  CSP_ALLOWED_DOMAINS?: string;
+  /** The request's single layout read, shared by the middleware and pages. */
+  layout?: Promise<LayoutData | null>;
   /** Request-local read coalescing. Never share in-flight I/O across requests. */
   inflightReads?: Map<string, Promise<unknown>>;
   /** Request-local API credential derived from the current request bindings. */
@@ -130,9 +128,7 @@ export function getRuntimeDashboardUrl(): string | undefined {
 }
 
 export interface RuntimeImageCdnPolicy {
-  enabled?: boolean;
   canonicalCdnUrl?: string;
-  allowedImageHosts?: string[];
   canonicalHostAliases?: string[];
 }
 
@@ -143,11 +139,7 @@ export function setRuntimeImageCdnPolicy(
   const store = getRuntime();
   if (!store || !policy) return;
 
-  store.IMAGE_OPTIMIZATION_ENABLED = policy.enabled !== false;
   store.IMAGE_CDN_BASE_URL = policy.canonicalCdnUrl || undefined;
-  store.IMAGE_CDN_ALLOWED_HOSTS = Array.isArray(policy.allowedImageHosts)
-    ? policy.allowedImageHosts
-    : [];
   store.IMAGE_CDN_CANONICAL_HOST_ALIASES = Array.isArray(
     policy.canonicalHostAliases,
   )
@@ -157,14 +149,6 @@ export function setRuntimeImageCdnPolicy(
 
 export function getRuntimeImageCdnBaseUrl(): string | undefined {
   return getRuntime()?.IMAGE_CDN_BASE_URL;
-}
-
-export function getRuntimeImageOptimizationEnabled(): boolean | undefined {
-  return getRuntime()?.IMAGE_OPTIMIZATION_ENABLED;
-}
-
-export function getRuntimeImageCdnAllowedHosts(): string[] {
-  return getRuntime()?.IMAGE_CDN_ALLOWED_HOSTS ?? [];
 }
 
 export function getRuntimeImageCdnCanonicalHostAliases(): string[] {
@@ -198,53 +182,41 @@ export function getRuntimeInflightReads():
   return getRuntime()?.inflightReads;
 }
 
-interface PublicPlatformOrigins {
-  storefrontUrl: string;
-  apiUrl: string;
-  dashboardUrl: string;
-  mediaUrl: string;
+function optional(value: string | null | undefined): string | undefined {
+  return value || undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * Seeds the current request's platform origins and merchant CSP sources from
+ * its layout payload. Malformed values are dropped rather than trusted, and an
+ * empty storefront setting keeps the request origin.
+ */
+export function applyPlatformOrigins(
+  layout: Pick<LayoutData, "platform" | "cspAllowedDomains"> | null | undefined,
+): void {
+  const store = getRuntime();
+  if (!store) return;
+  // The normalizers accept unknown input, so a malformed payload is dropped.
+  const platform: NonNullable<LayoutData["platform"]> = layout?.platform ?? {};
+  const apiUrl = optional(normalizePlatformOriginUrl(platform.apiUrl));
+  const mediaUrl = optional(normalizeMediaBaseUrl(platform.mediaUrl));
+  store.STOREFRONT_URL =
+    optional(normalizePlatformOriginUrl(platform.storefrontUrl)) ??
+    store.STOREFRONT_URL;
+  store.PUBLIC_API_BASE_URL = apiUrl;
+  store.PUBLIC_API_URL = apiUrl ? `${apiUrl}/api/v1` : undefined;
+  // The dashboard may live below a path prefix on a shared host; keep it.
+  store.DASHBOARD_URL = optional(normalizeDashboardUrl(platform.dashboardUrl));
+  store.MEDIA_URL = mediaUrl;
+  store.CDN_DOMAIN_URL = mediaUrl ? optional(mediaHostFromUrl(mediaUrl)) : undefined;
+  const cspAllowedDomains = layout?.cspAllowedDomains;
+  store.CSP_ALLOWED_DOMAINS =
+    typeof cspAllowedDomains === "string" ? cspAllowedDomains : "";
 }
 
-function parsePlatformEnvelope(payload: unknown): PublicPlatformOrigins | null {
-  if (!isRecord(payload) || payload.success !== true || !isRecord(payload.data)) {
-    return null;
-  }
-  const data = payload.data;
-  return {
-    storefrontUrl: normalizePlatformOriginUrl(data.storefrontUrl),
-    apiUrl: normalizePlatformOriginUrl(data.apiUrl),
-    // The dashboard may live below a path prefix on a shared host; keep it.
-    dashboardUrl: normalizeDashboardUrl(data.dashboardUrl),
-    mediaUrl: normalizeMediaBaseUrl(data.mediaUrl),
-  };
-}
-
-async function fetchPlatformOrigins(
-  env: RequestRuntimeEnv | null | undefined,
-): Promise<PublicPlatformOrigins | null> {
-  // Imported lazily so the transport can depend on these getters without a
-  // module cycle; the module is already bundled, so this is a registry lookup.
-  const { resolveBackendTarget } = await import("./transport");
-  const target = resolveBackendTarget(PLATFORM_CONFIG_PUBLIC_PATH, env?.BACKEND_API);
-  if (!target) return null;
-  try {
-    const response = await target.fetch(target.url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(PLATFORM_CONFIG_FETCH_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      await response.body?.cancel();
-      return null;
-    }
-    return parsePlatformEnvelope(await response.json());
-  } catch {
-    return null;
-  }
+/** Merchant CSP sources seeded from this request's layout payload. */
+export function getRuntimeCspAllowedDomains(): string {
+  return getRuntime()?.CSP_ALLOWED_DOMAINS ?? "";
 }
 
 /**
@@ -264,32 +236,18 @@ export async function deriveRuntimeTokens(
   return { API_TOKEN, PURGE_TOKEN };
 }
 
-function optional(value: string | null | undefined): string | undefined {
-  return value || undefined;
-}
-
-/** Builds the runtime for one request: derived secrets plus platform origins. */
+/**
+ * Builds the runtime for one request: derived secrets, with the request
+ * origin as the storefront origin until `applyPlatformOrigins` runs.
+ */
 export async function createRequestRuntime(
   request: Request,
   env: RequestRuntimeEnv | null | undefined,
 ): Promise<StorefrontRuntime> {
-  const [platform, secrets] = await Promise.all([
-    fetchPlatformOrigins(env),
-    deriveRuntimeTokens(env),
-  ]);
-  const apiUrl = optional(platform?.apiUrl);
-  const mediaUrl = optional(platform?.mediaUrl);
-
   return {
     BACKEND_API: env?.BACKEND_API,
-    STOREFRONT_URL:
-      optional(platform?.storefrontUrl) ?? optional(publicRequestOrigin(request.url)),
-    PUBLIC_API_BASE_URL: apiUrl,
-    PUBLIC_API_URL: apiUrl ? `${apiUrl}/api/v1` : undefined,
-    DASHBOARD_URL: optional(platform?.dashboardUrl),
-    MEDIA_URL: mediaUrl,
-    CDN_DOMAIN_URL: mediaUrl ? optional(mediaHostFromUrl(mediaUrl)) : undefined,
-    ...secrets,
+    STOREFRONT_URL: optional(publicRequestOrigin(request.url)),
+    ...(await deriveRuntimeTokens(env)),
     inflightReads: new Map<string, Promise<unknown>>(),
     apiJwt: { token: null, expiresAt: null, refresh: null },
   };

@@ -7,7 +7,7 @@ Firebase Cloud Messaging integration for sending push notifications to admin das
 | Component | Status |
 |-----------|--------|
 | `admin.ts` -- Server-side FCM REST API client | Fully implemented |
-| `client.ts` -- Browser-side Firebase SDK init + token registration | Fully implemented |
+| Browser SDK init + token registration (`apps/admin-v2/src/hooks/use-firebase-init.ts`) | Fully implemented |
 | Service worker for background notifications | Fully implemented |
 | FCM token registration API endpoint | Fully implemented |
 | FCM token storage in DB (`adminFcmTokens` table) | Fully implemented |
@@ -32,7 +32,7 @@ The queue consumer calls `sendOrderNotification()` on new orders, which sends FC
 A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` SDK). Handles:
 
 - **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
-- **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Uses per-instance memory for the current token and writes to `SHARED_AUTH_CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present; persisted values are `enc:` AES-GCM strings with a 3300s TTL. Legacy plaintext KV reads remain tolerated when the dedicated key is available, but new writes never persist raw bearer tokens.
+- **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Uses per-instance memory for the current token and writes to `CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present; persisted values are `enc:` AES-GCM strings with a 3300s TTL. Legacy plaintext KV reads remain tolerated when the dedicated key is available, but new writes never persist raw bearer tokens.
 - **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
 - **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. `FCM_SEND_CONCURRENCY` is a fixed constant (8) exported from `admin.ts` -- not a merchant setting or environment variable. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
 - **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + Web Crypto jitter. Respects `Retry-After` header.
@@ -66,24 +66,7 @@ The service account has exactly one source: the encrypted `firebase`/`service_ac
 
 Required fields in service account JSON: `client_email`, `private_key`, `project_id`.
 
-### `client.ts` -- Browser-Side Firebase Client
-
-Runs in the admin dashboard browser. Uses the Firebase app and messaging packages.
-
-- `initFirebaseClientNotifications(userId, config)` -- Entry point called from `FirebaseInit.astro`
-  1. Checks browser environment and notification support
-  2. Sets VAPID key from config (`config.vapidKey`)
-  3. Initializes Firebase app and messaging
-  4. Requests notification permission, obtains FCM token via `getToken()`
-  5. Sends token to server via `POST /api/v1/admin/fcm-token` with device info (browser, user agent, URL)
-  6. Sets up foreground message listener
-
-- Foreground message handler:
-  - Plays `/alert.mp3` audio alert
-  - Shows a custom toast notification (not Sonner -- uses hand-built DOM elements with CSS classes `custom-fcm-toast-*`)
-  - Toast includes order info, "View Order" link, and close button
-  - Dispatches `admin-notification` custom event on `window` for the notification dropdown
-  - All catch blocks use typed `error: unknown`
+The browser side (Firebase SDK init, token registration, foreground messages) lives in the admin app: `apps/admin-v2/src/hooks/use-firebase-init.ts`.
 
 ## Admin Dashboard Integration
 
@@ -92,10 +75,6 @@ Runs in the admin dashboard browser. Uses the Firebase app and messaging package
 A TanStack server function that fetches the public Firebase config from
 `GET /api/v1/auth/firebase-config` and normalizes it to `Record<string, string>`.
 No env-var default or merge: an unset field is simply absent from the result.
-`initFirebaseClientNotifications()` (`@scalius/core/integrations/firebase/client`)
-is the browser-side entry point this config is meant for, but no current
-admin-v2 route wires it up -- confirm before documenting admin push as active
-end to end.
 
 ### `/firebase-messaging-sw.js` (`apps/admin-v2/src/routes/firebase-messaging-sw[.]js.tsx`)
 
@@ -140,9 +119,9 @@ Firebase settings in `settings` table:
 
 ## Dependencies
 
-- `@firebase/app`, `@firebase/messaging` -- Client-side SDK (imported dynamically in browser)
+- `@firebase/app`, `@firebase/messaging` -- Client-side SDK, declared and dynamically imported by the admin app (`use-firebase-init.ts`)
 - Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
-- `SHARED_AUTH_CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
+- `CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
 
 ## Operations
 

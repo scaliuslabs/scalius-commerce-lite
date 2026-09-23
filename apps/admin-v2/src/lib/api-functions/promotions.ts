@@ -70,10 +70,6 @@ export type ActivatePromotionPayload =
   ApiData<PostApiV1AdminPromotionsByIdActivateResponse>;
 export type PausePromotionPayload =
   ApiData<PostApiV1AdminPromotionsByIdPauseResponse>;
-export type PromotionMutationPayload =
-  | UpdatePromotionPayload
-  | ActivatePromotionPayload
-  | PausePromotionPayload;
 
 export interface PromotionRevisionClaim {
   id: string;

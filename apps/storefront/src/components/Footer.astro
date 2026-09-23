@@ -8,12 +8,8 @@ import type {
   FooterMenuLink,
 } from "@/lib/api";
 import RecursiveFooterLink from "./RecursiveFooterLink.astro";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
-import {
-  withOptimizedSocialIcons,
-  type SerializedSocialLink,
-} from "@/lib/serialized-media";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import {
   applyStorefrontPrefetchPolicyToHtml,
@@ -36,7 +32,10 @@ const optimizedDescription = applyStorefrontPrefetchPolicyToHtml(
 const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
-const social = withOptimizedSocialIcons(socialRaw);
+const social = socialRaw.map((item) => ({
+  ...item,
+  optimizedIconUrl: item.iconUrl ? mediaImageUrl(item.iconUrl, 160) : null,
+}));
 
 /**
  * Convert flat menu structure to nested.
@@ -109,7 +108,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           {
             logo.src ? (
               <img
-                src={getOptimizedImageUrl(logo.src, { width: 344, height: 256, fit: "scale-down" })}
+                src={mediaImageUrl(logo.src, 480)}
                 alt={logo.alt}
                 width={344}
                 height={256}
@@ -164,7 +163,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         social.length > 0 && (
           <div class="lg:col-span-12 lg:hidden flex justify-center mt-8 w-full">
             <div class="flex items-center gap-4 flex-wrap">
-              {social.map((item: SerializedSocialLink) => {
+              {social.map((item) => {
                 if (!item.url) return null;
                 const displayTitle = item.label || item.platform || "Social";
                 const href = item.url.startsWith("http")
@@ -216,7 +215,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         {
           social.length > 0 && (
             <div class="hidden lg:flex items-center gap-5 flex-wrap">
-              {social.map((item: SerializedSocialLink) => {
+              {social.map((item) => {
                 if (!item.url) return null;
                 const displayTitle = item.label || item.platform || "Social";
                 const href = item.url.startsWith("http")

@@ -17,10 +17,8 @@ import { articleRoutes } from "./routes/articles";
 import { orderRoutes } from "./routes/orders";
 import { stripePaymentRoutes } from "./routes/payment/stripe-routes";
 import { sslcommerzPaymentRoutes } from "./routes/payment/sslcommerz-routes";
-import { polarPaymentRoutes } from "./routes/payment/polar-routes";
 import { stripeWebhookRoutes } from "./routes/webhooks/stripe";
 import { sslcommerzWebhookRoutes } from "./routes/webhooks/sslcommerz";
-import { polarWebhookRoutes } from "./routes/webhooks/polar";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { discountRoutes } from "./routes/discounts";
@@ -185,7 +183,6 @@ app.route("/__ptproxy", partytownProxyRoutes);
 app.use("/webhooks/*", webhookBodyLimitMiddleware);
 app.route("/webhooks/stripe", stripeWebhookRoutes);
 app.route("/webhooks/sslcommerz", sslcommerzWebhookRoutes);
-app.route("/webhooks/polar", polarWebhookRoutes);
 app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 
@@ -245,7 +242,6 @@ app.route("/setup", authSetupRoutes);
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment/stripe", stripePaymentRoutes);
 app.route("/payment/sslcommerz", sslcommerzPaymentRoutes);
-app.route("/payment/polar", polarPaymentRoutes);
 
 // Add Swagger UI documentation (relative path '/docs')
 // Swagger URL needs full path as it's resolved by browser/Swagger tool
