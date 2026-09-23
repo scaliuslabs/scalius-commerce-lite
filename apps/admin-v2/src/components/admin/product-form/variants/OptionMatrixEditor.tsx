@@ -345,6 +345,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               <label className="space-y-1 text-xs text-muted-foreground">
                 Quantity
                 <InventoryQuantityInput
+                  ariaLabel="Quantity"
                   value={simpleSku.stock}
                   committed={simpleCommitted}
                   onChange={(stock) => {
@@ -923,10 +924,11 @@ function NumberInput({ value, onChange, ariaLabel, integer = false, className }:
   return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-11 px-2 text-sm md:h-8", className)} />;
 }
 
-function InventoryQuantityInput({ value, committed, onChange }: {
+function InventoryQuantityInput({ value, committed, onChange, ariaLabel = "On-hand stock" }: {
   value: number;
   committed: number;
   onChange: (value: number) => void;
+  ariaLabel?: string;
 }) {
   const available = Math.max(0, value - committed);
   return (
@@ -935,7 +937,7 @@ function InventoryQuantityInput({ value, committed, onChange }: {
         value={value}
         integer
         onChange={onChange}
-        ariaLabel="On-hand stock"
+        ariaLabel={ariaLabel}
         className={committed > 0 ? "pr-12 md:pr-8" : undefined}
       />
       {committed > 0 ? (

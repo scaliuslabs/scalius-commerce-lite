@@ -74,7 +74,7 @@ describe("OptionMatrixEditor inventory for products without options", () => {
   }
 
   const trackCheckbox = () => host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;
-  const quantityInput = () => host.querySelector<HTMLInputElement>('input[aria-label="On-hand stock"]');
+  const quantityInput = () => host.querySelector<HTMLInputElement>('input[aria-label="Quantity"]');
 
   it("tracks quantity by default on a new product and sends it with the create request", async () => {
     const onDraftChange = vi.fn<(composition: ProductCreateComposition | null) => void>();

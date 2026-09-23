@@ -134,7 +134,10 @@ import {
     listOrderPaymentSessionAttempts,
 } from "../payments/payment-session-attempts";
 import { PAYMENT_BLOCKED_ORDER_STATUSES } from "../payments/payable-order";
-import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
+import {
+    resolveActiveDeliveryLocationNames,
+    type ResolvedDeliveryLocationNames,
+} from "./delivery-location-validation";
 import { listOrderSupportRequests } from "./order-support-requests";
 import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
 import {
@@ -1155,9 +1158,13 @@ function buildGuardedCustomerInsert(
     orderId: string,
     customerId: string,
     data: UpdateOrderData,
-    totalAmount: number,
+    locationNames: ResolvedDeliveryLocationNames,
     expectedOrderVersion: number,
 ): SQLiteBatchItem {
+    // INSERT ... SELECT binds every customers column positionally in schema
+    // order: identity/contact/location, six account timestamps, total_orders,
+    // total_spent (paid amounts only; recomputed after commit), last_order_at,
+    // created_at, updated_at, deleted_at.
     return db.insert(customers).select(sql`
         SELECT
             ${customerId},
@@ -1168,13 +1175,17 @@ function buildGuardedCustomerInsert(
             ${data.city},
             ${data.zone},
             ${data.area},
+            ${locationNames.cityName},
+            ${locationNames.zoneName},
+            ${locationNames.areaName},
+            NULL,
             NULL,
             NULL,
             NULL,
             NULL,
             NULL,
             1,
-            ${totalAmount},
+            0,
             unixepoch(),
             unixepoch(),
             unixepoch(),
@@ -3549,7 +3560,7 @@ export async function updateOrder(
                 id,
                 newCustomerId,
                 data,
-                totalAmount,
+                { cityName, zoneName, areaName },
                 expectedVersion,
             ));
         }

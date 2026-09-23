@@ -112,6 +112,21 @@ const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
     "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
+// Checked before the inventory classifier, whose Turso matcher treats any
+// "conflict" text as a retryable write conflict.
+const AGENT_CONTEXT_CHECKOUT_CONFLICT = "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFLICT";
+
+function checkoutGuardError(error: unknown): Error | null {
+    if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
+        return new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+    }
+    if (isBatchGuardError(error, AGENT_CONTEXT_CHECKOUT_CONFLICT)) {
+        return new ConflictError(
+            "This storefront context changed, closed, or expired before the order was committed. Reload it and retry.",
+        );
+    }
+    return null;
+}
 
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
@@ -868,9 +883,8 @@ export async function commitStorefrontOrderPayload(
                 };
             }
 
-            if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
-                throw new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
-            }
+            const guardError = checkoutGuardError(error);
+            if (guardError) throw guardError;
 
             const discountConstraintError = getDiscountUsageConstraintError(error)
                 ?? getPromotionRedemptionConstraintError(error);
@@ -901,10 +915,7 @@ export async function commitStorefrontOrderPayload(
                         ...(agentContextPlan?.writesAfterOrder ?? []),
                     ] as SQLiteBatchItem[]);
                 } catch (replayError) {
-                    if (isBatchGuardError(replayError, CHECKOUT_AUTHORITY_CHANGED)) {
-                        throw new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
-                    }
-                    throw replayError;
+                    throw checkoutGuardError(replayError) ?? replayError;
                 }
                 return {
                     orderId: payload.orderData.id,
@@ -964,7 +975,7 @@ function prepareAgentStorefrontCheckoutCommit(
     const guard = buildBatchGuard(
         db,
         sql`EXISTS (SELECT 1 FROM ${agentStorefrontContexts} WHERE ${activeContext})`,
-        "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFLICT",
+        AGENT_CONTEXT_CHECKOUT_CONFLICT,
     ) as SQLiteBatchItem;
     const contextWrite = db
         .update(agentStorefrontContexts)
