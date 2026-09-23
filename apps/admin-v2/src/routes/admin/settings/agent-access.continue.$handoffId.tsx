@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
 import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ADMIN_ACCESS_DENIED_PATH } from "~/lib/admin-access";
-import { postApiV1AdminAgentAccessBrowserHandoffsByHandoffId } from "@scalius/api-client/sdk";
+import {
+  getApiV1Platform,
+  postApiV1AdminAgentAccessBrowserHandoffsByHandoffId,
+} from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -18,25 +20,22 @@ interface BrowserAction {
   fields: Record<string, string>;
 }
 
-const getTrustedStorefrontOrigin = createServerFn({ method: "GET" }).handler(
-  async () => {
-    // Platform storefrontUrl resolved per request in src/server.ts.
-    const { getRuntimeEnv } = await import("~/lib/runtime-env.server");
-    const configured = getRuntimeEnv().STOREFRONT_URL;
-    if (!configured) throw new Error("Storefront continuation is not configured");
-    const url = new URL(configured);
-    if (
-      (url.protocol !== "https:" && url.hostname !== "localhost") ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    ) {
-      throw new Error("Storefront continuation origin is invalid");
-    }
-    return url.origin;
-  },
-);
+/** The Platform storefront URL, as resolved by the API Worker serving this page. */
+async function getTrustedStorefrontOrigin(): Promise<string> {
+  const { storefrontUrl } = await apiData(getApiV1Platform());
+  if (!storefrontUrl) throw new Error("Storefront continuation is not configured");
+  const url = new URL(storefrontUrl);
+  if (
+    (url.protocol !== "https:" && url.hostname !== "localhost") ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("Storefront continuation origin is invalid");
+  }
+  return url.origin;
+}
 
 export function isSafeBrowserAction(
   action: unknown,

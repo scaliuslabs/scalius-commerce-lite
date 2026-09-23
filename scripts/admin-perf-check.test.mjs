@@ -150,25 +150,12 @@ function createPassingFixture({ dist = true } = {}) {
   `);
 
   if (dist) {
-    write(root, "apps/admin-v2/dist/server/.vite/manifest.json", JSON.stringify({
-      "src/routes/admin/index.tsx?tsr-split=component": {
-        file: "assets/admin.js",
-        imports: ["assets/dashboard.js"],
-      },
-      "src/routes/admin/settings/index.tsx?tsr-split=component": {
-        file: "assets/settings.js",
-        imports: ["assets/settings-safe.js"],
-      },
-      "src/styles/global.css": {
-        file: "assets/immutable/global-a1B2c3D4.css",
-      },
-    }));
-    write(root, "apps/admin-v2/dist/client/_headers", headers);
-    write(root, "apps/admin-v2/dist/client/flags/flags.css", ".flag { display: block; }\n");
-    write(root, "apps/admin-v2/dist/client/assets/immutable/global-a1B2c3D4.css", `
+    write(root, "apps/admin-v2/dist/_headers", headers);
+    write(root, "apps/admin-v2/dist/flags/flags.css", ".flag { display: block; }\n");
+    write(root, "apps/admin-v2/dist/assets/immutable/global-a1B2c3D4.css", `
       :root { color-scheme: light; }
     `);
-    write(root, "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js", `
+    write(root, "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js", `
       import { DeferredTiptapEditor } from "./DeferredTiptapEditor-fixture.js";
       export async function loadAdditionalInfo() {
         return import("./AdditionalInfoManager-fixture.js");
@@ -208,7 +195,7 @@ describe("admin-perf-check", () => {
         return <DndContext />;
       }
     `);
-    write(root, "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js", `
+    write(root, "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js", `
       export async function restoreObsoleteGallery() {
         return import("./DraggableImageGallery-fixture.js");
       }
@@ -310,7 +297,7 @@ describe("admin-perf-check", () => {
   Cache-Control: public, max-age=31536000, immutable
 `;
     write(root, "apps/admin-v2/public/_headers", broadHeaders);
-    write(root, "apps/admin-v2/dist/client/_headers", broadHeaders);
+    write(root, "apps/admin-v2/dist/_headers", broadHeaders);
 
     const report = runAdminPerfCheck({ rootDir: root });
     const output = formatAdminPerfCheckReport(report).join("\n");
@@ -327,7 +314,7 @@ describe("admin-perf-check", () => {
   Cache-Control: public, max-age=31536000
 `;
     write(root, "apps/admin-v2/public/_headers", broadHeaders);
-    write(root, "apps/admin-v2/dist/client/_headers", broadHeaders);
+    write(root, "apps/admin-v2/dist/_headers", broadHeaders);
 
     const report = runAdminPerfCheck({ rootDir: root });
     const output = formatAdminPerfCheckReport(report).join("\n");
@@ -341,7 +328,7 @@ describe("admin-perf-check", () => {
     const root = createPassingFixture();
     const productFormChunk = join(
       root,
-      "apps/admin-v2/dist/client/assets/immutable/ProductForm-a1B2c3D4e.js",
+      "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js",
     );
     rmSync(productFormChunk);
 
@@ -352,29 +339,10 @@ describe("admin-perf-check", () => {
     expect(output).toContain("expected a ProductForm-*.js artifact");
   });
 
-  it("rejects server-rendered asset URLs missing from the client deployment", () => {
-    const root = createPassingFixture();
-    write(root, "apps/admin-v2/dist/server/.vite/manifest.json", JSON.stringify({
-      "src/routes/admin/index.tsx?tsr-split=component": {
-        file: "assets/admin.js",
-      },
-      "src/styles/global.css": {
-        file: "assets/global-missing1.css",
-      },
-    }));
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("server manifest references browser assets missing from dist/client");
-    expect(output).toContain("assets/global-missing1.css");
-  });
-
   it("rejects unhashed or misplaced generated scripts and styles", () => {
     const root = createPassingFixture();
-    write(root, "apps/admin-v2/dist/client/assets/immutable/unhashed.js", "export {};\n");
-    write(root, "apps/admin-v2/dist/client/assets/generated-a1B2c3D4.css", ".x {}\n");
+    write(root, "apps/admin-v2/dist/assets/immutable/unhashed.js", "export {};\n");
+    write(root, "apps/admin-v2/dist/assets/generated-a1B2c3D4.css", ".x {}\n");
 
     const report = runAdminPerfCheck({ rootDir: root });
     const output = formatAdminPerfCheckReport(report).join("\n");
@@ -389,8 +357,8 @@ describe("admin-perf-check", () => {
   it("rejects public files, maps, and HTML in the generated immutable namespace", () => {
     const root = createPassingFixture();
     write(root, "apps/admin-v2/public/assets/immutable/copied-a1B2c3D4.js", "export {};\n");
-    write(root, "apps/admin-v2/dist/client/assets/immutable/index.html", "<!doctype html>\n");
-    write(root, "apps/admin-v2/dist/client/assets/immutable/index-a1B2c3D4.js.map", "{}\n");
+    write(root, "apps/admin-v2/dist/assets/immutable/index.html", "<!doctype html>\n");
+    write(root, "apps/admin-v2/dist/assets/immutable/index-a1B2c3D4.js.map", "{}\n");
 
     const report = runAdminPerfCheck({ rootDir: root });
     const output = formatAdminPerfCheckReport(report).join("\n");
@@ -411,7 +379,7 @@ describe("admin-perf-check", () => {
       expect.arrayContaining([
         expect.objectContaining({
           status: "SKIP",
-          label: "dist: admin build artifacts",
+          label: "dist: ProductForm client chunk",
         }),
       ]),
     );

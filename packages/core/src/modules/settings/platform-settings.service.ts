@@ -1,21 +1,9 @@
 // src/modules/settings/platform-settings.service.ts
-// Storage and resolution for the deployment's public origins.
-//
-// The storefront origin is the existing `site_settings.storefront_url` column
-// (already merchant-editable). The API, dashboard, and media origins plus the
-// cookie domain and extra CORS origins live in the `settings` table. Workers
-// read the resolved config through KV.
-//
-// Storage, validation, cache, and invalidation are declared once as a settings
-// document; the exported functions below are thin wrappers so the API routes,
-// `apps/api/src/runtime/runtime-env.ts`, and the other Workers keep working.
+// Validation and resolution for the deployment's public origins. Storage is
+// the `platform` settings document; Workers read it through its KV mirror.
 
-import { z } from "zod";
-import { settings, siteSettings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { eq, inArray } from "drizzle-orm";
 import {
-  EMPTY_IDENTITY_HANDOFF_CONFIG,
   IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
   emptyPlatformConfig,
@@ -25,132 +13,20 @@ import {
   normalizeIdentityHandoffConfig,
   normalizeJwksUrl,
   normalizeMediaBaseUrl,
-  normalizePlatformConfig,
   normalizePlatformOriginUrl,
   type IdentityHandoffConfig,
   type PlatformConfig,
 } from "@scalius/shared/platform-config";
+import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { ValidationError } from "@scalius/core/errors";
-import {
-  defineSettingsDocument,
-  type SettingsDocumentContext,
-  type SettingsStoreKv,
-} from "./settings-store";
-import { saveStorefrontUrl } from "./site-settings.service";
-
-export const PLATFORM_SETTINGS_CATEGORY = "platform";
-export const PLATFORM_CONFIG_CACHE_KEY = "platform:config:v1";
-// Read on every API and storefront request. Every save deletes the key, so an
-// expiring entry only adds one KV write per Worker every five minutes; the
-// document store treats 0 as "no expiration".
-const PLATFORM_CONFIG_CACHE_TTL_SECONDS = 0;
-const PLATFORM_DOCUMENT_KEY = "config";
-
-/** Pre-document per-key rows, still the source of truth until first read. */
-const LEGACY_PLATFORM_SETTING_KEYS = {
-  apiUrl: "api_url",
-  dashboardUrl: "dashboard_url",
-  mediaUrl: "media_url",
-  customerAuthCookieDomain: "customer_auth_cookie_domain",
-  corsAllowedOrigins: "cors_allowed_origins",
-} as const;
+import type { SettingsStoreKv } from "./settings-store";
+import { platformDocument } from "./documents";
 
 type PlatformKv = SettingsStoreKv;
 
-const identityHandoffSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    issuer: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
-    audience: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
-    jwksUrl: z.string().default(""),
-    localLoginDisabled: z.boolean().default(false),
-  })
-  .default({ ...EMPTY_IDENTITY_HANDOFF_CONFIG });
-
-// Documents written before the automation fields existed omit them; the
-// defaults keep those rows readable without a migration.
-const platformConfigSchema = z
-  .object({
-    storefrontUrl: z.string(),
-    apiUrl: z.string(),
-    dashboardUrl: z.string(),
-    mediaUrl: z.string(),
-    customerAuthCookieDomain: z.string(),
-    corsAllowedOrigins: z.array(z.string()).max(PLATFORM_CORS_ORIGINS_MAX_COUNT),
-    setupTokenRequired: z.boolean().default(false),
-    identityHandoff: identityHandoffSchema,
-  })
-  .transform((value) => normalizePlatformConfig(value));
-
-/**
- * The deployment's public origins. `storefrontUrl` stays in the wide
- * `site_settings` singleton row and is exposed through the same interface by
- * the column adapter; the remaining origins are one JSON document.
- */
-export const platformSettingsDocument = defineSettingsDocument<PlatformConfig>({
-  category: PLATFORM_SETTINGS_CATEGORY,
-  key: PLATFORM_DOCUMENT_KEY,
-  label: "platform origins",
-  schema: platformConfigSchema,
-  defaults: emptyPlatformConfig(),
-  cache: { key: PLATFORM_CONFIG_CACHE_KEY, ttlSeconds: PLATFORM_CONFIG_CACHE_TTL_SECONDS },
-  // Origins feed layout HTML, CSP, discovery XML, and checkout callbacks.
-  columns: {
-    fields: ["storefrontUrl"],
-    async read(db) {
-      const [row] = await db
-        .select({ storefrontUrl: siteSettings.storefrontUrl })
-        .from(siteSettings)
-        .limit(1);
-      return { storefrontUrl: row?.storefrontUrl ?? "" };
-    },
-    async write(db, patch) {
-      if (typeof patch.storefrontUrl === "string") {
-        // Reuses the existing site-settings storefront origin validation. The
-        // storefront origin is required, so it cannot be cleared here either.
-        await saveStorefrontUrl(db, patch.storefrontUrl);
-      }
-    },
-  },
-  legacy: {
-    async read(db) {
-      const rows = await db
-        .select({ key: settings.key, value: settings.value })
-        .from(settings)
-        .where(inArray(settings.category, [PLATFORM_SETTINGS_CATEGORY]));
-      const byKey = new Map(rows.map((row) => [row.key, row.value]));
-      const legacyKeys = Object.values(LEGACY_PLATFORM_SETTING_KEYS);
-      if (!legacyKeys.some((key) => byKey.has(key))) return null;
-
-      const cors = byKey.get(LEGACY_PLATFORM_SETTING_KEYS.corsAllowedOrigins);
-      let corsAllowedOrigins: string[] = [];
-      if (cors) {
-        try {
-          corsAllowedOrigins = normalizeCorsOrigins(JSON.parse(cors) as unknown);
-        } catch {
-          corsAllowedOrigins = normalizeCorsOrigins(cors);
-        }
-      }
-
-      return {
-        document: {
-          apiUrl: byKey.get(LEGACY_PLATFORM_SETTING_KEYS.apiUrl) ?? "",
-          dashboardUrl: byKey.get(LEGACY_PLATFORM_SETTING_KEYS.dashboardUrl) ?? "",
-          mediaUrl: byKey.get(LEGACY_PLATFORM_SETTING_KEYS.mediaUrl) ?? "",
-          customerAuthCookieDomain:
-            byKey.get(LEGACY_PLATFORM_SETTING_KEYS.customerAuthCookieDomain) ?? "",
-          corsAllowedOrigins,
-        },
-        // Platform origins hold no secrets, so the document always supersedes.
-        migrate: true,
-      };
-    },
-  },
-});
-
 /** Reads the stored platform configuration (no cache). */
 export async function getPlatformSettings(db: Database): Promise<PlatformConfig> {
-  return platformSettingsDocument.read(db, {}, { skipCache: true });
+  return (await platformDocument.readDetailed(db, {}, { skipCache: true })).value;
 }
 
 export type PlatformSettingsPatch = Partial<{
@@ -262,6 +138,8 @@ function mergeIdentityHandoffPatch(
 export async function savePlatformSettings(
   db: Database,
   patch: PlatformSettingsPatch,
+  /** Written through so Worker-entry readers see the new origins at once. */
+  kv?: PlatformKv | null,
 ): Promise<PlatformConfig> {
   const documentPatch: Partial<PlatformConfig> = {};
 
@@ -322,30 +200,30 @@ export async function savePlatformSettings(
   }
 
   if (patch.storefrontUrl !== undefined) {
-    documentPatch.storefrontUrl = patch.storefrontUrl;
+    // The storefront origin is required, so it cannot be cleared.
+    const storefrontUrl = normalizeStorefrontOrigin(patch.storefrontUrl);
+    if (!storefrontUrl) {
+      throw new ValidationError(
+        "Enter the HTTPS origin of the public store. Local development may use an HTTP loopback origin.",
+      );
+    }
+    documentPatch.storefrontUrl = storefrontUrl;
   }
 
-  await platformSettingsDocument.write(db, documentPatch);
-  return getPlatformSettings(db);
+  return (await platformDocument.write(db, documentPatch, { kv })).value;
 }
 
 export async function readCachedPlatformConfig(
   kv: PlatformKv | null | undefined,
 ): Promise<PlatformConfig | null> {
-  return platformSettingsDocument.readCached({ kv });
+  return platformDocument.readCached({ kv });
 }
 
 export async function cachePlatformConfig(
   kv: PlatformKv | null | undefined,
   config: PlatformConfig,
 ): Promise<void> {
-  await platformSettingsDocument.writeCached({ kv }, config);
-}
-
-export async function invalidatePlatformConfigCache(
-  kv: PlatformKv | null | undefined,
-): Promise<void> {
-  await platformSettingsDocument.invalidate({ kv });
+  await platformDocument.writeCached({ kv }, config);
 }
 
 export interface ResolvePlatformConfigOptions {
@@ -362,12 +240,12 @@ export interface ResolvePlatformConfigOptions {
 export async function resolvePlatformConfig(
   options: ResolvePlatformConfigOptions,
 ): Promise<PlatformConfig> {
-  const ctx: SettingsDocumentContext = { kv: options.kv };
-  const cached = await platformSettingsDocument.readCached(ctx);
+  const ctx = { kv: options.kv };
+  const cached = await platformDocument.readCached(ctx);
   if (cached) return cached;
 
   try {
-    return await platformSettingsDocument.read(options.getDb(), ctx, { skipCache: true });
+    return (await platformDocument.readDetailed(options.getDb(), ctx, { skipCache: true })).value;
   } catch (error: unknown) {
     console.error(
       "[Platform] DB read failed for platform config:",
@@ -379,10 +257,5 @@ export async function resolvePlatformConfig(
 
 /** Storefront URL alone, for callers that only need the store origin. */
 export async function getConfiguredStorefrontUrl(db: Database): Promise<string> {
-  const [row] = await db
-    .select({ storefrontUrl: siteSettings.storefrontUrl })
-    .from(siteSettings)
-    .where(eq(siteSettings.singletonKey, "default"))
-    .limit(1);
-  return normalizePlatformOriginUrl(row?.storefrontUrl ?? "");
+  return (await getPlatformSettings(db)).storefrontUrl;
 }

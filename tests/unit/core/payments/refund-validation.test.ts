@@ -304,10 +304,9 @@ async function importRefundServiceWithMocks(options: {
       return { availabilityTransitionVariantIds: [] };
     },
   }));
-  vi.doMock("../../../../packages/core/src/modules/payments/factory", () => ({
-    createPaymentProvider: vi.fn(() => ({
-      createRefund: options.createRefund ?? vi.fn(),
-    })),
+  vi.doMock("../../../../packages/core/src/modules/payments/gateways/registry", async (importOriginal) => ({
+    ...await importOriginal<typeof import("../../../../packages/core/src/modules/payments/gateways/registry")>(),
+    getPaymentGateway: vi.fn(() => ({ refund: options.createRefund ?? vi.fn() })),
   }));
   vi.doMock("../../../../packages/core/src/modules/settings/settings.service", () => ({
     getCurrencyConfig: vi.fn(async () => ({ code: "BDT" })),
@@ -796,7 +795,7 @@ describe("refund validation", () => {
       });
       const db = createRefundDbWithLostStatusCas();
 
-      await expect(processRefund(db as never, undefined, {
+      await expect(processRefund(db as never, {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled before fulfillment",
         gateway: "cod",
@@ -816,7 +815,7 @@ describe("refund validation", () => {
       });
       const db = createAlreadyRefundedCancelledDb();
 
-      await expect(processRefund(db as never, undefined, {
+      await expect(processRefund(db as never, {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled before fulfillment",
         gateway: "cod",
@@ -843,7 +842,7 @@ describe("refund validation", () => {
       });
       const db = createAlreadyRefundedCancelledDeductedDb();
 
-      await expect(processRefund(db as never, undefined, {
+      await expect(processRefund(db as never, {
         orderId: "ord_refund_cas",
         reason: "Customer cancelled after fulfillment",
         gateway: "cod",

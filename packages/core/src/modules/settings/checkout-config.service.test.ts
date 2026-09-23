@@ -1,100 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-    getRegisteredGateways: vi.fn(),
     getPaymentGatewaySettingsSnapshot: vi.fn(),
 }));
 
-vi.mock("../payments/gateway-registry", () => ({
-    getRegisteredGateways: mocks.getRegisteredGateways,
-}));
-
-vi.mock("../payments/gateway-settings", () => ({
+vi.mock("../payments/gateway-settings", async (importOriginal) => ({
+    ...await importOriginal<typeof import("../payments/gateway-settings")>(),
     getPaymentGatewaySettingsSnapshot: mocks.getPaymentGatewaySettingsSnapshot,
 }));
 
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getCheckoutConfig } from "./checkout-config.service";
+import { checkoutDocument, currencyDocument } from "./documents";
 
-function createDb(
+async function createDb(
     siteOverrides: Record<string, unknown> = {},
     customerAuthPolicy?: Record<string, unknown>,
     readiness: {
         activeShippingRows?: Array<{ id: string }>;
         activeHierarchyRows?: Array<{ id: string }>;
-        currencyRows?: Array<{ key: string; value: string }>;
+        currency?: { currencyCode: string; currencySymbol: string };
     } = {},
 ) {
-    const select = vi.fn()
-        .mockReturnValueOnce({
-            from: () => ({
-                limit: () => Promise.resolve([{
-                    guestCheckoutEnabled: true,
-                    authVerificationMethod: "email",
-                    checkoutMode: "all",
-                    partialPaymentEnabled: false,
-                    partialPaymentAmount: 0,
-                    ...siteOverrides,
-                }]),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    all: () => Promise.resolve(readiness.currencyRows ?? [
-                        { key: "currency_code", value: "bdt" },
-                        { key: "currency_symbol", value: "৳" },
-                    ]),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    get: () => Promise.resolve(null),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    get: () => Promise.resolve(customerAuthPolicy ? { value: JSON.stringify(customerAuthPolicy) } : null),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    limit: () => Promise.resolve(readiness.activeShippingRows ?? [{ id: "sm_1" }]),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                where: () => ({
-                    limit: () => Promise.resolve(readiness.activeHierarchyRows ?? [{ id: "zone_1" }]),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: () => ({
-                limit: () => ({
-                    get: () => Promise.resolve({
-                        guestCheckoutEnabled: siteOverrides.guestCheckoutEnabled ?? true,
-                        authVerificationMethod: siteOverrides.authVerificationMethod ?? "email",
-                    }),
-                }),
-            }),
-        });
-
-    return { select };
+    const { db, sqlite } = createSqliteD1Database();
+    const { authVerificationMethod = "email", ...checkout } = siteOverrides;
+    await checkoutDocument.write(db, checkout);
+    // As migrated: the raw saved method, plus a policy only when one was saved.
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('auth', 'document', ?, 'json', 'customer_auth')")
+        .run(JSON.stringify({ authVerificationMethod, policy: customerAuthPolicy ?? null }));
+    await currencyDocument.write(db, (readiness.currency ?? { currencyCode: "bdt", currencySymbol: "৳" }) as never);
+    if ((readiness.activeShippingRows ?? [{ id: "sm_1" }]).length > 0) {
+        sqlite.exec("INSERT INTO shipping_methods (id, name, fee, is_active) VALUES ('sm_1', 'Standard', 60, 1)");
+    }
+    if ((readiness.activeHierarchyRows ?? [{ id: "zone_1" }]).length > 0) {
+        sqlite.exec(`INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+            VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
+                   ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1)`);
+    }
+    return db;
 }
+
+const readyStripe = {
+    enabled: true,
+    secretKey: "sk_test_realishValue",
+    publishableKey: "pk_test_realishValue",
+    webhookSecret: "whsec_realishValue",
+};
 
 function mockGatewaySnapshot(
     activePaymentMethods: { enabledMethods: string[]; defaultMethod: string },
-    stripe: { enabled: boolean; publishableKey: string } | null = {
-        enabled: true,
-        publishableKey: "pk_test",
-    },
+    stripe: Partial<typeof readyStripe> | null = readyStripe,
 ) {
     mocks.getPaymentGatewaySettingsSnapshot.mockResolvedValue({
         preferences: {
@@ -114,22 +69,6 @@ function mockGatewaySnapshot(
 describe("getCheckoutConfig", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.getRegisteredGateways.mockReturnValue([
-            {
-                id: "stripe",
-                name: "Stripe",
-                settingsCategory: "stripe",
-                getPublicConfig: (settings: Record<string, unknown>) => ({
-                    publishableKey: settings.publishableKey,
-                }),
-                getCurrencies: () => ["bdt", "usd"],
-            },
-            {
-                id: "cod",
-                name: "Cash on Delivery",
-                settingsCategory: "cod",
-            },
-        ]);
         mockGatewaySnapshot({ enabledMethods: ["cod"], defaultMethod: "cod" });
     });
 
@@ -139,7 +78,7 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb() as never);
+        const config = await getCheckoutConfig(await createDb());
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
         expect(mocks.getPaymentGatewaySettingsSnapshot).toHaveBeenCalledWith(
@@ -161,12 +100,9 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({}, undefined, {
-            currencyRows: [
-                { key: "currency_code", value: "USDT" },
-                { key: "currency_symbol", value: "₿" },
-            ],
-        }) as never);
+        const config = await getCheckoutConfig(await createDb({}, undefined, {
+            currency: { currencyCode: "USDT", currencySymbol: "₿" },
+        }));
 
         expect(config.currency).toEqual({
             code: "BDT",
@@ -182,20 +118,6 @@ describe("getCheckoutConfig", () => {
     });
 
     it("does not advertise a gateway that cannot process the store currency", async () => {
-        mocks.getRegisteredGateways.mockReturnValue([
-            {
-                id: "sslcommerz",
-                name: "SSLCommerz",
-                settingsCategory: "sslcommerz",
-                getCurrencies: () => ["bdt"],
-            },
-            {
-                id: "cod",
-                name: "Cash on Delivery",
-                settingsCategory: "cod",
-                getCurrencies: (localCurrency: string) => [localCurrency],
-            },
-        ]);
         mocks.getPaymentGatewaySettingsSnapshot.mockResolvedValue({
             preferences: {
                 enabledMethods: ["sslcommerz", "cod"],
@@ -208,17 +130,14 @@ describe("getCheckoutConfig", () => {
             },
             settings: {
                 stripe: null,
-                sslcommerz: { enabled: true, sandbox: true },
+                sslcommerz: { enabled: true, sandbox: false, storeId: "store_real", storePassword: "real-password" },
                 cod: { enabled: true },
             },
         });
 
-        const config = await getCheckoutConfig(createDb({}, undefined, {
-            currencyRows: [
-                { key: "currency_code", value: "USD" },
-                { key: "currency_symbol", value: "$" },
-            ],
-        }) as never);
+        const config = await getCheckoutConfig(await createDb({}, undefined, {
+            currency: { currencyCode: "USD", currencySymbol: "$" },
+        }));
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
         expect(config.activeDefaultMethod).toBeUndefined();
@@ -231,9 +150,19 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "stripe",
         });
 
-        const config = await getCheckoutConfig(createDb() as never);
+        const config = await getCheckoutConfig(await createDb());
 
-        expect(config.gateways.map((gateway) => gateway.id)).toEqual(["stripe", "cod"]);
+        expect(config.gateways).toEqual([
+            {
+                id: "stripe",
+                name: "Card Payment",
+                flow: "card",
+                currencies: ["BDT"],
+                publishableKey: "pk_test_realishValue",
+                testMode: true,
+            },
+            { id: "cod", name: "Cash on Delivery", flow: "cod", currencies: ["BDT"] },
+        ]);
         expect(config.activeDefaultMethod).toBe("stripe");
     });
 
@@ -243,7 +172,7 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "stripe",
         });
 
-        const config = await getCheckoutConfig(createDb() as never);
+        const config = await getCheckoutConfig(await createDb());
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod", "stripe"]);
         expect(config.activeDefaultMethod).toBe("stripe");
@@ -255,8 +184,8 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const legacyPhone = await getCheckoutConfig(createDb({ authVerificationMethod: "phone" }) as never);
-        const unsupportedMandatory = await getCheckoutConfig(createDb({ authVerificationMethod: "email_phone_mandatory" }) as never);
+        const legacyPhone = await getCheckoutConfig(await createDb({ authVerificationMethod: "phone" }));
+        const unsupportedMandatory = await getCheckoutConfig(await createDb({ authVerificationMethod: "email_phone_mandatory" }));
 
 	    expect(legacyPhone.authVerificationMethod).toBe("sms_otp");
 	    expect(unsupportedMandatory.authVerificationMethod).toBe("email");
@@ -269,12 +198,12 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({}, {
+        const config = await getCheckoutConfig(await createDb({}, {
             otpChannels: ["email", "whatsapp"],
             requiredContactFields: ["email", "phone"],
             optionalContactFields: [],
             defaultOtpChannel: "whatsapp",
-        }) as never);
+        }));
 
         expect(config.customerAuthPolicy).toEqual({
             otpChannels: ["email", "whatsapp"],
@@ -289,9 +218,9 @@ describe("getCheckoutConfig", () => {
         mockGatewaySnapshot({
             enabledMethods: ["stripe", "cod"],
             defaultMethod: "stripe",
-        }, { enabled: false, publishableKey: "pk_test" });
+        }, { ...readyStripe, enabled: false });
 
-        const config = await getCheckoutConfig(createDb() as never);
+        const config = await getCheckoutConfig(await createDb());
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
         expect(config.activeDefaultMethod).toBeUndefined();
@@ -301,9 +230,9 @@ describe("getCheckoutConfig", () => {
         mockGatewaySnapshot({
             enabledMethods: ["stripe", "cod"],
             defaultMethod: "stripe",
-        }, { enabled: true, publishableKey: "" });
+        }, { ...readyStripe, publishableKey: "" });
 
-        const config = await getCheckoutConfig(createDb() as never);
+        const config = await getCheckoutConfig(await createDb());
 
         expect(config.gateways.map((gateway) => gateway.id)).toEqual(["cod"]);
     });
@@ -314,10 +243,10 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({
+        const config = await getCheckoutConfig(await createDb({
             partialPaymentEnabled: true,
             partialPaymentAmount: 200,
-        }) as never);
+        }));
 
         expect(config.gateways).toEqual([]);
         expect(config.partialPaymentEnabled).toBe(true);
@@ -330,9 +259,9 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({}, undefined, {
+        const config = await getCheckoutConfig(await createDb({}, undefined, {
             activeShippingRows: [],
-        }) as never);
+        }));
 
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
@@ -353,9 +282,9 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({}, undefined, {
+        const config = await getCheckoutConfig(await createDb({}, undefined, {
             activeHierarchyRows: [],
-        }) as never);
+        }));
 
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
@@ -376,9 +305,9 @@ describe("getCheckoutConfig", () => {
             defaultMethod: "cod",
         });
 
-        const config = await getCheckoutConfig(createDb({
+        const config = await getCheckoutConfig(await createDb({
             guestCheckoutEnabled: false,
-        }) as never);
+        }));
 
         expect(config.unavailable).toBe(true);
         expect(config.gateways).toEqual([]);
@@ -396,7 +325,7 @@ describe("getCheckoutConfig", () => {
     it("rejects when payment-method settings cannot be read", async () => {
         mocks.getPaymentGatewaySettingsSnapshot.mockRejectedValue(new Error("settings unavailable"));
 
-        await expect(getCheckoutConfig(createDb() as never)).rejects.toThrow(
+        await expect(getCheckoutConfig(await createDb())).rejects.toThrow(
             "settings unavailable",
         );
     });

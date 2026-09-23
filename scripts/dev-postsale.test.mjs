@@ -139,13 +139,12 @@ describe("local post-sale smoke CLI", () => {
   it("seeds checkout, auth policy, delivery, and one untracked default SKU", () => {
     const sql = buildFixtureSql();
 
-    expect(sql).toContain("INSERT INTO site_settings");
+    expect(sql).toContain("'checkout'");
     expect(sql).toContain("'payment_methods'");
-    expect(sql).toContain("'currency_code'");
-    expect(sql).toContain("'BDT'");
-    expect(sql).toContain("'usd_exchange_rate'");
+    expect(sql).toContain('"currencyCode":"BDT"');
+    expect(sql).toContain('"usdExchangeRate":"110"');
     expect(sql).toContain("'customer_auth'");
-    expect(sql).toContain("'allowed_countries'");
+    expect(sql).toContain('"allowedCountries":["BD"]');
     expect(sql).toContain("'ops006_shipping_standard'");
     expect(sql).toContain("'ops006_product'");
     expect(sql).toContain("'ops006_variant_default'");
@@ -158,9 +157,9 @@ describe("local post-sale smoke CLI", () => {
   it("keeps OTP setup independent from catalog fixtures", () => {
     const sql = buildOtpFixtureSql();
 
-    expect(sql).toContain("INSERT INTO site_settings");
+    expect(sql).toContain("'platform'");
     expect(sql).toContain("'customer_auth'");
-    expect(sql).toContain("'email_sender'");
+    expect(sql).toContain('"sender":"noreply@local.scalius.test"');
     expect(sql).not.toContain("INSERT INTO products");
     expect(sql).not.toContain("INSERT INTO product_variants");
   });
@@ -171,8 +170,8 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("DELETE FROM payment_session_attempts");
     expect(sql).toContain("DELETE FROM payment_plans");
     expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')");
-    expect(sql).toContain("partial_payment_enabled = 1");
-    expect(sql).toContain("partial_payment_amount = 150");
+    expect(sql).toContain("\"partialPaymentEnabled\":true");
+    expect(sql).toContain("\"partialPaymentAmount\":150");
     expect(sql).toContain("currency_code, currency_decimal_places");
     expect(sql).toContain("subtotal_amount_minor");
     expect(sql).toContain("total_amount_minor");

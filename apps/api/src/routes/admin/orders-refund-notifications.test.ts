@@ -139,7 +139,6 @@ describe("admin refund notification routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.processRefund).toHaveBeenCalledWith(
             db,
-            env.CACHE,
             {
                 orderId: "order_1",
                 amount: 40,
@@ -264,7 +263,6 @@ describe("admin refund notification routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.reconcileRefundAttemptForOrder).toHaveBeenCalledWith(
             db,
-            env.CACHE,
             "order_1",
             "rfa_1",
             { encryptionKey: "credential-key" },

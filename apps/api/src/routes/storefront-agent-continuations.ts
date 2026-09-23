@@ -51,7 +51,7 @@ import {
   isPaymentSessionProcessingResult,
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
-import { reconcileStripeOrderPayment } from "./payment/stripe-reconciliation";
+import { reconcileOrderPayment } from "./payment/payment-events";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -255,7 +255,6 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   if (!result.success) {
     if (result.httpStatus === 429) throw new RateLimitError(result.error || "Too many requests.");
@@ -405,7 +404,7 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     c.get("db"),
     c.req.valid("param").continuationId,
   );
-  const { data, accepted } = await reconcileStripeOrderPayment({
+  const { data, accepted } = await reconcileOrderPayment({
     db: c.get("db"),
     env: c.env,
     orderId: access.orderId,
@@ -447,7 +446,6 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    migrationEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
   if (result.queuePayload) {
     try {

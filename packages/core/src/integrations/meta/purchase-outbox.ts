@@ -44,12 +44,6 @@ export type MetaCapiPurchaseOutboxStatus =
     | "failed"
     | "skipped";
 
-export interface MetaPurchaseQueueMessage {
-    type: "meta.purchase";
-    orderId: string;
-    source: string;
-}
-
 interface MetaPurchaseRuntimeOptions {
     storefrontUrl?: string | null;
     encryptionKey?: string;

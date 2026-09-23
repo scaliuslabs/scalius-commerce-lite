@@ -186,9 +186,9 @@ Storefront category ([slug].astro)
 ### Depends on this module:
 - `apps/api/src/routes/admin/products.ts` -- admin API routes
 - `apps/api/src/routes/products.ts` -- storefront API routes
-- `apps/admin-v2/src/loaders/admin/products.ts` -- SSR data loaders
-- `apps/admin-v2/src/components/admin/ProductForm.tsx` -- admin form (via fetch)
-- `apps/admin-v2/src/components/admin/ProductView.tsx` -- admin product view (via loader, uses `info.title`/`info.content` for additionalInfo)
+- `apps/admin-v2/src/lib/api-query-options/products.ts` -- dashboard queries (generated SDK)
+- `apps/admin-v2/src/components/admin/ProductForm.tsx` -- admin form (generated SDK)
+- `apps/admin-v2/src/components/admin/ProductView.tsx` -- admin product view (via route query, uses `info.title`/`info.content` for additionalInfo)
 - `apps/admin-v2/src/components/admin/product-form/variants/` -- variant management (via fetch)
 - `apps/storefront/src/lib/api/products.ts` -- storefront API client (via fetch, edge-cached)
 - `apps/storefront/src/pages/products/[slug].astro` -- product detail page

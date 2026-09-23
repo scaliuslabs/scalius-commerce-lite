@@ -1755,36 +1755,35 @@ async function checkApiOps(options, {
   };
 }
 
+// The API Worker serves the dashboard SPA shell on the dashboard host, and the
+// anonymous route-guard state proves the auth gate without a browser.
 async function checkDashboard(options, { fetchImpl, logger }) {
-  const url = buildUrl(options.dashboardUrl, "/admin");
-  const response = await fetchText(url, {
+  const shellUrl = buildUrl(options.dashboardUrl, "/admin");
+  const shell = await fetchText(shellUrl, {
     fetchImpl,
     timeoutMs: options.timeoutMs,
     accept: "text/html, */*;q=0.8",
     redirect: "manual",
   });
-  requireStatus(response, "Dashboard /admin", (status) =>
-    (status >= 200 && status < 400) || status === 401 || status === 403);
-  const location = response.headers.get("location") ?? "";
-  const bodyLower = response.body.toLowerCase();
-  const gateVisible =
-    response.statusCode === 401 ||
-    response.statusCode === 403 ||
-    location.includes("/auth/login") ||
-    location.includes("/login") ||
-    bodyLower.includes("sign in") ||
-    bodyLower.includes("log in") ||
-    bodyLower.includes("login");
-  if (!gateVisible) {
-    throw new Error("Dashboard /admin did not prove an auth gate or login surface.");
+  requireStatus(shell, "Dashboard /admin", (status) => status === 200);
+  if (!shell.body.includes('name="scalius-dashboard-base-path"')) {
+    throw new Error("Dashboard /admin did not return the dashboard SPA shell.");
   }
 
-  logger?.log(`PASS dashboard: /admin returned ${response.statusCode}.`);
+  const sessionUrl = buildUrl(options.dashboardUrl, "/api/auth/dashboard-session");
+  const sessionResponse = await fetchJson(sessionUrl, { fetchImpl, timeoutMs: options.timeoutMs });
+  requireStatus(sessionResponse, "Dashboard session state", (status) => status === 200);
+  const state = requireJsonResponse(sessionResponse, "Dashboard session state");
+  if (typeof state?.adminExists !== "boolean" || state.session !== null) {
+    throw new Error("Dashboard session state did not report an anonymous, gated session.");
+  }
+
+  logger?.log(`PASS dashboard: SPA shell served and anonymous session gated (adminExists=${state.adminExists}).`);
   return {
-    url: redactUrl(url),
-    statusCode: response.statusCode,
-    durationMs: response.durationMs,
-    location: location || null,
+    url: redactUrl(shellUrl),
+    statusCode: shell.statusCode,
+    durationMs: shell.durationMs + sessionResponse.durationMs,
+    adminExists: state.adminExists,
   };
 }
 
@@ -1825,7 +1824,7 @@ async function checkInvalidAdminCookieFailure({ url, label, fetchImpl, timeoutMs
 
 async function checkInvalidAdminCookieAuth(options, { fetchImpl, logger }) {
   const apiUrl = buildUrl(options.apiBaseUrl, ADMIN_BUSINESS_SETTINGS_PATH);
-  const dashboardProxyUrl = buildUrl(options.dashboardUrl, ADMIN_BUSINESS_SETTINGS_PATH);
+  const dashboardHostUrl = buildUrl(options.dashboardUrl, ADMIN_BUSINESS_SETTINGS_PATH);
 
   const api = await checkInvalidAdminCookieFailure({
     url: apiUrl,
@@ -1833,17 +1832,17 @@ async function checkInvalidAdminCookieAuth(options, { fetchImpl, logger }) {
     fetchImpl,
     timeoutMs: options.timeoutMs,
   });
-  const dashboardProxy = await checkInvalidAdminCookieFailure({
-    url: dashboardProxyUrl,
-    label: "Dashboard proxy admin business settings invalid-cookie smoke",
+  const dashboardHost = await checkInvalidAdminCookieFailure({
+    url: dashboardHostUrl,
+    label: "Dashboard-host admin business settings invalid-cookie smoke",
     fetchImpl,
     timeoutMs: options.timeoutMs,
   });
 
   logger?.log(
-    `PASS admin auth: invalid cookie rejected by API (${api.statusCode}) and dashboard proxy (${dashboardProxy.statusCode}).`,
+    `PASS admin auth: invalid cookie rejected by API (${api.statusCode}) and dashboard host (${dashboardHost.statusCode}).`,
   );
-  return { api, dashboardProxy };
+  return { api, dashboardHost };
 }
 
 async function checkStorefrontPages(options, { fetchImpl, logger }) {

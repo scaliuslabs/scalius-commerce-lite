@@ -19,7 +19,7 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 Fetches and shapes all homepage data in **two batched D1 round-trips**.
 
 **Batch 1** (3 parallel queries):
-1. SEO settings from `siteSettings` (siteTitle, homepageTitle, homepageMetaDescription)
+1. `seo` and `homepage` settings documents (siteTitle, homepageTitle, homepageMetaDescription, homepage rails)
 2. Active hero sliders from `heroSliders` (desktop + mobile)
 3. Active collections metadata from `collections` (ordered by sortOrder)
 
@@ -43,7 +43,7 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (11 par
 5. Currency settings from `settings` table (category = "currency")
 6. Versioned semantic storefront style from `theme_settings`, with the legacy flat color row used only before the first versioned publish
 7. Media delivery host settings from `settings` table (category = "media", key = "image_optimization")
-8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
+8. Meta CAPI browser dispatch readiness from the `meta_conversions` settings document
 9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")
 10. Public business identity fields from `settings` table (category = "business_info") for OnlineStore JSON-LD
 11. Merchant return-policy schema settings from `settings` table (category = "seo", key = "return_policy")
@@ -60,7 +60,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 **Theme**: Reads storefront color overrides from the `settings` table. Returns as `{ colors: Record<string, string> }`.
 
-**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from `settings.seo/discovery` plus merchant return-policy schema settings from `settings.seo/return_policy`. Layout consumers use this to gate global OnlineStore, WebSite, and MerchantReturnPolicy JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled. Return-policy JSON-LD is emitted only when the saved policy is enabled and has schema-safe country/category/window facts or a safe same-origin/absolute policy URL.
+**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from the `seo` settings document (`discovery`) plus its merchant return-policy schema settings (`returnPolicy`). Layout consumers use this to gate global OnlineStore, WebSite, and MerchantReturnPolicy JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled. Return-policy JSON-LD is emitted only when the saved policy is enabled and has schema-safe country/category/window facts or a safe same-origin/absolute policy URL.
 
 ## API Endpoints
 
@@ -117,7 +117,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 ## Dependencies
 
-- `@scalius/database` -- `siteSettings`, `categories`, `collections`, `heroSliders`, `analytics`, `pages`, `settings`
+- `@scalius/database` -- `categories`, `collections`, `heroSliders`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
 - `@scalius/core/modules/collections/collections.service` -- `resolveCollectionProductsBatch()`
 - `nanoid` -- fallback ID generation for footer social links/menus

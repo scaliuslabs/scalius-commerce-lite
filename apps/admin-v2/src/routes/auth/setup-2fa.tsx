@@ -1,10 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorSetup } from "~/components/auth/TwoFactorSetup";
-import { getSessionInfo } from "~/lib/auth.fns";
+import { readDashboardSession } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/setup-2fa")({
   beforeLoad: async () => {
-    const session = await getSessionInfo();
+    const { session } = await readDashboardSession();
 
     // No session -> login
     if (!session) {
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/auth/setup-2fa")({
 
     // 2FA already enabled
     if (session.user.twoFactorEnabled) {
-      if (session.session.twoFactorVerified) {
+      if (session.twoFactorVerified) {
         throw redirect({ to: "/admin" });
       }
       throw redirect({ to: "/auth/two-factor" });

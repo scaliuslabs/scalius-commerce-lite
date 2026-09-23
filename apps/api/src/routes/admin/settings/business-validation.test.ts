@@ -41,8 +41,10 @@ async function save(app: ReturnType<typeof createApp>, body: Record<string, unkn
   });
 }
 
-function businessInfo() {
-  return sqlite.prepare("SELECT key, value FROM settings WHERE category = 'business_info' ORDER BY key").all();
+/** The stored business document, or null before the first save. */
+function businessInfo(): Record<string, string> | null {
+  const row = sqlite.prepare("SELECT value FROM settings WHERE category = 'business'").get() as { value: string } | undefined;
+  return row ? JSON.parse(row.value) as Record<string, string> : null;
 }
 
 describe("Business email route boundary", () => {
@@ -51,13 +53,13 @@ describe("Business email route boundary", () => {
     mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   });
 
-  it("rejects malformed email without constructing an aggregate write", async () => {
+  it("rejects malformed email without writing", async () => {
     const response = await save(createApp(), { email: "support@" });
     const body = await response.json() as { error?: { message?: string } };
 
     expect(response.status).toBe(400);
     expect(body.error?.message).toContain("valid business support email address");
-    expect(businessInfo()).toEqual([]);
+    expect(businessInfo()).toBeNull();
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
@@ -68,14 +70,16 @@ describe("Business email route boundary", () => {
     const response = await save(createApp(), body);
 
     expect(response.status).toBe(200);
-    expect(businessInfo()).toEqual([{ key: "email", value: expectedEmail }]);
+    expect(businessInfo()).toMatchObject({ email: expectedEmail, companyName: "" });
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
   });
 
-  it("leaves omitted email out of the aggregate write", async () => {
-    const response = await save(createApp(), { companyName: "Merchant" });
+  it("keeps omitted fields when saving others", async () => {
+    const app = createApp();
+    await save(app, { email: "support@example.test" });
+    const response = await save(app, { companyName: "Merchant" });
 
     expect(response.status).toBe(200);
-    expect(businessInfo()).toEqual([{ key: "company_name", value: "Merchant" }]);
+    expect(businessInfo()).toMatchObject({ companyName: "Merchant", email: "support@example.test" });
   });
 });

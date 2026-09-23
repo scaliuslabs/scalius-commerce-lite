@@ -1,12 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { redirectIfAuthenticated } from "~/lib/auth.fns";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { readDashboardSession } from "~/lib/auth-guards";
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
 export const Route = createFileRoute("/auth/forgot-password")({
-  beforeLoad: () => redirectIfAuthenticated(),
+  beforeLoad: async () => {
+    // A signed-in user only lands here to finish a required password change.
+    const { session } = await readDashboardSession();
+    if (session && !session.user.mustChangePassword) throw redirect({ to: "/admin" });
+  },
   head: () => ({
     meta: [{ title: "Forgot Password - Scalius Admin" }],
   }),

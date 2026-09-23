@@ -7,7 +7,7 @@ This note records the performance evidence and release decisions for the Commerc
 ## Architecture and performance boundary
 
 - The storefront is an Astro SSR multi-page application on Cloudflare Workers. Anonymous, canonical public reads use the native Worker cache; browser HTML remains `no-store`; cart, checkout, account, recovery, and other buyer-state routes never enter the shared cache.
-- The dashboard is a persistent TanStack Start/Router shell. TanStack Query owns remote-data freshness, route loaders warm the same keys rendered by components, and the shared data table uses server-side pagination, sorting, and filtering.
+- The dashboard is a static TanStack Router single-page app served by the API Worker. TanStack Query owns remote-data freshness, route loaders warm the same keys rendered by components, and the shared data table uses server-side pagination, sorting, and filtering.
 - The API is a Hono Worker backed by D1. Request bindings are passed from `Env`, commerce writes stay authoritative in the relational provider, and independent reads use bounded D1 batches where that removes network round trips.
 - Hosted-service and multi-merchant control-plane concerns remain outside this repository.
 
@@ -31,13 +31,13 @@ intentional compatibility lanes:
   as the programmatic compiler API required by stable `typescript-eslint` and
   `@astrojs/check`; this is the migration shape recommended by the TypeScript 7
   release itself, not a stale compiler path.
-- TanStack Start 1.168.36 through 1.168.40 and Router 1.170.19 through 1.170.23
-  produce a reproducible document hydration mismatch in this dashboard. A
-  local production-build bisect found 1.168.35/1.170.18 clean and the very next
-  pair failing; the boundary coincides with TanStack's
+- TanStack Router stays pinned at 1.170.18. With TanStack Start 1.168.36
+  through 1.168.40, Router 1.170.19 through 1.170.23 produced a reproducible
+  document hydration mismatch while the dashboard was server-rendered; the
+  boundary coincides with TanStack's
   [large lane-match loader rewrite](https://github.com/TanStack/router/commit/45c4ad8d629e291fab70c37900525449e415ffcd).
-  The newest independently clean pair is pinned until that upstream regression
-  is fixed and the same production hydration gate passes.
+  The dashboard is now a client-only SPA, so lift the pin only after the
+  dashboard browser gates pass on the newer Router.
 
 The complete peer-dependency check and both full and production-only package
 audits pass with zero findings. The storefront sets `session: false`: nothing
@@ -234,7 +234,6 @@ Retained changes:
 - Narrow persistent sidebar/header location subscriptions to pathname and isolate the orders countdown from the 1,342-line route so one-second ticks do not reconstruct the route and table.
 - Keep route-search discriminators independent from full editor models. Disposable before/after builds showed a material reduction in the root and login critical closures; the structural boundary tests, rather than untracked raw samples, are the durable regression guard.
 - Emit generated dashboard JS/CSS only beneath `/assets/immutable/` with content hashes and one-year immutable caching. HTML, source maps, and copied stable public assets are excluded by a fail-closed build gate, eliminating conditional revalidation for unchanged route chunks on repeat visits.
-- Keep the SSR and client Vite asset directories identical. The first live dashboard deploy exposed that a client-only `assetsDir` change left the SSR manifest pointing at three missing legacy URLs. The release gate now resolves every CSS/image/font URL in the server manifest against `dist/client`, so this class of deploy can no longer pass locally.
 
 TanStack Table 9.1.0 is now native rather than hidden behind the v8 compatibility
 adapter. One typed table configuration registers only pagination, selection,

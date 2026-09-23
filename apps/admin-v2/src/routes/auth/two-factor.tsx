@@ -1,14 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorForm } from "~/components/auth/TwoFactorForm";
-import { getSessionInfo } from "~/lib/auth.fns";
+import { readDashboardSession } from "~/lib/auth-guards";
 
 export const Route = createFileRoute("/auth/two-factor")({
   beforeLoad: async () => {
-    const session = await getSessionInfo();
+    const { session } = await readDashboardSession();
 
     if (session?.user) {
       // 2FA not enabled or already verified -> go to admin
-      if (!session.user.twoFactorEnabled || session.session.twoFactorVerified) {
+      if (!session.user.twoFactorEnabled || session.twoFactorVerified) {
         throw redirect({ to: "/admin" });
       }
       // User has session but needs 2FA verification -> show form

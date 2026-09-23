@@ -78,8 +78,12 @@ export function useFirebaseInit(userId: string | undefined) {
 
       let serviceWorkerRegistration: ServiceWorkerRegistration | undefined;
       if ("serviceWorker" in navigator) {
+        // The worker is a static file; the public Firebase config (never a
+        // secret) travels in its URL. vapidKey is only used on this page.
+        const { vapidKey: _vapidKey, ...workerConfig } = config;
+        const workerParams = new URLSearchParams(workerConfig);
         serviceWorkerRegistration = await navigator.serviceWorker.register(
-          withDashboardBasePath("/firebase-messaging-sw.js"),
+          `${withDashboardBasePath("/firebase-messaging-sw.js")}?${workerParams}`,
           { scope: withDashboardBasePath("/") },
         );
       }

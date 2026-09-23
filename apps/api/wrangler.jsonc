@@ -20,6 +20,19 @@
   },
   // workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
   "workers_dev": false,
+  // The dashboard SPA (built by apps/admin-v2 before this Worker; turbo.json).
+  // Hashed bundles under /assets/* are served free by the asset layer; every
+  // other path runs this Worker first, which routes the dashboard host
+  // (shell, Better Auth, runtime base path) in src/dashboard/surface.ts.
+  // The Worker picks the shell itself, so no SPA fallback: a missing chunk
+  // must stay a 404, never an HTML 200.
+  "assets": {
+    "directory": "../admin-v2/dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "run_worker_first": ["/*", "!/assets/*"]
+  },
   // Keep every console.error/warn (payment, webhook, queue, cron failures are
   // masked and rare) but drop the per-request invocation record, which is the
   // bulk of log volume. Traces stay at 1%.
@@ -34,18 +47,16 @@
       "head_sampling_rate": 0.01
     }
   },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "CHECKOUT_COORDINATOR",
-        "class_name": "CheckoutCoordinator"
-      }
-    ]
-  },
+  // Checkout commits with one guarded database batch per order; the retired
+  // checkout coordinator Durable Object is deleted with its stored state.
   "migrations": [
     {
       "tag": "checkout-coordinator-v1",
       "new_sqlite_classes": ["CheckoutCoordinator"]
+    },
+    {
+      "tag": "checkout-coordinator-v2-delete",
+      "deleted_classes": ["CheckoutCoordinator"]
     }
   ],
   "d1_databases": [

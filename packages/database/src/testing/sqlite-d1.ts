@@ -23,8 +23,8 @@ type SqliteProvider = "d1" | "turso";
 type Row = Record<string, SQLOutputValue>;
 
 const migrationDirectory = join(dirname(fileURLToPath(import.meta.url)), "../../migrations");
-const compiledMigrations = new Map<SqliteProvider, string>();
-const migratedImages = new Map<SqliteProvider, Uint8Array>();
+const compiledMigrations = new Map<string, string>();
+const migratedImages = new Map<string, Uint8Array>();
 
 /** node:sqlite serialize/deserialize (Node 24.x); older typings omit them. */
 type SerializableSqlite = DatabaseSync & {
@@ -32,19 +32,24 @@ type SerializableSqlite = DatabaseSync & {
   deserialize?: (image: Uint8Array) => void;
 };
 
-/** Every numbered migration, compiled for the provider, as one script (cached per process). */
-export function compiledMigrationSql(provider: SqliteProvider = "d1"): string {
-  const cached = compiledMigrations.get(provider);
+/**
+ * Numbered migrations compiled for the provider as one script (cached per
+ * process). `beforeMigration` stops before that file, for upgrade tests.
+ */
+export function compiledMigrationSql(provider: SqliteProvider = "d1", beforeMigration?: string): string {
+  const cacheKey = `${provider}:${beforeMigration ?? ""}`;
+  const cached = compiledMigrations.get(cacheKey);
   if (cached !== undefined) return cached;
   const sql = readdirSync(migrationDirectory)
     .filter((name) => /^\d{4}_.+\.sql$/.test(name))
+    .filter((name) => beforeMigration === undefined || name < beforeMigration)
     .sort()
     .map((name) => compileSqliteMigrationForProvider(
       readFileSync(`${migrationDirectory}/${name}`, "utf8"),
       provider,
     ))
     .join("\n");
-  compiledMigrations.set(provider, sql);
+  compiledMigrations.set(cacheKey, sql);
   return sql;
 }
 
@@ -52,21 +57,24 @@ export interface MigratedSqliteOptions {
   provider?: SqliteProvider;
   /** Foreign-key enforcement. Defaults to ON, matching D1 (and node:sqlite's own default). */
   foreignKeys?: boolean;
+  /** Apply only migrations whose file name sorts before this one (e.g. "0065_"). */
+  beforeMigration?: string;
 }
 
 /**
  * An in-memory SQLite database with the real schema applied. Migrations run
- * once per provider per process (~300 ms); later databases restore that image.
+ * once per provider (and cut-off) per process (~300 ms); later databases restore that image.
  */
 export function createMigratedSqlite(options: MigratedSqliteOptions = {}): DatabaseSync {
   const provider = options.provider ?? "d1";
+  const imageKey = `${provider}:${options.beforeMigration ?? ""}`;
   const sqlite: SerializableSqlite = new DatabaseSync(":memory:");
-  const image = migratedImages.get(provider);
+  const image = migratedImages.get(imageKey);
   if (image && sqlite.deserialize) {
     sqlite.deserialize(image);
   } else {
-    sqlite.exec(compiledMigrationSql(provider));
-    if (sqlite.serialize) migratedImages.set(provider, sqlite.serialize());
+    sqlite.exec(compiledMigrationSql(provider, options.beforeMigration));
+    if (sqlite.serialize) migratedImages.set(imageKey, sqlite.serialize());
   }
   // Table-rebuild migrations toggle the pragma themselves; set it last.
   sqlite.exec(`PRAGMA foreign_keys = ${options.foreignKeys === false ? "OFF" : "ON"}`);

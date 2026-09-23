@@ -1,9 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-  invalidateSiteSettingsCache,
-  invalidateStorefrontUrlCache,
-} from "@scalius/core/modules/settings";
-import {
   STOREFRONT_THEME_BODY_FONTS,
   STOREFRONT_THEME_BUTTON_STYLES,
   STOREFRONT_THEME_CARD_STYLES,
@@ -84,20 +80,6 @@ import {
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-async function deleteLegacyCurrencyGatewayCache(
-  kv?: KVNamespace | null,
-): Promise<void> {
-  if (!kv) return;
-  try {
-    await kv.delete("gw:currency");
-  } catch (error: unknown) {
-    console.warn(
-      "[Settings] Legacy KV delete failed for gw:currency:",
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
-
 // ─────────────────────────────────────────
 // CURRENCY
 // ─────────────────────────────────────────
@@ -191,9 +173,6 @@ app.openapi(saveCurrencyRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
   await saveCurrencySettings(db, body);
-
-  const kv = c.env.CACHE;
-  await deleteLegacyCurrencyGatewayCache(kv);
   await bumpCacheGeneration(c);
 
   return ok(c, { message: "Currency settings saved successfully" });
@@ -414,7 +393,6 @@ app.openapi(saveHeaderRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(c.env.CACHE);
   await bumpCacheGeneration(c);
   return ok(c, saved);
 });
@@ -525,7 +503,6 @@ app.openapi(saveFooterRoute, async (c) => {
     validatedConfig as unknown as Record<string, unknown>,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(c.env.CACHE);
   await bumpCacheGeneration(c);
   return ok(c, saved);
 });
@@ -1458,7 +1435,6 @@ app.openapi(saveSeoRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   await saveSeoSettings(db, data);
-  await invalidateSiteSettingsCache(c.env.CACHE);
   await bumpCacheGeneration(c);
   return ok(c, { message: "SEO settings saved successfully" });
 });
@@ -1540,12 +1516,7 @@ const saveStorefrontUrlRoute = createRoute({
 app.openapi(saveStorefrontUrlRoute, async (c) => {
   const db = c.get("db");
   const { storefrontUrl } = c.req.valid("json");
-  await saveStorefrontUrl(db, storefrontUrl);
-  const kv = c.env.CACHE;
-  await Promise.all([
-    invalidateSiteSettingsCache(kv),
-    invalidateStorefrontUrlCache(kv),
-  ]);
+  await saveStorefrontUrl(db, storefrontUrl, c.env.CACHE);
   await bumpCacheGeneration(c);
   return ok(c, { message: "Storefront URL saved successfully" });
 });
@@ -1634,7 +1605,6 @@ app.openapi(saveHomepagePresentationRoute, async (c) => {
     config,
     expectedRevision,
   );
-  await invalidateSiteSettingsCache(c.env.CACHE);
   await bumpCacheGeneration(c);
   return ok(c, saved);
 });

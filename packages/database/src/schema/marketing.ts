@@ -1,6 +1,6 @@
 // src/db/schema/marketing.ts
 // Marketing domain tables: discounts, discountProducts, discountCollections,
-// discountUsage, metaConversionsSettings, metaConversionsLogs.
+// discountUsage, metaConversionsLogs.
 
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -129,24 +129,6 @@ export const discountCustomerRedemptions = sqliteTable("discount_customer_redemp
     index("discount_customer_redemptions_customer_id_idx").on(table.customerId),
 ]);
 
-export const metaConversionsSettings = sqliteTable("meta_conversions_settings", {
-    id: text("id").primaryKey(),
-    singletonKey: text("singleton_key").notNull().default("default"),
-    pixelId: text("pixel_id"),
-    accessToken: text("access_token"),
-    testEventCode: text("test_event_code"),
-    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
-    logRetentionDays: integer("log_retention_days").notNull().default(30),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-}, (table) => [
-    uniqueIndex("meta_conversions_settings_singleton_idx").on(table.singletonKey),
-]);
-
 export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
     id: text("id").primaryKey(),
     eventId: text("event_id").notNull().unique(),
@@ -192,6 +174,5 @@ export type DiscountProduct = InferSelectModel<typeof discountProducts>;
 export type DiscountCollection = InferSelectModel<typeof discountCollections>;
 export type DiscountUsage = InferSelectModel<typeof discountUsage>;
 export type DiscountCustomerRedemption = InferSelectModel<typeof discountCustomerRedemptions>;
-export type MetaConversionsSettings = InferSelectModel<typeof metaConversionsSettings>;
 export type MetaConversionsLog = InferSelectModel<typeof metaConversionsLogs>;
 export type MetaCapiPurchaseOutbox = InferSelectModel<typeof metaCapiPurchaseOutbox>;

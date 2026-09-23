@@ -456,6 +456,27 @@
       "when": 1790180633689,
       "tag": "0064_cache_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1790189925254,
+      "tag": "0065_single_checkout_commit",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1790189925255,
+      "tag": "0066_payment_provider_refs",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1790189925256,
+      "tag": "0067_settings_documents",
+      "breakpoints": true
     }
   ]
 }

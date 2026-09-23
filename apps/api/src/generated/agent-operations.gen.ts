@@ -266,11 +266,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "paymentMethod": {
                     "type": "string",
                     "nullable": true,
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      null
-                    ]
+                    "maxLength": 64
                   },
                   "paymentStatus": {
                     "type": "string",
@@ -7852,8 +7848,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "revision": {
               "type": "integer",
-              "minimum": 0,
-              "exclusiveMinimum": true
+              "minimum": 0
             }
           },
           "required": [
@@ -7928,8 +7923,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "expectedRevision": {
                   "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
+                  "minimum": 0
                 }
               },
               "required": [
@@ -7976,8 +7970,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "revision": {
               "type": "integer",
-              "minimum": 0,
-              "exclusiveMinimum": true
+              "minimum": 0
             }
           },
           "required": [
@@ -24327,9 +24320,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "object",
               "nullable": true,
               "properties": {
-                "id": {
-                  "type": "string"
-                },
                 "pixelId": {
                   "type": "string",
                   "nullable": true
@@ -24347,39 +24337,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "logRetentionDays": {
                   "type": "number"
-                },
-                "createdAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
-                },
-                "updatedAt": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {}
-                  ]
                 }
               },
               "required": [
-                "id",
                 "pixelId",
                 "accessToken",
                 "testEventCode",
                 "isEnabled",
-                "logRetentionDays",
-                "createdAt",
-                "updatedAt"
+                "logRetentionDays"
               ]
             },
             "pixelParity": {
@@ -24833,9 +24798,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "id": {
-              "type": "string"
-            },
             "pixelId": {
               "type": "string",
               "nullable": true
@@ -24853,39 +24815,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "logRetentionDays": {
               "type": "number"
-            },
-            "createdAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
-            },
-            "updatedAt": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {}
-              ]
             }
           },
           "required": [
-            "id",
             "pixelId",
             "accessToken",
             "testEventCode",
             "isEnabled",
-            "logRetentionDays",
-            "createdAt",
-            "updatedAt"
+            "logRetentionDays"
           ]
         }
       },
@@ -30955,9 +30892,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "cod",
               "stripe",
-              "sslcommerz"
+              "sslcommerz",
+              "cod"
             ]
           },
           "required": false,
@@ -34055,9 +33992,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "cod",
               "stripe",
-              "sslcommerz"
+              "sslcommerz",
+              "cod"
             ],
             "description": "Filter by payment method"
           },
@@ -35280,9 +35217,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "cod",
               "stripe",
-              "sslcommerz"
+              "sslcommerz",
+              "cod"
             ],
             "description": "Filter by payment gateway"
           },
@@ -35474,10 +35411,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "string"
             },
             "gateway": {
-              "type": "string",
-              "enum": [
-                "sslcommerz"
-              ]
+              "type": "string"
             },
             "paymentType": {
               "type": "string",
@@ -35659,9 +35593,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "cod",
               "stripe",
-              "sslcommerz"
+              "sslcommerz",
+              "cod"
             ],
             "description": "Filter by payment gateway"
           },
@@ -36277,23 +36211,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "status": {
                     "type": "string"
                   },
-                  "stripePaymentIntentId": {
+                  "providerRef": {
                     "type": "string",
                     "nullable": true
                   },
-                  "stripeChargeId": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "sslcommerzTranId": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "sslcommerzValId": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "sslcommerzBankTranId": {
+                  "providerSecondaryRef": {
                     "type": "string",
                     "nullable": true
                   },
@@ -36345,11 +36267,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "paymentMethod",
                   "paymentType",
                   "status",
-                  "stripePaymentIntentId",
-                  "stripeChargeId",
-                  "sslcommerzTranId",
-                  "sslcommerzValId",
-                  "sslcommerzBankTranId",
+                  "providerRef",
+                  "providerSecondaryRef",
                   "codCollectedBy",
                   "codCollectedAt",
                   "codReceiptUrl",
@@ -64112,139 +64031,70 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "gateways": {
               "type": "array",
               "items": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "enum": [
-                          "stripe"
-                        ]
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "currencies": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "maxItems": 4
-                      },
-                      "publishableKey": {
-                        "type": "string"
-                      },
-                      "testMode": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name",
-                      "currencies",
-                      "publishableKey",
-                      "testMode"
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "card",
+                      "hosted",
+                      "cod"
                     ]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "enum": [
-                          "sslcommerz"
-                        ]
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "currencies": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "maxItems": 4
-                      },
-                      "sandbox": {
-                        "type": "boolean"
-                      },
-                      "testMode": {
-                        "type": "boolean"
-                      },
-                      "amountLimits": {
-                        "type": "object",
-                        "properties": {
-                          "currency": {
-                            "type": "string",
-                            "enum": [
-                              "BDT"
-                            ]
-                          },
-                          "min": {
-                            "type": "number",
-                            "minimum": 0,
-                            "exclusiveMinimum": true
-                          },
-                          "max": {
-                            "type": "number",
-                            "minimum": 0,
-                            "exclusiveMinimum": true
-                          }
-                        },
-                        "required": [
-                          "currency",
-                          "min",
-                          "max"
-                        ]
-                      }
+                  "currencies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
                     },
-                    "required": [
-                      "id",
-                      "name",
-                      "currencies",
-                      "sandbox",
-                      "testMode",
-                      "amountLimits"
-                    ]
+                    "maxItems": 4
                   },
-                  {
+                  "testMode": {
+                    "type": "boolean"
+                  },
+                  "publishableKey": {
+                    "type": "string"
+                  },
+                  "amountLimits": {
                     "type": "object",
                     "properties": {
-                      "id": {
-                        "type": "string",
-                        "enum": [
-                          "cod"
-                        ]
-                      },
-                      "name": {
+                      "currency": {
                         "type": "string"
                       },
-                      "currencies": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "maxItems": 4
+                      "min": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "max": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
                       }
                     },
                     "required": [
-                      "id",
-                      "name",
-                      "currencies"
+                      "currency",
+                      "min",
+                      "max"
                     ]
                   }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "flow",
+                  "currencies"
                 ]
               },
-              "maxItems": 3
+              "maxItems": 32
             },
             "activeDefaultMethod": {
-              "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ]
+              "type": "string"
             },
             "guestCheckoutEnabled": {
               "type": "boolean"
@@ -64772,9 +64622,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "paymentMethod": {
                   "type": "string",
                   "enum": [
-                    "cod",
                     "stripe",
-                    "sslcommerz"
+                    "sslcommerz",
+                    "cod"
                   ],
                   "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
                 }
@@ -73326,6 +73176,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "storefront.payment_reconcile.reconcile",
+    "method": "POST",
+    "pathTemplate": "/api/v1/payment/{provider}/reconcile",
+    "summary": "Verify and reconcile a gateway payment for a private order receipt",
+    "tags": [
+      "Payments"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "financial",
+    "openWorld": true,
+    "idempotency": "supported",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Provider reconciliation requires raw receipt proof; storefront.payment.status owns context-authorized safe reconciliation.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "storefront.payment_recovery.begin",
     "method": "POST",
     "pathTemplate": "/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment-recovery",
@@ -73565,12 +73449,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "storefront.payment_sslcommerz_session.session",
+    "operationId": "storefront.payment_session.session",
     "method": "POST",
-    "pathTemplate": "/api/v1/payment/sslcommerz/session",
-    "summary": "Create an SSLCommerz payment session",
+    "pathTemplate": "/api/v1/payment/{provider}/session",
+    "summary": "Create a payment session for an order with the given gateway",
     "tags": [
-      "Payments - SSLCommerz"
+      "Payments"
     ],
     "surface": "storefront",
     "exposure": "excluded",
@@ -73591,75 +73475,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "requiredClientAction": null,
     "artifactOutput": null,
     "continuationOutput": null,
-    "exclusionReason": "Requires raw receipt proof and returns hosted SSLCommerz session material; use the secure storefront payment continuation.",
-    "rbac": {
-      "type": "public"
-    },
-    "inputSchema": null,
-    "outputSchema": null
-  },
-  {
-    "operationId": "storefront.payment_stripe_intent.intent",
-    "method": "POST",
-    "pathTemplate": "/api/v1/payment/stripe/intent",
-    "summary": "Create a Stripe PaymentIntent for an order",
-    "tags": [
-      "Payments - Stripe"
-    ],
-    "surface": "storefront",
-    "exposure": "excluded",
-    "principals": [
-      "customer",
-      "visitor"
-    ],
-    "risk": "financial",
-    "openWorld": true,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": true,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "Requires raw receipt proof and returns a Stripe client secret; use the secure storefront payment continuation.",
-    "rbac": {
-      "type": "public"
-    },
-    "inputSchema": null,
-    "outputSchema": null
-  },
-  {
-    "operationId": "storefront.payment_stripe_reconcile.reconcile",
-    "method": "POST",
-    "pathTemplate": "/api/v1/payment/stripe/reconcile",
-    "summary": "Verify and reconcile a Stripe payment for a private order receipt",
-    "tags": [
-      "Payments - Stripe"
-    ],
-    "surface": "storefront",
-    "exposure": "excluded",
-    "principals": [
-      "customer",
-      "visitor"
-    ],
-    "risk": "financial",
-    "openWorld": true,
-    "idempotency": "supported",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "Provider reconciliation requires raw receipt proof; storefront.payment.status owns context-authorized safe reconciliation.",
+    "exclusionReason": "Requires raw receipt proof and returns a card client secret or hosted gateway session; use the secure storefront payment continuation.",
     "rbac": {
       "type": "public"
     },

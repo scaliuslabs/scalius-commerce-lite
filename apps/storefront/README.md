@@ -40,7 +40,7 @@ src/
     tracking/        # Analytics tracking
   pages/             # File-based routing
     api/             # Server-side proxy routes
-      checkout/      # create-order, stripe-intent, sslcommerz-session
+      checkout/      # create-order, payment-session/[gateway], stripe-reconcile
       auth/          # Auth proxy routes
       customer-auth/ # Same-origin Customer OTP auth proxy
       products/      # Product data proxy
@@ -245,9 +245,8 @@ Proxy routes handle operations that require the derived `API_TOKEN` (from `SCALI
 
 | Route | Purpose |
 |-------|---------|
-| `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates gateway sessions through gateway-specific proxies after order commit |
-| `checkout/stripe-intent.ts` | Create Stripe PaymentIntent |
-| `checkout/sslcommerz-session.ts` | Create SSLCommerz session |
+| `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates the gateway session after order commit |
+| `checkout/payment-session/[gateway].ts` | Create (or replay) a payment session for any gateway |
 | `auth/` | Auth proxy routes |
 | `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
 | `products/` | Product data proxy |
@@ -278,7 +277,7 @@ Gateway-based payment architecture:
 - `registry.ts` -- Gateway handler registry (`registerGateway` / `getGateway`)
 - `handlers/cod.ts` -- Cash on delivery
 - `handlers/stripe.ts` -- Stripe Elements
-- `handlers/sslcommerz.ts` -- SSLCommerz redirect
+- `handlers/hosted.ts` -- every hosted (redirect) gateway, e.g. SSLCommerz
 - `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, redirects stale cart snapshots back to `/cart?checkoutIssues=1`, and shows an inline recovery state when the cart-to-checkout transfer is missing or unreadable.
 - Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
 - Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available. `/order-success` reads fresh checkout config before rendering retry actions: callback-only failed/cancelled returns expose only the current hosted gateway, while durable `payment_issue` states may offer another currently visible online gateway such as SSLCommerz <-> Stripe. The API is still the authority for whether a gateway switch is allowed.

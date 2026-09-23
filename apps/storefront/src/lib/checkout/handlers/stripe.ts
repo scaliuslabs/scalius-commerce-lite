@@ -184,7 +184,7 @@ export const stripeHandler: GatewayHandler = {
             : {}),
         };
 
-        const { data: intentData, response: intentRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/stripe-intent", {
+        const { data: intentData, response: intentRes } = await fetchPaymentSessionWithProcessingRetry(() => fetch("/api/checkout/payment-session/stripe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(intentPayload),

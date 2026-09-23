@@ -172,13 +172,15 @@ interface Env {
   // Store-scoped keys (src/utils/rate-limit.ts): strict 5/60s, standard 60/60s.
   RL_STRICT: RateLimit;
   RL_STANDARD: RateLimit;
-  CHECKOUT_COORDINATOR: DurableObjectNamespace;
   EMAIL?: CloudflareSendEmailBinding;
   /** One-time WebP renditions for non-dashboard uploads (agents, CLI, URL import). */
   IMAGES?: ImagesBinding;
 
   // Producer for the single `jobs` queue (DLQ `jobs-dlq`); routed by payload.type.
   JOBS_QUEUE: Queue;
+  // The built dashboard SPA (apps/admin-v2/dist). Absent under `pnpm dev`,
+  // where Vite serves the dashboard (src/dashboard/surface.ts).
+  ASSETS?: { fetch(request: Request): Promise<Response> };
 
   // Installed secrets (`wrangler secret put`). Exactly two per deployment.
   SCALIUS_SECRET?: string;

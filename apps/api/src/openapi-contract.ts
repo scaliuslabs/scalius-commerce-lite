@@ -388,7 +388,7 @@ function documentedContractStatuses(path: string, method: string): Array<keyof t
   if (method === "post" && path === "/admin/rbac/user-roles") statuses.push("409");
   if (
     method === "post" &&
-    (path === "/payment/stripe/intent" || /^\/payment\/[^/]+\/session$/.test(path))
+    /^\/payment\/[^/]+\/session$/.test(path)
   ) {
     statuses.push("409", "503");
   }

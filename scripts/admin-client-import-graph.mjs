@@ -1,17 +1,19 @@
 import { dirname, resolve } from "node:path";
 
+const STATIC_IMPORT_PATTERN = /\b(?:import|export)(?:[^"'`]*?\bfrom\s*)?["'](\.\/[^"']+\.js)["']/g;
+
+/** Absolute paths of the sibling chunks a built chunk imports statically. */
+export function staticChunkImports(file, source) {
+  return [...source.matchAll(STATIC_IMPORT_PATTERN)].map((match) =>
+    resolve(dirname(file), match[1]));
+}
+
 export function findStaticImportCycles(sources) {
   const files = new Set(sources.keys());
   const graph = new Map();
-  const importPattern = /\b(?:import|export)(?:[^"'`]*?\bfrom\s*)?["'](\.\/[^"']+\.js)["']/g;
 
   for (const [file, source] of sources) {
-    const imports = new Set();
-    for (const match of source.matchAll(importPattern)) {
-      const importedFile = resolve(dirname(file), match[1]);
-      if (files.has(importedFile)) imports.add(importedFile);
-    }
-    graph.set(file, imports);
+    graph.set(file, new Set(staticChunkImports(file, source).filter((imported) => files.has(imported))));
   }
 
   let nextIndex = 0;

@@ -4,7 +4,7 @@ import { inspectAdminStaticAssets } from "./admin-static-assets.mjs";
 import { findStaticImportCycles } from "./admin-client-import-graph.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "..");
-const clientRoot = resolve(workspaceRoot, "apps/admin-v2/dist/client");
+const clientRoot = resolve(workspaceRoot, "apps/admin-v2/dist");
 
 // These literals belong to the relational provider implementations and must
 // never appear in browser output. Their presence means an isomorphic route or
@@ -80,7 +80,7 @@ if (!staticAssetReport.ok || !staticAssetReport.distPresent) {
   console.error("Admin static asset cache boundary failed:");
   for (const error of staticAssetReport.errors) console.error(`- ${error}`);
   if (!staticAssetReport.distPresent) {
-    console.error("- apps/admin-v2/dist/client is missing.");
+    console.error("- apps/admin-v2/dist is missing.");
   }
 } else {
   console.log(

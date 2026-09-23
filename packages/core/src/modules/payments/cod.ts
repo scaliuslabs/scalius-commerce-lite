@@ -26,13 +26,6 @@ import type {
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
-import type {
-  PaymentProvider,
-  CreatePaymentParams,
-  CreatePaymentResult,
-  RefundParams,
-  RefundResult,
-} from "./provider";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import {
@@ -502,41 +495,4 @@ export async function markCODReturned(
     const message = err instanceof Error ? err.message : "Failed to mark COD as returned";
     return { success: false, error: message };
   }
-}
-
-// ---------------------------------------------------------------------------
-// PaymentProvider implementation
-// ---------------------------------------------------------------------------
-
-/**
- * COD PaymentProvider implementation.
- *
- * COD is fundamentally different from online gateways — there's no external
- * payment session to create and no webhooks. The "payment" is the physical
- * cash collection that happens at delivery time. This provider creates a
- * COD tracking record when `createPayment` is called. Refunds must be repaid
- * outside Scalius and recorded through the explicit manual-settlement flow.
- */
-export class CODProvider implements PaymentProvider {
-  readonly type = "cod" as const;
-  readonly name = "Cash on Delivery";
-
-  constructor(private readonly db: Database) {}
-
-  async createPayment(params: CreatePaymentParams): Promise<CreatePaymentResult> {
-    await initCODTracking(this.db, { orderId: params.orderId });
-
-    return {
-      transactionId: `COD-${params.orderId}`,
-      // No clientSecret or redirectUrl — COD requires no online payment action
-    };
-  }
-
-  async createRefund(_params: RefundParams): Promise<RefundResult> {
-    throw new ValidationError(
-      "COD refunds must be repaid outside Scalius before they are recorded.",
-    );
-  }
-
-  // COD has no webhooks — verifyWebhook is intentionally not implemented
 }

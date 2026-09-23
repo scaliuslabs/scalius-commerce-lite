@@ -46,7 +46,7 @@ const paymentReadinessGateways = [
     gateway: "stripe",
     orderId: "ops006_order_stripe",
     token: "chk_ops006_stripe",
-    path: "/api/v1/payment/stripe/intent",
+    path: "/api/v1/payment/stripe/session",
   },
   {
     gateway: "sslcommerz",
@@ -124,11 +124,8 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
 export function buildFixtureSql() {
   return [
     ...otpFixtureStatements(),
-    upsertSetting("currency", "currency_code", "BDT", "string"),
-    upsertSetting("currency", "currency_symbol", "৳", "string"),
-    upsertSetting("currency", "usd_exchange_rate", "110", "number"),
-    upsertSetting("payment_methods", "enabled_methods", JSON.stringify(["cod"]), "json"),
-    upsertSetting("payment_methods", "default_method", "cod", "string"),
+    patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "110" }),
+    patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     `INSERT INTO shipping_methods (
       id, name, fee, description, is_active, sort_order, created_at, updated_at, deleted_at
     ) VALUES (
@@ -227,30 +224,16 @@ function otpFixtureStatements() {
   };
 
   return [
-    `INSERT INTO site_settings (
-      id, singleton_key, site_name, site_description, header_config, footer_config,
-      storefront_url, auth_verification_method, guest_checkout_enabled, checkout_mode,
-      partial_payment_enabled, partial_payment_amount, created_at, updated_at
-    ) VALUES (
-      'ops006_site', 'default', 'Scalius Local Smoke', 'Local disposable smoke store',
-      '{}', '{}', 'http://localhost:4322', 'email', 1, 'all', 0, 0, unixepoch(), unixepoch()
-    )
-    ON CONFLICT(singleton_key) DO UPDATE SET
-      site_name = excluded.site_name,
-      site_description = excluded.site_description,
-      header_config = excluded.header_config,
-      footer_config = excluded.footer_config,
-      storefront_url = excluded.storefront_url,
-      auth_verification_method = excluded.auth_verification_method,
-      guest_checkout_enabled = excluded.guest_checkout_enabled,
-      checkout_mode = excluded.checkout_mode,
-      partial_payment_enabled = excluded.partial_payment_enabled,
-      partial_payment_amount = excluded.partial_payment_amount,
-      updated_at = unixepoch()`,
-    upsertSetting("customer_auth", "policy", JSON.stringify(customerAuthPolicy), "json"),
-    upsertSetting("email", "email_provider", "cloudflare", "string"),
-    upsertSetting("email", "email_sender", "noreply@local.scalius.test", "string"),
-    upsertSetting("phone", "allowed_countries", JSON.stringify({ countries: ["BD"], mode: "include" }), "json"),
+    patchSettingsDocument("platform", { storefrontUrl: "http://localhost:4322" }),
+    patchSettingsDocument("checkout", {
+      guestCheckoutEnabled: true,
+      checkoutMode: "all",
+      partialPaymentEnabled: false,
+      partialPaymentAmount: 0,
+    }),
+    patchSettingsDocument("customer_auth", { authVerificationMethod: "email", policy: customerAuthPolicy }),
+    patchSettingsDocument("email", { provider: "cloudflare", sender: "noreply@local.scalius.test" }),
+    patchSettingsDocument("customer_countries", { allowedCountries: ["BD"], allowedCountriesMode: "include" }),
   ];
 }
 
@@ -421,14 +404,12 @@ export function buildPaymentReadinessFixtureSql() {
     `DELETE FROM checkout_attempts WHERE order_id IN (${orderIds})`,
     `DELETE FROM orders WHERE id IN (${orderIds})`,
     `DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')`,
-    `UPDATE site_settings SET
-      checkout_mode = 'all',
-      partial_payment_enabled = 1,
-      partial_payment_amount = ${fixture.partialPaymentAmount},
-      updated_at = unixepoch()
-      WHERE singleton_key = 'default'`,
-    upsertSetting("payment_methods", "enabled_methods", JSON.stringify(onlineMethods), "json"),
-    upsertSetting("payment_methods", "default_method", "cod", "string"),
+    patchSettingsDocument("checkout", {
+      checkoutMode: "all",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: fixture.partialPaymentAmount,
+    }),
+    patchSettingsDocument("payment_methods", { enabledMethods: onlineMethods, defaultMethod: "cod" }),
     ...paymentReadinessGateways.flatMap((gateway, index) => {
       const totalAmount = fixture.price + fixture.shippingCharge;
       const subtotalAmountMinor = fixture.price * 100;
@@ -882,13 +863,17 @@ function unwrapData(body) {
   return body?.data ?? body;
 }
 
-function upsertSetting(category, key, value, type) {
-  const id = `ops006_${category}_${key}`.replace(/[^a-zA-Z0-9_:-]/g, "_");
-  return `INSERT INTO settings (id, key, value, type, category, updated_at)
-    VALUES (${sqlString(id)}, ${sqlString(key)}, ${sqlString(value)}, ${sqlString(type)}, ${sqlString(category)}, unixepoch())
+/**
+ * Merges `patch` into one settings document (RFC 7396 merge, so arrays are
+ * replaced) and advances its revision so open admin editors see the change.
+ */
+function patchSettingsDocument(category, patch) {
+  const id = `ops006_${category}`;
+  return `INSERT INTO settings (id, key, value, type, category, revision, updated_at)
+    VALUES (${sqlString(id)}, 'document', ${sqlString(JSON.stringify(patch))}, 'json', ${sqlString(category)}, 1, unixepoch())
     ON CONFLICT(key, category) DO UPDATE SET
-      value = excluded.value,
-      type = excluded.type,
+      value = json_patch(CASE WHEN json_valid(settings.value) THEN settings.value ELSE '{}' END, excluded.value),
+      revision = settings.revision + 1,
       updated_at = unixepoch()`;
 }
 

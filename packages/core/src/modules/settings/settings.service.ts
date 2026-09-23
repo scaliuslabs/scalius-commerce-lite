@@ -1,17 +1,12 @@
 // src/modules/settings/settings.service.ts
-// Central service for all store settings: site config, storefront URLs, currency.
-// Settings that lived in shared/ or in Astro API routes are consolidated here.
+// Currency configuration and order-notification rules. Storage lives in
+// ./documents; this module owns the cross-provider rules for enabling a
+// notification channel.
 
-import { siteSettings, settings } from "@scalius/database/schema";
-import { eq, and } from "drizzle-orm";
-import { buildStorefrontPath } from "@scalius/shared/storefront-url";
-import {
-    getDecimalPlaces,
-    normalizeSupportedCurrencyCode,
-} from "@scalius/shared/currency";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
+import { isReady } from "@scalius/shared/readiness";
 import {
     describeNotificationProviderBlock,
     getNotificationProviderBlock,
@@ -20,10 +15,17 @@ import {
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness } from "../../integrations/email";
-import { isReady } from "@scalius/shared/readiness";
+import {
+    currencyDocument,
+    DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
+    DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
+    normalizeNotificationChannelRules,
+    notificationsDocument,
+    type NotificationChannelRules,
+} from "./documents";
 
 // ─────────────────────────────────────────
-// Types
+// Currency
 // ─────────────────────────────────────────
 
 export interface CurrencyConfig {
@@ -33,346 +35,50 @@ export interface CurrencyConfig {
     decimalPlaces: number;
 }
 
-const DEFAULT_CURRENCY: CurrencyConfig = {
-    code: "BDT",
-    symbol: "৳",
-    usdExchangeRate: 1,
-    decimalPlaces: 2,
-};
-
-function normalizeCurrencyConfig(value: unknown): CurrencyConfig | null {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-    const candidate = value as Record<string, unknown>;
-    const code = normalizeSupportedCurrencyCode(candidate.code);
-    const symbol = typeof candidate.symbol === "string" ? candidate.symbol.trim() : "";
-    const usdExchangeRate = typeof candidate.usdExchangeRate === "number"
-        ? candidate.usdExchangeRate
-        : Number(candidate.usdExchangeRate);
-    if (!code || !symbol || !Number.isFinite(usdExchangeRate) || usdExchangeRate <= 0) {
-        return null;
-    }
+export async function getCurrencyConfig(db: Database): Promise<CurrencyConfig> {
+    const currency = await currencyDocument.read(db);
+    const usdExchangeRate = Number(currency.usdExchangeRate);
     return {
-        code,
-        symbol,
-        usdExchangeRate,
-        decimalPlaces: getDecimalPlaces(code),
+        code: currency.currencyCode,
+        symbol: currency.currencySymbol,
+        usdExchangeRate: Number.isFinite(usdExchangeRate) && usdExchangeRate > 0 ? usdExchangeRate : 1,
+        decimalPlaces: getDecimalPlaces(currency.currencyCode),
     };
 }
 
 // ─────────────────────────────────────────
-// Storefront URL
+// Customer order notifications
 // ─────────────────────────────────────────
 
-/**
- * Fetches the storefront base URL from the DB and builds a full path.
- * Use this instead of the old shared/storefront-url getStorefrontPath().
- */
-export async function getStorefrontPath(
-    db: Database,
-    path: string,
-    kv?: KVNamespace | null,
-): Promise<string> {
-    const baseUrl = await getStorefrontBaseUrl(db, kv);
-    return buildStorefrontPath(path, baseUrl);
-}
-
-/**
- * Returns the storefront base URL from DB, with optional KV cache.
- */
-export async function getStorefrontBaseUrl(
-    db: Database,
-    kv?: KVNamespace | null,
-): Promise<string> {
-    if (kv) {
-        try {
-            const cached = await kv.get("gw:storefront_url");
-            if (cached) return cached;
-        } catch (e: unknown) {
-            console.warn("[Settings] KV read failed for storefront_url:", e instanceof Error ? e.message : e);
-        }
-    }
-
-    try {
-        const [row] = await db
-            .select({ storefrontUrl: siteSettings.storefrontUrl })
-            .from(siteSettings)
-            .limit(1);
-
-        const url = row?.storefrontUrl || "/";
-
-        if (kv) {
-            try {
-                await kv.put("gw:storefront_url", url, { expirationTtl: 300 });
-            } catch (e: unknown) {
-                console.warn("[Settings] KV write failed for storefront_url:", e instanceof Error ? e.message : e);
-            }
-        }
-
-        return url;
-    } catch (e: unknown) {
-        console.error("[Settings] DB read failed for storefront_url:", e instanceof Error ? e.message : e);
-        return "/";
-    }
-}
-
-// ─────────────────────────────────────────
-// Currency
-// ─────────────────────────────────────────
-
-/**
- * Fetches currency settings from DB, with optional KV cache.
- * This is the canonical implementation; shared/currency.ts is now a thin re-export.
- */
-export async function getCurrencyConfig(
-    db: Database,
-    kv?: KVNamespace | null,
-): Promise<CurrencyConfig> {
-    if (kv) {
-        try {
-            const cached = await kv.get("gw:currency");
-            if (cached) {
-                const normalized = normalizeCurrencyConfig(JSON.parse(cached));
-                if (normalized) return normalized;
-            }
-        } catch (e: unknown) {
-            console.warn("[Settings] KV read failed for currency:", e instanceof Error ? e.message : e);
-        }
-    }
-
-    try {
-        const rows = await db
-            .select({ key: settings.key, value: settings.value })
-            .from(settings)
-            .where(eq(settings.category, "currency"))
-            .all();
-
-        const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-        const code = normalizeSupportedCurrencyCode(map.currency_code ?? DEFAULT_CURRENCY.code);
-        const config = normalizeCurrencyConfig({
-            code,
-            symbol: map.currency_symbol ?? DEFAULT_CURRENCY.symbol,
-            usdExchangeRate: map.usd_exchange_rate ?? DEFAULT_CURRENCY.usdExchangeRate,
-        }) ?? DEFAULT_CURRENCY;
-
-        if (kv) {
-            try {
-                await kv.put("gw:currency", JSON.stringify(config), { expirationTtl: 300 });
-            } catch (e: unknown) {
-                console.warn("[Settings] KV write failed for currency:", e instanceof Error ? e.message : e);
-            }
-        }
-
-        return config;
-    } catch (e: unknown) {
-        console.error("[Settings] DB read failed for currency:", e instanceof Error ? e.message : e);
-        return DEFAULT_CURRENCY;
-    }
-}
-
-// ─────────────────────────────────────────
-// Site Settings (header, footer, theme, etc.)
-// ─────────────────────────────────────────
-
-const SITE_SETTINGS_CACHE_KEY = "gw:site_settings";
-const STOREFRONT_URL_CACHE_KEY = "gw:storefront_url";
-
-/**
- * Returns the full siteSettings row (contains headerConfig, footerConfig, storefrontUrl, etc.)
- * With optional KV cache (5-minute TTL).
- */
-export async function getSiteSettings(
-    db: Database,
-    kv?: KVNamespace | null,
-) {
-    if (kv) {
-        try {
-            const cached = await kv.get(SITE_SETTINGS_CACHE_KEY);
-            if (cached) return JSON.parse(cached);
-        } catch (e: unknown) {
-            console.warn("[Settings] KV read failed for site_settings:", e instanceof Error ? e.message : e);
-        }
-    }
-
-    const [row] = await db
-        .select()
-        .from(siteSettings)
-        .limit(1);
-
-    const result = row ?? null;
-
-    if (kv && result) {
-        try {
-            await kv.put(SITE_SETTINGS_CACHE_KEY, JSON.stringify(result), { expirationTtl: 300 });
-        } catch (e: unknown) {
-            console.warn("[Settings] KV write failed for site_settings:", e instanceof Error ? e.message : e);
-        }
-    }
-
-    return result;
-}
-
-/**
- * Invalidate the site settings KV cache.
- * Call after any admin update to the siteSettings table.
- */
-export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Promise<void> {
-    if (!kv) return;
-    try {
-        await kv.delete(SITE_SETTINGS_CACHE_KEY);
-    } catch (e: unknown) {
-        console.warn("[Settings] KV delete failed for site_settings:", e instanceof Error ? e.message : e);
-    }
-}
-
-/**
- * Invalidate the separately cached storefront URL used by gateway URL helpers.
- *
- * This is intentionally distinct from `gw:site_settings`: readers of
- * `getStorefrontBaseUrl()` do not consult the site-settings cache, so clearing
- * only that broader row can leave URL generation stale for five minutes.
- */
-export async function invalidateStorefrontUrlCache(
-    kv?: KVNamespace | null,
-): Promise<void> {
-    if (!kv) return;
-    try {
-        await kv.delete(STOREFRONT_URL_CACHE_KEY);
-    } catch (e: unknown) {
-        console.warn(
-            "[Settings] KV delete failed for storefront_url:",
-            e instanceof Error ? e.message : e,
-        );
-    }
-}
-
-// ─────────────────────────────────────────
-// Notification Channel Preferences
-// ─────────────────────────────────────────
-
-const NOTIFICATIONS_CATEGORY = "notifications";
-const VALID_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
-type NotificationChannel = (typeof VALID_NOTIFICATION_CHANNELS)[number];
+const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp"] as const;
+type CustomerChannel = (typeof CUSTOMER_CHANNELS)[number];
 
 export interface OrderWhatsAppTemplateSettings {
     templateName: string;
     languageCode: string;
 }
 
-export const DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS: OrderWhatsAppTemplateSettings = {
-    templateName: "order_status_update",
-    languageCode: "en_US",
-};
-
-function defaultCustomerNotificationChannels(type: string): string[] {
-    if (type === "support_request_submitted") return [];
-    return ["email"];
-}
-
-const DEFAULT_NOTIFICATION_CHANNELS: Record<string, string[]> = Object.fromEntries(
-    ORDER_NOTIFICATION_TYPES.map((type) => [type, defaultCustomerNotificationChannels(type)]),
-);
-
-export function resolveNotificationChannelsFromStoredValue(
-    value: string | null | undefined,
-): Record<string, string[]> {
-    if (!value) return DEFAULT_NOTIFICATION_CHANNELS;
-    try {
-        return normalizeParsedChannels(JSON.parse(value));
-    } catch {
-        return DEFAULT_NOTIFICATION_CHANNELS;
-    }
+/** Event -> enabled customer channels. */
+export async function getNotificationChannels(db: Database): Promise<NotificationChannelRules> {
+    return (await notificationsDocument.read(db)).orderChannels;
 }
 
 /**
- * Get notification channel preferences per order status.
- * Returns a map of status -> enabled channels (string arrays).
- *
- * The admin UI stores channels as boolean maps (Record<StatusKey, Record<ChannelKey, boolean>>).
- * This function normalizes stored data back to string arrays for the notification service,
- * and the API route wraps it as { channels: ... } for the UI to consume.
- */
-export async function getNotificationChannels(
-    db: Database,
-): Promise<Record<string, string[]>> {
-    const row = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(and(eq(settings.category, NOTIFICATIONS_CATEGORY), eq(settings.key, "order_channels")))
-        .get();
-
-    if (!row?.value) return DEFAULT_NOTIFICATION_CHANNELS;
-    try {
-        // Normalize: the UI may have stored boolean maps instead of string arrays.
-        return resolveNotificationChannelsFromStoredValue(row.value);
-    } catch (e: unknown) {
-        console.error("[Settings] Failed to parse notification channels JSON:", e instanceof Error ? e.message : e);
-        return DEFAULT_NOTIFICATION_CHANNELS;
-    }
-}
-
-/**
- * Normalize channel data which may be in boolean-map format (from the UI)
- * or string-array format (canonical). Returns string-array format.
- */
-function isValidNotificationChannel(channel: string): channel is NotificationChannel {
-    return (VALID_NOTIFICATION_CHANNELS as readonly string[]).includes(channel);
-}
-
-function normalizeParsedChannels(
-    parsed: unknown,
-    options: { allowUnsupported?: boolean } = {},
-): Record<string, string[]> {
-    if (!parsed || typeof parsed !== "object") return DEFAULT_NOTIFICATION_CHANNELS;
-
-    // If the UI wrapped it in { channels: ... }, unwrap
-    const record = (parsed as Record<string, unknown>).channels
-        ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
-        : parsed as Record<string, unknown>;
-
-    const result: Record<string, string[]> = { ...DEFAULT_NOTIFICATION_CHANNELS };
-    for (const [status, value] of Object.entries(record)) {
-        if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(status)) continue;
-        if (Array.isArray(value)) {
-            // Already in string array format
-            result[status] = value
-                .filter((v): v is string => typeof v === "string")
-                .filter((channel) => options.allowUnsupported || isValidNotificationChannel(channel));
-        } else if (value && typeof value === "object") {
-            // Boolean map format from UI: { email: true, sms: false, ... }
-            result[status] = Object.entries(value as Record<string, boolean>)
-                .filter(([, enabled]) => enabled)
-                .map(([channel]) => channel)
-                .filter((channel) => options.allowUnsupported || isValidNotificationChannel(channel));
-        }
-    }
-    return result;
-}
-
-/**
- * Update notification channel preferences.
- * Accepts both UI format (boolean maps, possibly wrapped in { channels: ... })
- * and canonical format (string arrays). Normalizes and validates before saving.
+ * Accepts the dashboard's boolean maps or canonical arrays. A channel can only
+ * be newly enabled while its provider is configured and not paused.
  */
 export async function updateNotificationChannels(
     db: Database,
     input: Record<string, unknown>,
     encryptionKey?: string,
     env?: Record<string, unknown>,
-): Promise<Record<string, string[]>> {
+): Promise<NotificationChannelRules> {
     const currentChannels = await getNotificationChannels(db);
-    // Normalize from whatever format the UI sends
-    const requestedChannels = normalizeParsedChannels(input, { allowUnsupported: true });
-
-    if (channelsRequirePush(requestedChannels)) {
+    const requested = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, null);
+    if (Object.values(requested).some((channels) => channels.includes("push"))) {
         throw new ValidationError("Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications.");
     }
-
-    const channels = normalizeParsedChannels(input);
-
-    // Validate channel values against the known set
-    for (const [status, statusChannels] of Object.entries(channels)) {
-        channels[status] = statusChannels.filter(isValidNotificationChannel);
-    }
+    const channels = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, CUSTOMER_CHANNELS);
 
     if (channelWasEnabled(channels, currentChannels, "email")) {
         const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
@@ -382,14 +88,8 @@ export async function updateNotificationChannels(
                     ?? "Configure a transactional email provider before enabling email order notifications.",
             );
         }
-        await assertNotificationProviderNotPaused(db, {
-            channel: "email",
-            provider: emailReadiness.provider,
-        });
-        await assertNotificationProviderNotPaused(db, {
-            channel: "email",
-            provider: "email",
-        });
+        await assertNotificationProviderNotPaused(db, { channel: "email", provider: emailReadiness.provider });
+        await assertNotificationProviderNotPaused(db, { channel: "email", provider: "email" });
     }
 
     if (channelWasEnabled(channels, currentChannels, "sms")) {
@@ -401,10 +101,7 @@ export async function updateNotificationChannels(
             );
         }
         if (smsReadiness.activeProvider) {
-            await assertNotificationProviderNotPaused(db, {
-                channel: "sms",
-                provider: smsReadiness.activeProvider,
-            });
+            await assertNotificationProviderNotPaused(db, { channel: "sms", provider: smsReadiness.activeProvider });
         }
     }
 
@@ -412,26 +109,28 @@ export async function updateNotificationChannels(
         if (!(await isWhatsAppCloudApiConfigured(db, encryptionKey))) {
             throw new ValidationError("Configure Meta WhatsApp Cloud API credentials before enabling WhatsApp order notifications.");
         }
-        await assertNotificationProviderNotPaused(db, {
-            channel: "whatsapp",
-            provider: "whatsapp",
-        });
+        await assertNotificationProviderNotPaused(db, { channel: "whatsapp", provider: "whatsapp" });
     }
 
-    // Import upsertSetting from gateway-settings (same pattern used by site-settings.service.ts)
-    const { upsertSetting } = await import("../payments/gateway-settings");
-    await upsertSetting(db, NOTIFICATIONS_CATEGORY, "order_channels", JSON.stringify(channels));
-    return channels;
+    return (await notificationsDocument.write(db, { orderChannels: channels })).value.orderChannels;
 }
 
 function channelWasEnabled(
-    channels: Record<string, string[]>,
-    currentChannels: Record<string, string[]>,
-    channel: NotificationChannel,
+    channels: NotificationChannelRules,
+    currentChannels: NotificationChannelRules,
+    channel: CustomerChannel,
 ): boolean {
     return Object.entries(channels).some(([event, selected]) =>
         selected.includes(channel) && !currentChannels[event]?.includes(channel),
     );
+}
+
+async function assertNotificationProviderNotPaused(
+    db: Database,
+    options: { channel: NotificationProviderHealthChannel; provider: string },
+): Promise<void> {
+    const block = await getNotificationProviderBlock(db, options);
+    if (block) throw new ValidationError(describeNotificationProviderBlock(block));
 }
 
 export async function isWhatsAppCloudApiConfigured(
@@ -445,166 +144,46 @@ export async function isWhatsAppCloudApiConfigured(
 export async function getOrderWhatsAppTemplateSettings(
     db: Database,
 ): Promise<OrderWhatsAppTemplateSettings> {
-    const rows = await db
-        .select({ key: settings.key, value: settings.value })
-        .from(settings)
-        .where(eq(settings.category, NOTIFICATIONS_CATEGORY));
-
-    const map = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-    return normalizeOrderWhatsAppTemplateSettings({
-        templateName: map.whatsapp_order_template_name,
-        languageCode: map.whatsapp_order_template_language,
-    });
+    const stored = await notificationsDocument.read(db);
+    return {
+        templateName: stored.whatsappOrderTemplateName,
+        languageCode: stored.whatsappOrderTemplateLanguage,
+    };
 }
 
 export async function updateOrderWhatsAppTemplateSettings(
     db: Database,
     input: Partial<OrderWhatsAppTemplateSettings>,
 ): Promise<OrderWhatsAppTemplateSettings> {
-    const normalized = normalizeOrderWhatsAppTemplateSettings(input);
-    const { upsertSetting } = await import("../payments/gateway-settings");
-    await upsertSetting(
-        db,
-        NOTIFICATIONS_CATEGORY,
-        "whatsapp_order_template_name",
-        normalized.templateName,
-    );
-    await upsertSetting(
-        db,
-        NOTIFICATIONS_CATEGORY,
-        "whatsapp_order_template_language",
-        normalized.languageCode,
-    );
-    return normalized;
-}
-
-function normalizeOrderWhatsAppTemplateSettings(
-    input: Partial<OrderWhatsAppTemplateSettings>,
-): OrderWhatsAppTemplateSettings {
-    const templateName = (input.templateName ?? DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS.templateName).trim();
-    const languageCode = (input.languageCode ?? DEFAULT_ORDER_WHATSAPP_TEMPLATE_SETTINGS.languageCode).trim();
-
+    const defaults = notificationsDocument.defaults;
+    const templateName = (input.templateName ?? defaults.whatsappOrderTemplateName).trim();
+    const languageCode = (input.languageCode ?? defaults.whatsappOrderTemplateLanguage).trim();
     if (!/^[a-z0-9_]{1,512}$/.test(templateName)) {
         throw new ValidationError("WhatsApp order template name must use lowercase letters, numbers, and underscores.");
     }
-
     if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(languageCode)) {
         throw new ValidationError("WhatsApp order template language must look like en_US or bn.");
     }
-
+    await notificationsDocument.write(db, {
+        whatsappOrderTemplateName: templateName,
+        whatsappOrderTemplateLanguage: languageCode,
+    });
     return { templateName, languageCode };
 }
 
-function channelsRequirePush(channels: Record<string, string[]>): boolean {
-    return Object.values(channels).some((statusChannels) =>
-        statusChannels.includes("push"),
-    );
-}
-
-async function assertNotificationProviderNotPaused(
-    db: Database,
-    options: {
-        channel: NotificationProviderHealthChannel;
-        provider: string;
-    },
-): Promise<void> {
-    const block = await getNotificationProviderBlock(db, options);
-    if (!block) return;
-    throw new ValidationError(describeNotificationProviderBlock(block));
-}
-
 // ─────────────────────────────────────────
-// Admin Notification Channel Preferences
+// Staff order notifications (push only)
 // ─────────────────────────────────────────
 
-const VALID_ADMIN_CHANNELS = ["push"] as const;
-
-const DEFAULT_ADMIN_CHANNELS: Record<string, string[]> = Object.fromEntries(
-    ORDER_NOTIFICATION_TYPES.map((type) => [
-        type,
-        type === "order_created" || type === "order_cancelled" || type === "support_request_submitted" ? ["push"] : [],
-    ]),
-);
-
-export function resolveAdminNotificationChannelsFromStoredValue(
-    value: string | null | undefined,
-): Record<string, string[]> {
-    if (!value) return DEFAULT_ADMIN_CHANNELS;
-    try {
-        return normalizeAdminChannels(JSON.parse(value));
-    } catch {
-        return DEFAULT_ADMIN_CHANNELS;
-    }
+/** Event -> enabled staff channels. Defaults to push for new/cancelled orders and support requests. */
+export async function getAdminNotificationChannels(db: Database): Promise<NotificationChannelRules> {
+    return (await notificationsDocument.read(db)).adminChannels;
 }
 
-/**
- * Get admin notification channel preferences per order status.
- * Returns a map of status -> enabled channels (string arrays).
- * Defaults to push enabled for order_created and order_cancelled only.
- */
-export async function getAdminNotificationChannels(
-    db: Database,
-): Promise<Record<string, string[]>> {
-    const row = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(and(eq(settings.category, NOTIFICATIONS_CATEGORY), eq(settings.key, "admin_channels")))
-        .get();
-
-    if (!row?.value) return DEFAULT_ADMIN_CHANNELS;
-    try {
-        return resolveAdminNotificationChannelsFromStoredValue(row.value);
-    } catch (e: unknown) {
-        console.error("[Settings] Failed to parse admin notification channels JSON:", e instanceof Error ? e.message : e);
-        return DEFAULT_ADMIN_CHANNELS;
-    }
-}
-
-/**
- * Normalize admin channel data which may be in boolean-map format (from the UI)
- * or string-array format (canonical). Returns string-array format.
- */
-function normalizeAdminChannels(parsed: unknown): Record<string, string[]> {
-    if (!parsed || typeof parsed !== "object") return DEFAULT_ADMIN_CHANNELS;
-
-    // If the UI wrapped it in { channels: ... }, unwrap
-    const record = (parsed as Record<string, unknown>).channels
-        ? (parsed as Record<string, unknown>).channels as Record<string, unknown>
-        : parsed as Record<string, unknown>;
-
-    const result: Record<string, string[]> = { ...DEFAULT_ADMIN_CHANNELS };
-    for (const [status, value] of Object.entries(record)) {
-        if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(status)) continue;
-        if (Array.isArray(value)) {
-            result[status] = value.filter((v): v is string => typeof v === "string");
-        } else if (value && typeof value === "object") {
-            result[status] = Object.entries(value as Record<string, boolean>)
-                .filter(([, enabled]) => enabled)
-                .map(([channel]) => channel);
-        }
-    }
-    return result;
-}
-
-/**
- * Update admin notification channel preferences.
- * Accepts both UI format (boolean maps, possibly wrapped in { channels: ... })
- * and canonical format (string arrays). Normalizes and validates before saving.
- */
 export async function updateAdminNotificationChannels(
     db: Database,
     input: Record<string, unknown>,
-): Promise<Record<string, string[]>> {
-    const channels = normalizeAdminChannels(input);
-
-    // Validate channel values against the known admin set
-    for (const [status, statusChannels] of Object.entries(channels)) {
-        channels[status] = statusChannels.filter((c) =>
-            (VALID_ADMIN_CHANNELS as readonly string[]).includes(c),
-        );
-    }
-
-    const { upsertSetting } = await import("../payments/gateway-settings");
-    await upsertSetting(db, NOTIFICATIONS_CATEGORY, "admin_channels", JSON.stringify(channels));
-    return channels;
+): Promise<NotificationChannelRules> {
+    const adminChannels = normalizeNotificationChannelRules(input, DEFAULT_ADMIN_NOTIFICATION_CHANNELS, ["push"]);
+    return (await notificationsDocument.write(db, { adminChannels })).value.adminChannels;
 }

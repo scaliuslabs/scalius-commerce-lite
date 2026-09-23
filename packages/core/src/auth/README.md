@@ -6,7 +6,7 @@ Complete authentication and role-based access control for the Scalius Commerce a
 
 ```
 Admin Auth Flow:
-  Browser --> TanStack Start route guard --> Direct D1 session-cookie lookup
+  Browser (static SPA) --> GET <dashboard>/api/auth/dashboard-session --> Direct D1 session-cookie lookup
                                              |
                                              v
                                        RBAC Permission Load
@@ -14,7 +14,7 @@ Admin Auth Flow:
                                              v
                                        Page/API Route Guard
 
-API Worker Auth Flow (service bindings / external apps):
+API Worker Auth Flow (dashboard, CLI/agents, scanner):
   Request --> Hono admin-auth middleware --> Better Auth Cookie OR Scanner Cookie
                                              |
                                              v
@@ -121,35 +121,22 @@ Customer Auth Flow (storefront):
 - **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes the affected shared KV entry.
 - **Mutation rule**: RBAC mutation routes enumerate affected users and delete their per-user KV entries. There is no isolate-local authority cache to clear.
 
-## Admin Middleware Pipeline
+## Dashboard Sign-in and Route Guards
 
-The TanStack admin app now uses route/server-function guards rather than the old Astro middleware chain.
+The dashboard is a static SPA served by the API Worker on the dashboard hostname (`apps/api/src/dashboard/`).
 
-### 1. Auth Helpers
-
-- `apps/admin-v2/src/lib/admin-session.server.ts` is the hot route-guard path. It verifies the Better Auth session cookie HMAC with the derived `BETTER_AUTH_SECRET`, then verifies the active session/user directly through D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach the D1 lookup.
-- `apps/admin-v2/src/lib/auth.server.ts` remains the Better Auth integration boundary for `/api/auth/*`, 2FA verification paths, and auth operations that need Better Auth itself. Do not pull it back into normal `/admin` guard reads.
-
-### 2. Admin Detection Guards (`apps/admin-v2/src/lib/auth.fns.ts`)
-
-- `/auth/login`: Redirects to `/auth/setup` if no admin users exist. Redirects already-authenticated users to password setup, 2FA setup, 2FA verification, or `/admin` depending on live D1 session/user state.
-- `/admin/*`: Redirects to `/auth/setup` if no admin users exist, `/auth/login` if unauthenticated, `/auth/forgot-password` if `mustChangePassword` is true, `/auth/setup-2fa` if invited-admin 2FA enrollment is still required, or `/auth/two-factor` if 2FA is enabled but the session is not verified.
-- Loads the current session through the direct D1 helper and returns serializable user/session context for TanStack route guards.
-
-### 3. RBAC Loader (`apps/admin-v2/src/middleware/rbac.server.ts`)
-
-- Returns immediately for a known super admin before importing Cloudflare env, database helpers, or core RBAC modules.
-- Loads user permissions via `getUserPermissions()` and returns permission arrays to the route context. It never seeds or repairs roles on the page-request critical path.
-- Checks `isSuperAdmin()` and `hasAdminAccess()`
-- **Page-level protection**: `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
+- `apps/api/src/dashboard/auth.ts` owns `<dashboard>/api/auth/*`: Better Auth (sign-in, 2FA, sessions, password reset, identity handoff) plus the dashboard wrappers (reset-session cookie, blocked sign-up/change-password/2FA-disable routes, trusted-device refusal, D1 retries, 2FA-verified session marking). Every request must come from the dashboard origin.
+- `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same signed-cookie D1 lookup as the admin middleware. `session.permissions` is present only once every gate (password set, 2FA enrolled when required, 2FA verified) has passed.
+- `apps/admin-v2/src/lib/auth-guards.ts` turns that state into route redirects: `/auth/setup` when no admin exists, `/auth/login` when signed out, `/auth/forgot-password` when `mustChangePassword`, `/auth/setup-2fa` when invited-admin enrollment is pending, `/auth/two-factor` when the session is not verified.
+- Page-level protection: the `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
 
 ## API Worker Auth (Hono)
 
 ### Admin Auth Middleware (`apps/api/src/middleware/admin-auth.ts`)
 
 Authentication strategy:
-1. **Better Auth session cookie** -- tries first (for dashboard frontend requests via service binding). The API middleware uses the same direct signed-cookie model as the admin route guard: verify `token.signature` with the derived `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
-2. **Scanner session cookie** -- created only after the admin worker atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
+1. **Better Auth session cookie** -- tries first (dashboard requests on the dashboard host). The same direct signed-cookie model backs the dashboard route-guard state: verify `token.signature` with the derived `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
+2. **Scanner session cookie** -- created only after `<dashboard>/api/scanner-token` atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:
 - Invited admins with `user.mustChangePassword = true` are blocked before RBAC except the own-account password-change endpoint. Normal invite onboarding uses Better Auth reset links, so the public `/api/auth/request-password-reset` + `/auth/reset-password` flow clears the flag.
@@ -255,7 +242,7 @@ Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer r
 
 2. **Permission invalidation is per user**: Cross-isolate RBAC invalidation deletes affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes enumerate affected users and clear those keys.
 
-3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The API admin-auth middleware normalizes paths by prepending `/api/v1` if not present. Admin page access is handled separately through the TanStack Start guard and `@scalius/core/auth/rbac/page-permissions`.
+3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The API admin-auth middleware normalizes paths by prepending `/api/v1` if not present. Admin page access is handled separately through the dashboard route guard and `@scalius/core/auth/rbac/page-permissions`.
 
 4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline.
 

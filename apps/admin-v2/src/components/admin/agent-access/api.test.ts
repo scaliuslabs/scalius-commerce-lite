@@ -18,7 +18,7 @@ import {
 } from "./api";
 
 // These run through the real SDK client and admin transport; only the wire is
-// stubbed (vitest runs the `vite dev` server transport to the local API port).
+// stubbed (the browser transport calls same-origin `/api/v1/*`).
 interface WireCall {
   method: string;
   path: string;
@@ -32,7 +32,7 @@ beforeEach(() => {
   calls = [];
   responses = [];
   vi.stubGlobal("fetch", vi.fn(async (target: string, init: RequestInit = {}) => {
-    const url = new URL(target);
+    const url = new URL(target, "https://dashboard.test");
     calls.push({
       method: init.method ?? "GET",
       path: `${url.pathname}${url.search}`,

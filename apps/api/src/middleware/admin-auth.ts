@@ -32,6 +32,7 @@ interface User {
     id: string;
     email: string;
     name: string;
+    image?: string | null;
     role: string;
     twoFactorEnabled?: boolean;
     mustChangePassword?: boolean;
@@ -143,7 +144,8 @@ async function getAdminSessionTokenFromCookieHeader(
     return null;
 }
 
-async function getAdminSessionFromCookieHeader(
+/** The dashboard session behind a signed Better Auth cookie, or null. */
+export async function getAdminSessionFromCookieHeader(
     db: Database,
     cookieHeader: string | undefined,
     secret: string | undefined,
@@ -159,6 +161,7 @@ async function getAdminSessionFromCookieHeader(
                 id: userTable.id,
                 email: userTable.email,
                 name: userTable.name,
+                image: userTable.image,
                 role: userTable.role,
                 isSuperAdmin: userTable.isSuperAdmin,
                 twoFactorEnabled: userTable.twoFactorEnabled,
@@ -186,6 +189,7 @@ async function getAdminSessionFromCookieHeader(
             id: row.id,
             email: row.email,
             name: row.name,
+            image: row.image,
             role: row.role ?? "user",
             isSuperAdmin: truthy(row.isSuperAdmin),
             twoFactorEnabled: truthy(row.twoFactorEnabled),

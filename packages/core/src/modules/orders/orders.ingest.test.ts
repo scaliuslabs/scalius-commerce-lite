@@ -225,6 +225,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       results: [],
       statements: items.length > 0 ? [{ kind: "inventory-guard-and-write" }] : [],
       resolveIdempotentReplay: vi.fn(async () => null),
+      availabilityTransitions: () => [],
     }));
     mocks.isInventoryReservationConflictError.mockReturnValue(false);
     mocks.prepareAtomicCheckoutAttemptCommit.mockResolvedValue({
@@ -537,6 +538,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       customerId: "cust_existing",
       accountOwnerCustomerId: "cust_existing",
       alreadyCommitted: true,
+      availabilityTransitionVariantIds: [],
     });
     expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
     expect(mocks.prepareStockReservationBatch).not.toHaveBeenCalled();
@@ -586,6 +588,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       results: [],
       statements: [inventoryStatement],
       resolveIdempotentReplay: vi.fn(async () => null),
+      availabilityTransitions: () => [],
     });
     mocks.safeBatch.mockResolvedValue([]);
 
@@ -651,6 +654,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       results: [],
       statements: [inventoryStatement],
       resolveIdempotentReplay: vi.fn(async () => null),
+      availabilityTransitions: () => [],
     });
     mocks.prepareAtomicCheckoutAttemptCommit.mockResolvedValue({
       writesBeforeOrder: [attemptWrite, attemptGuard],
@@ -697,6 +701,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       results: [],
       statements: [{ kind: "fresh-inventory-write" }],
       resolveIdempotentReplay: vi.fn(async () => null),
+      availabilityTransitions: () => [],
     });
     mocks.safeBatch.mockRejectedValue(new Error("response lost after commit"));
 
@@ -717,6 +722,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     expect(result).toMatchObject({
       orderId: "order_discount",
       alreadyCommitted: true,
+      availabilityTransitionVariantIds: [],
     });
   });
 
@@ -784,6 +790,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       ],
       statements: [],
       resolveIdempotentReplay: vi.fn(async () => null),
+      availabilityTransitions: () => [],
     });
 
     const result = commitStorefrontOrderPayload(db, createPayload());

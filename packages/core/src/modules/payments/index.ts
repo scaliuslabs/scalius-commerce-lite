@@ -1,67 +1,30 @@
 // src/modules/payments/index.ts
-// Barrel exports for the payments module.
+// Barrel exports for the payments module. Gateway adapters live in
+// ./gateways (port.ts, one file per provider, registry.ts).
 
-// --- Provider interface & types ---
+export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {
-  PaymentProvider,
-  CreatePaymentParams,
-  CreatePaymentResult,
-  RefundParams,
-  RefundResult,
-  WebhookPayload,
-} from "./provider";
-
-// --- Factory ---
-export { createPaymentProvider } from "./factory";
-export type { GatewayConfig } from "./factory";
-
-// --- Provider implementations ---
-export { StripeProvider } from "./stripe";
-export { SSLCommerzProvider } from "./sslcommerz";
-export { CODProvider } from "./cod";
-
-// --- Domain types ---
-export type {
+  GatewayCheckoutFlow,
+  GatewayReadiness,
+  PaymentEvent,
   PaymentGateway,
-  PaymentType,
-  PaymentResult,
-  CreateStripePaymentIntentParams,
-  StripePaymentIntentResult,
-  InitSSLCommerzSessionParams,
-  SSLCommerzSessionResult,
-  SSLCommerzIPNPayload,
-  SSLCommerzValidationResult,
-  InitCODTrackingParams,
-  RecordCODCollectionParams,
-  RecordCODFailureParams,
-  ProcessPaymentParams,
-} from "./types";
-
-// --- Gateway registry ---
+} from "./gateways/port";
 export {
-  registerGateway,
-  getRegisteredGateways,
-  getGatewayMeta,
-} from "./gateway-registry";
-export type { GatewayMeta } from "./gateway-registry";
-
-// --- Store-currency eligibility ---
-export {
-  PAYMENT_GATEWAY_IDS,
-  filterPaymentGatewayIdsForCurrency,
-  getPaymentGatewayCurrencyEligibilityIssue,
-  isPaymentGatewayCurrencyEligible,
-  isPaymentGatewayId,
-} from "./gateway-currency-policy";
-export type { PaymentGatewayId } from "./gateway-currency-policy";
+  COD_PAYMENT_METHOD,
+  getPaymentGateway,
+  isOnlinePaymentMethod,
+  isPaymentMethodId,
+  listPaymentGateways,
+  listPaymentMethodIds,
+  paymentMethodLabel,
+  requirePaymentGateway,
+} from "./gateways/registry";
 
 // --- Gateway settings ---
 export {
   getStripeSettings,
   getSSLCommerzSettings,
   getActivePaymentMethods,
-  upsertSetting,
-  upsertEncryptedSetting,
 } from "./gateway-settings";
 export type {
   StripeSettings,
@@ -69,22 +32,10 @@ export type {
   PaymentMethodsConfig,
 } from "./gateway-settings";
 
-// --- Legacy function exports (backward compatibility) ---
-export {
-  createPaymentIntent,
-  capturePaymentIntent,
-  cancelPaymentIntent,
-  createRefund,
-  retrieveStripeRefund,
-  listStripeRefundsForCharge,
-  verifyStripeWebhook,
-  getStripe,
-} from "./stripe";
-export { initSSLCommerzSession, validateSSLCommerzIPN, validateSSLCommerzPayment, initiateSSLCommerzRefund, querySSLCommerzRefundStatus } from "./sslcommerz";
 export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---
-export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory, recordWebhookEvent } from "./process-payment";
+export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "./process-payment";
 export {
   assertOrderPaymentCurrency,
   createOrderCurrencySnapshot,
@@ -117,17 +68,17 @@ export type {
 } from "./refund-service";
 export {
   reconcileDueRefundAttempts,
+  reconcileExternalRefundWebhooks,
   reconcileRefundAttemptForOrder,
   reconcileRefundAttemptById,
-  reconcileStripeExternalRefundWebhooks,
 } from "./refund-reconciliation";
 export type {
+  ExternalRefundWebhookReconciliationOptions,
+  ExternalRefundWebhookReconciliationResult,
   ManualRefundAttemptReconciliationReason,
   ManualRefundAttemptReconciliationResult,
   RefundReconciliationOptions,
   RefundReconciliationResult,
-  StripeExternalRefundWebhookReconciliationOptions,
-  StripeExternalRefundWebhookReconciliationResult,
 } from "./refund-reconciliation";
 export {
   ACTIVE_REFUND_ATTEMPT_STATUSES,
@@ -171,7 +122,6 @@ export {
 } from "./payment-session-attempts";
 export type {
   AdminPaymentSessionAttemptView,
-  PaymentSessionGateway,
   PaymentSessionAttemptIdentity,
   ClaimPaymentSessionAttemptInput,
   ClaimedPaymentSessionAttempt,

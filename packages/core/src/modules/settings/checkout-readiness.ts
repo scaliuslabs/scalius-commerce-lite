@@ -1,8 +1,7 @@
 import type { Database } from "@scalius/database/client";
-import { deliveryLocations, settings, shippingMethods, siteSettings } from "@scalius/database/schema";
+import { deliveryLocations, shippingMethods } from "@scalius/database/schema";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { normalizeCustomerAuthPolicy } from "@scalius/shared/customer-auth-policy";
 import {
     isReady,
     mergeReadiness,
@@ -14,6 +13,8 @@ import {
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import { checkoutDocument, customerAuthDocument } from "./documents";
+import { selectSettingsDocuments } from "./settings-store";
 
 /**
  * Checkout readiness speaks the one shared vocabulary (`status` + `issues`)
@@ -170,16 +171,10 @@ export async function getCustomerSignInReadiness(
     db: Database,
     options: CheckoutReadinessOptions,
 ): Promise<CustomerSignInReadiness> {
-    const site = await db
-        .select({
-            guestCheckoutEnabled: siteSettings.guestCheckoutEnabled,
-            authVerificationMethod: siteSettings.authVerificationMethod,
-        })
-        .from(siteSettings)
-        .limit(1)
-        .get();
+    const rows = await selectSettingsDocuments(db, [checkoutDocument, customerAuthDocument]);
+    const checkout = await checkoutDocument.fromRows(rows);
     const customerSignInRequired = options.customerSignInRequiredOverride
-        ?? site?.guestCheckoutEnabled === false;
+        ?? !checkout.value.guestCheckoutEnabled;
     if (!customerSignInRequired && !options.inspectOptionalCustomerSignIn) {
         return customerSignInReadiness(false, true);
     }
@@ -187,15 +182,7 @@ export async function getCustomerSignInReadiness(
         return customerSignInReadiness(customerSignInRequired, false);
     }
 
-    const policyRow = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(and(eq(settings.category, "customer_auth"), eq(settings.key, "policy")))
-        .get();
-    const policy = normalizeCustomerAuthPolicy(
-        parseCustomerAuthPolicy(policyRow?.value),
-        site?.authVerificationMethod,
-    );
+    const { policy } = (await customerAuthDocument.fromRows(rows)).value;
 
     for (const channel of policy.otpChannels) {
         try {
@@ -225,13 +212,4 @@ export async function getCustomerSignInReadiness(
     }
 
     return customerSignInReadiness(customerSignInRequired, false);
-}
-
-function parseCustomerAuthPolicy(value: string | null | undefined): unknown {
-    if (!value) return undefined;
-    try {
-        return JSON.parse(value) as unknown;
-    } catch {
-        return undefined;
-    }
 }

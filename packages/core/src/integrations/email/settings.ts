@@ -1,12 +1,8 @@
 // src/integrations/email/settings.ts
 // Runtime settings for transactional email providers.
 
-import { z } from "zod";
 import type { Database } from "@scalius/database/client";
-import { settings as settingsTable } from "@scalius/database/schema";
-import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
-import { defineSettingsDocument } from "@scalius/core/modules/settings/settings-store";
-import { eq } from "drizzle-orm";
+import { emailDocument } from "@scalius/core/modules/settings/documents";
 import {
   readiness,
   readinessIssue,
@@ -18,8 +14,6 @@ import type { EmailRuntimeContext, EmailRuntimeSettings } from "./provider";
 const DEFAULT_FROM = "noreply@example.com";
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const EMAIL_SENDER_MAX_LENGTH = 320;
-const EMAIL_API_KEY_MAX_LENGTH = 512;
 
 /** Stable issue codes for email delivery setup. */
 export const EMAIL_READINESS_CODES = {
@@ -69,74 +63,6 @@ async function resolveDb(context?: EmailRuntimeContext): Promise<Database> {
   return getDb(context?.env);
 }
 
-/** Storage keys used before the settings document existed. */
-const LEGACY_EMAIL_SETTING_KEYS = {
-  provider: "email_provider",
-  sender: "email_sender",
-  resendApiKey: "resend_api_key",
-} as const;
-
-export interface EmailSettingsDocument extends Record<string, unknown> {
-  /** Empty means "not explicitly chosen"; the provider is then inferred. */
-  provider: "" | "cloudflare" | "resend";
-  sender: string;
-  resendApiKey: string;
-}
-
-/**
- * Transactional email provider settings. The Resend API key is the only
- * secret, so the document is never cached; readiness and delivery both read
- * it through the strict credential reader.
- */
-export const emailSettingsDocument = defineSettingsDocument<EmailSettingsDocument>({
-  category: "email",
-  key: "config",
-  label: "email provider",
-  schema: z.object({
-    provider: z.enum(["", "cloudflare", "resend"]),
-    sender: z.string().max(EMAIL_SENDER_MAX_LENGTH),
-    resendApiKey: z.string().max(EMAIL_API_KEY_MAX_LENGTH),
-  }),
-  defaults: { provider: "", sender: "", resendApiKey: "" },
-  secretFields: ["resendApiKey"],
-  // Email readiness is projected into the cached public checkout config.
-  legacy: {
-    async read(db, ctx) {
-      const rows = await db
-        .select({ key: settingsTable.key, value: settingsTable.value })
-        .from(settingsTable)
-        .where(eq(settingsTable.category, "email"))
-        .all();
-      const values = new Map(rows.map((row) => [row.key, row.value]));
-      const legacyKeys = Object.values(LEGACY_EMAIL_SETTING_KEYS);
-      if (!legacyKeys.some((key) => values.has(key))) return null;
-
-      const storedProvider = values.get(LEGACY_EMAIL_SETTING_KEYS.provider);
-      const storedApiKey = values.get(LEGACY_EMAIL_SETTING_KEYS.resendApiKey) || "";
-      const resolved = await readStoredCredentialStrict(
-        storedApiKey,
-        ctx.encryptionKey,
-        "Resend API key",
-      );
-
-      return {
-        document: {
-          provider:
-            storedProvider === "cloudflare" || storedProvider === "resend"
-              ? storedProvider
-              : "",
-          sender: (values.get(LEGACY_EMAIL_SETTING_KEYS.sender) || "").trim(),
-          resendApiKey: resolved.error ? "" : resolved.value,
-        },
-        // A key that cannot be read must not be replaced by an empty document.
-        migrate: !resolved.error && Boolean(ctx.encryptionKey || !storedApiKey),
-        secretErrors: resolved.error ? { resendApiKey: resolved.error } : {},
-        secretsConfigured: { resendApiKey: !resolved.error && Boolean(resolved.value) },
-      };
-    },
-  },
-});
-
 export async function getEmailRuntimeSettings(
   context?: EmailRuntimeContext,
 ): Promise<EmailRuntimeSettings> {
@@ -144,7 +70,7 @@ export async function getEmailRuntimeSettings(
 
   try {
     const db = await resolveDb(context);
-    const stored = await emailSettingsDocument.readDetailed(db, {
+    const stored = await emailDocument.readDetailed(db, {
       encryptionKey: encryptionKeyFromContext(context),
     });
 

@@ -3,7 +3,7 @@ import {
   isBatchGuardError,
   type Database,
 } from "@scalius/database/client";
-import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
+import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateOrderId } from "@scalius/shared/order-utils";
@@ -49,7 +49,7 @@ const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
 const CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT = "CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT";
 
-type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect;
+export type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect;
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 export interface PreparedAtomicCheckoutAttemptCommit {
@@ -110,37 +110,25 @@ export async function resolveExistingCheckoutAttempt<TResponse>(
   identity: CheckoutAttemptIdentity,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<ExistingCheckoutAttemptResult<TResponse> | null> {
-  const existing = await selectCheckoutAttemptByKey(db, identity.requestKey);
+  return resolveCheckoutAttemptRow<TResponse>(
+    await selectCheckoutAttemptByKey(db, identity.requestKey).get(),
+    identity,
+    nowSeconds,
+  );
+}
+
+/** Replay / 409 / retry decision for a row read by `selectCheckoutAttemptByKey`. */
+export function resolveCheckoutAttemptRow<TResponse>(
+  existing: CheckoutAttemptRow | undefined,
+  identity: CheckoutAttemptIdentity,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): ExistingCheckoutAttemptResult<TResponse> | null {
   assertSameCheckoutRequest(existing, identity);
 
   const replay = replayCheckoutAttempt<TResponse>(existing);
   if (replay) return replay;
 
-  if (!existing) {
-    const aggregate = await db
-      .select({
-        requestHash: orders.checkoutRequestHash,
-        responsePayload: orders.checkoutResponsePayload,
-      })
-      .from(orders)
-      .where(eq(orders.checkoutRequestKey, identity.requestKey))
-      .get();
-    if (!aggregate) return null;
-    if (aggregate.requestHash !== identity.requestHash) {
-      throw new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again.");
-    }
-    if (!aggregate.responsePayload) {
-      throw new ServiceUnavailableError("Checkout replay payload is unavailable. Please try again.");
-    }
-    try {
-      return {
-        status: "replay",
-        response: JSON.parse(aggregate.responsePayload) as TResponse,
-      };
-    } catch {
-      throw new ServiceUnavailableError("Checkout replay payload is unreadable. Please try again.");
-    }
-  }
+  if (!existing) return null;
   if (isRetryableCheckoutAttempt(existing, nowSeconds)) {
     return {
       status: "retry",
@@ -265,15 +253,12 @@ export function isCheckoutAttemptCommitConflictError(error: unknown): boolean {
   return isBatchGuardError(error, CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT);
 }
 
-async function selectCheckoutAttemptByKey(
-  db: Database,
-  requestKey: string,
-): Promise<CheckoutAttemptRow | undefined> {
+/** The idempotency row for a request key; composable into a read batch. */
+export function selectCheckoutAttemptByKey(db: Database, requestKey: string) {
   return db
     .select()
     .from(checkoutAttempts)
-    .where(eq(checkoutAttempts.requestKey, requestKey))
-    .get();
+    .where(eq(checkoutAttempts.requestKey, requestKey));
 }
 
 function replayCheckoutAttempt<TResponse>(

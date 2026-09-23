@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { createRouter, Link } from "@tanstack/react-router";
-import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import { createAdminQueryClient } from "./lib/admin-query-client";
 import {
@@ -91,9 +91,12 @@ function DefaultErrorComponent({ error }: { error: Error }) {
 export function getRouter() {
   const queryClient = createAdminQueryClient();
 
-  const router = createRouter({
+  return createRouter({
     routeTree,
     context: { queryClient },
+    // Runtime dashboard base path (Platform Dashboard URL), read from the
+    // shell's meta tag; "" at a host root.
+    basepath: getDashboardBasePath() || "/",
     scrollRestoration: true,
     getScrollRestorationKey: getAdminScrollRestorationKey,
     scrollToTopSelectors: ["#admin-main-scroll"],
@@ -105,22 +108,10 @@ export function getRouter() {
     defaultPendingMs: Number.POSITIVE_INFINITY,
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
+    Wrap: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
   });
-
-  // The dashboard base path is a runtime Platform setting. TanStack Start
-  // re-applies its build-time basepath ("/") on every `router.update` during
-  // SSR and hydration, so the runtime value is pinned through that seam.
-  const basepath = getDashboardBasePath();
-  if (basepath) {
-    const update = router.update;
-    router.update = (options) => update({ ...options, basepath });
-    router.update({ ...router.options, basepath });
-  }
-
-  // SSR dehydration/hydration for React Query — handles streaming automatically
-  setupRouterSsrQueryIntegration({ router, queryClient });
-
-  return router;
 }
 
 declare module "@tanstack/react-router" {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { ValidationError } from "@scalius/core/errors";
 
@@ -7,7 +8,6 @@ const mocks = vi.hoisted(() => ({
     getSmsProviderReadiness: vi.fn(),
     getWhatsAppCloudApiSettings: vi.fn(),
     getNotificationProviderBlock: vi.fn(),
-    upsertSetting: vi.fn(),
 }));
 
 vi.mock("../../integrations/email", () => ({
@@ -28,64 +28,35 @@ vi.mock("../notifications/notification-provider-health", () => ({
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
-vi.mock("../payments/gateway-settings", () => ({
-    upsertSetting: mocks.upsertSetting,
-}));
-
 import {
     getAdminNotificationChannels,
     getCurrencyConfig,
     getNotificationChannels,
-    invalidateStorefrontUrlCache,
     updateNotificationChannels,
 } from "./settings.service";
 
-describe("storefront URL cache invalidation", () => {
-    it("clears the dedicated gateway URL cache key", async () => {
-        const kv = { delete: vi.fn(async () => undefined) };
+type Harness = ReturnType<typeof createSqliteD1Database>;
 
-        await invalidateStorefrontUrlCache(kv as never);
+function storeDocument(harness: Harness, category: string, value: unknown) {
+    harness.sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES (?, 'document', ?, 'json', ?)")
+        .run(`${category}_doc`, JSON.stringify(value), category);
+    return harness.db;
+}
 
-        expect(kv.delete).toHaveBeenCalledWith("gw:storefront_url");
-    });
-
-    it("keeps the committed settings write successful when cache cleanup fails", async () => {
-        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-        const kv = { delete: vi.fn(async () => { throw new Error("KV unavailable"); }) };
-
-        await expect(invalidateStorefrontUrlCache(kv as never)).resolves.toBeUndefined();
-        expect(warn).toHaveBeenCalledWith(
-            "[Settings] KV delete failed for storefront_url:",
-            "KV unavailable",
-        );
-        warn.mockRestore();
-    });
-});
-
-function createCurrencyConfigDb(values: Record<string, string>) {
-    return {
-        select: vi.fn(() => ({
-            from: vi.fn(() => ({
-                where: vi.fn(() => ({
-                    all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
-                        key,
-                        value,
-                    }))),
-                })),
-            })),
-        })),
-    };
+function storedOrderChannels(harness: Harness): Record<string, string[]> | null {
+    const row = harness.sqlite.prepare("SELECT value FROM settings WHERE category = 'notifications'").get() as { value: string } | undefined;
+    return row ? JSON.parse(row.value).orderChannels : null;
 }
 
 describe("buyer currency config", () => {
     it("normalizes a supported persisted code and derives its precision", async () => {
-        const db = createCurrencyConfigDb({
-            currency_code: " jpy ",
-            currency_symbol: "¥",
-            usd_exchange_rate: "150",
+        const db = storeDocument(createSqliteD1Database(), "currency", {
+            currencyCode: " jpy ",
+            currencySymbol: "¥",
+            usdExchangeRate: "150",
         });
 
-        await expect(getCurrencyConfig(db as never)).resolves.toEqual({
+        await expect(getCurrencyConfig(db)).resolves.toEqual({
             code: "JPY",
             symbol: "¥",
             usdExchangeRate: 150,
@@ -94,66 +65,25 @@ describe("buyer currency config", () => {
     });
 
     it("fails closed to BDT when the persisted code is unsupported", async () => {
-        const db = createCurrencyConfigDb({
-            currency_code: "USDT",
-            currency_symbol: "₿",
-            usd_exchange_rate: "999",
+        const db = storeDocument(createSqliteD1Database(), "currency", {
+            currencyCode: "USDT",
+            currencySymbol: "₿",
+            usdExchangeRate: "999",
         });
 
-        await expect(getCurrencyConfig(db as never)).resolves.toEqual({
+        await expect(getCurrencyConfig(db)).resolves.toEqual({
             code: "BDT",
             symbol: "৳",
             usdExchangeRate: 1,
             decimalPlaces: 2,
         });
     });
-
-    it("ignores an invalid cached config and reloads a valid DB value", async () => {
-        const db = createCurrencyConfigDb({
-            currency_code: "USD",
-            currency_symbol: "$",
-            usd_exchange_rate: "1",
-        });
-        const kv = {
-            get: vi.fn(async () => JSON.stringify({
-                code: "USDT",
-                symbol: "₿",
-                usdExchangeRate: 1,
-                decimalPlaces: 2,
-            })),
-            put: vi.fn(async () => undefined),
-        };
-
-        await expect(getCurrencyConfig(db as never, kv as never)).resolves.toEqual({
-            code: "USD",
-            symbol: "$",
-            usdExchangeRate: 1,
-            decimalPlaces: 2,
-        });
-        expect(db.select).toHaveBeenCalledOnce();
-        expect(kv.put).toHaveBeenCalledWith(
-            "gw:currency",
-            JSON.stringify({
-                code: "USD",
-                symbol: "$",
-                usdExchangeRate: 1,
-                decimalPlaces: 2,
-            }),
-            { expirationTtl: 300 },
-        );
-    });
 });
 
-function createSettingsDb(rowValue?: string) {
-    return {
-        select: vi.fn(() => ({
-            from: vi.fn(() => ({
-                where: vi.fn(() => ({
-                    get: vi.fn(async () => rowValue ? { value: rowValue } : null),
-                })),
-            })),
-        })),
-    };
+function createSettingsDb(orderChannels?: string): Harness {
+    const harness = createSqliteD1Database();
+    if (orderChannels) storeDocument(harness, "notifications", { orderChannels: JSON.parse(orderChannels) });
+    return harness;
 }
 
 describe("notification channel settings", () => {
@@ -174,7 +104,6 @@ describe("notification channel settings", () => {
             phoneNumberId: "12345",
         });
         mocks.getNotificationProviderBlock.mockResolvedValue(null);
-        mocks.upsertSetting.mockResolvedValue(undefined);
     });
 
     it("strips legacy customer push from reads", async () => {
@@ -182,7 +111,7 @@ describe("notification channel settings", () => {
             order_created: ["email", "push"],
         }));
 
-        await expect(getNotificationChannels(db as never)).resolves.toMatchObject({
+        await expect(getNotificationChannels(db.db)).resolves.toMatchObject({
             order_created: ["email"],
         });
     });
@@ -192,7 +121,7 @@ describe("notification channel settings", () => {
             order_created: ["email"],
         }));
 
-        await expect(getNotificationChannels(db as never)).resolves.toMatchObject({
+        await expect(getNotificationChannels(db.db)).resolves.toMatchObject({
             order_created: ["email"],
             refund_processing: ["email"],
             refund_failed: ["email"],
@@ -206,7 +135,7 @@ describe("notification channel settings", () => {
     it("defaults admin push to new order, cancellation, and support request submissions only", async () => {
         const db = createSettingsDb();
 
-        await expect(getAdminNotificationChannels(db as never)).resolves.toMatchObject({
+        await expect(getAdminNotificationChannels(db.db)).resolves.toMatchObject({
             order_created: ["push"],
             order_cancelled: ["push"],
             support_request_submitted: ["push"],
@@ -217,8 +146,9 @@ describe("notification channel settings", () => {
 
     it("rejects customer push notification saves until customer push exists end to end", async () => {
         const db = createSettingsDb();
+        const before = storedOrderChannels(db);
 
-        await expect(updateNotificationChannels(db as never, {
+        await expect(updateNotificationChannels(db.db, {
             order_created: ["email", "push"],
         })).rejects.toMatchObject({
             name: "ValidationError",
@@ -226,7 +156,7 @@ describe("notification channel settings", () => {
         });
 
         expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 
     it("rejects SMS notification saves before the active provider is ready", async () => {
@@ -239,15 +169,16 @@ describe("notification channel settings", () => {
             activeProvider: null,
         });
         const db = createSettingsDb();
+        const before = storedOrderChannels(db);
 
-        const promise = updateNotificationChannels(db as never, {
+        const promise = updateNotificationChannels(db.db, {
             order_created: ["email", "sms"],
         }, "credential-key");
 
         await expect(promise).rejects.toBeInstanceOf(ValidationError);
         await expect(promise).rejects.toThrow("Configure an active SMS provider before enabling SMS order notifications.");
 
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 
     it("rejects email notification saves before the email provider is ready", async () => {
@@ -260,33 +191,27 @@ describe("notification channel settings", () => {
             provider: "cloudflare",
         });
         const db = createSettingsDb(JSON.stringify({ order_created: [] }));
+        const before = storedOrderChannels(db);
 
-        const promise = updateNotificationChannels(db as never, {
+        const promise = updateNotificationChannels(db.db, {
             order_created: ["email"],
         }, "credential-key");
 
         await expect(promise).rejects.toBeInstanceOf(ValidationError);
         await expect(promise).rejects.toThrow("Configure Cloudflare Email or save a Resend API key before enabling email delivery.");
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 
     it("saves SMS notifications when the active provider is ready", async () => {
         const db = createSettingsDb();
 
-        const result = await updateNotificationChannels(db as never, {
+        const result = await updateNotificationChannels(db.db, {
             order_created: ["email", "sms"],
         }, "credential-key");
 
         expect(result.order_created).toEqual(["email", "sms"]);
-        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db, "credential-key");
-        const [, category, key, value] = mocks.upsertSetting.mock.calls[0] ?? [];
-        expect({ category, key, channels: JSON.parse(String(value)) }).toMatchObject({
-            category: "notifications",
-            key: "order_channels",
-            channels: {
-                order_created: ["email", "sms"],
-            },
-        });
+        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db.db, "credential-key");
+        expect(storedOrderChannels(db)).toMatchObject({ order_created: ["email", "sms"] });
     });
 
     it("rejects SMS notification saves while the active provider is paused", async () => {
@@ -301,14 +226,15 @@ describe("notification channel settings", () => {
                 : null,
         );
         const db = createSettingsDb();
+        const before = storedOrderChannels(db);
 
-        await expect(updateNotificationChannels(db as never, {
+        await expect(updateNotificationChannels(db.db, {
             order_created: ["sms"],
         }, "credential-key")).rejects.toMatchObject({
             name: "ValidationError",
             message: "sms/gennet paused",
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 
     it("allows unrelated changes when a previously enabled SMS provider is paused", async () => {
@@ -320,7 +246,7 @@ describe("notification channel settings", () => {
         const saved = JSON.stringify({ order_created: ["sms"] });
         const db = createSettingsDb(saved);
 
-        await expect(updateNotificationChannels(db as never, {
+        await expect(updateNotificationChannels(db.db, {
             order_created: ["sms"],
             order_confirmed: ["email"],
         }, "credential-key")).resolves.toMatchObject({
@@ -329,7 +255,7 @@ describe("notification channel settings", () => {
         });
 
         expect(mocks.getSmsProviderReadiness).not.toHaveBeenCalled();
-        expect(mocks.upsertSetting).toHaveBeenCalledOnce();
+        expect(storedOrderChannels(db)).toMatchObject({ order_created: ["sms"], order_confirmed: ["email"] });
     });
 
     it("still rejects newly enabling a paused SMS provider", async () => {
@@ -339,14 +265,15 @@ describe("notification channel settings", () => {
                 : null,
         );
         const db = createSettingsDb(JSON.stringify({ order_created: [] }));
+        const before = storedOrderChannels(db);
 
-        await expect(updateNotificationChannels(db as never, {
+        await expect(updateNotificationChannels(db.db, {
             order_created: ["sms"],
         }, "credential-key")).rejects.toMatchObject({
             name: "ValidationError",
             message: "sms/gennet paused",
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 
     it("rejects WhatsApp notification saves while Meta delivery is paused", async () => {
@@ -361,13 +288,14 @@ describe("notification channel settings", () => {
                 : null,
         );
         const db = createSettingsDb();
+        const before = storedOrderChannels(db);
 
-        await expect(updateNotificationChannels(db as never, {
+        await expect(updateNotificationChannels(db.db, {
             order_created: ["whatsapp"],
         }, "credential-key")).rejects.toMatchObject({
             name: "ValidationError",
             message: "whatsapp/whatsapp paused",
         });
-        expect(mocks.upsertSetting).not.toHaveBeenCalled();
+        expect(storedOrderChannels(db)).toEqual(before);
     });
 });

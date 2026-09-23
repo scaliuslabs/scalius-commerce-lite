@@ -126,8 +126,8 @@ the generator then falls back to `http://localhost:8787`.
 
 The admin and storefront consume the generated workspace contract:
 
-- **Admin** (`apps/admin-v2/`) -- imports generated response types while its
-  server proxy owns authenticated request forwarding
+- **Admin** (`apps/admin-v2/`) -- calls generated SDK methods through one
+  same-origin fetch to the API Worker that serves it (`src/lib/api.ts`)
 - **Storefront** (`apps/storefront/`) -- imports response types for its API client layer and L1/L2 cache typing
   and uses generated SDK methods through its configured fetch clients
 

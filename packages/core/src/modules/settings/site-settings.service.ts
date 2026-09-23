@@ -1,13 +1,11 @@
 // src/modules/settings/site-settings.service.ts
-// DB operations for admin site settings (header, footer, theme, SEO, etc.).
-// Cache invalidation is intentionally NOT here — it stays in the route handlers
-// which have access to KV from the Hono context.
+// Store presentation and store-detail settings: currency, header/footer,
+// homepage, theme workflow, media hosts, SEO, storefront URL, and customer
+// countries. Storage lives in ./documents; cache effects stay in the routes.
 
 import {
   orders,
   products,
-  siteSettings,
-  settings,
   themePreviewSessions,
   themeSettings,
   themeSettingsDrafts,
@@ -27,50 +25,43 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import { z } from "zod";
-import { upsertSetting } from "../payments/gateway-settings";
-import { defineSettingsDocument } from "./settings-store";
-import {
-  normalizeSupportedCurrencyCode,
-  type SupportedCurrencyCode,
-} from "@scalius/shared/currency";
+import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   listInvalidStorefrontThemeSettingsEntries,
   parseStorefrontThemeSettings,
   sanitizeStorefrontThemeSettings,
   type StorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
+import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import {
-  mergeSeoDiscoverySettings,
-  parseSeoDiscoverySettings,
-  type SeoDiscoverySettings,
-} from "@scalius/shared/seo-discovery";
-import {
-  mergeSeoReturnPolicySettings,
-  parseSeoReturnPolicySettings,
-  type SeoReturnPolicySettings,
-} from "@scalius/shared/seo-return-policy";
-import {
-  parseHomepagePresentationConfig,
   sanitizeHomepagePresentationConfig,
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
-import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { readiness, type Readiness } from "@scalius/shared/readiness";
 import {
   isMediaReferenceDeletingGuardError,
   MEDIA_REFERENCE_DELETING_MESSAGE,
   noDeletingMediaReferences,
 } from "../media/media-reference-guard";
+import {
+  currencyDocument,
+  customerCountriesDocument,
+  footerDocument,
+  headerDocument,
+  homepageDocument,
+  mediaDocument,
+  normalizeMediaHost,
+  seoDocument,
+  stripEmbeddedNavigation,
+  type CurrencySettings,
+  type CustomerCountries,
+  type MediaOptimizationSettings,
+  type SitePresentationSection,
+} from "./documents";
+import { getPlatformSettings, savePlatformSettings } from "./platform-settings.service";
 
-const MEDIA_SETTINGS_CATEGORY = "media";
-const IMAGE_OPTIMIZATION_KEY = "image_optimization";
-const SEO_SETTINGS_CATEGORY = "seo";
-const DISCOVERY_SETTINGS_KEY = "discovery";
-const RETURN_POLICY_SETTINGS_KEY = "return_policy";
 const THEME_SETTINGS_ID = "default";
-const THEME_SETTINGS_CATEGORY = "theme";
-const THEME_COLORS_KEY = "storefront_colors";
 
 export interface ThemeSettingsDocument {
   theme: StorefrontThemeSettings;
@@ -115,22 +106,6 @@ export const SITE_PRESENTATION_REVISION_CONFLICT =
   "SITE_PRESENTATION_REVISION_CONFLICT";
 export const HOMEPAGE_PRESENTATION_REVISION_CONFLICT =
   "HOMEPAGE_PRESENTATION_REVISION_CONFLICT";
-
-export type SitePresentationSection = "header" | "footer";
-
-const SITE_PRESENTATION_KEYS: Record<
-  SitePresentationSection,
-  ReadonlySet<string>
-> = {
-  header: new Set(["topBar", "logo", "favicon", "contact", "social"]),
-  footer: new Set([
-    "logo",
-    "tagline",
-    "description",
-    "copyrightText",
-    "social",
-  ]),
-};
 
 export class SitePresentationRevisionConflictError extends AppError {
   constructor(
@@ -245,81 +220,9 @@ type PartialSeoDiscoverySettings = {
 };
 type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 
-const MEDIA_HOST_MAX_LENGTH = 253;
-const MEDIA_HOST_LIST_MAX_COUNT = 24;
-
-/** Media delivery hosts: the canonical CDN and older hosts rewritten to it. */
-export interface MediaOptimizationSettings {
-  canonicalCdnUrl: string;
-  canonicalHostAliases: string[];
-}
-
-export function normalizeMediaHost(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  if (/\s/.test(raw)) return "";
-
-  try {
-    const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (parsed.username || parsed.password || parsed.search || parsed.hash)
-      return "";
-    if (parsed.pathname && parsed.pathname !== "/") return "";
-    const host = parsed.hostname.toLowerCase();
-    if (!isValidMediaHost(host)) return "";
-    return host;
-  } catch {
-    return "";
-  }
-}
-
-export function isValidMediaHost(value: string): boolean {
-  const host = value.trim().toLowerCase();
-  if (!host || host.length > 253) return false;
-  if (host === "localhost") return true;
-
-  const labels = host.split(".");
-  if (labels.length < 2) return false;
-  return labels.every((label) => {
-    if (!label || label.length > 63) return false;
-    if (label.startsWith("-") || label.endsWith("-")) return false;
-    return /^[a-z0-9-]+$/.test(label);
-  });
-}
-
-export function isValidMediaHostInput(value: string): boolean {
-  return !value.trim() || normalizeMediaHost(value) !== "";
-}
-
-function normalizeHostList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.map(normalizeMediaHost).filter(Boolean))];
-}
-
-export function parseMediaOptimizationSettings(
-  value: string | null | undefined,
-): MediaOptimizationSettings {
-  if (!value) return { canonicalCdnUrl: "", canonicalHostAliases: [] };
-
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    return {
-      canonicalCdnUrl: normalizeMediaHost(parsed.canonicalCdnUrl),
-      canonicalHostAliases: normalizeHostList(parsed.canonicalHostAliases),
-    };
-  } catch {
-    return { canonicalCdnUrl: "", canonicalHostAliases: [] };
-  }
-}
-
 // ─────────────────────────────────────────
 // Currency
 // ─────────────────────────────────────────
-
-export interface CurrencySettings {
-  currencyCode: SupportedCurrencyCode;
-  currencySymbol: string;
-  usdExchangeRate: string;
-}
 
 const CURRENCY_CHANGE_CONFLICT_MESSAGE =
   "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.";
@@ -346,35 +249,8 @@ export async function isCurrencyCodeLocked(db: Database): Promise<boolean> {
   return Boolean(productRows?.length || orderRows?.length);
 }
 
-export function resolveCurrencySettingsFromRows(
-  rows: readonly { key: string; value: string }[],
-): CurrencySettings {
-  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  const currencyCode = normalizeSupportedCurrencyCode(map["currency_code"]);
-
-  if (!currencyCode) {
-    return {
-      currencyCode: "BDT",
-      currencySymbol: "\u09F3",
-      usdExchangeRate: "1",
-    };
-  }
-
-  return {
-    currencyCode,
-    currencySymbol: map["currency_symbol"] ?? "\u09F3",
-    usdExchangeRate: map["usd_exchange_rate"] ?? "1",
-  };
-}
-
 export async function getCurrencySettings(db: Database): Promise<CurrencySettings> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value })
-    .from(settings)
-    .where(eq(settings.category, "currency"))
-    .all();
-
-  return resolveCurrencySettingsFromRows(rows);
+  return currencyDocument.read(db);
 }
 
 export async function saveCurrencySettings(
@@ -397,40 +273,17 @@ export async function saveCurrencySettings(
   const currencySymbol = typeof data.currencySymbol === "string" && data.currencySymbol.trim()
     ? data.currencySymbol.trim()
     : current.currencySymbol;
-  const usdExchangeRate = data.usdExchangeRate === undefined
-    ? normalizeUsdExchangeRate(current.usdExchangeRate)
-    : normalizeUsdExchangeRate(data.usdExchangeRate);
+  const usdExchangeRate = normalizeUsdExchangeRate(data.usdExchangeRate ?? current.usdExchangeRate);
 
-  if (currencyCode !== current.currencyCode) {
-    if (await isCurrencyCodeLocked(db)) {
-      throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
-    }
+  if (currencyCode !== current.currencyCode && await isCurrencyCodeLocked(db)) {
+    throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
   }
 
-  const settingUpsert = (key: string, value: string) =>
-    db
-      .insert(settings)
-      .values({
-        id: crypto.randomUUID(),
-        key,
-        value,
-        type: "string",
-        category: "currency",
-      })
-      .onConflictDoUpdate({
-        target: [settings.key, settings.category],
-        set: { value, updatedAt: sql`unixepoch()` },
-      });
-
-  await safeBatch(db, [
-    settingUpsert("currency_code", currencyCode),
-    settingUpsert("currency_symbol", currencySymbol),
-    settingUpsert("usd_exchange_rate", usdExchangeRate),
-  ]);
+  await currencyDocument.write(db, { currencyCode, currencySymbol, usdExchangeRate });
 }
 
 // ─────────────────────────────────────────
-// General (header + footer)
+// General (header + footer) and homepage presentation
 // ─────────────────────────────────────────
 
 /**
@@ -443,39 +296,15 @@ export const NAVIGATION_READINESS_CODES = {
   invalid: "navigation.invalid",
 } as const;
 
-export function stripEmbeddedNavigation(
-  section: SitePresentationSection,
-  config: Record<string, unknown>,
-): Record<string, unknown> {
-  const allowedKeys = SITE_PRESENTATION_KEYS[section];
-  return Object.fromEntries(
-    Object.entries(config).filter(([key]) => allowedKeys.has(key)),
-  );
-}
-
-export function readPersistedSitePresentation(
-  section: SitePresentationSection,
-  value: string | null | undefined,
-): Record<string, unknown> {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return stripEmbeddedNavigation(section, parsed as Record<string, unknown>);
-  } catch {
-    return {};
-  }
-}
-
 export async function getGeneralSettings(db: Database) {
-  const [row] = await db.select().from(siteSettings).limit(1);
+  const [header, footer] = await Promise.all([
+    headerDocument.readDetailed(db),
+    footerDocument.readDetailed(db),
+  ]);
   return {
-    headerConfig: readPersistedSitePresentation("header", row?.headerConfig),
-    footerConfig: readPersistedSitePresentation("footer", row?.footerConfig),
-    revisions: {
-      header: row?.headerConfigRevision ?? 0,
-      footer: row?.footerConfigRevision ?? 0,
-    },
+    headerConfig: header.value,
+    footerConfig: footer.value,
+    revisions: { header: header.revision, footer: footer.revision },
     navigationReadiness: {
       header: readiness.ready(),
       footer: readiness.ready(),
@@ -483,172 +312,69 @@ export async function getGeneralSettings(db: Database) {
   };
 }
 
-export async function saveHeaderConfig(
+/**
+ * Saves one presentation document at the expected revision, rejecting a
+ * config that points at media being deleted.
+ */
+async function savePresentationDocument<T extends object>(
+  document: typeof headerDocument | typeof homepageDocument,
   db: Database,
-  config: Record<string, unknown>,
+  config: T,
   expectedRevision: number,
-): Promise<{ revision: number }> {
+  conflict: (currentRevision: number | null) => Error,
+): Promise<{ value: T; revision: number }> {
   assertPresentationRevision(expectedRevision);
-  const normalizedConfig = stripEmbeddedNavigation("header", config);
-  const serialized = JSON.stringify(normalizedConfig);
-  const mediaGuard = noDeletingMediaReferences(serialized);
-
-  if (expectedRevision === 0) {
-    const insert = db
-      .insert(siteSettings)
-      .values({
-        id: "settings_" + nanoid(),
-        siteName: "My Store",
-        siteDescription: "",
-        headerConfig: serialized,
-        headerConfigRevision: 1,
-        footerConfig: JSON.stringify({}),
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .onConflictDoNothing({ target: siteSettings.singletonKey })
-      .returning({ revision: siteSettings.headerConfigRevision });
-    if (mediaGuard) {
-      let inserted: unknown[] | undefined;
-      try {
-        [, inserted] = await safeBatch(db, [
-          buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
-          insert,
-        ] as never) as unknown[][];
-      } catch (error) {
-        if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-        throw error;
-      }
-      if (inserted?.[0]) return inserted[0] as { revision: number };
-    } else {
-      const inserted = await insert;
-      if (inserted[0]) return inserted[0];
+  const mediaGuard = noDeletingMediaReferences(JSON.stringify(config));
+  try {
+    return await (document as typeof headerDocument).write(
+      db,
+      config as Record<string, unknown>,
+      {},
+      {
+        expectedRevision,
+        conflict,
+        replace: true,
+        before: mediaGuard ? [buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING")] : [],
+      },
+    ) as { value: T; revision: number };
+  } catch (error) {
+    if (isMediaReferenceDeletingGuardError(error)) {
+      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
     }
-  } else {
-    const updated = await db
-      .update(siteSettings)
-      .set({
-        headerConfig: serialized,
-        headerConfigRevision: sql`${siteSettings.headerConfigRevision} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(
-        eq(siteSettings.singletonKey, "default"),
-        eq(siteSettings.headerConfigRevision, expectedRevision),
-        ...(mediaGuard ? [mediaGuard] : []),
-      ))
-      .returning({ revision: siteSettings.headerConfigRevision });
-    if (updated[0]) return updated[0];
+    throw error;
   }
-
-  const current = await db
-    .select({ revision: siteSettings.headerConfigRevision })
-    .from(siteSettings)
-    .where(eq(siteSettings.singletonKey, "default"))
-    .get();
-  if (mediaGuard && current?.revision === expectedRevision) {
-    throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-  }
-  throw new SitePresentationRevisionConflictError(
-    "header",
-    expectedRevision,
-    current?.revision ?? null,
-  );
 }
 
-export async function saveFooterConfig(
-  db: Database,
-  config: Record<string, unknown>,
-  expectedRevision: number,
-): Promise<{ revision: number }> {
-  assertPresentationRevision(expectedRevision);
-  const normalizedConfig = stripEmbeddedNavigation("footer", config);
-  const serialized = JSON.stringify(normalizedConfig);
-  const mediaGuard = noDeletingMediaReferences(serialized);
-
-  if (expectedRevision === 0) {
-    const insert = db
-      .insert(siteSettings)
-      .values({
-        id: "settings_" + nanoid(),
-        siteName: "My Store",
-        siteDescription: "",
-        headerConfig: JSON.stringify({}),
-        footerConfig: serialized,
-        footerConfigRevision: 1,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .onConflictDoNothing({ target: siteSettings.singletonKey })
-      .returning({ revision: siteSettings.footerConfigRevision });
-    if (mediaGuard) {
-      let inserted: unknown[] | undefined;
-      try {
-        [, inserted] = await safeBatch(db, [
-          buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING"),
-          insert,
-        ] as never) as unknown[][];
-      } catch (error) {
-        if (isMediaReferenceDeletingGuardError(error)) throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-        throw error;
-      }
-      if (inserted?.[0]) return inserted[0] as { revision: number };
-    } else {
-      const inserted = await insert;
-      if (inserted[0]) return inserted[0];
-    }
-  } else {
-    const updated = await db
-      .update(siteSettings)
-      .set({
-        footerConfig: serialized,
-        footerConfigRevision: sql`${siteSettings.footerConfigRevision} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(
-        eq(siteSettings.singletonKey, "default"),
-        eq(siteSettings.footerConfigRevision, expectedRevision),
-        ...(mediaGuard ? [mediaGuard] : []),
-      ))
-      .returning({ revision: siteSettings.footerConfigRevision });
-    if (updated[0]) return updated[0];
-  }
-
-  const current = await db
-    .select({ revision: siteSettings.footerConfigRevision })
-    .from(siteSettings)
-    .where(eq(siteSettings.singletonKey, "default"))
-    .get();
-  if (mediaGuard && current?.revision === expectedRevision) {
-    throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-  }
-  throw new SitePresentationRevisionConflictError(
-    "footer",
-    expectedRevision,
-    current?.revision ?? null,
-  );
+function sitePresentationWriter(section: SitePresentationSection) {
+  const document = section === "header" ? headerDocument : footerDocument;
+  return async (
+    db: Database,
+    config: Record<string, unknown>,
+    expectedRevision: number,
+  ): Promise<{ revision: number }> => {
+    const { revision } = await savePresentationDocument(
+      document,
+      db,
+      stripEmbeddedNavigation(section, config),
+      expectedRevision,
+      (currentRevision) => new SitePresentationRevisionConflictError(
+        section,
+        expectedRevision,
+        currentRevision,
+      ),
+    );
+    return { revision };
+  };
 }
 
-// ─────────────────────────────────────────
-// Homepage presentation
-// ─────────────────────────────────────────
+export const saveHeaderConfig = sitePresentationWriter("header");
+export const saveFooterConfig = sitePresentationWriter("footer");
 
 export async function getHomepagePresentationSettings(
   db: Database,
 ): Promise<{ config: HomepagePresentationConfig; revision: number }> {
-  const row = await db
-    .select({
-      config: siteSettings.homepageConfig,
-      revision: siteSettings.homepageConfigRevision,
-    })
-    .from(siteSettings)
-    .where(eq(siteSettings.singletonKey, "default"))
-    .get();
-
-  return {
-    config: parseHomepagePresentationConfig(row?.config),
-    revision: row?.revision ?? 0,
-  };
+  const { value, revision } = await homepageDocument.readDetailed(db);
+  return { config: value, revision };
 }
 
 export async function saveHomepagePresentationSettings(
@@ -656,56 +382,17 @@ export async function saveHomepagePresentationSettings(
   config: HomepagePresentationConfig,
   expectedRevision: number,
 ): Promise<{ config: HomepagePresentationConfig; revision: number }> {
-  assertPresentationRevision(expectedRevision);
-  const normalizedConfig = sanitizeHomepagePresentationConfig(config);
-  const serialized = JSON.stringify(normalizedConfig);
-
-  if (expectedRevision === 0) {
-    const inserted = await db
-      .insert(siteSettings)
-      .values({
-        id: "settings_" + nanoid(),
-        siteName: "My Store",
-        siteDescription: "",
-        headerConfig: JSON.stringify({}),
-        footerConfig: JSON.stringify({}),
-        homepageConfig: serialized,
-        homepageConfigRevision: 1,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .onConflictDoNothing({ target: siteSettings.singletonKey })
-      .returning({ revision: siteSettings.homepageConfigRevision });
-    if (inserted[0]) {
-      return { config: normalizedConfig, revision: inserted[0].revision };
-    }
-  } else {
-    const updated = await db
-      .update(siteSettings)
-      .set({
-        homepageConfig: serialized,
-        homepageConfigRevision: sql`${siteSettings.homepageConfigRevision} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(
-        eq(siteSettings.singletonKey, "default"),
-        eq(siteSettings.homepageConfigRevision, expectedRevision),
-      ))
-      .returning({ revision: siteSettings.homepageConfigRevision });
-    if (updated[0]) {
-      return { config: normalizedConfig, revision: updated[0].revision };
-    }
-  }
-
-  const current = await db
-    .select({ revision: siteSettings.homepageConfigRevision })
-    .from(siteSettings)
-    .where(eq(siteSettings.singletonKey, "default"))
-    .get();
-  throw new HomepagePresentationRevisionConflictError(
+  const { value, revision } = await savePresentationDocument(
+    homepageDocument,
+    db,
+    sanitizeHomepagePresentationConfig(config),
     expectedRevision,
-    current?.revision ?? null,
+    (currentRevision) => new HomepagePresentationRevisionConflictError(
+      expectedRevision,
+      currentRevision,
+    ),
   );
+  return { config: value, revision };
 }
 
 // ─────────────────────────────────────────
@@ -745,23 +432,9 @@ function themeSettingsDocumentFromRow(
   };
 }
 
-async function getLegacyThemeSettings(
-  db: Database,
-): Promise<ThemeSettingsDocument> {
-  // Pre-versioned installations stored colors in the generic settings table.
-  // A missing document is represented as revision 0 so the first writer can
-  // atomically claim revision 1 without overwriting another first writer.
-  const legacy = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.category, THEME_SETTINGS_CATEGORY),
-        eq(settings.key, THEME_COLORS_KEY),
-      ),
-    )
-    .get();
-  return { theme: parseStorefrontThemeSettings(legacy?.value), revision: 0 };
+/** No published row yet: revision 0 lets the first writer claim revision 1. */
+function unpublishedThemeSettings(): ThemeSettingsDocument {
+  return { theme: parseStorefrontThemeSettings(undefined), revision: 0 };
 }
 
 export async function getThemeSettings(
@@ -773,7 +446,7 @@ export async function getThemeSettings(
     return themeSettingsDocumentFromRow(current);
   }
 
-  return getLegacyThemeSettings(db);
+  return unpublishedThemeSettings();
 }
 
 export async function getThemeWorkspace(
@@ -795,7 +468,7 @@ export async function getThemeWorkspace(
   }[];
   const published = publishedRows[0]
     ? themeSettingsDocumentFromRow(publishedRows[0])
-    : await getLegacyThemeSettings(db);
+    : unpublishedThemeSettings();
   const draft = draftRows[0];
 
   return {
@@ -1362,47 +1035,24 @@ export async function resolveThemePreviewSession(
 }
 
 // ─────────────────────────────────────────
-// Media / Image optimization
+// Media delivery hosts
 // ─────────────────────────────────────────
 
-const mediaOptimizationDocumentSchema = z
-  .object({
-    canonicalCdnUrl: z.string().max(MEDIA_HOST_MAX_LENGTH),
-    canonicalHostAliases: z.array(z.string().max(MEDIA_HOST_MAX_LENGTH)).max(MEDIA_HOST_LIST_MAX_COUNT),
-  })
-  .transform((value): MediaOptimizationSettings => ({
-    canonicalCdnUrl: normalizeMediaHost(value.canonicalCdnUrl),
-    canonicalHostAliases: normalizeHostList(value.canonicalHostAliases),
-  }));
-
-/**
- * Media delivery hosts. Already one JSON row before the store existed, so
- * there is nothing to assemble from legacy rows. It stays uncached here
- * because the storefront projection reads the same row inside its own cached
- * layout query; a second KV copy would be a second source of truth.
- */
-export const mediaOptimizationDocument = defineSettingsDocument<MediaOptimizationSettings>({
-  category: MEDIA_SETTINGS_CATEGORY,
-  key: IMAGE_OPTIMIZATION_KEY,
-  label: "media optimization",
-  schema: mediaOptimizationDocumentSchema,
-  defaults: {
-    canonicalCdnUrl: "",
-    canonicalHostAliases: [],
-  },
-});
+export function isValidMediaHostInput(value: string): boolean {
+  return !value.trim() || normalizeMediaHost(value) !== "";
+}
 
 export async function getMediaOptimizationSettings(
   db: Database,
 ): Promise<MediaOptimizationSettings> {
-  return mediaOptimizationDocument.read(db);
+  return mediaDocument.read(db);
 }
 
 export async function saveMediaOptimizationSettings(
   db: Database,
   data: Partial<MediaOptimizationSettings>,
 ): Promise<MediaOptimizationSettings> {
-  return mediaOptimizationDocument.write(db, data);
+  return (await mediaDocument.write(db, data)).value;
 }
 
 // ─────────────────────────────────────────
@@ -1410,50 +1060,7 @@ export async function saveMediaOptimizationSettings(
 // ─────────────────────────────────────────
 
 export async function getSeoSettings(db: Database) {
-  const [siteRows, discoveryRows, returnPolicyRows] = await db.batch([
-    db
-      .select({
-        siteTitle: siteSettings.siteTitle,
-        homepageTitle: siteSettings.homepageTitle,
-        homepageMetaDescription: siteSettings.homepageMetaDescription,
-        robotsTxt: siteSettings.robotsTxt,
-      })
-      .from(siteSettings)
-      .limit(1),
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, SEO_SETTINGS_CATEGORY),
-          eq(settings.key, DISCOVERY_SETTINGS_KEY),
-        ),
-      )
-      .limit(1),
-    db
-      .select({ value: settings.value })
-      .from(settings)
-      .where(
-        and(
-          eq(settings.category, SEO_SETTINGS_CATEGORY),
-          eq(settings.key, RETURN_POLICY_SETTINGS_KEY),
-        ),
-      )
-      .limit(1),
-  ]);
-
-  const row = siteRows[0];
-  const discoveryRow = discoveryRows[0];
-  const returnPolicyRow = returnPolicyRows[0];
-
-  return {
-    siteTitle: row?.siteTitle || "",
-    homepageTitle: row?.homepageTitle || "",
-    homepageMetaDescription: row?.homepageMetaDescription || "",
-    robotsTxt: row?.robotsTxt || "",
-    discovery: parseSeoDiscoverySettings(discoveryRow?.value),
-    returnPolicy: parseSeoReturnPolicySettings(returnPolicyRow?.value),
-  };
+  return seoDocument.read(db);
 }
 
 export async function saveSeoSettings(
@@ -1467,163 +1074,54 @@ export async function saveSeoSettings(
     returnPolicy?: PartialSeoReturnPolicySettings;
   },
 ) {
-  // Filter out undefined values to avoid NULLing existing data
-  const updates: Record<string, unknown> = {};
-  if (data.siteTitle !== undefined) updates.siteTitle = data.siteTitle;
-  if (data.homepageTitle !== undefined)
-    updates.homepageTitle = data.homepageTitle;
-  if (data.homepageMetaDescription !== undefined)
-    updates.homepageMetaDescription = data.homepageMetaDescription;
-  if (data.robotsTxt !== undefined) updates.robotsTxt = data.robotsTxt;
-
-  const ops: Promise<unknown>[] = [];
-
-  if (Object.keys(updates).length > 0) {
-    ops.push(
-      db
-        .insert(siteSettings)
-        .values({
-          id: "settings_" + nanoid(),
-          siteName: "My Store",
-          headerConfig: JSON.stringify({}),
-          footerConfig: JSON.stringify({}),
-          ...updates,
-          createdAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .onConflictDoUpdate({
-          target: siteSettings.singletonKey,
-          set: {
-            ...updates,
-            updatedAt: sql`unixepoch()`,
-          },
-        }),
-    );
-  }
-
-  if (data.discovery !== undefined) {
-    const current = await getSeoSettings(db);
-    const discovery = mergeSeoDiscoverySettings(current.discovery, data.discovery);
-    ops.push(
-      upsertSetting(
-        db,
-        SEO_SETTINGS_CATEGORY,
-        DISCOVERY_SETTINGS_KEY,
-        JSON.stringify(discovery),
-      ),
-    );
-  }
-
-  if (data.returnPolicy !== undefined) {
-    const current = await getSeoSettings(db);
-    const returnPolicy = mergeSeoReturnPolicySettings(
-      current.returnPolicy,
-      data.returnPolicy,
-    );
-    ops.push(
-      upsertSetting(
-        db,
-        SEO_SETTINGS_CATEGORY,
-        RETURN_POLICY_SETTINGS_KEY,
-        JSON.stringify(returnPolicy),
-      ),
-    );
-  }
-
-  await Promise.all(ops);
+  const current = data.discovery !== undefined || data.returnPolicy !== undefined
+    ? await getSeoSettings(db)
+    : null;
+  await seoDocument.write(db, {
+    siteTitle: data.siteTitle,
+    homepageTitle: data.homepageTitle,
+    homepageMetaDescription: data.homepageMetaDescription,
+    robotsTxt: data.robotsTxt,
+    discovery: current && data.discovery !== undefined
+      ? mergeSeoDiscoverySettings(current.discovery, data.discovery)
+      : undefined,
+    returnPolicy: current && data.returnPolicy !== undefined
+      ? mergeSeoReturnPolicySettings(current.returnPolicy, data.returnPolicy)
+      : undefined,
+  });
 }
 
 // ─────────────────────────────────────────
-// Storefront URL
+// Storefront URL (the platform document's storefront origin)
 // ─────────────────────────────────────────
 
 export async function getStorefrontUrlSetting(db: Database) {
-  const [row] = await db
-    .select({ storefrontUrl: siteSettings.storefrontUrl })
-    .from(siteSettings)
-    .limit(1);
-  return { storefrontUrl: row?.storefrontUrl?.trim() ?? "" };
+  return { storefrontUrl: (await getPlatformSettings(db)).storefrontUrl };
 }
 
-export async function saveStorefrontUrl(db: Database, url: string) {
-  const storefrontUrl = normalizeStorefrontOrigin(url);
-  if (!storefrontUrl) {
-    throw new ValidationError(
-      "Enter the HTTPS origin of the public store. Local development may use an HTTP loopback origin.",
-    );
-  }
-
-  await db
-    .insert(siteSettings)
-    .values({
-      id: "settings_" + nanoid(),
-      siteName: "My Store",
-      headerConfig: JSON.stringify({}),
-      footerConfig: JSON.stringify({}),
-      storefrontUrl,
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.singletonKey,
-      set: {
-        storefrontUrl,
-        updatedAt: sql`unixepoch()`,
-      },
-    });
-}
-
-// ─────────────────────────────────────────
-// Allowed Countries
-// ─────────────────────────────────────────
-
-export function resolveAllowedCountriesFromRows(
-  rows: readonly { key?: string; value: string }[],
+export async function saveStorefrontUrl(
+  db: Database,
+  url: string,
+  kv?: Parameters<typeof savePlatformSettings>[2],
 ) {
-  const row = rows.find((candidate) => candidate.key === undefined || candidate.key === "allowed_countries");
-  let allowedCountries: string[] = [];
-  let allowedCountriesMode: "include" | "exclude" = "include";
-  if (row?.value) {
-    try {
-      const parsed = JSON.parse(row.value);
-      if (Array.isArray(parsed)) {
-        // Backward compat: old format was just an array
-        allowedCountries = parsed;
-      } else if (parsed && typeof parsed === "object") {
-        allowedCountries = Array.isArray(parsed.countries)
-          ? parsed.countries
-          : [];
-        allowedCountriesMode =
-          parsed.mode === "exclude" ? "exclude" : "include";
-      }
-    } catch {
-      // Invalid JSON — defaults
-    }
-  }
-  return { allowedCountries, allowedCountriesMode };
+  await savePlatformSettings(db, { storefrontUrl: url }, kv);
 }
 
-export async function getAllowedCountries(db: Database) {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.category, "phone"),
-        eq(settings.key, "allowed_countries"),
-      ),
-    )
-    .get();
+// ─────────────────────────────────────────
+// Customer countries
+// ─────────────────────────────────────────
 
-  return resolveAllowedCountriesFromRows(row ? [row] : []);
+export async function getAllowedCountries(db: Database): Promise<CustomerCountries> {
+  return customerCountriesDocument.read(db);
 }
 
 export async function saveAllowedCountries(
   db: Database,
   allowedCountries: string[],
   mode: "include" | "exclude" = "include",
-) {
-  const stored = JSON.stringify({ countries: allowedCountries, mode });
-  await upsertSetting(db, "phone", "allowed_countries", stored);
-  return { allowedCountries, allowedCountriesMode: mode };
+): Promise<CustomerCountries> {
+  return (await customerCountriesDocument.write(db, {
+    allowedCountries,
+    allowedCountriesMode: mode,
+  })).value;
 }

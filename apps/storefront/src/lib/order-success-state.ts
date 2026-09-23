@@ -10,7 +10,6 @@ import {
 
 export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
 
-const ONLINE_PAYMENT_METHODS = new Set(["stripe", "sslcommerz"]);
 const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
 const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
   "failed",
@@ -64,8 +63,10 @@ function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+/** Every payment method except cash on delivery is an online gateway. */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
-  return ONLINE_PAYMENT_METHODS.has(normalize(paymentMethod));
+  const method = normalize(paymentMethod);
+  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod";
 }
 
 function isAcceptedPayment(order: Pick<OrderReceipt, "paymentStatus" | "paidAmount">): boolean {

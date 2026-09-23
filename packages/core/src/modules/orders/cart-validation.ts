@@ -1,5 +1,4 @@
 import type { Database } from "@scalius/database/client";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
@@ -263,7 +262,7 @@ export function selectStorefrontCartVariantRows(
             optionCombinationKey: productVariants.optionCombinationKey,
             optionLabel: variantOptionLabelSql(productVariants.id),
             stock: productVariants.stock,
-            reservedStock: effectiveRegularReservedStockSql(),
+            reservedStock: productVariants.reservedStock,
             preorderStock: productVariants.preorderStock,
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
@@ -296,12 +295,6 @@ export function resolveStorefrontCartValidationFromRows(
     options: {
         inventoryPool?: string | null;
         currencyCode?: string | null;
-        /**
-         * The checkout coordinator performs the exact regular-stock guard in
-         * its commit transaction. Its catalog snapshot therefore validates
-         * identity and price without duplicating a stale availability check.
-         */
-        deferRegularInventoryAuthority?: boolean;
     },
     productRows: readonly StorefrontCartProductRow[],
     variantRows: readonly StorefrontCartVariantRow[],
@@ -433,9 +426,7 @@ export function resolveStorefrontCartValidationFromRows(
         }
 
         const variant = requestedVariant;
-        const availableQuantity = options.deferRegularInventoryAuthority && pool === "regular"
-            ? Number.POSITIVE_INFINITY
-            : availableForVariant(variant, pool);
+        const availableQuantity = availableForVariant(variant, pool);
         if (availableQuantity < item.quantity) {
             addIssue(issues, item, index, {
                 code: "QUANTITY_UNAVAILABLE",

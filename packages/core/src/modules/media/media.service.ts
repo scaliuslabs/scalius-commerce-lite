@@ -6,7 +6,6 @@ import {
     productMedia,
     products,
     orderItems,
-    siteSettings,
     settings,
     heroSliders,
     pages,
@@ -50,6 +49,8 @@ import {
     ServiceUnavailableError,
     ValidationError,
 } from "@scalius/core/errors";
+import { businessDocument, footerDocument, headerDocument } from "../settings/documents";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 import type { InitiateMediaUploadInput, UpdateMediaInput } from "./media.validation";
 import { presentMediaProjection } from "./media.presentation";
 
@@ -784,34 +785,19 @@ async function loadMediaDeleteDependencies(
     const savedReferences: Array<{ surface: string }> = [];
     let savedReferenceCount = 0;
     if (objectKey) {
-        const siteCounts = await db.select({
-            logo: sql<number>`sum(case when instr(coalesce(${siteSettings.logo}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            favicon: sql<number>`sum(case when instr(coalesce(${siteSettings.favicon}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            header: sql<number>`sum(case when instr(coalesce(${siteSettings.headerConfig}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            footer: sql<number>`sum(case when instr(coalesce(${siteSettings.footerConfig}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            social: sql<number>`sum(case when instr(coalesce(${siteSettings.socialLinks}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(siteSettings).get();
-        const savedSurfaces = [
-            ["site_logo", siteCounts?.logo], ["site_favicon", siteCounts?.favicon],
-            ["site_header", siteCounts?.header], ["site_footer", siteCounts?.footer],
-            ["site_social", siteCounts?.social],
-        ] as const;
-        for (const [surface, count] of savedSurfaces) {
+        const settingCounts = await db.select({
+            category: settings.category,
+            count: sql<number>`sum(case when instr(${settings.value}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
+        }).from(settings).where(and(
+            eq(settings.key, SETTINGS_DOCUMENT_ROW_KEY),
+            inArray(settings.category, Object.keys(MEDIA_SETTINGS_SURFACES)),
+        )).groupBy(settings.category);
+        for (const [category, surface] of Object.entries(MEDIA_SETTINGS_SURFACES)) {
+            const count = settingCounts.find((row) => row.category === category)?.count;
             if (count && count > 0) {
                 savedReferences.push({ surface });
                 savedReferenceCount += count;
             }
-        }
-
-        const invoiceCount = await db.select({
-            count: sql<number>`sum(case when instr(${settings.value}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(settings).where(and(
-            eq(settings.category, "business_info"),
-            eq(settings.key, "invoice_logo_url"),
-        )).get();
-        if (invoiceCount?.count && invoiceCount.count > 0) {
-            savedReferences.push({ surface: "business_invoice" });
-            savedReferenceCount += invoiceCount.count;
         }
 
         const heroCount = await db.select({
@@ -885,18 +871,18 @@ function hasMediaDeleteDependencies(details: MediaDependencyConflictDetails): bo
         || details.savedReferences.count > 0;
 }
 
+/** Settings documents that can hold media URLs, by the surface they report. */
+const MEDIA_SETTINGS_SURFACES: Record<string, string> = {
+    [headerDocument.key]: "site_header",
+    [footerDocument.key]: "site_footer",
+    [businessDocument.key]: "business_invoice",
+};
+
 function noSavedMediaReferences(objectKey: string) {
     return sql`NOT EXISTS (
-        SELECT 1 FROM ${siteSettings}
-        WHERE instr(coalesce(${siteSettings.logo}, ''), ${objectKey}) > 0
-           OR instr(coalesce(${siteSettings.favicon}, ''), ${objectKey}) > 0
-           OR instr(coalesce(${siteSettings.headerConfig}, ''), ${objectKey}) > 0
-           OR instr(coalesce(${siteSettings.footerConfig}, ''), ${objectKey}) > 0
-           OR instr(coalesce(${siteSettings.socialLinks}, ''), ${objectKey}) > 0
-    ) AND NOT EXISTS (
         SELECT 1 FROM ${settings}
-        WHERE ${settings.category} = 'business_info'
-          AND ${settings.key} = 'invoice_logo_url'
+        WHERE ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
+          AND ${settings.category} IN (${sql.join(Object.keys(MEDIA_SETTINGS_SURFACES).map((category) => sql`${category}`), sql`, `)})
           AND instr(${settings.value}, ${objectKey}) > 0
     ) AND NOT EXISTS (
         SELECT 1 FROM ${heroSliders}

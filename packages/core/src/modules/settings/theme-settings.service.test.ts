@@ -55,24 +55,9 @@ describe("versioned storefront theme settings", () => {
     `).run(`themev_seed_${publishedRevision}`, publishedRevision, serialized);
   }
 
-  it("reads and sanitizes the legacy color row before the first versioned publish", async () => {
-    sqlite.prepare(`
-      INSERT INTO settings (id, key, value, type, category, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      "legacy_theme",
-      "storefront_colors",
-      JSON.stringify({ primary: " #2563eb ", unsafe: "url(evil)" }),
-      "string",
-      "theme",
-      1,
-    );
-
+  it("reads unpublished defaults at revision zero", async () => {
     await expect(getThemeSettings(db)).resolves.toEqual({
-      theme: {
-        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-        colors: { primary: "#2563eb" },
-      },
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
       revision: 0,
     });
   });

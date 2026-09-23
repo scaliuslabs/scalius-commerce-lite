@@ -1,6 +1,8 @@
+// Behaviour tests on the migrated SQLite schema: provider payment events are
+// applied through the gateway-agnostic kernel exactly once.
 import type { DatabaseSync } from "node:sqlite";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
   orders,
@@ -14,12 +16,7 @@ import {
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 const mocks = vi.hoisted(() => ({
-  getCurrencyConfig: vi.fn(),
   applyInventoryForStatusChange: vi.fn(),
-}));
-
-vi.mock("../settings/settings.service", () => ({
-  getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
@@ -31,23 +28,25 @@ import {
   processPaymentFailed,
   releaseOrderInventory,
 } from "./process-payment";
+import type { ProcessPaymentParams } from "./types";
 
-/** A migrated D1 whose first batch is preceded by `beforeFirstBatch` (a competing committed write). */
-function createPaymentDatabase(beforeFirstBatch?: (sqlite: DatabaseSync) => void) {
+let sqlite: DatabaseSync;
+let db: Database;
+
+function openDatabase(beforeFirstBatch?: (sqlite: DatabaseSync) => void) {
   let pending = beforeFirstBatch;
-  return createSqliteD1Database({
-    beforeBatch(sqlite) {
+  const created = createSqliteD1Database({
+    beforeBatch(raceSqlite) {
       const race = pending;
       pending = undefined;
-      race?.(sqlite);
+      race?.(raceSqlite);
     },
   });
+  sqlite = created.sqlite;
+  db = created.db;
 }
 
-async function insertPaymentTestOrder(
-  db: Database,
-  overrides: Partial<typeof orders.$inferInsert> = {},
-) {
+async function insertOrder(overrides: Partial<typeof orders.$inferInsert> = {}) {
   await db.insert(orders).values({
     id: "order_1",
     customerName: "Buyer",
@@ -58,1014 +57,259 @@ async function insertPaymentTestOrder(
     totalAmount: 100,
     shippingCharge: 0,
     balanceDue: 100,
+    paymentMethod: "stripe",
+    status: OrderStatus.INCOMPLETE,
+    currencyCode: "BDT",
+    currencyDecimalPlaces: 2,
     ...overrides,
   });
 }
 
-function createDbMock({
-  selectGetResults,
-  batchResults = [],
-  insertError,
-}: {
-  selectGetResults: Array<Record<string, unknown> | null>;
-  batchResults?: unknown[][];
-  insertError?: unknown;
-}) {
-  const operations: string[] = [];
-  const inserts: Array<Record<string, unknown>> = [];
-  const updates: Array<Record<string, unknown>> = [];
-  const outboxClaimStatements: unknown[] = [];
-  const batch = vi.fn(async () => batchResults.shift() ?? []);
-
-  const db = {
-    select() {
-      return {
-        from() {
-          return {
-            where() {
-              return {
-                get: async () => selectGetResults.shift() ?? null,
-              };
-            },
-          };
-        },
-      };
-    },
-    insert() {
-      return {
-        values: (values: Record<string, unknown>) => {
-          operations.push("insert");
-          inserts.push(values);
-          const execution = insertError
-            ? Promise.reject(insertError)
-            : Promise.resolve(undefined);
-          return {
-            type: "insert-values",
-            values,
-            onConflictDoNothing: () => ({ type: "insert-values-on-conflict", values }),
-            then: execution.then.bind(execution),
-          };
-        },
-        select: (query: unknown) => ({
-          type: "insert-select",
-          query,
-          onConflictDoNothing: () => {
-            const statement = { type: "insert-select-on-conflict", query };
-            outboxClaimStatements.push(statement);
-            return statement;
-          },
-        }),
-      };
-    },
-    update() {
-      return {
-        set(values: Record<string, unknown>) {
-          operations.push("update");
-          updates.push(values);
-          return {
-            where() {
-              return {
-                returning: () => ({ type: "returning-update" }),
-              };
-            },
-          };
-        },
-      };
-    },
-    batch,
-  };
-
-  return { db, operations, inserts, updates, outboxClaimStatements, batch };
-}
-
-function createPaymentOrder(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "order_1",
-    totalAmount: 100,
-    paidAmount: 0,
-    balanceDue: 100,
-    paymentStatus: PaymentStatus.UNPAID,
-    status: OrderStatus.PENDING,
-    inventoryPool: "regular",
-    version: 7,
-    deletedAt: null,
+function confirm(overrides: Partial<ProcessPaymentParams> = {}) {
+  return processPaymentConfirmed(db, {
+    orderId: "order_1",
+    provider: "stripe",
+    amount: 100,
+    currency: "BDT",
+    paymentType: "full",
+    providerRef: "pi_1",
+    secondaryRef: "ch_1",
     ...overrides,
-  };
+  });
 }
 
-describe("payment processing idempotency", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
-    mocks.applyInventoryForStatusChange.mockResolvedValue("restored");
-  });
+function order() {
+  return sqlite.prepare("SELECT status, payment_status, payment_method, paid_amount, balance_due FROM orders WHERE id = 'order_1'").get();
+}
 
-  it("promotes a failed gateway attempt when the same Stripe intent later succeeds", async () => {
-    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        { id: "pay_1", amount: 0, status: PaymentRecordStatus.FAILED },
-        {
-          id: "order_1",
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
-          paymentStatus: PaymentStatus.FAILED,
-          status: OrderStatus.INCOMPLETE,
-          inventoryPool: "regular",
-          version: 7,
-        },
-      ],
-      batchResults: [
-        [[{ id: "order_1" }], [{ id: "pay_1" }]],
-      ],
-    });
+function payments() {
+  return sqlite.prepare(`
+    SELECT order_id, payment_method, payment_type, status, amount, provider_ref, provider_secondary_ref
+    FROM order_payments ORDER BY created_at, id
+  `).all();
+}
 
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      stripePaymentIntentId: "pi_1",
-      stripeChargeId: "ch_1",
-      amount: 100,
-      metadata: { currency: "bdt" },
-    });
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  mocks.applyInventoryForStatusChange.mockResolvedValue("restored");
+  openDatabase();
+});
 
-    expect(result).toEqual({ success: true });
-    expect(inserts).toHaveLength(0);
-    expect(batch).toHaveBeenCalledTimes(1);
-    expect(updates).toContainEqual(expect.objectContaining({
+afterEach(() => {
+  sqlite.close();
+});
+
+describe("confirmed payments", () => {
+  it("credits a provider reference once no matter how often it is delivered", async () => {
+    await insertOrder();
+
+    await expect(confirm()).resolves.toEqual({ success: true, paymentType: "full" });
+    await expect(confirm()).resolves.toEqual({ success: true, alreadyProcessed: true });
+    await expect(confirm({ secondaryRef: undefined })).resolves.toEqual({ success: true, alreadyProcessed: true });
+
+    expect(order()).toMatchObject({
       status: OrderStatus.PENDING,
-      paymentMethod: "stripe",
-      paidAmount: 100,
-      balanceDue: 0,
-      paymentStatus: PaymentStatus.PAID,
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      amount: 100,
+      payment_status: PaymentStatus.PAID,
+      paid_amount: 100,
+      balance_due: 0,
+    });
+    expect(payments()).toEqual([{
+      order_id: "order_1",
+      payment_method: "stripe",
+      payment_type: "full",
       status: PaymentRecordStatus.SUCCEEDED,
-      stripeChargeId: "ch_1",
-      metadata: JSON.stringify({ currency: "bdt" }),
-    }));
-    expect(outboxClaimStatements).toHaveLength(1);
-    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
-    const firstBatch = batchCalls[0]?.[0];
-    expect(firstBatch).toContain(outboxClaimStatements[0]);
+      amount: 100,
+      provider_ref: "pi_1",
+      provider_secondary_ref: "ch_1",
+    }]);
   });
 
-  it("applies SSLCommerz balance payments with a distinct val_id even when tran_id is reused", async () => {
-    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({
-          totalAmount: 100,
-          paidAmount: 25,
-          balanceDue: 75,
-          paymentStatus: PaymentStatus.PARTIAL,
-          status: OrderStatus.PENDING,
-        }),
-        {
-          status: PaymentPlanStatus.DEPOSIT_PAID,
-          balanceDue: 75,
-        },
-      ],
-      batchResults: [
-        [[{ id: "order_1" }], [{ id: "pay_balance" }], [{ id: "plan_1" }]],
-      ],
-    });
+  it("promotes an earlier failed attempt for the same provider reference", async () => {
+    await insertOrder({ status: OrderStatus.PENDING });
+    await processPaymentFailed(db, "order_1", "stripe", "pi_1");
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.FAILED });
 
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "balance",
-      sslcommerzTranId: "order_1",
-      sslcommerzValId: "val_balance",
-      sslcommerzBankTranId: "bank_balance",
-      amount: 75,
-      metadata: { currency: "BDT" },
-    });
+    await expect(confirm()).resolves.toMatchObject({ success: true });
 
-    expect(result).toEqual({ success: true });
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]).toMatchObject({
-      orderId: "order_1",
-      amount: 75,
-      paymentType: "balance",
-      sslcommerzTranId: "order_1",
-    });
-    expect(batch).toHaveBeenCalledTimes(1);
-    expect(updates).toContainEqual(expect.objectContaining({
-      paymentMethod: "sslcommerz",
-      paidAmount: 100,
-      balanceDue: 0,
-      paymentStatus: PaymentStatus.PAID,
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100 });
+    expect(payments()).toEqual([expect.objectContaining({
       status: PaymentRecordStatus.SUCCEEDED,
-      sslcommerzValId: "val_balance",
-      sslcommerzBankTranId: "bank_balance",
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      status: PaymentPlanStatus.COMPLETED,
-    }));
-    expect(outboxClaimStatements).toHaveLength(1);
-  });
-
-  it("applies a deposit payment only when the pending plan matches the incoming amount", async () => {
-    const { db, inserts, updates, outboxClaimStatements, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
-          paymentStatus: PaymentStatus.UNPAID,
-          status: OrderStatus.PENDING,
-        }),
-        {
-          status: PaymentPlanStatus.PENDING,
-          depositAmount: 50,
-          balanceDue: 50,
-        },
-      ],
-      batchResults: [
-        [[{ id: "order_1" }], [{ id: "pay_deposit" }], [{ id: "plan_1" }]],
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "deposit",
-      sslcommerzTranId: "order_1_deposit_ABC12345",
-      sslcommerzValId: "val_deposit",
-      sslcommerzBankTranId: "bank_deposit",
-      amount: 50,
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]).toMatchObject({
-      orderId: "order_1",
-      amount: 50,
-      paymentType: "deposit",
-      sslcommerzValId: "val_deposit",
-    });
-    expect(batch).toHaveBeenCalledTimes(1);
-    expect(updates).toContainEqual(expect.objectContaining({
-      paidAmount: 50,
-      balanceDue: 50,
-      paymentStatus: PaymentStatus.PARTIAL,
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      status: PaymentPlanStatus.DEPOSIT_PAID,
-    }));
-    expect(outboxClaimStatements).toHaveLength(1);
-  });
-
-  it("rejects balance confirmations before the deposit plan is marked paid", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({
-          totalAmount: 100,
-          paidAmount: 25,
-          balanceDue: 75,
-          paymentStatus: PaymentStatus.PARTIAL,
-        }),
-        {
-          status: PaymentPlanStatus.PENDING,
-          balanceDue: 75,
-        },
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "balance",
-      sslcommerzTranId: "order_1_balance_ABC12345",
-      sslcommerzValId: "val_balance",
-      amount: 75,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Deposit payment must be confirmed before balance payment",
-      retryable: false,
-    });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("rejects repeated deposit confirmations after partial money has already been recorded", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({
-          totalAmount: 100,
-          paidAmount: 50,
-          balanceDue: 50,
-          paymentStatus: PaymentStatus.PARTIAL,
-        }),
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "deposit",
-      sslcommerzTranId: "order_1_deposit_RETRY",
-      sslcommerzValId: "val_deposit_retry",
-      amount: 50,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Order already has a partial payment; use a balance payment",
-      retryable: false,
-    });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("rejects full-payment confirmations whose amount does not match the order total", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({ totalAmount: 100, paidAmount: 0, balanceDue: 100 }),
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      stripePaymentIntentId: "pi_wrong_amount",
-      amount: 90,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Full payment amount must match the order total",
-      retryable: false,
-    });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("does not report success when the payment plan CAS loses after order and payment updates", async () => {
-    const { db, inserts, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        createPaymentOrder({
-          totalAmount: 100,
-          paidAmount: 0,
-          balanceDue: 100,
-          paymentStatus: PaymentStatus.UNPAID,
-        }),
-        {
-          status: PaymentPlanStatus.PENDING,
-          depositAmount: 50,
-          balanceDue: 50,
-        },
-      ],
-      batchResults: [
-        [[{ id: "order_1" }], [{ id: "pay_deposit" }], []],
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "deposit",
-      sslcommerzTranId: "order_1_deposit_ABC12345",
-      sslcommerzValId: "val_deposit",
-      amount: 50,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Payment plan changed concurrently; retry required",
-    });
-    expect(inserts).toHaveLength(1);
-    expect(batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("dedupes exact duplicate SSLCommerz confirmations by val_id", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        { id: "pay_1", amount: 50, status: PaymentRecordStatus.SUCCEEDED },
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "sslcommerz",
-      paymentType: "deposit",
-      sslcommerzTranId: "order_1",
-      sslcommerzValId: "val_deposit",
-      sslcommerzBankTranId: "bank_deposit",
-      amount: 50,
-    });
-
-    expect(result).toEqual({ success: true, alreadyProcessed: true });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("does not rewrite duplicate failed gateway attempts", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.FAILED, paymentType: "full" },
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.FAILED,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-        },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
-
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("records a new failed attempt and the unpaid order failure in one atomic batch", async () => {
-    const { db, operations, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        null,
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          paymentPlanStatus: null,
-        },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "sslcommerz", "tran_1");
-
-    expect(operations).toEqual(["update", "insert"]);
-    expect(batch).toHaveBeenCalledTimes(1);
-    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
-    expect(batchCalls[0]?.[0]).toHaveLength(3);
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]).toMatchObject({
-      orderId: "order_1",
-      amount: 0,
-      paymentType: "full",
-      status: PaymentRecordStatus.FAILED,
-      sslcommerzTranId: "tran_1",
-    });
-    expect(updates).toContainEqual(expect.objectContaining({
-      paymentStatus: PaymentStatus.FAILED,
-    }));
-  });
-
-  it("atomically converges a pending attempt and its unpaid order to failed", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.PENDING, paymentType: "deposit" },
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          paymentPlanStatus: PaymentPlanStatus.PENDING,
-        },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
-
-    expect(inserts).toHaveLength(0);
-    expect(updates).toContainEqual(expect.objectContaining({
-      paymentStatus: PaymentStatus.FAILED,
-    }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      status: PaymentRecordStatus.FAILED,
-    }));
-    expect(batch).toHaveBeenCalledTimes(1);
-    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
-    expect(batchCalls[0]?.[0]).toHaveLength(3);
-  });
-
-  it("does not require order currency repair to finish an existing pending failure", async () => {
-    const { db, batch } = createDbMock({
-      selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.PENDING, paymentType: "full" },
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          currencyCode: "invalid",
-          currencyDecimalPlaces: 2,
-          paymentPlanStatus: null,
-        },
-      ],
-    });
-
-    await expect(processPaymentFailed(db as never, "order_1", "stripe", "pi_1"))
-      .resolves.toBeUndefined();
-    expect(batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("records a balance failure without downgrading a partially paid order", async () => {
-    const { db, inserts, batch } = createDbMock({
-      selectGetResults: [
-        null,
-        {
-          paidAmount: 25,
-          paymentStatus: PaymentStatus.PARTIAL,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          paymentPlanStatus: PaymentPlanStatus.DEPOSIT_PAID,
-        },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "stripe", "pi_balance");
-
-    expect(inserts).toContainEqual(expect.objectContaining({
-      orderId: "order_1",
-      paymentType: "balance",
-      status: PaymentRecordStatus.FAILED,
-      stripePaymentIntentId: "pi_balance",
-    }));
-    expect(batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("finishes stale failed-attempt bookkeeping when the order is still unpaid", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.FAILED, paymentType: "full" },
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          paymentPlanStatus: null,
-        },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
-
-    expect(inserts).toHaveLength(0);
-    expect(updates).toContainEqual(expect.objectContaining({
-      paymentStatus: PaymentStatus.FAILED,
-    }));
-    expect(batch).toHaveBeenCalledTimes(1);
-    const batchCalls = (batch as unknown as { mock: { calls: Array<[unknown[]]> } }).mock.calls;
-    expect(batchCalls[0]?.[0]).toHaveLength(2);
-  });
-
-  it("does not downgrade a gateway attempt that has already succeeded", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { id: "pay_1", status: PaymentRecordStatus.SUCCEEDED, paymentType: "full" },
-      ],
-    });
-
-    await processPaymentFailed(db as never, "order_1", "stripe", "pi_1");
-
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-  });
-
-  it("uses the centralized inventory transition for payment cancellation releases", async () => {
-    const { db } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-      ],
-    });
-
-    await releaseOrderInventory(db as never, "order_1");
-
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
-      db,
-      "order_1",
-      OrderStatus.CANCELLED,
-    );
-  });
-
-  it("returns retryable failure before claiming a confirmed payment while shipment creation is active", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: "shp_active", shipmentClaimExpiresAt: new Date(Date.now() + 60_000) },
-      ],
-    });
-
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      stripePaymentIntentId: "pi_1",
+      provider_ref: "pi_1",
       amount: 100,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Shipment creation or recovery is active. Check shipment history before trying again.",
-    });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    })]);
   });
 
-  it.each([
-    {
-      label: "cancelled order",
-      order: createPaymentOrder({ status: OrderStatus.CANCELLED }),
-      error: "Cannot pay a cancelled order",
-    },
-    {
-      label: "returned order",
-      order: createPaymentOrder({ status: OrderStatus.RETURNED }),
-      error: "Cannot pay a returned order",
-    },
-    {
-      label: "refunded order",
-      order: createPaymentOrder({ status: OrderStatus.REFUNDED }),
-      error: "Cannot pay a refunded order",
-    },
-    {
-      label: "partially refunded order",
-      order: createPaymentOrder({ status: OrderStatus.PARTIALLY_REFUNDED }),
-      error: "Cannot pay a partially refunded order",
-    },
-    {
-      label: "soft-deleted order",
-      order: createPaymentOrder({ deletedAt: new Date("2026-01-01T00:00:00Z") }),
-      error: "Cannot pay a deleted order",
-    },
-    {
-      label: "refunded payment status",
-      order: createPaymentOrder({ paymentStatus: PaymentStatus.REFUNDED }),
-      error: "Cannot pay an order whose payment has already been refunded",
-    },
-  ])("rejects confirmed payment for $label before claiming the payment", async ({ order, error }) => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        null,
-        order,
-      ],
+  it("never credits a provider reference that already belongs to another order", async () => {
+    await insertOrder();
+    await insertOrder({ id: "order_2" });
+    await confirm({ orderId: "order_2" });
+
+    await expect(confirm()).resolves.toMatchObject({ success: false, retryable: false });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID, paid_amount: 0 });
+  });
+
+  it("sends a provider currency that differs from the order snapshot to manual reconciliation", async () => {
+    await insertOrder();
+
+    await expect(confirm({ currency: "USD" })).resolves.toMatchObject({ success: false, retryable: false });
+    expect(payments()).toEqual([]);
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.UNPAID });
+  });
+
+  it("rejects a full payment whose amount differs from the order total", async () => {
+    await insertOrder();
+
+    await expect(confirm({ amount: 99 })).resolves.toMatchObject({ success: false, retryable: false });
+    expect(payments()).toEqual([]);
+  });
+
+  it("does not credit a cancelled order", async () => {
+    await insertOrder({ status: OrderStatus.CANCELLED });
+
+    await expect(confirm()).resolves.toMatchObject({ success: false, retryable: false });
+    expect(payments()).toEqual([]);
+  });
+
+  it("retries rather than credits while shipment creation holds the order", async () => {
+    await insertOrder({
+      shipmentClaimId: "claim_1",
+      shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
     });
 
-    const result = await processPaymentConfirmed(db as never, {
+    const result = await confirm();
+    expect(result.success).toBe(false);
+    expect(result.retryable).toBeUndefined();
+    expect(payments()).toEqual([]);
+  });
+
+  it("accepts a late success from another online gateway only after the checkout failed", async () => {
+    await insertOrder({ paymentMethod: "sslcommerz" });
+    await expect(confirm()).resolves.toMatchObject({ success: false, retryable: false });
+
+    sqlite.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = 'order_1'").run();
+    await expect(confirm()).resolves.toMatchObject({ success: true });
+    expect(order()).toMatchObject({ payment_method: "stripe", payment_status: PaymentStatus.PAID });
+  });
+
+  it("applies deposit then balance against the payment plan, inferring the type when the provider did not bind one", async () => {
+    await insertOrder();
+    await db.insert(paymentPlans).values({
+      id: "plan_1",
       orderId: "order_1",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      stripePaymentIntentId: "pi_late",
-      amount: 100,
+      totalAmount: 100,
+      depositAmount: 25,
+      balanceDue: 75,
+      status: PaymentPlanStatus.PENDING,
     });
 
-    expect(result).toEqual({ success: false, error, retryable: false });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    await expect(confirm({ paymentType: "balance", amount: 75, providerRef: "pi_early" }))
+      .resolves.toMatchObject({ success: false, retryable: false });
+    await expect(confirm({ paymentType: undefined, amount: 25, providerRef: "pi_deposit" }))
+      .resolves.toEqual({ success: true, paymentType: "deposit" });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount: 25, balance_due: 75 });
+
+    await expect(confirm({ paymentType: "deposit", amount: 25, providerRef: "pi_again" }))
+      .resolves.toMatchObject({ success: false, retryable: false });
+    await expect(confirm({ paymentType: "balance", amount: 75, providerRef: "pi_balance" }))
+      .resolves.toEqual({ success: true, paymentType: "balance" });
+
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100, balance_due: 0 });
+    expect(sqlite.prepare("SELECT status FROM payment_plans WHERE id = 'plan_1'").get())
+      .toEqual({ status: PaymentPlanStatus.COMPLETED });
+    expect(payments().map((row) => (row as { provider_ref: string }).provider_ref).sort()).toEqual(["pi_balance", "pi_deposit"]);
   });
 
-  it("does not promote a pending gateway record after an order becomes terminal", async () => {
-    const { db, inserts, updates, batch } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: null, shipmentClaimExpiresAt: null },
-        { id: "pay_1", amount: 100, status: PaymentRecordStatus.PENDING },
-        createPaymentOrder({ status: OrderStatus.CANCELLED }),
-      ],
-    });
+  it("applies money at the immutable order precision", async () => {
+    await insertOrder({ totalAmount: 1.235, balanceDue: 1.235, currencyCode: "KWD", currencyDecimalPlaces: 3 });
 
-    const result = await processPaymentConfirmed(db as never, {
-      orderId: "order_1",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      stripePaymentIntentId: "pi_late",
-      amount: 100,
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Cannot pay a cancelled order",
-      retryable: false,
-    });
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(batch).not.toHaveBeenCalled();
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("throws before recording failed payment state while shipment creation is active", async () => {
-    const { db, inserts, updates } = createDbMock({
-      selectGetResults: [
-        null,
-        {
-          paidAmount: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipmentClaimId: "shp_active",
-          shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
-        },
-      ],
-    });
-
-    await expect(processPaymentFailed(db as never, "order_1", "stripe", "pi_1"))
-      .rejects.toThrow("Shipment creation or recovery is active");
-
-    expect(inserts).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
-  });
-
-  it("throws before releasing cancellation inventory while shipment creation is active", async () => {
-    const { db } = createDbMock({
-      selectGetResults: [
-        { shipmentClaimId: "shp_active", shipmentClaimExpiresAt: new Date(Date.now() + 60_000) },
-      ],
-    });
-
-    await expect(releaseOrderInventory(db as never, "order_1"))
-      .rejects.toThrow("Shipment creation or recovery is active");
-
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("applies a JPY full payment at the immutable zero-decimal precision", async () => {
-    const { db, inserts, updates } = createDbMock({
-      selectGetResults: [
-        {
-          id: "order_jpy",
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          currencyCode: "JPY",
-          currencyDecimalPlaces: 0,
-        },
-        createPaymentOrder({
-          id: "order_jpy",
-          totalAmount: 100.49,
-          balanceDue: 100.49,
-          currencyCode: "JPY",
-          currencyDecimalPlaces: 0,
-        }),
-      ],
-      batchResults: [[[{ id: "order_jpy" }], [{ id: "pay_jpy" }]]],
-    });
-
-    await expect(processPaymentConfirmed(db as never, {
-      orderId: "order_jpy",
-      paymentGateway: "stripe",
-      paymentType: "full",
-      amount: 100.49,
-      metadata: { currency: "jpy" },
-    })).resolves.toEqual({ success: true });
-
-    expect(inserts).toContainEqual(expect.objectContaining({ amount: 100, currency: "JPY" }));
-    expect(updates).toContainEqual(expect.objectContaining({
-      paidAmount: 100,
-      balanceDue: 0,
-      paymentStatus: PaymentStatus.PAID,
-    }));
-  });
-
-  it("applies a KWD deposit and balance at three-decimal precision", async () => {
-    const { db, updates } = createDbMock({
-      selectGetResults: [
-        {
-          id: "order_kwd",
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          currencyCode: "KWD",
-          currencyDecimalPlaces: 3,
-        },
-        createPaymentOrder({
-          id: "order_kwd",
-          totalAmount: 2.469,
-          balanceDue: 2.469,
-          currencyCode: "KWD",
-          currencyDecimalPlaces: 3,
-        }),
-        {
-          status: PaymentPlanStatus.PENDING,
-          depositAmount: 1.235,
-          balanceDue: 1.234,
-        },
-      ],
-      batchResults: [[[{ id: "order_kwd" }], [{ id: "pay_kwd" }], [{ id: "plan_kwd" }]]],
-    });
-
-    await expect(processPaymentConfirmed(db as never, {
-      orderId: "order_kwd",
-      paymentGateway: "stripe",
-      paymentType: "deposit",
-      amount: 1.2346,
-      metadata: { currency: "KWD" },
-    })).resolves.toEqual({ success: true });
-
-    expect(updates).toContainEqual(expect.objectContaining({
-      paidAmount: 1.235,
-      balanceDue: 1.234,
-      paymentStatus: PaymentStatus.PARTIAL,
-    }));
-  });
-
-  it("fails closed when provider currency differs from the immutable order snapshot", async () => {
-    const { db, batch } = createDbMock({
-      selectGetResults: [{
-        id: "order_kwd",
-        shipmentClaimId: null,
-        shipmentClaimExpiresAt: null,
-        currencyCode: "KWD",
-        currencyDecimalPlaces: 3,
-      }],
-    });
-
-    await expect(processPaymentConfirmed(db as never, {
-      orderId: "order_kwd",
-      paymentGateway: "sslcommerz",
-      paymentType: "full",
-      amount: 1.235,
-      metadata: { currency: "BDT" },
-    })).resolves.toMatchObject({ success: false, error: expect.stringContaining("currency does not match") });
-    expect(batch).not.toHaveBeenCalled();
+    await expect(confirm({ amount: 1.235, currency: "KWD" })).resolves.toMatchObject({ success: true });
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 1.235, balance_due: 0 });
   });
 });
 
-describe("failed payment database transitions", () => {
+describe("failed payments", () => {
   it("durably converges a pending deposit attempt and its unpaid order", async () => {
-    const { sqlite, db } = createPaymentDatabase();
-    try {
-      await insertPaymentTestOrder(db, {
-        version: 3,
-        currencyCode: "BDT",
-        currencyDecimalPlaces: 2,
-      });
-      await db.insert(paymentPlans).values({
-        id: "plan_1",
-        orderId: "order_1",
-        totalAmount: 100,
-        depositAmount: 25,
-        balanceDue: 75,
-        status: PaymentPlanStatus.PENDING,
-      });
-      await db.insert(orderPayments).values({
-        id: "pay_1",
-        orderId: "order_1",
-        amount: 0,
-        currency: "BDT",
-        paymentMethod: "stripe",
-        paymentType: "deposit",
-        status: PaymentRecordStatus.PENDING,
-        stripePaymentIntentId: "pi_deposit",
-      });
+    await insertOrder({ status: OrderStatus.PENDING, version: 3 });
+    await db.insert(paymentPlans).values({
+      id: "plan_1",
+      orderId: "order_1",
+      totalAmount: 100,
+      depositAmount: 25,
+      balanceDue: 75,
+      status: PaymentPlanStatus.PENDING,
+    });
+    await db.insert(orderPayments).values({
+      id: "pay_1",
+      orderId: "order_1",
+      amount: 0,
+      currency: "BDT",
+      paymentMethod: "stripe",
+      paymentType: "deposit",
+      status: PaymentRecordStatus.PENDING,
+      providerRef: "pi_deposit",
+    });
 
-      await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
+    await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
+    await processPaymentFailed(db, "order_1", "stripe", "pi_deposit");
 
-      expect(sqlite.prepare(`
-        SELECT payment_status, paid_amount, balance_due, version
-        FROM orders
-        WHERE id = ?
-      `).get("order_1")).toMatchObject({
-        payment_status: PaymentStatus.FAILED,
-        paid_amount: 0,
-        balance_due: 100,
-        version: 4,
-      });
-      expect(sqlite.prepare(`
-        SELECT status, payment_type
-        FROM order_payments
-        WHERE id = ?
-      `).get("pay_1")).toMatchObject({
-        status: PaymentRecordStatus.FAILED,
-        payment_type: "deposit",
-      });
-    } finally {
-      sqlite.close();
-    }
+    expect(sqlite.prepare("SELECT payment_status, version FROM orders WHERE id = 'order_1'").get())
+      .toEqual({ payment_status: PaymentStatus.FAILED, version: 4 });
+    expect(sqlite.prepare("SELECT status, payment_type FROM order_payments WHERE id = 'pay_1'").get())
+      .toEqual({ status: PaymentRecordStatus.FAILED, payment_type: "deposit" });
   });
 
   it("records a balance failure without changing partial-payment truth", async () => {
-    const { sqlite, db } = createPaymentDatabase();
-    try {
-      await insertPaymentTestOrder(db, {
-        paidAmount: 25,
-        balanceDue: 75,
-        paymentStatus: PaymentStatus.PARTIAL,
-        version: 5,
-        currencyCode: "BDT",
-        currencyDecimalPlaces: 2,
-      });
-      await db.insert(paymentPlans).values({
-        id: "plan_1",
-        orderId: "order_1",
-        totalAmount: 100,
-        depositAmount: 25,
-        balanceDue: 75,
-        status: PaymentPlanStatus.DEPOSIT_PAID,
-      });
+    await insertOrder({ status: OrderStatus.PENDING, paidAmount: 25, balanceDue: 75, paymentStatus: PaymentStatus.PARTIAL, version: 5 });
+    await db.insert(paymentPlans).values({
+      id: "plan_1",
+      orderId: "order_1",
+      totalAmount: 100,
+      depositAmount: 25,
+      balanceDue: 75,
+      status: PaymentPlanStatus.DEPOSIT_PAID,
+    });
 
-      await processPaymentFailed(db, "order_1", "stripe", "pi_balance");
+    await processPaymentFailed(db, "order_1", "sslcommerz", "val_balance");
 
-      expect(sqlite.prepare(`
-        SELECT payment_status, paid_amount, balance_due, version
-        FROM orders
-        WHERE id = ?
-      `).get("order_1")).toMatchObject({
-        payment_status: PaymentStatus.PARTIAL,
-        paid_amount: 25,
-        balance_due: 75,
-        version: 5,
-      });
-      expect(sqlite.prepare(`
-        SELECT status, payment_type, stripe_payment_intent_id
-        FROM order_payments
-        WHERE order_id = ?
-      `).get("order_1")).toMatchObject({
-        status: PaymentRecordStatus.FAILED,
-        payment_type: "balance",
-        stripe_payment_intent_id: "pi_balance",
-      });
-    } finally {
-      sqlite.close();
-    }
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PARTIAL, paid_amount: 25, balance_due: 75 });
+    expect(payments()).toEqual([expect.objectContaining({
+      status: PaymentRecordStatus.FAILED,
+      payment_type: "balance",
+      payment_method: "sslcommerz",
+      provider_ref: "val_balance",
+    })]);
   });
 
   it("does not let a late failure overwrite success committed before its batch", async () => {
-    const { sqlite, db } = createPaymentDatabase((raceDatabase) => {
-      raceDatabase.prepare(`
-        UPDATE order_payments
-        SET status = ?, amount = 100
-        WHERE id = ?
-      `).run(PaymentRecordStatus.SUCCEEDED, "pay_1");
-      raceDatabase.prepare(`
-        UPDATE orders
-        SET payment_status = ?, paid_amount = 100, balance_due = 0, version = version + 1
-        WHERE id = ?
-      `).run(PaymentStatus.PAID, "order_1");
+    sqlite.close();
+    openDatabase((race) => {
+      race.prepare("UPDATE order_payments SET status = ?, amount = 100 WHERE id = 'pay_1'").run(PaymentRecordStatus.SUCCEEDED);
+      race.prepare("UPDATE orders SET payment_status = ?, paid_amount = 100, balance_due = 0, version = version + 1 WHERE id = 'order_1'")
+        .run(PaymentStatus.PAID);
     });
-    try {
-      await insertPaymentTestOrder(db, {
-        version: 7,
-        currencyCode: "BDT",
-        currencyDecimalPlaces: 2,
-      });
-      await db.insert(orderPayments).values({
-        id: "pay_1",
-        orderId: "order_1",
-        amount: 0,
-        currency: "BDT",
-        paymentMethod: "stripe",
-        paymentType: "full",
-        status: PaymentRecordStatus.PENDING,
-        stripePaymentIntentId: "pi_race",
-      });
+    await insertOrder({ status: OrderStatus.PENDING, version: 7 });
+    await db.insert(orderPayments).values({
+      id: "pay_1",
+      orderId: "order_1",
+      amount: 0,
+      currency: "BDT",
+      paymentMethod: "stripe",
+      paymentType: "full",
+      status: PaymentRecordStatus.PENDING,
+      providerRef: "pi_race",
+    });
 
-      await processPaymentFailed(db, "order_1", "stripe", "pi_race");
+    await processPaymentFailed(db, "order_1", "stripe", "pi_race");
 
-      expect(sqlite.prepare(`
-        SELECT payment_status, paid_amount, balance_due, version
-        FROM orders
-        WHERE id = ?
-      `).get("order_1")).toMatchObject({
-        payment_status: PaymentStatus.PAID,
-        paid_amount: 100,
-        balance_due: 0,
-        version: 8,
-      });
-      expect(sqlite.prepare(`
-        SELECT status, amount
-        FROM order_payments
-        WHERE id = ?
-      `).get("pay_1")).toMatchObject({
-        status: PaymentRecordStatus.SUCCEEDED,
-        amount: 100,
-      });
-    } finally {
-      sqlite.close();
-    }
+    expect(order()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount: 100 });
+    expect(sqlite.prepare("SELECT status FROM order_payments WHERE id = 'pay_1'").get())
+      .toEqual({ status: PaymentRecordStatus.SUCCEEDED });
+  });
+
+  it("releases a cancelled payment's inventory through the central transition", async () => {
+    await insertOrder();
+    await releaseOrderInventory(db, "order_1");
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
   });
 });

@@ -1,6 +1,5 @@
 import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { effectiveRegularReservedStockSql } from "@scalius/database/inventory-authority";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
     calculateCatalogFeedDiscountedAmount,
@@ -493,7 +492,7 @@ export async function getProductFeedDiagnostics(
                 productId: productVariants.productId,
                 optionCombinationKey: productVariants.optionCombinationKey,
                 stock: productVariants.stock,
-                reservedStock: effectiveRegularReservedStockSql(),
+                reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 price: productVariants.price,

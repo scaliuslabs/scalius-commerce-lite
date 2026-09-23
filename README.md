@@ -14,7 +14,7 @@
 </h4>
 
 <p align="center">
-  Self-hosted e-commerce platform — admin dashboard, storefront, and API — deployed as three Cloudflare Workers. Turborepo monorepo with TanStack Start, Astro, Hono, and portable D1, TursoDB, or PostgreSQL storage.
+  Self-hosted e-commerce platform — admin dashboard, storefront, and API — deployed as two Cloudflare Workers. Turborepo monorepo with TanStack Router, Astro, Hono, and portable D1, TursoDB, or PostgreSQL storage.
 </p>
 
 <p align="center">
@@ -47,7 +47,7 @@
 
 ```text
 apps/
-  admin-v2/     @scalius/admin-v2    TanStack Start dashboard  (Worker, dev :4323)
+  admin-v2/     @scalius/admin-v2    Dashboard SPA, served by the API Worker (dev :4323)
   api/          @scalius/api         Hono API + queue consumer (Worker, dev :8787)
   storefront/   @scalius/storefront  Astro SSR store           (Worker, dev :4322)
 packages/
@@ -64,7 +64,7 @@ scripts/        Dev setup, dev server wrapper, deploy pipeline, checks
 | Layer | Technology |
 |-------|------------|
 | Monorepo | Turborepo + pnpm workspaces |
-| Dashboard | TanStack Start / Router / Query, React 19, Vite 8 |
+| Dashboard | Static SPA: TanStack Router / Query, React 19, Vite 8 |
 | Storefront | Astro 7 SSR + React 19 islands |
 | API | Hono + `@hono/zod-openapi` (generated OpenAPI + Swagger UI) |
 | Database | Drizzle ORM on Cloudflare D1 (default), TursoDB, or PostgreSQL/Neon |
@@ -82,21 +82,18 @@ scripts/        Dev setup, dev server wrapper, deploy pipeline, checks
 ```mermaid
 flowchart TB
     Buyer["Buyer browser"] --> SF["Storefront Worker<br/>Astro 7 SSR · :4322<br/>secret: SCALIUS_SECRET"]
-    Merchant["Merchant browser"] --> AD["Dashboard Worker<br/>TanStack Start · :4323<br/>secrets: SCALIUS_SECRET<br/>+ CREDENTIAL_ENCRYPTION_KEY"]
+    Merchant["Merchant browser"] -->|"dashboard host:<br/>SPA shell · /api/auth · /api/v1"| API
 
     SF -->|"Service binding env.BACKEND_API<br/>https://api.internal"| API
-    AD -->|"Service binding env.API<br/>https://api.internal"| API
 
-    API["API Worker — Hono · :8787<br/>secrets: SCALIUS_SECRET<br/>+ CREDENTIAL_ENCRYPTION_KEY"]
+    API["API Worker — Hono · :8787<br/>+ dashboard SPA (ASSETS, Vite dev :4323)<br/>secrets: SCALIUS_SECRET<br/>+ CREDENTIAL_ENCRYPTION_KEY"]
 
     API -->|"GET /api/v1/platform"| PLAT["Platform settings<br/>storefront · API · dashboard · media URLs<br/>edited in Settings → System → Platform"]
     PLAT -. "origins read per request" .-> SF
-    PLAT -. "origins read per request" .-> AD
 
     API --> DB[("DB (D1) — or TursoDB / PostgreSQL")]
     API --> KV[("KV — CACHE")]
     API --> R2[("R2 — BUCKET<br/>media + private agent artifacts")]
-    API --> CHECKOUTDO["Durable Object<br/>CHECKOUT_COORDINATOR"]
     API --> Q["Queue — jobs + jobs-dlq"]
     Q -->|"queue consumer"| API
     CRON["Cron — every 15 min"] --> API
@@ -105,13 +102,15 @@ flowchart TB
     API -.->|"notifications"| NOTIF["Email · SMS · WhatsApp · FCM"]
 ```
 
-Two secrets are installed per Worker; every other per-purpose secret is HKDF
-derived from `SCALIUS_SECRET` at Worker entry. The dashboard and storefront hold
-no database, provider, or URL configuration of their own: they call the API
+The dashboard is a static single-page app (`apps/admin-v2/dist`) that the API
+Worker serves from its `ASSETS` binding on the dashboard hostname, together with
+Better Auth (`/api/auth/*`) and the API itself; in local development Vite serves
+it on :4323 and proxies those paths to `http://localhost:8787`. Every per-purpose
+secret is HKDF derived from `SCALIUS_SECRET` at Worker entry. The storefront
+holds no database, provider, or URL configuration of its own: it calls the API
 through a Cloudflare Service Binding in production (over HTTP to
-`http://localhost:8787` in local development) and read the deployment's public
-origins from the API: the dashboard from `GET /api/v1/platform`, the storefront
-from the `platform` block of the layout payload it already loads.
+`http://localhost:8787` in local development) and reads the deployment's public
+origins from the `platform` block of the layout payload it already loads.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, the
 order lifecycle, and invariants.
@@ -152,7 +151,7 @@ pnpm dev:setup
 pnpm dev
 ```
 
-`pnpm dev:setup` generates the two secrets into each app's `.dev.vars`
+`pnpm dev:setup` generates the two secrets into the API and storefront `.dev.vars`
 (gitignored), applies local D1 migrations, and creates a default local admin
 through `/api/v1/setup`. It writes no URLs — local development falls back to
 fixed localhost ports in code.
@@ -223,8 +222,8 @@ pnpm auth:handoff-token --help                     # Mint a dashboard handoff to
 
 # Build & deploy
 pnpm build
-pnpm run deploy                        # All three Workers
-pnpm run deploy:api | :admin | :storefront
+pnpm run deploy                        # API (with the dashboard SPA) + storefront
+pnpm run deploy:api | :storefront
 pnpm ops:check                         # Read-only production API smoke
 pnpm release:check                     # Read-only release smoke across all surfaces
 ```
@@ -242,8 +241,8 @@ Wrangler `vars`, everything else in the dashboard.**
 
 | Secret | Workers | Purpose | Generate with |
 |--------|---------|---------|---------------|
-| `SCALIUS_SECRET` | API, dashboard, storefront | Master secret; identical on all three, at least 32 characters | `openssl rand -base64 48` |
-| `CREDENTIAL_ENCRYPTION_KEY` | API, dashboard | AES-256-GCM key for merchant provider credentials at rest; base64 of exactly 32 bytes, identical on both | `openssl rand -base64 32` |
+| `SCALIUS_SECRET` | API, storefront | Master secret; identical on both, at least 32 characters | `openssl rand -base64 48` |
+| `CREDENTIAL_ENCRYPTION_KEY` | API | AES-256-GCM key for merchant provider credentials at rest; base64 of exactly 32 bytes | `openssl rand -base64 32` |
 
 Every per-purpose secret — Better Auth session signing, JWT signing, the
 internal service token, the agent token pepper, the
@@ -261,8 +260,7 @@ admins are signed out, service tokens stop verifying, and agent
 credentials must be reissued. Encrypted provider credentials survive, because
 they use `CREDENTIAL_ENCRYPTION_KEY`. Rotating `CREDENTIAL_ENCRYPTION_KEY` makes
 stored provider credentials undecryptable — every payment, delivery, SMS, and
-email credential must be re-entered in the dashboard. Install it on the API and
-dashboard in one pass; a mismatch breaks credential reads.
+email credential must be re-entered in the dashboard.
 
 ### Platform settings (Settings → System → Platform)
 
@@ -285,8 +283,8 @@ The last three belong to the opt-in automation contracts in
 for a hand-installed store.
 
 The API serves the four origins publicly at `GET /api/v1/platform`
-(`Cache-Control: public, max-age=60`); the dashboard Worker reads that endpoint
-per request, and the storefront receives the same origins inside
+(`Cache-Control: public, max-age=60`), and the storefront receives the same
+origins inside
 `GET /api/v1/storefront/layout`. `GET /api/v1/readyz` reports a required
 `platform_config` check listing any missing origin.
 
@@ -311,7 +309,7 @@ composed from these settings at Worker entry
 
 D1 is the zero-configuration default and is already bound in the Wrangler
 configs. TursoDB deployments install `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`
-as secrets on the API and dashboard; PostgreSQL deployments install
+as secrets on the API; PostgreSQL deployments install
 `POSTGRES_DATABASE_URL` or bind `HYPERDRIVE`. Complete credentials select the
 provider on their own; `DATABASE_PROVIDER` (`d1` | `turso` | `postgres`) is an
 optional explicit pin, required only when both Turso and PostgreSQL credentials
@@ -327,23 +325,26 @@ snapshot, import, and fingerprint protocol.
 
 ### 1. Create the Cloudflare resources
 
-The three `wrangler.jsonc` files are the source of truth. Create each resource
+The two `wrangler.jsonc` files (API, storefront) are the source of truth. Create each resource
 in your own account and replace the checked-in names and IDs:
 
 | Resource | Where | Binding |
 |----------|-------|---------|
-| D1 database | API, dashboard | `DB` |
-| KV namespace | API, dashboard (one namespace; OAuth keys use the `oauth:` prefix) | `CACHE` |
+| D1 database | API | `DB` |
+| KV namespace | API, storefront (one namespace; OAuth keys use the `oauth:` prefix) | `CACHE` |
 | R2 bucket | API (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | `BUCKET` |
 | Queues | `jobs` and its DLQ `jobs-dlq` | producer `JOBS_QUEUE` + both consumers on the API |
 | Rate limiters | API: strict 5/60 s, standard 60/60 s (keys are store-scoped) | `RL_STRICT`, `RL_STANDARD` |
-| Email routing | API, dashboard | `send_email` binding `EMAIL` |
-| Service bindings | Dashboard → API, storefront → API | `API`, `BACKEND_API` |
+| Email routing | API | `send_email` binding `EMAIL` |
+| Service binding | Storefront → API | `BACKEND_API` |
+| Static assets | API (the built dashboard SPA, `apps/admin-v2/dist`) | `ASSETS` |
 
-The `CHECKOUT_COORDINATOR` Durable Object is created by the deploy migration.
-All three Workers set `workers_dev: false`, so each needs a custom domain. The
-storefront's is declared in `apps/storefront/wrangler.jsonc` (`routes`); point a
-custom domain at the API and dashboard Workers in the Cloudflare dashboard, and
+The API Wrangler config keeps a `deleted_classes` migration for the retired
+`CheckoutCoordinator` Durable Object; there is no Durable Object binding.
+Both Workers set `workers_dev: false`, so each needs a custom domain. The
+storefront's is declared in `apps/storefront/wrangler.jsonc` (`routes`); point
+both the API and the dashboard custom domains at the API Worker (`scalius-api`)
+in the Cloudflare dashboard, and
 attach a public custom domain to the media R2 bucket. Add a WAF custom rule on
 that media hostname that blocks paths starting with `/private/` (agent
 artifacts are also AES-GCM sealed at rest, so this is defence in depth), and an
@@ -360,8 +361,6 @@ Wrangler prompts for each value; it is never written to a file or committed.
 ```bash
 pnpm --dir apps/api        exec wrangler secret put SCALIUS_SECRET
 pnpm --dir apps/api        exec wrangler secret put CREDENTIAL_ENCRYPTION_KEY
-pnpm --dir apps/admin-v2   exec wrangler secret put SCALIUS_SECRET
-pnpm --dir apps/admin-v2   exec wrangler secret put CREDENTIAL_ENCRYPTION_KEY
 pnpm --dir apps/storefront exec wrangler secret put SCALIUS_SECRET
 ```
 
@@ -372,7 +371,8 @@ pnpm run deploy -- --api-url https://api.example.com --storefront-url https://sh
 ```
 
 The pipeline runs `typecheck → build → D1 migrations → deploy each Worker →
-post-deploy verification`. Targeted deploys (`deploy:api`, `deploy:admin`,
+post-deploy verification`. The API build builds the dashboard SPA first, because
+it is the API Worker's static assets. Targeted deploys (`deploy:api`,
 `deploy:storefront`) use the same wrapper.
 
 Because the Wrangler configs carry no `vars`, the script has no built-in

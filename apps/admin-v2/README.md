@@ -1,54 +1,40 @@
 # @scalius/admin-v2 — Admin dashboard
 
-TanStack Start application deployed as a Cloudflare Worker. Install, configure,
-and deploy from the repository root; see the [root README](../../README.md).
+A static single-page app (Vite + TanStack Router). It has no Worker, Wrangler
+config, secrets, or bindings of its own: `vite build` writes `dist/`, and the
+API Worker (`scalius-api`) serves that directory from its `ASSETS` binding on
+the dashboard hostname, together with Better Auth (`/api/auth/*`), the scanner
+cookie exchange (`/api/scanner-token`), and the API (`/api/v1/*`); see
+`apps/api/src/dashboard/`. Build and deploy from the repository root; the API
+build builds this app first. See the [root README](../../README.md).
 
 ```bash
 pnpm dev:admin   # from the repo root: API :8787 + dashboard :4323
 ```
 
-Run `pnpm dev:setup` first to create `.dev.vars`, apply local D1 migrations, and
-create the default local admin.
+`pnpm dev` here runs Vite on :4323 and proxies `/api/v1`, `/api/auth`, and
+`/api/scanner-token` to the API Worker on :8787, so development and production
+see the same same-origin paths. Run `pnpm dev:setup` first to create the API's
+`.dev.vars`, apply local D1 migrations, and create the default local admin.
 
 ## Stack
 
-TanStack Start + TanStack Router (file-based routes) + Vite 8 · TanStack Query
-with SSR dehydration · TanStack Table with server-side pagination · React 19 ·
-shadcn/ui + Tailwind CSS v4 + Radix · React Hook Form + Zod · Tiptap · dnd-kit ·
-Recharts · Better Auth.
+TanStack Router (file-based routes) + Vite 8 · TanStack Query · TanStack Table
+with server-side pagination · React 19 · shadcn/ui + Tailwind CSS v4 + Radix ·
+React Hook Form + Zod · Tiptap · dnd-kit · Recharts · Better Auth client.
 
-## Runtime environment
+## Runtime
 
-The Worker installs exactly two secrets (`SCALIUS_SECRET`,
-`CREDENTIAL_ENCRYPTION_KEY`) and no `vars`. Everything else is composed per
-request:
-
-- `src/server.ts` returns `503 RUNTIME_SECRET_MISSING` for every request except
-  the `/health` probe when `SCALIUS_SECRET` is missing, then calls
-  `composeAdminRuntimeEnv(env, request)` (`src/lib/runtime-env.server.ts`) and
-  runs the TanStack handler inside `runWithRuntimeEnv()` (`AsyncLocalStorage`).
-  Server code reads the composed env through `getRuntimeEnv()`, never the raw
-  `cloudflare:workers` module env.
-- `composeAdminRuntimeEnv()` derives `BETTER_AUTH_SECRET` from `SCALIUS_SECRET`
-  with HKDF and fetches the deployment's public origins from
-  `GET /api/v1/platform`, composing `BETTER_AUTH_URL`, `PUBLIC_API_BASE_URL`,
-  `STOREFRONT_URL`, and `R2_PUBLIC_URL`. The dashboard's own request origin is
-  the fallback for `BETTER_AUTH_URL` when no dashboard URL is configured yet, so
-  the first admin can sign in and set it.
-- `fetchApi()` sends that read and every other API call through the `API` service
-  binding in production. `vite dev` runs the dashboard and API in separate
-  Miniflare processes, so local development uses HTTP to `http://localhost:8787`.
+- `index.html` is a blank shell; `src/main.tsx` resolves the first route
+  (including its session guard and any redirect) before rendering, so protected
+  content never flashes for a signed-out visitor.
+- The API Worker fills in the runtime dashboard base path (a `<meta>` tag plus
+  every root-relative asset URL), so one build serves any prefix
+  (`src/lib/dashboard-base-path.ts`).
 - Public origins, the optional customer cookie domain, and extra CORS origins are
   merchant settings edited in Settings → System → Platform
   (`PlatformSettingsBuilder.tsx`, backed by
   `GET`/`PUT /api/v1/admin/settings/platform`).
-
-| Binding | Type | Purpose |
-|---------|------|---------|
-| `DB` | D1 | Database |
-| `API` | Service | → `scalius-api` Worker |
-| `CACHE` | KV | Platform/settings cache, RBAC permission cache, scanner sessions (shared with the API) |
-| `EMAIL` | send_email | Cloudflare Email |
 
 ## Data flow
 
@@ -64,18 +50,14 @@ Each domain module declares its own `staleTime` constant — 30s for order and
 inventory lists, 2min for catalog lists and dashboard, 10min for form options and
 lookups, 30min for settings, 1hr for setup status. The QueryClient default is
 `ADMIN_QUERY_STALE_TIME_MS` (10s) in `src/lib/admin-query-client.ts`. Counts of
-server functions, query wrappers, and mutation hooks change often — scan with
-`rg` rather than copying numbers.
+query wrappers and mutation hooks change often — scan with `rg` rather than
+copying numbers.
 
-**Transport**: `src/lib/api.ts` points the generated SDK client at one
-isomorphic fetch. In the browser it calls same-origin `<base>/api/v1/admin/*`
-with `credentials: "same-origin"` (production: the admin proxy route; `vite dev`:
-the Vite proxy to `:8787`). During SSR it goes through `fetchAdminApiFromServer()`
-in `src/lib/api.server.ts`, which forwards the cookie/authorization headers,
-propagates `Set-Cookie`, and applies the read timeout. Both paths return the raw
-`{ success, data }` envelope, which `apiData()` unwraps; request/response types
-come from `@scalius/api-client/types`. Endpoints outside `/api/v1/admin`
-(setup, firebase config) are real server functions in `src/lib/api-server-fns.ts`.
+**Transport**: `src/lib/api.ts` points the generated SDK client at one fetch:
+same-origin `<base>/api/v1/*` with `credentials: "same-origin"` (production: the
+API Worker on the dashboard host; `vite dev`: the Vite proxy to `:8787`). It
+returns the raw `{ success, data }` envelope, which `apiData()` unwraps;
+request/response types come from `@scalius/api-client/types`.
 
 **Stale-while-revalidate**: detail queries use `staleTime: 0` in queryOptions and
 `staleTime: Infinity` in route loaders, so navigation serves cache and refetches
@@ -88,7 +70,7 @@ Keep loading overlays scoped to the table area.
 **Loader boundaries**: a route loader should wait only for the data that makes
 the first paint correct. Products waits for the primary list while category
 options and stats prefetch in the browser. Dashboard summary uses
-`warmRouteQuery()` — cold SSR waits for correct metrics, client transitions show
+`warmRouteQuery()` — a cold load waits for correct metrics, transitions show
 `DashboardSummaryLoading` instead of blocking or flashing zeros. Dashboard
 activity (90-day charts) loads after browser idle with a timeout fallback.
 
@@ -106,17 +88,18 @@ focus or reconnect refetches there.
 
 **Auth guards**: auth, setup, and 2FA success paths navigate with TanStack Router
 rather than full document reloads. The login form must not pass a Better Auth
-`callbackURL` when it also navigates after success. The setup guard caches only
-positive "admin exists" reads for a short isolate TTL. Empty-cookie auth routes
-skip Better Auth initialization entirely: `getSessionInfo()` /
-`redirectIfAuthenticated()` return `null` and `adminRouteGuard()` redirects to
-`/auth/login` before any RBAC work. Invited-admin gates come from the same direct
-D1 session lookup: `mustChangePassword` redirects to `/auth/forgot-password` and
-`mustEnrollTwoFactor` to `/auth/setup-2fa`, both before RBAC.
+`callbackURL` when it also navigates after success. Every guard decision in
+`src/lib/auth-guards.ts` comes from one read of
+`GET <base>/api/auth/dashboard-session` (admin exists, signed-in user, 2FA
+state, and RBAC permissions once every sign-in gate has passed):
+`adminRouteGuard()` redirects to `/auth/login` without a session,
+`mustChangePassword` to `/auth/forgot-password`, and `mustEnrollTwoFactor` to
+`/auth/setup-2fa`. The guards only redirect; the admin API enforces the same
+gates on every call.
 
 **Navigation performance**: the sidebar intent-preloads only the seven principal
 read-only list routes whose loaders and components share exact query keys. After
-hydration, idle work warms permission-visible route *code* with
+the first render, idle work warms permission-visible route *code* with
 `router.loadRouteChunk()` — never loaders or API reads — capped at two route
 chains (one on 3G) and paused for Save Data, 2G, offline, hidden, and page-hide.
 The router keeps the current screen mounted during navigation and shows a
@@ -129,7 +112,7 @@ changing router pending behavior, adopting Table v9, adding virtualization, or
 broadening preload behavior.
 
 **Client bundle safety**: keep the framework's `$initial` Rolldown group unsplit —
-a size cap can divide a strongly connected ESM graph and crash hydration before
+a size cap can divide a strongly connected ESM graph and crash the app before
 login is interactive. Production builds reject reciprocal static chunk imports;
 preserve that gate when changing bundle grouping. Generated JS and CSS live under
 `/assets/immutable/` with Vite content hashes and one-year immutable headers;
@@ -157,10 +140,9 @@ rebases field-wise on save acknowledgments and revision conflicts, pausing
 background synchronization during saves and conflict resolution.
 
 **Checkout readiness preview**: the Checkout Flow panel reads
-`/api/v1/admin/settings/checkout-readiness` through the dashboard admin proxy in
-the browser, keeping the typed server-function path for server-side execution
-only, so a transient transport failure does not become a false delivery-setup
-warning. If the read still fails, the panel must describe it as an admin status
+`/api/v1/admin/settings/checkout-readiness`, so a transient transport failure
+does not become a false delivery-setup warning. If the read still fails, the
+panel must describe it as an admin status
 refresh failure while public checkout continues to fail closed from the API
 policy.
 
@@ -178,7 +160,7 @@ taxes, theme, general) · invoice PDFs · scanner/QR app.
 
 Order detail supports provider shipments and manual fulfillment.
 `ManualFulfillmentDialog` posts the selected unshipped item IDs to the orders
-server-function slice, invalidates order detail and shipments, and computes
+admin API, invalidates order detail and shipments, and computes
 final-shipment intent from the remaining fulfillable items. The refresh action is
 shown only for provider-backed shipments. If a provider shipment is created but
 local finalization needs repair, the recovery notice exposes an RBAC-gated
@@ -194,20 +176,17 @@ token is written.
 
 | File | Purpose |
 |------|---------|
-| `src/server.ts` | Worker entry: secret gate, runtime env composition |
-| `src/lib/runtime-env.server.ts` | Per-request env composition (ALS-backed) |
-| `src/router.tsx` | Router config + SSR integration |
-| `src/routes/__root.tsx` | HTML shell, CSS, providers |
-| `src/routes/admin.tsx` | Admin layout, SSR auth guard, RBAC context |
+| `index.html` | Blank shell; the API Worker fills in the base path |
+| `src/main.tsx` | Entry: resolves the first route, then renders |
+| `src/router.tsx` | Router config (base path, scroll restoration, errors) |
+| `src/routes/__root.tsx` | Root layout and providers |
+| `src/routes/admin.tsx` | Admin layout, auth guard, RBAC context |
+| `src/lib/auth-guards.ts` | Route guards over `/api/auth/dashboard-session` |
 | `src/lib/admin-query-client.ts` | QueryClient defaults (idle-tab/reconnect policy) |
 | `src/lib/admin-route-context.ts` | Stale-while-revalidate auth/RBAC shell context |
-| `src/lib/auth.fns.ts` | Auth/setup guards and admin RBAC context server functions |
-| `src/middleware/rbac.server.ts` | Server-only RBAC loading with auto-seed |
 | `src/lib/api.ts` | SDK client transport + `apiData()` envelope unwrapping |
-| `src/lib/api-server-fns.ts` | Server functions for non-admin endpoints (setup, firebase config, admin users) |
 | `src/lib/api-query-options/` | Domain queryOptions with per-domain staleTime |
 | `src/lib/api-mutations/` | Domain mutation hooks with cache invalidation |
-| `src/lib/api.server.ts` | SSR transport (cookie forwarding, Set-Cookie, read timeout) |
 | `src/lib/admin-api-timeout.ts` | Read-only API timeout helper |
 | `src/lib/query-keys.ts` | Centralized query key factory |
 | `src/lib/list-helpers.tsx` | Shared list search schemas and selectors |

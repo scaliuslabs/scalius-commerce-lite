@@ -11,7 +11,7 @@
 // consumer archives each one into its durable D1 row.
 //
 // Handler locations:
-//   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
+//   payment.event    → core payments process-payment.ts (one type for every gateway)
 //   order.notif      → src/modules/notifications/notifications.service.ts
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
 //
@@ -27,7 +27,6 @@ import { and, eq } from "drizzle-orm";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
 import {
   processExistingMetaPurchaseOutboxForOrder,
-  type MetaPurchaseQueueMessage,
 } from "@scalius/core/integrations/meta/purchase-outbox";
 import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
@@ -76,6 +75,7 @@ import {
   buildWebhookEventId,
   type PaymentWebhookDlqEvidence,
 } from "./utils/webhook-idempotency";
+import type { PaymentEventQueueMessage } from "./routes/payment/payment-events";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
 type PaymentWebhookCompletionStatus = "processed" | "manual_reconciliation";
@@ -112,7 +112,7 @@ const AUTH_OTP_ACCEPTED_HINT_PREFIX = "auth_otp:accepted:";
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
-  gateway: "stripe" | "sslcommerz",
+  gateway: string,
   orderId: string,
 ): PaymentWebhookCompletionStatus {
   if (!result.success) {
@@ -128,15 +128,11 @@ function assertPaymentConfirmed(
   return "processed";
 }
 
-function normalizeConfirmedPaymentType(value: unknown): ConfirmedPaymentType {
-  return value === "deposit" || value === "balance" || value === "full" ? value : "full";
-}
-
 async function enqueueOrderCreatedAfterPaymentConfirmed(
   db: ReturnType<typeof getDb>,
   env: Env,
   orderId: string,
-  gateway: "stripe" | "sslcommerz",
+  gateway: string,
 ): Promise<void> {
   const result = await enqueueOrderCreatedNotificationForOrder({
     db,
@@ -158,7 +154,7 @@ async function enqueueOrderNotificationAfterPaymentConfirmed(
   env: Env,
   options: {
     orderId: string;
-    gateway: "stripe" | "sslcommerz";
+    gateway: string;
     paymentType: ConfirmedPaymentType;
     amount: number;
   },
@@ -191,7 +187,7 @@ function scheduleMetaPurchaseAfterPaymentConfirmed(
   executionCtx: ExecutionContext | undefined,
   options: {
     orderId: string;
-    gateway: "stripe" | "sslcommerz";
+    gateway: string;
   },
 ): void {
   const task = processExistingMetaPurchaseOutboxForOrder({
@@ -209,64 +205,8 @@ function scheduleMetaPurchaseAfterPaymentConfirmed(
   }
 }
 
-type PaymentWebhookEventLink = {
-  webhookEventId?: string;
-};
-
 export type PaymentQueueMessage =
-  | (PaymentWebhookEventLink & {
-    type: "payment.stripe.confirmed";
-    orderId: string;
-    paymentIntentId: string;
-    amount: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
-    currency: string;
-    chargeId?: string;
-    metadata?: Record<string, string>;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.stripe.failed";
-    orderId: string;
-    paymentIntentId: string;
-    failureCode?: string;
-    failureMessage?: string;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.stripe.canceled";
-    orderId: string;
-    paymentIntentId: string;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.stripe.refunded";
-    orderId: string;
-    paymentIntentId: string;
-    amountRefunded: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
-    currency: string;
-    chargeId: string;
-    refunds?: Array<{
-      id: string;
-      amount: number;
-      currency: string;
-      status?: string | null;
-    }>;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.sslcommerz.confirmed";
-    orderId: string;
-    tranId: string;
-    valId: string;
-    bankTranId: string;
-    amount: number;
-    currency: string;
-    cardType?: string;
-    cardBrand?: string;
-    paymentType?: string;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.sslcommerz.failed";
-    orderId: string;
-    tranId: string;
-    status: string;
-  })
+  | PaymentEventQueueMessage
   | {
     type: "order.notification";
     outboxId?: string;
@@ -302,7 +242,7 @@ export type AuthOtpQueueMessage =
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
+  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -321,7 +261,7 @@ export async function handleQueueBatch(
     batch.messages,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
+      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
       db,
       env,
       executionCtx,
@@ -343,7 +283,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
+        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
         result.reason,
       );
       msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
@@ -742,7 +682,7 @@ async function archiveAuthOtpDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage>,
+  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -761,149 +701,12 @@ async function processQueueMessage(
       break;
     }
 
-    // ── Durable checkout side effects ─────────────────────────────────────
+    // ── Payments (every gateway) ─────────────────────────────────────────────
 
-    case "meta.purchase": {
-      await processExistingMetaPurchaseOutboxForOrder({
-        db,
-        orderId: payload.orderId,
-        source: payload.source,
-        storefrontUrl: env.STOREFRONT_URL,
-        encryptionKey: getCredentialEncryptionKey(
-          env as unknown as Record<string, unknown>,
-        ),
-      });
-      break;
-    }
-
-    // ── Stripe ─────────────────────────────────────────────────────────────
-
-    case "payment.stripe.confirmed": {
-      // Convert smallest currency unit → major unit using ISO 4217 decimals.
-      // e.g. USD/BDT: ÷100, JPY: ÷1, BHD: ÷1000
-      const stripeDecimals = getDecimalPlaces(payload.currency);
-      const amountInMajor = payload.amount / Math.pow(10, stripeDecimals);
-      const paymentType = normalizeConfirmedPaymentType(payload.metadata?.paymentType);
-      const result = await processPaymentConfirmed(db, {
-        orderId: payload.orderId,
-        paymentGateway: "stripe",
-        paymentType,
-        stripePaymentIntentId: payload.paymentIntentId,
-        stripeChargeId: payload.chargeId,
-        amount: amountInMajor,
-        metadata: { currency: payload.currency },
-      });
-      const completionStatus = assertPaymentConfirmed(result, "stripe", payload.orderId);
-      if (result.success && !result.alreadyProcessed) {
-        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
-          orderId: payload.orderId,
-          gateway: "stripe",
-          paymentType,
-          amount: amountInMajor,
-        });
-        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
-          orderId: payload.orderId,
-          gateway: "stripe",
-        });
-      }
-      paymentWebhookStatus = completionStatus;
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "stripe",
-        outcome: result.success ? "confirmed" : "manual_reconciliation",
-        error: result.success ? null : result.error ?? null,
-      });
-      console.log(`[Queue] Stripe payment confirmed for order ${payload.orderId}`);
-      break;
-    }
-
-    case "payment.stripe.failed": {
-      await processPaymentFailed(db, payload.orderId, "stripe", payload.paymentIntentId);
-      paymentWebhookStatus = "processed";
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "stripe",
-        outcome: "failed",
-        failureCode: payload.failureCode ?? null,
-        failureMessage: payload.failureMessage ?? null,
-      });
-      console.log(`[Queue] Stripe payment failed for order ${payload.orderId}`);
-      break;
-    }
-
-    case "payment.stripe.canceled": {
-      await releaseOrderInventory(db, payload.orderId);
-      paymentWebhookStatus = "processed";
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "stripe",
-        outcome: "canceled",
-      });
-      console.log(`[Queue] Stripe payment cancelled, inventory released for order ${payload.orderId}`);
-      break;
-    }
-
-    case "payment.stripe.refunded": {
-      // Stripe refunds may originate in the Stripe dashboard. Keep this queue
-      // step audit-only; scheduled reconciliation imports provider-confirmed
-      // refunds into the local refund ledger before notifying buyers.
-      paymentWebhookStatus = "manual_reconciliation";
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "stripe",
-        outcome: "external_refund_observed",
-        amountRefunded: payload.amountRefunded,
-        currency: payload.currency,
-        paymentIntentId: payload.paymentIntentId,
-        chargeId: payload.chargeId,
-        refunds: payload.refunds ?? [],
-      });
-      console.log(`[Queue] Stripe refund observed for order ${payload.orderId}; awaiting scheduled reconciliation`);
-      break;
-    }
-
-    // ── SSLCommerz ─────────────────────────────────────────────────────────
-
-    case "payment.sslcommerz.confirmed": {
-      const paymentType = normalizeConfirmedPaymentType(payload.paymentType);
-      const result = await processPaymentConfirmed(db, {
-        orderId: payload.orderId,
-        paymentGateway: "sslcommerz",
-        paymentType,
-        sslcommerzTranId: payload.tranId,
-        sslcommerzValId: payload.valId,
-        sslcommerzBankTranId: payload.bankTranId,
-        amount: payload.amount,
-        metadata: { currency: payload.currency, cardType: payload.cardType, cardBrand: payload.cardBrand },
-      });
-      const completionStatus = assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
-      if (result.success && !result.alreadyProcessed) {
-        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
-          orderId: payload.orderId,
-          gateway: "sslcommerz",
-          paymentType,
-          amount: payload.amount,
-        });
-        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
-          orderId: payload.orderId,
-          gateway: "sslcommerz",
-        });
-      }
-      paymentWebhookStatus = completionStatus;
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "sslcommerz",
-        outcome: result.success ? "confirmed" : "manual_reconciliation",
-        error: result.success ? null : result.error ?? null,
-      });
-      console.log(`[Queue] SSLCommerz payment confirmed for order ${payload.orderId}`);
-      break;
-    }
-
-    case "payment.sslcommerz.failed": {
-      await processPaymentFailed(db, payload.orderId, "sslcommerz", payload.tranId);
-      paymentWebhookStatus = "processed";
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "sslcommerz",
-        outcome: "failed",
-        status: payload.status,
-      });
-      console.log(`[Queue] SSLCommerz payment failed for order ${payload.orderId}`);
+    case "payment.event": {
+      const outcome = await applyPaymentEvent(db, env, executionCtx, payload);
+      paymentWebhookStatus = outcome.status;
+      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, outcome.result);
       break;
     }
 
@@ -931,7 +734,6 @@ async function processQueueMessage(
           db,
           {
             encryptionKey,
-            migrationEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
             env: env as unknown as Record<string, unknown>,
             outboxId: payload.outboxId,
           },
@@ -1013,7 +815,7 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MetaPurchaseQueueMessage;
+type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
@@ -1029,81 +831,97 @@ function getPaymentWebhookEventId(payload: QueueBody): string | undefined {
   return payload.webhookEventId;
 }
 
+/** Apply one provider-authenticated payment event through the gateway-agnostic kernel. */
+async function applyPaymentEvent(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  executionCtx: ExecutionContext | undefined,
+  message: PaymentEventQueueMessage,
+): Promise<{ status: PaymentWebhookCompletionStatus; result: Record<string, unknown> }> {
+  const { provider, event } = message;
+  const refs = { gateway: provider, providerRef: event.providerRef, secondaryRef: event.secondaryRef ?? null };
+
+  switch (event.kind) {
+    case "confirmed": {
+      const currency = event.currency ?? "";
+      const amount = (event.amountMinor ?? 0) / 10 ** getDecimalPlaces(currency);
+      const result = await processPaymentConfirmed(db, {
+        orderId: event.orderId,
+        provider,
+        amount,
+        currency,
+        paymentType: event.paymentType,
+        providerRef: event.providerRef,
+        secondaryRef: event.secondaryRef,
+        metadata: { currency, ...event.details },
+      });
+      const status = assertPaymentConfirmed(result, provider, event.orderId);
+      if (result.success && !result.alreadyProcessed) {
+        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
+          orderId: event.orderId,
+          gateway: provider,
+          paymentType: result.paymentType ?? event.paymentType ?? "full",
+          amount,
+        });
+        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, { orderId: event.orderId, gateway: provider });
+      }
+      console.log(`[Queue] ${provider} payment confirmed for order ${event.orderId}`);
+      return {
+        status,
+        result: {
+          ...refs,
+          outcome: result.success ? "confirmed" : "manual_reconciliation",
+          error: result.success ? null : result.error ?? null,
+        },
+      };
+    }
+    case "failed":
+      await processPaymentFailed(db, event.orderId, provider, event.providerRef);
+      console.log(`[Queue] ${provider} payment failed for order ${event.orderId}`);
+      return { status: "processed", result: { ...refs, outcome: "failed", ...event.details } };
+    case "cancelled":
+      await releaseOrderInventory(db, event.orderId);
+      console.log(`[Queue] ${provider} payment cancelled, inventory released for order ${event.orderId}`);
+      return { status: "processed", result: { ...refs, outcome: "canceled" } };
+    case "refund_observed":
+      // Refunds made in the provider dashboard stay audit-only here; scheduled
+      // reconciliation imports provider-confirmed refunds into the ledger.
+      return { status: "manual_reconciliation", result: { ...refs, outcome: "external_refund_observed", ...event.details } };
+  }
+}
+
 function createPaymentWebhookDlqEvidence(
   msg: Message<PaymentOnlyQueueMessage>,
 ): PaymentWebhookDlqEvidence {
   const payload = msg.body;
-  const provider = getPaymentProviderFromQueueType(payload.type);
+  const { event } = payload;
   return {
     webhookEventId: payload.webhookEventId,
-    fallbackEventId: buildWebhookEventId(provider, `${payload.type}.dlq`, msg.id),
-    provider,
-    eventType: payload.type,
-    orderId: payload.orderId,
+    fallbackEventId: buildWebhookEventId(payload.provider, `${payload.type}.dlq`, msg.id),
+    provider: payload.provider,
+    eventType: `${payload.type}.${event.kind}`,
+    orderId: event.orderId,
     queueMessageId: msg.id,
     queueType: payload.type,
     attempts: msg.attempts,
     observedAtSeconds: Math.floor(Date.now() / 1000),
     messageTimestampSeconds: toUnixSeconds(msg.timestamp),
-    payment: getPaymentDlqSnapshot(payload),
+    payment: {
+      kind: event.kind,
+      providerRef: event.providerRef,
+      secondaryRef: event.secondaryRef ?? null,
+      amountMinor: event.amountMinor ?? null,
+      currency: event.currency ?? null,
+      paymentType: event.paymentType ?? null,
+    },
   };
 }
-
-function getPaymentProviderFromQueueType(type: PaymentOnlyQueueMessage["type"]): string {
-  const provider = type.split(".")[1];
-  return provider && PAYMENT_WEBHOOK_PROVIDER_SET.has(provider) ? provider : "unknown";
-}
-
-const PAYMENT_WEBHOOK_PROVIDER_SET = new Set(["stripe", "sslcommerz"]);
 
 function toUnixSeconds(value: Date | number | string | undefined): number | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return Math.floor(date.getTime() / 1000);
-}
-
-function getPaymentDlqSnapshot(payload: PaymentOnlyQueueMessage): Record<string, unknown> {
-  switch (payload.type) {
-    case "payment.stripe.confirmed":
-      return {
-        paymentIntentId: payload.paymentIntentId,
-        amount: payload.amount,
-        currency: payload.currency,
-        chargeId: payload.chargeId ?? null,
-        paymentType: payload.metadata?.paymentType ?? null,
-      };
-    case "payment.stripe.failed":
-      return {
-        paymentIntentId: payload.paymentIntentId,
-        failureCode: payload.failureCode ?? null,
-        failureMessage: payload.failureMessage ?? null,
-      };
-    case "payment.stripe.canceled":
-      return { paymentIntentId: payload.paymentIntentId };
-    case "payment.stripe.refunded":
-      return {
-        paymentIntentId: payload.paymentIntentId,
-        amountRefunded: payload.amountRefunded,
-        currency: payload.currency,
-        chargeId: payload.chargeId,
-        refunds: payload.refunds ?? [],
-      };
-    case "payment.sslcommerz.confirmed":
-      return {
-        tranId: payload.tranId,
-        valId: payload.valId,
-        bankTranId: payload.bankTranId,
-        amount: payload.amount,
-        currency: payload.currency,
-        paymentType: payload.paymentType ?? null,
-      };
-    case "payment.sslcommerz.failed":
-      return {
-        tranId: payload.tranId,
-        status: payload.status,
-      };
-  }
 }
 
 function createPaymentWebhookQueueResult(
@@ -1114,7 +932,7 @@ function createPaymentWebhookQueueResult(
   return {
     queueMessageId,
     queueType: payload.type,
-    orderId: payload.orderId,
+    orderId: payload.event.orderId,
     ...extra,
   };
 }
@@ -1149,7 +967,7 @@ async function markPaymentWebhookEventFailedOnTerminalAttempt(
     await markWebhookEventFailed(db, webhookEventId, {
       queueMessageId: msg.id,
       queueType: msg.body.type,
-      orderId: isPaymentQueuePayload(msg.body) ? msg.body.orderId : null,
+      orderId: isPaymentQueuePayload(msg.body) ? msg.body.event.orderId : null,
       terminalDeliveryAttempt: msg.attempts,
       maxRetries: JOBS_MAX_RETRIES,
       error: error instanceof Error ? error.message : String(error),
@@ -1575,10 +1393,7 @@ async function sendAuthOtpWhatsApp(
   }
 
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const config = await getWhatsAppCloudApiSettings(db, encryptionKey, {
-    migrateLegacy: true,
-    migrationEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-  });
+  const config = await getWhatsAppCloudApiSettings(db, encryptionKey);
   if (!config.accessToken || !config.phoneNumberId) {
     throw createAuthOtpDeliveryError("WhatsApp credentials are not configured", {
       provider: "whatsapp",

@@ -13,99 +13,20 @@ export class AdminApiReadTimeoutError extends Error {
   }
 }
 
-export function shouldTimeoutAdminApiMethod(method: string): boolean {
-  const normalized = method.toUpperCase();
-  return normalized === "GET" || normalized === "HEAD";
-}
-
-export interface AdminApiReadTimeoutHandle {
-  signal?: AbortSignal;
-  didTimeout: () => boolean;
-  cleanup: () => void;
-}
-
-export function createAdminApiReadTimeout(
+/**
+ * Reads (GET/HEAD) give up after `timeoutMs`, headers and body included, so a
+ * stalled read surfaces a retryable error instead of a spinner. Writes are
+ * never cut short: a timed-out write could still commit.
+ */
+export function adminApiReadSignal(
   method: string,
-  parentSignal?: AbortSignal,
+  parent?: AbortSignal,
   timeoutMs = ADMIN_API_READ_TIMEOUT_MS,
-): AdminApiReadTimeoutHandle {
-  if (!shouldTimeoutAdminApiMethod(method)) {
-    return {
-      signal: undefined,
-      didTimeout: () => false,
-      cleanup: () => {},
-    };
-  }
-
+): AbortSignal | undefined {
+  const normalized = method.toUpperCase();
+  if (normalized !== "GET" && normalized !== "HEAD") return parent;
   const controller = new AbortController();
-  let timeoutReached = false;
-
-  const abortFromParent = () => {
-    controller.abort(parentSignal?.reason);
-  };
-
-  if (parentSignal?.aborted) {
-    abortFromParent();
-  } else {
-    parentSignal?.addEventListener("abort", abortFromParent, { once: true });
-  }
-
-  const timeoutId = setTimeout(() => {
-    timeoutReached = true;
-    controller.abort(new AdminApiReadTimeoutError(timeoutMs));
-  }, timeoutMs);
-
-  return {
-    signal: controller.signal,
-    didTimeout: () => timeoutReached,
-    cleanup: () => {
-      clearTimeout(timeoutId);
-      parentSignal?.removeEventListener("abort", abortFromParent);
-    },
-  };
-}
-
-export function wrapResponseWithAdminApiReadTimeout(
-  response: Response,
-  timeout: AdminApiReadTimeoutHandle,
-): Response {
-  if (!timeout.signal || !response.body) {
-    timeout.cleanup();
-    return response;
-  }
-
-  const reader = response.body.getReader();
-  let cleanedUp = false;
-  const cleanupOnce = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    timeout.cleanup();
-  };
-
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          cleanupOnce();
-          controller.close();
-          return;
-        }
-        controller.enqueue(value);
-      } catch (error) {
-        cleanupOnce();
-        controller.error(error);
-      }
-    },
-    async cancel(reason) {
-      cleanupOnce();
-      await reader.cancel(reason);
-    },
-  });
-
-  return new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
+  const timer = setTimeout(() => controller.abort(new AdminApiReadTimeoutError(timeoutMs)), timeoutMs);
+  controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  return parent ? AbortSignal.any([parent, controller.signal]) : controller.signal;
 }

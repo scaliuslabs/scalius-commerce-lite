@@ -5,54 +5,39 @@
  *
  *   const category = await apiData(getApiV1AdminCategoriesById({ path: { id } }));
  *
- * Request path:
- * - Browser: same-origin `fetch` to `<dashboard base>/api/v1/admin/*` with the
- *   session cookie. Production answers through the admin proxy route
- *   (`routes/api/v1/admin/$.ts`, cross-origin cookie guard + read timeout);
- *   `vite dev` answers through the Vite proxy. Both return the API's raw
- *   envelope, which `apiData()` unwraps, so dev and production see one shape.
- * - Server (SSR loaders, server functions): `api.server.ts` forwards the
- *   incoming cookie/authorization to the API service binding and propagates
- *   Set-Cookie back.
+ * The dashboard is a static app served by the API Worker on the dashboard
+ * hostname, so every call is a same-origin `fetch` to
+ * `<dashboard base>/api/v1/*` carrying the session cookie. `vite dev` proxies
+ * the same paths to the local API Worker, so dev and production see one shape.
  */
-import { createIsomorphicFn } from "@tanstack/react-start";
 import { client as apiClient } from "@scalius/api-client/client";
 
 import { AdminApiResponseError } from "./admin-api-error";
+import { adminApiReadSignal } from "./admin-api-timeout";
 import { withDashboardBasePath } from "./dashboard-base-path";
-import { fetchAdminApiFromServer } from "./api.server";
 
-const ADMIN_API_PREFIX = "/api/v1/admin/";
-
-async function fetchAdminApiFromBrowser(request: Request): Promise<Response> {
+async function fetchAdminApi(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  // Only the admin proxy is reachable from the browser in production. Anything
-  // else would work under `vite dev` (which proxies all of /api/v1) and then
-  // fail in production, so reject it here in both.
-  if (!url.pathname.startsWith(ADMIN_API_PREFIX)) {
-    throw new Error(`Browser API calls must target ${ADMIN_API_PREFIX}*: ${url.pathname}`);
-  }
-  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const body = request.method === "GET" || request.method === "HEAD"
+    ? ""
+    : await request.text();
   return fetch(withDashboardBasePath(url.pathname) + url.search, {
     method: request.method,
     headers: request.headers,
-    body: hasBody ? await request.text() : undefined,
+    body: body || undefined,
     credentials: "same-origin",
     cache: "no-store",
+    signal: adminApiReadSignal(request.method, request.signal),
   });
 }
 
-const fetchAdminApi = createIsomorphicFn()
-  .server((request: Request) => fetchAdminApiFromServer(request))
-  .client((request: Request) => fetchAdminApiFromBrowser(request));
-
-// The origin is a placeholder: both transports only use path + query.
+// The origin is a placeholder: only path + query are used.
 apiClient.setConfig({
   baseUrl: "https://admin-api.invalid",
   // The API answers JSON envelopes; do not guess from Content-Type.
   parseAs: "json",
   // hey-api always calls `fetch(request)` with a built Request.
-  fetch: ((request: Request) => fetchAdminApi(request)) as typeof fetch,
+  fetch: fetchAdminApi as typeof fetch,
 });
 
 export { apiClient };
