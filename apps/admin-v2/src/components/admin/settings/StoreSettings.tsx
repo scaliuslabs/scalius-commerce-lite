@@ -40,6 +40,7 @@ import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
 import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { normalizeStorePhone } from "./store-phone";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
 type Business = ApiResult<typeof getApiV1AdminSettingsBusiness>;
@@ -114,6 +115,7 @@ function useBusinessForm() {
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
     isValid: (values) => isValidLogo(values.invoiceLogoUrl),
+    fields: (path) => `business-${path}`,
   });
 }
 
@@ -127,9 +129,10 @@ function BusinessFields({ fields }: { fields: Array<{ key: BusinessKey; label: s
         id={`business-${key}`}
         type={type}
         value={values[key]}
+        inputMode={key === "phone" ? "tel" : undefined}
         aria-describedby={help ? `business-${key}-note` : undefined}
-       
         onChange={(event) => setValue(key, event.target.value)}
+        onBlur={key === "phone" ? () => setValue(key, normalizeStorePhone(values[key])) : undefined}
       />
     </SettingsField>
   ));
@@ -230,7 +233,7 @@ export function BusinessCard() {
                 { key: "companyName", label: t("companyName") },
                 { key: "legalName", label: t("legalName"), help: t("legalNameHelp") },
                 { key: "email", label: t("email"), type: "email" },
-                { key: "phone", label: t("phone"), type: "tel" },
+                { key: "phone", label: t("phone"), help: t("phoneHelp"), type: "tel" },
                 { key: "taxId", label: t("taxId") },
               ]}
             />
@@ -312,6 +315,7 @@ function WebAddressFields() {
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
     isValid: (draft) => URL_KEYS.every((key) => !urlError(key, draft[key] ?? "")),
+    fields: (path) => `platform-${path}`,
   });
   return URL_KEYS.map((key) => {
     const [label, help] = URL_LABELS[key];

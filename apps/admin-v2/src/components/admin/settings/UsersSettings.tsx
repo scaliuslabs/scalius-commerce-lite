@@ -23,6 +23,7 @@ import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { apiData } from "~/lib/api";
 import { getAdminUsers, getRbacRoles, type AdminUser, type RbacRole } from "~/lib/api-query-options/rbac";
@@ -82,8 +83,15 @@ function failure(error: unknown, t: Messages, fallback: string, conflict?: strin
   if (error instanceof AdminApiResponseError) {
     if (error.status === 403) return t("noAuthority");
     if (error.status === 409 && conflict) return conflict;
+    // The API refuses to suspend the last active administrator.
+    if (error.status === 400 && /last active administrator/i.test(error.message)) return t("lastManager");
   }
   return fallback;
+}
+
+/** A save-bar rejection: field problems pass through to be marked in place; the rest in plain words. */
+function saveFailure(error: unknown, t: Messages, fallback: string, conflict?: string): Error {
+  return readApiFieldIssues(error) ? (error as Error) : new Error(failure(error, t, fallback, conflict));
 }
 
 /** Roles a viewer may hand out: only the store owner hands out the owner role. */
@@ -145,12 +153,13 @@ function AddStaffForm() {
     },
   });
   useSaveBar({
+    fields: { name: "staff-name", email: "staff-email", roleId: "staff-role" },
     dirty: Boolean(draft.name || draft.email || draft.roleId),
     saving: add.isPending,
     invalid: !draft.name.trim() || !/^\S+@\S+\.\S+$/.test(draft.email.trim()) || !draft.roleId,
     // The banner shows the reason; name the known conflicts in plain words.
     save: () => add.mutateAsync().catch((error: unknown) => {
-      throw new Error(failure(error, t, common("saveFailed"), t("emailTaken")));
+      throw saveFailure(error, t, common("saveFailed"), t("emailTaken"));
     }),
     discard: () => setDraft(empty),
   });
@@ -181,7 +190,7 @@ function AddStaffForm() {
       {roles.isError ? (
         <SettingsLoadFailure title={t("roles")} onRetry={roles.refetch} />
       ) : (
-        <SettingsField id="staff-role" label={t("role")} error={roles.data && !choices.length ? t("noRoles") : undefined}>
+        <SettingsField id="staff-role" label={t("role")} help={roles.data && !choices.length ? t("noRoles") : undefined}>
           <Select value={draft.roleId} onValueChange={(roleId) => setDraft({ ...draft, roleId })} disabled={!choices.length}>
             <SelectTrigger id="staff-role" aria-describedby={roles.data && !choices.length ? "staff-role-note" : undefined}>
               <SelectValue placeholder={t("chooseRole")} />
@@ -233,7 +242,7 @@ function StaffAccessForm({ member }: { member: AdminUser }) {
     saving: save.isPending,
     invalid: locked || noAccess,
     save: () => save.mutateAsync().catch((error: unknown) => {
-      throw new Error(failure(error, t, common("saveFailed")));
+      throw saveFailure(error, t, common("saveFailed"));
     }),
     discard: () => setDraft(saved),
   });
@@ -283,7 +292,7 @@ function StaffActionButtons({ member, status, actions }: { member: AdminUser; st
   const t = useMessages(usersMessages);
   const common = useMessages(settingsMessages);
   const queryClient = useQueryClient();
-  const [confirm, setConfirm] = useState<"remove" | "cancelInvite" | null>(null);
+  const [confirm, setConfirm] = useState<"suspend" | "cancelInvite" | null>(null);
   const reload = () => queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers.all });
   const onError = (error: unknown) => toast.error(failure(error, t, t("actionFailed")));
   const resend = useMutation({
@@ -296,7 +305,7 @@ function StaffActionButtons({ member, status, actions }: { member: AdminUser; st
     mutationFn: (suspended: boolean) =>
       apiData(postApiV1AdminAuthUsersByIdSuspension({ path: { id: member.id }, body: { suspended } })),
     onSuccess: async (_, suspended) => {
-      toast.success(t(suspended ? "removed" : "restored"));
+      toast.success(t(suspended ? "accessSuspended" : "restored"));
       setConfirm(null);
       await reload();
     },
@@ -312,7 +321,7 @@ function StaffActionButtons({ member, status, actions }: { member: AdminUser; st
     onError,
   });
   const busy = resend.isPending || suspend.isPending || revoke.isPending;
-  if (!actions.resendInvite && !actions.cancelInvite && !actions.restore && !actions.remove) return null;
+  if (!actions.resendInvite && !actions.cancelInvite && !actions.restore && !actions.suspend) return null;
   return (
     <div className="flex flex-wrap gap-2">
       {actions.resendInvite ? (
@@ -321,7 +330,13 @@ function StaffActionButtons({ member, status, actions }: { member: AdminUser; st
         </Button>
       ) : null}
       {actions.restore ? (
-        <Button type="button" variant="outline" disabled={busy} onClick={() => suspend.mutate(false)}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          loading={suspend.isPending && suspend.variables === false}
+          onClick={() => suspend.mutate(false)}
+        >
           {t("restoreAccess")}
         </Button>
       ) : null}
@@ -330,28 +345,30 @@ function StaffActionButtons({ member, status, actions }: { member: AdminUser; st
           {t("cancelInvite")}
         </Button>
       ) : null}
-      {actions.remove ? (
-        <Button type="button" variant="ghost" disabled={busy} onClick={() => setConfirm("remove")}>
-          {t("removeStaff")}
+      {actions.suspend ? (
+        <Button type="button" variant="ghost" disabled={busy} onClick={() => setConfirm("suspend")}>
+          {t("suspendAccess")}
         </Button>
       ) : null}
       <ConfirmDialog
-        open={confirm === "remove"}
-        onOpenChange={(open) => setConfirm(open ? "remove" : null)}
-        title={t("removeStaff")}
-        description={t("removeConfirm", { name: member.name })}
-        confirmLabel={common("remove")}
+        open={confirm === "suspend"}
+        onOpenChange={(open) => setConfirm(open ? "suspend" : null)}
+        title={t("suspendTitle", { name: member.name })}
+        description={t("suspendConfirm")}
+        confirmLabel={t("suspend")}
         cancelLabel={common("cancel")}
+        loadingLabel={t("suspending")}
         isLoading={suspend.isPending}
         onConfirm={() => suspend.mutate(true)}
       />
       <ConfirmDialog
         open={confirm === "cancelInvite"}
         onOpenChange={(open) => setConfirm(open ? "cancelInvite" : null)}
-        title={t("cancelInvite")}
-        description={t("cancelInviteConfirm", { name: member.name })}
+        title={t("cancelInviteTitle", { name: member.name })}
+        description={t("cancelInviteConfirm")}
         confirmLabel={t("cancelInvite")}
         cancelLabel={t("keepInvite")}
+        loadingLabel={t("cancellingInvite")}
         isLoading={revoke.isPending}
         onConfirm={() => revoke.mutate()}
       />
@@ -442,11 +459,12 @@ function RoleForm({ role }: { role: RbacRole | null }) {
     onError: (error) => toast.error(failure(error, t, t("actionFailed"), t("roleInUse"))),
   });
   useSaveBar({
+    fields: { name: "role-name", displayName: "role-name" },
     dirty: !readOnly && JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     invalid: !draft.name.trim(),
     save: () => save.mutateAsync().catch((error: unknown) => {
-      throw new Error(failure(error, t, common("saveFailed"), t("roleExists")));
+      throw saveFailure(error, t, common("saveFailed"), t("roleExists"));
     }),
     discard: () => setDraft(saved),
   });
@@ -484,11 +502,12 @@ function RoleForm({ role }: { role: RbacRole | null }) {
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteRole")}
+            title={common("deleteNamed", { name: role.displayName })}
             description={t("deleteRoleConfirm", { name: role.displayName })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
             isLoading={remove.isPending}
+            loadingLabel={t("deletingRole")}
             onConfirm={() => remove.mutate()}
           />
         </>

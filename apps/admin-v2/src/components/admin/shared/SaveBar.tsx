@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -15,10 +16,11 @@ import { AlertCircle, CircleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { translate, useMessages } from "~/i18n";
-import { saveBarMessages } from "~/i18n/save-bar";
+import { fieldErrorMessages, saveBarMessages } from "~/i18n/save-bar";
 
 /** One editable card (or dialog form) registered with a save scope. */
 export interface SaveBarEntry {
@@ -28,6 +30,14 @@ export interface SaveBarEntry {
   invalid?: boolean;
   /** Names the card in the "couldn't save" banner, e.g. "Business details". */
   label?: string;
+  /**
+   * Where the API's body paths are shown: a map or function from path to the
+   * control's DOM id (e.g. `(path) => \`business-${path}\``). A rejected field
+   * that is on screen is marked in place (`SettingsField`) and named by its
+   * label in the banner. A nested path (`sources.2`) falls back to its first
+   * segment.
+   */
+  fields?: Record<string, string> | ((path: string) => string | undefined);
   /** Rejects when the save failed; the error's message is listed in the banner. */
   save: () => Promise<unknown>;
   discard: () => void;
@@ -39,6 +49,10 @@ export interface SaveScopeState {
   invalid: boolean;
   /** Problems from the last save, one line each; empty after a clean save. */
   errors: string[];
+  /** Control id → what's wrong with it, from the last save. */
+  fieldErrors: Record<string, string>;
+  /** Save was pressed while fields were invalid; their messages are showing. */
+  revealed: boolean;
   /** Saves every dirty entry; false when any failed (their edits are kept). */
   saveAll: () => Promise<boolean>;
   discardAll: () => void;
@@ -50,12 +64,28 @@ interface SaveRegistry {
 }
 
 const SaveBarContext = createContext<SaveRegistry | null>(null);
-/** Kept apart from the registry so a failed save re-renders only the banner. */
-const SaveErrorsContext = createContext<{ errors: string[]; attempt: number }>({ errors: [], attempt: 0 });
+interface SaveFailure {
+  errors: string[];
+  fieldErrors: Record<string, string>;
+  attempt: number;
+  /**
+   * Inline validation shows once a field is left (blur). Pressing Save with
+   * invalid fields reveals every field's message at once; this counts presses.
+   */
+  reveal: number;
+}
+const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, attempt: 0, reveal: 0 };
+/** Kept apart from the registry so a failed save re-renders only the banner and marked fields. */
+const SaveErrorsContext = createContext<SaveFailure & { clearField: (id: string) => void }>({
+  ...NO_FAILURE,
+  clearField: () => {},
+});
 
 /** What went wrong, in words a merchant can act on. */
 function describeSaveError(error: unknown): string {
   if (error instanceof AdminApiResponseError) {
+    // A request-validation rejection nobody mapped carries a JSON issue list as its message.
+    if (error.status < 500 && error.message.startsWith("[")) return translate(fieldErrorMessages, "invalid");
     return error.status < 500 && error.message && !error.message.startsWith("API error")
       ? error.message
       : translate(saveBarMessages, "serverError");
@@ -67,6 +97,34 @@ function describeSaveError(error: unknown): string {
     return error.message || translate(saveBarMessages, "serverError");
   }
   return translate(saveBarMessages, "serverError");
+}
+
+/** Banner lines for one failed entry; marks the fields it can place. */
+/** The on-screen control (and its label) that shows an API body path. */
+function findField(entry: SaveBarEntry, path: string): { id: string; label: string } | null {
+  if (!entry.fields || typeof document === "undefined") return null;
+  const resolve = (key: string) =>
+    typeof entry.fields === "function" ? entry.fields(key) : entry.fields?.[key];
+  for (const key of [path, path.split(".")[0]!]) {
+    const id = resolve(key);
+    if (!id || !document.getElementById(id)) continue;
+    const label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim();
+    return { id, label: label || "" };
+  }
+  return null;
+}
+
+/** Banner lines for one failed entry; marks the fields it can place. */
+function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<string, string>): string[] {
+  const prefix = entry.label ? `${entry.label}: ` : "";
+  const issues = readApiFieldIssues(error);
+  if (!issues) return [prefix + describeSaveError(error)];
+  return issues.map((issue) => {
+    const field = findField(entry, issue.path);
+    if (!field) return prefix + issue.message;
+    fieldErrors[field.id] ??= issue.message;
+    return field.label ? `${field.label}: ${issue.message}` : prefix + issue.message;
+  });
 }
 
 /**
@@ -84,7 +142,15 @@ export function SaveScope({
   const entries = useRef(new Map<string, SaveBarEntry>());
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const [saving, setSaving] = useState(false);
-  const [failure, setFailure] = useState({ errors: [] as string[], attempt: 0 });
+  const [failure, setFailure] = useState<SaveFailure>(NO_FAILURE);
+  const clearField = useCallback((id: string) => {
+    setFailure((previous) => {
+      if (!(id in previous.fieldErrors)) return previous;
+      const { [id]: _cleared, ...rest } = previous.fieldErrors;
+      return { ...previous, fieldErrors: rest };
+    });
+  }, []);
+  const errorsValue = useMemo(() => ({ ...failure, clearField }), [failure, clearField]);
 
   const registry = useMemo<SaveRegistry>(() => ({
     set(id, entry) {
@@ -110,9 +176,17 @@ export function SaveScope({
     busy: saving || list.some((entry) => entry.saving),
     invalid: list.some((entry) => entry.dirty && entry.invalid),
     errors: failure.errors,
+    fieldErrors: failure.fieldErrors,
+    revealed: failure.reveal > 0,
     async saveAll() {
+      if (list.some((entry) => entry.dirty && entry.invalid)) {
+        // Shopify: Save stays pressable; it shows what to fix instead of saving.
+        setFailure((previous) => ({ ...previous, reveal: previous.reveal + 1 }));
+        return false;
+      }
       setSaving(true);
       const errors: string[] = [];
+      const fieldErrors: Record<string, string> = {};
       try {
         // Cards are separate documents: save each, keep the edits of any that fail.
         for (const entry of [...entries.current.values()]) {
@@ -120,14 +194,13 @@ export function SaveScope({
           try {
             await entry.save();
           } catch (error) {
-            const message = describeSaveError(error);
-            errors.push(entry.label ? `${entry.label}: ${message}` : message);
+            errors.push(...readFailure(entry, error, fieldErrors));
           }
         }
       } finally {
         setSaving(false);
       }
-      setFailure((previous) => ({ errors, attempt: previous.attempt + 1 }));
+      setFailure((previous) => ({ errors, fieldErrors, attempt: previous.attempt + 1, reveal: errors.length ? previous.reveal : 0 }));
       if (errors.length === 0) toast.success(t("saved"));
       return errors.length === 0;
     },
@@ -135,18 +208,27 @@ export function SaveScope({
       for (const entry of entries.current.values()) {
         if (entry.dirty) entry.discard();
       }
-      setFailure((previous) => ({ errors: [], attempt: previous.attempt }));
+      setFailure((previous) => ({ ...NO_FAILURE, attempt: previous.attempt }));
     },
   };
 
   return (
     <SaveBarContext.Provider value={registry}>
-      <SaveErrorsContext.Provider value={failure}>
+      <SaveErrorsContext.Provider value={errorsValue}>
         {children}
         {render(state)}
       </SaveErrorsContext.Provider>
     </SaveBarContext.Provider>
   );
+}
+
+/**
+ * The last save's verdict on one control, and a way to clear it once the
+ * merchant edits it. `SettingsField` does this for its `id`.
+ */
+export function useServerFieldError(id: string): { error: string | undefined; clear: () => void; revealed: boolean } {
+  const { fieldErrors, clearField, reveal } = useContext(SaveErrorsContext);
+  return { error: fieldErrors[id], clear: () => clearField(id), revealed: reveal > 0 };
 }
 
 /**
@@ -156,8 +238,14 @@ export function SaveScope({
  */
 export function SaveErrorBanner() {
   const t = useMessages(saveBarMessages);
-  const { errors, attempt } = useContext(SaveErrorsContext);
+  const { errors, attempt, reveal } = useContext(SaveErrorsContext);
   const ref = useRef<HTMLDivElement>(null);
+  const anchor = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (reveal === 0) return;
+    const container = anchor.current?.closest("[role=dialog]") ?? document;
+    container.querySelector<HTMLElement>('[aria-invalid="true"]:not([disabled])')?.focus();
+  }, [reveal]);
   useEffect(() => {
     const banner = ref.current;
     if (!banner || errors.length === 0) return;
@@ -170,7 +258,7 @@ export function SaveErrorBanner() {
       banner.scrollIntoView({ block: "nearest" });
     }
   }, [errors, attempt]);
-  if (errors.length === 0) return null;
+  if (errors.length === 0) return <span ref={anchor} hidden />;
   return (
     <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
       <CircleAlert aria-hidden="true" />
@@ -205,7 +293,7 @@ const SAVE_BUTTON =
 
 function SaveBar({ state }: { state: SaveScopeState }) {
   const t = useMessages(saveBarMessages);
-  const { dirty, busy, invalid, errors } = state;
+  const { dirty, busy, invalid, errors, revealed } = state;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   return (
     <>
@@ -232,7 +320,7 @@ function SaveBar({ state }: { state: SaveScopeState }) {
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {errors.length > 0 ? t("notSavedBar") : invalid ? t("fixErrors") : t("unsavedChanges")}
+                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : t("unsavedChanges")}
                 </span>
               </p>
               <div className="flex shrink-0 gap-1.5">
@@ -247,7 +335,7 @@ function SaveBar({ state }: { state: SaveScopeState }) {
                 <button
                   type="button"
                   className={SAVE_BUTTON}
-                  disabled={busy || invalid}
+                  disabled={busy}
                   aria-busy={busy || undefined}
                   onClick={() => void state.saveAll()}
                 >

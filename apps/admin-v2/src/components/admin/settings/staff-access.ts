@@ -80,7 +80,7 @@ export interface StaffActions {
   resendInvite: boolean;
   cancelInvite: boolean;
   restore: boolean;
-  remove: boolean;
+  suspend: boolean;
 }
 
 export function staffActions(
@@ -96,7 +96,7 @@ export function staffActions(
     resendInvite: manage && invited,
     cancelInvite: manage && invited,
     restore: manage && target.status === "suspended",
-    remove: manage && !invited && target.status !== "password_setup" && target.status !== "suspended",
+    suspend: manage && !invited && target.status !== "password_setup" && target.status !== "suspended",
   };
 }
 

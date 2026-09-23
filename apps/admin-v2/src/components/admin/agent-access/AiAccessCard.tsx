@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
@@ -12,6 +14,7 @@ import {
   SettingsField,
   SettingsRow,
 } from "~/components/admin/settings/SettingsPage";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -27,20 +30,25 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { formatDateTime, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
+import { permissionMessages } from "~/i18n/settings-users";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 import { AccessFields, defaultSelection } from "./AccessFields";
 import {
   countClearableAgentConnections,
   createAgentToken,
+  listAgentConnectionEvents,
   listAgentConnections,
   purgeRevokedAgentConnections,
   revokeAgentGrant,
   revokeAllAgentGrants,
+  rotateAgentCredential,
 } from "./api";
-import type { AgentConnection } from "./types";
+import type { AgentAuditEvent, AgentConnection, AgentRisk } from "./types";
 
 const LIST_LIMIT = 100;
+const ACTIVITY_LIMIT = 10;
+const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
 
 /** Active connections plus how many old ones "Clear old connections" would remove. */
 export const aiAccessQuery = {
@@ -66,14 +74,132 @@ function formatDate(value: string | null, withTime = false): string | null {
   return formatDateTime(date, withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" });
 }
 
-function ConnectionRow({ connection, canManage }: { connection: AgentConnection; canManage: boolean }) {
+const isKnownPermission = (permission: string): permission is PermissionName =>
+  Object.hasOwn(permissionMessages.en, permission);
+
+/** What the connection may do: the preset's plain summary, or each custom permission. */
+function ConnectionAbilities({ connection }: { connection: AgentConnection }) {
+  const t = useMessages(aiAccessMessages);
+  const label = useMessages(permissionMessages);
+  const permissions = connection.permissions ?? [];
+  const known = permissions.filter(isKnownPermission);
+  const unknown = permissions.length - known.length;
+  return (
+    <section className="space-y-1">
+      <h3 className="text-heading-sm">{t("whatItCanDo")}</h3>
+      {connection.preset !== "custom" ? (
+        <p className="text-body text-muted-foreground">{t(`preset_${connection.preset}Help`)}</p>
+      ) : permissions.length === 0 ? (
+        <p className="text-body text-muted-foreground">{t("noPermissions")}</p>
+      ) : (
+        <ul className="space-y-1 text-body">
+          {known.map((permission) => (
+            <li key={permission}>{label(permission)}</li>
+          ))}
+          {unknown > 0 ? (
+            <li className="text-muted-foreground">{t("morePermissions", { count: unknown })}</li>
+          ) : null}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ActivityLine({ event }: { event: AgentAuditEvent }) {
+  const t = useMessages(aiAccessMessages);
+  const when = formatDate(event.createdAt, true);
+  return (
+    <li className="flex min-h-11 items-center justify-between gap-4 py-2 text-body">
+      <span className="flex flex-wrap items-center gap-2">
+        {RISKS.has(event.risk) ? t(`risk_${event.risk}`) : t("risk_other")}
+        {event.outcome === "denied" ? <Badge variant="warning">{t("outcome_denied")}</Badge> : null}
+        {event.outcome === "failed" ? <Badge variant="destructive">{t("outcome_failed")}</Badge> : null}
+      </span>
+      {when ? <span className="shrink-0 text-muted-foreground">{when}</span> : null}
+    </li>
+  );
+}
+
+/** The newest events for one connection, fetched only while its dialog is open. */
+function RecentActivity({ grantId, open }: { grantId: string; open: boolean }) {
+  const t = useMessages(aiAccessMessages);
+  const common = useMessages(settingsMessages);
+  const { data, isError, isRefetching, refetch } = useQuery({
+    queryKey: ["agent-access", "events", grantId],
+    queryFn: () => listAgentConnectionEvents(grantId, { page: 1, limit: ACTIVITY_LIMIT }),
+    enabled: open,
+  });
+  let body: ReactNode;
+  if (isError) {
+    body = (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-body text-destructive">{t("activityFailed")}</p>
+        <Button type="button" variant="outline" size="sm" loading={isRefetching} onClick={() => void refetch()}>
+          {common("retry")}
+        </Button>
+      </div>
+    );
+  } else if (!data) {
+    body = (
+      <p className="flex items-center gap-2 text-body text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t("activityLoading")}
+      </p>
+    );
+  } else if (data.events.length === 0) {
+    body = <p className="text-body text-muted-foreground">{t("noActivity")}</p>;
+  } else {
+    body = (
+      <ul className="divide-y divide-border">
+        {data.events.map((event) => (
+          <ActivityLine key={event.id} event={event} />
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <section className="space-y-1">
+      <h3 className="text-heading-sm">{t("recentActivity")}</h3>
+      {body}
+    </section>
+  );
+}
+
+function ConnectionRow({
+  connection,
+  canManage,
+  onNewKey,
+}: {
+  connection: AgentConnection;
+  canManage: boolean;
+  onNewKey: (key: string) => void;
+}) {
   const t = useMessages(aiAccessMessages);
   const common = useMessages(settingsMessages);
   const refresh = useRefresh();
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const name = connection.label || connection.clientName || t("unnamed");
   const lastUsed = formatDate(connection.lastUsedAt, true);
+  // Only pasted keys can be replaced; an AI assistant reconnects instead.
+  const activeKey =
+    connection.kind === "pat" || connection.kind === "cli"
+      ? connection.credentials?.find((credential) => credential.revokedAt === null)
+      : undefined;
+  const replace = useMutation({
+    // The new key goes straight to component state; the mutation keeps nothing.
+    mutationFn: async (credentialId: string) => {
+      const result = await rotateAgentCredential(credentialId);
+      onNewKey(result.token);
+    },
+    onSuccess: async () => {
+      setConfirmReplace(false);
+      setOpen(false);
+      await refresh();
+    },
+    onError: () => toast.error(t("replaceFailed")),
+  });
   const disconnect = useMutation({
     mutationFn: () => revokeAgentGrant(connection.id),
     onSuccess: async () => {
@@ -116,6 +242,15 @@ function ConnectionRow({ connection, canManage }: { connection: AgentConnection;
               </div>
             ))}
           </dl>
+          <ConnectionAbilities connection={connection} />
+          <RecentActivity grantId={connection.id} open={open} />
+          {canManage && activeKey ? (
+            <div>
+              <Button type="button" variant="outline" onClick={() => setConfirmReplace(true)}>
+                {t("replaceKey")}
+              </Button>
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {t("close")}
@@ -138,6 +273,19 @@ function ConnectionRow({ connection, canManage }: { connection: AgentConnection;
         loadingLabel={t("working")}
         isLoading={disconnect.isPending}
         onConfirm={() => disconnect.mutate()}
+      />
+      <ConfirmDialog
+        open={confirmReplace}
+        onOpenChange={setConfirmReplace}
+        title={t("replaceTitle", { name })}
+        description={t("replaceBody")}
+        confirmLabel={t("replaceKey")}
+        cancelLabel={common("cancel")}
+        loadingLabel={t("working")}
+        isLoading={replace.isPending}
+        onConfirm={() => {
+          if (activeKey) replace.mutate(activeKey.id);
+        }}
       />
     </>
   );
@@ -299,7 +447,12 @@ export function AiAccessCard() {
           connections.length || quietActions ? (
             <>
               {connections.map((connection) => (
-                <ConnectionRow key={connection.id} connection={connection} canManage={canManage} />
+                <ConnectionRow
+                  key={connection.id}
+                  connection={connection}
+                  canManage={canManage}
+                  onNewKey={setNewKey}
+                />
               ))}
               {quietActions ? (
                 <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2 first:border-t-0">

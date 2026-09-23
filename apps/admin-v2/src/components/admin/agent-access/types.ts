@@ -21,6 +21,16 @@ export interface AgentClearableConnections {
 export type AgentPurgeRevokedResult =
   DeleteApiV1AdminAgentAccessConnectionsRevokedResponses[200]["data"];
 
+/** One key behind a connection. The key itself is never returned after it is shown once. */
+export interface AgentCredential {
+  id: string;
+  kind: AgentGrantKind;
+  tokenHint: string | null;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
 export interface AgentConnection {
   id: string;
   kind: AgentGrantKind;
@@ -29,6 +39,10 @@ export interface AgentConnection {
   clientName: string | null;
   ownerName: string | null;
   preset: AgentPreset;
+  /** Permission names this connection holds (what "custom" access means). */
+  permissions?: string[];
+  riskCeiling?: AgentRisk | null;
+  credentials?: AgentCredential[];
   status: AgentGrantStatus;
   createdAt: string;
   expiresAt: string;
@@ -46,6 +60,25 @@ export interface AgentSecretResult {
 }
 
 export type AgentRisk = "read" | "write" | "destructive" | "financial" | "security";
+
+export interface AgentAuditEvent {
+  id: string;
+  operationId: string;
+  risk: AgentRisk;
+  outcome: "success" | "denied" | "failed";
+  createdAt: string;
+}
+
+export interface AgentAuditEventsPage {
+  events: AgentAuditEvent[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export interface AgentRotateResult {
+  token: string;
+  credentialId: string;
+  connection: AgentConnection;
+}
 
 export interface AgentGrantSelection {
   resource: AgentResource;

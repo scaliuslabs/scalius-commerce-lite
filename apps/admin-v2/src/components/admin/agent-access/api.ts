@@ -3,6 +3,7 @@ import {
   deleteApiV1AdminAgentAccessGrantsByGrantId,
   getApiV1AdminAgentAccessAuthorizationRequestsByRequestId,
   getApiV1AdminAgentAccessConnections,
+  getApiV1AdminAgentAccessConnectionsByGrantIdEvents,
   postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove,
   postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny,
   postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove,
@@ -10,10 +11,12 @@ import {
   postApiV1AdminAgentAccessDeviceAuthorizationsLookup,
   postApiV1AdminAgentAccessRevokeAll,
   postApiV1AdminAgentAccessTokens,
+  postApiV1AdminAgentAccessTokensByCredentialIdRotate,
 } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
 
 import type {
+  AgentAuditEventsPage,
   AgentAuthorizationDecisionResult,
   AgentAuthorizationRequest,
   AgentClearableConnections,
@@ -25,6 +28,7 @@ import type {
   AgentGrantSelection,
   AgentPurgeRevokedResult,
   AgentResource,
+  AgentRotateResult,
   AgentSecretResult,
   CreateAgentTokenInput,
 } from "./types";
@@ -70,6 +74,25 @@ export function createAgentToken(
   input: CreateAgentTokenInput,
 ): Promise<AgentSecretResult> {
   return typed(apiData(postApiV1AdminAgentAccessTokens({ body: input })));
+}
+
+/** Replaces an active key. The new key is returned once; the old one stops working. */
+export function rotateAgentCredential(credentialId: string): Promise<AgentRotateResult> {
+  return typed(apiData(postApiV1AdminAgentAccessTokensByCredentialIdRotate({
+    path: { credentialId },
+    body: {},
+  })));
+}
+
+/** Newest audit events for one connection. */
+export function listAgentConnectionEvents(
+  grantId: string,
+  params?: { page?: number; limit?: number },
+): Promise<AgentAuditEventsPage> {
+  return typed(apiData(getApiV1AdminAgentAccessConnectionsByGrantIdEvents({
+    path: { grantId },
+    query: params,
+  })));
 }
 
 export function revokeAgentGrant(

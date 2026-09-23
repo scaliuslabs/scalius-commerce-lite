@@ -98,6 +98,7 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
     onError: () => toast.error(common("saveFailed")),
   });
   useSaveBar({
+    fields: { name: "location-name", parentId: "location-parent", externalIds: "location-pathao" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     invalid: !draft.name.trim() || (level !== "city" && !draft.parentId) || !pathaoValid,
@@ -146,7 +147,7 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteLocation")}
+            title={common("deleteNamed", { name: location.name })}
             description={t("deleteLocationConfirm", { name: location.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}

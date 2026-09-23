@@ -76,7 +76,7 @@ export const taxesMessages = defineMessages({
     onlyRateBoth: "Only active rate for products and delivery, so it can't be turned off, moved or deleted.",
     deleteRate: "Delete rate",
     rateDeleted: "Rate deleted",
-    deleteConfirm: "Delete {name}? This can't be undone.",
+    deleteConfirm: "This can't be undone.",
     // Try it
     tryIt: "Try it",
     tryItValue: "See the tax on a sample order",
@@ -174,7 +174,7 @@ export const taxesMessages = defineMessages({
     onlyRateBoth: "প্রোডাক্ট ও ডেলিভারির একমাত্র চালু রেট, তাই বন্ধ, সরানো বা ডিলিট করা যাবে না।",
     deleteRate: "রেট ডিলিট করুন",
     rateDeleted: "রেট ডিলিট হয়েছে",
-    deleteConfirm: "{name} ডিলিট করবেন? এটি আর ফেরানো যাবে না।",
+    deleteConfirm: "এটি আর ফেরানো যাবে না।",
     tryIt: "চেষ্টা করে দেখুন",
     tryItValue: "একটি নমুনা অর্ডারে ট্যাক্স দেখুন",
     price: "দাম",

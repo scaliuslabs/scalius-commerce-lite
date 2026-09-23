@@ -348,12 +348,15 @@ export function PaymentMethodsCard() {
             ) : null}
           </div>
         ) : null}
-        <Switch
-          checked={selected}
-          disabled={!canEdit || (!selected && !outcome.canSelect)}
-          aria-label={t("showAtCheckout", { method: t(method) })}
-          onCheckedChange={(on) => toggle(method, on)}
-        />
+        {/* A 44px hit area around the small switch (touch target). */}
+        <label className="-mx-1 -my-3 flex size-11 items-center justify-center">
+          <Switch
+            checked={selected}
+            disabled={!canEdit || (!selected && !outcome.canSelect)}
+            aria-label={t("showAtCheckout", { method: t(method) })}
+            onCheckedChange={(on) => toggle(method, on)}
+          />
+        </label>
       </li>
     );
   });
