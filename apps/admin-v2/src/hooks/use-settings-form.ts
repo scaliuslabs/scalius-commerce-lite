@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useSaveBar } from "~/components/admin/shared/SaveBar";
+import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
 
 interface UseSettingsFormOptions<T extends object, SaveResult> {
   queryKey: readonly unknown[];
@@ -18,6 +18,8 @@ interface UseSettingsFormOptions<T extends object, SaveResult> {
   canEdit?: boolean;
   /** Names this card in the page's "couldn't save" banner. */
   label?: string;
+  /** API body path → control id, so a rejected field is marked in place (see `SaveBarEntry.fields`). */
+  fields?: SaveBarEntry["fields"];
 }
 
 export function mergeUneditedFields<T extends object>(current: T, baseline: T, incoming: T): T {
@@ -50,6 +52,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   isValid,
   canEdit = true,
   label,
+  fields,
 }: UseSettingsFormOptions<T, SaveResult>) {
   const queryClient = useQueryClient();
 
@@ -153,6 +156,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     saving: mutation.isPending,
     invalid: !canEdit || !hasLoaded || (isValid ? !isValid(values) : false),
     label,
+    fields,
     save: () => mutation.mutateAsync(values),
     discard: reset,
   });

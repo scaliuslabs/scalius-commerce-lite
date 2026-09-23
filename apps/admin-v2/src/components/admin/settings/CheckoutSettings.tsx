@@ -232,6 +232,7 @@ function LanguageForm({ language }: { language: Language | null }) {
     onError: () => toast.error(common("saveFailed")),
   });
   useSaveBar({
+    fields: { name: "language-name", code: "language-code" },
     dirty,
     saving: save.isPending,
     invalid: !draft.name.trim() || !draft.code.trim(),
@@ -295,7 +296,7 @@ function LanguageForm({ language }: { language: Language | null }) {
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          title={t("deleteLanguage")}
+          title={common("deleteNamed", { name: language.name })}
           description={t("deleteConfirm", { name: language.name })}
           confirmLabel={common("delete")}
           cancelLabel={common("cancel")}

@@ -8,7 +8,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { GO_SHORTCUTS, SETTINGS_DESTINATIONS, type VisibleNavItem } from "./AdminNav";
+import { settingsNavMessages } from "~/i18n/settings";
+import { settingsSearchMessages } from "~/i18n/settings-search";
+import { SETTINGS_NAV } from "../settings/settings-nav";
+import { searchSettings } from "../settings/settings-search";
+import { GO_SHORTCUTS, type VisibleNavItem } from "./AdminNav";
 
 export interface GlobalSearchProps {
   nav: VisibleNavItem[];
@@ -20,10 +24,12 @@ interface Entry {
   label: string;
   to: string;
   search?: Record<string, string>;
+  /** A card on a settings page (the settings search's card id). */
+  hash?: string;
   icon: ComponentType<{ className?: string }>;
   hint?: string;
-  /** Extra words that also match (settings pages). */
-  keywords?: string;
+  /** Muted second part of the label, e.g. the settings page a card is on. */
+  detail?: string;
 }
 
 /** Shopify caps admin search at 7 results. */
@@ -58,6 +64,8 @@ function remember(entry: Entry) {
  */
 export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
   const t = useMessages(shellMessages);
+  const settingsPage = useMessages(settingsNavMessages);
+  const settingsCard = useMessages(settingsSearchMessages);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const term = query.trim();
@@ -79,19 +87,25 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
         .filter((child) => child.to !== item.to)
         .map((child) => ({ id: `nav:${child.to}`, label: t(child.key), to: child.to, icon: ArrowRight })),
     ]);
-    const settings = SETTINGS_DESTINATIONS.filter((item) => canOpen(item.to)).map((item): Entry => ({
-      id: `set:${item.to}`,
-      label: t(item.key),
-      to: item.to,
-      icon: Settings,
-      keywords: item.keywords,
-    }));
     // With no query, offer the sections themselves (their G-key hints teach the shortcuts).
     if (!needle) return pages.filter((entry) => nav.some((item) => item.to === entry.to));
-    return [...pages, ...settings].filter(
-      (entry) => entry.label.toLowerCase().includes(needle) || Boolean(entry.keywords?.toLowerCase().includes(needle)),
-    );
-  }, [canOpen, nav, needle, t]);
+    // Settings share one index with the settings column's search: pages, then
+    // the card a word like "cod", "courier" or "ভ্যাট" belongs to.
+    const found = searchSettings(needle);
+    const settingsPages = SETTINGS_NAV.filter((item) => canOpen(item.to));
+    const settings: Entry[] = [
+      ...settingsPages
+        .filter((item) => found.pages.includes(item.key))
+        .map((item) => ({ id: `set:${item.key}`, label: settingsPage(item.key), to: item.to, icon: Settings })),
+      ...found.cards.flatMap((entry): Entry[] => {
+        const page = settingsPages.find((item) => item.key === entry.page);
+        return page
+          ? [{ id: `set:${entry.card}`, label: settingsCard(entry.card), detail: settingsPage(entry.page), to: page.to, hash: entry.card, icon: Settings }]
+          : [];
+      }),
+    ];
+    return [...pages.filter((entry) => entry.label.toLowerCase().includes(needle)), ...settings];
+  }, [canOpen, nav, needle, settingsCard, settingsPage, t]);
 
   const records = useMemo<Entry[]>(() => {
     if (term.length < 2) return [];
@@ -121,13 +135,16 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
     remember(entry);
     setOpen(false);
     setQuery("");
-    void navigate({ to: entry.to, search: entry.search as never });
+    void navigate({ to: entry.to, search: entry.search as never, hash: entry.hash });
   };
 
   const renderItem = (entry: Entry) => (
     <CommandItem key={entry.id} value={entry.id} onSelect={() => go(entry)}>
       <entry.icon aria-hidden />
-      <span className="flex-1 truncate">{entry.label}</span>
+      <span className="flex-1 truncate">
+        {entry.label}
+        {entry.detail ? <span className="text-muted-foreground"> · {entry.detail}</span> : null}
+      </span>
       {entry.hint ? <kbd className="text-caption text-muted-foreground">{entry.hint}</kbd> : null}
     </CommandItem>
   );

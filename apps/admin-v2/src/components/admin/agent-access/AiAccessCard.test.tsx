@@ -19,6 +19,8 @@ const api = vi.hoisted(() => ({
   purgeRevokedAgentConnections: vi.fn(),
   revokeAgentGrant: vi.fn(),
   revokeAllAgentGrants: vi.fn(),
+  listAgentConnectionEvents: vi.fn(),
+  rotateAgentCredential: vi.fn(),
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 
@@ -62,12 +64,26 @@ async function render(permissions: string[], isSuperAdmin: boolean) {
   await flush();
 }
 
-function button(label: string): HTMLButtonElement {
-  const match = [...document.querySelectorAll("button")].find(
+function button(label: string, within: ParentNode = document): HTMLButtonElement {
+  const match = [...within.querySelectorAll("button")].find(
     (element) => element.textContent?.trim() === label,
   );
   if (!match) throw new Error(`No button "${label}"`);
   return match;
+}
+
+/** The connection's row in the card (its text also holds the kind and last use). */
+function row(name: string): HTMLButtonElement {
+  const match = [...host.querySelectorAll("button")].find((element) => element.textContent?.startsWith(name));
+  if (!match) throw new Error(`No row "${name}"`);
+  return match;
+}
+
+function listWith(...connections: object[]) {
+  api.listAgentConnections.mockResolvedValue({
+    connections,
+    pagination: { page: 1, limit: 100, total: connections.length, totalPages: 1 },
+  });
 }
 
 async function click(element: HTMLElement) {
@@ -100,6 +116,10 @@ beforeEach(() => {
   });
   api.countClearableAgentConnections.mockResolvedValue({ revoked: 0, expired: 0, total: 0 });
   api.createAgentToken.mockResolvedValue({ token: SECRET, connection });
+  api.listAgentConnectionEvents.mockResolvedValue({
+    events: [],
+    pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  });
 });
 
 afterEach(() => {
@@ -141,6 +161,104 @@ describe("AI & app access card", () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
     expect(document.body.textContent).not.toContain("Create access key");
     expect(document.body.textContent).not.toContain("Disconnect all");
+  });
+
+  it("lists each custom permission in plain words", async () => {
+    listWith({
+      ...connection,
+      preset: "custom",
+      permissions: ["orders.view", "orders.refund", "future.permission"],
+    });
+    await render(["agent_access.view"], false);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+    await click(row("Codex"));
+
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("What it can do");
+    expect(dialog.textContent).toContain("View orders");
+    expect(dialog.textContent).toContain("Refund orders");
+    expect(dialog.textContent).toContain("+1 more");
+    expect(dialog.textContent).not.toContain("future.permission");
+    expect(dialog.textContent).not.toContain("orders.view");
+  });
+
+  it("loads recent activity only when the details open and shows it in plain words", async () => {
+    api.listAgentConnectionEvents.mockResolvedValue({
+      events: [
+        { id: "e1", operationId: "dashboard.orders.list", risk: "read", outcome: "success", createdAt: "2026-09-20T10:00:00.000Z" },
+        { id: "e2", operationId: "dashboard.products.update", risk: "write", outcome: "denied", createdAt: "2026-09-20T09:00:00.000Z" },
+        { id: "e3", operationId: "dashboard.orders.refund", risk: "financial", outcome: "failed", createdAt: "2026-09-20T08:00:00.000Z" },
+      ],
+      pagination: { page: 1, limit: 10, total: 3, totalPages: 1 },
+    });
+    await render(["agent_access.view"], false);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+    expect(api.listAgentConnectionEvents).not.toHaveBeenCalled();
+
+    await click(row("Codex"));
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Viewed store data"));
+    expect(api.listAgentConnectionEvents).toHaveBeenCalledWith("agr_1", { page: 1, limit: 10 });
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Recent activity");
+    expect(dialog.textContent).toContain("Made a change");
+    expect(dialog.textContent).toContain("Blocked");
+    expect(dialog.textContent).toContain("Money action");
+    expect(dialog.textContent).toContain("Failed");
+    expect(dialog.textContent).not.toContain("dashboard.");
+  });
+
+  it("says so when there is no activity yet", async () => {
+    await render(["agent_access.view"], false);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+    await click(row("Codex"));
+    await vi.waitFor(() => expect(document.body.textContent).toContain("No activity yet."));
+  });
+
+  it("replaces an access key and shows the new key once, outside caches and toasts", async () => {
+    const key = {
+      ...connection,
+      kind: "pat",
+      label: "Warehouse",
+      clientName: null,
+      credentials: [
+        { id: "agc_old", kind: "pat", tokenHint: "sat_…1234", expiresAt: null, lastUsedAt: null, revokedAt: null },
+      ],
+    };
+    listWith(key);
+    api.rotateAgentCredential.mockResolvedValue({ token: SECRET, credentialId: "agc_new", connection: key });
+    await render(["agent_access.view", "agent_access.manage"], true);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Warehouse"));
+
+    await click(row("Warehouse"));
+    await click(button("Replace key", document.querySelector('[role="dialog"]')!));
+    const confirm = document.querySelector('[role="alertdialog"]')!;
+    expect(confirm.textContent).toContain("Replace Warehouse's key?");
+    expect(confirm.textContent).toContain("The old key stops working right away.");
+    await click(button("Replace key", confirm));
+
+    expect(api.rotateAgentCredential).toHaveBeenCalledWith("agc_old");
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLInputElement>('input[aria-label="Access key"]')?.value).toBe(SECRET),
+    );
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map((query) => query.state.data))).not.toContain(SECRET);
+    expect(JSON.stringify(queryClient.getMutationCache().getAll().map((mutation) => mutation.state.data))).not.toContain(SECRET);
+    expect(JSON.stringify([toasts.success.mock.calls, toasts.error.mock.calls])).not.toContain(SECRET);
+    expect(stored(localStorage)).not.toContain(SECRET);
+    expect(window.location.href).not.toContain(SECRET);
+
+    await click(button("Done"));
+    expect(document.body.innerHTML).not.toContain(SECRET);
+  });
+
+  it("offers no key replacement to viewers or for AI assistants", async () => {
+    listWith({
+      ...connection,
+      credentials: [{ id: "agc_1", kind: "oauth", tokenHint: null, expiresAt: null, lastUsedAt: null, revokedAt: null }],
+    });
+    await render(["agent_access.view", "agent_access.manage"], true);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+    await click(row("Codex"));
+    expect(document.body.textContent).not.toContain("Replace key");
   });
 
   it("renders nothing without access to AI & app access", async () => {

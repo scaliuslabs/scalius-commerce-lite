@@ -29,15 +29,15 @@ describe("staff status", () => {
 });
 
 describe("staff actions", () => {
-  const nothing = { editAccess: false, resendInvite: false, cancelInvite: false, restore: false, remove: false };
+  const nothing = { editAccess: false, resendInvite: false, cancelInvite: false, restore: false, suspend: false };
 
   it("never lets anyone change their own access or the store owner's", () => {
     expect(staffActions({ id: "me", isSuperAdmin: false, status: "ready" }, viewer)).toEqual(nothing);
     expect(staffActions({ id: "owner", isSuperAdmin: true, status: "ready" }, viewer)).toEqual(nothing);
   });
 
-  it("removes signed-up staff, cancels invites and restores removed staff", () => {
-    expect(staffActions({ id: "a", isSuperAdmin: false, status: "ready" }, viewer)).toEqual({ ...nothing, editAccess: true, remove: true });
+  it("suspends signed-up staff, cancels invites and restores suspended staff", () => {
+    expect(staffActions({ id: "a", isSuperAdmin: false, status: "ready" }, viewer)).toEqual({ ...nothing, editAccess: true, suspend: true });
     expect(staffActions({ id: "a", isSuperAdmin: false, status: "invite_expired" }, viewer)).toEqual({
       ...nothing,
       editAccess: true,
@@ -50,7 +50,7 @@ describe("staff actions", () => {
 
   it("splits staff management from role management", () => {
     const target = { id: "a", isSuperAdmin: false, status: "ready" as const };
-    expect(staffActions(target, { ...viewer, canManageRoles: false })).toEqual({ ...nothing, remove: true });
+    expect(staffActions(target, { ...viewer, canManageRoles: false })).toEqual({ ...nothing, suspend: true });
     expect(staffActions(target, { ...viewer, canManageStaff: false })).toEqual({ ...nothing, editAccess: true });
     expect(staffActions(target, { id: "me", canManageStaff: false, canManageRoles: false })).toEqual(nothing);
   });

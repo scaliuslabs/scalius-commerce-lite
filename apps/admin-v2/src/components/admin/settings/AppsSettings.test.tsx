@@ -124,7 +124,9 @@ describe("Settings → Apps cards", () => {
     await openConnection();
 
     expect(document.body.textContent).toContain(apps("needsPixelAndToken"));
-    expect(button(translate(settingsMessages, "save")).disabled).toBe(true);
+    // Save shows what's missing instead of saving.
+    await click(button(translate(settingsMessages, "save")));
     expect(sdk.postApiV1AdminSettingsMetaConversions).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 });

@@ -104,6 +104,7 @@ function RateForm({ rate }: { rate: ShippingMethod | null }) {
     onError: () => toast.error(common("saveFailed")),
   });
   useSaveBar({
+    fields: { name: "rate-name", fee: "rate-fee", description: "rate-description" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     invalid: !draft.name.trim() || !feeValid,
@@ -145,7 +146,7 @@ function RateForm({ rate }: { rate: ShippingMethod | null }) {
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteRate")}
+            title={common("deleteNamed", { name: rate.name })}
             description={t("deleteRateConfirm", { name: rate.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
@@ -421,6 +422,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
     onError: () => toast.error(common("saveFailed")),
   });
   useSaveBar({
+    fields: { name: "courier-name", baseUrl: "courier-base-url" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     // Fail closed: a courier can't be switched on until its keys are complete.
@@ -550,7 +552,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteCourier")}
+            title={common("deleteNamed", { name: courier.name })}
             description={t("deleteCourierConfirm", { name: courier.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}

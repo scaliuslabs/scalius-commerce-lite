@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
+import { cloneElement, createContext, isValidElement, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
-import { SaveErrorBanner, SaveScope } from "../shared/SaveBar";
+import { SaveErrorBanner, SaveScope, useServerFieldError } from "../shared/SaveBar";
 import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
@@ -141,12 +141,31 @@ export function SettingsField({
   error?: ReactNode;
   children: ReactNode;
 }) {
+  // Inline errors appear once the merchant leaves the field (or presses Save),
+  // never while typing. A rejected save marks the field until it's edited.
+  const [left, setLeft] = useState(false);
+  const server = useServerFieldError(id);
+  const clientShown = error && (left || server.revealed) ? error : null;
+  const shown = clientShown ?? server.error;
+  const isControl = isValidElement<{ id?: string }>(children) && children.props.id === id;
+  const control = !isControl
+    ? children
+    : shown
+      ? cloneElement(children as ReactElement<Record<string, unknown>>, { "aria-invalid": true, "aria-describedby": `${id}-note` })
+      : error
+        ? cloneElement(children as ReactElement<Record<string, unknown>>, { "aria-invalid": false })
+        : children;
   return (
-    <div className="space-y-1.5">
+    <div
+      className="space-y-1.5"
+      onBlur={() => setLeft(true)}
+      onInput={server.error ? server.clear : undefined}
+      onChange={server.error ? server.clear : undefined}
+    >
       <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error ? (
-        <p id={`${id}-note`} role="alert" className="text-body text-destructive">{error}</p>
+      {control}
+      {shown ? (
+        <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p>
       ) : help ? (
         <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
       ) : null}
@@ -220,7 +239,7 @@ export function SettingsDialog({
                 <Button
                   type="button"
                   loading={state.busy}
-                  disabled={!state.dirty || state.invalid}
+                  disabled={!state.dirty}
                   onClick={async () => {
                     if (await state.saveAll()) setOpen(false);
                   }}

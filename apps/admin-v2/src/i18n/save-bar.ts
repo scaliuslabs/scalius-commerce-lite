@@ -1,5 +1,35 @@
 import { defineMessages } from "./index";
 
+/** What a rejected field needs, when the API's own message is developer text. */
+export const fieldErrorMessages = defineMessages({
+  en: {
+    required: "This can't be empty.",
+    minLength: "Use at least {count} characters.",
+    maxLength: "Use {count} characters or fewer.",
+    tooLong: "This is too long.",
+    atLeast: "Enter {min} or more.",
+    atMost: "Enter {max} or less.",
+    pickOne: "Choose at least one.",
+    tooMany: "Choose fewer.",
+    email: "Enter an email address like name@example.com.",
+    url: "Enter a full web address starting with https://",
+    invalid: "Check this value.",
+  },
+  bn: {
+    required: "এটি খালি রাখা যাবে না।",
+    minLength: "কমপক্ষে {count}টি অক্ষর দিন।",
+    maxLength: "{count}টি অক্ষর বা তার কম দিন।",
+    tooLong: "এটি অনেক লম্বা।",
+    atLeast: "{min} বা তার বেশি দিন।",
+    atMost: "{max} বা তার কম দিন।",
+    pickOne: "অন্তত একটি বেছে নিন।",
+    tooMany: "কম বেছে নিন।",
+    email: "name@example.com এর মতো একটি ইমেইল দিন।",
+    url: "https:// দিয়ে শুরু পুরো ওয়েব ঠিকানা দিন।",
+    invalid: "এই মানটি দেখে নিন।",
+  },
+});
+
 export const saveBarMessages = defineMessages({
   en: {
     unsavedChanges: "Unsaved changes",
@@ -14,7 +44,7 @@ export const saveBarMessages = defineMessages({
     discardChanges: "Discard changes",
     notSavedBar: "Not saved. Fix the problems listed",
     notSavedOne: "Couldn't save your changes",
-    notSavedMany: "Couldn't save {count} changes",
+    notSavedMany: "To save, fix {count} problems",
     serverError: "Something went wrong on our side. Try again in a minute.",
     offline: "Couldn't reach the server. Check your connection and try again.",
   },
@@ -31,7 +61,7 @@ export const saveBarMessages = defineMessages({
     discardChanges: "পরিবর্তন বাতিল করুন",
     notSavedBar: "সেভ হয়নি। তালিকার সমস্যাগুলো ঠিক করুন",
     notSavedOne: "আপনার পরিবর্তন সেভ করা যায়নি",
-    notSavedMany: "{count}টি পরিবর্তন সেভ করা যায়নি",
+    notSavedMany: "সেভ করতে {count}টি সমস্যা ঠিক করুন",
     serverError: "আমাদের দিকে একটা সমস্যা হয়েছে। এক মিনিট পর আবার চেষ্টা করুন।",
     offline: "সার্ভারে পৌঁছানো যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
   },

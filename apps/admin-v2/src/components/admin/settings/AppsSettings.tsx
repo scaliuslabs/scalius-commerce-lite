@@ -352,7 +352,7 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteTracking")}
+            title={common("deleteNamed", { name: script.name })}
             description={t("deleteTrackingConfirm", { name: script.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}

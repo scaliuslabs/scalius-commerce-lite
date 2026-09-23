@@ -102,11 +102,20 @@ describe("save scope", () => {
     container.remove();
   });
 
-  it("blocks saving while a dirty card is invalid and discards every dirty card", () => {
+  it("won't save while a dirty card is invalid, and discards every dirty card", async () => {
     const invalid = { dirty: true, invalid: true, save: vi.fn(), discard: vi.fn() };
     const clean = { dirty: false, invalid: true, save: vi.fn(), discard: vi.fn() };
-    render([invalid, clean]);
+    const valid = { dirty: true, save: vi.fn(), discard: vi.fn() };
+    render([invalid, clean, valid]);
     expect(state!.invalid).toBe(true);
+
+    // Save shows what to fix instead of saving anything.
+    let saved = true;
+    await act(async () => { saved = await state!.saveAll(); });
+    expect(saved).toBe(false);
+    expect(invalid.save).not.toHaveBeenCalled();
+    expect(valid.save).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
 
     act(() => state!.discardAll());
     expect(invalid.discard).toHaveBeenCalledOnce();

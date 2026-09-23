@@ -87,6 +87,22 @@ function useWriteFailure() {
   };
 }
 
+/**
+ * For save-bar saves: the page banner reports the problem (no toast). A
+ * conflict reloads the newer version and keeps the merchant's edits.
+ */
+function useSaveFailure(key: readonly unknown[] = queryKeys.settings.taxes()) {
+  const queryClient = useQueryClient();
+  const t = useMessages(taxesMessages);
+  return async (error: unknown): Promise<never> => {
+    if (isAdminApiConflictError(error)) {
+      await queryClient.invalidateQueries({ queryKey: key });
+      throw new Error(t("conflict"));
+    }
+    throw error;
+  };
+}
+
 function useRefreshTaxes() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxes() });
@@ -133,6 +149,7 @@ export function TaxCollectionCard() {
   const config = configuration.data;
   const { values, setValue, isLoadError, refetch } = useSettingsForm<TaxSettingsRecord, TaxSettingsRecord>({
     label: t("collectionTitle"),
+    fields: { label: "tax-label" },
     queryKey: taxSettingsQuery.queryKey,
     fetchFn: fetchTaxSettings,
     saveFn: async (draft) => {
@@ -251,6 +268,7 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
   const common = useMessages(settingsMessages);
   const refresh = useRefreshTaxes();
   const failWrite = useWriteFailure();
+  const saveFailure = useSaveFailure();
   const [saved] = useState(() => ({ name: group?.name ?? "", isExempt: group?.isExempt ?? false }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -273,7 +291,6 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
         : apiData(postApiV1AdminTaxesClasses({ body }));
     },
     onSuccess: refresh,
-    onError: (error) => failWrite(error),
   });
   const remove = useMutation({
     mutationFn: () =>
@@ -286,10 +303,11 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
     onSettled: () => setConfirmDelete(false),
   });
   useSaveBar({
+    fields: { name: "tax-group-name" },
     dirty: draft.name !== saved.name || draft.isExempt !== saved.isExempt,
     saving: save.isPending,
     invalid: !draft.name.trim() || nameTaken || needsRate,
-    save: () => save.mutateAsync(),
+    save: () => save.mutateAsync().catch(saveFailure),
     discard: () => setDraft(saved),
   });
 
@@ -320,7 +338,7 @@ function GroupForm({ group, config }: { group: TaxClassRecord | null; config: Ta
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteGroup")}
+            title={common("deleteNamed", { name: group.name })}
             description={t("deleteConfirm", { name: group.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
@@ -406,6 +424,7 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
   const common = useMessages(settingsMessages);
   const refresh = useRefreshTaxes();
   const failWrite = useWriteFailure();
+  const saveFailure = useSaveFailure();
   const groupName = useGroupName();
   const [saved] = useState(() => toRateDraft(rate, config));
   const [draft, setDraft] = useState(saved);
@@ -438,7 +457,6 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
         : apiData(postApiV1AdminTaxesRates({ body }));
     },
     onSuccess: refresh,
-    onError: (error) => failWrite(error),
   });
   const remove = useMutation({
     mutationFn: () =>
@@ -451,10 +469,11 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
     onSettled: () => setConfirmDelete(false),
   });
   useSaveBar({
+    fields: { name: "tax-rate-name" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     invalid: !draft.name.trim() || rateBps === null || priority === null || !draft.taxClassId || !place || breaksCoverage,
-    save: () => save.mutateAsync(),
+    save: () => save.mutateAsync().catch(saveFailure),
     discard: () => setDraft(saved),
   });
 
@@ -554,7 +573,7 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={t("deleteRate")}
+            title={common("deleteNamed", { name: rate.name })}
             description={t("deleteConfirm", { name: rate.name })}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
@@ -755,7 +774,7 @@ export function TaxRatesCard() {
 function OverrideForm({ item, groups }: { item: TaxClassificationItem; groups: TaxClassRecord[] }) {
   const t = useMessages(taxesMessages);
   const queryClient = useQueryClient();
-  const failWrite = useWriteFailure();
+  const overrideFailure = useSaveFailure(queryKeys.settings.taxClassifications());
   const groupName = useGroupName();
   const saved = item.taxClassId ?? NONE;
   const [draft, setDraft] = useState(saved);
@@ -774,14 +793,13 @@ function OverrideForm({ item, groups }: { item: TaxClassificationItem; groups: T
         queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxClassifications() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.products.all }),
       ]),
-    onError: async (error) => {
-      if (isAdminApiConflictError(error)) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxClassifications() });
-      }
-      await failWrite(error);
-    },
   });
-  useSaveBar({ dirty: draft !== saved, saving: save.isPending, save: () => save.mutateAsync(), discard: () => setDraft(saved) });
+  useSaveBar({
+    dirty: draft !== saved,
+    saving: save.isPending,
+    save: () => save.mutateAsync().catch(overrideFailure),
+    discard: () => setDraft(saved),
+  });
   return (
     <SettingsField id="tax-override-group" label={t("rateGroup")}>
       <Select value={draft} onValueChange={setDraft}>
