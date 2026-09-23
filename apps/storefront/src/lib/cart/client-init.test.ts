@@ -69,6 +69,7 @@ function taxQuote(totalAmount: number, zone = "zone_banani"): CheckoutTaxQuote {
   return {
     valid: true,
     quoteFingerprint: `taxq_${zone.padEnd(22, "0")}`,
+    discountOffers: [],
     displayLabel: "VAT",
     pricesIncludeTax: false,
     shippingTaxed: true,
@@ -783,7 +784,6 @@ describe("initCartFunctionality", () => {
       id: "disc_1",
       code: "WELCOME",
       type: "percentage",
-      valueType: "percentage",
       discountValue: 10,
       discountAmount: 10,
     };
@@ -802,7 +802,6 @@ describe("initCartFunctionality", () => {
       id: "disc_1",
       code: "WELCOME",
       type: "percentage",
-      valueType: "percentage",
       discountValue: 10,
       discountAmount: 10,
     };
@@ -823,7 +822,6 @@ describe("initCartFunctionality", () => {
       id: "disc_1",
       code: "WELCOME",
       type: "percentage",
-      valueType: "percentage",
       discountValue: 10,
       discountAmount: 10,
     };
@@ -860,7 +858,6 @@ describe("initCartFunctionality", () => {
         id: "disc_open",
         code: "OPEN10",
         type: "amount_off_order",
-        valueType: "percentage",
         discountValue: 10,
       },
       discountAmount: 10,
@@ -878,7 +875,6 @@ describe("initCartFunctionality", () => {
 
     expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
       "OPEN10",
-      100,
       [expect.objectContaining(CART_ITEM)],
       60,
       undefined,
@@ -918,7 +914,6 @@ describe("initCartFunctionality", () => {
         id: "disc_open",
         code: "OPEN10",
         type: "amount_off_order",
-        valueType: "fixed_amount",
         discountValue: 10,
         discountAmount: 10,
       },
@@ -980,7 +975,6 @@ describe("initCartFunctionality", () => {
         id: "disc_open",
         code: "OPEN10",
         type: "amount_off_order",
-        valueType: "fixed_amount",
         discountValue: 10,
         discountAmount: 10,
       },
@@ -1014,7 +1008,6 @@ describe("initCartFunctionality", () => {
 
     expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
       "ONCE",
-      100,
       [expect.objectContaining(CART_ITEM)],
       60,
       undefined,

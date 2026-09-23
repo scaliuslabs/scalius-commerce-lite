@@ -36,8 +36,7 @@ const mocks = vi.hoisted(() => ({
   getActivePaymentMethods: vi.fn(),
   getCurrencySettings: vi.fn(),
   calculateStorefrontTaxQuote: vi.fn(),
-  isDiscountValid: vi.fn(),
-  calculateDiscountAmount: vi.fn(),
+  quoteStorefrontDiscount: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
 
@@ -127,14 +126,10 @@ vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
   };
 });
 
-vi.mock("@scalius/core/modules/discounts/discounts.eligibility", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@scalius/core/modules/discounts/discounts.eligibility")>();
-  return {
-    ...actual,
-    isDiscountValid: mocks.isDiscountValid,
-    calculateDiscountAmount: mocks.calculateDiscountAmount,
-  };
-});
+vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/promotions")>()),
+  quoteStorefrontDiscount: mocks.quoteStorefrontDiscount,
+}));
 
 import { orderRoutes } from "./orders";
 
@@ -191,8 +186,7 @@ beforeEach(() => {
     usdExchangeRate: "1",
   });
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
-  mocks.isDiscountValid.mockResolvedValue({ valid: false });
-  mocks.calculateDiscountAmount.mockResolvedValue(0);
+  mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, snapshot: null, taxAllocation: undefined, offers: [] });
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
@@ -896,7 +890,7 @@ describe("authoritative tax quote", () => {
     },
   );
 
-  it("passes validated product discount scope to the shared quote service", async () => {
+  it("passes the applied discount allocation to the shared tax quote service", async () => {
     mocks.getCustomerBySession.mockResolvedValue({
       token: "session_quote_owner",
       email: "buyer@example.com",
@@ -926,18 +920,8 @@ describe("authoritative tax quote", () => {
       subtotal: 100,
       hasFreeDeliveryProduct: false,
     });
-    mocks.isDiscountValid.mockResolvedValue({
-      valid: true,
-      discount: {
-        id: "discount_1",
-        type: "amount_off_products",
-        valueType: "fixed_amount",
-        discountValue: 50,
-      },
-      applicableProductIds: new Set(["product_1"]),
-      hasProductRestrictions: true,
-    });
-    mocks.calculateDiscountAmount.mockResolvedValue(50);
+    const taxAllocation = { lines: [{ lineId: "cart:0:variant_1", amountMinor: 5_000 }], shippingMinor: 0 };
+    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: {}, snapshot: {}, taxAllocation, offers: ["Buy a tee, get a cap free"] });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -961,38 +945,24 @@ describe("authoritative tax quote", () => {
     );
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ data: { discountOffers: ["Buy a tee, get a cap free"] } });
     expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        discountAmount: 50,
-        discountType: "amount_off_products",
-        applicableProductIds: ["product_1"],
+      expect.objectContaining({ promotionDiscountAllocation: taxAllocation }),
+    );
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      code: "PRODUCT50",
+      customerId: "customer_quote_owner",
+      customerPhone: "+8801712345678",
+      cart: expect.objectContaining({
+        lines: [expect.objectContaining({ id: "cart:0:variant_1", productId: "product_1", quantity: 1 })],
+        shippingAmountMinor: 6_000,
       }),
-    );
-    expect(mocks.isDiscountValid).toHaveBeenCalledWith(
-      expect.anything(),
-      "PRODUCT50",
-      100,
-      expect.any(Array),
-      "+8801712345678",
-      "",
-      "BDT",
-      "customer_quote_owner",
-    );
+    }));
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(
       expect.anything(),
       "session_quote_owner",
       undefined,
-    );
-    expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.any(Number),
-      expect.any(Array),
-      60,
-      new Set(["product_1"]),
-      "BDT",
-      true,
     );
   });
 });
@@ -1328,7 +1298,7 @@ describe("create order currency parity", () => {
         expect.objectContaining({ currencyCode }),
         cartValidation,
       );
-      expect(mocks.createStorefrontOrder.mock.calls[0]?.[6]).toBe(cartValidation);
+      expect(mocks.createStorefrontOrder.mock.calls[0]?.[4]).toBe(cartValidation);
     },
   );
 });
@@ -1467,8 +1437,6 @@ describe("create order commit/KV ordering", () => {
         expect.anything(),
         expect.objectContaining({ checkoutRequestId: "checkout_req_123456" }),
         expect.any(String),
-        expect.any(Function),
-        expect.any(Function),
         {
           orderId: "order_1",
           checkoutToken: "chk_order_1",
@@ -1481,10 +1449,9 @@ describe("create order commit/KV ordering", () => {
         }),
         undefined,
         { code: "BDT", decimalPlaces: 2 },
-        undefined,
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
-      );
+    );
     } finally {
       consoleError.mockRestore();
     }
@@ -2121,8 +2088,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.anything(),
       expect.anything(),
       expect.anything(),
@@ -2131,7 +2096,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       expect.anything(),
-      undefined,
       expect.anything(),
       expect.anything(),
     );
@@ -2210,8 +2174,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.objectContaining({
         orderId: "order_1",
         checkoutToken: "chk_order_1",
@@ -2223,7 +2185,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       { code: "BDT", decimalPlaces: 2 },
-      undefined,
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
     );
@@ -2260,8 +2221,6 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.objectContaining({ customerPhone: "+8801712345678" }),
       expect.any(String),
-      expect.any(Function),
-      expect.any(Function),
       expect.anything(),
       expect.anything(),
       expect.anything(),
@@ -2270,7 +2229,6 @@ describe("create order commit/KV ordering", () => {
         source: "authenticated",
       },
       expect.anything(),
-      undefined,
       expect.anything(),
       expect.anything(),
     );

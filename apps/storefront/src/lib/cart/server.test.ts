@@ -286,7 +286,6 @@ describe("cart server order processing", () => {
     expect(result).toMatchObject({ success: true, orderId: "order_1" });
     expect(mocks.validateDiscount).toHaveBeenCalledWith(
       "SAVE10",
-      90,
       [
         expect.objectContaining({
           id: "product-1",

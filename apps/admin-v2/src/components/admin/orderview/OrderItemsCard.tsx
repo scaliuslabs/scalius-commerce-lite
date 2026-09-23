@@ -157,8 +157,8 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Link
-                      to="/admin/promotions/$promotionId/edit"
-                      params={{ promotionId: order.promotion.id }}
+                      to="/admin/discounts/$discountId"
+                      params={{ discountId: order.promotion.id }}
                       className="truncate font-medium underline-offset-4 hover:underline"
                     >
                       {order.promotion.name}
@@ -169,9 +169,6 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
                       </code>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 text-muted-foreground">
-                    Saved promotion revision {order.promotion.revision}
-                  </p>
                 </div>
               </div>
             ) : null}

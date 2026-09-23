@@ -18,7 +18,7 @@ Load only the focused skill that owns the request:
 - Metrics, operational questions, queues, readiness, or reports: `$scalius-insights`.
 - Products, variants, categories, attributes, media, inventory, feeds, or labels: `$scalius-catalog`.
 - Pages, articles, navigation, header/footer/homepage, theme, SEO, or discovery: `$scalius-content`.
-- Customers, orders, discounts, promotions, fulfillment, returns, refunds, invoices, or payments: `$scalius-sales`.
+- Customers, orders, discounts (code and automatic), fulfillment, returns, refunds, invoices, or payments: `$scalius-sales`.
 - Business behavior, checkout, tax, shipping, providers, analytics, staff, security, agent access, or account settings: `$scalius-settings`.
 - Buyer catalog, context, cart, checkout, account, receipt, payment, or recovery: `$scalius-storefront`.
 

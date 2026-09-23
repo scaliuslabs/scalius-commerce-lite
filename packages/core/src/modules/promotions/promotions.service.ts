@@ -1,6 +1,6 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
-    discounts,
+    orderDiscountAllocations,
     promotionCodes,
     promotionConditions,
     promotionEffects,
@@ -26,6 +26,7 @@ import {
     createPromotionDraftSchema,
     updatePromotionDraftSchema,
     type CreatePromotionDraftInput,
+    type PromotionRule,
     type UpdatePromotionDraftInput,
 } from "./promotions.validation";
 
@@ -95,21 +96,22 @@ function fromEpochSeconds(value: number | null): Date | null {
     return value === null ? null : new Date(value * 1_000);
 }
 
-function parseConfig(value: string, label: string): unknown {
+function parseConfig(value: string): unknown {
     try {
         return JSON.parse(value) as unknown;
     } catch {
-        throw new ValidationError(`${label} configuration is unreadable. Repair the promotion before using it.`);
+        return null;
     }
 }
 
-function buildPromotionAggregate(
+/** Unvalidated evaluator input; the evaluator rejects a broken rule on its own. */
+export function promotionCandidateRecord(
     parent: typeof promotions.$inferSelect,
     codeRows: Array<typeof promotionCodes.$inferSelect>,
     conditionRows: Array<typeof promotionConditions.$inferSelect>,
     effectRows: Array<typeof promotionEffects.$inferSelect>,
-): PromotionAggregate {
-    const candidate = promotionCandidateSchema.safeParse({
+) {
+    return {
         id: parent.id,
         revision: parent.revision,
         name: parent.name,
@@ -117,6 +119,11 @@ function buildPromotionAggregate(
         status: parent.status,
         priority: parent.priority,
         conflictPolicy: parent.conflictPolicy,
+        combinesWith: {
+            product: parent.combinesWithProductDiscounts,
+            order: parent.combinesWithOrderDiscounts,
+            shipping: parent.combinesWithShippingDiscounts,
+        },
         startsAtEpochSeconds: toEpochSeconds(parent.startsAt),
         endsAtEpochSeconds: toEpochSeconds(parent.endsAt),
         maxRedemptions: parent.maxRedemptions,
@@ -130,16 +137,27 @@ function buildPromotionAggregate(
         conditions: conditionRows.map((condition) => ({
             id: condition.id,
             kind: condition.kind,
-            config: parseConfig(condition.config, "Promotion condition"),
+            config: parseConfig(condition.config),
         })),
         effects: effectRows.map((effect) => ({
             id: effect.id,
             kind: effect.kind,
             target: effect.target,
             allocation: effect.allocation,
-            config: parseConfig(effect.config, "Promotion effect"),
+            config: parseConfig(effect.config),
         })),
-    });
+    };
+}
+
+function buildPromotionAggregate(
+    parent: typeof promotions.$inferSelect,
+    codeRows: Array<typeof promotionCodes.$inferSelect>,
+    conditionRows: Array<typeof promotionConditions.$inferSelect>,
+    effectRows: Array<typeof promotionEffects.$inferSelect>,
+): PromotionAggregate {
+    const candidate = promotionCandidateSchema.safeParse(
+        promotionCandidateRecord(parent, codeRows, conditionRows, effectRows),
+    );
     if (!candidate.success) {
         throw new ValidationError("Promotion configuration is invalid and cannot be evaluated.", {
             promotionId: parent.id,
@@ -159,7 +177,7 @@ function buildPromotionAggregate(
 
 function isCodeIdentityConflict(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
-    return /promotion_codes_identity_unique|discounts\.code|PROMOTION_CODE_IDENTITY_CONFLICT/iu.test(message);
+    return /promotion_codes_identity_unique|promotion_codes\.normalized_code/iu.test(message);
 }
 
 async function assertCodeIdentitiesAvailable(
@@ -169,25 +187,26 @@ async function assertCodeIdentitiesAvailable(
 ): Promise<void> {
     if (codes.length === 0) return;
 
-    const [promotionRows, legacyRows] = await db.batch([
-        db.select({
-            promotionId: promotionCodes.promotionId,
-            code: promotionCodes.normalizedCode,
-        }).from(promotionCodes).where(inArray(promotionCodes.normalizedCode, [...codes])),
-        db.select({ code: discounts.code })
-            .from(discounts)
-            .where(inArray(sql<string>`upper(trim(${discounts.code}))`, [...codes])),
-    ]);
+    const promotionRows = await db.select({
+        promotionId: promotionCodes.promotionId,
+        code: promotionCodes.normalizedCode,
+    }).from(promotionCodes).where(inArray(promotionCodes.normalizedCode, [...codes]));
 
-    const collision = promotionRows.find((row) => row.promotionId !== promotionId)?.code
-        ?? legacyRows[0]?.code
-        ?? null;
+    const collision = promotionRows.find((row) => row.promotionId !== promotionId)?.code;
     if (collision) {
-        throw new ConflictError(`Promotion code ${String(collision).trim().toUpperCase()} is already reserved.`);
+        throw new ConflictError(`The discount code ${collision} is already in use.`);
     }
 }
 
-function buildCodeRows(promotionId: string, input: CreatePromotionDraftInput) {
+function combinesWithColumns(input: PromotionRule) {
+    return {
+        combinesWithProductDiscounts: input.combinesWith.product,
+        combinesWithOrderDiscounts: input.combinesWith.order,
+        combinesWithShippingDiscounts: input.combinesWith.shipping,
+    };
+}
+
+function buildCodeRows(promotionId: string, input: PromotionRule) {
     return input.codes.map(({ code, isActive }) => ({
         id: `pcode_${nanoid()}`,
         promotionId,
@@ -198,7 +217,7 @@ function buildCodeRows(promotionId: string, input: CreatePromotionDraftInput) {
     }));
 }
 
-function buildConditionRows(promotionId: string, input: CreatePromotionDraftInput) {
+function buildConditionRows(promotionId: string, input: PromotionRule) {
     return input.conditions.map((condition, position) => ({
         id: `pcond_${nanoid()}`,
         promotionId,
@@ -211,7 +230,7 @@ function buildConditionRows(promotionId: string, input: CreatePromotionDraftInpu
 
 function buildEffectInsertRow(
     promotionId: string,
-    effect: CreatePromotionDraftInput["effects"][number],
+    effect: PromotionRule["effects"][number],
     position: number,
 ) {
     return {
@@ -230,7 +249,7 @@ function buildEffectInsertRow(
 function buildChildInsertStatements(
     db: Database,
     promotionId: string,
-    input: CreatePromotionDraftInput,
+    input: PromotionRule,
 ): BatchItem<"sqlite">[] {
     const statements: BatchItem<"sqlite">[] = [];
     for (const rows of chunksOf(buildCodeRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
@@ -264,6 +283,7 @@ export async function createPromotionDraft(
         status: "draft",
         priority: input.priority,
         conflictPolicy: input.conflictPolicy,
+        ...combinesWithColumns(input),
         startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
         endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
         timezone: input.timezone,
@@ -283,7 +303,7 @@ export async function createPromotionDraft(
         ] as never);
     } catch (error) {
         if (isCodeIdentityConflict(error)) {
-            throw new ConflictError("One or more promotion codes are already reserved.");
+            throw new ConflictError("This discount code is already in use.");
         }
         throw error;
     }
@@ -349,30 +369,55 @@ export async function listPromotionDrafts(
                 isNull(promotionEffects.deletedAt),
             ))
             .orderBy(asc(promotionEffects.position), asc(promotionEffects.id)),
-        db.select({
-            promotionId: promotionRedemptions.promotionId,
-            redemptionCount: count(),
-            discountSpendMinor: sql<number>`coalesce(sum(${promotionRedemptions.discountAmountMinor}), 0)`,
-        }).from(promotionRedemptions)
-            .where(inArray(promotionRedemptions.promotionId, ids))
-            .groupBy(promotionRedemptions.promotionId),
+        orderUsageQuery(db, ids),
     ]);
     const usageByPromotionId = new Map(usageRows.map((usage) => [usage.promotionId, usage]));
 
-    return rows.map((parent) => {
-        const aggregate = buildPromotionAggregate(
-            parent,
-            codeRows.filter((code) => code.promotionId === parent.id),
-            conditionRows.filter((condition) => condition.promotionId === parent.id),
-            effectRows.filter((effect) => effect.promotionId === parent.id),
-        );
+    return rows.flatMap((parent) => {
+        let aggregate: PromotionAggregate;
+        try {
+            aggregate = buildPromotionAggregate(
+                parent,
+                codeRows.filter((code) => code.promotionId === parent.id),
+                conditionRows.filter((condition) => condition.promotionId === parent.id),
+                effectRows.filter((effect) => effect.promotionId === parent.id),
+            );
+        } catch {
+            // A rule the evaluator cannot read never applies; keep the list usable.
+            return [];
+        }
         const usage = usageByPromotionId.get(parent.id);
-        return {
+        return [{
             ...aggregate,
             redemptionCount: Number(usage?.redemptionCount ?? 0),
             discountSpendMinor: Number(usage?.discountSpendMinor ?? 0),
-        };
+        }];
     });
+}
+
+/**
+ * Orders and savings per discount. Allocations cover code and automatic
+ * discounts alike (a code order's allocations always sum to its claim).
+ */
+function orderUsageQuery(db: Database, ids: string[]) {
+    return db.select({
+        promotionId: orderDiscountAllocations.promotionId,
+        redemptionCount: sql<number>`count(DISTINCT ${orderDiscountAllocations.orderId})`,
+        discountSpendMinor: sql<number>`coalesce(sum(${orderDiscountAllocations.discountAmountMinor}), 0)`,
+    }).from(orderDiscountAllocations)
+        .where(inArray(orderDiscountAllocations.promotionId, ids))
+        .groupBy(orderDiscountAllocations.promotionId);
+}
+
+export async function getPromotionOrderUsage(
+    db: Database,
+    promotionId: string,
+): Promise<{ redemptionCount: number; discountSpendMinor: number }> {
+    const [usage] = await orderUsageQuery(db, [promotionId]);
+    return {
+        redemptionCount: Number(usage?.redemptionCount ?? 0),
+        discountSpendMinor: Number(usage?.discountSpendMinor ?? 0),
+    };
 }
 
 export async function updatePromotionDraft(
@@ -413,6 +458,7 @@ export async function updatePromotionDraft(
             method: input.method,
             priority: input.priority,
             conflictPolicy: input.conflictPolicy,
+            ...combinesWithColumns(input),
             startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
             endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
             timezone: input.timezone,
@@ -457,7 +503,7 @@ export async function updatePromotionDraft(
         return { id: promotionId, revision: result.revision, status: current.status };
     } catch (error) {
         if (isCodeIdentityConflict(error)) {
-            throw new ConflictError("One or more promotion codes are already reserved.");
+            throw new ConflictError("This discount code is already in use.");
         }
         throw error;
     }

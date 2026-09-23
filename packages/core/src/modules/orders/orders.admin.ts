@@ -699,7 +699,6 @@ async function prepareManualOrderQuote(
         })),
         shippingAmount: money.shippingCharge,
         discountAmount: money.discountAmount,
-        discountType: money.discountAmount > 0 ? "amount_off_order" : null,
         currency: {
             code: currency.code,
             decimalPlaces: currency.decimalPlaces,

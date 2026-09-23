@@ -331,8 +331,7 @@ export interface StorefrontOrderCommitPayload {
         taxableAmountMinor: number;
         taxAmountMinor: number;
     }[];
-    discountUsage: { discountId: string; revision: number; amountDiscounted: number } | null;
-    /** Mutually exclusive with legacy discountUsage. Re-verified during the order commit. */
+    /** The applied discount (code or automatic); re-verified during the order commit. */
     promotion?: PromotionCheckoutSnapshot | null;
     requestUrl: string;
     taxQuote: TaxQuote;

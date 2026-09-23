@@ -569,32 +569,6 @@ export const collectionSchema = collectionSummarySchema.extend({
 });
 
 // ─────────────────────────────────────────
-// Discounts
-// ─────────────────────────────────────────
-
-/** Discount — returned by discount service endpoints. */
-export const discountSchema = z.object({
-  id: z.string(),
-  code: z.string(),
-  revision: z.number().int().min(1),
-  type: z.string(),
-  valueType: z.string(),
-  discountValue: z.number(),
-  minPurchaseAmount: z.number().nullable(),
-  minQuantity: z.number().nullable(),
-  maxUsesPerOrder: z.number().nullable(),
-  maxUses: z.number().nullable(),
-  limitOnePerCustomer: z.boolean(),
-  customerSegment: z.string().nullable(),
-  startDate: timestampSchema,
-  endDate: nullableTimestampSchema,
-  isActive: z.boolean(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-  deletedAt: nullableTimestampSchema,
-});
-
-// ─────────────────────────────────────────
 // Pages
 // ─────────────────────────────────────────
 

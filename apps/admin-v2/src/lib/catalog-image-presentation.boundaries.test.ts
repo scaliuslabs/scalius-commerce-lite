@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 const productImageSurfaces = [
   "../components/admin/ProductView.tsx",
   "../components/admin/data-table/columns/product-columns.tsx",
-  "../components/admin/discount/ProductSelector.tsx",
   "../components/admin/orderview/OrderItemsCard.tsx",
   "../components/admin/product-form/ProductImagesSection.tsx",
   "../components/admin/product-form/variants/OptionMatrixEditor.tsx",

@@ -68,22 +68,6 @@ export const DeliveryProvider = {
 
 export type DeliveryProviderType = (typeof DeliveryProvider)[keyof typeof DeliveryProvider];
 
-export const DiscountType = {
-    AMOUNT_OFF_PRODUCTS: "amount_off_products",
-    AMOUNT_OFF_ORDER: "amount_off_order",
-    FREE_SHIPPING: "free_shipping",
-} as const;
-
-export type DiscountType = (typeof DiscountType)[keyof typeof DiscountType];
-
-export const DiscountValueType = {
-    PERCENTAGE: "percentage",
-    FIXED_AMOUNT: "fixed_amount",
-    FREE: "free",
-} as const;
-
-export type DiscountValueType = (typeof DiscountValueType)[keyof typeof DiscountValueType];
-
 export const PaymentRecordStatus = {
     PENDING: "pending",
     CONFIRMED: "confirmed",

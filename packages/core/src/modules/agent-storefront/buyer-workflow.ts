@@ -12,10 +12,6 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import {
-  calculateDiscountAmount,
-  isDiscountValid,
-} from "@scalius/core/modules/discounts/discounts.eligibility";
-import {
   assertGuestStorefrontCheckoutPolicy,
   assertStorefrontCheckoutPolicy,
   buildCheckoutAttemptIdentity,
@@ -413,31 +409,10 @@ export async function submitAgentStorefrontCheckout(
     ? existing.attempt
     : createAtomicCheckoutAttempt(attemptIdentity);
 
-  type DiscountCartItem = { id: string; price: number; quantity: number; variantId: string };
   const prepared = await withCheckoutStage("AGENT_CHECKOUT_PREPARE", () => createStorefrontOrder(
     db,
     data,
     options.requestUrl,
-    (storeDb, code, total, items, phone, customerId) => isDiscountValid(
-      storeDb,
-      code,
-      total,
-      items as DiscountCartItem[],
-      phone,
-      "",
-      undefined,
-      customerId,
-    ),
-    (storeDb, discount, total, items, shipping, applicableIds, restricted) => calculateDiscountAmount(
-      storeDb,
-      discount as { id: string; type: string; valueType: string; discountValue: number },
-      total,
-      items as DiscountCartItem[],
-      shipping,
-      applicableIds,
-      authority.currency.currencyCode,
-      restricted,
-    ),
     { orderId: attempt.orderId, checkoutToken: attempt.checkoutToken },
     authority.cartValidation,
     authority.deliveryPreflight,
@@ -446,7 +421,6 @@ export async function submitAgentStorefrontCheckout(
       code: authority.currency.currencyCode,
       decimalPlaces: getDecimalPlaces(authority.currency.currencyCode),
     },
-    undefined,
     createTrustedStorefrontCheckoutPolicySnapshot({
       partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
       authorityRevision: authority.authorityRevision,
