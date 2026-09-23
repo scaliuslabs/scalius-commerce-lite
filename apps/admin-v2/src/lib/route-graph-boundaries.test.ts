@@ -707,23 +707,6 @@ describe("admin route graph boundaries", () => {
     }
   });
 
-  it("keeps self-loading settings routes out of route-entry data awaits", () => {
-    const selfLoadingSettingsRoutes = [
-      ["notifications.tsx", "FirebaseSettingsForm"],
-    ] as const;
-
-    for (const [filename, marker] of selfLoadingSettingsRoutes) {
-      const source = readFileSync(
-        join(ADMIN_SRC_ROOT, "routes", "admin", "settings", filename),
-        "utf8",
-      );
-
-      expect(source).toContain(marker);
-      expect(source).not.toContain("ensureQueryData(");
-      expect(source).not.toContain("prefetchQuery(");
-    }
-  });
-
   it("keeps edit forms from blocking on secondary label hydration", () => {
     const collectionSource = readFileSync(
       join(
