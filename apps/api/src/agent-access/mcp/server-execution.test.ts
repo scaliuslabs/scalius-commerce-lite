@@ -87,7 +87,7 @@ async function connectInMemory() {
     surface: "dashboard",
     env: {
       PUBLIC_API_BASE_URL: "https://api.example.test",
-      AGENT_RATE_LIMITER: { limit: async () => ({ success: true }) },
+      RL_STANDARD: { limit: async () => ({ success: true }) },
     } as unknown as Env,
     ctx: {} as ExecutionContext,
   });
@@ -231,7 +231,6 @@ describe("MCP split operation execution", () => {
           gatewayStatus: {
             stripe: { configured: false, usable: false, checkoutVisible: false },
             sslcommerz: { configured: false, usable: false, checkoutVisible: false },
-            polar: { configured: false, usable: false, checkoutVisible: false },
             cod: { configured: true, usable: true, checkoutVisible: true },
           },
         },

@@ -14,7 +14,6 @@ const PAYMENT_METHOD_LABELS: Record<CheckoutPaymentMethodId, string> = {
   cod: "Cash on delivery",
   stripe: "Stripe",
   sslcommerz: "SSLCommerz",
-  polar: "Polar",
 };
 
 export interface StorefrontCheckoutSettingsSnapshot {

@@ -67,8 +67,6 @@ export function formatOrderSuccessPaymentMethod(
       return copy.orderReceiptPaymentMethodCardText;
     case "sslcommerz":
       return copy.orderReceiptPaymentMethodSslcommerzText;
-    case "polar":
-      return copy.orderReceiptPaymentMethodPolarText;
     default:
       return copy.orderReceiptStatusNotAvailableText;
   }
@@ -91,14 +89,6 @@ export function localizeOrderReceiptGatewayPresentation(
         ...presentation,
         buyerLabel: copy.onlinePaymentText,
         description: copy.onlinePaymentDescriptionText,
-      };
-    case "polar":
-      return {
-        ...presentation,
-        buyerLabel: copy.cardOrWalletText,
-        description: formatCheckoutLanguageText(copy.completeWithProviderText, {
-          provider: presentation.providerLabel ?? "Polar",
-        }),
       };
     case "cod":
       return {

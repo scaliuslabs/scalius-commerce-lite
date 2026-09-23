@@ -19,8 +19,7 @@ import {
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { MediaManager } from "../media-manager";
 
 interface BusinessSettings {
@@ -274,10 +273,7 @@ export default function BusinessSettingsBuilder() {
               <div className="flex min-h-24 items-center justify-center rounded-lg border bg-muted/20 p-3">
                 {invoiceLogoUrl ? (
                 <img
-                  src={getOptimizedImageUrl(
-                    invoiceLogoUrl,
-                    ADMIN_IMAGE_PRESETS.invoiceLogo,
-                  )}
+                  src={mediaImageUrl(invoiceLogoUrl, 480)}
                   alt="Invoice logo preview"
                   className="max-h-14 max-w-full object-contain"
                 />

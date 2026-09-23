@@ -19,7 +19,7 @@ import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import {
-    getCurrentPublicMediaUrl,
+    getCurrentMediaUrl,
 } from "../../integrations/storage";
 import {
     publicProductHasBuyerResolvableSku,
@@ -345,6 +345,7 @@ async function readMediaPage(
             mediaId: productMedia.mediaId,
             kind: media.kind,
             objectKey: media.objectKey,
+            variantWidth: media.variantWidth,
             mediaAltText: media.altText,
             contextualAltText: productMedia.altText,
             caption: media.caption,
@@ -353,6 +354,7 @@ async function readMediaPage(
             durationMs: media.durationMs,
             posterMediaId: poster.id,
             posterObjectKey: poster.objectKey,
+            posterVariantWidth: poster.variantWidth,
             posterKind: poster.kind,
             posterStatus: poster.status,
             isPrimary: productMedia.isPrimary,
@@ -380,12 +382,12 @@ async function readMediaPage(
             id: row.id,
             mediaId: row.mediaId,
             kind: row.kind,
-            url: getCurrentPublicMediaUrl(row.objectKey),
+            url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
             posterMediaId: row.posterObjectKey && row.posterKind === "image" && (row.posterStatus === "ready" || row.posterStatus === "trashed")
                 ? row.posterMediaId
                 : null,
             posterUrl: row.posterObjectKey && row.posterKind === "image" && (row.posterStatus === "ready" || row.posterStatus === "trashed")
-                ? getCurrentPublicMediaUrl(row.posterObjectKey)
+                ? getCurrentMediaUrl(row.posterObjectKey, row.posterVariantWidth)
                 : null,
             altText: row.contextualAltText ?? row.mediaAltText ?? productName,
             caption: row.caption,

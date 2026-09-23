@@ -47,8 +47,8 @@ describe("SEO base URL helpers", () => {
   it("normalizes relative SEO asset URLs against the absolute storefront URL", () => {
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://shop.example.com/");
 
-    expect(toAbsoluteStorefrontSeoUrl("/cdn-cgi/image/x/products/fish.jpg")).toBe(
-      "https://shop.example.com/cdn-cgi/image/x/products/fish.jpg",
+    expect(toAbsoluteStorefrontSeoUrl("/media/fish.jpg/1600.webp")).toBe(
+      "https://shop.example.com/media/fish.jpg/1600.webp",
     );
     expect(toAbsoluteStorefrontSeoUrl("https://cdn.example.com/fish.jpg")).toBe(
       "https://cdn.example.com/fish.jpg",

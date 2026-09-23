@@ -11,7 +11,11 @@ import {
   getEffectiveCartShippingFee,
   type CartStore,
 } from "../../store/cart";
-import { validateStorefrontPhone } from "../phone-country-policy";
+import {
+  checkoutPhoneResult,
+  initCheckoutPhoneField,
+  loadCheckoutPhoneValidator,
+} from "../checkout/phone-field";
 import { getShippingAddressError, MIN_SHIPPING_ADDRESS_LENGTH } from "../checkout/shipping-address";
 import {
   readCheckoutFormDraft,
@@ -110,7 +114,10 @@ function renderCartDom(): void {
       <div id="checkoutPanel"><form id="checkoutForm">
         <input name="formIntent" value="checkout" />
         <input name="customerName" value="Synthetic buyer" />
-        <input name="customerPhone" value="+8801712345678" />
+        <div id="customerPhone-field" data-default-country="BD">
+          <input id="customerPhone-input" value="01712345678" />
+          <input type="hidden" name="customerPhone" data-e164-value="" />
+        </div>
         <textarea id="shippingAddress" name="shippingAddress">Synthetic checkout address</textarea>
         <input name="city" value="city_dhaka" />
         <input name="zone" value="zone_banani" />
@@ -175,7 +182,9 @@ async function startCartPage(): Promise<void> {
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
     getEffectiveCartShippingFee,
-    validateStorefrontPhone,
+    checkoutPhoneResult,
+    initCheckoutPhoneField,
+    loadCheckoutPhoneValidator,
     findNamedCheckoutControl,
     getShippingAddressError,
     MIN_SHIPPING_ADDRESS_LENGTH,

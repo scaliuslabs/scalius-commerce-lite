@@ -505,7 +505,7 @@ describe("Steadfast webhook idempotency keys", () => {
           status: "delivered",
         }),
       },
-      { ORDER_NOTIFICATIONS_QUEUE: queue } as unknown as Env,
+      { JOBS_QUEUE: queue } as unknown as Env,
     );
 
     expect(response.status).toBe(200);

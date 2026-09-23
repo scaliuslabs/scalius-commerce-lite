@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import type { LibraryMediaFile, MediaCapability, UploadQueueItem } from "../types";
 import { readIntrinsicMediaMetadata } from "../utils/intrinsic-metadata";
+import { canEncodeMediaVariants, encodeMediaVariants } from "../utils/media-variants";
 
 const MAX_CONCURRENT_FILES = 2;
 const UNFINISHED_UPLOAD_STATUSES = new Set<UploadQueueItem["status"]>([
@@ -66,6 +67,10 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     let item = queueRef.current.find((candidate) => candidate.id === id);
     if (!item || item.status !== "initiating") return;
     const intrinsicMetadata = readIntrinsicMediaMetadata(item.file, item.kind);
+    // Renditions encode while the parts upload; null falls back to the server.
+    const encodedVariants = canEncodeMediaVariants(item.file.type)
+      ? encodeMediaVariants(item.file)
+      : Promise.resolve(null);
     let sessionId = item.sessionId;
     let failedPart: number | null = null;
     try {
@@ -137,14 +142,23 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       item = queueRef.current.find((candidate) => candidate.id === id);
       if (!item || item.status === "paused" || item.status === "cancelled") return;
       mutate(id, { status: "completing", progress: 97 });
-      let file = await MediaApiClient.completeUpload(session.id);
-      const metadata = await intrinsicMetadata;
+      const variants = await encodedVariants;
+      let file = await MediaApiClient.completeUpload(session.id, variants ? "client" : "server");
       let warning: string | null = null;
-      if (metadata) {
+      if (variants) {
         try {
-          file = await MediaApiClient.updateFile(file, metadata);
+          file = await MediaApiClient.saveVariants(file.id, variants);
         } catch {
-          warning = "Uploaded, but dimensions or duration could not be saved. The asset is still usable.";
+          warning = "Uploaded, but optimized copies could not be saved. Use Optimize images in the media library.";
+        }
+      } else {
+        const metadata = await intrinsicMetadata;
+        if (metadata && !(file.width && file.height)) {
+          try {
+            file = await MediaApiClient.updateFile(file, metadata);
+          } catch {
+            warning = "Uploaded, but dimensions or duration could not be saved. The asset is still usable.";
+          }
         }
       }
       mutate(id, { status: "complete", progress: 100, result: file, warning });

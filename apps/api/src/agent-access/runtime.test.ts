@@ -6,18 +6,19 @@ const oauthMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./oauth", () => ({
-  createOAuthProvider: () => ({ fetch: oauthMocks.providerFetch }),
+  handleOAuthRequest: oauthMocks.providerFetch,
   completeOAuthAuthorization: oauthMocks.complete,
 }));
 
 import { handleAgentAccessRequest } from "./runtime";
+import { rateLimitKey } from "../utils/rate-limit";
 
 function runtimeEnv() {
   return {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     BETTER_AUTH_URL: "https://dashboard.example.test",
     STOREFRONT_URL: "https://storefront.example.test",
-    AGENT_RATE_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    RL_STANDARD: { limit: vi.fn().mockResolvedValue({ success: true }) },
   } as unknown as Env;
 }
 
@@ -75,7 +76,7 @@ describe("agent runtime ingress", () => {
 
   it("fails closed with no-store when the unauthenticated limiter is unavailable", async () => {
     const env = runtimeEnv();
-    (env.AGENT_RATE_LIMITER.limit as ReturnType<typeof vi.fn>)
+    (env.RL_STANDARD.limit as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("binding unavailable"));
     const response = await handleAgentAccessRequest(
       new Request("https://api.example.test/oauth/authorize", { method: "GET" }),
@@ -89,7 +90,7 @@ describe("agent runtime ingress", () => {
 
   it("IP-limits MCP before OAuth parsing and does not misreport binding failure as quota", async () => {
     const denied = runtimeEnv();
-    (denied.AGENT_RATE_LIMITER.limit as ReturnType<typeof vi.fn>)
+    (denied.RL_STANDARD.limit as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ success: false });
     const limited = await handleAgentAccessRequest(
       new Request("https://api.example.test/api/v1/mcp/dashboard", { method: "POST" }),
@@ -100,7 +101,7 @@ describe("agent runtime ingress", () => {
     expect(oauthMocks.providerFetch).not.toHaveBeenCalled();
 
     const unavailable = runtimeEnv();
-    (unavailable.AGENT_RATE_LIMITER.limit as ReturnType<typeof vi.fn>)
+    (unavailable.RL_STANDARD.limit as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("binding unavailable"));
     const failedClosed = await handleAgentAccessRequest(
       new Request("https://api.example.test/api/v1/mcp/storefront", { method: "POST" }),
@@ -114,7 +115,7 @@ describe("agent runtime ingress", () => {
 
   it("normalizes random artifact and completion IDs into bounded per-IP buckets", async () => {
     const env = runtimeEnv();
-    const limiter = env.AGENT_RATE_LIMITER.limit as ReturnType<typeof vi.fn>;
+    const limiter = env.RL_STANDARD.limit as ReturnType<typeof vi.fn>;
     limiter
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: false })
@@ -136,11 +137,12 @@ describe("agent runtime ingress", () => {
     );
     await complete("0123456789abcdefghij");
     await complete("jihgfedcba9876543210");
-    expect(limiter.mock.calls.map(([input]) => input.key)).toEqual([
-      "unauth:artifact.dashboard:unknown",
-      "unauth:artifact.dashboard:unknown",
-      "unauth:oauth.complete:unknown",
-      "unauth:oauth.complete:unknown",
+    const keys = limiter.mock.calls.map(([input]) => input.key);
+    expect(keys).toEqual([
+      await rateLimitKey(env, "agent", "unauth:artifact.dashboard:unknown"),
+      await rateLimitKey(env, "agent", "unauth:artifact.dashboard:unknown"),
+      await rateLimitKey(env, "agent", "unauth:oauth.complete:unknown"),
+      await rateLimitKey(env, "agent", "unauth:oauth.complete:unknown"),
     ]);
     expect(oauthMocks.providerFetch).toHaveBeenCalledTimes(1);
     expect(oauthMocks.complete).toHaveBeenCalledTimes(1);

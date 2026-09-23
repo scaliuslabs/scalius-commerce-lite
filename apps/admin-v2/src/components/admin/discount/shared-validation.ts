@@ -60,19 +60,6 @@ export function refineEndDateAfterStart<T extends { startDate: Date; endDate?: D
   );
 }
 
-/** Percentage discounts cannot exceed the complete eligible amount. */
-export function refinePercentageAtMost100<
-  T extends { valueType: "percentage" | "fixed_amount"; discountValue: number },
->(schema: z.ZodType<T>) {
-  return schema.refine(
-    (data) => data.valueType !== "percentage" || data.discountValue <= 100,
-    {
-      message: "Percentage discount cannot exceed 100%",
-      path: ["discountValue"],
-    },
-  );
-}
-
 /** The current admin editor is date-based: starts are local-day inclusive. */
 export function normalizeDiscountStartDate(value: Date): Date {
   const normalized = new Date(value);

@@ -11,16 +11,12 @@ import {
 import {
   type CheckoutReadinessPayload,
   getCheckoutFlowSettings,
-  getAuthSettings,
   getCheckoutReadiness,
   getCustomerRequestPolicySettings,
-  getFirebaseSettings,
   getGeneralSettings,
-  getMetaConversionsLogs,
   getMetaConversionsSettings,
   getPaymentMethods,
   getSeoSettings,
-  getThemeSettings,
 } from "../api-functions/settings";
 import { extractApiError, unwrapEnvelope } from "../api-helpers";
 import { queryKeys } from "../query-keys";
@@ -133,13 +129,6 @@ export const generalSettingsQueryOptions = () =>
     staleTime: CONFIG_STALE_TIME_MS,
   });
 
-export const authSettingsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.auth(),
-    queryFn: () => getAuthSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
-  });
-
 export const checkoutFlowSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutFlow(),
@@ -171,36 +160,12 @@ export const seoSettingsQueryOptions = () =>
     staleTime: CONFIG_STALE_TIME_MS,
   });
 
-export const firebaseSettingsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.firebase(),
-    queryFn: () => getFirebaseSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
-  });
-
-export const themeSettingsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.theme(),
-    queryFn: () => getThemeSettings(),
-    staleTime: CONFIG_STALE_TIME_MS,
-  });
-
 export const metaConversionsSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.metaConversions(),
     queryFn: () => getMetaConversionsSettings(),
     staleTime: MODERATE_STALE_TIME_MS,
     refetchOnMount: "always",
-  });
-
-export const metaConversionsLogsQueryOptions = (params: {
-  page?: number;
-  limit?: number;
-}) =>
-  queryOptions({
-    queryKey: queryKeys.settings.metaConversionsLogs(params),
-    queryFn: () => getMetaConversionsLogs({ data: params }),
-    staleTime: MODERATE_STALE_TIME_MS,
   });
 
 export const paymentMethodsQueryOptions = () =>

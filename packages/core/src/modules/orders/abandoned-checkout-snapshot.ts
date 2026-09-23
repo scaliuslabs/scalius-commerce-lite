@@ -28,7 +28,7 @@ export interface AbandonedCheckoutAgentSummary {
     total: number;
     hasCustomerContact: boolean;
     orderId: string | null;
-    paymentMethod: "stripe" | "sslcommerz" | "polar" | null;
+    paymentMethod: "stripe" | "sslcommerz" | null;
     paymentStatus: "unpaid" | "failed" | null;
 }
 
@@ -56,7 +56,6 @@ export function projectAbandonedCheckoutAgentSummary(
 
         const paymentMethod = data.paymentMethod === "stripe"
             || data.paymentMethod === "sslcommerz"
-            || data.paymentMethod === "polar"
             ? data.paymentMethod
             : null;
         const paymentStatus = data.paymentStatus === "unpaid" || data.paymentStatus === "failed"

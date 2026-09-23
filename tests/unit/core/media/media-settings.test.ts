@@ -5,7 +5,7 @@ import {
   parseMediaOptimizationSettings,
 } from "../../../../packages/core/src/modules/settings/site-settings.service";
 
-describe("media optimization settings", () => {
+describe("media delivery settings", () => {
   it("normalizes pasted CDN hosts without accepting paths or queries", () => {
     expect(normalizeMediaHost("https://CDN.Example.com/")).toBe(
       "cdn.example.com",
@@ -35,9 +35,7 @@ describe("media optimization settings", () => {
         }),
       ),
     ).toEqual({
-      enabled: false,
       canonicalCdnUrl: "cdn.example.com",
-      allowedImageHosts: ["media.example.com"],
       canonicalHostAliases: ["old.example.com"],
     });
   });

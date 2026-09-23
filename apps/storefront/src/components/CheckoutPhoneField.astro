@@ -1,0 +1,107 @@
+---
+// Server-rendered checkout phone field: typeable before any JavaScript runs.
+// lib/checkout/phone-field.ts owns validation and the canonical E.164 value;
+// the international country picker loads only when a buyer opens it.
+import { getCountries, getCountryCallingCode } from "@scalius/shared/customer-utils";
+import {
+  normalizePhonePolicy,
+  phoneCountryAllowed,
+} from "@/lib/checkout/phone-field";
+
+interface Props {
+  label: string;
+  placeholder?: string;
+  allowedCountries?: string[];
+  allowedCountriesMode?: "include" | "exclude";
+  requiredMessage: string;
+  invalidMessage: string;
+  countryNotAcceptedMessage: string;
+  countrySelectLabel: string;
+  languageCode: string;
+}
+
+const {
+  label,
+  placeholder,
+  allowedCountries = [],
+  allowedCountriesMode = "include",
+  requiredMessage,
+  invalidMessage,
+  countryNotAcceptedMessage,
+  countrySelectLabel,
+  languageCode,
+} = Astro.props;
+
+const policy = normalizePhonePolicy({
+  countries: allowedCountries,
+  mode: allowedCountriesMode,
+});
+type CountryCode = Parameters<typeof getCountryCallingCode>[0];
+const knownCountries = new Set<string>(getCountries());
+// Bangladesh first; otherwise the merchant's first accepted country.
+const defaultCountry = phoneCountryAllowed("BD", policy)
+  ? "BD"
+  : ((policy.mode === "include" ? policy.countries : getCountries()).find(
+      (country) => knownCountries.has(country) && phoneCountryAllowed(country, policy),
+    ) ?? "BD");
+const callingCode = `+${getCountryCallingCode(defaultCountry as CountryCode)}`;
+const singleCountry = policy.mode === "include" && policy.countries.length === 1;
+---
+
+<div
+  id="customerPhone-field"
+  data-countries={policy.countries.join(",")}
+  data-country-mode={policy.mode}
+  data-default-country={defaultCountry}
+  data-required-message={requiredMessage}
+  data-invalid-message={invalidMessage}
+  data-country-message={countryNotAcceptedMessage}
+  data-country-label={countrySelectLabel}
+  data-language={languageCode}
+>
+  <label
+    for="customerPhone-input"
+    class="mb-1 block text-sm font-medium text-foreground"
+  >
+    {label}
+    <span class="text-destructive ml-0.5">*</span>
+  </label>
+  <input type="hidden" name="customerPhone" value="" data-e164-value="" />
+  <div
+    data-phone-box
+    class="flex h-11 w-full items-center overflow-hidden rounded-lg border border-input bg-muted text-base text-foreground shadow-sm transition-all focus-within:border-primary focus-within:bg-background focus-within:ring-1 focus-within:ring-primary/20 sm:h-9"
+  >
+    <span class="relative flex h-full shrink-0 items-center border-r border-input">
+      {
+        singleCountry ? (
+          <span class="px-3 text-sm font-medium text-muted-foreground">{callingCode}</span>
+        ) : (
+          <button
+            type="button"
+            data-phone-country
+            aria-label={countrySelectLabel}
+            class="flex h-full items-center gap-1 px-3 text-sm font-medium text-foreground"
+          >
+            <span data-phone-code>{callingCode}</span>
+            <svg aria-hidden="true" class="h-3 w-3 opacity-60" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 4.5 3 3 3-3" /></svg>
+          </button>
+        )
+      }
+    </span>
+    <input
+      id="customerPhone-input"
+      type="tel"
+      inputmode="tel"
+      autocomplete="tel"
+      required
+      placeholder={placeholder || "Phone number"}
+      class="h-full min-w-0 flex-1 border-none bg-transparent px-3 text-base text-foreground outline-none"
+    />
+  </div>
+  <p
+    id="customerPhone-error"
+    role="alert"
+    class="mt-1 hidden text-xs font-medium text-destructive"
+  >
+  </p>
+</div>

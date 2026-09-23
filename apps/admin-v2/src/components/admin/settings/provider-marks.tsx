@@ -3,7 +3,6 @@ import { cn } from "@scalius/shared/utils";
 export type ProviderMarkId =
   | "stripe"
   | "sslcommerz"
-  | "polar"
   | "cloudflare"
   | "resend"
   | "meta"
@@ -70,19 +69,6 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
         "Cropped the transparent outer margin to its alpha bounds with two source pixels retained on each side; artwork pixels were not recolored or redrawn.",
       sourceSha256: "7907eaf8fd5ecd525bef3ccefac93f6df2eb5314dca5d0a947185d5f7df64ba6",
     },
-  },
-  polar: {
-    label: "Polar",
-    lightSrc: "/provider-marks/polar-black.svg",
-    darkSrc: "/provider-marks/polar-white.svg",
-    kind: "icon",
-    firstPartyAssetUrl: "https://polar.sh/assets/brand/polar_brand.zip",
-    governingTermsUrl: "https://polar.sh/brand",
-    retrievedAt: "2026-07-14",
-    sha256: "a96f2cc562f1ac1eac4f864b943d313e145626d8fa0cebe12c61b1af80bbb670",
-    darkSha256: "4ccc963c7284172dcc475aee1ad4fc5bfe3d10caaf7fbde446451f3f983d2ef4",
-    minimumCssPixels: 16,
-    allowedSurface: "direct-provider-settings-and-storefront-checkout",
   },
   cloudflare: {
     label: "Cloudflare",

@@ -2,29 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeleteAttributes,
-  bulkRestoreAttributes,
-  createAttribute,
   deleteAttribute,
   deleteAttributePermanent,
   restoreAttribute,
   updateAttribute,
-  type CreateAttributeInput,
   type UpdateAttributeInput,
 } from "../api-functions/attributes";
 import { getServerFnError, queryKeys } from "./shared";
-
-export function useCreateAttribute() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateAttributeInput) => createAttribute({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      toast.success("Attribute created");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create attribute")),
-  });
-}
 
 export function useUpdateAttribute() {
   const queryClient = useQueryClient();
@@ -113,21 +97,5 @@ export function useBulkDeleteAttributes() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to delete attributes")),
-  });
-}
-
-export function useBulkRestoreAttributes() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { ids: string[] }) => bulkRestoreAttributes({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.attributes.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.attributes.values(),
-      });
-      toast.success(`${variables.ids.length} attribute(s) restored`);
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore attributes")),
   });
 }

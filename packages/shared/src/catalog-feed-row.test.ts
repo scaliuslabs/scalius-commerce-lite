@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CATALOG_FEED_IMAGE_OPTIONS,
   catalogFeedRowUtf8Bytes,
   catalogFeedRowsUtf8Bytes,
   projectCatalogFeedRows,
@@ -22,14 +21,14 @@ function project(
       variantStrategy: "variants",
       includeUnavailableProducts: true,
     },
-    transformImageUrl: (source) => source,
+    resolveImageUrl: (source) => source,
     ...overrides,
   });
 }
 
 describe("catalog feed row projector", () => {
   it("projects every optional variant XML fact from one pure row authority", () => {
-    const transforms: Array<{ source: string; options: unknown }> = [];
+    const resolved: string[] = [];
     const result = project([
       {
         id: "prod_shirt",
@@ -101,23 +100,17 @@ describe("catalog feed row projector", () => {
         ],
       },
     ], {
-      transformImageUrl: (source, options) => {
-        transforms.push({ source, options });
+      resolveImageUrl: (source) => {
+        resolved.push(source);
         return source;
       },
     });
 
     expect(result.omissions).toEqual([]);
     expect(result.omissionsTruncated).toBe(false);
-    expect(transforms).toEqual([
-      {
-        source: "/products/shirt-navy.jpg",
-        options: CATALOG_FEED_IMAGE_OPTIONS,
-      },
-      {
-        source: "https://cdn.example.test/shirt-primary.jpg",
-        options: CATALOG_FEED_IMAGE_OPTIONS,
-      },
+    expect(resolved).toEqual([
+      "/products/shirt-navy.jpg",
+      "https://cdn.example.test/shirt-primary.jpg",
     ]);
 
     expect(result.rows[0]).toEqual({

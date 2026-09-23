@@ -60,7 +60,6 @@ describe("cart checkout auth regressions", () => {
 
     expect(source).toContain('id="checkoutFormCard"');
     expect(source).toContain("{ hidden: checkoutConfig.guestCheckoutEnabled === false }");
-    expect(source).toContain("<PhoneField\n                  client:load");
     expect(source).toContain("const revealCheckoutFormForCustomer = () => {");
     expect(source).toContain(
       'document.getElementById("checkoutFormCard")?.classList.remove("hidden")',

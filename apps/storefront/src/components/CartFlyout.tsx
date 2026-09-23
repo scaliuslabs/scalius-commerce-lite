@@ -302,16 +302,7 @@ export default function CartFlyout({ onReady }: Props) {
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                       <img
-                        src={getProductImageUrl(
-                          item.image,
-                          {
-                            width: 96,
-                            height: 96,
-                            quality: 75,
-                            format: "auto",
-                            fit: "contain",
-                          },
-                        )}
+                        src={getProductImageUrl(item.image, 96)}
                         alt={item.name}
                         className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"

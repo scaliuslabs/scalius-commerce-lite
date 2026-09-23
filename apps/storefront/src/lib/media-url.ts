@@ -3,15 +3,18 @@
  *
  * Wraps @scalius/shared's pure resolveMediaUrl with the storefront's
  * runtime CDN base resolution (SSR: request-local runtime context,
- * client: window.__CDN_DOMAIN__ injected by Layout.astro).
+ * client: window.__CDN_DOMAIN__ injected by Layout.astro), and picks
+ * pre-generated renditions (see @scalius/shared/media-variants).
  */
 import { resolveMediaUrl as sharedResolveMediaUrl } from "@scalius/shared/media-url";
 import {
+  mediaImageSrcSet as sharedMediaImageSrcSet,
+  mediaImageUrl as sharedMediaImageUrl,
+} from "@scalius/shared/media-variants";
+import {
   getRuntimeCdnDomain,
-  getRuntimeImageCdnAllowedHosts,
   getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases,
-  getRuntimeImageOptimizationEnabled,
 } from "./api/runtime";
 
 function normalizeCdnDomain(value: string | null | undefined): string {
@@ -47,21 +50,13 @@ function readWindowString(name: "__IMAGE_CDN_BASE_URL__"): string {
 }
 
 function readWindowStringArray(
-  name: "__IMAGE_CDN_HOSTS__" | "__IMAGE_CDN_CANONICAL_HOST_ALIASES__",
+  name: "__IMAGE_CDN_CANONICAL_HOST_ALIASES__",
 ): string[] {
   if (typeof window === "undefined") return [];
   const value = (window as typeof window & Record<typeof name, unknown>)[name];
   return Array.isArray(value)
     ? value.filter((item) => typeof item === "string")
     : [];
-}
-
-function readWindowBoolean(
-  name: "__IMAGE_OPTIMIZATION_ENABLED__",
-): boolean | undefined {
-  if (typeof window === "undefined") return undefined;
-  const value = (window as typeof window & Record<typeof name, unknown>)[name];
-  return typeof value === "boolean" ? value : undefined;
 }
 
 /**
@@ -94,25 +89,6 @@ export function getCdnBase(): string {
   return toCdnBaseUrl(normalizeCdnDomain(readWindowCdnDomain()));
 }
 
-/**
- * Return configured CDN hostnames that are eligible for Cloudflare Image Resizing.
- */
-export function getCdnHosts(): string[] {
-  const hosts = new Set<string>();
-  for (const source of [
-    getRuntimeImageCdnBaseUrl(),
-    getRuntimeCdnDomain(),
-    readWindowString("__IMAGE_CDN_BASE_URL__"),
-    readWindowCdnDomain(),
-    ...getRuntimeImageCdnAllowedHosts(),
-    ...readWindowStringArray("__IMAGE_CDN_HOSTS__"),
-  ]) {
-    const host = normalizeCdnDomain(source);
-    if (host) hosts.add(host.toLowerCase());
-  }
-  return [...hosts];
-}
-
 export function getCdnCanonicalHostAliases(): string[] {
   const hosts = new Set<string>();
   for (const source of [
@@ -125,14 +101,6 @@ export function getCdnCanonicalHostAliases(): string[] {
   return [...hosts];
 }
 
-export function getImageOptimizationEnabled(): boolean {
-  return (
-    getRuntimeImageOptimizationEnabled() ??
-    readWindowBoolean("__IMAGE_OPTIMIZATION_ENABLED__") ??
-    true
-  );
-}
-
 /**
  * Resolve a media URL using the storefront's runtime CDN base.
  */
@@ -140,4 +108,23 @@ export function resolveMediaUrl(url: string | null | undefined): string {
   return sharedResolveMediaUrl(url, getCdnBase(), {
     cdnHostAliases: getCdnCanonicalHostAliases(),
   });
+}
+
+/**
+ * The smallest pre-generated rendition at least `width` px wide. Images
+ * without renditions (legacy uploads, SVG, external URLs) are served as-is.
+ */
+export function mediaImageUrl(
+  url: string | null | undefined,
+  width: number,
+): string {
+  const resolved = resolveMediaUrl(url);
+  return resolved ? sharedMediaImageUrl(resolved, width) : "";
+}
+
+/** `srcset` over every rendition; undefined when the image has none. */
+export function mediaImageSrcSet(
+  url: string | null | undefined,
+): string | undefined {
+  return sharedMediaImageSrcSet(resolveMediaUrl(url)) || undefined;
 }

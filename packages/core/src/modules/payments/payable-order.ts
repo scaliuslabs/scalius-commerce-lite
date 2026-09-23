@@ -40,7 +40,3 @@ export function getUnpayableOrderReason(order: PayableOrderState): string | null
 
   return BLOCKED_ORDER_STATUS_MESSAGES[order.status] ?? null;
 }
-
-export function isOrderPayable(order: PayableOrderState): boolean {
-  return getUnpayableOrderReason(order) === null;
-}

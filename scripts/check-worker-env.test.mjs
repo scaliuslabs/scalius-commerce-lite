@@ -6,6 +6,7 @@ import {
   apps,
   collectConfigNames,
   collectDuplicateEnvDeclarations,
+  collectResourceBindingViolations,
   collectWranglerVarsViolations,
   extractEnvNames,
   runWorkerEnvCheck,
@@ -87,6 +88,34 @@ describe("worker env check: Wrangler vars", () => {
   });
 });
 
+describe("worker env check: per-store resource shape", () => {
+  it("keeps every committed config to one KV, one bucket, one jobs queue, and two limiters", () => {
+    for (const app of apps) {
+      for (const configPath of app.configs) {
+        expect(collectResourceBindingViolations(configPath, readRepoJsonc(configPath)), configPath).toEqual([]);
+      }
+    }
+    const api = readRepoJsonc("apps/api/wrangler.jsonc");
+    expect(api.queues.consumers.map((consumer) => consumer.queue)).toEqual(["jobs", "jobs-dlq"]);
+    expect(api.queues.consumers[0].max_batch_timeout).toBeLessThanOrEqual(2);
+    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces).toBeUndefined();
+  });
+
+  it("fails on a second namespace, bucket, queue, or limiter", () => {
+    expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", {
+      kv_namespaces: [{ binding: "CACHE" }, { binding: "OAUTH_KV" }],
+      r2_buckets: [{ binding: "BUCKET" }, { binding: "AGENT_ARTIFACTS" }],
+      ratelimits: [{ name: "RL_STANDARD" }, { name: "SEARCH_RATE_LIMITER" }],
+      queues: { producers: [{ binding: "JOBS_QUEUE" }, { binding: "AUTH_OTP_QUEUE" }] },
+    })).toEqual([
+      expect.stringContaining("kv_namespaces OAUTH_KV"),
+      expect.stringContaining("r2_buckets AGENT_ARTIFACTS"),
+      expect.stringContaining("ratelimits SEARCH_RATE_LIMITER"),
+      expect.stringContaining("queue_producers AUTH_OTP_QUEUE"),
+    ]);
+  });
+});
+
 describe("worker env check: allowlists", () => {
   it("installs exactly the master secret on every Worker and the AES key on API + admin", () => {
     const byName = Object.fromEntries(apps.map((app) => [app.name, app.extraEnv]));
@@ -148,7 +177,6 @@ describe("worker env check: allowlists", () => {
       "POSTGRES_DATABASE_URL",
       "HYPERDRIVE",
       "DATABASE_MIGRATION_FREEZE",
-      "OAUTH_PROVIDER",
     ]) {
       expect(api.extraEnv).toContain(name);
     }
@@ -208,7 +236,7 @@ describe("worker env check: parsing", () => {
       kv_namespaces: [{ binding: "CACHE", id: "x" }],
       durable_objects: { bindings: [{ name: "CHECKOUT_COORDINATOR", class_name: "CheckoutCoordinator" }] },
       send_email: [{ name: "EMAIL" }],
-      ratelimits: [{ name: "SEARCH_RATE_LIMITER", namespace_id: "1" }],
+      ratelimits: [{ name: "RL_STANDARD", namespace_id: "1" }],
       services: [{ binding: "API", service: "scalius-api" }],
     });
 
@@ -218,7 +246,7 @@ describe("worker env check: parsing", () => {
       "CHECKOUT_COORDINATOR",
       "EMAIL",
       "LOCAL_MAILPIT_URL",
-      "SEARCH_RATE_LIMITER",
+      "RL_STANDARD",
     ]);
   });
 

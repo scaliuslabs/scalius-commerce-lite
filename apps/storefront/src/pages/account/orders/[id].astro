@@ -219,7 +219,7 @@ const orderId = Astro.params.id ?? "";
     __scaliusLoadOrderDetail?: () => Promise<void>;
   };
   const detailWindow = window as DetailWindow;
-  type OnlineRecoveryGateway = "stripe" | "sslcommerz" | "polar";
+  type OnlineRecoveryGateway = "stripe" | "sslcommerz";
   let currentDetail: CustomerOrderDetail | null = null;
   let currentCheckoutConfig: CheckoutConfig | null = null;
   let recoveryAction: AccountPaymentRecoveryAction | null = null;
@@ -315,7 +315,7 @@ const orderId = Astro.params.id ?? "";
   }
 
   function isOnlineRecoveryGateway(value: string): value is OnlineRecoveryGateway {
-    return value === "stripe" || value === "sslcommerz" || value === "polar";
+    return value === "stripe" || value === "sslcommerz";
   }
 
   function recoveryGatewayMarkup(gateway: OnlineRecoveryGateway): string {
@@ -369,7 +369,7 @@ const orderId = Astro.params.id ?? "";
   function recoveryButtonLabelFor(gateway: OnlineRecoveryGateway): string {
     if (gateway === "stripe") return "Enter card details";
     if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
-    return `Continue with ${gateway === "sslcommerz" ? "SSLCommerz" : "Polar"}`;
+    return "Continue with SSLCommerz";
   }
 
   function selectRecoveryGateway(gateway: OnlineRecoveryGateway): void {
@@ -913,13 +913,7 @@ const orderId = Astro.params.id ?? "";
     const items = document.getElementById("orderItems");
     if (items) {
       items.innerHTML = detail.items.map((item) => {
-        const imageUrl = getProductImageUrl(item.productImage, {
-          width: 128,
-          height: 128,
-          quality: 80,
-          format: "auto",
-          fit: "contain",
-        });
+        const imageUrl = getProductImageUrl(item.productImage, 128);
         const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
         const unitPrice = savedLine && savedMoneySummary
           ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)

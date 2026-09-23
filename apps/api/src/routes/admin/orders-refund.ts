@@ -69,7 +69,7 @@ const adminRefundRecoveryErrorResponses = {
 
 async function enqueueRefundNotification(options: {
     db: Database;
-    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    queue: Env["JOBS_QUEUE"] | undefined;
     orderId: string;
     result: {
         gateway: string;
@@ -97,7 +97,7 @@ async function enqueueRefundNotification(options: {
 
 async function enqueueRefundNotificationFact(options: {
     db: Database;
-    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    queue: Env["JOBS_QUEUE"] | undefined;
     orderId: string;
     gateway?: string;
     notification: RefundNotificationFact | {
@@ -125,7 +125,7 @@ async function enqueueRefundNotificationFact(options: {
 
 async function recordPartialRefundProcessedSideEffects(options: {
     db: Database;
-    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    queue: Env["JOBS_QUEUE"] | undefined;
     error: PartialRefundProcessedError;
     context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
     source: string;
@@ -164,7 +164,7 @@ async function recordPartialRefundProcessedSideEffects(options: {
 
 async function recordReconciledRefundAttemptSideEffects(options: {
     db: Database;
-    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    queue: Env["JOBS_QUEUE"] | undefined;
     orderIds: string[];
     notifications: RefundNotificationFact[];
     context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
@@ -206,7 +206,7 @@ async function recordReconciledRefundAttemptSideEffects(options: {
 
 async function recordDirectRefundSideEffects(options: {
     db: Database;
-    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    queue: Env["JOBS_QUEUE"] | undefined;
     orderId: string;
     result: Awaited<ReturnType<typeof processRefund>>;
     context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
@@ -277,7 +277,7 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum(["stripe", "sslcommerz", "polar", "cod"]).optional(),
+                        gateway: z.enum(["stripe", "sslcommerz", "cod"]).optional(),
                         manualSettlementConfirmed: z.boolean().optional(),
                     })
                 }
@@ -317,7 +317,7 @@ app.openapi(refundOrderRoute, async (c) => {
         if (error instanceof PartialRefundProcessedError) {
             await recordPartialRefundProcessedSideEffects({
                 db,
-                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+                queue: c.env.JOBS_QUEUE,
                 error,
                 context: c,
                 source: "orders-refund-partial-failure",
@@ -328,7 +328,7 @@ app.openapi(refundOrderRoute, async (c) => {
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     const sideEffects = await recordDirectRefundSideEffects({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         orderId,
         result,
         context: c,
@@ -381,7 +381,7 @@ app.openapi(reconcileRefundAttemptRoute, async (c) => {
 
     const sideEffects = await recordReconciledRefundAttemptSideEffects({
         db,
-        queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+        queue: c.env.JOBS_QUEUE,
         orderIds: result.orderIds,
         notifications: result.refundNotifications,
         context: c,

@@ -12,7 +12,7 @@ import {
   buyerCatalogHasSkuInPriceRange,
 } from "../modules/products/products.buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
-import { getCurrentPublicMediaUrl } from "../integrations/storage";
+import { getCurrentMediaUrl } from "../integrations/storage";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -55,6 +55,7 @@ export type SearchResult =
 type SearchImageProjection = {
   mediaId: string;
   objectKey: string;
+  variantWidth: number | null;
   altText: string;
 };
 
@@ -68,6 +69,10 @@ function buildSearchImageProjection(): SQL<string | null> {
       'objectKey', CASE
         WHEN search_media.kind = 'image' THEN search_media.object_key
         ELSE search_poster.object_key
+      END,
+      'variantWidth', CASE
+        WHEN search_media.kind = 'image' THEN search_media.variant_width
+        ELSE search_poster.variant_width
       END,
       'altText', COALESCE(
         search_product_media.alt_text,
@@ -114,7 +119,10 @@ function parseSearchImageProjection(
     ) {
       return null;
     }
-    return parsed as SearchImageProjection;
+    return {
+      ...parsed,
+      variantWidth: typeof parsed.variantWidth === "number" ? parsed.variantWidth : null,
+    } as SearchImageProjection;
   } catch {
     return null;
   }
@@ -273,7 +281,7 @@ export async function search(
         availableForSale: Boolean(availableForSale),
         hasVariants: Boolean(hasVariants),
         priceVaries: maxBuyerPrice > product.discountedPrice,
-        imageUrl: image ? getCurrentPublicMediaUrl(image.objectKey) : null,
+        imageUrl: image ? getCurrentMediaUrl(image.objectKey, image.variantWidth) : null,
         imageMediaId: image?.mediaId ?? null,
         imageAlt: image?.altText ?? null,
         type: "product" as const,

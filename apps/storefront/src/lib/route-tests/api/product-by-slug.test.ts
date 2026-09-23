@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getProductBySlug: vi.fn(),
   loadPageWithLayout: vi.fn(),
-  withOptimizedProductPageImages: vi.fn((product: unknown) => product),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -12,10 +11,6 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("@/lib/page-data", () => ({
   loadPageWithLayout: mocks.loadPageWithLayout,
-}));
-
-vi.mock("@/lib/serialized-media", () => ({
-  withOptimizedProductPageImages: mocks.withOptimizedProductPageImages,
 }));
 
 import { GET } from "../../../pages/api/products/[slug]";

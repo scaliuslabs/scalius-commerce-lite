@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@scalius/shared/utils";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
 import { saveProductOptionMatrix, type ProductOptionMatrixInput } from "@/lib/api-functions/products";
 import { getServerFnError } from "@/lib/api-helpers";
@@ -887,7 +887,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
         <button type="button" className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded border bg-background md:h-8 md:w-10" aria-label={triggerLabel}>
           {selected
             ? <img
-                src={getOptimizedImageUrl(selected.url, { width: 80, height: 80, quality: 75, fit: "contain" })}
+                src={mediaImageUrl(selected.url, 80)}
                 alt=""
                 className="h-full w-full object-contain object-center"
               />
@@ -947,7 +947,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
                 title={image.status === "trashed" ? "In trash · existing assignments remain" : image.altText || "Product image"}
               >
                 <img
-                  src={getOptimizedImageUrl(image.url, { width: 96, height: 96, quality: 75, fit: "contain" })}
+                  src={mediaImageUrl(image.url, 96)}
                   alt=""
                   className="h-full w-full object-contain object-center"
                 />

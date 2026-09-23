@@ -689,13 +689,13 @@ describe("payment processing idempotency", () => {
       ],
     });
 
-    await processPaymentFailed(db as never, "order_1", "polar", "checkout_balance");
+    await processPaymentFailed(db as never, "order_1", "stripe", "pi_balance");
 
     expect(inserts).toContainEqual(expect.objectContaining({
       orderId: "order_1",
       paymentType: "balance",
       status: PaymentRecordStatus.FAILED,
-      polarCheckoutId: "checkout_balance",
+      stripePaymentIntentId: "pi_balance",
     }));
     expect(batch).toHaveBeenCalledTimes(1);
   });
@@ -1070,7 +1070,7 @@ describe("failed payment database transitions", () => {
         status: PaymentPlanStatus.DEPOSIT_PAID,
       });
 
-      await processPaymentFailed(db, "order_1", "polar", "checkout_balance");
+      await processPaymentFailed(db, "order_1", "stripe", "pi_balance");
 
       expect(sqlite.prepare(`
         SELECT payment_status, paid_amount, balance_due, version
@@ -1083,13 +1083,13 @@ describe("failed payment database transitions", () => {
         version: 5,
       });
       expect(sqlite.prepare(`
-        SELECT status, payment_type, polar_checkout_id
+        SELECT status, payment_type, stripe_payment_intent_id
         FROM order_payments
         WHERE order_id = ?
       `).get("order_1")).toMatchObject({
         status: PaymentRecordStatus.FAILED,
         payment_type: "balance",
-        polar_checkout_id: "checkout_balance",
+        stripe_payment_intent_id: "pi_balance",
       });
     } finally {
       sqlite.close();

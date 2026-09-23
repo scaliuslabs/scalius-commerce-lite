@@ -106,7 +106,6 @@ function mockGatewaySnapshot(
         settings: {
             stripe,
             sslcommerz: null,
-            polar: null,
             cod: { enabled: true },
         },
     });
@@ -210,7 +209,6 @@ describe("getCheckoutConfig", () => {
             settings: {
                 stripe: null,
                 sslcommerz: { enabled: true, sandbox: true },
-                polar: null,
                 cod: { enabled: true },
             },
         });

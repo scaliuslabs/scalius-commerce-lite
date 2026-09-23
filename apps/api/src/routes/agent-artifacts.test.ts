@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import type { AgentPrincipal } from "../agent-access/types";
-import { createAgentArtifact } from "../agent-access/artifacts";
+import { createAgentArtifact, sealAgentArtifact } from "../agent-access/artifacts";
 
 const mocks = vi.hoisted(() => ({
   resolveBearer: vi.fn(),
@@ -183,7 +183,7 @@ async function createArtifact(db: Database, suffix = "one") {
     filename: "orders.csv",
     sizeBytes: 3,
     sha256: SHA256,
-    r2Key: `agent-artifacts/${suffix}`,
+    r2Key: `private/agent-artifacts/${suffix}`,
   }, { PUBLIC_API_BASE_URL: "https://api.example.com" } as Env);
 }
 
@@ -208,25 +208,29 @@ function appFor(db: Database) {
 
 function envFor(input: {
   bytes?: ArrayBuffer | null;
+  unsealed?: boolean;
   rateAllowed?: boolean;
   deleteFails?: boolean;
 } = {}): Env {
   const bytes = input.bytes === undefined ? BYTES : input.bytes;
-  return {
+  const env: Env = {
+    SCALIUS_SECRET: "artifact-route-test-master-secret-0123456789",
     AGENT_TOKEN_PEPPER: "pepper",
-    AGENT_RATE_LIMITER: {
+    RL_STANDARD: {
       limit: vi.fn().mockResolvedValue({ success: input.rateAllowed ?? true }),
     },
-    AGENT_ARTIFACTS: {
-      get: vi.fn(async () => bytes === null ? null : ({
-        size: bytes.byteLength,
-        arrayBuffer: async () => bytes,
-      })),
+    BUCKET: {
+      get: vi.fn(async (key: string) => {
+        if (bytes === null) return null;
+        const stored = input.unsealed ? bytes : (await sealAgentArtifact(env, key, bytes)).slice().buffer;
+        return { size: stored.byteLength, arrayBuffer: async () => stored };
+      }),
       delete: vi.fn(async () => {
         if (input.deleteFails) throw new Error("R2 unavailable");
       }),
     },
   } as unknown as Env;
+  return env;
 }
 
 function download(app: ReturnType<typeof appFor>, env: Env, artifactId: string, headers: HeadersInit = {}) {
@@ -319,7 +323,7 @@ describe("authenticated agent artifact route", () => {
     });
     const cleanupOrder: string[] = [];
     const env = envFor();
-    const bucket = env.AGENT_ARTIFACTS as unknown as {
+    const bucket = env.BUCKET as unknown as {
       delete: ReturnType<typeof vi.fn>;
     };
     bucket.delete.mockImplementation(async () => {
@@ -363,11 +367,12 @@ describe("authenticated agent artifact route", () => {
     ["missing R2 object", null, "r2_missing"],
     ["size mismatch", new TextEncoder().encode("abcd").buffer as ArrayBuffer, "size_mismatch"],
     ["digest mismatch", new TextEncoder().encode("abd").buffer as ArrayBuffer, "digest_mismatch"],
-  ])("keeps a claimed artifact terminal after %s", async (_label, bytes, failureClass) => {
+    ["unsealed object", BYTES, "digest_mismatch", true],
+  ])("keeps a claimed artifact terminal after %s", async (_label, bytes, failureClass, unsealed = false) => {
     const harness = createHarness();
     sqlite = harness.sqlite;
     const artifact = await createArtifact(harness.db);
-    const response = await download(appFor(harness.db), envFor({ bytes }), artifact.artifactId);
+    const response = await download(appFor(harness.db), envFor({ bytes, unsealed }), artifact.artifactId);
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain("abc");
     expect(sqlite.prepare(`

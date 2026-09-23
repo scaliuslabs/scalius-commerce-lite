@@ -278,59 +278,20 @@ app.get("/readyz", async (c) => {
   const asyncChecks = await Promise.all([
     databaseCheck(env),
     kvCheck("api_cache_kv", env.CACHE),
-    kvCheck("shared_auth_kv", env.SHARED_AUTH_CACHE),
-    kvCheck("oauth_kv", env.OAUTH_KV),
     r2Check("r2", env.BUCKET),
-    r2Check("agent_artifacts_r2", env.AGENT_ARTIFACTS),
   ]);
 
   const checks = [
     ...asyncChecks,
-    queueBindingCheck("payment_events_queue", env.PAYMENT_EVENTS_QUEUE),
-    queueBindingCheck("order_notifications_queue", env.ORDER_NOTIFICATIONS_QUEUE),
-    queueBindingCheck("auth_otp_queue", env.AUTH_OTP_QUEUE),
+    queueBindingCheck("jobs_queue", env.JOBS_QUEUE),
     bindingMethodsCheck(
       "checkout_coordinator",
       env.CHECKOUT_COORDINATOR,
       ["idFromName", "get"],
       "durable object namespace",
     ),
-    bindingMethodsCheck(
-      "agent_rate_limiter",
-      env.AGENT_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
-    bindingMethodsCheck(
-      "search_rate_limiter",
-      env.SEARCH_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
-    bindingMethodsCheck(
-      "order_ip_rate_limiter",
-      env.ORDER_IP_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
-    bindingMethodsCheck(
-      "order_phone_rate_limiter",
-      env.ORDER_PHONE_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
-    bindingMethodsCheck(
-      "meta_events_rate_limiter",
-      env.META_EVENTS_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
-    bindingMethodsCheck(
-      "abandoned_checkout_rate_limiter",
-      env.ABANDONED_CHECKOUT_RATE_LIMITER,
-      ["limit"],
-      "rate limit",
-    ),
+    bindingMethodsCheck("rl_strict", env.RL_STRICT, ["limit"], "rate limit"),
+    bindingMethodsCheck("rl_standard", env.RL_STANDARD, ["limit"], "rate limit"),
     configCheck(env),
     platformCheck(env),
   ];

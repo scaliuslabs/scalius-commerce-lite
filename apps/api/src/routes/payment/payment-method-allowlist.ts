@@ -2,20 +2,17 @@ import type { Database } from "@scalius/database/client";
 import { siteSettings } from "@scalius/database/schema";
 import {
   getPaymentMethodPreferences,
-  getPolarCheckoutReadiness,
-  getPolarSettings,
   getSSLCommerzCheckoutReadiness,
   getSSLCommerzSettings,
   getStripeCheckoutReadiness,
   getStripeSettings,
-  type PolarSettings,
   type SSLCommerzSettings,
   type StripeSettings,
 } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/settings/checkout-flow";
 import { ServiceUnavailableError } from "../../utils/api-error";
 
-export type StorefrontPaymentMethod = "stripe" | "sslcommerz" | "polar";
+export type StorefrontPaymentMethod = "stripe" | "sslcommerz";
 
 export interface CheckoutFlowSettings {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";
@@ -26,13 +23,11 @@ export interface CheckoutFlowSettings {
 type GatewaySettingsByMethod = {
   stripe: StripeSettings;
   sslcommerz: SSLCommerzSettings;
-  polar: PolarSettings;
 };
 
 const GATEWAY_LABELS: Record<StorefrontPaymentMethod, string> = {
   stripe: "Stripe",
   sslcommerz: "SSLCommerz",
-  polar: "Polar",
 };
 
 export async function assertGatewaySelectedForCheckout(
@@ -82,12 +77,8 @@ export function assertGatewayCheckoutSettings(
   settings: SSLCommerzSettings | null,
 ): asserts settings is SSLCommerzSettings;
 export function assertGatewayCheckoutSettings(
-  method: "polar",
-  settings: PolarSettings | null,
-): asserts settings is PolarSettings;
-export function assertGatewayCheckoutSettings(
   method: StorefrontPaymentMethod,
-  settings: StripeSettings | SSLCommerzSettings | PolarSettings | null,
+  settings: StripeSettings | SSLCommerzSettings | null,
 ): void {
   if (method === "stripe") {
     const readiness = getStripeCheckoutReadiness(settings as StripeSettings | null);
@@ -100,23 +91,12 @@ export function assertGatewayCheckoutSettings(
     return;
   }
 
-  if (method === "sslcommerz") {
-    const readiness = getSSLCommerzCheckoutReadiness(settings as SSLCommerzSettings | null);
-    if (!settings || !readiness.configured) {
-      throw new ServiceUnavailableError(readiness.blockedReason ?? "SSLCommerz is not configured. Please set credentials in the admin dashboard.");
-    }
-    if (!readiness.enabled) {
-      throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
-    }
-    return;
-  }
-
-  const readiness = getPolarCheckoutReadiness(settings as PolarSettings | null);
+  const readiness = getSSLCommerzCheckoutReadiness(settings as SSLCommerzSettings | null);
   if (!settings || !readiness.configured) {
-    throw new ServiceUnavailableError(readiness.blockedReason ?? "Polar is not configured. Please set credentials in the admin dashboard.");
+    throw new ServiceUnavailableError(readiness.blockedReason ?? "SSLCommerz is not configured. Please set credentials in the admin dashboard.");
   }
   if (!readiness.enabled) {
-    throw new ServiceUnavailableError("Polar gateway is disabled.");
+    throw new ServiceUnavailableError("SSLCommerz gateway is disabled.");
   }
 }
 
@@ -133,11 +113,6 @@ export function loadCheckoutGatewaySettings(
 export function loadCheckoutGatewaySettings(
   db: Database,
   encryptionKey: string | undefined,
-  method: "polar",
-): Promise<PolarSettings>;
-export function loadCheckoutGatewaySettings(
-  db: Database,
-  encryptionKey: string | undefined,
   method: StorefrontPaymentMethod,
 ): Promise<GatewaySettingsByMethod[StorefrontPaymentMethod]>;
 export async function loadCheckoutGatewaySettings(
@@ -150,13 +125,7 @@ export async function loadCheckoutGatewaySettings(
     assertGatewayCheckoutSettings(method, settings);
     return settings;
   }
-  if (method === "sslcommerz") {
-    const settings = await getSSLCommerzSettings(db, encryptionKey);
-    assertGatewayCheckoutSettings(method, settings);
-    return settings;
-  }
-
-  const settings = await getPolarSettings(db, encryptionKey);
+  const settings = await getSSLCommerzSettings(db, encryptionKey);
   assertGatewayCheckoutSettings(method, settings);
   return settings;
 }

@@ -68,32 +68,6 @@ export interface SSLCommerzCheckoutReadiness {
   blockedReason?: string;
 }
 
-export interface PolarSettings {
-  accessToken: string;
-  webhookSecret: string;
-  productId: string;
-  sandbox: boolean;
-  enabled: boolean;
-  credentialErrors?: string[];
-}
-
-export type PolarCheckoutRequiredField = "accessToken" | "productId" | "webhookSecret";
-
-const POLAR_CHECKOUT_FIELD_LABELS: Record<PolarCheckoutRequiredField, string> = {
-  accessToken: "access token",
-  productId: "product ID",
-  webhookSecret: "webhook secret",
-};
-
-export interface PolarCheckoutReadiness {
-  configured: boolean;
-  enabled: boolean;
-  usable: boolean;
-  missingFields: PolarCheckoutRequiredField[];
-  credentialErrors?: string[];
-  blockedReason?: string;
-}
-
 // ---------------------------------------------------------------------------
 // Generic helper: bulk-read all keys for a category
 // ---------------------------------------------------------------------------
@@ -365,129 +339,6 @@ async function resolveSSLCommerzSettingsFromValues(
 }
 
 // ---------------------------------------------------------------------------
-// Polar
-// ---------------------------------------------------------------------------
-
-const POLAR_CATEGORY = "polar";
-const POLAR_PHYSICAL_GOODS_BLOCKED_REASON =
-  "Polar does not support physical goods. Scalius buyer checkout currently handles shipped products.";
-const POLAR_PLACEHOLDER_VALUES = new Set([
-  "dummy",
-  "placeholder",
-  "example",
-  "demo",
-  "test",
-  "polar_access_token",
-  "polar_product_id",
-  "polar_webhook_secret",
-  "your_polar_token",
-  "your_polar_access_token",
-  "your_polar_product_id",
-  "your_polar_webhook_secret",
-  "your_polar_token_here",
-  "your_polar_webhook_secret_here",
-]);
-
-type PolarCredentialField = "accessToken" | "productId" | "webhookSecret";
-
-export function isPolarPlaceholderCredential(value: unknown): boolean {
-  return typeof value === "string" && POLAR_PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
-}
-
-export function getPolarCheckoutMissingFields(
-  settings: Partial<Pick<PolarSettings, PolarCheckoutRequiredField>> | null | undefined,
-): PolarCheckoutRequiredField[] {
-  const missing: PolarCheckoutRequiredField[] = [];
-  if (!hasText(settings?.accessToken)) missing.push("accessToken");
-  if (!hasText(settings?.productId)) missing.push("productId");
-  if (!hasText(settings?.webhookSecret)) missing.push("webhookSecret");
-  return missing;
-}
-
-function polarBlockedReason(missingFields: PolarCheckoutRequiredField[]): string | undefined {
-  if (missingFields.length === 0) return undefined;
-  const labels = missingFields.map((field) => POLAR_CHECKOUT_FIELD_LABELS[field]);
-  return `Polar needs ${labels.join(", ")} before it can be shown at checkout.`;
-}
-
-function getPolarPlaceholderCredentialErrors(
-  settings: Partial<Pick<PolarSettings, PolarCredentialField>> | null | undefined,
-): string[] {
-  const errors: string[] = [];
-  if (isPolarPlaceholderCredential(settings?.accessToken)) {
-    errors.push("Polar access token looks like a placeholder. Enter the real Polar access token from your merchant account.");
-  }
-  if (isPolarPlaceholderCredential(settings?.productId)) {
-    errors.push("Polar product ID looks like a placeholder. Enter the real Polar product ID from your merchant account.");
-  }
-  if (isPolarPlaceholderCredential(settings?.webhookSecret)) {
-    errors.push("Polar webhook secret looks like a placeholder. Enter the real Polar webhook secret from your merchant account.");
-  }
-  return errors;
-}
-
-export function getPolarCheckoutReadiness(
-  settings: Partial<PolarSettings> | null | undefined,
-): PolarCheckoutReadiness {
-  const missingFields = getPolarCheckoutMissingFields(settings);
-  const credentialErrors = compactErrors([
-    ...(settings?.credentialErrors ?? []),
-    ...getPolarPlaceholderCredentialErrors(settings),
-  ]);
-  const enabled = settings?.enabled === true;
-  const configured = missingFields.length === 0 && credentialErrors.length === 0;
-  return {
-    configured,
-    enabled,
-    // Polar's merchant-of-record terms prohibit physical goods. Keep stored
-    // credentials readable for existing-order webhooks/reconciliation, but do
-    // not offer Polar for the current shipping-based storefront product model.
-    usable: false,
-    missingFields,
-    credentialErrors,
-    blockedReason:
-      credentialErrors[0] ??
-      polarBlockedReason(missingFields) ??
-      POLAR_PHYSICAL_GOODS_BLOCKED_REASON,
-  };
-}
-
-export function isPolarCheckoutUsable(
-  settings: Partial<PolarSettings> | null | undefined,
-): settings is PolarSettings {
-  return getPolarCheckoutReadiness(settings).usable;
-}
-
-export async function getPolarSettings(
-  db: Database,
-  encryptionKey?: string,
-): Promise<PolarSettings | null> {
-  const values = await readCategory(db, POLAR_CATEGORY);
-  return resolvePolarSettingsFromValues(values, encryptionKey);
-}
-
-async function resolvePolarSettingsFromValues(
-  values: Record<string, string>,
-  encryptionKey?: string,
-): Promise<PolarSettings | null> {
-  if (!values.access_token && !values.product_id && !values.webhook_secret && values.sandbox === undefined && values.enabled === undefined) return null;
-
-  const [accessToken, webhookSecret] = await Promise.all([
-    readStoredCredentialStrict(values.access_token, encryptionKey, "Polar access token"),
-    readStoredCredentialStrict(values.webhook_secret, encryptionKey, "Polar webhook secret"),
-  ]);
-
-  return {
-    accessToken: accessToken.value,
-    webhookSecret: webhookSecret.value,
-    productId: values.product_id ?? "",
-    sandbox: values.sandbox !== "false",
-    enabled: values.enabled !== "false",
-    credentialErrors: compactErrors([accessToken.error, webhookSecret.error]),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Upsert helpers (used by admin API routes)
 // ---------------------------------------------------------------------------
 
@@ -536,16 +387,16 @@ const PAYMENT_METHODS_CATEGORY = "payment_methods";
 
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront */
-  enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
   /** Default payment method shown first on checkout */
-  defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
+  defaultMethod: "stripe" | "sslcommerz" | "cod";
 }
 
 export interface PaymentMethodPreferences {
   /** Raw merchant-selected checkout allowlist before gateway readiness filtering. */
-  enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
   /** Raw merchant-selected default before gateway readiness filtering. */
-  defaultMethod: "stripe" | "sslcommerz" | "polar" | "cod";
+  defaultMethod: "stripe" | "sslcommerz" | "cod";
   /** Whether the allowlist was explicitly saved by the merchant. */
   hasExplicitEnabledMethods: boolean;
 }
@@ -553,17 +404,16 @@ export interface PaymentMethodPreferences {
 function parsePaymentMethodPreferences(
   values: Record<string, string>,
 ): PaymentMethodPreferences {
-  let enabledMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[];
+  let enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
   const hasExplicitEnabledMethods = values.enabled_methods !== undefined;
   try {
     const parsed = values.enabled_methods
       ? JSON.parse(values.enabled_methods) as unknown
       : ["cod"];
     enabledMethods = Array.isArray(parsed)
-      ? Array.from(new Set(parsed.filter((method): method is ("stripe" | "sslcommerz" | "polar" | "cod") =>
+      ? Array.from(new Set(parsed.filter((method): method is ("stripe" | "sslcommerz" | "cod") =>
           method === "stripe" ||
           method === "sslcommerz" ||
-          method === "polar" ||
           method === "cod",
         )))
       : [];
@@ -575,7 +425,6 @@ function parsePaymentMethodPreferences(
   const defaultMethod = (
     storedDefault === "stripe" ||
     storedDefault === "sslcommerz" ||
-    storedDefault === "polar" ||
     storedDefault === "cod"
   )
     ? storedDefault
@@ -592,7 +441,6 @@ export const STOREFRONT_GATEWAY_SETTING_CATEGORIES = [
   PAYMENT_METHODS_CATEGORY,
   STRIPE_CATEGORY,
   SSL_CATEGORY,
-  POLAR_CATEGORY,
 ] as const;
 
 export interface PaymentGatewaySettingsSnapshot {
@@ -601,7 +449,6 @@ export interface PaymentGatewaySettingsSnapshot {
   settings: {
     stripe: StripeSettings | null;
     sslcommerz: SSLCommerzSettings | null;
-    polar: PolarSettings | null;
     cod: { enabled: true };
   };
 }
@@ -624,12 +471,11 @@ function buildActivePaymentMethods(
   preferences: PaymentMethodPreferences,
   resolved: ResolvedGatewaySettings,
 ): PaymentMethodsConfig {
-  const validMethods: ("stripe" | "sslcommerz" | "polar" | "cod")[] = [];
+  const validMethods: ("stripe" | "sslcommerz" | "cod")[] = [];
   for (const method of preferences.enabledMethods) {
     if (method === "cod") validMethods.push(method);
     else if (method === "stripe" && isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
     else if (method === "sslcommerz" && isSSLCommerzCheckoutUsable(resolved.sslcommerz)) validMethods.push(method);
-    else if (method === "polar" && isPolarCheckoutUsable(resolved.polar)) validMethods.push(method);
   }
   if (validMethods.length === 0 && !preferences.hasExplicitEnabledMethods) {
     validMethods.push("cod");
@@ -650,12 +496,11 @@ async function resolvePaymentGatewaySettingsSnapshotFromRows(
   const preferences = parsePaymentMethodPreferences(
     byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
   );
-  const [stripe, sslcommerz, polar] = await Promise.all([
+  const [stripe, sslcommerz] = await Promise.all([
     resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey),
     resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey),
-    resolvePolarSettingsFromValues(byCategory.get(POLAR_CATEGORY) ?? {}, encryptionKey),
   ]);
-  const resolved = { stripe, sslcommerz, polar, cod: { enabled: true as const } };
+  const resolved = { stripe, sslcommerz, cod: { enabled: true as const } };
   return {
     preferences,
     activePaymentMethods: buildActivePaymentMethods(preferences, resolved),
@@ -672,21 +517,17 @@ export async function resolveActivePaymentMethodsFromRows(
     byCategory.get(PAYMENT_METHODS_CATEGORY) ?? {},
   );
   const enabled = new Set(preferences.enabledMethods);
-  const [stripe, sslcommerz, polar] = await Promise.all([
+  const [stripe, sslcommerz] = await Promise.all([
     enabled.has("stripe")
       ? resolveStripeSettingsFromValues(byCategory.get(STRIPE_CATEGORY) ?? {}, encryptionKey)
       : null,
     enabled.has("sslcommerz")
       ? resolveSSLCommerzSettingsFromValues(byCategory.get(SSL_CATEGORY) ?? {}, encryptionKey)
       : null,
-    enabled.has("polar")
-      ? resolvePolarSettingsFromValues(byCategory.get(POLAR_CATEGORY) ?? {}, encryptionKey)
-      : null,
   ]);
   return buildActivePaymentMethods(preferences, {
     stripe,
     sslcommerz,
-    polar,
     cod: { enabled: true },
   });
 }
@@ -753,17 +594,6 @@ registerGateway({
     amountLimits: SSL_COMMERZ_BDT_AMOUNT_LIMITS,
   }),
   getCurrencies: () => ["bdt"],
-});
-
-registerGateway({
-  id: "polar",
-  name: "Polar",
-  settingsCategory: POLAR_CATEGORY,
-  getPublicConfig: (s) => ({
-    sandbox: s.sandbox,
-    testMode: s.sandbox === true,
-  }),
-  getCurrencies: (localCurrency) => [localCurrency, "usd"],
 });
 
 registerGateway({

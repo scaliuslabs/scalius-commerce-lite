@@ -5,7 +5,7 @@ import { getOrderSuccessVisibleBalanceDue } from "./order-success-state";
 import { getGatewayPresentation } from "./checkout/gateway-presentation";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
-export type OrderSuccessRetryGateway = "stripe" | "sslcommerz" | "polar";
+export type OrderSuccessRetryGateway = "stripe" | "sslcommerz";
 export type OrderSuccessRetryOption = {
   gateway: OrderSuccessRetryGateway;
   label: string;
@@ -14,7 +14,7 @@ export type OrderSuccessRetryOption = {
   requiresCardForm: boolean;
 };
 
-const RETRYABLE_HOSTED_METHODS = new Set(["stripe", "sslcommerz", "polar"]);
+const RETRYABLE_HOSTED_METHODS = new Set(["stripe", "sslcommerz"]);
 const RETRYABLE_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
 const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
   "cancelled",
@@ -35,7 +35,6 @@ export function getOrderSuccessRetryEndpoint(paymentMethod: string | null | unde
   const method = normalize(paymentMethod);
   if (method === "stripe") return "/api/checkout/stripe-intent";
   if (method === "sslcommerz") return "/api/checkout/sslcommerz-session";
-  if (method === "polar") return "/api/checkout/polar-session";
   return null;
 }
 
@@ -61,7 +60,7 @@ export function canRetryOrderSuccessPayment(
 
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
   const method = normalize(value);
-  return method === "stripe" || method === "sslcommerz" || method === "polar" ? method : null;
+  return method === "stripe" || method === "sslcommerz" ? method : null;
 }
 
 export function getOrderSuccessRetryOptions(

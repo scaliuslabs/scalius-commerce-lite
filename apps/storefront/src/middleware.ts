@@ -7,11 +7,14 @@ import {
 } from "@scalius/shared/http-security";
 
 import {
+  applyPlatformOrigins,
   getRuntimeApiBaseUrl,
+  getRuntimeCspAllowedDomains,
   getRuntimeMediaUrl,
   getRuntimeStorefrontUrl,
   runWithRequestRuntime,
 } from "@/lib/api/runtime";
+import { getLayoutData } from "@/lib/api/storefront";
 import { getCdnBase } from "@/lib/media-url";
 import {
   isPrivateStorefrontPathname,
@@ -104,20 +107,29 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 
   const securedResponse = isBrowserContinuationRelayPathname(url.pathname)
     ? response
-    : await setPageCspHeader(response, {
-        apiBaseUrl: getRuntimeApiBaseUrl(),
-        storefrontUrl: getRuntimeStorefrontUrl(),
-        mediaUrl: getRuntimeMediaUrl(),
-        cdnBaseUrl: getCdnBase(),
-      });
+    : setPageCspHeader(
+        response,
+        {
+          apiBaseUrl: getRuntimeApiBaseUrl(),
+          storefrontUrl: getRuntimeStorefrontUrl(),
+          mediaUrl: getRuntimeMediaUrl(),
+          cdnBaseUrl: getCdnBase(),
+        },
+        getRuntimeCspAllowedDomains(),
+      );
   return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
-// Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET and
-// public origins from the API's /api/v1/platform response. Nothing is read
-// from Wrangler vars or import.meta.env, and nothing is retained across requests.
+// Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET, then
+// public origins and merchant CSP sources from the layout payload. Pages reuse
+// that same layout read, so there is no separate platform or CSP sub-request.
+// Nothing is read from Wrangler vars or import.meta.env, and nothing is
+// retained across requests.
 const requestRuntimeMiddleware = defineMiddleware(({ request }, next) =>
-  runWithRequestRuntime(request, getEnv(), next),
+  runWithRequestRuntime(request, getEnv(), async () => {
+    applyPlatformOrigins(await getLayoutData());
+    return next();
+  }),
 );
 
 const transportSecurityMiddleware = defineMiddleware(

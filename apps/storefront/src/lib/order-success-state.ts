@@ -10,7 +10,7 @@ import {
 
 export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
 
-const ONLINE_PAYMENT_METHODS = new Set(["stripe", "sslcommerz", "polar"]);
+const ONLINE_PAYMENT_METHODS = new Set(["stripe", "sslcommerz"]);
 const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
 const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
   "failed",

@@ -42,7 +42,7 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (11 par
 4. Published pages (for navigation fallback)
 5. Currency settings from `settings` table (category = "currency")
 6. Versioned semantic storefront style from `theme_settings`, with the legacy flat color row used only before the first versioned publish
-7. Media/image optimization settings from `settings` table (category = "media", key = "image_optimization")
+7. Media delivery host settings from `settings` table (category = "media", key = "image_optimization")
 8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
 9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")
 10. Public business identity fields from `settings` table (category = "business_info") for OnlineStore JSON-LD
@@ -69,8 +69,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 |--------|------|-------------|-------|
 | GET | `/homepage` | Consolidated homepage data (SEO, hero, collections + products) | `api:storefront:homepage:*` with CACHE_TTLS.STANDARD; product/category/collection/homepage/media writes invalidate it |
 | GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `api:storefront:page:*` with CACHE_TTLS.STANDARD; page writes invalidate exact page render keys |
-| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
-| GET | `/csp` | CSP allowed domains from `settings` (category = security) | `api:storefront:csp:*` with CACHE_TTLS.STANDARD |
+| GET | `/layout` | Consolidated layout data (analytics, header, nav, footer, currency, theme, media, Meta CAPI readiness, public business identity, SEO discovery, public platform origins, merchant CSP sources) | `api:storefront:layout:*` with CACHE_TTLS.STANDARD |
 
 ### Public Hero (`/api/v1/hero`)
 | Method | Path | Description | Cache |

@@ -40,7 +40,7 @@ function createTestApp() {
     send: vi.fn(async (_payload: unknown) => undefined),
   };
   const env = {
-    AUTH_OTP_QUEUE: queue,
+    JOBS_QUEUE: queue,
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
     JWT_SECRET: "test-jwt-secret",
     PUBLIC_API_BASE_URL: "http://localhost:8787",

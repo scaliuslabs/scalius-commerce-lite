@@ -4,10 +4,12 @@ import type {
   AgentOperationManifestEntry,
 } from "../openapi/agent-operation-manifest";
 import {
+  AGENT_ARTIFACT_KEY_PREFIX,
   createAgentArtifact,
   deleteAgentArtifactRecords,
   expireAgentArtifactHandles,
   listAgentArtifactCleanupCandidates,
+  sealAgentArtifact,
   sha256Hex,
 } from "./artifacts";
 import type { AgentPrincipal } from "./types";
@@ -133,7 +135,7 @@ async function stageAgentArtifactInternal(
       );
     }
   }
-  const r2Key = `agent-artifacts/${principal.grantId}/${crypto.randomUUID()}`;
+  const r2Key = `${AGENT_ARTIFACT_KEY_PREFIX}${principal.grantId}/${crypto.randomUUID()}`;
   if (!response.body) {
     throw new AgentArtifactDeliveryError(
       "invalid_artifact_response",
@@ -169,7 +171,7 @@ async function stageAgentArtifactInternal(
   }
   if (bytes.byteLength < 1 || bytes.byteLength !== total) {
     try {
-      await env.AGENT_ARTIFACTS.delete(r2Key);
+      await env.BUCKET.delete(r2Key);
     } catch {
       // Best-effort cleanup of an invalid generated artifact.
     }
@@ -181,7 +183,7 @@ async function stageAgentArtifactInternal(
   }
   if (declaredLength !== null && bytes.byteLength !== Number(declaredLength)) {
     try {
-      await env.AGENT_ARTIFACTS.delete(r2Key);
+      await env.BUCKET.delete(r2Key);
     } catch {
       // Best-effort cleanup of a truncated or overlong generated artifact.
     }
@@ -193,13 +195,13 @@ async function stageAgentArtifactInternal(
   }
   const sha256 = await sha256Hex(bytes);
   try {
-    // The private object is never served directly. The relational handle is
-    // the authority for response type, filename, digest, size, and expiry, so
-    // avoid duplicating untrusted response metadata into R2 object metadata.
-    await env.AGENT_ARTIFACTS.put(r2Key, bytes);
+    // The sealed private object is never served directly. The relational handle
+    // is the authority for response type, filename, digest, size, and expiry,
+    // so avoid duplicating untrusted response metadata into R2 object metadata.
+    await env.BUCKET.put(r2Key, await sealAgentArtifact(env, r2Key, bytes));
   } catch {
     try {
-      await env.AGENT_ARTIFACTS.delete(r2Key);
+      await env.BUCKET.delete(r2Key);
     } catch {
       // Best-effort cleanup of a failed or partial write.
     }
@@ -235,7 +237,7 @@ async function stageAgentArtifactInternal(
     };
   } catch (error) {
     try {
-      await env.AGENT_ARTIFACTS.delete(r2Key);
+      await env.BUCKET.delete(r2Key);
     } catch {
       // An unreferenced object contains only generated artifact bytes and is
       // unreachable. Bucket lifecycle cleanup remains a secondary safety net.
@@ -274,14 +276,14 @@ export async function stageAgentArtifact(
  * unavailable object never stops later deletions.
  */
 export async function deleteAgentArtifactObjects(
-  env: Pick<Env, "AGENT_ARTIFACTS">,
+  env: Pick<Env, "BUCKET">,
   candidates: ReadonlyArray<{ id: string; r2Key: string }>,
 ): Promise<{ deletedIds: string[]; failed: number }> {
   const deletedIds: string[] = [];
   let failed = 0;
   for (const candidate of candidates) {
     try {
-      await env.AGENT_ARTIFACTS.delete(candidate.r2Key);
+      await env.BUCKET.delete(candidate.r2Key);
       deletedIds.push(candidate.id);
     } catch {
       failed += 1;

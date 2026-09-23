@@ -12,7 +12,6 @@ import {
 const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
-  getPolarSettings: vi.fn(),
   createPaymentProvider: vi.fn(),
   providerCreateRefund: vi.fn(),
   getCurrencyConfig: vi.fn(),
@@ -24,7 +23,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./gateway-settings", () => ({
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-  getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("./factory", () => ({
@@ -54,12 +52,11 @@ type PaymentRow = {
   orderId: string;
   amount: number;
   currency: string;
-  paymentMethod: "stripe" | "sslcommerz" | "polar" | "cod";
+  paymentMethod: "stripe" | "sslcommerz" | "cod";
   paymentType: "full" | "deposit" | "balance" | "refund";
   status: string;
   stripeChargeId: string | null;
   sslcommerzBankTranId: string | null;
-  polarCheckoutId: string | null;
   metadata: string | null;
 };
 
@@ -105,7 +102,6 @@ function stripePayment(overrides: Partial<PaymentRow>): PaymentRow {
     status: PaymentRecordStatus.SUCCEEDED,
     stripeChargeId: "ch_stripe",
     sslcommerzBankTranId: null,
-    polarCheckoutId: null,
     metadata: null,
     ...overrides,
   };
@@ -122,7 +118,6 @@ function sslPayment(overrides: Partial<PaymentRow>): PaymentRow {
     status: PaymentRecordStatus.SUCCEEDED,
     stripeChargeId: null,
     sslcommerzBankTranId: "bank_ssl",
-    polarCheckoutId: null,
     metadata: null,
     ...overrides,
   };
@@ -139,7 +134,6 @@ function codPayment(overrides: Partial<PaymentRow>): PaymentRow {
     status: PaymentRecordStatus.SUCCEEDED,
     stripeChargeId: null,
     sslcommerzBankTranId: null,
-    polarCheckoutId: null,
     metadata: null,
     ...overrides,
   };
@@ -156,7 +150,6 @@ function refundRow(overrides: Partial<PaymentRow>): PaymentRow {
     status: PaymentRecordStatus.REFUNDED,
     stripeChargeId: null,
     sslcommerzBankTranId: null,
-    polarCheckoutId: null,
     metadata: null,
     ...overrides,
   };
@@ -296,12 +289,6 @@ describe("refund allocation", () => {
       enabled: true,
       storeId: "store",
       storePassword: "password",
-      sandbox: true,
-    });
-    mocks.getPolarSettings.mockResolvedValue({
-      enabled: true,
-      accessToken: "polar_token",
-      productId: "polar_product",
       sandbox: true,
     });
   });

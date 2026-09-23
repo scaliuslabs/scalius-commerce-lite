@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { X, ImageIcon } from "lucide-react";
 import { MediaManager } from "../media-manager";
 import type { MediaFile } from "../media-manager";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 
 interface FormImageUploadFieldProps {
@@ -62,12 +62,7 @@ export function FormImageUploadField({
       {value ? (
         <div className={cn("relative w-full", aspectRatio, maxWidth)}>
           <img
-            src={getOptimizedImageUrl(value.url, {
-              width: 640,
-              height: 480,
-              quality: 82,
-              fit: "scale-down",
-            })}
+            src={mediaImageUrl(value.url, 640)}
             alt={value.filename}
             className="h-full w-full rounded-md bg-muted/20 object-contain"
             loading="lazy"

@@ -9,13 +9,17 @@
   "workers_dev": false,
   "observability": {
     "enabled": true,
+    "logs": {
+      "invocation_logs": false,
+      "head_sampling_rate": 1
+    },
     "traces": {
       "enabled": true,
       "head_sampling_rate": 0.01
     }
   },
   "limits": {
-    "cpu_ms": 300000
+    "cpu_ms": 30000
   },
   "dev": {
     "inspector_port": 9232
@@ -32,20 +36,6 @@
     {
       "binding": "CACHE",
       "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
-    },
-    {
-      "binding": "SESSION",
-      "id": "0564d3a6c3704c8c9f355b7ec5498f50"
-    },
-    {
-      "binding": "SHARED_AUTH_CACHE",
-      "id": "9f577136c05144349f2b8013a4fc1cc5"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "scalius-media"
     }
   ],
   "send_email": [

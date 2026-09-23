@@ -697,7 +697,7 @@ async function resolveActiveCustomerLocation(
  * Handles OTP generation, rate limiting, and queueing for delivery.
  * Sign-in requests require a claimed active customer account before any OTP
  * delivery state is created. Sign-up duplicate checks still happen after proof.
- * Returns a queue payload that the route should send to AUTH_OTP_QUEUE.
+ * Returns a queue payload that the route should send to JOBS_QUEUE.
  *
  * @throws {ValidationError} if the identifier is missing or malformed
  * @throws {ForbiddenError} if the requested method is disabled by the store

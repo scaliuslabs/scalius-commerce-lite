@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, safeBatch } from "@scalius/database/client";
 import { agentArtifactHandles, agentGrants } from "@scalius/database/schema";
+import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import type { AgentPrincipal, AgentResource } from "./types";
 
 const MAX_ARTIFACT_BYTES = 16_777_216;
@@ -313,6 +314,46 @@ export async function expireAgentArtifactHandles(db: Database): Promise<void> {
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Artifacts live in the store's media bucket, which its public custom domain
+ * serves by key. They are stored AES-GCM sealed (key derived from
+ * SCALIUS_SECRET, object key as associated data) under a prefix the edge
+ * blocks, so a leaked or guessed object URL never yields artifact bytes.
+ */
+export const AGENT_ARTIFACT_KEY_PREFIX = "private/agent-artifacts/";
+const ARTIFACT_IV_BYTES = 12;
+
+async function agentArtifactCipherKey(env: Env): Promise<CryptoKey> {
+  const master = readMasterSecret(env);
+  if (!master) throw new Error("SCALIUS_SECRET is required for agent artifacts");
+  const secret = await deriveRuntimeSecret(master, "agent-artifact-encryption");
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+export async function sealAgentArtifact(env: Env, r2Key: string, bytes: ArrayBuffer): Promise<Uint8Array> {
+  const iv = crypto.getRandomValues(new Uint8Array(ARTIFACT_IV_BYTES));
+  const sealed = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(r2Key) },
+    await agentArtifactCipherKey(env),
+    bytes,
+  );
+  const output = new Uint8Array(ARTIFACT_IV_BYTES + sealed.byteLength);
+  output.set(iv);
+  output.set(new Uint8Array(sealed), ARTIFACT_IV_BYTES);
+  return output;
+}
+
+/** Throws when the object was not sealed for this store and key. */
+export async function openAgentArtifact(env: Env, r2Key: string, sealed: ArrayBuffer): Promise<ArrayBuffer> {
+  const data = new Uint8Array(sealed);
+  return crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: data.subarray(0, ARTIFACT_IV_BYTES), additionalData: new TextEncoder().encode(r2Key) },
+    await agentArtifactCipherKey(env),
+    data.subarray(ARTIFACT_IV_BYTES),
+  );
 }
 
 export async function verifyAgentArtifactBytes(

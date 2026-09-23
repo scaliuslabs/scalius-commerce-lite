@@ -116,7 +116,7 @@ Exported type: `SaveNavigationConfigInput`.
 
 ### Admin Side
 
-The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation/AddNavItemDialog.tsx`) fetches items via `GET /api/v1/admin/navigation/items` to populate the category and page picker lists.
+The dashboard edits menus through the normalized navigation-authority workspace (`apps/admin-v2/src/components/admin/navigation-authority/`). No dashboard screen calls `GET /api/v1/admin/navigation/items`; it remains an API/agent operation.
 
 ### Admin API Route (`apps/api/src/routes/admin/navigation.ts`)
 
@@ -140,30 +140,6 @@ menus, individual menus, and default navigation generation.
 Two endpoints:
 - `GET /navigation` -- returns navigation by type (`header`, `footer`, or `all`). Falls back to auto-generated nav from categories + pages if no config saved. Cached 1h.
 - `GET /navigation/{id}` -- returns a specific menu by id (`"header"`, `"footer"`, or a footer menu id/title match).
-
-## Data Flow
-
-```
-getNavigationItems(db)
-    |
-    v
-API: GET /admin/navigation/items  -->  Admin AddNavItemDialog (picker)
-                                       |
-                                       v
-                                  NavigationBuilder (tree editor)
-                                       |
-                                       v
-                             HeaderBuilder / FooterBuilder
-                                       |
-                                       v
-                             POST /admin/navigation (or PUT /admin/navigation/{id})
-                                       |
-                                       v
-                             siteSettings.headerConfig / footerConfig (JSON in D1)
-                                       |
-                                       v
-                             GET /header, GET /footer, GET /navigation  -->  Storefront
-```
 
 ## Dependencies
 

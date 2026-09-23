@@ -13,8 +13,7 @@ import {
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 type ApiData<T> = T extends { success: true; data: infer Data } ? Data : never;
 type InvoiceData = ApiData<GetApiV1AdminOrdersByIdInvoiceResponse>;
@@ -144,10 +143,7 @@ function InvoicePage() {
             {businessInfo.invoiceLogoUrl && (
               <div className="business-logo">
                 <img
-                  src={getOptimizedImageUrl(
-                    businessInfo.invoiceLogoUrl,
-                    ADMIN_IMAGE_PRESETS.invoiceLogo,
-                  )}
+                  src={mediaImageUrl(businessInfo.invoiceLogoUrl, 480)}
                   alt={businessInfo.companyName || businessInfo.legalName || "Business logo"}
                 />
               </div>

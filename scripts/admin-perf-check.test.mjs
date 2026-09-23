@@ -130,15 +130,6 @@ function createPassingFixture({ dist = true } = {}) {
     export const visibleVariants = filteredVariants.slice(page * pageSize, (page + 1) * pageSize);
   `);
 
-  write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
-    export const NAVIGATION_RENDER_BATCH_SIZE = 80;
-    export function NavigationBuilder() {
-      const outlineRows = [];
-      const renderLimit = NAVIGATION_RENDER_BATCH_SIZE;
-      return outlineRows.slice(0, renderLimit);
-    }
-  `);
-
   write(root, "apps/admin-v2/src/components/admin/settings/GeneralSettingsPage.tsx", `
     import { lazy, Suspense } from "react";
     import type { HeaderConfig } from "../header-builder/types";
@@ -292,25 +283,6 @@ describe("admin-perf-check", () => {
     expect(output).toContain("product media must keep the direct, accessible reorder controls");
     expect(output).toContain("cap its initial rendered tiles at 12");
     expect(output).toContain("native lazy loading");
-  });
-
-  it("fails when navigation restores duplicate editors or drops row batching", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `
-      import { MobileNavigationTree } from "./MobileNavigationTree";
-      const SortableNavigationEditor = () => null;
-      export function NavigationBuilder({ outlineRows }) {
-        return <><MobileNavigationTree />{outlineRows.map((row) => row)}</>;
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("80-row render batch");
-    expect(output).toContain("only the active row batch");
-    expect(output).toContain("duplicate legacy desktop/mobile editors");
   });
 
   it("fails when OrderView restores lazy panel hydration", () => {

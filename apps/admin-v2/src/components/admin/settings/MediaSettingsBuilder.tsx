@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
@@ -19,9 +18,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface MediaSettingsValues {
-  enabled: boolean;
   canonicalCdnUrl: string;
-  allowedImageHostsText: string;
   canonicalHostAliasesText: string;
 }
 
@@ -50,9 +47,7 @@ function fromLines(value: string): string[] {
 const fetchMedia = async (): Promise<MediaSettingsValues> => {
   const data = (await getMediaSettings()) as Record<string, unknown>;
   return {
-    enabled: data.enabled !== false,
     canonicalCdnUrl: (data.canonicalCdnUrl as string) || "",
-    allowedImageHostsText: toLines(data.allowedImageHosts),
     canonicalHostAliasesText: toLines(data.canonicalHostAliases),
   };
 };
@@ -60,9 +55,7 @@ const fetchMedia = async (): Promise<MediaSettingsValues> => {
 const saveMedia = async (values: MediaSettingsValues) => {
   await updateMediaSettings({
     data: {
-      enabled: values.enabled,
       canonicalCdnUrl: values.canonicalCdnUrl.trim(),
-      allowedImageHosts: fromLines(values.allowedImageHostsText),
       canonicalHostAliases: fromLines(values.canonicalHostAliasesText),
     },
   });
@@ -88,18 +81,14 @@ export default function MediaSettingsBuilder() {
       fetchFn: fetchMedia,
       saveFn: saveMedia,
       defaultValues: {
-        enabled: true,
         canonicalCdnUrl: "",
-        allowedImageHostsText: "",
         canonicalHostAliasesText: "",
       },
       successMessage: "Media settings saved successfully.",
       errorMessage: "Failed to save media settings.",
     });
 
-  const configuredHostCount =
-    fromLines(values.allowedImageHostsText).length +
-    fromLines(values.canonicalHostAliasesText).length;
+  const configuredHostCount = fromLines(values.canonicalHostAliasesText).length;
 
   if (isLoading) {
     return (
@@ -128,19 +117,10 @@ export default function MediaSettingsBuilder() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Image delivery</CardTitle>
           <CardDescription>
-            Serve correctly sized images through Cloudflare.
+            The host that serves uploaded images and their pre-sized copies.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex min-h-11 items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
-            <Label htmlFor="image-optimization-enabled">Image optimization</Label>
-            <Switch
-              id="image-optimization-enabled"
-              checked={values.enabled}
-              onCheckedChange={(checked) => setValue("enabled", checked)}
-            />
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="canonical-cdn-url">Delivery host</Label>
             <Input
@@ -175,22 +155,6 @@ export default function MediaSettingsBuilder() {
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="space-y-4 border-t px-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="allowed-image-hosts">Resizable hosts</Label>
-            <Textarea
-              id="allowed-image-hosts"
-              value={values.allowedImageHostsText}
-              onChange={(event) =>
-                setValue("allowedImageHostsText", event.target.value)
-              }
-              placeholder={"media.example.com\ncdn.example.com"}
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground">
-              Hosts that support Cloudflare image transformations, one per line.
-            </p>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="canonical-host-aliases">Previous host aliases</Label>
             <Textarea

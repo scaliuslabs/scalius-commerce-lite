@@ -67,9 +67,9 @@ describe("formatPaymentWebhookIssue", () => {
 
   it("falls back safely when legacy failed rows store plain text", () => {
     const issue = formatPaymentWebhookIssue({
-      id: "polar:order.paid:evt_1",
-      provider: "polar",
-      eventType: "order.paid",
+      id: "sslcommerz:ipn:evt_1",
+      provider: "sslcommerz",
+      eventType: "ipn",
       status: "failed",
       result: "Queue not available",
       processedAt: 1_900,

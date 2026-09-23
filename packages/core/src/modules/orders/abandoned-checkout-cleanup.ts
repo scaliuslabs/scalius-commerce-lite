@@ -65,7 +65,7 @@ export function isAbandonedCheckoutEmpty(checkout: {
 
         const isHostedPaymentArchive =
             typeof data?.id === "string"
-            && ["stripe", "sslcommerz", "polar"].includes(data?.paymentMethod)
+            && ["stripe", "sslcommerz"].includes(data?.paymentMethod)
             && ["unpaid", "failed"].includes(data?.paymentStatus);
 
         return !hasItems && !hasCustomerInfo && !isHostedPaymentArchive;

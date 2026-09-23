@@ -120,7 +120,7 @@ describe("theme preview continuation route", () => {
 
   it("serves a private relay without continuation material", async () => {
     // Dashboard and API origins come from the request context seeded by the
-    // middleware from /api/v1/platform, never from Worker vars.
+    // middleware from the layout payload, never from Worker vars.
     const response = await requestRuntime.run({
       DASHBOARD_URL: "https://dashboard.example.test",
       PUBLIC_API_BASE_URL: "https://api.example.test",

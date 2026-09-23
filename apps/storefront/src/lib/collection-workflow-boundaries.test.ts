@@ -88,7 +88,7 @@ describe("collection storefront workflow boundaries", () => {
     expect(carousel).not.toContain('from "react"');
     expect(carousel).not.toContain(".tsx");
     expect(productCard).toContain("getProductImageSrcSet");
-    expect(productCard).toContain('sizes="(max-width: 639px) 50vw');
+    expect(productCard).toContain('sizes="(max-width: 639px) calc(50vw - 1.5rem)');
     expect(productCard).toContain("h-11 w-11");
     expect(productCard).toContain("aria-label={`View ${product.name}`}");
   });

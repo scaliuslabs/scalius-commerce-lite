@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
     updateMediaFile: vi.fn(),
     trashMediaFile: vi.fn(),
     restoreMediaFile: vi.fn(),
+    saveMediaVariants: vi.fn(),
+    completeMediaUpload: vi.fn(),
     invalidateMediaDependentProductCaches: vi.fn(),
 }));
 
@@ -19,6 +21,8 @@ vi.mock("@scalius/core/modules/media", async () => {
         updateMediaFile: mocks.updateMediaFile,
         trashMediaFile: mocks.trashMediaFile,
         restoreMediaFile: mocks.restoreMediaFile,
+        saveMediaVariants: mocks.saveMediaVariants,
+        completeMediaUpload: mocks.completeMediaUpload,
     };
 });
 
@@ -68,6 +72,8 @@ function createTestApp() {
         trashedAt: 2,
     });
     mocks.restoreMediaFile.mockResolvedValue(presentedMedia);
+    mocks.saveMediaVariants.mockResolvedValue({ ...presentedMedia, variantWidth: 800 });
+    mocks.completeMediaUpload.mockResolvedValue(presentedMedia);
     mocks.invalidateMediaDependentProductCaches.mockResolvedValue(undefined);
 
     app.onError((error, c) => {
@@ -151,5 +157,44 @@ describe("admin media cache invalidation", () => {
 
         expect(response.status).toBe(500);
         expect(mocks.invalidateMediaDependentProductCaches).not.toHaveBeenCalled();
+    });
+
+    it("stores browser renditions from the multipart form and invalidates dependent products", async () => {
+        const { app, db, env } = createTestApp();
+        const form = new FormData();
+        form.set("width", "800");
+        form.set("height", "600");
+        form.set("w160", new Blob(["a"], { type: "image/webp" }), "160.webp");
+        form.set("w800", new Blob(["bb"], { type: "image/webp" }), "800.webp");
+        form.set("note", "ignored");
+
+        const response = await app.request("/api/v1/admin/media/media_123/variants", {
+            method: "POST",
+            body: form,
+        }, env);
+
+        expect(response.status).toBe(200);
+        const [, id, input, bucket] = mocks.saveMediaVariants.mock.calls[0]!;
+        expect(id).toBe("media_123");
+        expect(bucket).toBe(env.BUCKET);
+        expect({ width: input.width, height: input.height, widths: [...input.files.keys()] })
+            .toEqual({ width: 800, height: 600, widths: [160, 800] });
+        expect(input.files.get(800).byteLength).toBe(2);
+        expect(mocks.invalidateMediaDependentProductCaches).toHaveBeenCalledWith(
+            db,
+            "media_123",
+            expect.objectContaining({ env }),
+        );
+    });
+
+    it("renders renditions on the server unless the dashboard uploads its own", async () => {
+        const { app, env } = createTestApp();
+        const images = { id: "images" };
+        const withImages = { ...env, IMAGES: images } as unknown as Env;
+
+        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete", { method: "POST" }, withImages);
+        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" }, withImages);
+
+        expect(mocks.completeMediaUpload.mock.calls.map((call) => call[3])).toEqual([images, undefined]);
     });
 });

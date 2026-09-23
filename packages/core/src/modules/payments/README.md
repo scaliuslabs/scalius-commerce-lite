@@ -17,16 +17,16 @@ Storefront (SSR proxy)               apps/storefront/src/pages/api/checkout/*
 API Worker                            apps/api/src/routes/payment/*
   |
   |  4. Creates payment session/intent via gateway SDK
-  |  5. Returns clientSecret (Stripe) or redirectUrl (SSLCommerz/Polar)
+  |  5. Returns clientSecret (Stripe) or redirectUrl (SSLCommerz)
   v
-Payment Gateway (Stripe / SSLCommerz / Polar)
+Payment Gateway (Stripe / SSLCommerz)
   |
   |  6. Customer pays on gateway
   |  7. Gateway sends webhook to API worker
   v
 API Webhook Handler                   apps/api/src/routes/webhooks/*
   |
-  |  8. Verifies signature, enqueues message to PAYMENT_EVENTS_QUEUE
+  |  8. Verifies signature, enqueues message to JOBS_QUEUE
   v
 Queue Consumer                        apps/api/src/queue-consumer.ts
   |
@@ -45,37 +45,34 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 
 | File | Exports | Purpose |
 |------|---------|---------|
-| `types.ts` | `PaymentGateway`, `PaymentType`, `PaymentResult`, gateway-specific param/result types | Shared type definitions for all gateways. Header comment documents the amount convention: DB stores major units; Stripe/Polar expect smallest units via `getDecimalPlaces()`; SSLCommerz expects major units with `toFixed(decimals)`. |
+| `types.ts` | `PaymentGateway`, `PaymentType`, `PaymentResult`, gateway-specific param/result types | Shared type definitions for all gateways. Header comment documents the amount convention: DB stores major units; Stripe expects smallest units via `getDecimalPlaces()`; SSLCommerz expects major units with `toFixed(decimals)`. |
 | `provider.ts` | `PaymentProvider` interface, `CreatePaymentParams`, `CreatePaymentResult`, `RefundParams`, `RefundResult`, `WebhookPayload` | Unified gateway abstraction |
 | `factory.ts` | `createPaymentProvider()`, `GatewayConfig` | Factory function returning the correct `PaymentProvider` for a gateway type; checks `enabled` flag, throws `ServiceUnavailableError` if disabled. Uses discriminated union `GatewayConfig` with exhaustive switch. |
 | `gateway-registry.ts` | `registerGateway()`, `getRegisteredGateways()`, `getGatewayMeta()`, `GatewayMeta` | Static gateway metadata for checkout discovery. `GatewayMeta` includes `getPublicConfig()` and `getCurrencies()`; database access stays outside the registry. |
-| `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getPolarSettings()`, `getActivePaymentMethods()`, `getPaymentGatewaySettingsSnapshot()`, `upsertSetting()`, `upsertEncryptedSetting()` | Reads authoritative gateway settings from the relational provider, resolves a single request-scoped snapshot where several gateways are needed, never retains decrypted credentials in Worker-global memory or KV, encrypts provider-secret writes, and registers static metadata for all four gateways |
+| `gateway-settings.ts` | `getStripeSettings()`, `getSSLCommerzSettings()`, `getActivePaymentMethods()`, `getPaymentGatewaySettingsSnapshot()`, `upsertSetting()`, `upsertEncryptedSetting()` | Reads authoritative gateway settings from the relational provider, resolves a single request-scoped snapshot where several gateways are needed, never retains decrypted credentials in Worker-global memory or KV, encrypts provider-secret writes, and registers static metadata for all three gateways |
 | `stripe.ts` | `StripeProvider` class, `createPaymentIntent()`, `capturePaymentIntent()`, `cancelPaymentIntent()`, `createRefund()`, `retrieveStripeRefund()`, `listStripeRefundsForCharge()`, `verifyStripeWebhook()`, `getStripe()` | Stripe SDK wrapper; module-level singleton with key rotation detection |
 | `sslcommerz.ts` | `SSLCommerzProvider` class, `initSSLCommerzSession()`, `validateSSLCommerzIPN()`, `validateSSLCommerzPayment()`, `initiateSSLCommerzRefund()`, `querySSLCommerzRefundStatus()` | SSLCommerz REST API wrapper; no SDK, uses native `fetch`; sandbox/production URL switching. Uses `getDecimalPlaces()` for ISO 4217-aware amount formatting. |
-| `polar.ts` | `PolarProvider` class, `createPolarCheckout()`, `createPolarRefund()`, `listPolarRefunds()`, `verifyPolarWebhook()`, `processPolarWebhookRefund()` | Polar SDK wrapper; its webhook helper verifies signatures and validates generated event schemas. External Polar refunds reconcile cumulative provider snapshots into local refund-payment deltas. |
 | `cod.ts` | `CODProvider` class, `initCODTracking()`, `recordCODCollection()`, `recordCODFailure()`, `markCODReturned()` | Cash on Delivery tracking; DB-only operations, no external gateway |
 | `process-payment.ts` | `processPaymentConfirmed()`, `processPaymentFailed()`, `releaseOrderInventory()`, `recordWebhookEvent()` | Shared post-payment business logic called by queue consumer |
 | `payment-state.ts` | `computeOrderPaymentState()`, `computePaymentStateAfterPayment()`, `computePaymentStateAfterRefund()` | Canonical order payment-state arithmetic for `paidAmount`, `balanceDue`, and `paymentStatus` |
 | `refund-service.ts` | `processRefund()`, `finalizeAcceptedRefundAttemptIds()` | Gateway-agnostic refund orchestrator; detects gateway from payment records, validates cumulative refund amounts, and owns local accepted-refund finalization. Returns are an independent order workflow. |
 | `refund-reconciliation.ts` | `reconcileDueRefundAttempts()`, `reconcileRefundAttemptById()` | Scheduled bounded recovery for stale/ambiguous refund attempts. Claims due rows, probes providers where possible, finalizes accepted attempts through `refund-service.ts`, fails stale pre-dispatch attempts, and defers unknown outcomes without duplicate refunds. |
 | `refund-attempt-visibility.ts` | `listOrderRefundAttempts()`, `formatRefundAttemptForVisibility()`, `summarizeActiveRefundOperation()` | Sanitized admin/customer read model for refund attempts. Admin receives operational references and safe errors; customers receive buyer-safe progress copy. Raw request/response payloads, request hashes, provider idempotency keys, claim fields, and payment metadata stay private. |
-| `payment-session-attempts.ts` | `buildPaymentSessionAttemptIdentity()`, `claimPaymentSessionAttempt()`, created/failed markers, active setup guards | Durable D1 idempotency for Stripe/SSLCommerz/Polar session creation across receipt-token checkout recovery and customer-account post-sale recovery, plus the shared active hosted-payment setup lock for admin/post-sale mutations |
+| `payment-session-attempts.ts` | `buildPaymentSessionAttemptIdentity()`, `claimPaymentSessionAttempt()`, created/failed markers, active setup guards | Durable D1 idempotency for Stripe/SSLCommerz session creation across receipt-token checkout recovery and customer-account post-sale recovery, plus the shared active hosted-payment setup lock for admin/post-sale mutations |
 | `index.ts` | Barrel re-exports | All public exports from the module |
 
 ### API Routes (`apps/api/src/routes/`)
 
 | File | Route Mount | Endpoints |
 |------|-------------|-----------|
-| `payment/payment-session-create.ts` | Shared helper | Common Stripe/SSLCommerz/Polar session creator used by checkout receipt-token routes and customer-account owned-order recovery |
+| `payment/payment-session-create.ts` | Shared helper | Common Stripe/SSLCommerz session creator used by checkout receipt-token routes and customer-account owned-order recovery |
 | `payment/stripe-routes.ts` | `/api/v1/payment/stripe` | `POST /intent` -- Create PaymentIntent |
 | `payment/sslcommerz-routes.ts` | `/api/v1/payment/sslcommerz` | `POST /session` -- Create payment session; `POST /success`, `GET /success` -- redirect handler; `POST /fail`, `GET /fail` -- redirect handler; `POST /cancel`, `GET /cancel` -- redirect handler |
-| `payment/polar-routes.ts` | `/api/v1/payment/polar` | `POST /session` -- Create checkout session; `GET /success` -- redirect handler; `GET /cancel` -- redirect handler |
 | `customer-auth.ts` | `/api/v1/customer-auth` | `GET /orders/{id}` includes policy-backed `paymentRecovery`; `POST /orders/{id}/payment-session` creates a strict customer-owned retry/pay-balance session |
 | `webhooks/stripe.ts` | `/api/v1/webhooks/stripe` | `POST /` -- Stripe webhook receiver |
 | `webhooks/sslcommerz.ts` | `/api/v1/webhooks/sslcommerz` | `POST /` -- SSLCommerz IPN receiver |
-| `webhooks/polar.ts` | `/api/v1/webhooks/polar` | `POST /` -- Polar webhook receiver |
 | `checkout.ts` | `/api/v1/checkout` | `GET /config` -- Storefront checkout configuration (available gateways, auth settings, partial payment config, currency with decimalPlaces, allowedCountries) |
-| `admin/settings/payments.ts` | `/api/v1/admin/settings` | `GET /payment-methods`, `POST /payment-methods` -- Enabled methods + default; `GET /stripe`, `POST /stripe`; `GET /sslcommerz`, `POST /sslcommerz`; `GET /polar`, `POST /polar` |
+| `admin/settings/payments.ts` | `/api/v1/admin/settings` | `GET /payment-methods`, `POST /payment-methods` -- Enabled methods + default; `GET /stripe`, `POST /stripe`; `GET /sslcommerz`, `POST /sslcommerz` |
 
 ### Storefront (`apps/storefront/`)
 
@@ -89,13 +86,11 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | `src/lib/checkout/handlers/cod.ts` | COD handler: creates order, redirects to `/order-success` |
 | `src/lib/checkout/handlers/stripe.ts` | Stripe handler: creates order, fetches PaymentIntent, dynamically loads Stripe.js, mounts card element, confirms card payment client-side |
 | `src/lib/checkout/handlers/sslcommerz.ts` | SSLCommerz handler: creates order, fetches session, redirects to `gatewayUrl` |
-| `src/lib/checkout/handlers/polar.ts` | Polar handler: creates order, fetches session, redirects to `gatewayUrl` |
 | `src/lib/account-payment-recovery.ts` | Pure account-order payment recovery copy/action helpers plus hosted URL normalization |
 | `src/pages/account/orders/[id].astro` | Private customer order detail page; renders retry/pay-balance UI, Stripe card form, and hosted-gateway redirects without receipt tokens |
 | `src/pages/api/checkout/create-order.ts` | SSR proxy: calls API to create order (derived `API_TOKEN`, server-side only) |
 | `src/pages/api/checkout/stripe-intent.ts` | SSR proxy: calls `POST /payment/stripe/intent`, unwraps `{success, data}` envelope |
 | `src/pages/api/checkout/sslcommerz-session.ts` | SSR proxy: calls `POST /payment/sslcommerz/session`, unwraps envelope, 15s timeout |
-| `src/pages/api/checkout/polar-session.ts` | SSR proxy: calls `POST /payment/polar/session`, unwraps envelope, 15s timeout |
 | `src/pages/checkout.astro` | Checkout page: injects `__CHECKOUT_CONFIG__`, imports `initCheckoutPage` |
 
 ### Admin (`apps/admin-v2/src/components/admin/settings/`)
@@ -103,15 +98,14 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 | File | Purpose |
 |------|---------|
 | `PaymentGatewaysManager.tsx` | Main payment settings UI. 2x2 accordion grid. Lazy-loads credentials per-gateway on expand. Manages enabled/disabled toggles, default method selector, save per-gateway. |
-| `PolarSettingsForm.tsx` | `PolarForm` (credentials form) + `PolarSetupGuide` (5-step setup dialog) |
-| `payment-gateway-utils.tsx` | Shared types (`StripeData`, `SSLCommerzData`, `PolarData`, `MethodKey`), reusable components (`PasswordInput`, `SaveBtn`, `SandboxToggle`, `LiveWarning`, `ExtLink`), gateway logo SVGs, `META` lookup |
+| `payment-gateway-utils.tsx` | Shared types (`StripeData`, `SSLCommerzData`, `MethodKey`), reusable components (`PasswordInput`, `SaveBtn`, `SandboxToggle`, `LiveWarning`, `ExtLink`), gateway logo SVGs, `META` lookup |
 
 ### Database Schema (`packages/database/src/schema/orders.ts`)
 
 | Table | Purpose |
 |-------|---------|
-| `orders` | Main order table. Payment fields: `paymentMethod` (stripe/sslcommerz/polar/cod), `paymentStatus` (unpaid/partial/paid/refunded/failed), `paymentIntentId` (stores Stripe PI ID, SSLCommerz session key, or Polar checkout ID), `paidAmount`, `balanceDue` |
-| `orderPayments` | Individual payment records. Per-gateway columns: `stripePaymentIntentId`, `stripeChargeId`, `sslcommerzTranId`, `sslcommerzValId`, `sslcommerzBankTranId`, `polarCheckoutId`, `codCollectedBy`, `codCollectedAt`, `codReceiptUrl`. Status: `pending`/`succeeded`/`failed`/`refunded`. Indexed on gateway-specific ID columns for idempotency lookups. |
+| `orders` | Main order table. Payment fields: `paymentMethod` (stripe/sslcommerz/cod), `paymentStatus` (unpaid/partial/paid/refunded/failed), `paymentIntentId` (stores Stripe PI ID or SSLCommerz session key), `paidAmount`, `balanceDue` |
+| `orderPayments` | Individual payment records. Per-gateway columns: `stripePaymentIntentId`, `stripeChargeId`, `sslcommerzTranId`, `sslcommerzValId`, `sslcommerzBankTranId`, `codCollectedBy`, `codCollectedAt`, `codReceiptUrl`. Status: `pending`/`succeeded`/`failed`/`refunded`. Indexed on gateway-specific ID columns for idempotency lookups. |
 | `refundAttempts` | Durable refund operation ledger. One row per refund allocation/payment row, with request hash, source/refund payment IDs, provider idempotency/reference keys, provider refund ID/status, probe scheduling, and active statuses (`pending`, `processing`, `provider_unknown`, `reconcile_required`) that block duplicate refund attempts until reconciliation completes. |
 | `paymentPlans` | Partial payment tracking. `orderId` (unique), `totalAmount`, `depositAmount`, `balanceDue`, `depositPaidAt`, `balancePaidAt`, `status` (pending/deposit_paid/completed/cancelled) |
 | `codTracking` | COD-specific tracking. `orderId` (unique), `deliveryAttempts`, `lastAttemptAt`, `codStatus` (pending/collected/failed/returned), `failureReason`, `collectedBy`, `collectedAmount`, `collectedAt`, `receiptUrl` |
@@ -119,7 +113,7 @@ COD is the exception: no external gateway, no webhook, no queue. Order is placed
 
 ### Enums (`packages/database/src/schema/enums.ts`)
 
-- `PaymentMethod`: `stripe | sslcommerz | polar | cod`
+- `PaymentMethod`: `stripe | sslcommerz | cod`
 - `PaymentStatus`: `unpaid | partial | paid | refunded | failed`
 - `OrderStatus`: includes `incomplete` (pre-payment) and `pending` (post-payment)
 
@@ -129,7 +123,7 @@ Dispatches `PaymentQueueMessage` types:
 
 Payment webhook handlers attach the source `webhookEventId` to queued payment messages. The consumer closes that durable event only after the queued side effects finish: `processed` for successful side effects, `manual_reconciliation` for non-retryable business-state conflicts, and `failed` only on the terminal payment queue delivery attempt before DLQ/deletion.
 
-`payment-events-dlq` is consumed as an evidence archive, not a replay queue. The DLQ branch runs before normal message dispatch, writes compact `payment_events_dlq` evidence to `webhook_events`, preserves prior results, avoids downgrading rows already marked `processed` or `manual_reconciliation`, and acks only after the D1 write succeeds. It must not call `processPaymentConfirmed()`, `processPaymentFailed()`, provider APIs, notification dispatch, or cache invalidation.
+`jobs-dlq` is consumed as an evidence archive, not a replay queue. For `payment.*` messages the DLQ branch runs before normal message dispatch, writes compact `payment_events_dlq` evidence to `webhook_events`, preserves prior results, avoids downgrading rows already marked `processed` or `manual_reconciliation`, and acks only after the D1 write succeeds. It must not call `processPaymentConfirmed()`, `processPaymentFailed()`, provider APIs, notification dispatch, or cache invalidation.
 
 | Message Type | Handler | Action |
 |------|---------|--------|
@@ -139,9 +133,6 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 | `payment.stripe.refunded` | (audit only) | Logs refund event; actual refund handled synchronously |
 | `payment.sslcommerz.confirmed` | `processPaymentConfirmed()` | Amount already in major unit (no conversion), records payment |
 | `payment.sslcommerz.failed` | `processPaymentFailed()` | Uses the same atomic, capture-safe failure transition; scheduled stale cleanup handles later archive/release |
-| `payment.polar.confirmed` | `processPaymentConfirmed()` | Converts amount from smallest unit to major unit (via `getDecimalPlaces()`) |
-| `payment.polar.failed` | `processPaymentFailed()` | Uses the same atomic, capture-safe failure transition; scheduled stale cleanup handles later archive/release |
-| `payment.polar.refunded` | `processPolarWebhookRefund()` | Requires the matching `polarCheckoutId`, imports only the newly observed delta from Polar's cumulative `refunded_amount`, writes a local `orderPayments` refund row, CAS-updates the order from the payment ledger, releases inventory on pre-fulfillment full-order refund, and returns a post-commit buyer notification fact |
 
 ## Provider Details
 
@@ -172,20 +163,6 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 - **Replay protection**: Durable `webhook_events` claim `sslcommerz:ipn:{tran_id}:{val_id}` before queueing. The buyer return and IPN deliberately share that identity, so whichever arrives first schedules confirmation and the late duplicate is a no-op. Confirmed payment idempotency also uses canonical `val_id`; `tran_id` remains a merchant attempt/correlation field.
 - **Refund**: `initiateSSLCommerzRefund()` uses `bank_tran_id` (from original payment). Refund amount formatted with `toFixed(2)` (SSLCommerz only supports BDT for refunds). Production requires IP whitelisting. `querySSLCommerzRefundStatus()` checks refund progress (refunded/processing/cancelled). Admin refunds pass a deterministic per-allocation `refund_trans_id` through provider metadata instead of generating a new timestamp id on retry.
 - **Settings**: `store_id`, `store_password`, `sandbox`, `enabled` (stored in `settings` table, category `sslcommerz`)
-
-### Polar
-
-- **Buyer-checkout eligibility**: Polar credentials and webhooks remain supported for existing-order reconciliation, but Polar is not returned as an active method for the current shipping-based storefront. [Polar's merchant-of-record acceptable-use policy](https://polar.sh/legal/acceptable-use-policy) prohibits physical goods. A future digital-only product/fulfillment model must be designed before enabling new Polar buyer checkouts.
-- **SDK**: `@polar-sh/sdk` (`Polar` client plus its webhook validator)
-- **Client singleton**: Module-level `_cachedClient` keyed by access token and sandbox/production server so credential or environment rotation takes effect in warm isolates
-- **Session creation**: `createPolarCheckout()` uses ad-hoc pricing -- a Polar Product must exist but the actual amount is set per-checkout via `prices` override. Returns `checkoutUrl` (redirect) + `checkoutId`, and forwards trusted success/cancel URLs from the API route.
-- **Webhook verification**: `verifyPolarWebhook()` delegates signature verification, secret encoding, event-type dispatch, and runtime payload validation to `@polar-sh/sdk/webhooks`. Synchronous verification (not async).
-- **Webhook events handled**: `checkout.updated` (status failed/expired -> enqueue failed), `order.paid` (enqueue confirmed), `order.refunded` (enqueue refund -> update payment and allowed order status + pre-fulfillment inventory)
-- **Replay protection**: Durable `webhook_events` claim before queueing
-- **External refund semantics**: Polar `order.refunded.refunded_amount` is cumulative for the Polar checkout. The queue payload must preserve `polarCheckoutId`; `processPolarWebhookRefund()` resolves the local succeeded Polar payment row, calculates the target refunded amount against that source payment, records only the new local delta as a refund payment row, and derives full-vs-partial order state from the whole local payment ledger. Repeated or larger cumulative events converge instead of compounding against current `orders.paidAmount`, and a fully-refunded Polar deposit remains a partial merchant-order refund if other captured payments remain.
-- **Refund**: `createPolarRefund()` refunds by Polar order ID. Reason codes: `fraudulent`, `customer_request`, `duplicate`, `other`, `service_disruption`, and `satisfaction_guarantee`. Omitted reasons use `customer_request`.
-- **Settings**: `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` (stored in `settings` table, category `polar`)
-- **Currency**: Amount in smallest currency unit. API route converts via `getDecimalPlaces(currency)`: `amount * Math.pow(10, decimals)`. Queue consumer reverses: `amount / Math.pow(10, decimals)`.
 
 ### COD (Cash on Delivery)
 
@@ -224,10 +201,10 @@ Uses `resolveOrderCurrencySnapshot()`, `roundOrderMoney()`, and `orderMoneyEqual
 
 Four layers of duplicate prevention:
 
-1. **Session creation level**: Public Stripe, SSLCommerz, and Polar routes claim `payment_session_attempts` before provider calls using a canonical key derived from order id, receipt token hash or customer-account proof, gateway, payment type, server-derived amount/currency, and route-owned callback/customer context. Volatile caller retry metadata is not part of the identity. Created attempts store the replay payload (`clientSecret`/redirect URL/session id) so identical proof/return-target retries return the original session without touching the provider again. Live in-flight attempts are single-flight per order/gateway/payment type through a D1 partial unique index and return a retryable `202 processing` response instead of creating a duplicate or surfacing a hard conflict. Storefront payment handlers and post-sale recovery retry only those explicit processing responses through a bounded client helper: respect `retryAfterSeconds`/`Retry-After`, wait at least 2s, and give up within 25s/12 attempts so provider setup never becomes a hot loop. Failed or stale attempts are reclaimable. Receipt-token recovery can rotate a failed unpaid online order between SSLCommerz and Polar only after target gateway readiness, current-gateway failed-payment evidence, no unsafe payment rows, no active setup lease, and a guarded order CAS. Active unexpired setup leases are also the shared mutation lock for admin order edit/restore/delete/status, shipment create/refresh/delete, COD collection/failure/return, refunds, and returns, so local order/payment/inventory changes cannot race a hosted gateway setup. Stripe also receives the same durable attempt key as its provider idempotency key.
+1. **Session creation level**: Public Stripe and SSLCommerz routes claim `payment_session_attempts` before provider calls using a canonical key derived from order id, receipt token hash or customer-account proof, gateway, payment type, server-derived amount/currency, and route-owned callback/customer context. Volatile caller retry metadata is not part of the identity. Created attempts store the replay payload (`clientSecret`/redirect URL/session id) so identical proof/return-target retries return the original session without touching the provider again. Live in-flight attempts are single-flight per order/gateway/payment type through a D1 partial unique index and return a retryable `202 processing` response instead of creating a duplicate or surfacing a hard conflict. Storefront payment handlers and post-sale recovery retry only those explicit processing responses through a bounded client helper: respect `retryAfterSeconds`/`Retry-After`, wait at least 2s, and give up within 25s/12 attempts so provider setup never becomes a hot loop. Failed or stale attempts are reclaimable. Receipt-token recovery can rotate a failed unpaid online order between Stripe and SSLCommerz only after target gateway readiness, current-gateway failed-payment evidence, no unsafe payment rows, no active setup lease, and a guarded order CAS. Active unexpired setup leases are also the shared mutation lock for admin order edit/restore/delete/status, shipment create/refresh/delete, COD collection/failure/return, refunds, and returns, so local order/payment/inventory changes cannot race a hosted gateway setup. Stripe also receives the same durable attempt key as its provider idempotency key.
 2. **Webhook level**: Durable `webhook_events` claims prevent re-enqueuing the same payment webhook before side effects. Queue-send failures mark the event `failed` so provider retries can reclaim it. Queued payment messages carry the source `webhookEventId`, and the queue consumer marks it `processed`, `manual_reconciliation`, or terminal `failed` after the actual side effects finish. Fresh `processing` claims dedupe in-flight work, while stale `processing` claims are lease-reclaimable so isolate failures before queue send do not black-hole provider retries. Scheduled maintenance marks payment-provider `queued` rows older than six hours as `failed` in bounded batches so provider retries or admin/manual recovery can reclaim genuinely stranded events. Valid late SSLCommerz success callbacks after gateway rotation are accepted only while the order is still failed/unpaid with no captured amount; conflicting callbacks become `manual_reconciliation` evidence and return `OK` so deterministic business conflicts do not create provider retry storms. Admin order payment history reads sanitized failed/manual webhook issues from this table.
-3. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on normal payment retry). With `max_retries = 3`, payment webhook rows stay `queued` through transient failures and are marked failed only on the fourth delivery attempt. If Cloudflare moves a payment message to `payment-events-dlq`, the DLQ consumer records evidence and retries only the evidence write (`300s` delay); it never auto-replays payment side effects.
-4. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts, Polar checkout id) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders. When a provider success is applied, the order summary `paymentMethod` is updated to the gateway that actually captured the payment; `orderPayments` remains the detailed audit ledger.
+3. **Queue level**: Cloudflare Queue retries with ack/retry per message (30s delay on normal payment retry). With `max_retries = 5` on the shared `jobs` queue, payment webhook rows stay `queued` through transient failures and are marked failed only on the sixth delivery attempt. If Cloudflare moves a payment message to `jobs-dlq`, the DLQ consumer records evidence and retries only the evidence write (`300s` delay); it never auto-replays payment side effects.
+4. **processPaymentConfirmed() level**: Checks for existing `orderPayments` by gateway-specific ID (Stripe payment intent, SSLCommerz validation id with transaction-id fallback for legacy failed attempts) before any writes. Also checks `paymentStatus === PAID` to short-circuit fully-paid orders. When a provider success is applied, the order summary `paymentMethod` is updated to the gateway that actually captured the payment; `orderPayments` remains the detailed audit ledger.
 
 COD collection (`recordCODCollection()`) has its own idempotency: queries for existing succeeded payment with `paymentMethod: "cod"`.
 
@@ -242,7 +219,7 @@ Failed or abandoned hosted-payment orders are not force-cancelled in webhook han
 
 ### Public Session Policy
 
-Public Stripe, SSLCommerz, and Polar checkout session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{sha256(token)}` proof or D1 checkout-attempt fallback, but receipt proof validation repairs the KV receipt hint only for committed attempts and never stores raw receipt proof in KV keys; the shared session creator remains the order/payment authority before provider work. The API rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and current checkout settings, and keeps public Stripe sessions on automatic capture. Authenticated customer-account recovery uses the same shared session creator but swaps the proof to `{ kind: "customer_account" }`, authorizes through private `orders.accountOwnerCustomerId`, accepts an optional target gateway plus explicit replacement intent, and returns hosted gateways to `/account/orders/{id}` instead of `/order-success`. Both receipt-token and account-owned recovery may replace a failed unpaid online method with Stripe, SSLCommerz, or Polar when that target is currently eligible. Replacement happens only after the target gateway survives the current checkout allowlist/settings/policy checks and requires incomplete/unshipped order state, zero paid amount, durable failed/cancelled evidence, no pending/confirmed/succeeded payment rows, no active setup lease, and an order-version CAS with the same predicates. A still-live same-gateway attempt is replayed instead of replaced, and a live attempt cannot be switched to another payable gateway merely because the browser returned through a cancel URL. Both paths first read authoritative `payment_methods.enabled_methods` plus `siteSettings.checkoutMode`/partial-payment fields, then read only the selected target gateway credentials; this blocks stale checkout tabs or account pages from creating new external sessions after a merchant disables/rotates a gateway or switches to COD only without reading unrelated gateway credentials. Full storefront checkout config uses one `getPaymentGatewaySettingsSnapshot()` read because it must evaluate every selected buyer-visible method. Customer order-detail `paymentRecovery` previews may pass the already-loaded customer-owned order header into the recovery helper to avoid a second order read, but payment-session POSTs must still use request-local authority. The account-owned POST path uses `createCustomerAccountPaymentSession()` so it loads the order once, derives the gateway/balance intent once, and then reuses the same internal provider-session creation code. After those checks and before the provider call, routes claim `payment_session_attempts`; created attempts replay only for the same proof/return-target context, while live processing attempts for the same order/gateway/payment type return `202 processing` with `Retry-After`/`no-store` instead of double-creating gateway sessions. Exact duplicate attempts with a fresh processing lease return from the first selected row and do not issue a reclaim update or second state read.
+Public Stripe and SSLCommerz checkout session routes require the order receipt token before gateway settings/provider calls. The API validates the token against the stored `order_receipt:{sha256(token)}` proof or D1 checkout-attempt fallback, but receipt proof validation repairs the KV receipt hint only for committed attempts and never stores raw receipt proof in KV keys; the shared session creator remains the order/payment authority before provider work. The API rejects non-payable orders, derives trusted callback URLs from runtime config, ignores caller currency, derives payment type/amount from order state and current checkout settings, and keeps public Stripe sessions on automatic capture. Authenticated customer-account recovery uses the same shared session creator but swaps the proof to `{ kind: "customer_account" }`, authorizes through private `orders.accountOwnerCustomerId`, accepts an optional target gateway plus explicit replacement intent, and returns hosted gateways to `/account/orders/{id}` instead of `/order-success`. Both receipt-token and account-owned recovery may replace a failed unpaid online method with Stripe or SSLCommerz when that target is currently eligible. Replacement happens only after the target gateway survives the current checkout allowlist/settings/policy checks and requires incomplete/unshipped order state, zero paid amount, durable failed/cancelled evidence, no pending/confirmed/succeeded payment rows, no active setup lease, and an order-version CAS with the same predicates. A still-live same-gateway attempt is replayed instead of replaced, and a live attempt cannot be switched to another payable gateway merely because the browser returned through a cancel URL. Both paths first read authoritative `payment_methods.enabled_methods` plus `siteSettings.checkoutMode`/partial-payment fields, then read only the selected target gateway credentials; this blocks stale checkout tabs or account pages from creating new external sessions after a merchant disables/rotates a gateway or switches to COD only without reading unrelated gateway credentials. Full storefront checkout config uses one `getPaymentGatewaySettingsSnapshot()` read because it must evaluate every selected buyer-visible method. Customer order-detail `paymentRecovery` previews may pass the already-loaded customer-owned order header into the recovery helper to avoid a second order read, but payment-session POSTs must still use request-local authority. The account-owned POST path uses `createCustomerAccountPaymentSession()` so it loads the order once, derives the gateway/balance intent once, and then reuses the same internal provider-session creation code. After those checks and before the provider call, routes claim `payment_session_attempts`; created attempts replay only for the same proof/return-target context, while live processing attempts for the same order/gateway/payment type return `202 processing` with `Retry-After`/`no-store` instead of double-creating gateway sessions. Exact duplicate attempts with a fresh processing lease return from the first selected row and do not issue a reclaim update or second state read.
 
 Pending Stripe receipt pages make one best-effort call to the receipt-authenticated reconciliation route before bounded status polling. The API ignores browser payment claims, fresh-loads Stripe credentials, retrieves the order's stored PaymentIntent from Stripe, verifies both the provider ID and `metadata.orderId`, and queues settlement only for provider status `succeeded`. A durable synthetic webhook claim deduplicates repeated receipt loads; a later real webhook is safe because duplicate successful payment records return `alreadyProcessed`, allowing the consumer to acknowledge them without repeating cache, notification, or analytics side effects. Stripe Card Element completeness is checked before order creation so incomplete client-side card fields cannot create an order or reserve inventory.
 
@@ -257,7 +234,7 @@ Payment types: `full`, `deposit`, `balance`.
 
 ### Payment State Arithmetic
 
-`payment-state.ts` is the single authority for order-level `paidAmount`, `balanceDue`, and `paymentStatus` arithmetic. Payment confirmations, COD collection, admin manual order create/edit, admin refunds, and Polar refund webhooks should call it instead of recomputing totals inline.
+`payment-state.ts` is the single authority for order-level `paidAmount`, `balanceDue`, and `paymentStatus` arithmetic. Payment confirmations, COD collection, admin manual order create/edit, and admin refunds should call it instead of recomputing totals inline.
 
 Admin-created manual orders are unpaid by definition, so they must insert `paidAmount = 0`, `balanceDue = totalAmount`, and `paymentStatus = unpaid`. Admin order edits recalculate balance from the new total and existing paid amount, preserving terminal `failed`/`refunded` payment statuses while still refreshing `balanceDue`.
 
@@ -271,7 +248,7 @@ COD collection validates against computed outstanding balance when a stored `bal
 2. Validates amount: positive, does not exceed current `paidAmount`
 3. Loads all successful source payments newest-first, subtracts previous refunded rows by `metadata.sourcePaymentId` (with old unattributed rows applied newest-first), and allocates the requested refund across the remaining capacity. `params.gateway` filters eligible source payments and fails closed if that gateway cannot cover the request.
 4. Claims one pending `orderPayments` refund row and one `refundAttempts` ledger row per allocation in the same local claim batch. Each payment row stores `sourcePaymentId`, `sourcePaymentType`, `refundGroupId`, `allocationIndex`, provider idempotency/reference metadata, and source transaction details in `metadata`; each attempt row stores normalized operation identity for duplicate blocking, probing, and admin recovery.
-5. Dispatches each online allocation to its source gateway after an authoritative provider-specific settings read. Stripe always receives an explicit smallest-unit amount for each source charge; SSLCommerz receives a deterministic `refund_trans_id`; Polar receives a per-source amount using that source payment metadata for currency conversion. COD never makes a provider call: any allocation containing COD fails before the local claim unless `manualSettlementConfirmed` is explicitly true, then records `manual_external` audit evidence without a fabricated provider refund or source transaction ID. Online-gateway calls run behind a bounded provider deadline.
+5. Dispatches each online allocation to its source gateway after an authoritative provider-specific settings read. Stripe always receives an explicit smallest-unit amount for each source charge; SSLCommerz receives a deterministic `refund_trans_id`. COD never makes a provider call: any allocation containing COD fails before the local claim unless `manualSettlementConfirmed` is explicitly true, then records `manual_external` audit evidence without a fabricated provider refund or source transaction ID. Online-gateway calls run behind a bounded provider deadline.
 6. Moves `refundAttempts` through `pending` -> `processing`; marks provider-successful allocations `refunded` only after local order payment-state reconciliation succeeds; marks pre-provider/local failures `failed`; and marks ambiguous online-provider failures `provider_unknown`. If a provider accepted money movement but local order reconciliation loses a CAS or inventory/status step, the attempt becomes `reconcile_required` instead of returning a false clean success. Active attempt statuses block duplicate refund attempts until scheduled reconciliation or admin recovery resolves them.
 7. Updates `orders.status` to `REFUNDED` (full refund) or `PARTIALLY_REFUNDED` (partial), subject to state machine validation via `canTransitionTo()`
 8. On pre-fulfillment full refund: calls `applyInventoryForStatusChange(db, orderId, "cancelled")` to release inventory. Same-status retries repair already-cancelled, non-deducted orders; fulfilled/deducted refunds do NOT auto-restock inventory.
@@ -280,13 +257,7 @@ After local provider acceptance and order/payment finalization succeeds, `proces
 
 If a split direct refund partially succeeds before a later allocation fails or has an unknown provider outcome, `processRefund()` throws `PartialRefundProcessedError` only after the accepted allocations have been reconciled locally. The error carries affected order IDs plus private notification facts from the committed finalizer and a group-deduped `refund_processing`/`refund_failed` fact for the unresolved remainder. Admin refund and return routes catch that specific error, invalidate affected availability caches, enqueue the carried facts through the durable outbox, then rethrow so operators still see the refund action needs review. Auto-refunded returns may also carry the committed `order_returned` status change on the same error so the buyer is not left without a return notification.
 
-Polar dashboard/dispute refund webhooks are handled separately by `processPolarWebhookRefund()`. After the local CAS update or idempotent already-refunded check succeeds, it returns a private notification fact for the payment queue consumer. Full Polar refunds use `order_refunded` with `polar-refund:${orderId}:full`; partial Polar refunds use `order_partially_refunded` with `polar-refund:${orderId}:partial:${amountRefunded}:${totalAmount}:${currency}` so repeated cumulative webhooks dedupe while later larger partial refunds can notify again.
-
-Stripe dashboard refunds stay audit-only in the webhook queue. `payment.stripe.refunded` marks the durable webhook row as `manual_reconciliation` with charge/refund evidence, and scheduled maintenance calls `reconcileStripeExternalRefundWebhooks()` to list provider refunds by charge, import each new succeeded refund into deterministic local `order_payments`/`refund_attempts` rows, and finalize through `finalizeAcceptedRefundAttemptIds()`. Buyer notifications are emitted only from those committed finalizer facts, never directly from the raw Stripe webhook.
-
-Active refund attempts also block conflicting post-sale order mutations. Status updates, bulk/manual shipment creation, COD collection/return, admin order edits, trash/restore/delete flows, and shipment-driven order-status sync call the shared `refund-attempt-guard.ts` helper before changing order/payment/inventory state. COD failure logging remains allowed because it records delivery evidence only and does not collect money, return stock, or change order status.
-
-Scheduled maintenance calls `reconcileDueRefundAttempts()` in small batches. `reconcile_required` attempts are finalized locally without another provider call. Expired `pending` attempts are failed as not dispatched and do not notify buyers because no provider-side refund was started. Expired `processing`/`provider_unknown` attempts probe Stripe by refund id or charge metadata, SSLCommerz by `refund_ref_id`, and Polar by refund/order metadata; accepted proof finalizes the local order/payment/inventory state, rejected proof fails the refund row, and missing/uncertain proof releases the claim with a later `nextProbeAt`. Accepted reconciled attempts return private `order_refunded`/`order_partially_refunded` notification facts derived from the recomputed ledger state. Provider-pending probes return a group-deduped `refund_processing` fact, provider-rejected probes return a group-deduped `refund_failed` fact, and scheduled maintenance records all of them through the durable order-notification outbox after the local state change. Stripe and Polar refund creation now send the platform refund reference/idempotency metadata to make future no-response provider probes deterministic.
+Scheduled maintenance calls `reconcileDueRefundAttempts()` in small batches. `reconcile_required` attempts are finalized locally without another provider call. Expired `pending` attempts are failed as not dispatched and do not notify buyers because no provider-side refund was started. Expired `processing`/`provider_unknown` attempts probe Stripe by refund id or charge metadata, and SSLCommerz by `refund_ref_id`; accepted proof finalizes the local order/payment/inventory state, rejected proof fails the refund row, and missing/uncertain proof releases the claim with a later `nextProbeAt`. Accepted reconciled attempts return private `order_refunded`/`order_partially_refunded` notification facts derived from the recomputed ledger state. Provider-pending probes return a group-deduped `refund_processing` fact, provider-rejected probes return a group-deduped `refund_failed` fact, and scheduled maintenance records all of them through the durable order-notification outbox after the local state change. Stripe refund creation sends the platform refund reference/idempotency metadata to make future no-response provider probes deterministic.
 
 `refund-attempt-visibility.ts` is the only refund-attempt projection that admin/customer surfaces should use. Admin order detail and payment history expose sanitized refund attempts plus `activeRefundOperation` so operators can see why status, COD, shipment, fulfillment, edit, and refund actions are locked during recovery. Admin order lists may expose only the compact active-refund lock summary, not the raw attempt rows or provider/debug evidence, so bulk delete/shipment/status controls can fail closed before operators hit API rejections. Customer order detail maps internal statuses such as `provider_unknown` and `reconcile_required` to buyer-safe progress states and timeline copy; it must not expose provider payloads, request hashes, idempotency keys, claim state, raw metadata, or raw gateway error names.
 
@@ -302,14 +273,13 @@ All gateway credentials are stored in the `settings` DB table with a `category` 
 |----------|------|
 | `stripe` | `secret_key`, `publishable_key`, `webhook_secret`, `enabled` |
 | `sslcommerz` | `store_id`, `store_password`, `sandbox`, `enabled` |
-| `polar` | `access_token`, `webhook_secret`, `product_id`, `sandbox`, `enabled` |
 | `payment_methods` | `enabled_methods` (JSON array), `default_method` |
 
-Gateway settings are authoritative relational reads; decrypted credentials are not retained across requests or written to KV. New Stripe, SSLCommerz, and Polar secret writes require `CREDENTIAL_ENCRYPTION_KEY`, store `enc:`-prefixed AES-GCM values, and fail before settings writes or checkout invalidation if the dedicated key is missing. Gateway runtime/readiness reads use strict credential resolution: legacy plaintext remains readable, old bare AES-GCM rows remain readable with the dedicated key, but missing/wrong credential keys return explicit readiness errors and never count ciphertext as configured. Checkout readiness is provider-specific: Stripe requires provider enabled + secret key + publishable key + webhook secret; SSLCommerz requires provider enabled + store ID + store password; Polar requires provider enabled + access token + product ID + webhook secret. Admin saves invalidate the API and storefront checkout projections after the relational write commits. Public checkout config and admin status reads use one `getPaymentGatewaySettingsSnapshot()` query for preferences and all gateway categories; payment-session, webhook, and refund paths read only the provider configuration they need.
+Gateway settings are authoritative relational reads; decrypted credentials are not retained across requests or written to KV. New Stripe and SSLCommerz secret writes require `CREDENTIAL_ENCRYPTION_KEY`, store `enc:`-prefixed AES-GCM values, and fail before settings writes or checkout invalidation if the dedicated key is missing. Gateway runtime/readiness reads use strict credential resolution: legacy plaintext remains readable, old bare AES-GCM rows remain readable with the dedicated key, but missing/wrong credential keys return explicit readiness errors and never count ciphertext as configured. Checkout readiness is provider-specific: Stripe requires provider enabled + secret key + publishable key + webhook secret; SSLCommerz requires provider enabled + store ID + store password. Admin saves invalidate the API and storefront checkout projections after the relational write commits. Public checkout config and admin status reads use one `getPaymentGatewaySettingsSnapshot()` query for preferences and all gateway categories; payment-session, webhook, and refund paths read only the provider configuration they need.
 
 ### Gateway Registry
 
-`gateway-settings.ts` side-effect registers all 4 gateways on import:
+`gateway-settings.ts` side-effect registers all 3 gateways on import:
 
 - Each registration includes static `id`, `name`, `settingsCategory`, `getPublicConfig()` (safe fields to expose), and `getCurrencies()` metadata.
 - Checkout config loads one relational gateway snapshot, applies `payment_methods.enabled_methods` as the outer allowlist, and combines the request-scoped settings with registry metadata. Unusable gateways fail closed before they are advertised.
@@ -318,7 +288,7 @@ Gateway settings are authoritative relational reads; decrypted credentials are n
 ### Checkout Config Response
 
 The `GET /checkout/config` endpoint returns:
-- `gateways[]` -- buyer-visible gateways after raw allowlist, provider readiness, checkout mode, and partial-payment filtering, with public config only (publishable key for Stripe, provider-neutral `testMode`, and the transitional `sandbox` flag for SSLCommerz/Polar)
+- `gateways[]` -- buyer-visible gateways after raw allowlist, provider readiness, checkout mode, and partial-payment filtering, with public config only (publishable key for Stripe, provider-neutral `testMode`, and the transitional `sandbox` flag for SSLCommerz)
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`
@@ -342,10 +312,10 @@ Mirrors the server-side pattern. `apps/storefront/src/lib/checkout/` has:
 
 - A `GatewayHandler` interface with `id`, `meta` (label/icon/desc), `getButtonText()`, optional `onSelect()`, and `processPayment()`
 - A `registry.ts` with `registerGateway()` / `getGateway()`
-- Handler implementations per gateway that each: call `createOrder()`, then call their respective proxy endpoint, then either redirect (SSLCommerz/Polar) or confirm client-side (Stripe)
+- Handler implementations per gateway that each: call `createOrder()`, then call their respective proxy endpoint, then either redirect (SSLCommerz) or confirm client-side (Stripe)
 - All handlers are registered in `index.ts` on import
 
-Normal checkout order creation does not request an attached `initialPaymentSession`; this keeps the authoritative order commit response independent from provider latency. The same-origin create-order proxy keeps an explicit opt-in `initialPaymentSession: true` branch for covered diagnostics/experiments, but the default browser flow creates Stripe/SSLCommerz/Polar sessions through the gateway-specific proxies with only `orderId` and receipt proof. API payment-session routes must await the durable `payment_session_attempts` created row before returning, while scheduling only the best-effort `orders.paymentIntentId` recovery hint through `executionCtx.waitUntil()` when available. Gateway-specific storefront proxies preserve API `202 processing` responses instead of flattening them to `200`; hosted checkout handlers send already-committed orders to receipt recovery, Stripe stays on checkout with retryable copy, account recovery shows the same processing message without treating it as a usable session, and hosted retry payloads no longer include a retry key that can fragment durable replay. The receipt and account-order pages fetch fresh checkout config before rendering retry buttons and offer all currently eligible online methods for a failed/cancelled unpaid order; selecting a different method explicitly replaces the old attempt on the same order. Stripe sends the D1 attempt key as the provider idempotency key, SSLCommerz derives a deterministic `tran_id` from it, and Polar stores it in checkout metadata; reclaimed Polar attempts must query recent open Polar checkouts by product/customer filter and exact metadata before creating another checkout.
+Normal checkout order creation does not request an attached `initialPaymentSession`; this keeps the authoritative order commit response independent from provider latency. The same-origin create-order proxy keeps an explicit opt-in `initialPaymentSession: true` branch for covered diagnostics/experiments, but the default browser flow creates Stripe/SSLCommerz sessions through the gateway-specific proxies with only `orderId` and receipt proof. API payment-session routes must await the durable `payment_session_attempts` created row before returning, while scheduling only the best-effort `orders.paymentIntentId` recovery hint through `executionCtx.waitUntil()` when available. Gateway-specific storefront proxies preserve API `202 processing` responses instead of flattening them to `200`; hosted checkout handlers send already-committed orders to receipt recovery, Stripe stays on checkout with retryable copy, account recovery shows the same processing message without treating it as a usable session, and hosted retry payloads no longer include a retry key that can fragment durable replay. The receipt and account-order pages fetch fresh checkout config before rendering retry buttons and offer all currently eligible online methods for a failed/cancelled unpaid order; selecting a different method explicitly replaces the old attempt on the same order. Stripe sends the D1 attempt key as the provider idempotency key, and SSLCommerz derives a deterministic `tran_id` from it.
 
 ## API Endpoints Summary
 
@@ -356,7 +326,6 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 | `GET` | `/api/v1/checkout/config` | Checkout configuration (cached 60s) |
 | `POST` | `/api/v1/payment/stripe/intent` | Create Stripe PaymentIntent |
 | `POST` | `/api/v1/payment/sslcommerz/session` | Create SSLCommerz session |
-| `POST` | `/api/v1/payment/polar/session` | Create Polar checkout session |
 | `GET` | `/api/v1/customer-auth/orders/{id}` | Private customer order detail with `paymentRecovery` preview |
 | `POST` | `/api/v1/customer-auth/orders/{id}/payment-session` | Private customer-owned retry/pay-balance session creation |
 | `POST` | `/api/v1/customer-auth/orders/{id}/claim-receipt` | Explicitly attach a receipt-proven guest order to the matching signed-in account |
@@ -368,8 +337,6 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 | `POST/GET` | `/api/v1/payment/sslcommerz/success` | SSLCommerz success redirect |
 | `POST/GET` | `/api/v1/payment/sslcommerz/fail` | SSLCommerz failure redirect |
 | `POST/GET` | `/api/v1/payment/sslcommerz/cancel` | SSLCommerz cancel redirect |
-| `GET` | `/api/v1/payment/polar/success` | Polar success redirect |
-| `GET` | `/api/v1/payment/polar/cancel` | Polar cancel redirect |
 
 ### Webhooks (signature verification IS the auth)
 
@@ -377,7 +344,6 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 |--------|------|---------|
 | `POST` | `/api/v1/webhooks/stripe` | Stripe webhook receiver |
 | `POST` | `/api/v1/webhooks/sslcommerz` | SSLCommerz IPN receiver |
-| `POST` | `/api/v1/webhooks/polar` | Polar webhook receiver |
 
 ### Admin (requires admin auth)
 
@@ -389,13 +355,10 @@ Normal checkout order creation does not request an attached `initialPaymentSessi
 | `POST` | `/api/v1/admin/settings/stripe` | Save Stripe settings |
 | `GET` | `/api/v1/admin/settings/sslcommerz` | Get SSLCommerz settings (password masked) |
 | `POST` | `/api/v1/admin/settings/sslcommerz` | Save SSLCommerz settings |
-| `GET` | `/api/v1/admin/settings/polar` | Get Polar settings (token/secret masked) |
-| `POST` | `/api/v1/admin/settings/polar` | Save Polar settings |
 
 ## Dependencies
 
 - `stripe` -- Stripe SDK v17+ (Web Fetch API native)
-- `@polar-sh/sdk` -- Polar SDK
 - `@scalius/database` -- `orders`, `orderItems`, `orderPayments`, `paymentPlans`, `codTracking`, `webhookEvents`, `settings`, `siteSettings` tables
 - `@scalius/core/errors` -- `ValidationError`, `ServiceUnavailableError`, `NotFoundError`, `ConflictError`
 - `@scalius/core/modules/payments/order-currency` -- immutable order currency/precision resolution, ledger-currency assertions, and snapshot-aware rounding

@@ -3,7 +3,6 @@ import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 export const PAYMENT_GATEWAY_IDS = [
   "stripe",
   "sslcommerz",
-  "polar",
   "cod",
 ] as const;
 

@@ -152,13 +152,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     // Cart presentation comes from the same authoritative validation that
     // checked price and stock. It is always an image/poster, never video.
-    const cartImageUrl = getProductImageUrl(validatedItem.productImage ?? "", {
-      width: 160,
-      height: 160,
-      quality: 75,
-      format: "auto",
-      fit: "contain",
-    });
+    const cartImageUrl = getProductImageUrl(validatedItem.productImage ?? "", 160);
     const options = cartItemOptions(itemToAdd);
     const cartItem: CartItem = {
       id: product.id,

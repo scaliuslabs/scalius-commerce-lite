@@ -13,6 +13,11 @@ import {
   validateMediaSignature,
   type SupportedMediaMimeType,
 } from "@scalius/shared/media-policy";
+import {
+  MEDIA_VARIANT_MAX_WIDTH,
+  mediaVariantObjectKey,
+  mediaVariantWidths,
+} from "@scalius/shared/media-variants";
 
 // Configuration constants
 const UPLOAD_TIMEOUT = 30_000; // 30 s
@@ -57,6 +62,20 @@ export function getCurrentPublicMediaUrl(
   return getPublicMediaUrl(
     publicUrl ?? publicMediaUrlContext.getStore() ?? "",
     key,
+  );
+}
+
+/**
+ * Public URL a media row is published as: its largest pre-generated WebP
+ * rendition when one exists (consumers derive the smaller ones from it, see
+ * @scalius/shared/media-variants), otherwise the original upload.
+ */
+export function getCurrentMediaUrl(
+  objectKey: string,
+  variantWidth: number | null | undefined,
+): string {
+  return getCurrentPublicMediaUrl(
+    variantWidth ? mediaVariantObjectKey(objectKey, variantWidth) : objectKey,
   );
 }
 
@@ -133,11 +152,31 @@ function boundedCustomMetadata(
   return output;
 }
 
+const MEDIA_VARIANT_KEY = /^(.+)\/([1-9]\d{0,3})\.webp$/u;
+
+/** True for `<original object key>/<width>.webp` rendition keys. */
+function isMediaVariantObjectKey(key: string): boolean {
+  const match = MEDIA_VARIANT_KEY.exec(key);
+  if (!match || Number(match[2]) > MEDIA_VARIANT_MAX_WIDTH) return false;
+  try {
+    validateMediaObjectKey(match[1]!);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function validateMediaObjectKey(
   value: string,
   expectedMimeType?: SupportedMediaMimeType,
 ): string {
   const key = value.trim();
+  if (
+    (!expectedMimeType || expectedMimeType === "image/webp") &&
+    isMediaVariantObjectKey(key)
+  ) {
+    return key;
+  }
   if (
     key.length === 0 ||
     key.length > OBJECT_KEY_MAX_LENGTH ||
@@ -564,6 +603,45 @@ export async function headMediaObject(
   }
 }
 
+/** Store one pre-generated WebP rendition beside its original object. */
+export async function putMediaVariant(
+  objectKey: string,
+  width: number,
+  body: ArrayBuffer | ArrayBufferView,
+  bucket?: R2Bucket,
+): Promise<void> {
+  const key = validateMediaObjectKey(mediaVariantObjectKey(objectKey, width));
+  const r2 = requireBucket(bucket);
+  try {
+    await r2.put(key, body, {
+      httpMetadata: {
+        contentType: "image/webp",
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+    });
+  } catch {
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
+  }
+}
+
+/** Delete the renditions recorded for an original object. */
+export async function deleteMediaVariants(
+  objectKey: string,
+  variantWidth: number | null,
+  bucket?: R2Bucket,
+): Promise<void> {
+  if (!variantWidth) return;
+  const keys = mediaVariantWidths(variantWidth).map((width) =>
+    validateMediaObjectKey(mediaVariantObjectKey(objectKey, width)),
+  );
+  const r2 = requireBucket(bucket);
+  try {
+    await r2.delete(keys);
+  } catch {
+    throw new ServiceUnavailableError("Media storage is temporarily unavailable.");
+  }
+}
+
 /**
  * Delete a file from Cloudflare R2.
  */
@@ -593,17 +671,6 @@ export function extractKeyFromUrl(url: string): string | null {
     if (mediaRouteIndex >= 0) {
       const key = pathname.slice(mediaRouteIndex + mediaRouteMarker.length);
       return key || null;
-    }
-
-    const resizeMarker = "/cdn-cgi/image/";
-    const resizeIndex = pathname.indexOf(resizeMarker);
-    if (resizeIndex >= 0) {
-      const resizedPath = pathname.slice(resizeIndex + resizeMarker.length);
-      const originalPathIndex = resizedPath.indexOf("/");
-      if (originalPathIndex >= 0) {
-        const key = resizedPath.slice(originalPathIndex + 1);
-        return key.replace(/^\/+/, "") || null;
-      }
     }
 
     return pathname.replace(/^\/+/, "") || null;

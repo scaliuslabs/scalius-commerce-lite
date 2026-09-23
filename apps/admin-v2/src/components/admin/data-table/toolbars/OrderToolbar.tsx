@@ -69,7 +69,6 @@ const paymentMethodFilters = [
   { value: "cod", label: "COD" },
   { value: "stripe", label: "Stripe" },
   { value: "sslcommerz", label: "SSLCommerz" },
-  { value: "polar", label: "Polar" },
 ];
 
 const fulfillmentStatusFilters = [

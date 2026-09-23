@@ -26,7 +26,7 @@ const CUSTOMER_COOKIE_CLEAR_HEADERS = [
   "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
 ];
 
-type OnlinePaymentMethod = "stripe" | "sslcommerz" | "polar";
+type OnlinePaymentMethod = "stripe" | "sslcommerz";
 
 type CheckoutCreateOrderPayload = CreateOrderPayload & {
   initialPaymentSession?: unknown;
@@ -39,11 +39,10 @@ type InitialPaymentSessionResult =
 const PAYMENT_SESSION_ENDPOINTS: Record<OnlinePaymentMethod, string> = {
   stripe: "/payment/stripe/intent",
   sslcommerz: "/payment/sslcommerz/session",
-  polar: "/payment/polar/session",
 };
 
 function isOnlinePaymentMethod(value: unknown): value is OnlinePaymentMethod {
-  return value === "stripe" || value === "sslcommerz" || value === "polar";
+  return value === "stripe" || value === "sslcommerz";
 }
 
 async function createInitialPaymentSession(

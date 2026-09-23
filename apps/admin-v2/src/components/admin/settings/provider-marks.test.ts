@@ -8,13 +8,13 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../../../public/", import.meta.url)
 
 describe("provider mark manifest", () => {
   it("keeps every adopted mark local, traceable, and byte-verified", () => {
-    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(19);
+    expect(Object.keys(PROVIDER_MARKS)).toHaveLength(18);
 
     for (const [id, mark] of Object.entries(PROVIDER_MARKS)) {
       expect(mark.firstPartyAssetUrl).toMatch(/^https:\/\//);
       expect(mark.governingTermsUrl).toMatch(/^https:\/\//);
       expect(mark.allowedSurface).toBe(
-        ["stripe", "sslcommerz", "polar"].includes(id)
+        ["stripe", "sslcommerz"].includes(id)
           ? "direct-provider-settings-and-storefront-checkout"
           : "direct-provider-settings",
       );

@@ -35,20 +35,14 @@ const checkoutGatewaySchema = z.discriminatedUnion("id", [
     }),
   }),
   z.object({
-    id: z.literal("polar"),
-    ...checkoutGatewayBaseSchema,
-    sandbox: z.boolean(),
-    testMode: z.boolean(),
-  }),
-  z.object({
     id: z.literal("cod"),
     ...checkoutGatewayBaseSchema,
   }),
 ]);
 
 const checkoutConfigSchema = z.object({
-  gateways: z.array(checkoutGatewaySchema).max(4),
-  activeDefaultMethod: z.enum(["stripe", "sslcommerz", "polar", "cod"]).optional(),
+  gateways: z.array(checkoutGatewaySchema).max(3),
+  activeDefaultMethod: z.enum(["stripe", "sslcommerz", "cod"]).optional(),
   guestCheckoutEnabled: z.boolean(),
   authVerificationMethod: z.enum(["email", "sms_otp", "whatsapp_otp", "both"]),
   customerAuthPolicy: z.object({

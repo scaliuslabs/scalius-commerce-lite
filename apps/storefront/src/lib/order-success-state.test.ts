@@ -97,7 +97,7 @@ describe("order success state", () => {
       .toMatchObject({ paymentStatusLabel: "No payment due" });
   });
 
-  it.each(["stripe", "sslcommerz", "polar"])(
+  it.each(["stripe", "sslcommerz"])(
     "holds %s orders in pending while local payment state is incomplete",
     (paymentMethod) => {
       const order = makeOrder({

@@ -8,13 +8,10 @@ const mocks = vi.hoisted(() => ({
   createPaymentIntent: vi.fn(),
   initSSLCommerzSession: vi.fn(),
   validateSSLCommerzIPN: vi.fn(),
-  createPolarCheckout: vi.fn(),
-  findReusablePolarCheckout: vi.fn(),
   getActivePaymentMethods: vi.fn(),
   getPaymentMethodPreferences: vi.fn(),
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
-  getPolarSettings: vi.fn(),
   currentCurrencyReads: vi.fn(),
   assertNoActivePaymentSessionAttempt: vi.fn(),
   buildPaymentSessionAttemptIdentity: vi.fn(),
@@ -34,18 +31,12 @@ vi.mock("@scalius/core/modules/payments/sslcommerz", async (importOriginal) => (
   validateSSLCommerzIPN: mocks.validateSSLCommerzIPN,
 }));
 
-vi.mock("@scalius/core/modules/payments/polar", () => ({
-  createPolarCheckout: mocks.createPolarCheckout,
-  findReusablePolarCheckout: mocks.findReusablePolarCheckout,
-}));
-
 vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
   getActivePaymentMethods: mocks.getActivePaymentMethods,
   getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-  getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("@scalius/core/modules/payments/payment-session-attempts", async (importOriginal) => ({
@@ -62,7 +53,6 @@ vi.mock("@scalius/core/modules/payments/hosted-payment-return", async (importOri
   reconcileHostedPaymentReturn: mocks.reconcileHostedPaymentReturn,
 }));
 
-import { polarPaymentRoutes } from "./polar-routes";
 import { sslcommerzPaymentRoutes } from "./sslcommerz-routes";
 import { stripePaymentRoutes } from "./stripe-routes";
 import {
@@ -84,8 +74,6 @@ import {
   settings as settingsTable,
   siteSettings as siteSettingsTable,
 } from "@scalius/database/schema";
-
-const VALID_POLAR_RETURN_NONCE = `hpr_${"a".repeat(64)}`;
 
 const orderRow = {
   id: "order_1",
@@ -268,7 +256,6 @@ function createTestApp(mode: TokenMode = "valid", dbOptions: string | DbMockOpti
   });
   app.route("/payment/stripe", stripePaymentRoutes);
   app.route("/payment/sslcommerz", sslcommerzPaymentRoutes);
-  app.route("/payment/polar", polarPaymentRoutes);
 
   return { app, db, kv };
 }
@@ -318,11 +305,11 @@ function deferred<T = void>(): {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getActivePaymentMethods.mockResolvedValue({
-    enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
+    enabledMethods: ["stripe", "sslcommerz", "cod"],
     defaultMethod: "cod",
   });
   mocks.getPaymentMethodPreferences.mockResolvedValue({
-    enabledMethods: ["stripe", "sslcommerz", "polar", "cod"],
+    enabledMethods: ["stripe", "sslcommerz", "cod"],
     defaultMethod: "cod",
     hasExplicitEnabledMethods: true,
   });
@@ -362,19 +349,6 @@ beforeEach(() => {
     value_a: "full",
     value_b: "order_1",
   });
-  mocks.getPolarSettings.mockResolvedValue({
-    enabled: true,
-    accessToken: "polar_token",
-    productId: "polar_product",
-    webhookSecret: "polar_webhook",
-    sandbox: true,
-  });
-  mocks.createPolarCheckout.mockResolvedValue({
-    success: true,
-    checkoutUrl: "https://polar.example.test/pay",
-    checkoutId: "polar_checkout_1",
-  });
-  mocks.findReusablePolarCheckout.mockResolvedValue(null);
   mocks.assertNoActivePaymentSessionAttempt.mockResolvedValue(undefined);
   mocks.buildPaymentSessionAttemptIdentity.mockImplementation(async (input: {
     orderId: string;
@@ -436,11 +410,6 @@ describe("payment session receipt-token proof", () => {
       label: "SSLCommerz session",
       paymentMethod: "sslcommerz",
       path: "/api/v1/payment/sslcommerz/session",
-    },
-    {
-      label: "Polar session",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
     },
   ])("creates $label with receipt proof from X-Receipt-Token", async ({ paymentMethod, path }) => {
     const { app, kv } = createTestApp("valid", paymentMethod);
@@ -652,12 +621,6 @@ describe("payment session receipt-token proof", () => {
       path: "/api/v1/payment/sslcommerz/session",
       gateway: mocks.initSSLCommerzSession,
     },
-    {
-      label: "Polar session",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      gateway: mocks.createPolarCheckout,
-    },
   ])("rejects $label creation while shipment creation has an active claim", async ({ paymentMethod, path, gateway }) => {
     const { app, kv } = createTestApp("valid", {
       paymentMethod,
@@ -695,13 +658,6 @@ describe("payment session receipt-token proof", () => {
       path: "/api/v1/payment/sslcommerz/session",
       settings: mocks.getSSLCommerzSettings,
       gateway: mocks.initSSLCommerzSession,
-    },
-    {
-      label: "Polar session",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      gateway: mocks.createPolarCheckout,
     },
   ].flatMap((gateway) => [
     {
@@ -803,13 +759,6 @@ describe("payment session receipt-token proof", () => {
       settings: mocks.getSSLCommerzSettings,
       gateway: mocks.initSSLCommerzSession,
     },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      gateway: mocks.createPolarCheckout,
-    },
   ])("rejects $label deposits before creating a payment plan when the gateway is not ready", async ({
     paymentMethod,
     path,
@@ -878,7 +827,6 @@ describe("payment session receipt-token proof", () => {
       undefined,
     );
     expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
-    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.createPaymentIntent).toHaveBeenCalledWith("sk_test", expect.objectContaining({
       amount: 5000,
       currency: "bdt",
@@ -1400,7 +1348,6 @@ describe("payment session receipt-token proof", () => {
       db,
       undefined,
     );
-    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
       "ssl_store_password_123",
@@ -1468,7 +1415,6 @@ describe("payment session receipt-token proof", () => {
       db,
       undefined,
     );
-    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledTimes(1);
     expect(mocks.initSSLCommerzSession).toHaveBeenCalledWith(
       "store",
@@ -1530,7 +1476,7 @@ describe("payment session receipt-token proof", () => {
       CACHE: kv,
       PUBLIC_API_BASE_URL: "https://api.example.test",
       STOREFRONT_URL: "https://shop.example.test",
-      PAYMENT_EVENTS_QUEUE: queue,
+      JOBS_QUEUE: queue,
     } as never;
 
     const response = await app.request(
@@ -1862,207 +1808,7 @@ describe("payment session receipt-token proof", () => {
     expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
-  it("creates Polar deposit sessions with original store-currency metadata", async () => {
-    const { app, db, kv } = createTestApp("valid", {
-      paymentMethod: "polar",
-      partialPaymentEnabled: true,
-      partialPaymentAmount: 55,
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: "order_1",
-          receiptToken: "chk_valid",
-          paymentType: "deposit",
-          depositAmount: 55,
-          currency: "USD",
-        }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(200);
-    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
-    expect(mocks.getPaymentMethodPreferences).toHaveBeenCalledWith(db);
-    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
-    expect(mocks.getSSLCommerzSettings).not.toHaveBeenCalled();
-    expect(mocks.getPolarSettings).toHaveBeenCalledWith(
-      db,
-      undefined,
-    );
-    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
-      expect.objectContaining({
-        amount: 50,
-        currency: "usd",
-        paymentType: "deposit",
-        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=deposit&deposit_amount=55",
-        cancelUrl: expect.stringMatching(
-          /^https:\/\/api\.example\.test\/api\/v1\/payment\/polar\/cancel\?order_id=order_1&payment_type=deposit&deposit_amount=55&return_nonce=hpr_[a-f0-9]{64}$/,
-        ),
-        metadata: expect.objectContaining({
-          orderId: "order_1",
-          paymentType: "deposit",
-          originalAmount: "55",
-          originalCurrency: "bdt",
-          exchangeRate: "110",
-        }),
-        requestTimeoutMs: PAYMENT_SESSION_PROVIDER_REQUEST_TIMEOUT_MS,
-        signal: expect.any(AbortSignal),
-      }),
-    );
-    const polarRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
-      successUrl?: string;
-      cancelUrl?: string;
-    };
-    expectNoReceiptProofInUrl(polarRequest.successUrl ?? null);
-    expectNoReceiptProofInUrl(polarRequest.cancelUrl ?? null);
-  });
-
-  it("fails an invalid Polar conversion without switching the order gateway", async () => {
-    const { app, db, kv } = createTestApp("valid", {
-      paymentMethod: "sslcommerz",
-      currentCurrencyCode: "USD",
-      order: {
-        totalAmount: 125,
-        totalAmountMinor: 12_500,
-        currencyCode: "BDT",
-        currencyDecimalPlaces: 2,
-        balanceDue: 125,
-        paymentStatus: PaymentStatus.FAILED,
-        paidAmount: 0,
-      },
-      paymentRows: [
-        { paymentMethod: "sslcommerz", status: PaymentRecordStatus.FAILED },
-      ],
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      error: { message: expect.stringContaining("different currency") },
-    });
-    expect(mocks.currentCurrencyReads).toHaveBeenCalledTimes(1);
-    expect(db.__updateSetValues).toHaveLength(0);
-    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
-  });
-
-  it("rejects Polar conversion when the USD rate is only the fresh-store default", async () => {
-    const { app, kv } = createTestApp("valid", {
-      paymentMethod: "polar",
-      explicitUsdExchangeRate: null,
-      order: {
-        totalAmount: 125,
-        totalAmountMinor: 12_500,
-        currencyCode: "BDT",
-        currencyDecimalPlaces: 2,
-        balanceDue: 125,
-      },
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      error: { message: expect.stringContaining("no explicit USD exchange rate") },
-    });
-    expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
-  });
-
-  it("allows an explicitly saved parity rate for an unsupported historical currency", async () => {
-    const { app, kv } = createTestApp("valid", {
-      paymentMethod: "polar",
-      currentCurrencyCode: "BMD",
-      explicitUsdExchangeRate: "1",
-      order: {
-        totalAmount: 125,
-        totalAmountMinor: 12_500,
-        currencyCode: "BMD",
-        currencyDecimalPlaces: 2,
-        balanceDue: 125,
-      },
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
-      expect.objectContaining({
-        amount: 12_500,
-        currency: "usd",
-        paymentType: "full",
-      }),
-    );
-  });
-
-  it("creates a supported historical JPY Polar session without reading the current exchange rate", async () => {
-    const { app, kv } = createTestApp("valid", {
-      paymentMethod: "polar",
-      currentCurrencyCode: "USD",
-      order: {
-        totalAmount: 125.4,
-        totalAmountMinor: 125,
-        currencyCode: "JPY",
-        currencyDecimalPlaces: 0,
-        balanceDue: 125,
-      },
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
-      expect.objectContaining({
-        amount: 125,
-        currency: "jpy",
-        paymentType: "full",
-      }),
-    );
-    expect(mocks.currentCurrencyReads).not.toHaveBeenCalled();
-  });
-
-  it("switches a failed unpaid SSLCommerz order to Polar after target readiness passes", async () => {
+  it("switches a failed unpaid SSLCommerz order to Stripe after target readiness passes", async () => {
     const { app, db, kv } = createTestApp("valid", {
       paymentMethod: "sslcommerz",
       order: {
@@ -2076,7 +1822,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2087,20 +1833,20 @@ describe("payment session receipt-token proof", () => {
     const json = await response.json();
 
     expect(response.status, JSON.stringify(json)).toBe(200);
-    expect(json).toEqual({
+    expect(json).toMatchObject({
       success: true,
       data: {
-        gatewayUrl: "https://polar.example.test/pay",
-        checkoutId: "polar_checkout_1",
+        clientSecret: "secret_1",
+        paymentIntentId: "pi_1",
       },
     });
     expect(db.__updateSetValues).toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.createPolarCheckout).toHaveBeenCalledTimes(1);
-    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
+    expect(mocks.createPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(mocks.createPaymentIntent).toHaveBeenCalledWith(
+      "sk_test",
       expect.objectContaining({
         orderId: "order_1",
         paymentType: "full",
@@ -2126,7 +1872,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2142,9 +1888,9 @@ describe("payment session receipt-token proof", () => {
     expect(response.status).toBe(400);
     expect(db.batch).not.toHaveBeenCalled();
     expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
     }));
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("replays the current hosted session instead of replacing a still-pending attempt", async () => {
@@ -2217,7 +1963,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2228,10 +1974,10 @@ describe("payment session receipt-token proof", () => {
 
     expect(response.status).toBe(400);
     expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
     expect(mocks.markPaymentSessionAttemptCreated).not.toHaveBeenCalled();
   });
 
@@ -2254,7 +2000,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2265,10 +2011,10 @@ describe("payment session receipt-token proof", () => {
 
     expect(response.status).toBe(400);
     expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("does not switch gateways while any payment-session setup lease is active", async () => {
@@ -2289,7 +2035,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2300,10 +2046,10 @@ describe("payment session receipt-token proof", () => {
 
     expect(response.status).toBe(409);
     expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
     expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
   });
 
@@ -2322,7 +2068,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2333,10 +2079,10 @@ describe("payment session receipt-token proof", () => {
 
     expect(response.status).toBe(400);
     expect(db.__updateSetValues).toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
     expect(mocks.claimPaymentSessionAttempt).not.toHaveBeenCalled();
   });
 
@@ -2359,7 +2105,7 @@ describe("payment session receipt-token proof", () => {
     });
 
     const response = await app.request(
-      "/api/v1/payment/polar/session",
+      "/api/v1/payment/stripe/intent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2370,117 +2116,11 @@ describe("payment session receipt-token proof", () => {
 
     expect(response.status).toBe(503);
     expect(db.__updateSetValues).not.toContainEqual(expect.objectContaining({
-      paymentMethod: "polar",
+      paymentMethod: "stripe",
       version: 2,
     }));
-    expect(mocks.getPolarSettings).not.toHaveBeenCalled();
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
-  });
-
-  it("redirects Polar cancelled hosted payments back to the receipt recovery page", async () => {
-    const { app, kv } = createTestApp("valid", "polar");
-
-    const response = await app.request(
-      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
-      { method: "GET" },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(302);
-    const location = response.headers.get("location");
-    expect(location).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&payment=polar&result=cancelled&paymentType=full",
-    );
-    expectNoReceiptProofInUrl(location);
-    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        orderId: "order_1",
-        gateway: "polar",
-        paymentType: "full",
-        result: "cancelled",
-        providerCorrelationId: VALID_POLAR_RETURN_NONCE,
-      },
-    );
-  });
-
-  it("does not reconcile a Polar cancel without a server-generated return nonce", async () => {
-    const { app, kv } = createTestApp("valid", "polar");
-
-    const response = await app.request(
-      "/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
-      { method: "GET" },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
-    );
-    expect(mocks.reconcileHostedPaymentReturn).not.toHaveBeenCalled();
-  });
-
-  it("does not expose a cancelled result for a forged Polar return nonce", async () => {
-    mocks.reconcileHostedPaymentReturn.mockResolvedValueOnce("ignored");
-    const { app, kv } = createTestApp("valid", "polar");
-    const forgedNonce = `hpr_${"b".repeat(64)}`;
-
-    const response = await app.request(
-      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${forgedNonce}`,
-      { method: "GET" },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
-    );
-    expect(mocks.reconcileHostedPaymentReturn).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ providerCorrelationId: forgedNonce }),
-    );
-  });
-
-  it("suppresses a Polar cancelled result once payment is settling or terminal", async () => {
-    mocks.reconcileHostedPaymentReturn.mockResolvedValueOnce("retry_suppressed");
-    const { app, kv } = createTestApp("valid", "polar");
-
-    const response = await app.request(
-      `/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
-      { method: "GET" },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://shop.example.test/order-success?orderId=order_1&payment=polar&paymentType=full",
-    );
-  });
-
-  it("redirects Polar account callbacks without exposing receipt tokens", async () => {
-    const { app, kv } = createTestApp("valid", "polar");
-
-    const success = await app.request(
-      "/api/v1/payment/polar/success?order_id=order_1&return_to=account&payment_type=balance",
-      { method: "GET" },
-      envFor(kv),
-    );
-    const cancelled = await app.request(
-      `/api/v1/payment/polar/cancel?order_id=order_1&return_to=account&payment_type=balance&return_nonce=${VALID_POLAR_RETURN_NONCE}`,
-      { method: "GET" },
-      envFor(kv),
-    );
-
-    expect(success.headers.get("location")).toBe(
-      "https://shop.example.test/account/orders/order_1?payment=polar&paymentType=balance",
-    );
-    expect(cancelled.headers.get("location")).toBe(
-      "https://shop.example.test/account/orders/order_1?payment=polar&result=cancelled&paymentType=balance",
-    );
-    for (const response of [success, cancelled]) {
-      expect(response.status).toBe(302);
-      expectNoReceiptProofInUrl(response.headers.get("location"));
-    }
+    expect(mocks.getStripeSettings).not.toHaveBeenCalled();
+    expect(mocks.createPaymentIntent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -2495,12 +2135,6 @@ describe("payment session receipt-token proof", () => {
       paymentMethod: "sslcommerz",
       path: "/api/v1/payment/sslcommerz/session",
       gateway: mocks.initSSLCommerzSession,
-    },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      gateway: mocks.createPolarCheckout,
     },
   ])("replays a created $label session without a second provider call", async ({ paymentMethod, path, gateway }) => {
     const { app, db, kv } = createTestApp("valid", paymentMethod);
@@ -2548,83 +2182,6 @@ describe("payment session receipt-token proof", () => {
       db,
       expect.objectContaining({ id: "psa_1", claimId: "psac_1" }),
       expect.objectContaining({ response: firstJson.data }),
-    );
-    if (paymentMethod === "polar") {
-      const firstClaimInput = mocks.claimPaymentSessionAttempt.mock.calls.at(-2)?.[1] as {
-        providerCorrelationId?: string;
-      };
-      const replayClaimInput = mocks.claimPaymentSessionAttempt.mock.calls.at(-1)?.[1] as {
-        providerCorrelationId?: string;
-      };
-      expect(firstClaimInput.providerCorrelationId).toMatch(/^hpr_[a-f0-9]{64}$/);
-      expect(replayClaimInput.providerCorrelationId).toBe(firstClaimInput.providerCorrelationId);
-
-      const providerRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
-        cancelUrl?: string;
-      };
-      const cancelUrl = new URL(providerRequest.cancelUrl ?? "https://invalid.example");
-      expect(cancelUrl.searchParams.get("return_nonce")).toBe(firstClaimInput.providerCorrelationId);
-      expect(providerRequest.cancelUrl).not.toContain("chk_valid");
-    }
-  });
-
-  it("recovers a reclaimed Polar checkout before creating another provider session", async () => {
-    const { app, db, kv } = createTestApp("valid", "polar");
-    mocks.claimPaymentSessionAttempt.mockResolvedValueOnce({
-      status: "claimed",
-      attempt: {
-        id: "psa_1",
-        attemptKey: "payment_session:polar:hash_order_1_full",
-        claimId: "psac_1",
-        attempts: 2,
-      },
-    });
-    mocks.findReusablePolarCheckout.mockResolvedValueOnce({
-      success: true,
-      checkoutUrl: "https://polar.example.test/recovered",
-      checkoutId: "polar_checkout_recovered",
-      recovered: true,
-    });
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", receiptToken: "chk_valid" }),
-      },
-      envFor(kv),
-    );
-    const json = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(json).toEqual({
-      success: true,
-      data: {
-        gatewayUrl: "https://polar.example.test/recovered",
-        checkoutId: "polar_checkout_recovered",
-      },
-    });
-    expect(mocks.findReusablePolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
-      expect.objectContaining({
-        orderId: "order_1",
-        idempotencyKey: "payment_session:polar:hash_order_1_full",
-        paymentType: "full",
-        productId: "polar_product",
-      }),
-    );
-    expect(mocks.createPolarCheckout).not.toHaveBeenCalled();
-    expect(mocks.markPaymentSessionAttemptCreated).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({ id: "psa_1", claimId: "psac_1", attempts: 2 }),
-      {
-        providerSessionId: "polar_checkout_recovered",
-        response: {
-          gatewayUrl: "https://polar.example.test/recovered",
-          checkoutId: "polar_checkout_recovered",
-        },
-      },
     );
   });
 
@@ -2675,11 +2232,6 @@ describe("payment session receipt-token proof", () => {
       label: "SSLCommerz",
       paymentMethod: "sslcommerz",
       path: "/api/v1/payment/sslcommerz/session",
-    },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
     },
   ])("schedules the $label order recovery hint after the response when executionCtx is available", async ({
     paymentMethod,
@@ -2761,12 +2313,6 @@ describe("payment session receipt-token proof", () => {
       paymentMethod: "sslcommerz",
       path: "/api/v1/payment/sslcommerz/session",
       gateway: mocks.initSSLCommerzSession,
-    },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      gateway: mocks.createPolarCheckout,
     },
   ])("does not create a second $label session while an attempt is already processing", async ({
     paymentMethod,
@@ -2864,17 +2410,6 @@ describe("payment session receipt-token proof", () => {
         timedOut: true,
       },
     },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      gateway: mocks.createPolarCheckout,
-      timeoutResult: {
-        success: false,
-        error: "Polar did not respond before the payment timeout. Please try again.",
-        timedOut: true,
-      },
-    },
   ])("maps $label provider deadline results to retryable 503 responses", async ({
     paymentMethod,
     path,
@@ -2921,13 +2456,6 @@ describe("payment session receipt-token proof", () => {
       settings: mocks.getSSLCommerzSettings,
       gateway: mocks.initSSLCommerzSession,
     },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      gateway: mocks.createPolarCheckout,
-    },
   ])("rejects stale $label checkout sessions when the payment-method allowlist is disabled", async ({
     paymentMethod,
     path,
@@ -2970,7 +2498,7 @@ describe("payment session receipt-token proof", () => {
         publishableKey: "pk_test",
         webhookSecret: "whsec_test",
       },
-      otherSettings: [mocks.getSSLCommerzSettings, mocks.getPolarSettings],
+      otherSettings: [mocks.getSSLCommerzSettings],
       gateway: mocks.createPaymentIntent,
       message: "Stripe gateway is disabled.",
     },
@@ -2985,25 +2513,9 @@ describe("payment session receipt-token proof", () => {
         storePassword: "ssl_store_password_123",
         sandbox: true,
       },
-      otherSettings: [mocks.getStripeSettings, mocks.getPolarSettings],
+      otherSettings: [mocks.getStripeSettings],
       gateway: mocks.initSSLCommerzSession,
       message: "SSLCommerz gateway is disabled.",
-    },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      disabledSettings: {
-        enabled: false,
-        accessToken: "polar_token",
-        productId: "polar_product",
-        webhookSecret: "polar_webhook",
-        sandbox: true,
-      },
-      otherSettings: [mocks.getStripeSettings, mocks.getSSLCommerzSettings],
-      gateway: mocks.createPolarCheckout,
-      message: "Polar gateway is disabled.",
     },
   ])("rejects selected $label sessions when the provider is not checkout-ready", async ({
     paymentMethod,
@@ -3059,13 +2571,6 @@ describe("payment session receipt-token proof", () => {
       settings: mocks.getSSLCommerzSettings,
       gateway: mocks.initSSLCommerzSession,
     },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      gateway: mocks.createPolarCheckout,
-    },
   ])("rejects stale $label checkout sessions when checkout mode switches to Fast COD Only", async ({
     paymentMethod,
     path,
@@ -3107,13 +2612,6 @@ describe("payment session receipt-token proof", () => {
       path: "/api/v1/payment/sslcommerz/session",
       settings: mocks.getSSLCommerzSettings,
       gateway: mocks.initSSLCommerzSession,
-    },
-    {
-      label: "Polar",
-      paymentMethod: "polar",
-      path: "/api/v1/payment/polar/session",
-      settings: mocks.getPolarSettings,
-      gateway: mocks.createPolarCheckout,
     },
   ])("rejects full $label payment sessions when partial payment requires a deposit", async ({
     paymentMethod,
@@ -3189,50 +2687,5 @@ describe("payment session receipt-token proof", () => {
       requestContext?: Record<string, unknown>;
     };
     expect(identityInput.requestContext).not.toHaveProperty("retryKey");
-  });
-
-  it("uses trusted API config for Polar redirect URLs instead of caller URLs", async () => {
-    const { app, kv } = createTestApp("valid", "polar");
-
-    const response = await app.request(
-      "/api/v1/payment/polar/session",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: "order_1",
-          receiptToken: "chk_valid",
-          successUrl: "https://attacker.example/success",
-          cancelUrl: "https://attacker.example/cancel",
-          retryKey: "retry_2",
-        }),
-      },
-      envFor(kv),
-    );
-
-    expect(response.status).toBe(200);
-    expect(mocks.createPolarCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ productId: "polar_product" }),
-      expect.objectContaining({
-        successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=full",
-        cancelUrl: expect.stringMatching(
-          /^https:\/\/api\.example\.test\/api\/v1\/payment\/polar\/cancel\?order_id=order_1&payment_type=full&return_nonce=hpr_[a-f0-9]{64}$/,
-        ),
-      }),
-    );
-    const polarRequest = mocks.createPolarCheckout.mock.calls.at(-1)?.[1] as {
-      successUrl?: string;
-      cancelUrl?: string;
-    };
-    expectNoReceiptProofInUrl(polarRequest.successUrl ?? null);
-    expectNoReceiptProofInUrl(polarRequest.cancelUrl ?? null);
-    const identityInput = mocks.buildPaymentSessionAttemptIdentity.mock.calls.at(-1)?.[0] as {
-      requestContext?: Record<string, unknown>;
-    };
-    expect(identityInput.requestContext).not.toHaveProperty("retryKey");
-    expect(identityInput.requestContext).toMatchObject({
-      successUrl: "https://api.example.test/api/v1/payment/polar/success?order_id=order_1&payment_type=full",
-      cancelUrl: "https://api.example.test/api/v1/payment/polar/cancel?order_id=order_1&payment_type=full",
-    });
   });
 });

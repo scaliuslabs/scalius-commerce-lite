@@ -87,7 +87,6 @@ interface OrderPayment {
   sslcommerzTranId: string | null;
   sslcommerzValId: string | null;
   sslcommerzBankTranId: string | null;
-  polarCheckoutId: string | null;
   codCollectedBy: string | null;
   codCollectedAt: number | null;
   codReceiptUrl: string | null;
@@ -177,7 +176,6 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   stripe: "Stripe",
   sslcommerz: "SSLCommerz",
   cod: "Cash on Delivery",
-  polar: "Polar",
 };
 
 const REFUND_SEVERITY_CLASS: Record<string, string> = {
@@ -194,7 +192,7 @@ const MANUAL_REFUND_RECOVERY_STATUSES = new Set([
   "pending",
 ]);
 
-const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"]);
+const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz"]);
 
 function getSessionAttemptView(
   attempt: PaymentSessionAttempt,
@@ -338,7 +336,6 @@ function paymentReferences(payment: OrderPayment): Array<{ label: string; value:
     { label: "SSL tran", value: payment.sslcommerzTranId ?? "" },
     { label: "SSL val", value: payment.sslcommerzValId ?? "" },
     { label: "SSL bank tran", value: payment.sslcommerzBankTranId ?? "" },
-    { label: "Polar checkout", value: payment.polarCheckoutId ?? "" },
   ].filter((entry) => entry.value);
 }
 

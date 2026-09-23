@@ -24,6 +24,7 @@ describe("media cursor pagination", () => {
                 caption TEXT,
                 width INTEGER,
                 height INTEGER,
+                variant_width INTEGER,
                 duration_ms INTEGER,
                 poster_media_id TEXT,
                 folder_id TEXT,

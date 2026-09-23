@@ -53,7 +53,6 @@ resolve_pnpm_bin() {
   fi
 
   for candidate in \
-    "$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/pnpm" \
     "$HOME"/.nvm/versions/node/*/lib/node_modules/corepack/shims/pnpm; do
     if [ -f "$candidate" ]; then
       printf "%s\n" "$candidate"

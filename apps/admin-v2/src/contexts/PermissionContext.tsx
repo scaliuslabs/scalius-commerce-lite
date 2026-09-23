@@ -73,8 +73,3 @@ export function useHasPermission(permission: PermissionName | string): boolean {
   const { hasPermission } = usePermissions();
   return hasPermission(permission);
 }
-
-export function useHasAnyPermission(permissions: (PermissionName | string)[]): boolean {
-  const { hasAnyPermission } = usePermissions();
-  return hasAnyPermission(permissions);
-}

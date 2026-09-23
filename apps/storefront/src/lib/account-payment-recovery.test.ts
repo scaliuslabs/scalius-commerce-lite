@@ -81,7 +81,7 @@ describe("account payment recovery", () => {
       tone: "warning",
       title: "Payment was cancelled",
     });
-    expect(getAccountPaymentReturnNotice("polar", "failed")).toMatchObject({
+    expect(getAccountPaymentReturnNotice("sslcommerz", "failed")).toMatchObject({
       tone: "warning",
       title: "Payment did not complete",
     });

@@ -25,11 +25,18 @@ import {
     completeMediaMultipartUpload,
     createMediaMultipartUpload,
     deleteFile,
+    deleteMediaVariants,
     headMediaObject,
+    putMediaVariant,
     uploadMediaMultipartPart,
 } from "../../integrations/storage";
 import {
+    mediaVariantQuality,
+    mediaVariantWidths,
+} from "@scalius/shared/media-variants";
+import {
     MEDIA_MULTIPART_PART_SIZE_BYTES,
+    MEDIA_SIGNATURE_READ_BYTES,
     validateMediaFileMetadata,
     validateMediaSignature,
 } from "@scalius/shared/media-policy";
@@ -114,6 +121,7 @@ const poster = alias(media, "media_poster");
 const mediaProjection = {
     ...getTableColumns(media),
     posterObjectKey: poster.objectKey,
+    posterVariantWidth: poster.variantWidth,
     posterKind: poster.kind,
     posterStatus: poster.status,
 };
@@ -197,6 +205,8 @@ export async function listMediaFiles(db: Database, input: {
     mimeType?: string;
     kind?: "image" | "video";
     view?: "ready" | "trash";
+    /** "missing": images that can still get pre-generated renditions. */
+    variants?: "missing";
 }) {
     const boundedLimit = Math.min(100, Math.max(1, input.limit ?? 24));
     const sortBy = input.sortBy ?? "createdAt";
@@ -210,6 +220,7 @@ export async function listMediaFiles(db: Database, input: {
         mimeType,
         kind: input.kind ?? "all",
         view: input.view ?? "ready",
+        variants: input.variants ?? "all",
     });
 
     if (search) conditions.push(like(media.filename, `%${search}%`));
@@ -222,6 +233,13 @@ export async function listMediaFiles(db: Database, input: {
     }
     if (mimeType) conditions.push(like(media.mimeType, `${mimeType}%`));
     if (input.kind) conditions.push(eq(media.kind, input.kind));
+    if (input.variants === "missing") {
+        conditions.push(
+            eq(media.kind, "image"),
+            isNull(media.variantWidth),
+            inArray(media.mimeType, [...VARIANT_SOURCE_MIME_TYPES]),
+        );
+    }
 
     const sortColumn = sortBy === "size" ? media.size : sortBy === "filename" ? media.filename : media.createdAt;
     if (input.cursor) {
@@ -489,7 +507,31 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
     return row;
 }
 
+/**
+ * Completes an upload. When `images` is given (non-browser uploads: agents,
+ * CLI, URL import), the renditions are generated once right away; a failure
+ * there never fails the upload and leaves the image original-only.
+ */
 export async function completeMediaUpload(
+    db: Database,
+    sessionId: string,
+    bucket: R2Bucket,
+    images?: ImagesBinding,
+) {
+    const file = await completeMediaUploadObject(db, sessionId, bucket);
+    if (!images || file.variantWidth || !canHaveVariants(file)) return file;
+    try {
+        return await generateMediaVariants(db, file.id, bucket, images);
+    } catch (error) {
+        console.warn("[media] rendition generation skipped", {
+            mediaId: file.id,
+            error: error instanceof Error ? error.name : "unknown",
+        });
+        return file;
+    }
+}
+
+async function completeMediaUploadObject(
     db: Database,
     sessionId: string,
     bucket: R2Bucket,
@@ -926,6 +968,7 @@ export async function permanentlyDeleteMediaFile(
         throw new ConflictError("Move current media to trash before deleting it permanently.");
     }
     await deleteFile(current.objectKey, bucket);
+    await deleteMediaVariants(current.objectKey, current.variantWidth, bucket);
     const finalized = await db.update(media).set({
         status: "deleted",
         deletedAt: sql`(unixepoch())`,
@@ -942,6 +985,120 @@ export async function permanentlyDeleteMediaFile(
             throw new ConflictError("Media deletion changed while storage was being finalized. Reload and retry.");
         }
     }
+}
+
+const VARIANT_SOURCE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"] as const;
+const MAX_VARIANT_BYTES = MEDIA_MULTIPART_PART_SIZE_BYTES;
+
+/** GIFs keep their animation, so only still formats get WebP renditions. */
+function canHaveVariants(row: { kind: string; mimeType: string }): boolean {
+    return row.kind === "image"
+        && (VARIANT_SOURCE_MIME_TYPES as readonly string[]).includes(row.mimeType);
+}
+
+export interface MediaVariantsInput {
+    /** Intrinsic size of the original upload. */
+    width: number;
+    height: number;
+    /** WebP bytes keyed by rendition width; must match mediaVariantWidths(width). */
+    files: ReadonlyMap<number, ArrayBuffer>;
+}
+
+/**
+ * Stores pre-generated WebP renditions beside the original object and records
+ * the largest one on the media row, which switches every published URL of
+ * this media to the renditions. Re-running replaces the same keys.
+ */
+export async function saveMediaVariants(
+    db: Database,
+    id: string,
+    input: MediaVariantsInput,
+    bucket: R2Bucket,
+) {
+    const current = await db.select().from(media).where(and(
+        eq(media.id, id),
+        inArray(media.status, ["ready", "trashed"]),
+    )).get();
+    if (!current) throw new NotFoundError("Media file not found");
+    if (!canHaveVariants(current)) {
+        throw new ValidationError("Only JPEG, PNG, WebP and AVIF images get optimized renditions.");
+    }
+    const widths = mediaVariantWidths(input.width);
+    if (
+        !Number.isSafeInteger(input.width) || !Number.isSafeInteger(input.height) ||
+        input.height < 1 || widths.length === 0 ||
+        input.files.size !== widths.length ||
+        widths.some((width) => !input.files.has(width))
+    ) {
+        throw new ValidationError(`Send one WebP rendition for each width: ${widths.join(", ") || "none"}.`);
+    }
+    for (const width of widths) {
+        const bytes = input.files.get(width)!;
+        if (bytes.byteLength < 1 || bytes.byteLength > MAX_VARIANT_BYTES) {
+            throw new ValidationError("Each rendition must be between 1 byte and 5 MB.");
+        }
+        const signature = validateMediaSignature(bytes.slice(0, MEDIA_SIGNATURE_READ_BYTES), "image/webp");
+        if (!signature.ok) throw new ValidationError(signature.error);
+    }
+    for (const width of widths) {
+        await putMediaVariant(current.objectKey, width, input.files.get(width)!, bucket);
+    }
+    const updated = await db.update(media).set({
+        width: input.width,
+        height: input.height,
+        variantWidth: widths.at(-1)!,
+        version: sql`${media.version} + 1`,
+        updatedAt: sql`(unixepoch())`,
+    }).where(and(
+        eq(media.id, id),
+        eq(media.objectKey, current.objectKey),
+        inArray(media.status, ["ready", "trashed"]),
+    )).returning({ id: media.id }).get();
+    if (!updated) throw new ConflictError("Media changed while its renditions were saved. Reload and try again.");
+    const presented = await readPresentedMedia(db, id);
+    if (!presented) throw new ConflictError("Media changed while it was being read. Reload and try again.");
+    return presented;
+}
+
+/** Streams a stored original for the dashboard rendition backfill. */
+export async function readMediaOriginal(db: Database, id: string, bucket: R2Bucket) {
+    const row = await db.select({ objectKey: media.objectKey, mimeType: media.mimeType })
+        .from(media)
+        .where(and(eq(media.id, id), inArray(media.status, ["ready", "trashed"])))
+        .get();
+    if (!row) throw new NotFoundError("Media file not found");
+    const object = await bucket.get(row.objectKey);
+    if (!object || !("body" in object)) throw new NotFoundError("Media object not found");
+    return { body: object.body, mimeType: row.mimeType };
+}
+
+/**
+ * Server-side rendition pipeline for uploads that did not come from the
+ * dashboard browser pipeline. Uses the Cloudflare Images binding once per
+ * rendition at upload time; renditions are then plain R2 objects.
+ */
+export async function generateMediaVariants(
+    db: Database,
+    id: string,
+    bucket: R2Bucket,
+    images: ImagesBinding,
+) {
+    const row = await db.select().from(media).where(eq(media.id, id)).get();
+    if (!row || !canHaveVariants(row)) throw new ValidationError("This media cannot get optimized renditions.");
+    const object = await bucket.get(row.objectKey);
+    if (!object || !("arrayBuffer" in object)) throw new NotFoundError("Media object not found");
+    const source = await object.arrayBuffer();
+    const stream = () => new Blob([source]).stream();
+    const info = await images.info(stream());
+    if (!("width" in info)) throw new ValidationError("This media has no raster dimensions.");
+    const files = new Map<number, ArrayBuffer>();
+    for (const width of mediaVariantWidths(info.width)) {
+        const output = await images.input(stream())
+            .transform({ width })
+            .output({ format: "image/webp", quality: Math.round(mediaVariantQuality(width) * 100) });
+        files.set(width, await output.response().arrayBuffer());
+    }
+    return saveMediaVariants(db, id, { width: info.width, height: info.height, files }, bucket);
 }
 
 export async function moveMediaFiles(

@@ -443,33 +443,6 @@ function checkVariantToolBoundaries(context) {
   });
 }
 
-function checkNavigationBuilderBoundary(context) {
-  runCheck(context, "source: NavigationBuilder keeps one bounded editor", () => {
-    const file = "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx";
-    requireContains(
-      context,
-      file,
-      /NAVIGATION_RENDER_BATCH_SIZE\s*=\s*80/,
-      "source",
-      "expected the navigation editor to keep its 80-row render batch.",
-    );
-    requireContains(
-      context,
-      file,
-      /outlineRows\.slice\(0,\s*renderLimit\)/,
-      "source",
-      "expected the navigation editor to render only the active row batch.",
-    );
-    requireLacksMarkers(
-      context,
-      file,
-      ["SortableNavigationEditor", "MobileNavigationTree"],
-      "source",
-      "navigation must not restore the duplicate legacy desktop/mobile editors",
-    );
-  });
-}
-
 function checkGeneralSettingsBoundary(context) {
   runCheck(context, "source: GeneralSettings header/footer builders are lazy", () => {
     const file = "apps/admin-v2/src/components/admin/settings/GeneralSettingsPage.tsx";
@@ -694,7 +667,6 @@ export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
   checkProductFormTiptapBoundary(context);
   checkProductImagesBoundary(context);
   checkVariantToolBoundaries(context);
-  checkNavigationBuilderBoundary(context);
   checkGeneralSettingsBoundary(context);
   checkOrderViewBoundary(context);
   checkStaticAssetCaching(context);

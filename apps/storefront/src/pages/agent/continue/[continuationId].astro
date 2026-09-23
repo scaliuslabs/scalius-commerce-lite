@@ -13,7 +13,7 @@ Astro.response.headers.set("Referrer-Policy", "no-referrer");
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
 Astro.response.headers.set(
   "Content-Security-Policy",
-  "default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://*.sslcommerz.com https://*.polar.sh; frame-ancestors 'none'; base-uri 'none'",
+  "default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self' https://*.sslcommerz.com; frame-ancestors 'none'; base-uri 'none'",
 );
 
 if (!validContinuationId) Astro.response.status = 404;

@@ -44,8 +44,9 @@ describe("remote media import", () => {
 
     it("imports through the existing durable upload authority", async () => {
         const fetcher = vi.fn().mockResolvedValue(response(png));
+        const images = {} as ImagesBinding;
         await expect(importMediaFromUrl({
-            db, bucket, sourceUrl: "https://cdn.example.test/image.png", filename: "image.png", fetcher,
+            db, bucket, images, sourceUrl: "https://cdn.example.test/image.png", filename: "image.png", fetcher,
         })).resolves.toMatchObject({ id: "media_remote" });
         expect(fetcher).toHaveBeenCalledWith(new URL("https://cdn.example.test/image.png"), expect.objectContaining({
             redirect: "manual", cache: "no-store",
@@ -56,7 +57,7 @@ describe("remote media import", () => {
         expect(uploadMediaPart).toHaveBeenCalledWith(db, expect.objectContaining({
             sessionId: "mup_remote", partNumber: 1, size: 8,
         }), bucket);
-        expect(completeMediaUpload).toHaveBeenCalledWith(db, "mup_remote", bucket);
+        expect(completeMediaUpload).toHaveBeenCalledWith(db, "mup_remote", bucket, images);
         expect(abortMediaUpload).not.toHaveBeenCalled();
     });
 

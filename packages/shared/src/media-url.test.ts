@@ -48,13 +48,10 @@ describe("resolveMediaUrl", () => {
     ).toBe("https://cdn.scalius.test/products/main.webp?size=large#photo");
   });
 
-  it("preserves local absolute paths and Cloudflare image paths", () => {
+  it("preserves local absolute paths", () => {
     expect(resolveMediaUrl("/img/no-image.webp", cdnBase)).toBe(
       "/img/no-image.webp",
     );
-    expect(
-      resolveMediaUrl("/cdn-cgi/image/width=640/products/main.webp", cdnBase),
-    ).toBe("/cdn-cgi/image/width=640/products/main.webp");
   });
 
   it("rejects unsafe non-http schemes instead of resolving them as keys", () => {

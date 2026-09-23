@@ -80,7 +80,7 @@ describe("checkout flow validation", () => {
       checkoutMode: "gateways_only",
       partialPaymentEnabled: true,
       partialPaymentAmount: 5,
-      availablePaymentMethods: ["stripe", "polar"],
+      availablePaymentMethods: ["stripe"],
     })).not.toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
   });
 
@@ -90,7 +90,7 @@ describe("checkout flow validation", () => {
     ["guest_cod_only", false, 0, "cod", true],
     ["guest_cod_only", false, 0, "stripe", false],
     ["gateways_only", false, 0, "cod", false],
-    ["gateways_only", false, 0, "polar", true],
+    ["gateways_only", false, 0, "stripe", true],
     ["all", true, 200, "cod", false],
     ["all", true, 200, "stripe", true],
     ["all", true, 0, "stripe", false],

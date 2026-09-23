@@ -4,18 +4,15 @@ import type { Database } from "@scalius/database/client";
 const mocks = vi.hoisted(() => ({
   getStripeSettings: vi.fn(),
   getSSLCommerzSettings: vi.fn(),
-  getPolarSettings: vi.fn(),
   retrieveStripeRefund: vi.fn(),
   listStripeRefundsForCharge: vi.fn(),
   querySSLCommerzRefundStatus: vi.fn(),
-  listPolarRefunds: vi.fn(),
   finalizeAcceptedRefundAttemptIds: vi.fn(),
 }));
 
 vi.mock("./gateway-settings", () => ({
   getStripeSettings: mocks.getStripeSettings,
   getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-  getPolarSettings: mocks.getPolarSettings,
 }));
 
 vi.mock("./stripe", () => ({
@@ -25,10 +22,6 @@ vi.mock("./stripe", () => ({
 
 vi.mock("./sslcommerz", () => ({
   querySSLCommerzRefundStatus: mocks.querySSLCommerzRefundStatus,
-}));
-
-vi.mock("./polar", () => ({
-  listPolarRefunds: mocks.listPolarRefunds,
 }));
 
 vi.mock("./refund-service", () => ({
@@ -125,7 +118,6 @@ describe("refund attempt reconciliation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getStripeSettings.mockResolvedValue({ secretKey: "sk_test" });
-    mocks.getPolarSettings.mockResolvedValue({ accessToken: "polar_test" });
     mocks.finalizeAcceptedRefundAttemptIds.mockResolvedValue({
       orderIds: ["order_1"],
       finalizedAttemptIds: ["rfa_1"],
@@ -249,108 +241,6 @@ describe("refund attempt reconciliation", () => {
       [{ id: "rfa_1" }],
       attemptRow(),
       ...legacyCurrencyPreflightRows(),
-    ]);
-
-    const result = await reconcileDueRefundAttempts(db, undefined, {
-      encryptionKey: "cred_key",
-      nowSeconds: 1_765_000_000,
-      limit: 5,
-    });
-
-    expect(result).toMatchObject({ claimed: 1, finalized: 0, deferred: 1 });
-    expect(mocks.finalizeAcceptedRefundAttemptIds).not.toHaveBeenCalled();
-    expect(updateSets.at(-1)).toMatchObject({
-      status: "provider_unknown",
-      lastError: expect.stringContaining(error),
-    });
-  });
-
-  it("finalizes a converted Polar refund only when provider USD money matches the source-payment snapshot", async () => {
-    mocks.listPolarRefunds.mockResolvedValue({
-      success: true,
-      refunds: [{
-        id: "polar_refund_1",
-        status: "succeeded",
-        amount: 1000,
-        currency: "usd",
-        orderId: "polar_order_1",
-        metadata: {},
-      }],
-    });
-    const sourceMetadata = JSON.stringify({
-      originalCurrency: "bdt",
-      gatewayCurrency: "usd",
-      exchangeRate: "110",
-      originalAmount: "1100",
-      gatewayAmount: 10,
-    });
-    const { db } = createDbMock([
-      [{ id: "rfa_1" }],
-      attemptRow({
-        gateway: "polar",
-        amount: 1100,
-        sourcePaymentId: "pay_polar",
-        sourceTransactionId: "polar_order_1",
-        providerRefundId: "polar_refund_1",
-      }),
-      { currencyCode: "BDT", currencyDecimalPlaces: 2 },
-      [
-        { id: "pay_polar", amount: 1100, currency: "BDT", metadata: sourceMetadata },
-        { id: "refund_1", currency: "BDT", metadata: null },
-      ],
-    ]);
-
-    const result = await reconcileDueRefundAttempts(db, undefined, {
-      encryptionKey: "cred_key",
-      nowSeconds: 1_765_000_000,
-      limit: 5,
-    });
-
-    expect(result).toMatchObject({ claimed: 1, finalized: 1, deferred: 0 });
-    expect(mocks.finalizeAcceptedRefundAttemptIds).toHaveBeenCalledWith(db, ["rfa_1"]);
-  });
-
-  it.each([
-    ["amount", { amount: 999, currency: "usd", orderId: "polar_order_1" }, "Polar refund amount does not match"],
-    ["currency", { amount: 1000, currency: "bdt", orderId: "polar_order_1" }, "Polar refund currency does not match"],
-    ["source", { amount: 1000, currency: "usd", orderId: "polar_order_other" }, "Polar refund source order does not match"],
-  ] as const)("does not finalize a converted Polar refund with the wrong provider %s", async (_case, provider, error) => {
-    mocks.listPolarRefunds.mockResolvedValue({
-      success: true,
-      refunds: [{
-        id: "polar_refund_1",
-        status: "succeeded",
-        amount: provider.amount,
-        currency: provider.currency,
-        orderId: provider.orderId,
-        metadata: {},
-      }],
-    });
-    const { db, updateSets } = createDbMock([
-      [{ id: "rfa_1" }],
-      attemptRow({
-        gateway: "polar",
-        amount: 1100,
-        sourcePaymentId: "pay_polar",
-        sourceTransactionId: "polar_order_1",
-        providerRefundId: "polar_refund_1",
-      }),
-      { currencyCode: "BDT", currencyDecimalPlaces: 2 },
-      [
-        {
-          id: "pay_polar",
-          amount: 1100,
-          currency: "BDT",
-          metadata: JSON.stringify({
-            originalCurrency: "bdt",
-            gatewayCurrency: "usd",
-            exchangeRate: "110",
-            originalAmount: "1100",
-            gatewayAmount: 10,
-          }),
-        },
-        { id: "refund_1", currency: "BDT", metadata: null },
-      ],
     ]);
 
     const result = await reconcileDueRefundAttempts(db, undefined, {

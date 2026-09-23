@@ -20,6 +20,7 @@ import type {
 } from "../types";
 
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import type { EncodedMediaVariants } from "../utils/media-variants";
 
 /** Same-origin proxy path, below the runtime dashboard base path. */
 const MEDIA_API = withDashboardBasePath("/api/v1/admin/media");
@@ -233,13 +234,46 @@ export class MediaApiClient {
     await parseDirectResponse(response);
   }
 
-  static async completeUpload(sessionId: string): Promise<LibraryMediaFile> {
-    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}/complete`, {
+  /** `client`: this browser uploads the renditions itself; `server`: the API generates them. */
+  static async completeUpload(sessionId: string, variants: "client" | "server"): Promise<LibraryMediaFile> {
+    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}/complete?variants=${variants}`, {
       method: "POST",
       credentials: "same-origin",
     });
     const data = await parseDirectResponse<{ file: MediaFileDto }>(response);
     return toMediaFile(data.file);
+  }
+
+  static async saveVariants(fileId: string, variants: EncodedMediaVariants): Promise<LibraryMediaFile> {
+    const form = new FormData();
+    form.set("width", String(variants.width));
+    form.set("height", String(variants.height));
+    for (const [width, blob] of variants.files) form.set(`w${width}`, blob, `${width}.webp`);
+    const response = await fetch(`${MEDIA_API}/${encodeURIComponent(fileId)}/variants`, {
+      method: "POST",
+      credentials: "same-origin",
+      body: form,
+    });
+    const data = await parseDirectResponse<{ file: MediaFileDto }>(response);
+    return toMediaFile(data.file);
+  }
+
+  static async fetchOriginal(fileId: string): Promise<Blob> {
+    const response = await fetch(`${MEDIA_API}/${encodeURIComponent(fileId)}/original`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`Media request failed (${response.status}).`);
+    return response.blob();
+  }
+
+  /** First page of images that still lack renditions (oldest first). */
+  static async fetchFilesMissingVariants(cursor: string | undefined, limit: number): Promise<MediaApiResponse> {
+    const data = await readDirect<{
+      files: MediaFileDto[];
+      pagination: CursorPagination;
+    }>("", { cursor, limit: String(limit), variants: "missing", sortOrder: "asc" });
+    return { files: data.files.map(toMediaFile), pagination: data.pagination };
   }
 
   static async abortUpload(sessionId: string): Promise<void> {

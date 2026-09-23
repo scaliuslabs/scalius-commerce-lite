@@ -1,5 +1,5 @@
 ---
-import { getOptimizedImageUrl, getResponsiveSrcSet } from "@/lib/image-optimizer";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import type { HomepageData } from "@/lib/api/storefront";
 
 type CategoryRail = HomepageData["presentation"]["categoryRail"];
@@ -25,26 +25,7 @@ const categories = rail.enabled ? rail.categories : [];
       <div class="homepage-category-scroll -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 md:grid-cols-5">
         {categories.map((category) => {
           const href = category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`;
-          const src = category.imageUrl
-            ? getOptimizedImageUrl(category.imageUrl, {
-                width: 520,
-                height: 620,
-                fit: "cover",
-                gravity: "auto",
-                quality: 84,
-                format: "auto",
-              })
-            : null;
-          const srcset = category.imageUrl
-            ? getResponsiveSrcSet(category.imageUrl, [240, 360, 520], {
-                width: 520,
-                height: 620,
-                fit: "cover",
-                gravity: "auto",
-                quality: 84,
-                format: "auto",
-              })
-            : null;
+          const src = category.imageUrl ? mediaImageUrl(category.imageUrl, 480) : null;
 
           return (
             <a
@@ -55,8 +36,8 @@ const categories = rail.enabled ? rail.categories : [];
               {src ? (
                 <img
                   src={src}
-                  srcset={srcset || undefined}
-                  sizes="(max-width: 639px) 42vw, (max-width: 767px) 33vw, 20vw"
+                  srcset={mediaImageSrcSet(category.imageUrl)}
+                  sizes="(max-width: 639px) min(42vw, 176px), (max-width: 767px) 33vw, 20vw"
                   alt=""
                   width="520"
                   height="620"

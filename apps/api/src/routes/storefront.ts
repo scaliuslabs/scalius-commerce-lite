@@ -9,7 +9,7 @@ import {
   getPageRenderData,
 } from "@scalius/core/modules/storefront/storefront.service";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
-import { securitySettingsDocument } from "@scalius/core/modules/settings/security-settings.service";
+import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -214,9 +214,7 @@ const layoutDataSchema = z.object({
     }),
   }),
   media: z.object({
-    enabled: z.boolean(),
     canonicalCdnUrl: z.string(),
-    allowedImageHosts: z.array(z.string()),
     canonicalHostAliases: z.array(z.string()),
   }),
   metaCapi: z.object({ browserEventsEnabled: z.boolean() }),
@@ -237,6 +235,15 @@ const layoutDataSchema = z.object({
     discovery: discoverySchema,
     returnPolicy: returnPolicySchema,
   }),
+  /** Public origins of this deployment, so the storefront needs no separate platform read. */
+  platform: z.object({
+    storefrontUrl: z.string(),
+    apiUrl: z.string(),
+    dashboardUrl: z.string(),
+    mediaUrl: z.string(),
+  }),
+  /** Merchant CSP sources (Settings -> Security), comma-separated. */
+  cspAllowedDomains: z.string(),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;
 
@@ -312,10 +319,19 @@ const layoutRoute = createRoute({
 
 app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
-  const data = await getLayoutData(db, {
+  const layout = await getLayoutData(db, {
     credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
-  }) as unknown as LayoutData;
-  return ok(c, data);
+  });
+  const platform = c.env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG;
+  return ok(c, {
+    ...layout,
+    platform: {
+      storefrontUrl: platform.storefrontUrl,
+      apiUrl: platform.apiUrl,
+      dashboardUrl: platform.dashboardUrl,
+      mediaUrl: platform.mediaUrl,
+    },
+  } as unknown as LayoutData);
 });
 
 const resolveThemePreviewRoute = createRoute({
@@ -359,30 +375,6 @@ app.openapi(resolveThemePreviewRoute, async (c) => {
   );
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
   return ok(c, preview);
-});
-
-// GET /storefront/csp — returns merchant-configured CSP allowed domains
-const cspRoute = createRoute({
-  method: "get",
-  path: "/csp",
-  tags: ["Storefront"],
-  summary: "Get CSP allowed domains configuration",
-  responses: {
-    200: {
-      description: "CSP configuration",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        cspAllowedDomains: z.string(),
-      })) } },
-    },
-    500: errorResponses[500],
-  }
-});
-
-app.openapi(cspRoute, async (c) => {
-  const db = c.get("db");
-  // One owner for the CSP row and its KV mirror, shared with the Partytown proxy.
-  const security = await securitySettingsDocument.read(db, { kv: c.env.CACHE });
-  return ok(c, { cspAllowedDomains: security.cspAllowedDomains });
 });
 
 export { app as storefrontRoutes };

@@ -6,7 +6,7 @@
 // (e.g. 150.00 BDT, 29.99 USD). This is the canonical representation.
 //
 // Gateway APIs each have their own convention:
-//   Stripe & Polar — expect amounts in SMALLEST currency unit (cents, paisa, fils).
+//   Stripe — expects amounts in SMALLEST currency unit (cents, paisa, fils).
 //     Conversion: amount * 10^(ISO 4217 decimal places).
 //     e.g. 150.00 BDT → 15000, 150 JPY → 150, 1.500 BHD → 1500.
 //     This conversion happens at the API route layer before calling gateway functions.
@@ -19,7 +19,7 @@
 // Use getDecimalPlaces() from @scalius/shared/currency for the ISO 4217 lookup.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PaymentGateway = "stripe" | "sslcommerz" | "polar" | "cod";
+export type PaymentGateway = "stripe" | "sslcommerz" | "cod";
 export type PaymentType = "full" | "deposit" | "balance";
 export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
 
@@ -124,66 +124,6 @@ export interface SSLCommerzValidationResult {
 }
 
 // ---------------------------------------------------------------------------
-// Polar
-// ---------------------------------------------------------------------------
-
-export interface CreatePolarCheckoutParams {
-  orderId: string;
-  amount: number; // In smallest currency unit — use getDecimalPlaces(currency) for conversion
-  currency: string; // ISO 4217 lowercase (usd, jpy, bdt)
-  productId: string; // Polar product ID (required by Polar)
-  paymentType: PaymentType;
-  successUrl: string;
-  cancelUrl?: string;
-  customerId?: string;
-  customerName?: string;
-  customerEmail?: string;
-  /** Deterministic local payment-session attempt key stored in Polar metadata for retry recovery. */
-  idempotencyKey?: string;
-  metadata?: Record<string, string>;
-  /** Per-provider HTTP deadline in milliseconds for checkout/session creation. */
-  requestTimeoutMs?: number;
-  /** Abort signal from the API route deadline guard. */
-  signal?: AbortSignal;
-}
-
-export interface PolarCheckoutResult {
-  success: boolean;
-  checkoutUrl?: string; // Redirect customer to this URL
-  checkoutId?: string; // Polar checkout session ID
-  recovered?: boolean;
-  error?: string;
-  timedOut?: boolean;
-}
-
-export interface FindReusablePolarCheckoutParams {
-  orderId: string;
-  amount: number;
-  currency: string;
-  productId: string;
-  paymentType: PaymentType;
-  customerId?: string;
-  customerEmail?: string;
-  idempotencyKey: string;
-  requestTimeoutMs?: number;
-  signal?: AbortSignal;
-}
-
-export interface PolarRefundParams {
-  polarOrderId: string; // The ID of the order within Polar, which usually matches checkoutId
-  amount: number; // In smallest currency unit. Must be explicitly provided.
-  reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee";
-  comment?: string;
-  metadata?: Record<string, string | number | boolean>;
-}
-
-export interface PolarRefundResult {
-  success: boolean;
-  refundId?: string; // Polar refund ID
-  error?: string;
-}
-
-// ---------------------------------------------------------------------------
 // COD
 // ---------------------------------------------------------------------------
 
@@ -218,6 +158,5 @@ export interface ProcessPaymentParams {
   sslcommerzTranId?: string;
   sslcommerzValId?: string;
   sslcommerzBankTranId?: string;
-  polarCheckoutId?: string;
   metadata?: Record<string, unknown>;
 }

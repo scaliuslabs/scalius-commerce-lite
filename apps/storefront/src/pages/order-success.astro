@@ -75,7 +75,7 @@ const paymentResult = Astro.url.searchParams.get("result");
 const requestedPayment = Astro.url.searchParams.get("payment");
 const requestedPaymentType = Astro.url.searchParams.get("paymentType");
 const requestedDepositAmount = normalizeRetryDepositAmount(Astro.url.searchParams.get("depositAmount"));
-const hostedRecoveryPayment = requestedPayment === "sslcommerz" || requestedPayment === "polar"
+const hostedRecoveryPayment = requestedPayment === "sslcommerz"
   ? requestedPayment
   : null;
 

@@ -79,8 +79,10 @@ resolves them per invocation in `apps/api/src/runtime/runtime-env.ts`, which
 returns a request-scoped env carrying the derived secrets and the resolved
 `PLATFORM_CONFIG`; consumers keep reading fields such as `env.STOREFRONT_URL`
 without knowing where the value came from. The storefront and admin Workers hold
-no origins of their own: they read `GET /api/v1/platform` through their service
-binding and fall back to their own request origin for their own URL. Local
+no origins of their own: the admin reads `GET /api/v1/platform` and the
+storefront reads the same origins from `GET /api/v1/storefront/layout`, both
+through their service binding, and fall back to their own request origin for
+their own URL. Local
 development substitutes fixed localhost ports in code.
 
 Automated and managed deployments extend this boundary without widening it.
@@ -189,7 +191,7 @@ Admin/Webhook triggers status change
     ├─ Executes: reserve / deduct / release / restore
     └─ Returns new inventoryAction for batch
     ↓
-4. Queue notification — ORDER_NOTIFICATIONS_QUEUE.send()
+4. Queue notification — JOBS_QUEUE.send()
     ↓
 5. Queue consumer dispatches to channels (independently):
     ├─ EMAIL: sendEmail() via Cloudflare Email Service by default, Resend fallback
@@ -282,7 +284,7 @@ Browser → Storefront Proxy → API Worker → Gateway
                                     Webhook Handler (API)
                                     ├─ Verify signature
                                     ├─ Claim durable webhook_events row
-                                    └─ Enqueue PAYMENT_EVENTS_QUEUE
+                                    └─ Enqueue JOBS_QUEUE
                                               │
                                               ↓
                                     Queue Consumer
@@ -302,7 +304,7 @@ Browser → Storefront Proxy → API Worker → Gateway
 |-------|-------|-----------|
 | 1. Webhook claim | `webhook_events` table | Claim-before-side-effect with retryable failed claims and lease-reclaimable stale processing claims |
 | 2. Queue dedup | Cloudflare native | Per-message ID tracking |
-| 3. DB dedup | Unique partial indexes | `UNIQUE(orderId, stripePaymentIntentId)`, `UNIQUE(orderId, sslcommerzValId)`, `UNIQUE(orderId, polarCheckoutId)` |
+| 3. DB dedup | Unique partial indexes | `UNIQUE(orderId, stripePaymentIntentId)`, `UNIQUE(orderId, sslcommerzValId)` |
 | 4. Status guard | processPaymentConfirmed() | Skip if `paymentStatus === PAID` |
 
 ### Amount Conventions
@@ -311,7 +313,6 @@ Browser → Storefront Proxy → API Worker → Gateway
 |---------|-----------|---------------|----------|------------|
 | Stripe | Major units | Smallest units (cents) | Smallest | x/÷ 10^decimals |
 | SSLCommerz | Major units | Major units | Major | None |
-| Polar | Major units | Smallest units (cents) | Smallest | x/÷ 10^decimals |
 | COD | Major units | N/A | N/A | None |
 
 ---
@@ -321,7 +322,7 @@ Browser → Storefront Proxy → API Worker → Gateway
 ### Channel Dispatch
 
 ```
-ORDER_NOTIFICATIONS_QUEUE message arrives
+JOBS_QUEUE message arrives
     ↓
 Claim order_notification_outbox by outboxId
     ↓
@@ -368,7 +369,7 @@ If status changed:
     │   ├─ applyInventoryForStatusChange()
     │   └─ Update orders.status + inventoryAction
     └─ enqueueOrderStatusChangeNotification()
-        └─ ORDER_NOTIFICATIONS_QUEUE.send({ type: "order.notification", ... })
+        └─ JOBS_QUEUE.send({ type: "order.notification", ... })
 ```
 
 **Status Mapping (Provider → Order):**
@@ -401,7 +402,6 @@ If status changed:
 | `sms` | SMS provider credentials (4 providers: smsnetbd, bdbulksms, mimsms, gennet) | Yes (AES-GCM) |
 | `stripe` | Stripe credentials | Yes |
 | `sslcommerz` | SSLCommerz credentials | Yes |
-| `polar` | Polar credentials | Yes |
 | `firebase` | Firebase service account and public browser config | Service account only (AES-GCM `enc:`) |
 | `platform` | Public API/dashboard/media origins, customer cookie domain, extra CORS origins (the storefront origin stays in `siteSettings.storefrontUrl`) | No |
 | `business_info` | Company name, TIN, logo, address | No |

@@ -142,7 +142,7 @@ function createPublicSectionSchema(sqlite: DatabaseSync) {
         CREATE TABLE media (
             id TEXT PRIMARY KEY, filename TEXT NOT NULL, kind TEXT NOT NULL, object_key TEXT NOT NULL,
             size INTEGER NOT NULL, mime_type TEXT NOT NULL, alt_text TEXT, caption TEXT,
-            width INTEGER, height INTEGER, duration_ms INTEGER, poster_media_id TEXT,
+            width INTEGER, height INTEGER, variant_width INTEGER, duration_ms INTEGER, poster_media_id TEXT,
             folder_id TEXT, status TEXT NOT NULL, version INTEGER NOT NULL,
             created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
             trashed_at INTEGER, deleted_at INTEGER

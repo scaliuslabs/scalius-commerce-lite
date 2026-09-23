@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { AlertCircle, Check, ImageIcon, Loader2, Search } from "lucide-react";
-import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { useDebounce } from "~/hooks/use-debounce";
-import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
 import { isCollectionProductOptionDto } from "~/lib/collection-product-options";
 import { Button } from "../../ui/button";
@@ -206,10 +205,7 @@ export function ProductPickerDialog({
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted sm:h-9 sm:w-9">
                           {product.primaryImage ? (
                             <img
-                              src={getOptimizedImageUrl(
-                                product.primaryImage,
-                                ADMIN_IMAGE_PRESETS.productMicro,
-                              )}
+                              src={mediaImageUrl(product.primaryImage, 160)}
                               alt=""
                               className="h-full w-full object-contain object-center"
                               loading="lazy"

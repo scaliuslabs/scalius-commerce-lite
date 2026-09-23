@@ -26,7 +26,7 @@ const queue = { send: vi.fn(async () => undefined) };
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
-        ORDER_NOTIFICATIONS_QUEUE: queue,
+        JOBS_QUEUE: queue,
     } as unknown as Env;
 
     app.onError((error, c) => {

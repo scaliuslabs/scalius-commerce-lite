@@ -4,7 +4,6 @@ import {
   getOrder,
   getOrderCod,
   getOrderFormData,
-  getOrderItems,
   getOrderNotifications,
   getOrders,
   getOrderPayments,
@@ -55,13 +54,6 @@ export const orderFormDataQueryOptions = (id: string) =>
     queryKey: queryKeys.orders.formData(id),
     queryFn: () => getOrderFormData({ data: { id } }),
     staleTime: 0,
-  });
-
-export const orderItemsQueryOptions = (orderId: string) =>
-  queryOptions({
-    queryKey: queryKeys.orders.items(orderId),
-    queryFn: () => getOrderItems({ data: { orderId } }),
-    staleTime: FAST_STALE_TIME_MS,
   });
 
 export const orderPaymentsQueryOptions = (orderId: string) =>

@@ -3,7 +3,7 @@ import Layout from "@/layouts/Layout.astro";
 import { getArticleBySlug } from "@/lib/api/articles";
 import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { processShortcodes } from "@/lib/shortcodes";
@@ -47,14 +47,7 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   article.canonicalPath,
 );
 const featuredImageUrl = article.featuredImage?.url
-  ? getOptimizedImageUrl(article.featuredImage.url, {
-      width: 1440,
-      height: 810,
-      fit: "cover",
-      gravity: "auto",
-      format: "auto",
-      quality: 85,
-    })
+  ? mediaImageUrl(article.featuredImage.url, 1200)
   : null;
 const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(featuredImageUrl);
 const featuredImageAlt =
@@ -231,6 +224,8 @@ const breadcrumbJsonLd =
         <figure class="mt-10 overflow-hidden rounded-2xl bg-muted">
           <img
             src={featuredImageUrl}
+            srcset={mediaImageSrcSet(article.featuredImage?.url)}
+            sizes="(max-width: 1024px) calc(100vw - 2rem), 1024px"
             alt={featuredImageAlt}
             width="1440"
             height="810"

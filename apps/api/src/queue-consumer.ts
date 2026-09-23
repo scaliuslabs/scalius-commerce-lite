@@ -1,13 +1,14 @@
 // src/queue-consumer.ts
-// Cloudflare Queue consumer — thin dispatcher.
-// Receives batches from Cloudflare and routes each message to the right handler.
+// Cloudflare Queue consumer — thin dispatcher for the single `jobs` queue.
+// Every producer sends to JOBS_QUEUE; each message is routed by `payload.type`.
 //
 // Architecture:
 //   Webhook handler  →  enqueue message  →  return 200 immediately
 //   Queue consumer   →  process message  →  update DB, send notifications
 //
 // This makes webhooks resilient: Cloudflare retries failed queue messages
-// automatically (up to max_retries = 3).
+// automatically (up to max_retries = 5), then moves them to `jobs-dlq`, whose
+// consumer archives each one into its durable D1 row.
 //
 // Handler locations:
 //   payment.*        → src/modules/payments/process-payment.ts   (via switch below)
@@ -24,7 +25,6 @@ import {
 } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
-import { processPolarWebhookRefund } from "@scalius/core/modules/payments/polar";
 import {
   processExistingMetaPurchaseOutboxForOrder,
   type MetaPurchaseQueueMessage,
@@ -50,7 +50,6 @@ import {
 import {
   enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder,
-  enqueueOrderRefundNotificationForOrder,
 } from "./utils/order-notification-queue";
 import {
   claimAuthOtpDeliveryReceipt,
@@ -102,10 +101,10 @@ type AuthOtpAcceptedHint = {
   createdAt: number;
 };
 
-// Mirrors apps/api/wrangler*.jsonc for PAYMENT_EVENTS_QUEUE. Cloudflare delivers
-// the first attempt plus max_retries additional attempts before DLQ/deletion.
-const PAYMENT_EVENTS_MAX_RETRIES = 3;
-const PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT = PAYMENT_EVENTS_MAX_RETRIES + 1;
+// Mirrors apps/api/wrangler*.jsonc for the `jobs` queue. Cloudflare delivers
+// the first attempt plus max_retries additional attempts before the DLQ.
+const JOBS_MAX_RETRIES = 5;
+const JOBS_TERMINAL_DELIVERY_ATTEMPT = JOBS_MAX_RETRIES + 1;
 const QUEUE_BATCH_CONCURRENCY_LIMIT = 3;
 const DLQ_BATCH_CONCURRENCY_LIMIT = 2;
 const AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS = 24 * 60 * 60;
@@ -113,7 +112,7 @@ const AUTH_OTP_ACCEPTED_HINT_PREFIX = "auth_otp:accepted:";
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
-  gateway: "stripe" | "sslcommerz" | "polar",
+  gateway: "stripe" | "sslcommerz",
   orderId: string,
 ): PaymentWebhookCompletionStatus {
   if (!result.success) {
@@ -137,11 +136,11 @@ async function enqueueOrderCreatedAfterPaymentConfirmed(
   db: ReturnType<typeof getDb>,
   env: Env,
   orderId: string,
-  gateway: "stripe" | "sslcommerz" | "polar",
+  gateway: "stripe" | "sslcommerz",
 ): Promise<void> {
   const result = await enqueueOrderCreatedNotificationForOrder({
     db,
-    queue: env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: env.JOBS_QUEUE,
     orderId,
     source: `payment-${gateway}-confirmed`,
     retryOnQueueFailure: true,
@@ -159,7 +158,7 @@ async function enqueueOrderNotificationAfterPaymentConfirmed(
   env: Env,
   options: {
     orderId: string;
-    gateway: "stripe" | "sslcommerz" | "polar";
+    gateway: "stripe" | "sslcommerz";
     paymentType: ConfirmedPaymentType;
     amount: number;
   },
@@ -171,7 +170,7 @@ async function enqueueOrderNotificationAfterPaymentConfirmed(
 
   const result = await enqueueOrderBalancePaidNotificationForOrder({
     db,
-    queue: env.ORDER_NOTIFICATIONS_QUEUE,
+    queue: env.JOBS_QUEUE,
     orderId: options.orderId,
     source: `payment-${options.gateway}-balance-paid`,
     amount: options.amount,
@@ -192,7 +191,7 @@ function scheduleMetaPurchaseAfterPaymentConfirmed(
   executionCtx: ExecutionContext | undefined,
   options: {
     orderId: string;
-    gateway: "stripe" | "sslcommerz" | "polar";
+    gateway: "stripe" | "sslcommerz";
   },
 ): void {
   const task = processExistingMetaPurchaseOutboxForOrder({
@@ -207,37 +206,6 @@ function scheduleMetaPurchaseAfterPaymentConfirmed(
 
   if (executionCtx && typeof executionCtx.waitUntil === "function") {
     executionCtx.waitUntil(task);
-  }
-}
-
-async function enqueueOrderRefundNotificationAfterPolarWebhook(
-  db: ReturnType<typeof getDb>,
-  env: Env,
-  options: {
-    orderId: string;
-    notification?: {
-      notificationType: "order_refunded" | "order_partially_refunded";
-      dedupeKey: string;
-      data?: Record<string, unknown>;
-    };
-  },
-): Promise<void> {
-  if (!options.notification) return;
-
-  const result = await enqueueOrderRefundNotificationForOrder({
-    db,
-    queue: env.ORDER_NOTIFICATIONS_QUEUE,
-    orderId: options.orderId,
-    notificationType: options.notification.notificationType,
-    dedupeKey: options.notification.dedupeKey,
-    source: "payment-polar-refunded",
-    data: options.notification.data,
-  });
-
-  if (!result.enqueued) {
-    console.warn(
-      `[Queue] Polar refund notification for order ${options.orderId} recorded but not enqueued: ${result.skippedReason}`,
-    );
   }
 }
 
@@ -299,30 +267,6 @@ export type PaymentQueueMessage =
     tranId: string;
     status: string;
   })
-  | (PaymentWebhookEventLink & {
-    type: "payment.polar.confirmed";
-    orderId: string;
-    checkoutId: string;
-    amount?: number; // in smallest currency unit (cents, yen, fils — see ISO 4217)
-    currency?: string;
-    paymentType?: string;
-    metadata?: Record<string, string>;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.polar.failed";
-    orderId: string;
-    checkoutId: string;
-    reason?: string;
-  })
-  | (PaymentWebhookEventLink & {
-    type: "payment.polar.refunded";
-    orderId: string;
-    polarCheckoutId: string;
-    amountRefunded: number; // in smallest currency unit (cents) — cumulative refunded amount from Polar
-    totalAmount: number; // in smallest currency unit (cents) — original total from Polar
-    currency: string;
-    polarStatus: string; // "refunded" (full) or "partially_refunded"
-  })
   | {
     type: "order.notification";
     outboxId?: string;
@@ -364,25 +308,8 @@ export async function handleQueueBatch(
 ): Promise<void> {
   const db = getDb(env);
 
-  if (batch.queue === "payment-events-dlq") {
-    await handlePaymentEventsDlqBatch(batch as unknown as MessageBatch<QueueBody>, db);
-    return;
-  }
-
-  if (batch.queue === "auth-otp-dlq") {
-    await handleAuthOtpDlqBatch(
-      batch as unknown as MessageBatch<AuthOtpQueueMessage>,
-      db,
-      env,
-    );
-    return;
-  }
-
-  if (batch.queue === "order-notifications-dlq") {
-    await handleOrderNotificationsDlqBatch(
-      batch as unknown as MessageBatch<OrderNotificationQueueMessage>,
-      db,
-    );
+  if (batch.queue === "jobs-dlq") {
+    await handleJobsDlqBatch(batch as unknown as MessageBatch<QueueBody>, db, env);
     return;
   }
 
@@ -427,79 +354,12 @@ export async function handleQueueBatch(
   logQueueBatchCompleted(batchContext, acked, retried);
 }
 
-async function handleOrderNotificationsDlqBatch(
-  batch: MessageBatch<OrderNotificationQueueMessage>,
-  db: ReturnType<typeof getDb>,
-): Promise<void> {
-  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
-  logQueueBatchStarted(batchContext);
-  logQueueBatchConcurrency(batchContext);
-
-  const results = await runSettledWithConcurrency(
-    batch.messages,
-    DLQ_BATCH_CONCURRENCY_LIMIT,
-    (msg) => archiveOrderNotificationDlqMessage(msg, db),
-  );
-
-  let acked = 0;
-  let retried = 0;
-
-  for (let i = 0; i < batch.messages.length; i++) {
-    const result = results[i];
-    const msg = batch.messages[i];
-    if (!result || !msg) continue;
-    if (result.status === "fulfilled") {
-      console.warn(
-        `[Queue] Archived order notification DLQ message ${msg.id} as ${result.value.status}`,
-      );
-      msg.ack();
-      acked += 1;
-    } else {
-      console.error(`[Queue] Failed to archive order notification DLQ message ${msg.id}:`, result.reason);
-      msg.retry({ delaySeconds: 300 });
-      retried += 1;
-    }
-  }
-
-  logQueueBatchCompleted(batchContext, acked, retried);
-}
-
-async function handlePaymentEventsDlqBatch(
+/**
+ * `jobs-dlq` consumer: a message that exhausted its retries is archived into
+ * its durable D1 row by type, never reprocessed. Unknown types are acked.
+ */
+async function handleJobsDlqBatch(
   batch: MessageBatch<QueueBody>,
-  db: ReturnType<typeof getDb>,
-): Promise<void> {
-  const batchContext = createQueueBatchLogContext(batch, DLQ_BATCH_CONCURRENCY_LIMIT);
-  logQueueBatchStarted(batchContext);
-  logQueueBatchConcurrency(batchContext);
-
-  const results = await runSettledWithConcurrency(
-    batch.messages,
-    DLQ_BATCH_CONCURRENCY_LIMIT,
-    (msg) => archivePaymentEventsDlqMessage(msg, db),
-  );
-
-  let acked = 0;
-  let retried = 0;
-
-  for (let i = 0; i < batch.messages.length; i++) {
-    const result = results[i];
-    const msg = batch.messages[i];
-    if (!result || !msg) continue;
-    if (result.status === "fulfilled") {
-      msg.ack();
-      acked += 1;
-    } else {
-      console.error(`[Queue] Failed to archive payment DLQ message ${msg.id}:`, result.reason);
-      msg.retry({ delaySeconds: 300 });
-      retried += 1;
-    }
-  }
-
-  logQueueBatchCompleted(batchContext, acked, retried);
-}
-
-async function handleAuthOtpDlqBatch(
-  batch: MessageBatch<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<void> {
@@ -510,7 +370,7 @@ async function handleAuthOtpDlqBatch(
   const results = await runSettledWithConcurrency(
     batch.messages,
     DLQ_BATCH_CONCURRENCY_LIMIT,
-    (msg) => archiveAuthOtpDlqMessage(msg, db, env),
+    (msg) => archiveJobsDlqMessage(msg, db, env),
   );
 
   let acked = 0;
@@ -521,19 +381,35 @@ async function handleAuthOtpDlqBatch(
     const msg = batch.messages[i];
     if (!result || !msg) continue;
     if (result.status === "fulfilled") {
-      console.warn(
-        `[Queue] Archived auth OTP DLQ message ${msg.id} as ${result.value.status}`,
-      );
+      console.warn(`[Queue] Archived DLQ message ${msg.id} type=${msg.body.type} as ${result.value}`);
       msg.ack();
       acked += 1;
     } else {
-      console.error(`[Queue] Failed to archive auth OTP DLQ message ${msg.id}:`, result.reason);
+      console.error(`[Queue] Failed to archive DLQ message ${msg.id}:`, result.reason);
       msg.retry({ delaySeconds: 300 });
       retried += 1;
     }
   }
 
   logQueueBatchCompleted(batchContext, acked, retried);
+}
+
+async function archiveJobsDlqMessage(
+  msg: Message<QueueBody>,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<string> {
+  const payload = msg.body;
+  if (isPaymentQueuePayload(payload)) {
+    return archivePaymentEventsDlqMessage(msg as Message<PaymentOnlyQueueMessage>, db);
+  }
+  if (isOrderNotificationQueuePayload(payload)) {
+    return (await archiveOrderNotificationDlqMessage(msg as Message<OrderNotificationQueueMessage>, db)).status;
+  }
+  if (payload.type === "auth.send_otp") {
+    return (await archiveAuthOtpDlqMessage(msg as Message<AuthOtpQueueMessage>, db, env)).status;
+  }
+  return "ignored";
 }
 
 type QueueBatchLogContext = {
@@ -776,32 +652,18 @@ function isAuthOtpAcceptedHint(value: unknown, deliveryKey: string): value is Au
 }
 
 async function archivePaymentEventsDlqMessage(
-  msg: Message<QueueBody>,
+  msg: Message<PaymentOnlyQueueMessage>,
   db: ReturnType<typeof getDb>,
-): Promise<void> {
-  const payload = msg.body;
-  if (!isPaymentQueuePayload(payload)) {
-    console.warn(`[Queue] Ignoring non-payment message in payment-events-dlq id=${msg.id}`);
-    return;
-  }
-
-  const evidence = createPaymentWebhookDlqEvidence(msg as Message<PaymentOnlyQueueMessage>);
-  const result = await recordPaymentWebhookDlqEvidence(db, evidence);
-  console.warn(
-    `[Queue] Archived payment DLQ message ${msg.id} for webhook ${result.id} with status=${result.status}`,
-  );
+): Promise<string> {
+  const result = await recordPaymentWebhookDlqEvidence(db, createPaymentWebhookDlqEvidence(msg));
+  return `webhook ${result.id} status=${result.status}`;
 }
 
 async function archiveOrderNotificationDlqMessage(
   msg: Message<OrderNotificationQueueMessage>,
   db: ReturnType<typeof getDb>,
-): Promise<{ status: "outbox_failed" | "outbox_missing" | "legacy_ignored" | "ignored"; outboxId?: string }> {
+): Promise<{ status: "outbox_failed" | "outbox_missing" | "legacy_ignored"; outboxId?: string }> {
   const payload = msg.body;
-  if (!isOrderNotificationQueuePayload(payload)) {
-    console.warn(`[Queue] Ignoring non-order-notification message in order-notifications-dlq id=${msg.id}`);
-    return { status: "ignored" };
-  }
-
   if (!payload.outboxId) {
     console.warn(
       `[Queue] Ignoring legacy order notification DLQ message ${msg.id} for order ${payload.orderId}; no durable outbox id was present.`,
@@ -827,13 +689,8 @@ async function archiveAuthOtpDlqMessage(
   msg: Message<AuthOtpQueueMessage>,
   db: ReturnType<typeof getDb>,
   env: Env,
-): Promise<{ status: "accepted" | "skipped" | "already_terminal" | "ignored" }> {
+): Promise<{ status: "accepted" | "skipped" | "already_terminal" }> {
   const payload = msg.body;
-  if (payload.type !== "auth.send_otp") {
-    console.warn(`[Queue] Ignoring non-auth-otp message in auth-otp-dlq id=${msg.id}`);
-    return { status: "ignored" };
-  }
-
   const resolution = await resolveAuthOtpQueueDeliveryPayload(payload, msg.id, db, env);
   const resolvedPayload = resolution.payload;
   const channel = resolveAuthOtpDeliveryChannel(resolvedPayload);
@@ -892,10 +749,6 @@ async function processQueueMessage(
 ): Promise<void> {
   const payload = msg.body;
   console.log(`[Queue] Processing message type=${payload.type} id=${msg.id}`);
-  if ((payload as { type?: unknown }).type === "order.ingest") {
-    console.warn(`[Queue] Ignoring retired order.ingest message id=${msg.id}`);
-    return;
-  }
   let paymentWebhookStatus: PaymentWebhookCompletionStatus | undefined;
   let paymentWebhookResult: Record<string, unknown> | undefined;
 
@@ -1054,109 +907,6 @@ async function processQueueMessage(
       break;
     }
 
-    // ── Polar ──────────────────────────────────────────────────────────────
-
-    case "payment.polar.confirmed": {
-      // Convert smallest currency unit → major unit using ISO 4217 decimals.
-      const polarCurrency = payload.currency ?? "usd";
-      const polarDecimals = getDecimalPlaces(polarCurrency);
-      const gatewayAmountMajor = (payload.amount ?? 0) / Math.pow(10, polarDecimals);
-
-      // If currency was converted (e.g. BDT→USD), the checkout metadata contains
-      // the original local-currency amount. Use it so paidAmount matches totalAmount's
-      // currency. Without this, a $8.40 USD payment would be recorded as ৳8.40 against
-      // a ৳1000 order, incorrectly marking it as partial.
-      const originalAmount = payload.metadata?.originalAmount
-        ? parseFloat(payload.metadata.originalAmount)
-        : null;
-      const recordAmount = originalAmount != null && !isNaN(originalAmount)
-        ? originalAmount
-        : gatewayAmountMajor;
-      const paymentType = normalizeConfirmedPaymentType(payload.paymentType);
-
-      const result = await processPaymentConfirmed(db, {
-        orderId: payload.orderId,
-        paymentGateway: "polar",
-        paymentType,
-        polarCheckoutId: payload.checkoutId,
-        amount: recordAmount,
-        metadata: {
-          gatewayCurrency: polarCurrency,
-          gatewayAmount: gatewayAmountMajor,
-          exchangeRate: payload.metadata?.exchangeRate ?? "1",
-          ...payload.metadata,
-        },
-      });
-      const completionStatus = assertPaymentConfirmed(result, "polar", payload.orderId);
-      if (result.success && !result.alreadyProcessed) {
-        await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
-          orderId: payload.orderId,
-          gateway: "polar",
-          paymentType,
-          amount: recordAmount,
-        });
-        scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, {
-          orderId: payload.orderId,
-          gateway: "polar",
-        });
-      }
-      paymentWebhookStatus = completionStatus;
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "polar",
-        outcome: result.success ? "confirmed" : "manual_reconciliation",
-        error: result.success ? null : result.error ?? null,
-        recordAmount,
-        gatewayAmount: gatewayAmountMajor,
-        gatewayCurrency: polarCurrency,
-      });
-      console.log(`[Queue] Polar payment confirmed for order ${payload.orderId} (recorded: ${recordAmount}, gateway: ${gatewayAmountMajor} ${polarCurrency})`);
-      break;
-    }
-
-    case "payment.polar.failed": {
-      await processPaymentFailed(db, payload.orderId, "polar", payload.checkoutId);
-      paymentWebhookStatus = "processed";
-      paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-        gateway: "polar",
-        outcome: "failed",
-        reason: payload.reason ?? null,
-      });
-      console.log(`[Queue] Polar payment failed for order ${payload.orderId}`);
-      break;
-    }
-
-    case "payment.polar.refunded": {
-      // Unlike Stripe refunds (audit-only, since refunds are admin-initiated),
-      // Polar refunds can originate from the Polar dashboard or Polar's own
-      // dispute auto-refund system. We must update the DB to reflect the refund.
-      const result = await processPolarWebhookRefund(db, {
-        orderId: payload.orderId,
-        polarCheckoutId: payload.polarCheckoutId,
-        amountRefunded: payload.amountRefunded,
-        totalAmount: payload.totalAmount,
-        currency: payload.currency,
-        polarStatus: payload.polarStatus,
-      });
-      if (result.success) {
-        await enqueueOrderRefundNotificationAfterPolarWebhook(db, env, {
-          orderId: payload.orderId,
-          notification: result.notification,
-        });
-        paymentWebhookStatus = "processed";
-        paymentWebhookResult = createPaymentWebhookQueueResult(payload, msg.id, {
-          gateway: "polar",
-          outcome: "refunded",
-          amountRefunded: payload.amountRefunded,
-          totalAmount: payload.totalAmount,
-          polarStatus: payload.polarStatus,
-        });
-        console.log(`[Queue] Polar refund processed for order ${payload.orderId} (status: ${payload.polarStatus})`);
-      } else {
-        throw new Error(`Polar refund failed for order ${payload.orderId}: ${result.error}`);
-      }
-      break;
-    }
-
     // ── Order notifications ────────────────────────────────────────────────
 
     case "order.notification": {
@@ -1304,7 +1054,7 @@ function getPaymentProviderFromQueueType(type: PaymentOnlyQueueMessage["type"]):
   return provider && PAYMENT_WEBHOOK_PROVIDER_SET.has(provider) ? provider : "unknown";
 }
 
-const PAYMENT_WEBHOOK_PROVIDER_SET = new Set(["stripe", "sslcommerz", "polar"]);
+const PAYMENT_WEBHOOK_PROVIDER_SET = new Set(["stripe", "sslcommerz"]);
 
 function toUnixSeconds(value: Date | number | string | undefined): number | null {
   if (!value) return null;
@@ -1353,26 +1103,6 @@ function getPaymentDlqSnapshot(payload: PaymentOnlyQueueMessage): Record<string,
         tranId: payload.tranId,
         status: payload.status,
       };
-    case "payment.polar.confirmed":
-      return {
-        checkoutId: payload.checkoutId,
-        amount: payload.amount ?? null,
-        currency: payload.currency ?? null,
-        paymentType: payload.paymentType ?? null,
-      };
-    case "payment.polar.failed":
-      return {
-        checkoutId: payload.checkoutId,
-        reason: payload.reason ?? null,
-      };
-    case "payment.polar.refunded":
-      return {
-        polarCheckoutId: payload.polarCheckoutId,
-        amountRefunded: payload.amountRefunded,
-        totalAmount: payload.totalAmount,
-        currency: payload.currency,
-        polarStatus: payload.polarStatus,
-      };
   }
 }
 
@@ -1413,7 +1143,7 @@ async function markPaymentWebhookEventFailedOnTerminalAttempt(
 ): Promise<void> {
   const webhookEventId = getPaymentWebhookEventId(msg.body);
   if (!webhookEventId) return;
-  if (msg.attempts < PAYMENT_EVENTS_TERMINAL_DELIVERY_ATTEMPT) return;
+  if (msg.attempts < JOBS_TERMINAL_DELIVERY_ATTEMPT) return;
 
   try {
     await markWebhookEventFailed(db, webhookEventId, {
@@ -1421,7 +1151,7 @@ async function markPaymentWebhookEventFailedOnTerminalAttempt(
       queueType: msg.body.type,
       orderId: isPaymentQueuePayload(msg.body) ? msg.body.orderId : null,
       terminalDeliveryAttempt: msg.attempts,
-      maxRetries: PAYMENT_EVENTS_MAX_RETRIES,
+      maxRetries: JOBS_MAX_RETRIES,
       error: error instanceof Error ? error.message : String(error),
     });
   } catch (markError) {

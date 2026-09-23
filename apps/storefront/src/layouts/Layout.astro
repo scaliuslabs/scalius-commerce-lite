@@ -5,7 +5,7 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
-import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
   getRuntimeMediaUrl,
@@ -132,11 +132,7 @@ const discoverySettings = normalizeSeoDiscoverySettings(
 );
 
 const faviconUrl = headerData?.favicon?.src
-  ? getOptimizedImageUrl(headerData.favicon.src, {
-      width: 64,
-      height: 64,
-      fit: "scale-down",
-    })
+  ? mediaImageUrl(headerData.favicon.src, 160)
   : "/favicon.svg";
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
@@ -153,13 +149,7 @@ const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
 
 // Organization JSON-LD — only emit when we have a logo (per SEO-05)
 const logoUrl = headerData.logo.src
-  ? toAbsoluteStorefrontSeoUrl(
-      getOptimizedImageUrl(headerData.logo.src, {
-        width: 512,
-        height: 512,
-        fit: "scale-down",
-      }),
-    )
+  ? toAbsoluteStorefrontSeoUrl(mediaImageUrl(headerData.logo.src, 480))
   : null;
 
 const onlineStoreJsonLd =
@@ -229,7 +219,7 @@ const bodyEndScripts = analyticsScripts.filter(
 );
 
 // Public API and media origins come from the per-request context seeded by
-// the middleware from /api/v1/platform. No Worker vars, no build-time values.
+// the middleware from the layout payload. No Worker vars, no build-time values.
 const publicApiUrl = getRuntimeApiUrl() ?? "";
 const mediaSettings = layoutData?.media;
 // Dashboard media settings own the canonical CDN; the platform media URL is
@@ -239,18 +229,6 @@ const configuredCdnBase =
 const cdnDomainUrl = configuredCdnBase
   .replace(/^https?:\/\//, "")
   .replace(/\/$/, "");
-const imageOptimizationEnabled = mediaSettings?.enabled !== false;
-const imageCdnHosts = [
-  cdnDomainUrl,
-  ...(mediaSettings?.allowedImageHosts ?? []),
-]
-  .map((host) =>
-    host
-      .replace(/^https?:\/\//, "")
-      .replace(/\/$/, "")
-      .toLowerCase(),
-  )
-  .filter(Boolean);
 const imageCdnAliases = (mediaSettings?.canonicalHostAliases ?? [])
   .map((host) =>
     host
@@ -265,9 +243,7 @@ const cdnDomain = cdnDomainUrl || null;
 const runtimeGlobalsScript = [
   `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
   `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
-  `window.__IMAGE_OPTIMIZATION_ENABLED__=${serializeJsonForInlineScript(imageOptimizationEnabled)};`,
   `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
-  `window.__IMAGE_CDN_HOSTS__=${serializeJsonForInlineScript(imageCdnHosts)};`,
   `window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${serializeJsonForInlineScript(imageCdnAliases)};`,
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
@@ -355,8 +331,6 @@ if (!window.$RefreshReg$) {
         <meta property="og:image" content={absoluteOgImageUrl} />
       )
     }
-    {absoluteOgImageUrl && <meta property="og:image:width" content="1200" />}
-    {absoluteOgImageUrl && <meta property="og:image:height" content="630" />}
     {absoluteOgImageUrl && <meta property="og:image:alt" content={title} />}
     {ogPrice && <meta property="og:price:amount" content={ogPrice} />}
     {ogCurrency && <meta property="og:price:currency" content={ogCurrency} />}

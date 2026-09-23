@@ -4,7 +4,7 @@
 /// <reference types="astro/client" />
 
 // No build-time environment variables are declared here. Public origins are
-// resolved per request from the API (/api/v1/platform) and secrets are derived
+// resolved per request from the API layout payload and secrets are derived
 // from the single installed master secret; nothing is baked into the bundle.
 
 // ---------------------------------------------------------------------------
@@ -12,45 +12,6 @@
 // These avoid importing @cloudflare/workers-types globally, which can conflict
 // with DOM types (e.g. Response.json() overload changes).
 // ---------------------------------------------------------------------------
-
-interface KVNamespaceListKey<Metadata = unknown, Key extends string = string> {
-  name: Key;
-  expiration?: number;
-  metadata?: Metadata;
-}
-
-interface KVNamespaceListResult<
-  Metadata = unknown,
-  Key extends string = string,
-> {
-  keys: KVNamespaceListKey<Metadata, Key>[];
-  list_complete: boolean;
-  cursor?: string;
-  cacheStatus: string | null;
-}
-
-interface KVNamespace<Key extends string = string> {
-  get(key: Key, options?: { cacheTtl?: number }): Promise<string | null>;
-  get(key: Key, type: "text"): Promise<string | null>;
-  get<T = unknown>(key: Key, type: "json"): Promise<T | null>;
-  get(key: Key, type: "arrayBuffer"): Promise<ArrayBuffer | null>;
-  get(key: Key, type: "stream"): Promise<ReadableStream | null>;
-  put(
-    key: Key,
-    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-    options?: {
-      expiration?: number;
-      expirationTtl?: number;
-      metadata?: object | null;
-    },
-  ): Promise<void>;
-  delete(key: Key): Promise<void>;
-  list<Metadata = unknown>(options?: {
-    prefix?: Key;
-    limit?: number;
-    cursor?: string;
-  }): Promise<KVNamespaceListResult<Metadata, Key>>;
-}
 
 interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -90,9 +51,6 @@ interface WorkerEntrypointFetcher {
 interface Env {
   // Static assets binding (required by @astrojs/cloudflare)
   ASSETS: Fetcher;
-
-  // Astro session storage for storefront SSR
-  SESSION: KVNamespace;
 
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
@@ -155,9 +113,7 @@ interface GlobalEventHandlersEventMap {
 interface Window {
   __API_BASE_URL__?: string;
   __CDN_DOMAIN__?: string;
-  __IMAGE_OPTIMIZATION_ENABLED__?: boolean;
   __IMAGE_CDN_BASE_URL__?: string;
-  __IMAGE_CDN_HOSTS__?: string[];
   __IMAGE_CDN_CANONICAL_HOST_ALIASES__?: string[];
   __CURRENCY_SYMBOL__?: string;
   __CURRENCY_CODE__?: string;

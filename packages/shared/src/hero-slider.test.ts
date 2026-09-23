@@ -3,8 +3,6 @@ import {
   HERO_SLIDE_LIMIT,
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
-  getHeroSlideCloudflareGravity,
-  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
   parseStoredHeroSlides,
   validateAndNormalizeHeroSlides,
@@ -40,7 +38,7 @@ describe("hero slider document", () => {
     });
   });
 
-  it("normalizes a merchant focal point and projects it to CSS and Cloudflare gravity", () => {
+  it("normalizes a merchant focal point and projects it to CSS object-position", () => {
     const result = validateAndNormalizeHeroSlides([{
       ...baseSlide,
       focalPoint: { x: 24.1234, y: 81.9876 },
@@ -53,33 +51,6 @@ describe("hero slider document", () => {
     const focalPoint = result.slides[0]?.focalPoint;
     if (!focalPoint) throw new Error("Expected one normalized slide");
     expect(getHeroSlideObjectPosition(focalPoint)).toBe("24.12% 81.99%");
-    expect(getHeroSlideCloudflareGravity(focalPoint)).toBe("0.2412x0.8199");
-  });
-
-  it("keeps production and compact previews on the same viewport crop", () => {
-    const focalPoint = { x: 24, y: 82 };
-
-    expect(getHeroSlideImageTransform("desktop", focalPoint)).toEqual({
-      width: 1_300,
-      height: 500,
-      quality: 90,
-      format: "auto",
-      fit: "cover",
-      gravity: "0.24x0.82",
-    });
-    expect(
-      getHeroSlideImageTransform("mobile", focalPoint, {
-        width: 320,
-        quality: 80,
-      }),
-    ).toEqual({
-      width: 320,
-      height: 150,
-      quality: 80,
-      format: "auto",
-      fit: "cover",
-      gravity: "0.24x0.82",
-    });
   });
 
   it("rejects focal points outside the source image", () => {

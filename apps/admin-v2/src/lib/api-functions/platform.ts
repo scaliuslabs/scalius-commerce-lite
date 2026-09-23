@@ -13,7 +13,6 @@ export type PlatformSettingsPayload = ApiEnvelopeData<
   GetApiV1AdminSettingsPlatformResponses[200]
 >;
 export type PlatformSettingsReadiness = PlatformSettingsPayload["readiness"];
-export type PlatformSettingsEffective = PlatformSettingsPayload["effective"];
 export type PlatformUrlKey = PlatformSettingsReadiness["missing"][number];
 export type UpdatePlatformSettingsInput = PutApiV1AdminSettingsPlatformData["body"];
 

@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
   createReceiptOrderSupportRequest: vi.fn(),
   getOrderSupportRequestStatusLabel: vi.fn((status: string) => status),
   getReceiptOrderSupportRequestState: vi.fn(),
-  rateLimit: vi.fn(async () => ({ allowed: true })),
+  limiter: { limit: vi.fn(async (_input: { key: string }) => ({ success: true })) },
   getClientIp: vi.fn(() => "127.0.0.1"),
   getCustomerBySession: vi.fn(),
   getActivePaymentMethods: vi.fn(),
@@ -87,7 +87,6 @@ vi.mock("../utils/cache-invalidation", () => ({
 }));
 
 vi.mock("@scalius/shared/rate-limit", () => ({
-  rateLimit: mocks.rateLimit,
   getClientIp: mocks.getClientIp,
 }));
 
@@ -171,7 +170,7 @@ const DEFAULT_SHIPPING_METHOD_SNAPSHOT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.rateLimit.mockResolvedValue({ allowed: true });
+  mocks.limiter.limit.mockResolvedValue({ success: true });
   mocks.getClientIp.mockReturnValue("127.0.0.1");
   mocks.getCustomerBySession.mockResolvedValue(null);
   mocks.getActivePaymentMethods.mockResolvedValue({
@@ -366,6 +365,8 @@ function createTestApp(options: {
   });
   app.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.env.RL_STANDARD ??= mocks.limiter;
+    c.env.RL_STRICT ??= mocks.limiter;
     await next();
   });
   app.route("/orders", orderRoutes);
@@ -1368,7 +1369,7 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
 
@@ -1606,7 +1607,7 @@ describe("create order commit/KV ordering", () => {
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
     });
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp({
       guestCheckoutEnabled: false,
       checkoutMode: "gateways_only",
@@ -1634,7 +1635,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -1646,7 +1647,7 @@ describe("create order commit/KV ordering", () => {
       orderId: "order_processing",
       statusToken: DEFAULT_STATUS_TOKEN,
     });
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
@@ -1673,7 +1674,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -1763,7 +1764,7 @@ describe("create order commit/KV ordering", () => {
     mocks.resolveExistingCheckoutAttempt.mockRejectedValue(
       new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again."),
     );
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
@@ -1781,7 +1782,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -1809,7 +1810,7 @@ describe("create order commit/KV ordering", () => {
       subtotal: 0,
       hasFreeDeliveryProduct: false,
     });
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
@@ -1845,7 +1846,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -1855,7 +1856,7 @@ describe("create order commit/KV ordering", () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
@@ -1891,7 +1892,7 @@ describe("create order commit/KV ordering", () => {
     );
     expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2079,7 +2080,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.validateStorefrontDeliveryPreflight).toHaveBeenCalledOnce();
     expect(mocks.getActivePaymentMethods).toHaveBeenCalledOnce();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2110,7 +2111,7 @@ describe("create order commit/KV ordering", () => {
     });
     expect(mocks.getActivePaymentMethods).toHaveBeenCalledOnce();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2132,7 +2133,7 @@ describe("create order commit/KV ordering", () => {
     expect(response.status).toBe(401);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.getCustomerBySession).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
@@ -2250,7 +2251,7 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.getCustomerBySession).toHaveBeenCalledWith(db, "expired_session", undefined);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2394,7 +2395,7 @@ describe("create order commit/KV ordering", () => {
         message: "Your signed-in account is missing its required phone number. Update your profile and try again.",
       },
     });
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
@@ -2412,7 +2413,7 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
@@ -2434,7 +2435,7 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
@@ -2457,7 +2458,7 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(503);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
@@ -2489,7 +2490,7 @@ describe("create order commit/KV ordering", () => {
       db,
       undefined,
     );
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2525,7 +2526,7 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.calculateStorefrontTaxQuote).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2592,7 +2593,7 @@ describe("create order commit/KV ordering", () => {
         message: "SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.",
       },
     });
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2643,7 +2644,7 @@ describe("create order commit/KV ordering", () => {
         message: "SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.",
       },
     });
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
@@ -2698,9 +2699,9 @@ describe("create order commit/KV ordering", () => {
     );
   });
 
-  it("uses native on-machine checkout limiters without touching KV counters", async () => {
-    const ipLimiter = { limit: vi.fn(async () => ({ success: true })) };
-    const phoneLimiter = { limit: vi.fn(async () => ({ success: true })) };
+  it("limits checkout IP on the standard tier and phone on the strict tier with store-scoped hashed keys", async () => {
+    const standard = { limit: vi.fn(async () => ({ success: true })) };
+    const strict = { limit: vi.fn(async () => ({ success: true })) };
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -2712,29 +2713,24 @@ describe("create order commit/KV ordering", () => {
       },
       {
         CACHE: kv,
-        ORDER_IP_RATE_LIMITER: ipLimiter,
-        ORDER_PHONE_RATE_LIMITER: phoneLimiter,
+        RL_STANDARD: standard,
+        RL_STRICT: strict,
         PUBLIC_API_BASE_URL: "https://merchant-api.example",
       } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
-    expect(ipLimiter.limit).toHaveBeenCalledWith({
-      key: expect.stringMatching(/^checkout:ip:[a-f0-9]{64}$/),
-    });
-    expect(phoneLimiter.limit).toHaveBeenCalledWith({
-      key: expect.stringMatching(/^checkout:phone:[a-f0-9]{64}$/),
-    });
+    expect(standard.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(strict.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(JSON.stringify([
-      ipLimiter.limit.mock.calls,
-      phoneLimiter.limit.mock.calls,
+      standard.limit.mock.calls,
+      strict.limit.mock.calls,
     ])).not.toContain(validOrderBody.customerPhone);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
   });
 
-  it("rejects a checkout denied by a native limiter before order writes", async () => {
-    const ipLimiter = { limit: vi.fn(async () => ({ success: true })) };
-    const phoneLimiter = { limit: vi.fn(async () => ({ success: false })) };
+  it("rejects a checkout denied by the strict phone limiter before order writes", async () => {
+    const standard = { limit: vi.fn(async () => ({ success: true })) };
+    const strict = { limit: vi.fn(async () => ({ success: false })) };
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -2746,8 +2742,8 @@ describe("create order commit/KV ordering", () => {
       },
       {
         CACHE: kv,
-        ORDER_IP_RATE_LIMITER: ipLimiter,
-        ORDER_PHONE_RATE_LIMITER: phoneLimiter,
+        RL_STANDARD: standard,
+        RL_STRICT: strict,
       } as never,
     );
 
@@ -2755,11 +2751,11 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.createAtomicCheckoutAttempt).toHaveBeenCalledOnce();
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
   });
 
   it("rate limits a new checkout after pure preparation but before order writes", async () => {
-    mocks.rateLimit.mockResolvedValue({ allowed: false });
+    mocks.limiter.limit.mockResolvedValue({ success: false });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -2774,7 +2770,7 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(429);
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledOnce();
-    expect(mocks.rateLimit).toHaveBeenCalledTimes(2);
+    expect(mocks.limiter.limit).toHaveBeenCalledTimes(2);
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
@@ -2796,7 +2792,7 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.rateLimit).not.toHaveBeenCalled();
+    expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 

@@ -91,9 +91,7 @@ describe("dashboard feed row preview route", () => {
     mocks.getSeo.mockResolvedValue({ discovery: { feeds: feedsPolicy } });
     mocks.getCurrency.mockResolvedValue({ currencyCode: "BDT" });
     mocks.getMedia.mockResolvedValue({
-      enabled: true,
       canonicalCdnUrl: "cdn.example.com",
-      allowedImageHosts: ["images.example.com"],
       canonicalHostAliases: ["old-cdn.example.com"],
     });
     mocks.execute.mockResolvedValue(responseData());
@@ -112,9 +110,7 @@ describe("dashboard feed row preview route", () => {
     mocks.getMedia.mockImplementation(async () => {
       order.push("media");
       return {
-        enabled: true,
         canonicalCdnUrl: "cdn.example.com",
-        allowedImageHosts: ["images.example.com"],
         canonicalHostAliases: ["old-cdn.example.com"],
       };
     });
@@ -144,9 +140,7 @@ describe("dashboard feed row preview route", () => {
         currencyCode: "BDT",
         feedsPolicy,
         mediaPolicy: {
-          enabled: true,
           canonicalCdnUrl: "cdn.example.com",
-          allowedImageHosts: ["images.example.com"],
           canonicalHostAliases: ["old-cdn.example.com"],
         },
         environmentCdnUrl: "fallback-cdn.example.com",

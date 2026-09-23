@@ -23,7 +23,7 @@ interface Props {
 const { product, media } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
-const imageTransforms = GALLERY_CONFIG.imageTransforms;
+const imageWidths = GALLERY_CONFIG.imageWidths;
 
 const galleryMedia = media
   .filter((item) =>
@@ -38,30 +38,9 @@ const featuredMedia =
 const productFallbackUrl = hasProductImage(product.imageUrl)
   ? product.imageUrl!
   : PRODUCT_IMAGE_FALLBACK;
-const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, {
-  width: imageTransforms.display,
-  height: imageTransforms.display,
-  quality: 85,
-  format: "auto",
-  fit: "contain",
-  trim: "border",
-});
-const productFallbackMobileUrl = getProductImageUrl(productFallbackUrl, {
-  width: imageTransforms.mobileDisplay,
-  height: imageTransforms.mobileDisplay,
-  quality: imageTransforms.mobileQuality,
-  format: "auto",
-  fit: "contain",
-  trim: "border",
-});
-const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, {
-  width: imageTransforms.zoom,
-  height: imageTransforms.zoom,
-  quality: 85,
-  format: "auto",
-  fit: "contain",
-  trim: "border",
-});
+const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, imageWidths.display);
+const productFallbackMobileUrl = getProductImageUrl(productFallbackUrl, imageWidths.mobileDisplay);
+const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, imageWidths.zoom);
 
 function formatDuration(durationMs: number | null): string | null {
   if (!durationMs || durationMs <= 0) return null;
@@ -80,25 +59,13 @@ const optimizedMedia = galleryMedia.map((item) => {
       altText,
       duration: formatDuration(item.durationMs),
       thumbUrl: item.posterUrl
-        ? getProductImageUrl(item.posterUrl, {
-            width: imageTransforms.preview,
-            height: imageTransforms.preview,
-            quality: imageTransforms.previewQuality,
-            format: "auto",
-            fit: "contain",
-          })
+        ? getProductImageUrl(item.posterUrl, imageWidths.preview)
         : null,
       mainUrl: item.url,
       mobileUrl: item.url,
       zoomUrl: null,
       posterUrl: item.posterUrl
-        ? getProductImageUrl(item.posterUrl, {
-            width: imageTransforms.display,
-            height: imageTransforms.display,
-            quality: 85,
-            format: "auto",
-            fit: "contain",
-          })
+        ? getProductImageUrl(item.posterUrl, imageWidths.display)
         : null,
     };
   }
@@ -107,38 +74,10 @@ const optimizedMedia = galleryMedia.map((item) => {
     item,
     altText,
     duration: null,
-    thumbUrl: getProductImageUrl(item.url, {
-      width: imageTransforms.preview,
-      height: imageTransforms.preview,
-      quality: imageTransforms.previewQuality,
-      format: "auto",
-      fit: "contain",
-      trim: "border",
-    }),
-    mainUrl: getProductImageUrl(item.url, {
-      width: imageTransforms.display,
-      height: imageTransforms.display,
-      quality: 85,
-      format: "auto",
-      fit: "contain",
-      trim: "border",
-    }),
-    mobileUrl: getProductImageUrl(item.url, {
-      width: imageTransforms.mobileDisplay,
-      height: imageTransforms.mobileDisplay,
-      quality: imageTransforms.mobileQuality,
-      format: "auto",
-      fit: "contain",
-      trim: "border",
-    }),
-    zoomUrl: getProductImageUrl(item.url, {
-      width: imageTransforms.zoom,
-      height: imageTransforms.zoom,
-      quality: 85,
-      format: "auto",
-      fit: "contain",
-      trim: "border",
-    }),
+    thumbUrl: getProductImageUrl(item.url, imageWidths.preview),
+    mainUrl: getProductImageUrl(item.url, imageWidths.display),
+    mobileUrl: getProductImageUrl(item.url, imageWidths.mobileDisplay),
+    zoomUrl: getProductImageUrl(item.url, imageWidths.zoom),
     posterUrl: null,
   };
 });
@@ -232,8 +171,8 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 data-desktop-main-image
                 src={initialImageUrl}
                 alt={initialImageAlt}
-                width={imageTransforms.display}
-                height={imageTransforms.display}
+                width={imageWidths.display}
+                height={imageWidths.display}
                 class="h-full w-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none"
                 loading="lazy"
                 fetchpriority="low"
@@ -555,8 +494,8 @@ const hasMultipleMedia = optimizedMedia.length > 1;
         data-fullscreen-image
         data-zoom-src={initialImageZoomUrl}
         alt={`${initialImageAlt} — zoomed view`}
-        width={imageTransforms.zoom}
-        height={imageTransforms.zoom}
+        width={imageWidths.zoom}
+        height={imageWidths.zoom}
         loading="lazy"
         decoding="async"
         class="max-h-full max-w-full origin-center object-contain transition-transform duration-100 ease-out will-change-transform motion-reduce:transition-none"

@@ -32,30 +32,3 @@ export function formatDuration(durationMs: number | null | undefined): string | 
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
-
-export function truncateFilename(
-  filename: string,
-  maxLength: number = 30,
-): string {
-  if (filename.length <= maxLength) return filename;
-
-  const extension = filename.split(".").pop() || "";
-  const nameWithoutExt = filename.substring(
-    0,
-    filename.length - extension.length - 1,
-  );
-  const truncatedName = nameWithoutExt.substring(
-    0,
-    maxLength - extension.length - 4,
-  );
-
-  return `${truncatedName}...${extension}`;
-}
-
-export function bytesToMB(bytes: number): number {
-  return bytes / (1024 * 1024);
-}
-
-export function mbToBytes(mb: number): number {
-  return mb * 1024 * 1024;
-}

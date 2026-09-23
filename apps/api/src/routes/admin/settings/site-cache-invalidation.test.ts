@@ -212,9 +212,7 @@ function createTestApp() {
   });
   mocks.isValidMediaHostInput.mockReturnValue(true);
   mocks.saveMediaOptimizationSettings.mockResolvedValue({
-    enabled: true,
     canonicalCdnUrl: "cdn.example.com",
-    allowedImageHosts: [],
     canonicalHostAliases: [],
   });
   mocks.getSeoSettings.mockResolvedValue({
@@ -419,12 +417,7 @@ describe("site settings cache invalidation", () => {
       usdExchangeRate: "1".repeat(10_000),
     });
     mocks.getMediaOptimizationSettings.mockResolvedValueOnce({
-      enabled: true,
       canonicalCdnUrl: "c".repeat(10_000),
-      allowedImageHosts: Array.from(
-        { length: 100 },
-        (_, index) => `asset-${index}.${"a".repeat(1_000)}`,
-      ),
       canonicalHostAliases: Array.from(
         { length: 100 },
         (_, index) => `alias-${index}.${"b".repeat(1_000)}`,
@@ -461,12 +454,7 @@ describe("site settings cache invalidation", () => {
     }
 
     mocks.getMediaOptimizationSettings.mockResolvedValueOnce({
-      enabled: true,
       canonicalCdnUrl: "cdn.example.com",
-      allowedImageHosts: Array.from(
-        { length: 100 },
-        (_, index) => `asset-${index}.example.com`,
-      ),
       canonicalHostAliases: Array.from(
         { length: 100 },
         (_, index) => `alias-${index}.example.com`,
@@ -478,9 +466,8 @@ describe("site settings cache invalidation", () => {
       env,
     );
     const projectedMediaBody = (await projectedMediaResponse.json()) as {
-      data: { allowedImageHosts: string[]; canonicalHostAliases: string[] };
+      data: { canonicalHostAliases: string[] };
     };
-    expect(projectedMediaBody.data.allowedImageHosts).toHaveLength(24);
     expect(projectedMediaBody.data.canonicalHostAliases).toHaveLength(24);
   });
 
@@ -1019,7 +1006,7 @@ describe("site settings cache invalidation", () => {
     {
       path: "/media",
       method: "POST" as const,
-      body: { enabled: true, canonicalCdnUrl: "cdn.example.com" },
+      body: { canonicalCdnUrl: "cdn.example.com" },
       groups: ["media"],
     },
     {

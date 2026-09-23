@@ -122,7 +122,7 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
     if (result.statusChanged) {
         await enqueueOrderSupportRequestNotificationForOrder({
             db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
+            queue: c.env.JOBS_QUEUE,
             orderId,
             requestId: result.request.id,
             notificationType: "support_request_status_updated",

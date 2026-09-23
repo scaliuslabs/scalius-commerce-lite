@@ -114,7 +114,7 @@ describe("admin shipment status sync helper", () => {
       db: db as never,
       shipment: initialShipment,
       encryptionKey: "credential-key",
-      c: { env: { ORDER_NOTIFICATIONS_QUEUE: queue } as unknown as Env },
+      c: { env: { JOBS_QUEUE: queue } as unknown as Env },
       source: "orders-shipment-status",
     });
 
@@ -131,7 +131,7 @@ describe("admin shipment status sync helper", () => {
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       db,
       { variantIds: ["variant_1"] },
-      { env: { ORDER_NOTIFICATIONS_QUEUE: queue } },
+      { env: { JOBS_QUEUE: queue } },
     );
     expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
@@ -159,7 +159,7 @@ describe("admin shipment status sync helper", () => {
     await expect(checkAndSyncShipmentStatus({
       db: db as never,
       shipment: shipment(),
-      c: { env: { ORDER_NOTIFICATIONS_QUEUE: { send: vi.fn() } } as unknown as Env },
+      c: { env: { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env },
       source: "orders-shipment-status",
     })).rejects.toThrow("active refund operation");
 

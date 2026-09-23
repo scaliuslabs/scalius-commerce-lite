@@ -5,7 +5,7 @@ export interface GatewayEnvironmentConfig {
 
 /**
  * New checkout config uses one provider-neutral flag. The sandbox fallback
- * keeps already-cached SSLCommerz/Polar responses truthful during rollout.
+ * keeps already-cached SSLCommerz responses truthful during rollout.
  */
 export function isGatewayTestMode(gateway: GatewayEnvironmentConfig): boolean {
   if (typeof gateway.testMode === "boolean") return gateway.testMode;

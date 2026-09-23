@@ -9,9 +9,9 @@ import {
 describe("payment gateway currency policy", () => {
   it("keeps all known methods for BDT", () => {
     expect(filterPaymentGatewayIdsForCurrency(
-      ["stripe", "sslcommerz", "polar", "cod"],
+      ["stripe", "sslcommerz", "cod"],
       "BDT",
-    )).toEqual(["stripe", "sslcommerz", "polar", "cod"]);
+    )).toEqual(["stripe", "sslcommerz", "cod"]);
   });
 
   it("excludes SSLCommerz outside BDT without changing the saved order", () => {

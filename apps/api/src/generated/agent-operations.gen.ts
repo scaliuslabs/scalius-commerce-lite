@@ -269,7 +269,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "enum": [
                       "stripe",
                       "sslcommerz",
-                      "polar",
                       null
                     ]
                   },
@@ -22380,6 +22379,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true
                 },
+                "variantWidth": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "durationMs": {
                   "type": "number",
                   "nullable": true
@@ -22596,6 +22599,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": false,
           "name": "view",
           "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "missing"
+            ],
+            "description": "`missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet."
+          },
+          "required": false,
+          "description": "`missing` lists JPEG/PNG/WebP/AVIF images that have no pre-generated renditions yet.",
+          "name": "variants",
+          "in": "query"
         }
       ]
     },
@@ -22655,6 +22671,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "height": {
                     "type": "number",
+                    "nullable": true
+                  },
+                  "variantWidth": {
+                    "type": "integer",
                     "nullable": true
                   },
                   "durationMs": {
@@ -22873,6 +22893,41 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.media.original",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/media/{id}/original",
+    "summary": "Read the original upload bytes",
+    "description": "Same-origin read of the stored original so the dashboard can generate renditions for media uploaded before them.",
+    "tags": [
+      "Admin - Media"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Binary original read for the dashboard's browser rendition pipeline; agents use the public media URL.",
+    "rbac": {
+      "type": "permission",
+      "permission": "media.view"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "dashboard.media.permanently_delete",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/media/{id}/permanent",
@@ -23044,6 +23099,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "height": {
                   "type": "number",
+                  "nullable": true
+                },
+                "variantWidth": {
+                  "type": "integer",
                   "nullable": true
                 },
                 "durationMs": {
@@ -23249,6 +23308,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "height": {
                   "type": "number",
+                  "nullable": true
+                },
+                "variantWidth": {
+                  "type": "integer",
                   "nullable": true
                 },
                 "durationMs": {
@@ -23503,6 +23566,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true
                 },
+                "variantWidth": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "durationMs": {
                   "type": "number",
                   "nullable": true
@@ -23677,6 +23744,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": true,
           "name": "id",
           "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "server",
+              "client"
+            ],
+            "default": "server",
+            "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save."
+          },
+          "required": false,
+          "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.",
+          "name": "variants",
+          "in": "query"
         }
       ]
     },
@@ -23734,6 +23816,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "height": {
                   "type": "number",
+                  "nullable": true
+                },
+                "variantWidth": {
+                  "type": "integer",
                   "nullable": true
                 },
                 "durationMs": {
@@ -24322,6 +24408,41 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Internal expired-upload maintenance is not a merchant capability.",
+    "rbac": {
+      "type": "permission",
+      "permission": "media.upload"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.media.variants_save",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/media/{id}/variants",
+    "summary": "Store pre-generated WebP renditions",
+    "description": "Multipart form with the original's intrinsic `width` and `height` plus one `image/webp` file per rendition width, named `w<width>` (for example w160, w320 … and the master). The widths must be exactly those the dashboard pipeline derives from `width`. Replaces earlier renditions and switches the published media URL to the largest one.",
+    "tags": [
+      "Admin - Media"
+    ],
+    "surface": "dashboard",
+    "exposure": "excluded",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion.",
     "rbac": {
       "type": "permission",
       "permission": "media.upload"
@@ -31006,8 +31127,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "cod",
               "stripe",
-              "sslcommerz",
-              "polar"
+              "sslcommerz"
             ]
           },
           "required": false,
@@ -34107,8 +34227,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "cod",
               "stripe",
-              "sslcommerz",
-              "polar"
+              "sslcommerz"
             ],
             "description": "Filter by payment method"
           },
@@ -35333,8 +35452,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "cod",
               "stripe",
-              "sslcommerz",
-              "polar"
+              "sslcommerz"
             ],
             "description": "Filter by payment gateway"
           },
@@ -35528,8 +35646,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "gateway": {
               "type": "string",
               "enum": [
-                "sslcommerz",
-                "polar"
+                "sslcommerz"
               ]
             },
             "paymentType": {
@@ -35714,8 +35831,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "enum": [
               "cod",
               "stripe",
-              "sslcommerz",
-              "polar"
+              "sslcommerz"
             ],
             "description": "Filter by payment gateway"
           },
@@ -36351,10 +36467,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
-                  "polarCheckoutId": {
-                    "type": "string",
-                    "nullable": true
-                  },
                   "codCollectedBy": {
                     "type": "string",
                     "nullable": true
@@ -36408,7 +36520,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "sslcommerzTranId",
                   "sslcommerzValId",
                   "sslcommerzBankTranId",
-                  "polarCheckoutId",
                   "codCollectedBy",
                   "codCollectedAt",
                   "codReceiptUrl",
@@ -37157,7 +37268,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "enum": [
                     "stripe",
                     "sslcommerz",
-                    "polar",
                     "cod"
                   ]
                 },
@@ -40892,58 +41002,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "enabled"
                   ]
                 },
-                "polar": {
-                  "type": "object",
-                  "properties": {
-                    "configured": {
-                      "type": "boolean"
-                    },
-                    "enabled": {
-                      "type": "boolean"
-                    },
-                    "usable": {
-                      "type": "boolean"
-                    },
-                    "missingFields": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "credentialErrors": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "blockedReason": {
-                      "type": "string"
-                    },
-                    "providerEnabled": {
-                      "type": "boolean"
-                    },
-                    "checkoutSelected": {
-                      "type": "boolean"
-                    },
-                    "checkoutVisible": {
-                      "type": "boolean"
-                    },
-                    "environment": {
-                      "type": "string",
-                      "enum": [
-                        "test",
-                        "live",
-                        "mixed",
-                        "unknown",
-                        "not_applicable"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "configured",
-                    "enabled"
-                  ]
-                },
                 "cod": {
                   "type": "object",
                   "properties": {
@@ -41000,7 +41058,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "required": [
                 "stripe",
                 "sslcommerz",
-                "polar",
                 "cod"
               ]
             }
@@ -41064,19 +41121,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "enum": [
                       "stripe",
                       "sslcommerz",
-                      "polar",
                       "cod"
                     ]
                   },
                   "minItems": 1,
-                  "maxItems": 4
+                  "maxItems": 3
                 },
                 "defaultMethod": {
                   "type": "string",
                   "enum": [
                     "stripe",
                     "sslcommerz",
-                    "polar",
                     "cod"
                   ]
                 }
@@ -41085,166 +41140,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "enabledMethods",
                 "defaultMethod"
               ]
-            }
-          }
-        }
-      }
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "message": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "message"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.payments.polar_get",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/settings/polar",
-    "summary": "Get Polar settings",
-    "tags": [
-      "Admin - Settings"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "accessToken": {
-              "type": "string"
-            },
-            "webhookSecret": {
-              "type": "string"
-            },
-            "productId": {
-              "type": "string"
-            },
-            "sandbox": {
-              "type": "boolean"
-            },
-            "enabled": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "accessToken",
-            "webhookSecret",
-            "productId",
-            "sandbox",
-            "enabled"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.payments.polar_update",
-    "method": "POST",
-    "pathTemplate": "/api/v1/admin/settings/polar",
-    "summary": "Save Polar settings",
-    "tags": [
-      "Admin - Settings"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "security",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.general.edit"
-    },
-    "inputSchema": {
-      "requestBody": {
-        "required": true,
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "properties": {
-                "accessToken": {
-                  "type": "string"
-                },
-                "webhookSecret": {
-                  "type": "string"
-                },
-                "productId": {
-                  "type": "string"
-                },
-                "sandbox": {
-                  "type": "boolean"
-                },
-                "enabled": {
-                  "type": "boolean"
-                }
-              }
             }
           }
         }
@@ -52335,7 +52230,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.settings.media_delivery_get",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/settings/media",
-    "summary": "Get media and image optimization settings",
+    "summary": "Get media delivery host settings",
     "tags": [
       "Admin - Settings"
     ],
@@ -52374,23 +52269,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "enabled": {
-              "type": "boolean",
-              "default": true
-            },
             "canonicalCdnUrl": {
               "type": "string",
               "maxLength": 253,
               "default": ""
-            },
-            "allowedImageHosts": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "maxLength": 253
-              },
-              "maxItems": 24,
-              "default": []
             },
             "canonicalHostAliases": {
               "type": "array",
@@ -52414,7 +52296,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.settings.media_delivery_update",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/media",
-    "summary": "Save media and image optimization settings",
+    "summary": "Save media delivery host settings",
     "tags": [
       "Admin - Settings"
     ],
@@ -52448,23 +52330,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "default": true
-                },
                 "canonicalCdnUrl": {
                   "type": "string",
                   "maxLength": 253,
                   "default": ""
-                },
-                "allowedImageHosts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "maxLength": 253
-                  },
-                  "maxItems": 24,
-                  "default": []
                 },
                 "canonicalHostAliases": {
                   "type": "array",
@@ -52493,23 +52362,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "enabled": {
-              "type": "boolean",
-              "default": true
-            },
             "canonicalCdnUrl": {
               "type": "string",
               "maxLength": 253,
               "default": ""
-            },
-            "allowedImageHosts": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "maxLength": 253
-              },
-              "maxItems": 24,
-              "default": []
             },
             "canonicalHostAliases": {
               "type": "array",
@@ -64489,40 +64345,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id": {
                         "type": "string",
                         "enum": [
-                          "polar"
-                        ]
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "currencies": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "maxItems": 4
-                      },
-                      "sandbox": {
-                        "type": "boolean"
-                      },
-                      "testMode": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name",
-                      "currencies",
-                      "sandbox",
-                      "testMode"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "enum": [
                           "cod"
                         ]
                       },
@@ -64545,14 +64367,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   }
                 ]
               },
-              "maxItems": 4
+              "maxItems": 3
             },
             "activeDefaultMethod": {
               "type": "string",
               "enum": [
                 "stripe",
                 "sslcommerz",
-                "polar",
                 "cod"
               ]
             },
@@ -65084,8 +64905,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "enum": [
                     "cod",
                     "stripe",
-                    "sslcommerz",
-                    "polar"
+                    "sslcommerz"
                   ],
                   "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
                 }
@@ -70461,17 +70281,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "media": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean"
-                },
                 "canonicalCdnUrl": {
                   "type": "string"
-                },
-                "allowedImageHosts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
                 },
                 "canonicalHostAliases": {
                   "type": "array",
@@ -70481,9 +70292,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "enabled",
                 "canonicalCdnUrl",
-                "allowedImageHosts",
                 "canonicalHostAliases"
               ]
             },
@@ -70736,6 +70545,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discovery",
                 "returnPolicy"
               ]
+            },
+            "platform": {
+              "type": "object",
+              "properties": {
+                "storefrontUrl": {
+                  "type": "string"
+                },
+                "apiUrl": {
+                  "type": "string"
+                },
+                "dashboardUrl": {
+                  "type": "string"
+                },
+                "mediaUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "storefrontUrl",
+                "apiUrl",
+                "dashboardUrl",
+                "mediaUrl"
+              ]
+            },
+            "cspAllowedDomains": {
+              "type": "string"
             }
           },
           "required": [
@@ -70748,7 +70583,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "media",
             "metaCapi",
             "business",
-            "seo"
+            "seo",
+            "platform",
+            "cspAllowedDomains"
           ]
         }
       },
@@ -73585,40 +73422,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Storefront render-helper duplicate; use storefront.pages.get_by_slug as the canonical page-content authority.",
-    "rbac": {
-      "type": "public"
-    },
-    "inputSchema": null,
-    "outputSchema": null
-  },
-  {
-    "operationId": "storefront.payment_polar_session.session",
-    "method": "POST",
-    "pathTemplate": "/api/v1/payment/polar/session",
-    "summary": "Create a Polar checkout session",
-    "tags": [
-      "Payments - Polar"
-    ],
-    "surface": "storefront",
-    "exposure": "excluded",
-    "principals": [
-      "customer",
-      "visitor"
-    ],
-    "risk": "financial",
-    "openWorld": true,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": true,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "Requires raw receipt proof and returns hosted Polar checkout material; use the secure storefront payment continuation.",
     "rbac": {
       "type": "public"
     },
@@ -76465,39 +76268,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "storefront.storefront_csp.get_csp",
-    "method": "GET",
-    "pathTemplate": "/api/v1/storefront/csp",
-    "summary": "Get CSP allowed domains configuration",
-    "tags": [
-      "Storefront"
-    ],
-    "surface": "storefront",
-    "exposure": "excluded",
-    "principals": [
-      "internal"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "Storefront CSP-domain configuration is consumed by response middleware to build browser security headers, not as a semantic storefront read.",
-    "rbac": {
-      "type": "public"
-    },
-    "inputSchema": null,
-    "outputSchema": null
-  },
-  {
     "operationId": "system.agent_artifacts.download",
     "method": "GET",
     "pathTemplate": "/api/v1/agent-artifacts/{artifactId}",
@@ -78952,18 +78722,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                       {
                         "pointer": "/sslcommerz/checkoutVisible",
                         "alias": "sslVisible"
-                      },
-                      {
-                        "pointer": "/polar/configured",
-                        "alias": "polarConfigured"
-                      },
-                      {
-                        "pointer": "/polar/usable",
-                        "alias": "polarUsable"
-                      },
-                      {
-                        "pointer": "/polar/checkoutVisible",
-                        "alias": "polarVisible"
                       },
                       {
                         "pointer": "/cod/configured",
@@ -81968,8 +81726,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
             "provider",
             "gateway",
             "sslcommerz",
-            "stripe",
-            "polar"
+            "stripe"
           ]
         ],
         "ignoreWhenNegated": true
@@ -82249,7 +82006,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.payments.methods_update",
         "dashboard.payments.stripe_update",
         "dashboard.payments.sslcommerz_update",
-        "dashboard.payments.polar_update",
         "dashboard.shipping_methods.create",
         "dashboard.shipping_methods.update",
         "dashboard.shipping_methods.trash",
@@ -85572,22 +85328,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "workflowIds": [
           "dashboard.bangladesh-checkout-supported-setup",
           "dashboard.payment-methods"
-        ]
-      },
-      {
-        "operationId": "dashboard.payments.polar_get",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.payments.polar_get"
-        ]
-      },
-      {
-        "operationId": "dashboard.payments.polar_update",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.payments.polar_update"
         ]
       },
       {

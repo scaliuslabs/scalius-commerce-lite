@@ -28,14 +28,12 @@ interface Env {
     }): Promise<{ messageId: string }>;
   };
 
-  // KV namespace for caching (auth/rbac/api-protection, middleware-helper/csp-handler).
+  // The only KV namespace (auth/rbac permission cache, identity handoff,
+  // firebase/admin.ts FCM token cache, middleware-helper/csp-handler).
   CACHE: KVNamespace;
 
-  // KV namespace for shared auth token caching (integrations/firebase/admin.ts).
-  SHARED_AUTH_CACHE: KVNamespace;
-
   // Order notification fan-out (modules/orders/orders.ingest.ts).
-  ORDER_NOTIFICATIONS_QUEUE: Queue;
+  JOBS_QUEUE: Queue;
 
   // Passed through to `getDb(env)` / `resolveDatabaseConfiguration(env)`.
   DB?: D1Database;
