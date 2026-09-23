@@ -1,5 +1,4 @@
 import { useRef, type MouseEvent } from "react";
-import { Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,6 +10,8 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import type { ProductRevisionConflict } from "~/lib/admin-api-error";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 
 interface ProductRevisionConflictDialogProps {
   open: boolean;
@@ -23,6 +24,7 @@ interface ProductRevisionConflictDialogProps {
   onProductUnavailable: () => void;
 }
 
+/** Someone else saved (or deleted) the product; never save over their version. */
 export function ProductRevisionConflictDialog({
   open,
   conflict,
@@ -33,7 +35,9 @@ export function ProductRevisionConflictDialog({
   onReloadLatest,
   onProductUnavailable,
 }: ProductRevisionConflictDialogProps) {
+  const t = useMessages(productMessages);
   const keepDraftRef = useRef<HTMLButtonElement>(null);
+  const deleted = conflict?.currentRevision === null;
 
   function handleReload(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -43,76 +47,33 @@ export function ProductRevisionConflictDialog({
   return (
     <AlertDialog open={open && conflict !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent
-        className="max-w-md gap-3"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           keepDraftRef.current?.focus();
         }}
       >
-        <AlertDialogHeader className="space-y-1.5">
-          <AlertDialogTitle>This product changed elsewhere</AlertDialogTitle>
-          <AlertDialogDescription>
-            Your draft is still here, but it can&apos;t be saved over the newer
-            version.
-          </AlertDialogDescription>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t(deleted ? "conflictDeletedTitle" : "conflictTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{t(deleted ? "conflictDeletedBody" : "conflictBody")}</AlertDialogDescription>
         </AlertDialogHeader>
 
-        {conflict ? (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-md border bg-muted/30 px-3 py-2.5 text-xs">
-            <dt className="font-medium text-foreground">Your draft</dt>
-            <dd className="text-right text-muted-foreground">
-              Revision {conflict.expectedRevision} · Not saved
-            </dd>
-            <dt className="font-medium text-foreground">Saved product</dt>
-            <dd className="text-right text-muted-foreground">
-              {conflict.currentRevision === null
-                ? "No longer available"
-                : `Revision ${conflict.currentRevision}`}
-            </dd>
-          </dl>
-        ) : null}
-
-        <p className="text-xs text-muted-foreground">
-          {conflict?.currentRevision === null
-            ? "This draft cannot be saved because the product no longer exists."
-            : "Reloading replaces this draft with the latest saved product."}
-        </p>
-
         {reloadError ? (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-          >
+          <p role="alert" className="text-body text-destructive">
             {reloadError}
           </p>
         ) : null}
 
         <AlertDialogFooter>
-          <AlertDialogCancel
-            ref={keepDraftRef}
-            disabled={isReloading}
-            onClick={onKeepDraft}
-          >
-            Keep draft
+          <AlertDialogCancel ref={keepDraftRef} disabled={isReloading} onClick={onKeepDraft}>
+            {t("keepMyEdits")}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={
-              conflict?.currentRevision === null
-                ? onProductUnavailable
-                : handleReload
-            }
+            onClick={deleted ? onProductUnavailable : handleReload}
             disabled={isReloading}
             aria-busy={isReloading}
             variant="destructive"
           >
-            {isReloading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {isReloading
-              ? "Reloading…"
-              : conflict?.currentRevision === null
-                ? "Return to products"
-                : "Reload latest"}
+            {t(deleted ? "backToProducts" : "loadLatest")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

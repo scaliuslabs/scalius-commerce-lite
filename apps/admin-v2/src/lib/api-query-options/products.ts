@@ -4,7 +4,6 @@ import {
   getApiV1AdminProductsById,
   getApiV1AdminProductsByIds,
   getApiV1AdminProductsByIdVariants,
-  getApiV1AdminProductsStats,
   type postApiV1AdminProducts,
   type putApiV1AdminProductsByIdOptionsMatrix,
 } from "@scalius/api-client/sdk";
@@ -14,7 +13,8 @@ import { queryKeys } from "../query-keys";
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
 
-export type ProductsQuery = ApiQuery<typeof getApiV1AdminProducts>;
+// status: added in wave 4; remove this intersection after generate:sdk.
+export type ProductsQuery = ApiQuery<typeof getApiV1AdminProducts> & { status?: "active" | "draft" };
 export type ProductListItemDto = ApiResult<typeof getApiV1AdminProducts>["products"][number];
 export type ProductsByIdsPayload = ApiResult<typeof getApiV1AdminProductsByIds>;
 type ApiProductDetail = ApiResult<typeof getApiV1AdminProductsById>;
@@ -47,7 +47,10 @@ function normalizeLookupIds(ids: readonly string[]): string[] {
 
 /** The admin list always reads the compact projection. */
 export const fetchProducts = (query: ProductsQuery) =>
-  apiData(getApiV1AdminProducts({ query: { view: "compact", ...query } }));
+  apiData(getApiV1AdminProducts({
+    // status: added in wave 4; remove cast after generate:sdk
+    query: { view: "compact", ...query } as ApiQuery<typeof getApiV1AdminProducts>,
+  }));
 
 export const fetchProductsByIds = (ids: readonly string[]) => {
   const normalizedIds = normalizeLookupIds(ids);
@@ -79,13 +82,6 @@ export const productQueryOptions = (id: string) =>
     queryFn: async () =>
       (await apiData(getApiV1AdminProductsById({ path: { id } }))) as ProductDetailDto,
     staleTime: 0,
-  });
-
-export const productStatsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.products.stats(),
-    queryFn: () => apiData(getApiV1AdminProductsStats()),
-    staleTime: MODERATE_STALE_TIME_MS,
   });
 
 export const productVariantsQueryOptions = (productId: string) =>

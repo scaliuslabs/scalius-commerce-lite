@@ -1447,31 +1447,29 @@ export async function listOrders(db: Database, options: {
     const trimmedSearch = search?.trim();
     if (trimmedSearch) {
         const phoneSearchTerms = buildPhoneSearchTerms(trimmedSearch);
-        const phoneCondition = buildPhoneSearchCondition(phoneSearchTerms);
+        const phoneCondition = isLikelyPhoneSearch(trimmedSearch)
+            ? buildPhoneSearchCondition(phoneSearchTerms)
+            : undefined;
         const ftsCondition = ftsMatch(db, "orders_fts", "orders", trimmedSearch);
-
-        if (isLikelyPhoneSearch(trimmedSearch) && phoneCondition) {
-            whereConditions.push(ftsCondition ? sql`(${ftsCondition} OR ${phoneCondition})` : phoneCondition);
-            if (isFts5SearchEnabled(db)) {
-                const sanitized = sanitizeFtsQuery(trimmedSearch);
-                rankExpression = sql`
-                    COALESCE(
-                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                        999999
-                    ) ASC
-                `;
-            }
-        } else if (ftsCondition) {
-            whereConditions.push(ftsCondition);
-            if (isFts5SearchEnabled(db)) {
-                const sanitized = sanitizeFtsQuery(trimmedSearch);
-                rankExpression = sql`
-                    COALESCE(
-                        (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
-                        999999
-                    ) ASC
-                `;
-            }
+        // Merchants also look orders up by the courier's consignment or tracking id.
+        const courierIdCondition = sql`EXISTS (
+            SELECT 1 FROM ${deliveryShipments}
+            WHERE ${deliveryShipments.orderId} = ${orders.id}
+              AND (lower(${deliveryShipments.trackingId}) = lower(${trimmedSearch})
+                OR lower(${deliveryShipments.externalId}) = lower(${trimmedSearch}))
+        )`;
+        const matches = [ftsCondition, phoneCondition, courierIdCondition].filter(
+            (condition): condition is SQL => condition !== undefined,
+        );
+        whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
+        if (ftsCondition && isFts5SearchEnabled(db)) {
+            const sanitized = sanitizeFtsQuery(trimmedSearch);
+            rankExpression = sql`
+                COALESCE(
+                    (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitized}),
+                    999999
+                ) ASC
+            `;
         }
     }
 

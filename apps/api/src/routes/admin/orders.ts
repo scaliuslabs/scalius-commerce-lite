@@ -388,7 +388,7 @@ app.openapi(catalogProductsRoute, async (c) => {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
-        activeOnly: true,
+        status: "active",
         sort: "name",
         order: "asc",
         agentSummary: true,

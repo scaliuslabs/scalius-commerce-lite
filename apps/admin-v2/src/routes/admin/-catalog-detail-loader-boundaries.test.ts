@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROUTES = [
-  "./products/$productId/index.tsx",
   "./products/$productId/edit.tsx",
   "./categories/$categoryId/edit.tsx",
   "./collections/$collectionId/edit.tsx",

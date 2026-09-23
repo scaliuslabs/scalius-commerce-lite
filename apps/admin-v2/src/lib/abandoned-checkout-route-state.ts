@@ -2,6 +2,7 @@ import {
   normalizeEnumSearchParam,
   normalizeListPositiveInteger,
   normalizeSearchString,
+  type SearchValidatorInput,
 } from "./list-helpers";
 
 export const ABANDONED_CHECKOUT_SORTS = [
@@ -21,7 +22,7 @@ export interface AbandonedCheckoutRouteState {
 }
 
 export function validateAbandonedCheckoutSearch(
-  search: Record<string, unknown>,
+  search: SearchValidatorInput<AbandonedCheckoutRouteState>,
 ): AbandonedCheckoutRouteState {
   return {
     page: normalizeListPositiveInteger(search.page, 1),

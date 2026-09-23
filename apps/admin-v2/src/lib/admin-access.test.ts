@@ -42,10 +42,9 @@ describe("admin shell access", () => {
     };
 
     expect(canAccessAdminPath("/admin/products", productViewer)).toBe(true);
-    expect(canAccessAdminPath("/admin/products/abc", productViewer)).toBe(true);
-    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(
-      false,
-    );
+    // One product page: viewers can open it; saving still needs products.edit.
+    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(true);
+    expect(canAccessAdminPath("/admin/orders/abandoned", productViewer)).toBe(false);
     expect(canAccessAdminPath("/admin/products/new", productViewer)).toBe(
       false,
     );

@@ -16,20 +16,20 @@ import {
   queryKeys,
 } from "./shared";
 import { readProductRevisionConflict } from "../admin-api-error";
+import { translate } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 
-function handleProductListMutationError(
-  queryClient: QueryClient,
-  error: unknown,
-  fallback: string,
-) {
+const t = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
+  translate(productMessages, key, vars);
+
+function handleProductListMutationError(queryClient: QueryClient, error: unknown) {
   if (readProductRevisionConflict(error)) {
     queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-    toast.error("Product changed", {
-      description: "The product list is refreshing. Try again.",
-    });
+    toast.error(t("listChangedTitle"), { description: t("listChangedBody") });
     return;
   }
-  toast.error(getServerFnError(error, fallback));
+  toast.error(getServerFnError(error, translate(resourceMessages, "actionFailed")));
 }
 
 export function useDeleteProduct() {
@@ -43,14 +43,9 @@ export function useDeleteProduct() {
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(variables.id) });
-      toast.success("Product moved to trash");
+      toast.success(t("movedToTrash"));
     },
-    onError: (err) =>
-      handleProductListMutationError(
-        queryClient,
-        err,
-        "Failed to delete product",
-      ),
+    onError: (err) => handleProductListMutationError(queryClient, err),
   });
 }
 
@@ -68,14 +63,9 @@ export function usePermanentDeleteProduct() {
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(variables.id) });
-      toast.success("Product permanently deleted");
+      toast.success(t("deleted"));
     },
-    onError: (err) =>
-      handleProductListMutationError(
-        queryClient,
-        err,
-        "Failed to permanently delete product",
-      ),
+    onError: (err) => handleProductListMutationError(queryClient, err),
   });
 }
 
@@ -92,14 +82,9 @@ export function useRestoreProduct() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.detail(variables.id),
       });
-      toast.success("Product restored");
+      toast.success(t("restored"));
     },
-    onError: (err) =>
-      handleProductListMutationError(
-        queryClient,
-        err,
-        "Failed to restore product",
-      ),
+    onError: (err) => handleProductListMutationError(queryClient, err),
   });
 }
 
@@ -114,7 +99,7 @@ export function useBulkDeleteProducts() {
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       if (!variables.permanent) {
-        toast.success(`${variables.products.length} products moved to trash`);
+        toast.success(t("bulkMovedToTrash", { count: variables.products.length }));
         return;
       }
 
@@ -122,27 +107,19 @@ export function useBulkDeleteProducts() {
         (outcome) => outcome.status === "blocked" || outcome.status === "failed",
       );
       if (blocked.length === 0) {
-        toast.success(`${data.deletedIds.length} products permanently deleted`);
+        toast.success(t("bulkDeleted", { count: data.deletedIds.length }));
         return;
       }
 
+      // The server explains why (e.g. a variant has stock history); show it as sent.
       const firstMessage = blocked.find((outcome) => outcome.message)?.message;
-      const summary = `${data.deletedIds.length} deleted; ${blocked.length} kept in trash.`;
+      const summary = t("bulkDeletePartial", { deleted: data.deletedIds.length, kept: blocked.length });
       if (data.deletedIds.length === 0) {
-        toast.error("No products were permanently deleted", {
-          description: firstMessage ?? summary,
-        });
+        toast.error(t("bulkDeleteNone"), { description: firstMessage ?? summary });
       } else {
-        toast.warning("Permanent delete completed with issues", {
-          description: firstMessage ? `${summary} ${firstMessage}` : summary,
-        });
+        toast.warning(summary, { description: firstMessage });
       }
     },
-    onError: (err) =>
-      handleProductListMutationError(
-        queryClient,
-        err,
-        "Failed to delete products",
-      ),
+    onError: (err) => handleProductListMutationError(queryClient, err),
   });
 }

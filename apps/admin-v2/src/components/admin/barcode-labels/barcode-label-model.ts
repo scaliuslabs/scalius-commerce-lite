@@ -25,27 +25,10 @@ export function getBarcodeQuietZoneModules(
   return { left: 10, right: 10 };
 }
 
-export type LabelPreset = {
-  id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-wide-cut-2x7" | "a4-adhesive-2x7" | "a4-extra-wide-cut-1x10" | "thermal-50x25" | "thermal-40x30" | "custom";
-  name: string;
-  detail: string;
-  pageWidthMm: number;
-  pageHeightMm: number;
-  columns: number;
-  rows: number;
-  marginXmm: number;
-  marginYmm: number;
-  gapXmm: number;
-  gapYmm: number;
-  cropMarks: boolean;
-  thermal: boolean;
-};
-
-export const LABEL_PRESETS: readonly LabelPreset[] = [
+/** The two label stocks the dashboard prints: an A4 cut sheet and a 38 × 25 mm thermal roll. */
+export const LABEL_PRESETS = [
   {
-    id: "a4-cut-3x8",
-    name: "A4 cut sheet",
-    detail: "Plain paper · 3 × 8 · 24 labels",
+    id: "a4",
     pageWidthMm: 210,
     pageHeightMm: 297,
     columns: 3,
@@ -55,73 +38,10 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
     gapXmm: 2,
     gapYmm: 2,
     cropMarks: true,
-    thermal: false,
   },
   {
-    id: "a4-compact-4x10",
-    name: "A4 compact",
-    detail: "Plain paper · 4 × 10 · 40 labels",
-    pageWidthMm: 210,
-    pageHeightMm: 297,
-    columns: 4,
-    rows: 10,
-    marginXmm: 7,
-    marginYmm: 7,
-    gapXmm: 1.5,
-    gapYmm: 1,
-    cropMarks: true,
-    thermal: false,
-  },
-  {
-    id: "a4-wide-cut-2x7",
-    name: "A4 wide cut",
-    detail: "Plain paper · 2 × 7 · 14 labels",
-    pageWidthMm: 210,
-    pageHeightMm: 297,
-    columns: 2,
-    rows: 7,
-    marginXmm: 10,
-    marginYmm: 10,
-    gapXmm: 2,
-    gapYmm: 2,
-    cropMarks: true,
-    thermal: false,
-  },
-  {
-    id: "a4-adhesive-2x7",
-    name: "A4 adhesive",
-    detail: "2 × 7 · 14 larger labels",
-    pageWidthMm: 210,
-    pageHeightMm: 297,
-    columns: 2,
-    rows: 7,
-    marginXmm: 10,
-    marginYmm: 10,
-    gapXmm: 2,
-    gapYmm: 2,
-    cropMarks: false,
-    thermal: false,
-  },
-  {
-    id: "a4-extra-wide-cut-1x10",
-    name: "A4 extra-wide cut",
-    detail: "Plain paper · 1 × 10 · 10 labels",
-    pageWidthMm: 210,
-    pageHeightMm: 297,
-    columns: 1,
-    rows: 10,
-    marginXmm: 10,
-    marginYmm: 8,
-    gapXmm: 0,
-    gapYmm: 2,
-    cropMarks: true,
-    thermal: false,
-  },
-  {
-    id: "thermal-50x25",
-    name: "Thermal 50 × 25 mm",
-    detail: "One label per page",
-    pageWidthMm: 50,
+    id: "thermal-38x25",
+    pageWidthMm: 38,
     pageHeightMm: 25,
     columns: 1,
     rows: 1,
@@ -130,41 +50,15 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
     gapXmm: 0,
     gapYmm: 0,
     cropMarks: false,
-    thermal: true,
-  },
-  {
-    id: "thermal-40x30",
-    name: "Thermal 40 × 30 mm",
-    detail: "One compact label per page",
-    pageWidthMm: 40,
-    pageHeightMm: 30,
-    columns: 1,
-    rows: 1,
-    marginXmm: 1.5,
-    marginYmm: 1.5,
-    gapXmm: 0,
-    gapYmm: 0,
-    cropMarks: false,
-    thermal: true,
-  },
-  {
-    id: "custom",
-    name: "Custom stock",
-    detail: "Set page, grid, margins, and gaps",
-    pageWidthMm: 210,
-    pageHeightMm: 297,
-    columns: 3,
-    rows: 8,
-    marginXmm: 8,
-    marginYmm: 8,
-    gapXmm: 2,
-    gapYmm: 2,
-    cropMarks: true,
-    thermal: false,
   },
 ] as const;
 
+export type LabelPreset = (typeof LABEL_PRESETS)[number];
 export type LabelPresetId = LabelPreset["id"];
+
+export function getLabelPreset(id: LabelPresetId): LabelPreset {
+  return LABEL_PRESETS.find((preset) => preset.id === id) ?? LABEL_PRESETS[0];
+}
 
 export type BarcodeSymbol = {
   format: BarcodeRenderFormat | null;
@@ -187,72 +81,7 @@ export const DEFAULT_LABEL_CONTENT: LabelContentOptions = {
   showPrice: true,
 };
 
-export const MAX_LABEL_ALIGNMENT_MM = 5;
-
-export type LabelPrintAlignment = {
-  xMm: number;
-  yMm: number;
-};
-
-export const DEFAULT_LABEL_PRINT_ALIGNMENT: LabelPrintAlignment = {
-  xMm: 0,
-  yMm: 0,
-};
-
-export function clampLabelAlignmentMm(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(-MAX_LABEL_ALIGNMENT_MM, Math.min(MAX_LABEL_ALIGNMENT_MM, value));
-}
-
-export function formatLabelPrintAlignment(alignment: LabelPrintAlignment): string {
-  if (alignment.xMm === 0 && alignment.yMm === 0) return "Default";
-  const horizontal = alignment.xMm === 0
-    ? null
-    : `${Math.abs(alignment.xMm)} mm ${alignment.xMm > 0 ? "right" : "left"}`;
-  const vertical = alignment.yMm === 0
-    ? null
-    : `${Math.abs(alignment.yMm)} mm ${alignment.yMm > 0 ? "down" : "up"}`;
-  return [horizontal, vertical].filter(Boolean).join(" · ");
-}
-
-export function getLabelPrintGridPosition(
-  preset: Pick<LabelPreset, "marginXmm" | "marginYmm">,
-  alignment: LabelPrintAlignment,
-): { leftMm: number; topMm: number } {
-  return {
-    leftMm: preset.marginXmm + clampLabelAlignmentMm(alignment.xMm),
-    topMm: preset.marginYmm + clampLabelAlignmentMm(alignment.yMm),
-  };
-}
-
-export function formatLabelCount(count: number): string {
-  return `${count} ${count === 1 ? "label" : "labels"}`;
-}
-
-export function formatPageCount(count: number): string {
-  return `${count} ${count === 1 ? "page" : "pages"}`;
-}
-
-export function clampLabelPreviewPageIndex(index: number, pageCount: number): number {
-  const lastPageIndex = Math.max(0, Math.trunc(pageCount) - 1);
-  return Math.max(0, Math.min(Math.trunc(index) || 0, lastPageIndex));
-}
-
-export function getLabelPreset(id: LabelPresetId): LabelPreset {
-  return LABEL_PRESETS.find((preset) => preset.id === id) ?? LABEL_PRESETS[0];
-}
-
-export function getLabelInventorySummary(
-  variant: Pick<InventoryLabelVariant, "available" | "stock" | "trackInventory">,
-): string {
-  return variant.trackInventory
-    ? `${variant.stock} on hand · ${variant.available} available`
-    : "Inventory not tracked";
-}
-
 export type LabelQuantityShortcut = "one" | "onHand" | "available";
-
-export type LabelOrder = "selected" | "product" | "sku";
 
 export function getLabelShortcutQuantity(
   variant: Pick<InventoryLabelVariant, "available" | "stock" | "trackInventory">,
@@ -264,66 +93,11 @@ export function getLabelShortcutQuantity(
   return Math.max(0, mode === "onHand" ? variant.stock : variant.available);
 }
 
-function compareLabelText(left: string | null | undefined, right: string | null | undefined): number {
-  return (left ?? "").localeCompare(right ?? "", "en", {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-/**
- * Printing order is a job concern, not catalog identity. Never mutate the API
- * projection or the URL selection order while arranging physical labels.
- */
-export function orderLabelVariants(
-  variants: readonly InventoryLabelVariant[],
-  order: LabelOrder,
-): InventoryLabelVariant[] {
-  const ordered = [...variants];
-  if (order === "selected") return ordered;
-
-  return ordered.sort((left, right) => {
-    const primary = order === "product"
-      ? compareLabelText(left.productName, right.productName)
-      : compareLabelText(left.sku, right.sku);
-    if (primary !== 0) return primary;
-
-    const secondary = order === "product"
-      ? compareLabelText(left.optionLabel, right.optionLabel)
-      : compareLabelText(left.productName, right.productName);
-    if (secondary !== 0) return secondary;
-
-    const tertiary = compareLabelText(left.sku, right.sku);
-    return tertiary !== 0 ? tertiary : compareLabelText(left.id, right.id);
-  });
-}
-
-export function getNonPrintingLabelVariantIds(
-  variants: readonly Pick<InventoryLabelVariant, "id">[],
-  quantities: Readonly<Record<string, number>>,
-): string[] {
-  return variants
-    .filter((variant) => Math.max(0, Math.trunc(quantities[variant.id] ?? 1)) === 0)
-    .map((variant) => variant.id);
-}
-
 export function getLabelDimensions(preset: LabelPreset) {
   return {
     widthMm: (preset.pageWidthMm - (2 * preset.marginXmm) - ((preset.columns - 1) * preset.gapXmm)) / preset.columns,
     heightMm: (preset.pageHeightMm - (2 * preset.marginYmm) - ((preset.rows - 1) * preset.gapYmm)) / preset.rows,
   };
-}
-
-export function getLabelPresetIssue(preset: LabelPreset): string | null {
-  if (preset.pageWidthMm < 20 || preset.pageWidthMm > 320) return "Page width must be between 20 and 320 mm.";
-  if (preset.pageHeightMm < 15 || preset.pageHeightMm > 450) return "Page height must be between 15 and 450 mm.";
-  if (!Number.isInteger(preset.columns) || preset.columns < 1 || preset.columns > 10) return "Columns must be a whole number from 1 to 10.";
-  if (!Number.isInteger(preset.rows) || preset.rows < 1 || preset.rows > 20) return "Rows must be a whole number from 1 to 20.";
-  if (preset.marginXmm < 0 || preset.marginYmm < 0 || preset.gapXmm < 0 || preset.gapYmm < 0) return "Margins and gaps cannot be negative.";
-  const dimensions = getLabelDimensions(preset);
-  if (dimensions.widthMm < 20) return "Each label needs at least 20 mm of width. Reduce columns, margins, or horizontal gaps.";
-  if (dimensions.heightMm < 15) return "Each label needs at least 15 mm of height. Reduce rows, margins, or vertical gaps.";
-  return null;
 }
 
 function gtinCheckDigit(inputWithoutCheckDigit: string): string {
@@ -387,10 +161,15 @@ export function resolveBarcodeSymbol(
   return { format: null, value, displayValue: value, error: "This barcode type is not supported for printing." };
 }
 
+/**
+ * Smallest reliable printed width including quiet zones. EAN/UPC use GS1's
+ * 80% minimum magnification (0.264 mm modules), which is what 38 × 25 mm
+ * retail thermal labels print; Code 128 assumes 0.2 mm modules.
+ */
 export function estimateBarcodeWidthMm(symbol: BarcodeSymbol): number | null {
   if (!symbol.format) return null;
-  if (symbol.format === "EAN13" || symbol.format === "UPC") return 37.3;
-  if (symbol.format === "EAN8") return 27;
+  if (symbol.format === "EAN13" || symbol.format === "UPC") return 29.9;
+  if (symbol.format === "EAN8") return 21.4;
   if (symbol.format === "ITF14") return 48;
 
   const numericPairs = /^\d+$/.test(symbol.value) && symbol.value.length % 2 === 0;
@@ -400,31 +179,24 @@ export function estimateBarcodeWidthMm(symbol: BarcodeSymbol): number | null {
   return modulesIncludingQuietZone * 0.2;
 }
 
-export function getBarcodeFitIssue(symbol: BarcodeSymbol, preset: LabelPreset): string | null {
-  if (symbol.error) return symbol.error;
+export type BarcodeFitIssue = "unprintable" | "tooWide";
+
+export function getBarcodeFitIssue(symbol: BarcodeSymbol, preset: LabelPreset): BarcodeFitIssue | null {
   const minimumWidth = estimateBarcodeWidthMm(symbol);
-  if (minimumWidth === null) return "This barcode cannot be rendered.";
-  const { widthMm } = getLabelDimensions(preset);
-  const usableWidth = widthMm - 4;
-  if (minimumWidth > usableWidth) {
-    return `Barcode needs about ${Math.ceil(minimumWidth)} mm; this label has ${Math.floor(usableWidth)} mm of safe width.`;
-  }
-  return null;
+  if (symbol.error || minimumWidth === null) return "unprintable";
+  return minimumWidth > getLabelDimensions(preset).widthMm - 4 ? "tooWide" : null;
 }
 
+/** The other preset, when every barcode in the job fits it. */
 export function findCompatibleLabelPreset(
   symbols: readonly BarcodeSymbol[],
   currentPreset: LabelPreset,
 ): LabelPreset | null {
   if (symbols.length === 0) return null;
-  const candidates = LABEL_PRESETS.filter((candidate) => (
-    candidate.id !== "custom"
-    && candidate.id !== currentPreset.id
+  return LABEL_PRESETS.find((candidate) => (
+    candidate.id !== currentPreset.id
     && symbols.every((symbol) => getBarcodeFitIssue(symbol, candidate) === null)
-  ));
-  return candidates.find((candidate) => candidate.thermal === currentPreset.thermal)
-    ?? candidates[0]
-    ?? null;
+  )) ?? null;
 }
 
 export type LabelCopy = {
@@ -432,53 +204,6 @@ export type LabelCopy = {
   variant: InventoryLabelVariant;
   symbol: BarcodeSymbol;
 };
-
-function labelCsvCell(value: unknown): string {
-  let text = value == null ? "" : String(value);
-  // Catalog text is merchant-controlled and CSV files are commonly opened in
-  // spreadsheet software before being merged into label-printer templates.
-  // Keep the export inert instead of allowing a leading formula character.
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-/**
- * Exports one row per physical label, not one row per SKU. Database-merge
- * tools such as P-touch can therefore print every record once and preserve the
- * exact quantities and job order already reviewed in Scalius.
- */
-export function buildLabelDataCsv(
-  copies: readonly LabelCopy[],
-  formatPrice: (price: number | string) => string,
-): string {
-  const headers = [
-    "Label number",
-    "Product",
-    "Variant",
-    "SKU",
-    "Barcode format",
-    "Encoded barcode",
-    "Printed value",
-    "Selling price",
-  ];
-  const rows = copies.map((copy, index) => [
-    index + 1,
-    copy.variant.productName,
-    copy.variant.optionLabel ?? "",
-    copy.variant.sku,
-    copy.symbol.format ?? "",
-    copy.symbol.value,
-    copy.symbol.displayValue,
-    formatPrice(copy.variant.effectivePrice),
-  ]);
-
-  // The BOM keeps non-Latin product and variant names intact in Excel and in
-  // the desktop label applications merchants commonly use as merge sources.
-  return `\uFEFF${[
-    headers.map(labelCsvCell).join(","),
-    ...rows.map((row) => row.map(labelCsvCell).join(",")),
-  ].join("\r\n")}`;
-}
 
 export function buildLabelCopies(
   variants: readonly InventoryLabelVariant[],
@@ -496,23 +221,6 @@ export function buildLabelCopies(
   return copies;
 }
 
-export type LabelPageCell = LabelCopy | null;
-
-export function paginateLabelCopies(
-  copies: readonly LabelCopy[],
-  preset: LabelPreset,
-  startOffset = 0,
-): LabelPageCell[][] {
-  const perPage = preset.columns * preset.rows;
-  if (perPage < 1) return [];
-  const safeOffset = Math.max(0, Math.min(perPage - 1, Math.trunc(startOffset)));
-  const cells: LabelPageCell[] = [
-    ...Array.from({ length: copies.length > 0 ? safeOffset : 0 }, () => null),
-    ...copies,
-  ];
-  const pages: LabelPageCell[][] = [];
-  for (let index = 0; index < cells.length; index += perPage) {
-    pages.push(cells.slice(index, index + perPage));
-  }
-  return pages;
+export function countLabelPages(copyCount: number, preset: LabelPreset): number {
+  return Math.ceil(copyCount / (preset.columns * preset.rows));
 }

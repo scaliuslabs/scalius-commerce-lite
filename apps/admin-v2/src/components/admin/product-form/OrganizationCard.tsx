@@ -1,19 +1,13 @@
-// src/components/admin/product-form/OrganizationCard.tsx
 import { memo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
+import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@scalius/shared/utils";
+import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -23,105 +17,84 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { ChevronsUpDown, Check, Plus, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@scalius/shared/utils";
-import type { ProductFormValues } from "./types";
 import { getServerFnError } from "@/lib/api-helpers";
-import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-
-export interface Category {
-  id: string;
-  name: string;
-  status: "draft" | "published" | "internal";
-}
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
+import type { Category, ProductFormValues } from "./types";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
   categories: Category[];
 }
 
-export const OrganizationCard = memo(function OrganizationCard({
-  form,
-  categories,
-}: OrganizationCardProps) {
+/** Side card: the product's category (new categories start as drafts). */
+export const OrganizationCard = memo(function OrganizationCard({ form, categories }: OrganizationCardProps) {
+  const t = useMessages(productMessages);
   const [availableCategories, setAvailableCategories] = useState<Category[]>(categories);
-
-  const handleCategoryCreated = (newCategory: Category) => {
-    setAvailableCategories((prev) => [...prev, newCategory]);
-    form.setValue("categoryId", newCategory.id, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  };
 
   return (
     <Card>
-      <CardHeader className="px-4 py-3">
-        <CardTitle className="text-sm">Organization</CardTitle>
+      <CardHeader>
+        <CardTitle>{t("organization")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 px-4 pb-4 pt-0">
+      <CardContent>
         <FormField
           control={form.control}
           name="categoryId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">
-                Category <span className="text-destructive">*</span>
-              </FormLabel>
+              <FormLabel>{t("category")}</FormLabel>
               <CategoryCombobox
-                availableCategories={availableCategories}
-                selectedCategoryId={field.value}
-                onSelect={(categoryId) => {
-                  field.onChange(categoryId);
+                categories={availableCategories}
+                selectedId={field.value}
+                onSelect={field.onChange}
+                onCreated={(category) => {
+                  setAvailableCategories((current) => [...current, category]);
+                  form.setValue("categoryId", category.id, { shouldDirty: true, shouldValidate: true });
                 }}
-                onCategoryCreated={handleCategoryCreated}
               />
               <FormMessage />
             </FormItem>
           )}
         />
-
       </CardContent>
     </Card>
   );
 });
 
-// Combobox component for selecting and creating categories
 function CategoryCombobox({
-  availableCategories,
-  selectedCategoryId,
+  categories,
+  selectedId,
   onSelect,
-  onCategoryCreated,
+  onCreated,
 }: {
-  availableCategories: Category[];
-  selectedCategoryId: string;
+  categories: Category[];
+  selectedId: string;
   onSelect: (categoryId: string) => void;
-  onCategoryCreated: (newCategory: Category) => void;
+  onCreated: (category: Category) => void;
 }) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const queryClient = useQueryClient();
+  const name = search.trim();
+
+  const statusLabel = (category: Category) =>
+    category.status === "draft" ? t("statusDraft") : category.status === "internal" ? t("categoryHidden") : null;
 
   const handleCreate = async () => {
-    if (!search.trim()) return;
+    if (!name) return;
     setIsCreating(true);
-
-    // Generate slug from name
-    const slug = search
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
-
     try {
       const data = await apiData(postApiV1AdminCategories({
         body: {
-          name: search.trim(),
-          slug,
+          name,
+          slug: name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
           description: null,
           content: null,
           metaTitle: null,
@@ -132,72 +105,44 @@ function CategoryCombobox({
           image: null,
         },
       }));
-
-      const newCategory: Category = {
-        id: data.id,
-        name: search.trim(),
-        status: data.status,
-      };
-
-      onCategoryCreated(newCategory);
+      onCreated({ id: data.id, name, status: data.status });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.categories.formOptions(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.collections.categoryOptions(),
-        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.categoryOptions() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
       ]);
-      toast.success(`Draft category “${newCategory.name}” created`, {
-        description: "Assign products now, then publish the category from its edit page.",
-      });
+      toast.success(t("categoryCreated"), { description: t("categoryCreatedHint") });
       setOpen(false);
       setSearch("");
     } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Failed to create category"));
+      toast.error(getServerFnError(error, r("actionFailed")));
     } finally {
       setIsCreating(false);
     }
   };
 
-  const selectedCategory = availableCategories.find((c) => c.id === selectedCategoryId);
-  const selectedCategoryName = selectedCategory
-    ? `${selectedCategory.name}${selectedCategory.status === "published" ? "" : ` · ${selectedCategory.status}`}`
-    : "Select category...";
-
-  const filteredCategories = availableCategories.filter((cat) =>
-    cat.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const selected = categories.find((category) => category.id === selectedId);
+  const selectedStatus = selected ? statusLabel(selected) : null;
+  const filtered = categories.filter((category) => category.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          className={cn(
-            "min-h-11 w-full justify-between font-normal md:min-h-9",
-            !selectedCategoryId && "text-muted-foreground"
-          )}
-        >
-          <span className="truncate">{selectedCategoryName}</span>
+        <Button variant="outline" role="combobox" className="w-full justify-between">
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            {selected ? (selectedStatus ? `${selected.name} · ${selectedStatus}` : selected.name) : t("chooseCategory")}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-72 p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search categories..."
-            value={search}
-            onValueChange={setSearch}
-            className="min-h-11 md:min-h-10"
-          />
+          <CommandInput placeholder={t("searchCategories")} value={search} onValueChange={setSearch} />
           <CommandList>
-            {filteredCategories.length > 0 && (
-              <CommandGroup heading="Categories" className="p-2">
-                {filteredCategories.map((category) => (
+            {filtered.length > 0 ? (
+              <CommandGroup>
+                {filtered.map((category) => (
                   <CommandItem
                     key={category.id}
                     value={category.name}
@@ -206,57 +151,25 @@ function CategoryCombobox({
                       setOpen(false);
                       setSearch("");
                     }}
-                    className="min-h-11 cursor-pointer px-2 py-2 md:min-h-9"
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedCategoryId === category.id
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                    />
+                    <Check className={cn("mr-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
                     <span className="flex-1">{category.name}</span>
-                    {category.status !== "published" ? (
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {category.status}
-                      </span>
+                    {statusLabel(category) ? (
+                      <span className="text-body text-muted-foreground">{statusLabel(category)}</span>
                     ) : null}
                   </CommandItem>
                 ))}
               </CommandGroup>
-            )}
+            ) : null}
             <CommandEmpty>
-              <div className="p-2">
-                {search.trim() ? (
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start h-auto py-3 px-2 hover:bg-accent"
-                    onClick={handleCreate}
-                    disabled={isCreating}
-                  >
-                    <div className="flex items-center w-full">
-                      {isCreating ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <Plus className="mr-2 h-4 w-4 text-primary" />
-                      )}
-                      <div className="flex-1 text-left">
-                        <div className="text-sm font-medium">Create new category</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          Add "{search}"
-                        </div>
-                      </div>
-                    </div>
-                  </Button>
-                ) : (
-                  <div className="py-6 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      Type to search or create a category
-                    </p>
-                  </div>
-                )}
-              </div>
+              {name ? (
+                <Button type="button" variant="ghost" className="w-full justify-start" onClick={handleCreate} disabled={isCreating}>
+                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  {t("createCategory", { name })}
+                </Button>
+              ) : (
+                <p className="py-4 text-center text-body text-muted-foreground">{t("typeToFindCategory")}</p>
+              )}
             </CommandEmpty>
           </CommandList>
         </Command>

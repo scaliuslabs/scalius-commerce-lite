@@ -1,123 +1,65 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { orderDetailMessages } from "~/i18n/order-detail";
 
-const mocks = vi.hoisted(() => ({
-  html2pdf: vi.fn(),
-}));
+const mocks = vi.hoisted(() => ({ issue: vi.fn() }));
 
-vi.mock("html2pdf.js", () => ({
-  default: mocks.html2pdf,
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children }: { children: ReactNode }) => <a href="/admin/orders/order_1">{children}</a>,
 }));
+vi.mock("@scalius/api-client/sdk", () => ({ postApiV1AdminOrdersByIdInvoice: mocks.issue }));
+vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
 
 import { InvoiceActions } from "./InvoiceActions";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const en = orderDetailMessages.en;
 
 describe("InvoiceActions", () => {
   let host: HTMLDivElement;
-  let invoiceDocument: HTMLDivElement;
   let root: Root;
-  let save: ReturnType<typeof vi.fn>;
+  const onIssued = vi.fn();
 
   beforeEach(() => {
+    vi.clearAllMocks();
     host = document.createElement("div");
-    invoiceDocument = document.createElement("div");
-    invoiceDocument.id = "invoice-document";
-    document.body.append(host, invoiceDocument);
+    document.body.append(host);
     root = createRoot(host);
-
-    save = vi.fn().mockResolvedValue(undefined);
-    const chain = {
-      set: vi.fn(),
-      from: vi.fn(),
-      save,
-    };
-    chain.set.mockReturnValue(chain);
-    chain.from.mockReturnValue(chain);
-    mocks.html2pdf.mockReset();
-    mocks.html2pdf.mockReturnValue(chain);
   });
 
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
-    invoiceDocument.remove();
-    vi.restoreAllMocks();
   });
 
-  function renderActions() {
-    act(() => root.render(
-      <InvoiceActions orderId="order_1" invoiceNumber="INV-1001" />,
-    ));
-  }
+  const button = (label: string) =>
+    [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
 
-  function pdfButton(): HTMLButtonElement {
-    const button = [...host.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.includes("Download PDF"),
-    );
-    if (!(button instanceof HTMLButtonElement)) {
-      throw new Error("Download PDF button not found");
-    }
-    return button;
-  }
+  it("prints an issued invoice with the browser print dialog", () => {
+    const print = vi.fn();
+    Object.defineProperty(window, "print", { value: print, configurable: true });
+    act(() => root.render(<InvoiceActions orderId="order_1" issued expectedOrderVersion={3} onIssued={onIssued} />));
+    expect(button(en["invoice.issue"])).toBeUndefined();
+    act(() => button(en["invoice.print"])!.click());
+    expect(print).toHaveBeenCalledOnce();
+  });
 
-  async function clickPdfButton() {
-    await act(async () => {
-      pdfButton().click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
+  it("retries a failed issue with the same operation key and the order version", async () => {
+    mocks.issue.mockRejectedValueOnce(new Error("Order changed")).mockResolvedValueOnce({ status: "issued" });
+    act(() => root.render(<InvoiceActions orderId="order_1" issued={false} expectedOrderVersion={3} onIssued={onIssued} />));
+    expect(button(en["invoice.print"])).toBeUndefined();
 
-  it("keeps a failed PDF action visible and retryable without hiding Printable HTML", async () => {
-    save.mockRejectedValueOnce(new Error("canvas failed"));
-    renderActions();
+    await act(async () => button(en["invoice.issue"])!.click());
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Order changed");
+    await act(async () => button(en["invoice.issue"])!.click());
 
-    await clickPdfButton();
-
-    const alert = host.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("PDF could not be generated");
-    expect(alert?.textContent).toContain("Printable HTML");
-    expect(alert?.textContent).not.toContain("canvas failed");
-    expect(pdfButton().disabled).toBe(false);
-    expect(host.textContent).toContain("Printable HTML");
-
-    let resolveRetry: (() => void) | undefined;
-    save.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      resolveRetry = resolve;
-    }));
-    const retryButton = pdfButton();
-    await act(async () => {
-      retryButton.click();
-      await Promise.resolve();
-    });
-
-    expect(save).toHaveBeenCalledTimes(2);
+    const [first, second] = mocks.issue.mock.calls.map(([options]) => options.body);
+    expect(first.expectedOrderVersion).toBe(3);
+    expect(second.operationKey).toBe(first.operationKey);
+    expect(onIssued).toHaveBeenCalledWith({ status: "issued" });
     expect(host.querySelector('[role="alert"]')).toBeNull();
-    expect(retryButton.disabled).toBe(true);
-    expect(retryButton.textContent).toContain("Generating");
-
-    await act(async () => {
-      resolveRetry?.();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(pdfButton().disabled).toBe(false);
-  });
-
-  it("reports a missing invoice document instead of returning silently", async () => {
-    invoiceDocument.remove();
-    renderActions();
-
-    await clickPdfButton();
-
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-      "PDF could not be generated",
-    );
-    expect(mocks.html2pdf).not.toHaveBeenCalled();
-    expect(pdfButton().disabled).toBe(false);
   });
 });

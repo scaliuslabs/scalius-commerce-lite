@@ -1,3 +1,5 @@
+import { translate } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
 import type { OrderItem } from "../types";
 
 let fallbackCommandCounter = 0;
@@ -17,8 +19,8 @@ export function parseReturnQuantity(value: string, max: number): number {
 }
 
 export function getOrderItemName(item: OrderItem | undefined): string {
-  if (!item) return "Order item";
-  return [item.productName || "Unnamed product", item.variantLabel]
+  if (!item) return translate(orderDetailMessages, "items.unknown");
+  return [item.productName || translate(orderDetailMessages, "items.unnamed"), item.variantLabel]
     .filter(Boolean)
     .join(" · ");
 }

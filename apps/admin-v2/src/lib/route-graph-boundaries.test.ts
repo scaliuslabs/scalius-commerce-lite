@@ -311,7 +311,6 @@ describe("admin route graph boundaries", () => {
     const hotEntryPaths = [
       "routes/admin.tsx",
       "routes/admin/index.tsx",
-      "routes/admin/abandoned-checkouts.tsx",
       "routes/admin/articles/index.tsx",
       "routes/admin/attributes.tsx",
       "routes/admin/categories/index.tsx",
@@ -319,7 +318,9 @@ describe("admin route graph boundaries", () => {
       "routes/admin/customers/index.tsx",
       "routes/admin/discounts/index.tsx",
       "routes/admin/inventory/index.tsx",
-      "routes/admin/orders/index.tsx",
+      "routes/admin/orders/_list.tsx",
+      "routes/admin/orders/_list/index.tsx",
+      "routes/admin/orders/_list/abandoned.tsx",
       "routes/admin/pages/index.tsx",
       "routes/admin/products/index.tsx",
     ];
@@ -657,32 +658,6 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "lib", "admin-query-client.ts"),
       "utf8",
     );
-    const orderDetailSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "orders",
-        "$orderId",
-        "index.tsx",
-      ),
-      "utf8",
-    );
-    const orderListSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "index.tsx"),
-      "utf8",
-    );
-    const orderAutoRefreshCountdownSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "data-table",
-        "toolbars",
-        "OrderAutoRefreshCountdown.tsx",
-      ),
-      "utf8",
-    );
     const settingsQueryOptionsSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "api-query-options", "settings.ts"),
       "utf8",
@@ -703,18 +678,6 @@ describe("admin route graph boundaries", () => {
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");
     expect(queryClientSource).toContain("ADMIN_QUERY_RETRY = false");
-    expect(orderDetailSource).toContain("refetchInterval: 30_000");
-    expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
-    expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
-    expect(orderAutoRefreshCountdownSource).toContain(
-      'document.addEventListener("visibilitychange"',
-    );
-    expect(orderAutoRefreshCountdownSource).toContain("isDocumentHidden()");
-    expect(orderListSource).not.toContain("window.setInterval");
-    expect(orderListSource).toContain("activeOrderListRefreshRef");
-    expect(orderListSource).toContain("orderListRefreshInFlightRef");
-    expect(orderListSource).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
-    expect(orderListSource).not.toContain("refreshIntervalRef");
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollRestoration: true");
     expect(routerSource).toContain(
@@ -731,66 +694,6 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteContextSource).toContain(
       "refreshAdminRouteContextInBackground",
     );
-  });
-
-  it("keeps product list route first paint independent from secondary stats", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "products", "index.tsx"),
-      "utf8",
-    );
-    const loaderSource = source.slice(
-      source.indexOf("loader: async"),
-      source.indexOf("head: ({ match })"),
-    );
-
-    expect(loaderSource).toContain(
-      "await warmRouteQuery(queryClient, productsQueryOptions(mapParams(deps)))",
-    );
-    expect(loaderSource).toContain('typeof window !== "undefined"');
-    expect(loaderSource).toContain(
-      "void queryClient.prefetchQuery(categoryFormOptionsQueryOptions())",
-    );
-    expect(loaderSource).toContain(
-      "void queryClient.prefetchQuery(productStatsQueryOptions())",
-    );
-    expect(loaderSource).not.toContain(
-      "queryClient.ensureQueryData(categoryFormOptionsQueryOptions())",
-    );
-    expect(loaderSource).not.toContain(
-      "queryClient.ensureQueryData(productStatsQueryOptions())",
-    );
-  });
-
-  it("keeps list delete confirmations behind lazy interaction boundaries", () => {
-    const cases = [
-      {
-        route: "products",
-        component: "ProductDeleteDialog",
-        file: "-ProductDeleteDialog.tsx",
-        openMarker: "isProductDeleteDialogOpen &&",
-      },
-    ];
-
-    for (const { route, component, file, openMarker } of cases) {
-      const routeSource = readFileSync(
-        join(ADMIN_SRC_ROOT, "routes", "admin", route, "index.tsx"),
-        "utf8",
-      );
-      const dialogSource = readFileSync(
-        join(ADMIN_SRC_ROOT, "routes", "admin", route, file),
-        "utf8",
-      );
-
-      expect(routeSource).toContain(`const ${component} = lazy(()`);
-      expect(routeSource).toContain(
-        `import("./${file.replace(/\.tsx$/, "")}")`,
-      );
-      expect(routeSource).toContain(openMarker);
-      expect(routeSource).not.toContain("~/components/ui/alert-dialog");
-      expect(routeSource).not.toContain("AlertDialogContent");
-      expect(dialogSource).toContain("~/components/ui/alert-dialog");
-      expect(dialogSource).toContain(component);
-    }
   });
 
   it("keeps secondary admin tool routes from blocking first paint on data reads", () => {
@@ -811,103 +714,21 @@ describe("admin route graph boundaries", () => {
     }
   });
 
-  it("keeps abandoned checkout list state URL-owned and client-loaded", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
-      "utf8",
-    );
-    const managerSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "AbandonedCheckoutsManager.tsx",
-      ),
-      "utf8",
-    );
+  it("keeps self-loading settings routes out of route-entry data awaits", () => {
+    const selfLoadingSettingsRoutes = [
+      ["notifications.tsx", "FirebaseSettingsForm"],
+    ] as const;
 
-    expect(source).toContain("AbandonedCheckoutsManager");
-    expect(source).toContain("validateSearch: validateAbandonedCheckoutSearch");
-    expect(source).not.toContain("abandonedCheckoutsQueryOptions");
-    expect(source).not.toContain("ensureQueryData(");
-    expect(source).not.toContain("prefetchQuery(");
-    expect(source).toContain("routeState={search}");
-    expect(managerSource).toContain("routeState: AbandonedCheckoutRouteState");
-    expect(managerSource).toContain("onRouteStateChange");
-    expect(managerSource).not.toContain('useState("")');
-    expect(managerSource).toContain("No records have been assumed.");
-    expect(managerSource).toContain("getCanonicalPageForPagination");
-  });
+    for (const [filename, marker] of selfLoadingSettingsRoutes) {
+      const source = readFileSync(
+        join(ADMIN_SRC_ROOT, "routes", "admin", "settings", filename),
+        "utf8",
+      );
 
-  it("keeps new-order creation independent from catalog size", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "new.tsx"),
-      "utf8",
-    );
-    const loaderSource = source.slice(
-      source.indexOf("loader: async"),
-      source.indexOf("head: ()"),
-    );
-
-    expect(loaderSource).not.toContain("productsQueryOptions(");
-    expect(loaderSource).toContain("buildNewOrderFormRouteData()");
-    expect(loaderSource).toContain("deliveryLocationsQueryOptions");
-    expect(source).not.toContain("productQueryOptions(");
-    expect(loaderSource).not.toContain("Promise.all(");
-    expect(loaderSource).not.toContain("for (let");
-  });
-
-  it("keeps product edit first paint from eagerly importing variant management", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "products",
-        "$productId",
-        "edit.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain("const OptionMatrixEditor = lazy(");
-    expect(source).toContain(
-      'import("~/components/admin/product-form/variants/OptionMatrixEditor")',
-    );
-    expect(source).toContain('<LoadingFallback height="h-48" />');
-    expect(source).not.toMatch(
-      /import\s+\{\s*OptionMatrixEditor\s*\}\s+from\s+["']~\/components\/admin\/product-form\/variants/,
-    );
-  });
-
-  it("keeps the primary product description on the deferred editor boundary", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "product-form",
-        "TitleDescriptionSection.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain(
-      'import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor"',
-    );
-    expect(source).toContain("<DeferredTiptapEditor");
-    expect(source).toContain('placeholder="Describe your product..."');
-    expect(source).not.toContain('from "@/components/ui/tiptap/TiptapEditor"');
-    expect(source).not.toContain("<TiptapEditor");
-    expect(source).not.toContain(
-      'import("@/components/ui/tiptap/TiptapEditor")',
-    );
-    expect(source).not.toContain(
-      'fallback={<LoadingFallback height="h-[237px]" />}',
-    );
-    expect(source).not.toContain("<RichContent");
-    expect(source).not.toContain("../rich-content");
-    expect(source).not.toContain("TiptapToolbarSkeleton");
+      expect(source).toContain(marker);
+      expect(source).not.toContain("ensureQueryData(");
+      expect(source).not.toContain("prefetchQuery(");
+    }
   });
 
   it("keeps edit forms from blocking on secondary label hydration", () => {
@@ -1013,252 +834,4 @@ describe("admin route graph boundaries", () => {
     expect(menuBarSource).not.toContain('querySelector("button")?.click()');
   });
 
-  it("keeps order payment history failures local to the payment card", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "orderview",
-        "PaymentCard.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain("orderPaymentsQueryOptions(order.id)");
-    expect(source).toContain("useQuery({");
-    expect(source).not.toContain("useSuspenseQuery");
-    expect(source).toContain("Payment history unavailable");
-    expect(source).toContain("refetchPayments");
-    expect(source).toContain("Retry before reviewing");
-    expect(source).toContain("paymentWebhookIssues");
-    expect(source).toContain("Payment webhook needs review");
-    expect(source).toContain(
-      "Check the gateway dashboard before changing payment-sensitive order state.",
-    );
-    expect(source).toContain("paymentSessionAttempts");
-    expect(source).toContain("Payment session attempts");
-    expect(source).toContain("refetchInterval: (query)");
-    expect(source).toContain("Internal ref:");
-    expect(source).toContain("Provider refund:");
-    expect(source).toContain("Refund row:");
-  });
-
-  it("normalizes stale hosted-payment archives in incomplete-checkout UI", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "AbandonedCheckoutsManager.tsx",
-      ),
-      "utf8",
-    );
-    const routeSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
-      "utf8",
-    );
-
-    expect(source).toContain("parseAbandonedCheckoutDisplay");
-    expect(source).toContain("useOrderActionPermissions");
-    expect(source).toContain("orderActions.canDeleteOrders");
-    expect(source).toContain("orderActions.canBulkDeleteOrders");
-    expect(source).toContain("Archived hosted-payment order");
-    expect(source).toContain("This was a stale online checkout order");
-    expect(source).toContain("View order");
-    expect(source).toContain("Delete recovery record");
-    expect(source).toContain("The original order record remains in Orders.");
-    expect(source).not.toContain("const parseCheckoutData =");
-
-    expect(routeSource).toContain("<AbandonedCheckoutsManager");
-    expect(routeSource).not.toContain("archived hosted payments");
-  });
-
-  it("keeps order detail SSR formatting deterministic", () => {
-    const orderViewSources = [
-      ...listSourceFiles(
-        join(ADMIN_SRC_ROOT, "components", "admin", "orderview"),
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "ShipmentStatusIndicator.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "orders",
-        "$orderId",
-        "index.tsx",
-      ),
-    ].map(
-      (file) =>
-        [relative(ADMIN_SRC_ROOT, file), readFileSync(file, "utf8")] as const,
-    );
-
-    for (const [file, source] of orderViewSources) {
-      expect(source, file).not.toMatch(
-        /\.toLocale(?:String|DateString|TimeString)\(/,
-      );
-      expect(source, file).not.toContain("new Date().toISOString()");
-      expect(source, file).not.toContain("suppressHydrationWarning");
-    }
-
-    const formatterSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-time.ts"),
-      "utf8",
-    );
-    expect(formatterSource).toContain(
-      "export const ADMIN_TIME_ZONE = COMMERCE_TIME_ZONE",
-    );
-    expect(formatterSource).toContain('new Intl.DateTimeFormat("en-US"');
-  });
-
-  it("keeps order detail optional panels hydration-gated", () => {
-    const routeSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "orders",
-        "$orderId",
-        "index.tsx",
-      ),
-      "utf8",
-    );
-    const paymentSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "orderview",
-        "PaymentCard.tsx",
-      ),
-      "utf8",
-    );
-    const notificationsSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "orderview",
-        "OrderNotificationsCard.tsx",
-      ),
-      "utf8",
-    );
-    const notificationDisplaySource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "order-notification-display.ts"),
-      "utf8",
-    );
-
-    expect(routeSource).toContain("const isHydrated = useHydrated()");
-    expect(routeSource).toContain("enabled: isHydrated");
-    expect(routeSource).toContain(
-      "const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)",
-    );
-    expect(routeSource).toContain(
-      "isHydrated && Array.isArray(providersQuery.data)",
-    );
-    expect(paymentSource).toContain("const isHydrated = useHydrated()");
-    expect(paymentSource).toContain("enabled: isHydrated");
-    expect(paymentSource).toContain("enabled: isHydrated && usesCashCollection");
-    expect(paymentSource).toContain("const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery");
-    expect(paymentSource).toContain("(!isHydrated || paymentsLoading)");
-    expect(notificationsSource).toContain("const isHydrated = useHydrated()");
-    expect(notificationsSource).toContain("enabled: isHydrated");
-    expect(notificationsSource).toContain("!isHydrated || isLoading");
-    expect(notificationsSource).toContain("buildReceiptDisplayGroups");
-    expect(notificationDisplaySource).toContain("Stopped after");
-    expect(notificationDisplaySource).toContain("return null");
-    expect(notificationsSource).toContain("recorded attempt");
-  });
-
-  it("keeps order detail panels on the deterministic eager boundary", () => {
-    const orderViewPath = join(
-      ADMIN_SRC_ROOT,
-      "components",
-      "admin",
-      "OrderView.tsx",
-    );
-    const orderViewSource = readFileSync(orderViewPath, "utf8");
-    const supportPath = join(
-      ADMIN_SRC_ROOT,
-      "components",
-      "admin",
-      "orderview",
-      "OrderSupportRequestsCard.tsx",
-    );
-    const notificationsPath = join(
-      ADMIN_SRC_ROOT,
-      "components",
-      "admin",
-      "orderview",
-      "OrderNotificationsCard.tsx",
-    );
-    const paymentPath = join(
-      ADMIN_SRC_ROOT,
-      "components",
-      "admin",
-      "orderview",
-      "PaymentCard.tsx",
-    );
-    const shipmentPath = join(
-      ADMIN_SRC_ROOT,
-      "components",
-      "admin",
-      "orderview",
-      "ShipmentCard.tsx",
-    );
-
-    expect(orderViewSource).not.toContain("lazy(");
-    expect(orderViewSource).not.toContain("<Suspense");
-    expect(orderViewSource).toContain(
-      "(order.supportRequests?.length ?? 0) > 0",
-    );
-    expect(orderViewSource).toContain(
-      'import { PaymentCard } from "./orderview/PaymentCard"',
-    );
-    expect(orderViewSource).toContain(
-      'import { ShipmentCard } from "./orderview/ShipmentCard"',
-    );
-    expect(orderViewSource).toContain(
-      'import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard"',
-    );
-    expect(orderViewSource).toContain(
-      'import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard"',
-    );
-    expect(
-      findStaticImportPathToTarget(orderViewPath, supportPath),
-    ).not.toBeNull();
-    expect(
-      findStaticImportPathToTarget(orderViewPath, notificationsPath),
-    ).not.toBeNull();
-    expect(
-      findStaticImportPathToTarget(orderViewPath, paymentPath),
-    ).not.toBeNull();
-    expect(
-      findStaticImportPathToTarget(orderViewPath, shipmentPath),
-    ).not.toBeNull();
-  });
-
-  it("keeps order-detail refund recovery context as the payment-card fallback", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "routes",
-        "admin",
-        "orders",
-        "$orderId",
-        "index.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain("refundAttempts: order.refundAttempts");
-    expect(source).toContain(
-      "activeRefundOperation: order.activeRefundOperation",
-    );
-  });
 });

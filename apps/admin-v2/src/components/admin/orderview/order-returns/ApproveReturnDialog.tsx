@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, Loader2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "~/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,52 +7,51 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useApproveOrderReturn } from "@/lib/api-mutations/orders";
-import { StableReturnCommandKey, type OrderReturnDto } from "@/lib/order-return-workflow";
+} from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { useMessages } from "~/i18n";
+import { orderDetailMessages } from "~/i18n/order-detail";
+import { resourceMessages } from "~/i18n/resource";
+import { useApproveOrderReturn } from "~/lib/api-mutations/orders";
+import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import {
-  createReturnCommandKey,
-  getOrderItemName,
-  parseReturnQuantity,
-} from "./shared";
+import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
 
+/** Approve or reject each requested unit. The decision never changes stock. */
 export function ApproveReturnDialog({
   orderReturn,
   itemsById,
   open,
   onOpenChange,
 }: {
-  orderReturn: OrderReturnDto;
+  /** The return being acted on; the dialog stays mounted without one. */
+  orderReturn: OrderReturnDto | null;
   itemsById: ReadonlyMap<string, OrderItem>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useMessages(orderDetailMessages);
+  const r = useMessages(resourceMessages);
   const [approved, setApproved] = useState<Record<string, number>>(() =>
-    Object.fromEntries(orderReturn.lines.map((line) => [line.id, line.requestedQuantity])),
+    Object.fromEntries((orderReturn?.lines ?? []).map((line) => [line.id, line.requestedQuantity])),
   );
   const [notes, setNotes] = useState("");
   const mutation = useApproveOrderReturn();
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
   const lines = orderReturn.lines.map((line) => ({
     lineId: line.id,
     approvedQuantity: approved[line.id] ?? line.requestedQuantity,
     rejectedQuantity: line.requestedQuantity - (approved[line.id] ?? line.requestedQuantity),
   }));
-  const isFullRejection = lines.every((line) => line.approvedQuantity === 0);
+  const rejectAll = lines.every((line) => line.approvedQuantity === 0);
 
   const submit = () => {
     const intent = { expectedVersion: orderReturn.version, notes: notes.trim() || null, lines };
     mutation.mutate(
-      {
-        orderId: orderReturn.orderId,
-        returnId: orderReturn.id,
-        commandKey: commandKey.current.get("approve", intent),
-        ...intent,
-      },
+      { orderId: orderReturn.orderId, returnId: orderReturn.id, commandKey: commandKey.current.get("approve", intent), ...intent },
       {
         onSuccess: () => {
           commandKey.current.clear();
@@ -65,67 +63,55 @@ export function ApproveReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Review return request</DialogTitle>
-          <DialogDescription>Approve or reject every requested unit. This decision does not change stock.</DialogDescription>
+          <DialogTitle>{t("returns.reviewTitle")}</DialogTitle>
+          <DialogDescription>{t("returns.reviewHelp")}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="overflow-hidden rounded-md border border-border">
-            <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-sm font-medium sm:grid">
-              <span>Return line</span><span>Approve</span><span>Reject</span>
-            </div>
+        <div className="space-y-4">
+          <ul className="divide-y rounded-md border">
             {orderReturn.lines.map((line) => {
-              const approvedQuantity = approved[line.id] ?? line.requestedQuantity;
               const name = getOrderItemName(itemsById.get(line.orderItemId));
+              const value = approved[line.id] ?? line.requestedQuantity;
               return (
-                <div key={line.id} className="grid items-center gap-2 border-b border-border px-3 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] sm:py-2">
-                  <div className="min-w-0 text-sm">
-                    <p className="truncate font-medium">{name}</p>
-                    <p className="text-muted-foreground">{line.requestedQuantity} requested</p>
-                    {line.reason ? <p className="truncate text-muted-foreground">{line.reason}</p> : null}
+                <li key={line.id} className="flex items-center justify-between gap-3 px-3 py-2 text-body">
+                  <div className="min-w-0">
+                    <p className="font-medium">{name}</p>
+                    <p className="text-muted-foreground">
+                      {t("returns.qtyRequested", { count: line.requestedQuantity })} · {t("returns.qtyRejected", { count: line.requestedQuantity - value })}
+                    </p>
                   </div>
-                  <label className="grid grid-cols-[1fr_5.5rem] items-center gap-2 text-sm sm:block">
-                    <span className="sm:sr-only">Approve</span>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={line.requestedQuantity}
-                      className="h-9 text-sm"
-                      aria-label={`Approved quantity for ${name}`}
-                      value={approvedQuantity}
-                      onChange={(event) => setApproved((current) => ({
-                        ...current,
-                        [line.id]: parseReturnQuantity(event.target.value, line.requestedQuantity),
-                      }))}
-                    />
-                  </label>
-                  <div className="grid grid-cols-[1fr_5.5rem] items-center gap-2 text-sm sm:block">
-                    <span className="sm:sr-only">Reject</span>
-                    <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm" aria-label={`Rejected quantity ${line.requestedQuantity - approvedQuantity}`}>
-                      {line.requestedQuantity - approvedQuantity}
-                    </div>
-                  </div>
-                </div>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={line.requestedQuantity}
+                    className="w-20 shrink-0"
+                    aria-label={t("returns.approveQty", { name })}
+                    value={value}
+                    onChange={(e) => setApproved((current) => ({
+                      ...current,
+                      [line.id]: parseReturnQuantity(e.target.value, line.requestedQuantity),
+                    }))}
+                  />
+                </li>
               );
             })}
-          </div>
+          </ul>
           <div className="space-y-2">
-            <Label htmlFor={`approval-notes-${orderReturn.id}`} className="text-sm">Decision notes <span className="font-normal text-muted-foreground">(optional)</span></Label>
-            <Textarea id={`approval-notes-${orderReturn.id}`} className="min-h-20 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} />
+            <Label htmlFor={`approval-notes-${orderReturn.id}`}>{t("returns.notes")}</Label>
+            <Textarea id={`approval-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancel</Button>
-          <Button
-            type="button"
-            variant={isFullRejection ? "destructive" : "default"}
-            onClick={submit}
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isFullRejection ? <X className="mr-2 h-4 w-4" /> : <Check className="mr-2 h-4 w-4" />}
-            {isFullRejection ? "Reject return" : "Save decision"}
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
+          <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} disabled={mutation.isPending}>
+            {rejectAll
+              ? t("returns.reject")
+              : t("returns.approveSummary", {
+                  approved: lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
+                  rejected: lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
+                })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -24,9 +24,9 @@ describe("admin saved order tax presentation", () => {
   it("renders the complete saved calculation in its original currency", () => {
     const summary = resolveSavedOrderMoneySummary(savedOrder);
     expect(summary?.taxLabel).toBe("VAT");
-    expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("BDT 275.00");
-    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("BDT 12,345.00");
-    expect(formatSavedMajorAmount(12_345.6, summary!)).toBe("BDT 12,345.60");
+    expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("৳275.00");
+    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("৳12,345.00");
+    expect(formatSavedMajorAmount(12_345.6, summary!)).toBe("৳12,345.60");
   });
 
   it("rejects legacy, partial, and mismatched snapshots", () => {

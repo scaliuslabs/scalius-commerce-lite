@@ -94,8 +94,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/orders": { permission: PERMISSIONS.ORDERS_VIEW },
   "/admin/orders/new": { permission: PERMISSIONS.ORDERS_CREATE },
 
-  // Abandoned Checkouts (requires orders.view)
-  "/admin/abandoned-checkouts": { permission: PERMISSIONS.ORDERS_VIEW },
+  // Abandoned checkouts live under Orders (requires orders.view)
+  "/admin/orders/abandoned": { permission: PERMISSIONS.ORDERS_VIEW },
 
   // Discounts
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
@@ -149,13 +149,9 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
   },
 
-  // Products
+  // Products: one detail page; saving still requires products.edit.
   {
     pattern: /^\/admin\/products\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  {
-    pattern: /^\/admin\/products\/[^/]+$/,
     config: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
 

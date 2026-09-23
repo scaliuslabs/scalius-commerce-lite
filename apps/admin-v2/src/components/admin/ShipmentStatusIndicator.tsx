@@ -1,8 +1,10 @@
 import { type FC } from "react";
+import { RefreshCw } from "lucide-react";
+import { cn } from "@scalius/shared/utils";
 import { useShipmentStatus } from "@/hooks/use-shipment-status";
-import { History, RefreshCw } from "lucide-react";
+import { useMessages } from "~/i18n";
+import { orderListMessages, shipmentStatusLabel } from "~/i18n/order-list";
 import { Button } from "../ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { formatOrderTimestamp } from "./orderview/formatters";
 
 interface ShipmentStatusIndicatorProps {
@@ -18,6 +20,7 @@ interface ShipmentStatusIndicatorProps {
   showLastChecked?: boolean;
 }
 
+/** Courier delivery status with a refresh button and when it was last checked. */
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   shipment,
   onStatusUpdated,
@@ -25,104 +28,42 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   refreshDisabledReason,
   showLastChecked = true,
 }) => {
+  const t = useMessages(orderListMessages);
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
-  const showRefreshControl = canRefresh || Boolean(refreshDisabledReason);
-  const refreshTitle = refreshDisabledReason ?? "Refresh shipment status";
+  const refreshing = isRefreshing[shipment.id] === true;
+  const showRefresh = canRefresh || Boolean(refreshDisabledReason);
+  const refreshTitle = refreshDisabledReason ?? t("refreshShipment");
+  const checkedAt = formatOrderTimestamp(shipment.lastChecked);
 
-  // Get status color based on status
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "delivered":
-        return "bg-emerald-500";
-      case "in_transit":
-      case "picked_up":
-        return "bg-blue-500";
-      case "pending":
-      case "in_review":
-        return "bg-amber-500";
-      case "cancelled":
-      case "failed":
-      case "returned":
-        return "bg-red-500";
-      default:
-        return "bg-gray-500";
-    }
-  };
-
-  // Handle refresh status
   const handleRefresh = async () => {
-    if (isRefreshing[shipment.id]) return;
-
-    const updatedShipment = await refreshShipmentStatus(
-      shipment.orderId, shipment.id,
-    );
-
-    if (updatedShipment && onStatusUpdated) {
-      onStatusUpdated(updatedShipment as { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown });
-    }
-  };
-
-  // Format the status for display
-  const formatStatus = (status: string) => {
-    return status
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  };
-
-  const getLastCheckedLabel = (dateStr?: string) => {
-    if (!dateStr) return "Never checked";
-    return formatOrderTimestamp(dateStr) ?? "Never checked";
+    if (refreshing) return;
+    const updated = await refreshShipmentStatus(shipment.orderId, shipment.id);
+    if (updated && onStatusUpdated) onStatusUpdated(updated);
   };
 
   return (
-    <div className="flex flex-col space-y-1.5">
-      <div className="flex items-center space-x-2">
-        <span
-          className={`w-3 h-3 rounded-full ${getStatusColor(shipment.status)}`}
-        ></span>
-        <span className="font-medium text-[var(--foreground)]">
-          {formatStatus(shipment.status)}
-        </span>
+    <div className="flex items-start gap-1 text-body">
+      <div className="min-w-0">
+        <p className="truncate">{shipmentStatusLabel(t, shipment.status)}</p>
+        {showLastChecked ? (
+          <p className="text-body text-muted-foreground">
+            {checkedAt ? t("lastChecked", { time: checkedAt }) : t("neverChecked")}
+          </p>
+        ) : null}
       </div>
-
-      {(showLastChecked || showRefreshControl) && (
-        <div className="flex items-center justify-between text-xs">
-          {showLastChecked ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex cursor-help items-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
-                  <History className="mr-1 h-3 w-3" />
-                  {getLastCheckedLabel(shipment.lastChecked)}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent
-                side="bottom"
-                className="border border-[var(--border)] bg-[var(--popover)] p-2 text-xs text-[var(--popover-foreground)]"
-              >
-                {getLastCheckedLabel(shipment.lastChecked)}
-              </TooltipContent>
-            </Tooltip>
-          ) : <span />}
-
-          {showRefreshControl && (
-            <span title={refreshTitle}>
-              <Button
-                aria-label={refreshTitle}
-                onClick={handleRefresh}
-                disabled={!canRefresh || isRefreshing[shipment.id]}
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
-                />
-              </Button>
-            </span>
-          )}
-        </div>
-      )}
+      {showRefresh ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          aria-label={refreshTitle}
+          title={refreshTitle}
+          onClick={handleRefresh}
+          disabled={!canRefresh || refreshing}
+        >
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+        </Button>
+      ) : null}
     </div>
   );
 };

@@ -19,6 +19,8 @@ import {
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound, type ProductRevisionConflict } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -35,7 +37,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
     ]);
     if (!product || (product as ProductDetail).deletedAt) throw redirect({ to: "/admin/products" });
   },
-  head: () => ({ meta: [{ title: "Edit Product | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: `${translate(productMessages, "product")} | Scalius Admin` }] }),
   errorComponent: RouteErrorComponent,
   component: EditProductPage,
 });
@@ -97,9 +99,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
       setMatrixIssue(null);
       setRevisionConflict(null);
       setIsConflictOpen(false);
-      requestAnimationFrame(() => document.getElementById("product-form-heading")?.focus());
     } catch (error) {
-      setReloadLatestError(getServerFnError(error, "The latest product could not be loaded. Your draft is still here."));
+      setReloadLatestError(getServerFnError(error, translate(productMessages, "reloadFailed")));
     } finally {
       setIsReloadingLatest(false);
     }
@@ -165,14 +166,13 @@ function ProductEditor({ productId, initialProduct, categories }: {
   };
 
   return (
-    <div className="container max-w-6xl space-y-4 py-4 pb-8">
+    <>
       <ProductForm
         key={formGeneration}
         categories={categories}
         defaultValues={defaultValues}
         isEdit
         aggregateRevision={aggregateRevision}
-        editorVariants={matrixSnapshot.variants}
         revisionConflict={revisionConflict}
         onAggregateRevisionChange={updateRevision}
         onRevisionConflict={(conflict) => {
@@ -185,7 +185,17 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixDirty={matrixDirty}
         optionMatrixSaving={matrixSaving}
         onOptionMatrixSave={() => matrixRef.current?.save()}
-        optionManager={({ skuImages, productName, productPrice, requestSave, productSaving }) => (
+        onDiscard={() => {
+          if (revisionConflict) {
+            void reloadLatest();
+            return;
+          }
+          setFormGeneration((value) => value + 1);
+          setMatrixGeneration((value) => value + 1);
+          setMatrixDirty(false);
+          setMatrixIssue(null);
+        }}
+        optionManager={({ skuImages, productName, productPrice }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               ref={matrixRef}
@@ -201,8 +211,6 @@ function ProductEditor({ productId, initialProduct, categories }: {
               onDirtyChange={setMatrixDirty}
               onDraftIssueChange={setMatrixIssue}
               onSavingChange={setMatrixSaving}
-              onSaveRequest={requestSave}
-              productSaving={productSaving}
               onRevisionConflict={(conflict) => {
                 setRevisionConflict(conflict);
                 setIsConflictOpen(true);
@@ -222,6 +230,6 @@ function ProductEditor({ productId, initialProduct, categories }: {
         onReloadLatest={reloadLatest}
         onProductUnavailable={() => void navigate({ to: "/admin/products" })}
       />
-    </div>
+    </>
   );
 }

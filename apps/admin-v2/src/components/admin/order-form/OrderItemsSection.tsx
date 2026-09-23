@@ -1,18 +1,11 @@
 import React from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrderForm } from "./OrderFormContext";
 import { ProductSearch } from "./ProductSearch";
 import { ItemSelection } from "./ItemSelection";
 import { OrderItemsTable } from "./OrderItemsTable";
-import { updateOrderItems } from "@/store/orderStore";
 import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -22,6 +15,9 @@ import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
 } from "./manual-order-stock";
+import { discountedUnitPrice } from "./order-item-presentation";
+import { useMessages } from "@/i18n";
+import { orderFormMessages } from "@/i18n/order-form";
 
 const ORDER_CATALOG_PAGE_SIZE = 10;
 const ORDER_CATALOG_SEARCH_DEBOUNCE_MS = 300;
@@ -68,8 +64,7 @@ function normalizeCatalogProduct(product: ProductListItemDto): Product {
     name: product.name,
     price: product.price,
     discountPercentage: product.discountPercentage ?? null,
-    // The list contract types discountType as a plain string.
-    discountType: (product.discountType as Product["discountType"]) ?? null,
+    discountType: product.discountType ?? null,
     discountAmount: product.discountAmount ?? null,
     variantCount: product.variantCount ?? 0,
     variants: [],
@@ -78,6 +73,7 @@ function normalizeCatalogProduct(product: ProductListItemDto): Product {
 
 export function OrderItemsSection() {
   const { form, refs, isEdit } = useOrderForm();
+  const t = useMessages(orderFormMessages);
   const queryClient = useQueryClient();
 
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -107,11 +103,13 @@ export function OrderItemsSection() {
   const isInitialProductError = productQuery.isError
     && displayedProducts.length === 0;
 
-  // State for the currently selected item before it's added to the list
+  // The product whose variant is being chosen (products with several variants).
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
   const [isLoadingVariants, setIsLoadingVariants] = React.useState(false);
   const [quantity, setQuantity] = React.useState<number>(1);
+  // Lazy-loaded rows kept beside the form lines so an added line shows its
+  // product name and options even when the route did not load them.
   const [resolvedVariantsById, setResolvedVariantsById] = React.useState<
     Record<string, ProductVariant>
   >({});
@@ -119,63 +117,6 @@ export function OrderItemsSection() {
     Record<string, Product>
   >({});
   const variantLoadTokenRef = React.useRef(0);
-
-  const focusItemInputs = (needsVariantChoice: boolean) => {
-    setTimeout(() => {
-      const variantSelect = document.getElementById("variant-select-trigger");
-      if (variantSelect && needsVariantChoice) {
-        variantSelect.focus();
-      } else {
-        const quantityInput = document.getElementById("quantity-input");
-        quantityInput?.focus();
-      }
-    }, 100);
-  };
-
-  const selectProduct = (product: Product) => {
-    const loadToken = variantLoadTokenRef.current + 1;
-    variantLoadTokenRef.current = loadToken;
-    const knownVariants = product.variants || [];
-    const shouldLoadVariants =
-      knownVariants.length === 0 && (product.variantCount ?? 0) > 0;
-
-    setSelectedProduct({ ...product, variants: knownVariants });
-    setResolvedProductsById((current) => ({ ...current, [product.id]: product }));
-    setSelectedVariant(knownVariants.length === 1 ? knownVariants[0]!.id : "");
-    setQuantity(1);
-    setIsLoadingVariants(shouldLoadVariants);
-
-    if (!shouldLoadVariants) {
-      focusItemInputs(knownVariants.length > 1);
-      return;
-    }
-
-    void queryClient
-      .ensureQueryData(productVariantsQueryOptions(product.id))
-      .then((result) => {
-        if (variantLoadTokenRef.current !== loadToken) return;
-        const variants = normalizeVariants(result);
-        const nextSelectedVariant = variants.length === 1 ? variants[0]!.id : "";
-        setSelectedProduct((current) =>
-          current?.id === product.id
-            ? { ...current, variants, variantCount: variants.length }
-            : current,
-        );
-        setSelectedVariant(nextSelectedVariant);
-        focusItemInputs(variants.length > 1);
-      })
-      .catch((error: unknown) => {
-        if (variantLoadTokenRef.current !== loadToken) return;
-        console.error("Error loading product variants:", error);
-        toast.error("Could not load product SKUs. Please try again before adding this item.");
-        focusItemInputs(false);
-      })
-      .finally(() => {
-        if (variantLoadTokenRef.current === loadToken) {
-          setIsLoadingVariants(false);
-        }
-      });
-  };
 
   const clearProductSelection = () => {
     variantLoadTokenRef.current += 1;
@@ -186,144 +127,113 @@ export function OrderItemsSection() {
     refs.productSearchButtonRef.current?.focus();
   };
 
-  const calculateDiscountedPrice = (product: Product, variantId: string | null) => {
-    const variant = variantId ? product.variants.find((v) => v.id === variantId) : null;
-    const basePrice = variant ? variant.price : product.price;
-
-    // Variant discount overrides product discount
-    const variantHasDiscount = variant && (
-      (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) ||
-      (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0)
-    );
-
-    if (variantHasDiscount && variant) {
-      if (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) {
-        return Math.max(0, basePrice - variant.discountAmount).toFixed(2);
-      }
-      if (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0) {
-        return (basePrice - basePrice * (variant.discountPercentage / 100)).toFixed(2);
-      }
-    }
-
-    // Fall back to product discount
-    if (product.discountType === "flat" && product.discountAmount && product.discountAmount > 0) {
-      return Math.max(0, basePrice - product.discountAmount).toFixed(2);
-    }
-    if (product.discountPercentage && product.discountPercentage > 0) {
-      const discountAmount = basePrice * (product.discountPercentage / 100);
-      return (basePrice - discountAmount).toFixed(2);
-    }
-    return basePrice.toFixed(2);
-  };
-
-  const handleAddItem = () => {
-    if (!selectedProduct || isLoadingVariants) return;
-
-    const activeVariants = selectedProduct.variants.filter((variant) => variant.id);
-    const variant = selectedVariant
-      ? activeVariants.find((v) => v.id === selectedVariant)
-      : activeVariants.length === 1
-        ? activeVariants[0]
-        : null;
-    if (!variant) {
-      toast.error(
-        activeVariants.length === 0
-          ? "This product has no active SKU. Add a SKU before creating an order."
-          : "Choose a SKU before adding this product.",
-      );
-      return;
-    }
+  /** Adds one line unless it would exceed the tracked stock. */
+  const addLine = (product: Product, variant: ProductVariant, lineQuantity: number) => {
     const currentItems = form.getValues("items");
     const remainingStock = isEdit
       ? null
       : remainingStockForNewOrderLine(variant, currentItems);
-    if (remainingStock !== null && quantity > remainingStock) {
+    if (remainingStock !== null && lineQuantity > remainingStock) {
       toast.error(exceededStockMessage(remainingStock));
-      return;
+      return false;
     }
-    let basePrice = variant.price;
-
-    // Variant discount overrides product discount
-    const variantHasDiscount = variant && (
-      (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) ||
-      (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0)
-    );
-
-    if (variantHasDiscount && variant) {
-      if (variant.discountType === "flat" && variant.discountAmount && variant.discountAmount > 0) {
-        basePrice = Math.max(0, basePrice - variant.discountAmount);
-      } else if (variant.discountType === "percentage" && variant.discountPercentage && variant.discountPercentage > 0) {
-        basePrice = basePrice - basePrice * (variant.discountPercentage / 100);
-      }
-    } else if (selectedProduct.discountType === "flat" && selectedProduct.discountAmount && selectedProduct.discountAmount > 0) {
-      basePrice = Math.max(0, basePrice - selectedProduct.discountAmount);
-    } else if (selectedProduct.discountPercentage && selectedProduct.discountPercentage > 0) {
-      basePrice = basePrice - basePrice * (selectedProduct.discountPercentage / 100);
-    }
-
-    const newItems = [
+    setResolvedProductsById((current) => ({ ...current, [product.id]: product }));
+    setResolvedVariantsById((current) => ({ ...current, [variant.id]: variant }));
+    form.setValue("items", [
       ...currentItems,
       {
-        productId: selectedProduct.id,
+        productId: product.id,
         variantId: variant.id,
-        quantity,
-        price: basePrice,
+        quantity: lineQuantity,
+        price: discountedUnitPrice(product, variant),
       },
-    ];
+    ], { shouldDirty: true, shouldValidate: true });
+    return true;
+  };
 
-    // Keep the exact lazy-loaded SKU projection beside the form row. The
-    // initial product page may not contain this SKU, but the merchant should
-    // still see the choice immediately after adding it.
-    setResolvedVariantsById((current) => ({
-      ...current,
-      [variant.id]: variant,
-    }));
+  const showVariants = (product: Product, variants: ProductVariant[]) => {
+    // One variant: add it straight away at quantity 1, as Shopify does.
+    if (variants.length === 1) {
+      addLine(product, variants[0]!, 1);
+      clearProductSelection();
+      return;
+    }
+    setSelectedProduct({ ...product, variants, variantCount: variants.length });
+    setSelectedVariant("");
+    setQuantity(1);
+    setTimeout(() => document.getElementById("variant-select-trigger")?.focus(), 0);
+  };
 
-    form.setValue("items", newItems, { shouldDirty: true, shouldValidate: true });
-    updateOrderItems(newItems); // Sync with nanostore
+  const selectProduct = (product: Product) => {
+    const loadToken = variantLoadTokenRef.current + 1;
+    variantLoadTokenRef.current = loadToken;
+    const knownVariants = product.variants || [];
+    if (knownVariants.length > 0 || (product.variantCount ?? 0) === 0) {
+      showVariants(product, knownVariants);
+      return;
+    }
 
-    clearProductSelection();
+    setSelectedProduct({ ...product, variants: [] });
+    setIsLoadingVariants(true);
+    void queryClient
+      .ensureQueryData(productVariantsQueryOptions(product.id))
+      .then((result) => {
+        if (variantLoadTokenRef.current !== loadToken) return;
+        setIsLoadingVariants(false);
+        showVariants(product, normalizeVariants(result));
+      })
+      .catch((error: unknown) => {
+        if (variantLoadTokenRef.current !== loadToken) return;
+        console.error("Error loading product variants:", error);
+        toast.error(t("variantsFailed"));
+        clearProductSelection();
+      });
+  };
+
+  const handleAddItem = () => {
+    if (!selectedProduct) return;
+    const variant = selectedProduct.variants.find((v) => v.id === selectedVariant);
+    if (!variant) {
+      toast.error(t(selectedProduct.variants.length === 0 ? "noActiveVariant" : "chooseVariantFirst"));
+      return;
+    }
+    if (addLine(selectedProduct, variant, quantity)) clearProductSelection();
   };
 
   return (
     <Card>
-      <CardHeader className="pb-3 pt-4 px-4">
-        <CardTitle className="text-base">Order Items</CardTitle>
-        <CardDescription className="text-xs">Add products to the order.</CardDescription>
+      <CardHeader>
+        <CardTitle>{t("products")}</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-3">
-        <div className="space-y-4">
-          <ProductSearch
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            displayedProducts={displayedProducts}
-            hasMore={Boolean(productQuery.hasNextPage)}
-            loadMoreProducts={() => void productQuery.fetchNextPage()}
-            totalProducts={totalProducts}
-            isLoading={isInitialProductLoading}
-            isError={isInitialProductError}
-            isLoadingMore={productQuery.isFetchingNextPage}
-            isLoadMoreError={productQuery.isFetchNextPageError}
-            retry={() => void productQuery.refetch()}
-            selectedProduct={selectedProduct}
-            selectProduct={selectProduct}
-            clearProductSelection={clearProductSelection}
-            calculateDiscountedPrice={calculateDiscountedPrice}
-          />
+      <CardContent className="space-y-4">
+        <ProductSearch
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          displayedProducts={displayedProducts}
+          hasMore={Boolean(productQuery.hasNextPage)}
+          loadMoreProducts={() => void productQuery.fetchNextPage()}
+          totalProducts={totalProducts}
+          isLoading={isInitialProductLoading}
+          isError={isInitialProductError}
+          isLoadingMore={productQuery.isFetchingNextPage}
+          isLoadMoreError={productQuery.isFetchNextPageError}
+          retry={() => void productQuery.refetch()}
+          selectedProduct={selectedProduct}
+          isLoadingVariants={isLoadingVariants}
+          selectProduct={selectProduct}
+          clearProductSelection={clearProductSelection}
+        />
 
-          {selectedProduct && (
-            <ItemSelection
-              selectedProduct={selectedProduct}
-              selectedVariant={selectedVariant}
-              setSelectedVariant={setSelectedVariant}
-              quantity={quantity}
-              setQuantity={setQuantity}
-              handleAddItem={handleAddItem}
-              calculateDiscountedPrice={calculateDiscountedPrice}
-              isLoadingVariants={isLoadingVariants}
-            />
-          )}
-        </div>
+        {selectedProduct && !isLoadingVariants ? (
+          <ItemSelection
+            selectedProduct={selectedProduct}
+            selectedVariant={selectedVariant}
+            setSelectedVariant={setSelectedVariant}
+            quantity={quantity}
+            setQuantity={setQuantity}
+            handleAddItem={handleAddItem}
+          />
+        ) : null}
 
         <OrderItemsTable
           resolvedProductsById={resolvedProductsById}

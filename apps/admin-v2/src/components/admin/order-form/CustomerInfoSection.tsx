@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FormControl,
   FormField,
@@ -28,36 +22,138 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
+import type { DeliveryLocation } from "./types";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
+import { useMessages } from "@/i18n";
+import { orderFormMessages } from "@/i18n/order-form";
 
+const SELECT_KEY = { city: "selectCity", zone: "selectZone", area: "selectArea" } as const;
+
+/** One searchable city / zone / area picker. */
+function LocationPicker({
+  name,
+  options,
+  disabled,
+  loading,
+  buttonRef,
+  onPick,
+}: {
+  name: keyof typeof SELECT_KEY;
+  options: DeliveryLocation[];
+  disabled?: boolean;
+  loading?: boolean;
+  buttonRef: React.RefObject<HTMLButtonElement | null>;
+  onPick: (location: DeliveryLocation) => void;
+}) {
+  const { form } = useOrderForm();
+  const t = useMessages(orderFormMessages);
+  const [open, setOpen] = React.useState(false);
+  const selectKey = SELECT_KEY[name];
+
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => {
+        const selected = options.find((option) => option.id === field.value);
+        return (
+          <FormItem className="flex flex-col">
+            <FormLabel>{t(name)}</FormLabel>
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button
+                    ref={buttonRef}
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    disabled={disabled || loading}
+                    className="w-full justify-between"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setOpen(true);
+                      }
+                    }}
+                  >
+                    <span className={cn("truncate", !selected && "text-muted-foreground")}>
+                      {loading ? t("loading") : selected?.name ?? t(selectKey)}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
+              <PopoverContent align="start">
+                <Command>
+                  <CommandInput
+                    placeholder={t(selectKey)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setOpen(false);
+                        buttonRef.current?.focus();
+                      }
+                    }}
+                  />
+                  <CommandList>
+                    <CommandEmpty>{name === "area" && options.length === 0 ? t("noAreas") : t("noMatch")}</CommandEmpty>
+                    <CommandGroup>
+                      {options.map((option) => (
+                        <CommandItem
+                          key={option.id}
+                          value={option.name}
+                          onSelect={() => {
+                            onPick(option);
+                            setOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "h-4 w-4",
+                              option.id === field.value ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          {option.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
+
+/** Side column: Customer, Delivery address and Notes cards. */
 export function CustomerInfoSection() {
   const { form, isEdit, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
     useOrderForm();
-  const initialPhone = React.useRef(
-    isEdit ? form.getValues("customerPhone") : undefined,
-  );
-
-  const [citySearchOpen, setCitySearchOpen] = React.useState(false);
-  const [zoneSearchOpen, setZoneSearchOpen] = React.useState(false);
-  const [areaSearchOpen, setAreaSearchOpen] = React.useState(false);
+  const t = useMessages(orderFormMessages);
+  const initialPhone = React.useRef(isEdit ? form.getValues("customerPhone") : undefined);
+  const [city, zone] = form.watch(["city", "zone"]);
+  // A picked location is an edit: mark it dirty so Save turns on.
+  const pick = { shouldDirty: true, shouldValidate: true };
 
   return (
-    <Card>
-      <CardHeader className="pb-3 pt-4 px-4">
-        <CardTitle className="text-base">Customer Information</CardTitle>
-        <CardDescription className="text-xs">Contact and shipping details</CardDescription>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-3">
-        <div className="grid gap-3 md:grid-cols-2">
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("customer")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <FormField
             control={form.control}
             name="customerName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Customer Name</FormLabel>
+                <FormLabel>{t("name")}</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="Enter customer name"
                     {...field}
                     ref={(el) => {
                       field.ref(el);
@@ -70,13 +166,12 @@ export function CustomerInfoSection() {
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="customerPhone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone Number</FormLabel>
+                <FormLabel>{t("phone")}</FormLabel>
                 <FormControl>
                   <AdminPhoneInput
                     ref={refs.customerPhoneRef}
@@ -90,344 +185,126 @@ export function CustomerInfoSection() {
               </FormItem>
             )}
           />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="customerEmail"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email (Optional)</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  placeholder="Enter email address"
-                  {...field}
-                  value={field.value || ""}
-                  ref={(el) => {
-                    field.ref(el);
-                    refs.customerEmailRef.current = el;
-                  }}
-                  onKeyDown={(e) => handleKeyDown(e, refs.shippingAddressRef)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="shippingAddress"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Shipping Address</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Enter shipping address"
-                  className="h-20 resize-none"
-                  {...field}
-                  ref={(el) => {
-                    field.ref(el);
-                    refs.shippingAddressRef.current = el;
-                  }}
-                  onKeyDown={(e) => handleKeyDown(e, refs.cityButtonRef)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid gap-3 md:grid-cols-3">
           <FormField
             control={form.control}
+            name="customerEmail"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("email")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(e) => field.onChange(e.target.value || null)}
+                    ref={(el) => {
+                      field.ref(el);
+                      refs.customerEmailRef.current = el;
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, refs.shippingAddressRef)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("deliveryAddress")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormField
+            control={form.control}
+            name="shippingAddress"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("address")}</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    {...field}
+                    ref={(el) => {
+                      field.ref(el);
+                      refs.shippingAddressRef.current = el;
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, refs.cityButtonRef)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <LocationPicker
             name="city"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>City</FormLabel>
-                <Popover
-                  open={citySearchOpen}
-                  onOpenChange={setCitySearchOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        ref={refs.cityButtonRef}
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={citySearchOpen}
-                        className={cn(
-                          "w-full justify-between",
-                          !field.value && "text-muted-foreground",
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setCitySearchOpen(true);
-                          }
-                        }}
-                      >
-                        {field.value
-                          ? locations.cities.find(
-                              (city) => city.id === field.value,
-                            )?.name
-                          : "Select city"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                    <Command>
-                      <CommandInput
-                        placeholder="Search city..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") {
-                            setCitySearchOpen(false);
-                            refs.cityButtonRef.current?.focus();
-                          }
-                        }}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No city found.</CommandEmpty>
-                        <CommandGroup>
-                          {locations.cities.map((city) => (
-                            <CommandItem
-                              value={city.name}
-                              key={city.id}
-                              onSelect={() => {
-                                form.setValue("city", city.id);
-                                form.setValue("zone", "");
-                                form.setValue("area", null);
-                                loadZones(city.id);
-                                setCitySearchOpen(false);
-                                refs.zoneButtonRef.current?.focus();
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  city.id === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0",
-                                )}
-                              />
-                              {city.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
+            options={locations.cities}
+            buttonRef={refs.cityButtonRef}
+            onPick={(location) => {
+              form.setValue("city", location.id, pick);
+              form.setValue("zone", "", { shouldDirty: true });
+              form.setValue("area", null, { shouldDirty: true });
+              void loadZones(location.id);
+              refs.zoneButtonRef.current?.focus();
+            }}
           />
-
-          <FormField
-            control={form.control}
+          <LocationPicker
             name="zone"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Zone</FormLabel>
-                <Popover
-                  open={zoneSearchOpen}
-                  onOpenChange={setZoneSearchOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        ref={refs.zoneButtonRef}
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={zoneSearchOpen}
-                        disabled={!form.watch("city") || isLoading.zones}
-                        className={cn(
-                          "w-full justify-between",
-                          !field.value && "text-muted-foreground",
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setZoneSearchOpen(true);
-                          }
-                        }}
-                      >
-                        {isLoading.zones
-                          ? "Loading..."
-                          : field.value
-                            ? locations.zones.find(
-                                (zone) => zone.id === field.value,
-                              )?.name
-                            : "Select zone"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                    <Command>
-                      <CommandInput
-                        placeholder="Search zone..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") {
-                            setZoneSearchOpen(false);
-                            refs.zoneButtonRef.current?.focus();
-                          }
-                        }}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No zone found.</CommandEmpty>
-                        <CommandGroup>
-                          {locations.zones.map((zone) => (
-                            <CommandItem
-                              value={zone.name}
-                              key={zone.id}
-                              onSelect={() => {
-                                form.setValue("zone", zone.id);
-                                form.setValue("area", null);
-                                loadAreas(zone.id);
-                                setZoneSearchOpen(false);
-                                refs.areaButtonRef.current?.focus();
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  zone.id === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0",
-                                )}
-                              />
-                              {zone.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
+            options={locations.zones}
+            disabled={!city}
+            loading={isLoading.zones}
+            buttonRef={refs.zoneButtonRef}
+            onPick={(location) => {
+              form.setValue("zone", location.id, pick);
+              form.setValue("area", null, { shouldDirty: true });
+              void loadAreas(location.id);
+              refs.areaButtonRef.current?.focus();
+            }}
           />
+          <LocationPicker
+            name="area"
+            options={locations.areas}
+            disabled={!zone}
+            loading={isLoading.areas}
+            buttonRef={refs.areaButtonRef}
+            onPick={(location) => {
+              form.setValue("area", location.id, pick);
+              refs.notesRef.current?.focus();
+            }}
+          />
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("notes")}</CardTitle>
+        </CardHeader>
+        <CardContent>
           <FormField
             control={form.control}
-            name="area"
+            name="notes"
             render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Area (Optional)</FormLabel>
-                <Popover
-                  open={areaSearchOpen}
-                  onOpenChange={setAreaSearchOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        ref={refs.areaButtonRef}
-                        variant="outline"
-                        role="combobox"
-                        disabled={!form.watch("zone") || isLoading.areas}
-                        aria-expanded={areaSearchOpen}
-                        className={cn(
-                          "w-full justify-between",
-                          !field.value && "text-muted-foreground",
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setAreaSearchOpen(true);
-                          }
-                        }}
-                      >
-                        {isLoading.areas
-                          ? "Loading..."
-                          : field.value
-                            ? locations.areas.find(
-                                (area) => area.id === field.value,
-                              )?.name ?? "Select area"
-                            : "Select area"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                    <Command>
-                      <CommandInput
-                        placeholder="Search area..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") {
-                            setAreaSearchOpen(false);
-                            refs.areaButtonRef.current?.focus();
-                          }
-                        }}
-                      />
-                      <CommandList>
-                        <CommandEmpty>No area found.</CommandEmpty>
-                        <CommandGroup>
-                          {locations.areas.length === 0 &&
-                            !isLoading.areas && (
-                              <div className="py-6 text-center text-sm">
-                                No areas available for this zone.
-                              </div>
-                            )}
-                          {locations.areas.map((area) => (
-                            <CommandItem
-                              value={area.name}
-                              key={area.id}
-                              onSelect={() => {
-                                form.setValue("area", area.id);
-                                setAreaSearchOpen(false);
-                                refs.notesRef.current?.focus();
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  area.id === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0",
-                                )}
-                              />
-                              {area.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+              <FormItem>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    aria-label={t("notes")}
+                    {...field}
+                    value={field.value || ""}
+                    ref={(el) => {
+                      field.ref(el);
+                      refs.notesRef.current = el;
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, refs.productSearchButtonRef)}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Notes (Optional)</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Enter any additional notes"
-                  className="h-20 resize-none"
-                  {...field}
-                  value={field.value || ""}
-                  ref={(el) => {
-                    field.ref(el);
-                    refs.notesRef.current = el;
-                  }}
-                  onKeyDown={(e) => handleKeyDown(e, refs.productSearchButtonRef)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </>
   );
 }

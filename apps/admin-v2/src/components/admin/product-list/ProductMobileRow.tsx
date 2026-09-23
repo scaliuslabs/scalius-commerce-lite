@@ -1,12 +1,16 @@
-import { Link } from "@tanstack/react-router";
-import { Image as ImageIcon, Copy } from "lucide-react";
-import { toast } from "sonner";
-import { Badge } from "~/components/ui/badge";
+import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
-import type { ProductListItem } from "~/components/admin/data-table/columns/product-columns";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { formatDateShort } from "@scalius/shared/timestamps";
+import { useMessages } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
+import {
+  ProductStatusBadge,
+  ProductThumb,
+  ProductTitleLink,
+  productShortcodeAction,
+  type ProductListItem,
+} from "./product-columns";
 
 interface ProductMobileRowProps {
   product: ProductListItem;
@@ -17,21 +21,15 @@ interface ProductMobileRowProps {
   canDelete: boolean;
   canRestore: boolean;
   canPermanentDelete: boolean;
-  formatPrice: (price: number) => string;
+  fmt: (price: number) => string;
   onSelectedChange: (selected: boolean) => void;
-  onView: () => void;
-  onEdit: () => void;
+  onOpen: () => void;
   onDelete: () => void;
   onRestore: () => void;
   onPermanentDelete: () => void;
 }
 
-function copyShortcode(slug: string) {
-  navigator.clipboard.writeText(`[product slug="${slug}"]`)
-    .then(() => toast.success("Product shortcode copied."))
-    .catch(() => toast.error("Could not copy the product shortcode."));
-}
-
+/** Phone row: thumb, title and status; then price · category. */
 export function ProductMobileRow({
   product,
   selected,
@@ -41,80 +39,45 @@ export function ProductMobileRow({
   canDelete,
   canRestore,
   canPermanentDelete,
-  formatPrice,
+  fmt,
   onSelectedChange,
-  onView,
-  onEdit,
+  onOpen,
   onDelete,
   onRestore,
   onPermanentDelete,
 }: ProductMobileRowProps) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
   return (
-    <article className={`grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 px-2.5 py-2.5 ${selected ? "bg-primary/5" : "bg-background"}`}>
-      <div className="flex items-start gap-2">
-        {canSelect && (
+    <article className={cn("flex items-center gap-3 bg-background px-3 py-2", selected && "bg-muted")}>
+      {canSelect ? (
+        <label className="flex h-11 w-6 shrink-0 items-center justify-center">
           <Checkbox
             checked={selected}
             onCheckedChange={(value) => onSelectedChange(value === true)}
-            aria-label={`Select ${product.name}`}
-            className="mt-4"
+            aria-label={r("select", { name: product.name })}
           />
-        )}
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-          {product.primaryImage ? (
-            <img
-              src={mediaImageUrl(product.primaryImage, 96)}
-              alt=""
-              className="h-full w-full object-contain object-center"
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          )}
+        </label>
+      ) : null}
+      <ProductThumb src={product.primaryImage} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <ProductTitleLink product={product} />
+          <ProductStatusBadge isActive={product.isActive} />
         </div>
-      </div>
-
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Link
-            to="/admin/products/$productId"
-            params={{ productId: product.id }}
-            className="truncate text-sm font-medium text-foreground hover:underline"
-          >
-            {product.name || "Unnamed product"}
-          </Link>
-          <Badge variant="outline" className={`h-4 shrink-0 px-1 text-[9px] ${product.isActive && !showTrashed ? "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
-            {showTrashed ? "Trashed" : product.isActive ? "Active" : "Draft"}
-          </Badge>
-        </div>
-        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-          {product.sku || "No SKU"} · {product.category?.name || "Uncategorized"}
+        <p className="truncate text-body text-muted-foreground">
+          <span className="tabular-nums">{fmt(product.price)}</span> · {product.category.name || t("uncategorized")}
         </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-          <span className="font-medium text-foreground">{formatPrice(product.price)}</span>
-          <span className="text-muted-foreground">
-            {product.variantCount} SKU{product.variantCount === 1 ? "" : "s"}
-          </span>
-          <span className="text-muted-foreground" suppressHydrationWarning>
-            {formatDateShort(product.updatedAt)}
-          </span>
-        </div>
       </div>
-
       <DataTableRowActions
         showTrashed={showTrashed}
-        menuLabel={`Open actions for ${product.name}`}
-        onView={onView}
-        onEdit={canEdit ? onEdit : undefined}
+        menuLabel={t("actionsFor", { name: product.name })}
+        onView={canEdit ? undefined : onOpen}
+        onEdit={canEdit ? onOpen : undefined}
         onDelete={canDelete ? onDelete : undefined}
         onRestore={canRestore ? onRestore : undefined}
         onPermanentDelete={canPermanentDelete ? onPermanentDelete : undefined}
-        extraActions={!showTrashed ? [{
-          label: "Copy Shortcode",
-          icon: Copy,
-          onClick: () => copyShortcode(product.slug),
-        }] : undefined}
+        extraActions={showTrashed ? undefined : [productShortcodeAction(product.slug)]}
       />
     </article>
   );

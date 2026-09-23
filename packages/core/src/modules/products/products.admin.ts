@@ -410,7 +410,8 @@ export async function listProducts(db: Database, options: {
     page?: number;
     limit?: number;
     showTrashed?: boolean;
-    activeOnly?: boolean;
+    /** "active" = sold on the storefront, "draft" = hidden. */
+    status?: "active" | "draft";
     sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
     order?: "asc" | "desc";
     /** Agent summaries omit large text/media projections before they leave SQL. */
@@ -424,7 +425,7 @@ export async function listProducts(db: Database, options: {
         page = 1,
         limit = 10,
         showTrashed = false,
-        activeOnly = false,
+        status,
         sort = "updatedAt",
         order = "desc",
         agentSummary = false,
@@ -439,8 +440,8 @@ export async function listProducts(db: Database, options: {
     } else {
         whereConditions.push(sql`${products.deletedAt} IS NULL`);
     }
-    if (activeOnly) {
-        whereConditions.push(eq(products.isActive, true));
+    if (status) {
+        whereConditions.push(eq(products.isActive, status === "active"));
     }
 
     let rankExpression = undefined;
