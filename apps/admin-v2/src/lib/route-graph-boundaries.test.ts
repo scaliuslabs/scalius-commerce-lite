@@ -222,16 +222,6 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps notification settings UI off the backend notifications barrel", () => {
-    const notificationSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "settings",
-        "NotificationChannelsBuilder.tsx",
-      ),
-      "utf8",
-    );
     const offenders = [
       ...listSourceFiles(join(ADMIN_SRC_ROOT, "components")),
       ...listSourceFiles(join(ADMIN_SRC_ROOT, "routes")),
@@ -247,75 +237,7 @@ describe("admin route graph boundaries", () => {
       )
       .map(({ path }) => path);
 
-    expect(notificationSource).toContain(
-      "@scalius/core/modules/notifications/notification-types",
-    );
     expect(offenders).toEqual([]);
-  });
-
-  it("keeps customer notification channels limited to implemented delivery paths", () => {
-    const notificationSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "settings",
-        "NotificationChannelsBuilder.tsx",
-      ),
-      "utf8",
-    );
-    const policySource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "settings",
-        "notification-channel-policy.ts",
-      ),
-      "utf8",
-    );
-
-    const customerChannelBlock = policySource.slice(
-      policySource.indexOf("CUSTOMER_NOTIFICATION_CHANNELS"),
-      policySource.indexOf("ADMIN_NOTIFICATION_CHANNELS"),
-    );
-    const adminChannelBlock = policySource.slice(
-      policySource.indexOf("ADMIN_NOTIFICATION_CHANNELS"),
-      policySource.indexOf("NOTIFICATION_EVENTS"),
-    );
-
-    expect(customerChannelBlock).toContain('{ key: "email"');
-    expect(customerChannelBlock).toContain('{ key: "sms"');
-    expect(customerChannelBlock).toContain('{ key: "whatsapp"');
-    expect(customerChannelBlock).not.toContain('{ key: "push"');
-    expect(adminChannelBlock).toContain('{ key: "push"');
-    expect(notificationSource).toContain("setIsSmsConfigured(isReady(data?.sms))");
-    expect(notificationSource).toContain("buildCustomerNotificationConfig");
-    expect(notificationSource).toContain("serializeCustomerNotificationConfig");
-    expect(notificationSource).toContain(
-      'activeRules={countCustomerRules(channels, "email")}',
-    );
-    expect(notificationSource).toContain(
-      'activeRules={countCustomerRules(channels, "sms")}',
-    );
-    expect(notificationSource).toContain(
-      'activeRules={countCustomerRules(channels, "whatsapp")}',
-    );
-    expect(notificationSource).toContain(
-      "checked={channels[event.key][channel.key]}",
-    );
-    expect(notificationSource).toContain("Saved rules stay paused.");
-    expect(notificationSource).toContain(
-      "Saved push rules stay paused until delivery recovers.",
-    );
-    expect(notificationSource).toContain("setIsPushConfigured(isReady(data?.push))");
-    expect(notificationSource).toContain("checked={channels[event.key].push}");
-    expect(policySource).toContain(
-      "Provider readiness controls delivery, not merchant intent.",
-    );
-    expect(policySource).toContain("enabledChannels.includes(channel.key)");
-    expect(policySource).toContain('enabledChannels.includes("push")');
-    expect(policySource).not.toContain("sanitizeCustomerChannelConfig");
   });
 
   it("keeps the deferred rich-text editor client render flicker-free", () => {
@@ -390,7 +312,6 @@ describe("admin route graph boundaries", () => {
       "routes/admin.tsx",
       "routes/admin/index.tsx",
       "routes/admin/abandoned-checkouts.tsx",
-      "routes/admin/analytics/index.tsx",
       "routes/admin/articles/index.tsx",
       "routes/admin/attributes.tsx",
       "routes/admin/categories/index.tsx",
@@ -458,48 +379,7 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("queryKeys.dashboard.all");
   });
 
-  it("keeps analytics list dates hydration-safe", () => {
-    const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsList.tsx"),
-      "utf8",
-    );
-
-    expect(source).toMatch(
-      /suppressHydrationWarning[^]*formatDate\(script\.updatedAt\)/,
-    );
-  });
-
-  it("keeps analytics list mutations gated by exact RBAC permissions", () => {
-    const listSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsList.tsx"),
-      "utf8",
-    );
-    const indexSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "analytics", "index.tsx"),
-      "utf8",
-    );
-    const permissionsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "admin-permissions.ts"),
-      "utf8",
-    );
-
-    expect(permissionsSource).toContain('ANALYTICS_TOGGLE: "analytics.toggle"');
-    expect(listSource).toContain("usePermissions");
-    expect(indexSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_CREATE");
-    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_EDIT");
-    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_TOGGLE");
-    expect(indexSource).toContain("canCreate ? (");
-    expect(listSource).toContain("canToggle");
-    expect(listSource).toContain("canEdit");
-    expect(listSource).toContain("aria-label={`Edit ${script.name}`}");
-    expect(listSource).toContain("aria-label={`Move ${script.name} to trash`}");
-  });
-
   it("keeps create forms draft-first and lifecycle controls permission-gated", () => {
-    const analyticsForm = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsForm.tsx"),
-      "utf8",
-    );
     const pageForm = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "PageForm.tsx"),
       "utf8",
@@ -529,9 +409,6 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(analyticsForm).toContain("isActive: false");
-    expect(analyticsForm).toContain("PERMISSIONS.ANALYTICS_TOGGLE");
-    expect(analyticsForm).toContain("disabled={!canToggle}");
     expect(pageForm).toContain('publicationMode: "draft"');
     expect(pageForm).toContain("PERMISSIONS.PAGES_PUBLISH");
     expect(pageForm).toContain("disabled={!canPublish}");
@@ -609,7 +486,7 @@ describe("admin route graph boundaries", () => {
         "components",
         "admin",
         "settings",
-        "ScannerTokenGenerator.tsx",
+        "AppsSettings.tsx",
       ),
       "utf8",
     );
@@ -620,7 +497,7 @@ describe("admin route graph boundaries", () => {
       expect(source).not.toMatch(/from\s+["']qrcode["']/);
     }
     expect(accountTwoFactorSource).toContain("if (!totpUri)");
-    expect(scannerTokenSource).toContain("if (!token)");
+    expect(scannerTokenSource).toContain("if (!link)");
   });
 
   it("keeps post-auth success navigation inside the hydrated router", () => {
@@ -720,16 +597,6 @@ describe("admin route graph boundaries", () => {
         ),
         action: 'action="/admin/account"',
       },
-      {
-        path: join(
-          ADMIN_SRC_ROOT,
-          "components",
-          "admin",
-          "account-settings",
-          "AdminUsersManager.tsx",
-        ),
-        action: 'action="/admin/settings/account"',
-      },
     ];
 
     expect(hydratedHookSource).toContain(
@@ -759,24 +626,6 @@ describe("admin route graph boundaries", () => {
     }
   });
 
-  it("keeps team invites off temporary-password UX", () => {
-    const adminUsersSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "account-settings",
-        "AdminUsersManager.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(adminUsersSource).toContain("one-use setup link");
-    expect(adminUsersSource).toContain("must configure a password and 2FA");
-    expect(adminUsersSource).not.toContain("temporary password");
-    expect(adminUsersSource).not.toContain("Temporary Password");
-  });
-
   it("keeps admin app forms from relying on implicit browser submit methods", () => {
     const offenders = listSourceFiles(ADMIN_SRC_ROOT)
       .filter((path) => !/\.test\./.test(path))
@@ -795,36 +644,14 @@ describe("admin route graph boundaries", () => {
 
   it("keeps sensitive admin mutation forms out of native GET submissions", () => {
     const mutationForms = [
-      join(ADMIN_SRC_ROOT, "components", "admin", "FraudCheckerSettings.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "OrderForm.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "ProductForm.tsx"),
       join(
         ADMIN_SRC_ROOT,
         "components",
         "admin",
-        "checkout-languages",
-        "LanguageFormDialog.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
         "collection-form",
         "CollectionFormContainer.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "delivery-locations",
-        "LocationFormDialog.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "meta-conversions",
-        "MetaConversionsSettingsForm.tsx",
       ),
       join(
         ADMIN_SRC_ROOT,
@@ -844,22 +671,8 @@ describe("admin route graph boundaries", () => {
         ADMIN_SRC_ROOT,
         "components",
         "admin",
-        "settings",
-        "PaymentGatewaysManager.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
         "shared",
         "FormContainer.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "shipping-methods",
-        "MethodFormDialog.tsx",
       ),
     ];
 
@@ -873,56 +686,6 @@ describe("admin route graph boundaries", () => {
         expect(formTag).toContain("noValidate");
       }
     }
-  });
-
-  it("keeps payment gateway visibility saves locked behind loaded settings", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "settings",
-        "PaymentGatewaysManager.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain("const [methodsLoadError, setMethodsLoadError]");
-    expect(source).toContain("if (!methods) {");
-    expect(source).toContain(
-      "Reload payment status before saving buyer payment methods.",
-    );
-    expect(source).toContain("Payment settings could not be loaded");
-    expect(source).toContain(
-      "Checkout visibility is locked until the saved payment-method settings load successfully.",
-    );
-    expect(source).toContain("setMethods(null)");
-  });
-
-  it("keeps checkout flow saves locked behind payment readiness", () => {
-    const source = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "settings",
-        "CheckoutFlowSettings.tsx",
-      ),
-      "utf8",
-    );
-
-    expect(source).toContain("isFetching: paymentMethodsFetching");
-    expect(source).toContain(
-      "const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError",
-    );
-    expect(source).toContain(
-      "Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.",
-    );
-    expect(source).toContain(
-      "Checkout-flow saves are locked until Payment Gateways loads successfully.",
-    );
-    expect(source).toContain("Retry payment check");
-    expect(source).toContain("disabled={saving || saveBlocked}");
   });
 
   it("keeps new-discount type selection off the decorative animation runtime", () => {
@@ -1145,23 +908,6 @@ describe("admin route graph boundaries", () => {
       expect(loaderSource).toContain("void queryClient.prefetchQuery(");
       expect(loaderSource).not.toContain("await queryClient.ensureQueryData(");
       expect(loaderSource).not.toContain("await Promise.all(");
-    }
-  });
-
-  it("keeps self-loading settings routes out of route-entry data awaits", () => {
-    const selfLoadingSettingsRoutes = [
-      ["notifications.tsx", "FirebaseSettingsForm"],
-    ] as const;
-
-    for (const [filename, marker] of selfLoadingSettingsRoutes) {
-      const source = readFileSync(
-        join(ADMIN_SRC_ROOT, "routes", "admin", "settings", filename),
-        "utf8",
-      );
-
-      expect(source).toContain(marker);
-      expect(source).not.toContain("ensureQueryData(");
-      expect(source).not.toContain("prefetchQuery(");
     }
   });
 

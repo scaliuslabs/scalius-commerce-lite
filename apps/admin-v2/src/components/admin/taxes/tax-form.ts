@@ -1,9 +1,10 @@
 import type {
+  TaxConfigurationPayload,
   TaxJurisdictionOption,
   TaxJurisdictionType,
-  TaxConfigurationPayload,
-  UpdateTaxSettingsInput,
-} from "@/lib/api-query-options/taxes";
+  TaxRateRecord,
+  TaxSettingsRecord,
+} from "~/lib/api-query-options/taxes";
 
 export function basisPointsToPercent(rateBps: number): string {
   if (!Number.isInteger(rateBps) || rateBps < 0) return "0";
@@ -18,64 +19,55 @@ export function percentToBasisPoints(value: string): number | null {
   return Math.round(percent * 100);
 }
 
-export function taxSettingsIssue(
-  input: Pick<
-    UpdateTaxSettingsInput,
-    "enabled" | "taxShipping" | "defaultTaxClassId" | "shippingTaxClassId" | "displayLabel"
-  >,
-  configuration?: Pick<TaxConfigurationPayload, "classes" | "rates">,
-): string | null {
-  if (!input.displayLabel.trim()) return "Enter the buyer-facing tax label.";
-  if (input.enabled && !input.defaultTaxClassId) {
-    return "Choose a default tax class before enabling tax.";
-  }
-  if (input.taxShipping && !input.shippingTaxClassId && !input.defaultTaxClassId) {
-    return "Choose a shipping or default class before taxing shipping.";
-  }
-  if (input.enabled && configuration && input.defaultTaxClassId) {
-    const defaultClass = configuration.classes.find(
-      (taxClass) => taxClass.id === input.defaultTaxClassId,
-    );
-    if (!defaultClass) return "Choose an active default tax class before enabling tax.";
-    const defaultRateReady = defaultClass.isExempt || configuration.rates.some(
-      (rate) => rate.isActive && rate.taxClassId === defaultClass.id,
-    );
-    if (!defaultRateReady) {
-      return `Add an active rate to default product class “${defaultClass.name}” before enabling tax.`;
-    }
+export type TaxSettingsIssue =
+  | { field: "label"; key: "labelRequired" }
+  | { field: "default"; key: "defaultRequired" | "groupMissing" }
+  | { field: "delivery"; key: "deliveryRequired" | "groupMissing" }
+  | { field: "default" | "delivery"; key: "groupNeedsRate"; name: string };
 
-    const effectiveShippingClassId = input.taxShipping
-      ? input.shippingTaxClassId ?? input.defaultTaxClassId
-      : null;
-    if (effectiveShippingClassId && effectiveShippingClassId !== defaultClass.id) {
-      const shippingClass = configuration.classes.find(
-        (taxClass) => taxClass.id === effectiveShippingClassId,
-      );
-      if (!shippingClass) return "Choose an active shipping tax class before enabling tax.";
-      const shippingRateReady = shippingClass.isExempt || configuration.rates.some(
-        (rate) => rate.isActive && rate.taxClassId === shippingClass.id,
-      );
-      if (!shippingRateReady) {
-        return `Add an active rate to shipping class “${shippingClass.name}” before enabling tax.`;
-      }
-    }
-  }
-  return null;
+type SettingsDraft = Pick<
+  TaxSettingsRecord,
+  "enabled" | "taxShipping" | "defaultTaxClassId" | "shippingTaxClassId" | "displayLabel"
+>;
+type ClassesAndRates = Pick<TaxConfigurationPayload, "classes" | "rates">;
+
+function hasActiveRate(configuration: ClassesAndRates, classId: string): boolean {
+  return configuration.rates.some((rate) => rate.isActive && rate.taxClassId === classId);
 }
 
-export function taxSettingsFormIsDirty(
-  current: UpdateTaxSettingsInput,
-  saved: UpdateTaxSettingsInput,
-): boolean {
-  return (
-    current.expectedVersion !== saved.expectedVersion ||
-    current.enabled !== saved.enabled ||
-    current.pricesIncludeTax !== saved.pricesIncludeTax ||
-    current.taxShipping !== saved.taxShipping ||
-    current.defaultTaxClassId !== saved.defaultTaxClassId ||
-    current.shippingTaxClassId !== saved.shippingTaxClassId ||
-    current.displayLabel !== saved.displayLabel
-  );
+/**
+ * Mirrors the server's save checks so an unsafe tax setup can't be saved:
+ * collecting tax needs a default group, and every taxed group needs a rate.
+ */
+export function taxSettingsIssue(
+  input: SettingsDraft,
+  configuration: ClassesAndRates,
+): TaxSettingsIssue | null {
+  if (!input.displayLabel.trim()) return { field: "label", key: "labelRequired" };
+  const find = (id: string | null) => configuration.classes.find((taxClass) => taxClass.id === id);
+  if (input.defaultTaxClassId && !find(input.defaultTaxClassId)) {
+    return { field: "default", key: "groupMissing" };
+  }
+  // The delivery group is saved (and checked) only while delivery is taxed.
+  if (input.taxShipping && input.shippingTaxClassId && !find(input.shippingTaxClassId)) {
+    return { field: "delivery", key: "groupMissing" };
+  }
+  if (input.enabled && !input.defaultTaxClassId) return { field: "default", key: "defaultRequired" };
+  if (input.taxShipping && !input.shippingTaxClassId && !input.defaultTaxClassId) {
+    return { field: "delivery", key: "deliveryRequired" };
+  }
+  if (!input.enabled || !input.defaultTaxClassId) return null;
+
+  const defaultClass = find(input.defaultTaxClassId)!;
+  if (!defaultClass.isExempt && !hasActiveRate(configuration, defaultClass.id)) {
+    return { field: "default", key: "groupNeedsRate", name: defaultClass.name };
+  }
+  const deliveryClass = input.taxShipping ? find(input.shippingTaxClassId ?? defaultClass.id)! : null;
+  if (deliveryClass && deliveryClass.id !== defaultClass.id && !deliveryClass.isExempt
+    && !hasActiveRate(configuration, deliveryClass.id)) {
+    return { field: "delivery", key: "groupNeedsRate", name: deliveryClass.name };
+  }
+  return null;
 }
 
 export function resolveJurisdictionSelection(
@@ -94,14 +86,33 @@ export function resolveJurisdictionSelection(
     : null;
 }
 
-export function formatTaxMoney(
-  amount: number,
-  currencyCode: string,
-  locale = "en-BD",
-): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2,
-  }).format(amount);
+export type RequiredTaxRateRole = "products" | "delivery";
+
+/**
+ * While tax is collected, the last active rate of the default or delivery
+ * group can't be turned off, moved or deleted (the server refuses it too).
+ */
+export function getRequiredTaxRateRoles(
+  configuration: TaxConfigurationPayload,
+  rate: TaxRateRecord | null,
+): RequiredTaxRateRole[] {
+  if (!configuration.settings.enabled || !rate?.isActive) return [];
+
+  const taxClass = configuration.classes.find(
+    (candidate) => candidate.id === rate.taxClassId,
+  );
+  if (!taxClass || taxClass.isExempt) return [];
+
+  const activeClassRates = configuration.rates.filter(
+    (candidate) => candidate.isActive && candidate.taxClassId === rate.taxClassId,
+  );
+  if (activeClassRates.length !== 1 || activeClassRates[0]?.id !== rate.id) return [];
+
+  const roles: RequiredTaxRateRole[] = [];
+  if (configuration.settings.defaultTaxClassId === rate.taxClassId) roles.push("products");
+  const deliveryClassId = configuration.settings.taxShipping
+    ? configuration.settings.shippingTaxClassId ?? configuration.settings.defaultTaxClassId
+    : null;
+  if (deliveryClassId === rate.taxClassId) roles.push("delivery");
+  return roles;
 }

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
 
 import {
-    CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
     getCheckoutFlowPreviewIssues,
+    type CheckoutFlowIssue,
     type CheckoutFlowPreviewOptions,
 } from "./checkout-flow-policy";
 
@@ -18,7 +18,7 @@ const baseOptions: CheckoutFlowPreviewOptions = {
     sslCommerzEnabled: false,
 };
 
-function issues(overrides: Partial<CheckoutFlowPreviewOptions>): string[] {
+function issues(overrides: Partial<CheckoutFlowPreviewOptions>): CheckoutFlowIssue[] {
     return getCheckoutFlowPreviewIssues({
         ...baseOptions,
         ...overrides,
@@ -31,7 +31,7 @@ describe("checkout flow preview policy", () => {
             checkoutMode: "all",
             codEnabled: false,
             activeOnlineMethodCount: 0,
-        })).toContain("Enable at least one configured payment method in Payment Gateways.");
+        })).toContain("noMethod");
     });
 
     it.each([
@@ -51,12 +51,12 @@ describe("checkout flow preview policy", () => {
             checkoutMode: "guest_cod_only",
             codEnabled: false,
             activeOnlineMethodCount: 1,
-        })).toContain("Enable Cash on Delivery in Payment Gateways before using COD only.");
+        })).toContain("codOff");
         expect(issues({
             checkoutMode: "gateways_only",
             codEnabled: true,
             activeOnlineMethodCount: 0,
-        })).toContain("Enable and configure at least one online gateway in Payment Gateways.");
+        })).toContain("noOnline");
     });
 
     it("requires an online gateway and provider-valid amount for advance payments", () => {
@@ -67,8 +67,8 @@ describe("checkout flow preview policy", () => {
             codEnabled: true,
             activeOnlineMethodCount: 0,
         })).toEqual(expect.arrayContaining([
-            "Set an advance amount greater than zero.",
-            "Advance payments need at least one enabled and configured online gateway.",
+            "amountInvalid",
+            "advanceNeedsOnline",
         ]));
     });
 
@@ -83,7 +83,7 @@ describe("checkout flow preview policy", () => {
             codEnabled: true,
             activeOnlineMethodCount: 1,
             sslCommerzEnabled: true,
-        })).toContain(`SSLCommerz requires an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`);
+        })).toContain("sslRange");
     });
 
     it.each([5, 500001])("does not apply SSLCommerz's BDT range to other online gateways (%s)", (amount) => {
@@ -113,9 +113,7 @@ describe("checkout flow preview policy", () => {
             paymentMethodsUnavailable: true,
             codEnabled: false,
             activeOnlineMethodCount: 0,
-        })).toEqual([
-            "Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.",
-        ]);
+        })).toEqual(["readinessUnknown"]);
     });
 
     it.each([

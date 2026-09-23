@@ -6,15 +6,11 @@ import {
   countClearableAgentConnections,
   createAgentToken,
   getAgentAuthorizationRequest,
-  getAgentConnection,
-  listAgentAuditEvents,
   listAgentConnections,
   lookupAgentDeviceAuthorization,
   purgeRevokedAgentConnections,
   denyAgentDeviceAuthorization,
   revokeAgentGrant,
-  rotateAgentToken,
-  updateAgentGrant,
 } from "./api";
 
 // These run through the real SDK client and admin transport; only the wire is
@@ -47,7 +43,7 @@ afterEach(() => {
 });
 
 describe("Agent Access dashboard API client", () => {
-  it("uses the admin API for paginated connection and audit reads", async () => {
+  it("uses the admin API for paginated connection reads", async () => {
     await listAgentConnections({
       page: 2,
       limit: 20,
@@ -55,7 +51,6 @@ describe("Agent Access dashboard API client", () => {
       resource: "dashboard",
       kind: "oauth",
     });
-    await listAgentAuditEvents("agr_1", { page: 3, limit: 10 });
 
     expect(calls).toEqual([
       {
@@ -63,36 +58,7 @@ describe("Agent Access dashboard API client", () => {
         path: "/api/v1/admin/agent-access/connections?page=2&limit=20&status=active&resource=dashboard&kind=oauth",
         body: undefined,
       },
-      {
-        method: "GET",
-        path: "/api/v1/admin/agent-access/connections/agr_1/events?page=3&limit=10",
-        body: undefined,
-      },
     ]);
-  });
-
-  it("unwraps detail and narrowing responses", async () => {
-    const connection = { id: "agr_1" };
-    responses.push({ connection }, { connection });
-
-    await expect(getAgentConnection("agr_1")).resolves.toEqual(connection);
-    await expect(
-      updateAgentGrant("agr_1", {
-        permissions: ["products.view"],
-        riskCeiling: "read",
-        expiresAt: "2026-09-01T00:00:00.000Z",
-      }),
-    ).resolves.toEqual(connection);
-
-    expect(calls[1]).toEqual({
-      method: "PATCH",
-      path: "/api/v1/admin/agent-access/grants/agr_1",
-      body: {
-        permissions: ["products.view"],
-        riskCeiling: "read",
-        expiresAt: "2026-09-01T00:00:00.000Z",
-      },
-    });
   });
 
   it("sends token, OAuth, and CLI grant decisions in request bodies", async () => {
@@ -109,17 +75,15 @@ describe("Agent Access dashboard API client", () => {
       riskCeiling: "security",
       expiresInDays: 30,
     };
-    responses.push({}, {}, {}, { deviceAuthorization: {} }, {});
+    responses.push({}, {}, { deviceAuthorization: {} }, {});
 
     await createAgentToken({ ...selection, label: "Codex" });
-    await rotateAgentToken("cred_1", 30);
     await approveAgentAuthorizationRequest("auth_1", selection);
     await lookupAgentDeviceAuthorization("AB12CD34");
     await approveAgentDeviceAuthorization("dev_1", selection);
 
     expect(calls.map(({ method, path, body }) => [method, path, body])).toEqual([
       ["POST", "/api/v1/admin/agent-access/tokens", { ...selection, label: "Codex" }],
-      ["POST", "/api/v1/admin/agent-access/tokens/cred_1/rotate", { expiresInDays: 30 }],
       ["POST", "/api/v1/admin/agent-access/authorization-requests/auth_1/approve", approval],
       ["POST", "/api/v1/admin/agent-access/device-authorizations/lookup", { userCode: "AB12CD34" }],
       ["POST", "/api/v1/admin/agent-access/device-authorizations/dev_1/approve", approval],
@@ -129,7 +93,7 @@ describe("Agent Access dashboard API client", () => {
   it("unwraps OAuth and device lookup objects and sends required empty bodies", async () => {
     const authorizationRequest = { id: "auth_1" };
     const deviceAuthorization = { id: "dev_1" };
-    responses.push({ authorizationRequest }, { deviceAuthorization }, {}, {});
+    responses.push({ authorizationRequest }, { deviceAuthorization }, {});
 
     await expect(getAgentAuthorizationRequest("auth_1")).resolves.toEqual(
       authorizationRequest,
@@ -137,14 +101,9 @@ describe("Agent Access dashboard API client", () => {
     await expect(lookupAgentDeviceAuthorization("AB12CD34")).resolves.toEqual(
       deviceAuthorization,
     );
-    await rotateAgentToken("cred_1");
     await denyAgentDeviceAuthorization("dev_1");
 
     expect(calls[2]).toMatchObject({
-      path: "/api/v1/admin/agent-access/tokens/cred_1/rotate",
-      body: {},
-    });
-    expect(calls[3]).toMatchObject({
       path: "/api/v1/admin/agent-access/device-authorizations/dev_1/deny",
       body: {},
     });

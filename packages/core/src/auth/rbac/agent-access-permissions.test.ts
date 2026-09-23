@@ -5,9 +5,11 @@ import { PERMISSIONS } from "./permissions";
 
 describe("agent-access RBAC boundaries", () => {
   it("uses dedicated permissions for settings and consent pages", () => {
-    expect(getPagePermission("/admin/settings/agent-access")).toEqual({
-      permission: PERMISSIONS.AGENT_ACCESS_VIEW,
-    });
+    // Agent access lives on Settings → Apps; that page opens for any role
+    // that can see one of its cards, and the card itself checks the view.
+    expect(getPagePermission("/admin/settings/apps")?.anyOf).toContain(
+      PERMISSIONS.AGENT_ACCESS_VIEW,
+    );
     expect(
       getPagePermission("/admin/settings/agent-access/authorize/request-123"),
     ).toEqual({ permission: PERMISSIONS.AGENT_ACCESS_MANAGE });

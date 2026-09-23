@@ -1,49 +1,39 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
-import CheckoutSettingsPage from "~/components/admin/settings/CheckoutSettingsPage";
+import { createFileRoute } from "@tanstack/react-router";
 import {
-  normalizeCheckoutSettingsSection,
-  type CheckoutSettingsSection,
-} from "~/components/admin/settings/checkout-settings-sections";
-import { checkoutFlowSettingsQueryOptions } from "~/lib/api-query-options/settings";
+  CheckoutTextCard,
+  CustomerContactCard,
+  CustomerRequestsCard,
+  checkoutReadinessQuery,
+  customerRequestsQuery,
+  languagesQuery,
+} from "~/components/admin/settings/CheckoutSettings";
+import { checkoutFlowQuery } from "~/components/admin/settings/PaymentsSettings";
+import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { useHasPermission } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { RouteErrorComponent } from "~/lib/route-error";
 
-export function validateCheckoutSettingsSearch(
-  search: Record<string, unknown>,
-) {
-  return { section: normalizeCheckoutSettingsSection(search.section) };
-}
-
 export const Route = createFileRoute("/admin/settings/checkout")({
-  validateSearch: validateCheckoutSettingsSearch,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.prefetchQuery(checkoutFlowSettingsQueryOptions());
-  },
-  head: () => ({ meta: [{ title: "Checkout Settings | Scalius Admin" }] }),
+  loader: ({ context: { queryClient } }) =>
+    Promise.allSettled([
+      queryClient.ensureQueryData(checkoutFlowQuery),
+      queryClient.ensureQueryData(checkoutReadinessQuery),
+      queryClient.ensureQueryData(languagesQuery),
+      queryClient.ensureQueryData(customerRequestsQuery),
+    ]),
+  head: () => settingsHead("checkout"),
   errorComponent: RouteErrorComponent,
   component: CheckoutPage,
 });
 
 function CheckoutPage() {
-  const search = Route.useSearch();
-  const navigate = useNavigate();
-  const handleSectionChange = useCallback(
-    (section: CheckoutSettingsSection) => {
-      void navigate({
-        resetScroll: false,
-        search: ((previous: Record<string, unknown>) => ({
-          ...previous,
-          section,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   return (
-    <CheckoutSettingsPage
-      section={search.section}
-      onSectionChange={handleSectionChange}
-    />
+    <SettingsPage page="checkout" readOnly={!canEdit}>
+      <CustomerContactCard />
+      <CheckoutTextCard />
+      <CustomerRequestsCard />
+    </SettingsPage>
   );
 }

@@ -1,31 +1,15 @@
 import {
-  ORDER_NOTIFICATION_LABELS,
   ORDER_NOTIFICATION_TYPES,
   type OrderNotificationType,
 } from "@scalius/core/modules/notifications/notification-types";
 
-export const CUSTOMER_NOTIFICATION_CHANNELS = [
-  { key: "email", label: "Email" },
-  { key: "sms", label: "SMS" },
-  { key: "whatsapp", label: "WhatsApp" },
-] as const;
+export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
 
-export const ADMIN_NOTIFICATION_CHANNELS = [
-  { key: "push", label: "Push" },
-] as const;
-
-export const NOTIFICATION_EVENTS = ORDER_NOTIFICATION_TYPES.map((key) => ({
-  key,
-  label: ORDER_NOTIFICATION_LABELS[key],
-}));
-
-export const NOTIFICATION_EVENT_GROUPS: ReadonlyArray<{
-  label: string;
-  keys: readonly OrderNotificationType[];
-}> = [
+/** Grouped for display; labels come from `notificationEventMessages`. */
+export const NOTIFICATION_EVENT_GROUPS = [
   {
-    label: "Order progress",
-    keys: [
+    key: "groupOrders",
+    events: [
       "order_created",
       "order_confirmed",
       "order_processing",
@@ -36,8 +20,8 @@ export const NOTIFICATION_EVENT_GROUPS: ReadonlyArray<{
     ],
   },
   {
-    label: "Payments & returns",
-    keys: [
+    key: "groupPayments",
+    events: [
       "order_returned",
       "refund_processing",
       "refund_failed",
@@ -47,48 +31,17 @@ export const NOTIFICATION_EVENT_GROUPS: ReadonlyArray<{
     ],
   },
   {
-    label: "Support",
-    keys: ["support_request_submitted", "support_request_status_updated"],
+    key: "groupSupport",
+    events: ["support_request_submitted", "support_request_status_updated"],
   },
-];
+] as const satisfies ReadonlyArray<{ key: string; events: readonly OrderNotificationType[] }>;
 
-export type CustomerNotificationChannel =
-  (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number]["key"];
-export type AdminNotificationChannel =
-  (typeof ADMIN_NOTIFICATION_CHANNELS)[number]["key"];
+export type CustomerNotificationChannel = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number];
 export type CustomerNotificationConfig = Record<
   OrderNotificationType,
   Record<CustomerNotificationChannel, boolean>
 >;
-export type AdminNotificationConfig = Record<
-  OrderNotificationType,
-  Record<AdminNotificationChannel, boolean>
->;
-
-export function getDefaultCustomerNotificationConfig(): CustomerNotificationConfig {
-  const config = {} as CustomerNotificationConfig;
-  for (const event of NOTIFICATION_EVENTS) {
-    config[event.key] = {
-      email: event.key !== "support_request_submitted",
-      sms: false,
-      whatsapp: false,
-    };
-  }
-  return config;
-}
-
-export function getDefaultAdminNotificationConfig(): AdminNotificationConfig {
-  const config = {} as AdminNotificationConfig;
-  for (const event of NOTIFICATION_EVENTS) {
-    config[event.key] = {
-      push:
-        event.key === "order_created" ||
-        event.key === "order_cancelled" ||
-        event.key === "support_request_submitted",
-    };
-  }
-  return config;
-}
+export type AdminNotificationConfig = Record<OrderNotificationType, { push: boolean }>;
 
 /**
  * Provider readiness controls delivery, not merchant intent. A temporarily
@@ -98,15 +51,14 @@ export function getDefaultAdminNotificationConfig(): AdminNotificationConfig {
 export function buildCustomerNotificationConfig(
   channelData: Record<string, string[]> | undefined,
 ): CustomerNotificationConfig {
-  const config = getDefaultCustomerNotificationConfig();
-  if (!channelData || typeof channelData !== "object") return config;
-
-  for (const event of NOTIFICATION_EVENTS) {
-    const enabledChannels = channelData[event.key];
-    if (!Array.isArray(enabledChannels)) continue;
-    for (const channel of CUSTOMER_NOTIFICATION_CHANNELS) {
-      config[event.key][channel.key] = enabledChannels.includes(channel.key);
-    }
+  const config = {} as CustomerNotificationConfig;
+  for (const event of ORDER_NOTIFICATION_TYPES) {
+    const saved = channelData?.[event];
+    config[event] = {
+      email: Array.isArray(saved) ? saved.includes("email") : event !== "support_request_submitted",
+      sms: Array.isArray(saved) && saved.includes("sms"),
+      whatsapp: Array.isArray(saved) && saved.includes("whatsapp"),
+    };
   }
   return config;
 }
@@ -114,27 +66,24 @@ export function buildCustomerNotificationConfig(
 export function buildAdminNotificationConfig(
   channelData: Record<string, string[]> | undefined,
 ): AdminNotificationConfig {
-  const config = getDefaultAdminNotificationConfig();
-  if (!channelData || typeof channelData !== "object") return config;
-
-  for (const event of NOTIFICATION_EVENTS) {
-    const enabledChannels = channelData[event.key];
-    if (!Array.isArray(enabledChannels)) continue;
-    config[event.key].push = enabledChannels.includes("push");
+  const config = {} as AdminNotificationConfig;
+  for (const event of ORDER_NOTIFICATION_TYPES) {
+    const saved = channelData?.[event];
+    config[event] = {
+      push: Array.isArray(saved)
+        ? saved.includes("push")
+        : event === "order_created" || event === "order_cancelled" || event === "support_request_submitted",
+    };
   }
   return config;
 }
 
-type CustomerChannelKey = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number]["key"];
-
 export function serializeCustomerNotificationConfig(
   config: CustomerNotificationConfig,
-): Record<OrderNotificationType, CustomerChannelKey[]> {
-  const result = {} as Record<OrderNotificationType, CustomerChannelKey[]>;
-  for (const event of NOTIFICATION_EVENTS) {
-    result[event.key] = CUSTOMER_NOTIFICATION_CHANNELS
-      .filter((channel) => config[event.key]?.[channel.key])
-      .map((channel) => channel.key);
+): Record<OrderNotificationType, CustomerNotificationChannel[]> {
+  const result = {} as Record<OrderNotificationType, CustomerNotificationChannel[]>;
+  for (const event of ORDER_NOTIFICATION_TYPES) {
+    result[event] = CUSTOMER_NOTIFICATION_CHANNELS.filter((channel) => config[event]?.[channel]);
   }
   return result;
 }
@@ -143,74 +92,8 @@ export function serializeAdminNotificationConfig(
   config: AdminNotificationConfig,
 ): Record<OrderNotificationType, "push"[]> {
   const result = {} as Record<OrderNotificationType, "push"[]>;
-  for (const event of NOTIFICATION_EVENTS) {
-    result[event.key] = config[event.key]?.push ? ["push"] : [];
+  for (const event of ORDER_NOTIFICATION_TYPES) {
+    result[event] = config[event]?.push ? ["push"] : [];
   }
   return result;
-}
-
-export function setCustomerChannelForEveryEvent(
-  config: CustomerNotificationConfig,
-  channel: CustomerNotificationChannel,
-  enabled: boolean,
-): CustomerNotificationConfig {
-  const next = { ...config };
-  for (const event of NOTIFICATION_EVENTS) {
-    next[event.key] = { ...config[event.key], [channel]: enabled };
-  }
-  return next;
-}
-
-export function setAdminPushForEveryEvent(
-  config: AdminNotificationConfig,
-  enabled: boolean,
-): AdminNotificationConfig {
-  const next = { ...config };
-  for (const event of NOTIFICATION_EVENTS) {
-    next[event.key] = { push: enabled };
-  }
-  return next;
-}
-
-export function getCustomerChannelSelection(
-  config: CustomerNotificationConfig,
-  channel: CustomerNotificationChannel,
-): boolean | "indeterminate" {
-  const enabled = NOTIFICATION_EVENTS.filter(
-    (event) => config[event.key]?.[channel],
-  ).length;
-  if (enabled === 0) return false;
-  if (enabled === NOTIFICATION_EVENTS.length) return true;
-  return "indeterminate";
-}
-
-export function getAdminPushSelection(
-  config: AdminNotificationConfig,
-): boolean | "indeterminate" {
-  const enabled = NOTIFICATION_EVENTS.filter(
-    (event) => config[event.key]?.push,
-  ).length;
-  if (enabled === 0) return false;
-  if (enabled === NOTIFICATION_EVENTS.length) return true;
-  return "indeterminate";
-}
-
-export function customerNotificationConfigsEqual(
-  left: CustomerNotificationConfig,
-  right: CustomerNotificationConfig,
-): boolean {
-  return (
-    JSON.stringify(serializeCustomerNotificationConfig(left)) ===
-    JSON.stringify(serializeCustomerNotificationConfig(right))
-  );
-}
-
-export function adminNotificationConfigsEqual(
-  left: AdminNotificationConfig,
-  right: AdminNotificationConfig,
-): boolean {
-  return (
-    JSON.stringify(serializeAdminNotificationConfig(left)) ===
-    JSON.stringify(serializeAdminNotificationConfig(right))
-  );
 }

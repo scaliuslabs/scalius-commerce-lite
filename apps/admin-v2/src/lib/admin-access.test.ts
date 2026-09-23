@@ -99,7 +99,7 @@ describe("admin shell access", () => {
 
   it("allows super admins through mapped routes", () => {
     expect(
-      canAccessAdminPath("/admin/settings/cache", {
+      canAccessAdminPath("/admin/settings/advanced", {
         isSuperAdmin: true,
         hasAdminAccess: true,
         permissions: new Set(),
@@ -121,11 +121,14 @@ describe("admin shell access", () => {
       "/admin/customers/customer-123/edit",
       "/admin/discounts/discount-123/edit",
       "/admin/promotions/promotion-123/edit",
-      "/admin/analytics/report-123/edit",
       "/admin/pages/page-123/edit",
       "/admin/articles/article-123/edit",
       "/admin/account",
-      "/admin/settings/cache",
+      "/admin/settings",
+      "/admin/settings/store",
+      "/admin/settings/users",
+      "/admin/settings/shipping",
+      "/admin/settings/apps",
       "/admin/settings/taxes",
       "/admin/experimental",
     ];

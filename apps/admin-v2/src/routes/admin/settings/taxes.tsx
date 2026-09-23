@@ -1,24 +1,28 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { TaxSettingsPage } from "~/components/admin/taxes";
 import {
-  normalizeTaxClassificationRouteState,
-  type TaxClassificationRouteState,
-} from "~/components/admin/taxes/tax-classification-route-state";
+  TaxCollectionCard,
+  TaxGroupsCard,
+  TaxOverridesCard,
+  TaxRatesCard,
+  firstTaxOverridesQuery,
+} from "~/components/admin/taxes/TaxesSettings";
+import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
+import { useHasPermission } from "~/contexts/PermissionContext";
 import {
-  normalizeTaxWorkspaceSection,
-  type TaxWorkspaceSection,
-} from "~/components/admin/taxes/tax-workspace-sections";
-import { taxConfigurationQueryOptions } from "~/lib/api-query-options/taxes";
+  taxConfigurationQueryOptions,
+  taxSettingsQueryOptions,
+} from "~/lib/api-query-options/taxes";
 import {
   ADMIN_ACCESS_DENIED_PATH,
   canAccessAdminPath,
 } from "~/lib/admin-access";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getFreshAdminRouteContext } from "~/lib/admin-route-context";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
+/** Re-reads the viewer's permissions so a revoked tax viewer never loads tax data. */
 export async function requireFreshTaxesRouteAuthority() {
   const context = await getFreshAdminRouteContext();
   if (!canAccessAdminPath("/admin/settings/taxes", context)) {
@@ -27,74 +31,27 @@ export async function requireFreshTaxesRouteAuthority() {
   return context;
 }
 
-export function validateTaxesSearch(search: Record<string, unknown>) {
-  const classification = normalizeTaxClassificationRouteState(search);
-  return {
-    section: normalizeTaxWorkspaceSection(search.section),
-    ...(classification.kind === "variant" ? { kind: classification.kind } : {}),
-    ...(classification.search ? { query: classification.search } : {}),
-    ...(classification.page > 1 ? { page: classification.page } : {}),
-  };
-}
-
 export const Route = createFileRoute("/admin/settings/taxes")({
-  validateSearch: validateTaxesSearch,
   beforeLoad: requireFreshTaxesRouteAuthority,
-  loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(taxConfigurationQueryOptions());
-  },
-  head: () => ({ meta: [{ title: "Taxes | Scalius Admin" }] }),
+  loader: ({ context: { queryClient } }) =>
+    Promise.allSettled([
+      queryClient.ensureQueryData(taxConfigurationQueryOptions()),
+      queryClient.ensureQueryData(taxSettingsQueryOptions()),
+      queryClient.ensureQueryData(firstTaxOverridesQuery),
+    ]),
+  head: () => settingsHead("taxes"),
   errorComponent: RouteErrorComponent,
   component: TaxesPage,
 });
 
 function TaxesPage() {
-  const search = Route.useSearch();
-  const navigate = useNavigate();
-  const classificationRouteState = normalizeTaxClassificationRouteState(search);
-  const rememberWorkspaceScroll = useWorkspaceScrollMemory(
-    `${search.section}:${classificationRouteState.kind}:${classificationRouteState.search}:${classificationRouteState.page}`,
-  );
-  const handleSectionChange = useCallback(
-    (section: TaxWorkspaceSection) => {
-      void navigate({
-        resetScroll: false,
-        search: ((previous: Record<string, unknown>) => ({
-          ...previous,
-          section,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-  const handleClassificationRouteStateChange = useCallback(
-    (state: TaxClassificationRouteState) => {
-      void navigate({
-        resetScroll: false,
-        search: ((previous: Record<string, unknown>) => ({
-          ...previous,
-          section: "classification",
-          kind: state.kind === "product" ? undefined : state.kind,
-          query: state.search || undefined,
-          page: state.page === 1 ? undefined : state.page,
-        })) as never,
-      });
-    },
-    [navigate],
-  );
-
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
   return (
-    <div
-      className="contents"
-      onPointerDownCapture={rememberWorkspaceScroll}
-      onKeyDownCapture={rememberWorkspaceScroll}
-    >
-      <TaxSettingsPage
-        section={search.section}
-        onSectionChange={handleSectionChange}
-        classificationRouteState={classificationRouteState}
-        onClassificationRouteStateChange={handleClassificationRouteStateChange}
-      />
-    </div>
+    <SettingsPage page="taxes" readOnly={!canEdit}>
+      <TaxCollectionCard />
+      <TaxGroupsCard />
+      <TaxRatesCard />
+      <TaxOverridesCard />
+    </SettingsPage>
   );
 }
