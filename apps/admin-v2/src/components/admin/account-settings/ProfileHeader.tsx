@@ -13,7 +13,17 @@ import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
 import { MediaManager, type MediaFile } from "../media-manager";
-import type { User } from "./AccountSettingsContainer";
+
+/** The signed-in staff member shown on the account page. */
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  role?: string | null;
+  twoFactorEnabled?: boolean | null;
+  twoFactorMethod?: string | null;
+}
 
 function initials(name: string): string {
   return Array.from(name.trim().split(/\s+/), (part) => Array.from(part)[0] ?? "").join("").slice(0, 2).toUpperCase();

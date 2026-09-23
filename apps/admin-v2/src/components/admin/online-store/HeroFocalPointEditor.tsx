@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import { Crosshair, RotateCcw } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
@@ -61,15 +61,15 @@ export function HeroFocalPointEditor({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-3" align="start">
-        <div>
-          <p className="text-sm font-medium">{t("focusTitle")}</p>
-          <p className="text-sm text-muted-foreground">{t("focusHelp")}</p>
+        <div className="space-y-1">
+          <p className="text-heading-sm">{t("focusTitle")}</p>
+          <p className="text-body text-muted-foreground">{t("focusHelp")}</p>
         </div>
 
-        <div className="flex justify-center overflow-hidden rounded-md border bg-muted/30">
+        <div className="flex justify-center overflow-clip rounded-md bg-muted">
           <button
             type="button"
-            className="relative inline-block max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="relative inline-block max-w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={setFromImage}
             aria-label={t("focusTitle")}
           >
@@ -81,8 +81,8 @@ export function HeroFocalPointEditor({
               decoding="async"
             />
             <span
-              className="pointer-events-none absolute size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow"
-              style={{ left: `${focalPoint.x}%`, top: `${focalPoint.y}%` }}
+              style={{ "--focus-x": `${focalPoint.x}%`, "--focus-y": `${focalPoint.y}%` } as CSSProperties}
+              className="pointer-events-none absolute top-(--focus-y) left-(--focus-x) size-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-background"
             >
               <span className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background" />
             </span>
@@ -102,7 +102,7 @@ export function HeroFocalPointEditor({
               onChange={(event) => onChange({ ...focalPoint, x: clampPercent(event.target.valueAsNumber) })}
               className="h-4 min-w-0 flex-1 accent-primary"
             />
-            <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{focalPoint.x}%</span>
+            <span className="w-10 shrink-0 text-right text-body tabular-nums text-muted-foreground">{focalPoint.x}%</span>
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor={`hero-focus-y-${imageId}`} className="w-24 shrink-0">{t("vertical")}</Label>
@@ -116,11 +116,11 @@ export function HeroFocalPointEditor({
               onChange={(event) => onChange({ ...focalPoint, y: clampPercent(event.target.valueAsNumber) })}
               className="h-4 min-w-0 flex-1 accent-primary"
             />
-            <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{focalPoint.y}%</span>
+            <span className="w-10 shrink-0 text-right text-body tabular-nums text-muted-foreground">{focalPoint.y}%</span>
           </div>
         </div>
 
-        <div className="flex justify-end border-t pt-2">
+        <div className="flex justify-end border-t border-border pt-2">
           <Button
             type="button"
             variant="ghost"

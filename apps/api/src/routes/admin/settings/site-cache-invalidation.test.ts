@@ -449,6 +449,7 @@ describe("site settings cache invalidation", () => {
 
   it.each([
     "http://cdn.example.com/social.jpg",
+    "http://localhost.example.com/social.jpg",
     "https://user:pass@cdn.example.com/social.jpg",
     "/media/social.jpg",
     "//cdn.example.com/social.jpg",
@@ -463,8 +464,8 @@ describe("site settings cache invalidation", () => {
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
   });
 
-  it.each(["", "https://cdn.example.com/media/social.jpg"])(
-    "accepts a blank or absolute https social image: %j",
+  it.each(["", "https://cdn.example.com/media/social.jpg", "http://localhost:8787/media/social.jpg"])(
+    "accepts a blank, absolute https or local-development social image: %j",
     async (socialImage) => {
       const { app, env } = createTestApp();
 

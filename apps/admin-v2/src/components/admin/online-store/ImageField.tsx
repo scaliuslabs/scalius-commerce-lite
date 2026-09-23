@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { ImageIcon } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
@@ -19,11 +20,12 @@ export function ImageField({
   wide?: boolean;
 }) {
   const t = useMessages(onlineStoreMessages);
+  const labelId = useId();
   return (
-    <div className="flex items-center gap-3">
+    <div role="group" aria-labelledby={labelId} className="flex items-center gap-3">
       <div
         className={cn(
-          "grid shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted/40",
+          "grid shrink-0 place-items-center overflow-clip rounded-lg border bg-muted",
           wide ? "h-16 w-28" : "size-16",
         )}
       >
@@ -34,7 +36,7 @@ export function ImageField({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
+        <p id={labelId} className="text-body font-medium">{label}</p>
         <div className="mt-1 flex flex-wrap gap-2">
           <MediaManager
             capability="image"

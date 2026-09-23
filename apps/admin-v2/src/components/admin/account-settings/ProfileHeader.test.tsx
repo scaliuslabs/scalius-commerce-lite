@@ -13,7 +13,7 @@ import {
 
 import { ProfileHeader } from "./ProfileHeader";
 import { SaveBarProvider, SaveErrorBanner } from "../shared/SaveBar";
-import type { User } from "./AccountSettingsContainer";
+import type { User } from "./ProfileHeader";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;

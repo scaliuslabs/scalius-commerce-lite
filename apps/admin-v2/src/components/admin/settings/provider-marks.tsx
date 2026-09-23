@@ -1,4 +1,5 @@
 import { cn } from "@scalius/shared/utils";
+import { useTheme } from "~/components/admin/layout/ThemeProvider";
 
 export type ProviderMarkId =
   | "stripe"
@@ -263,7 +264,8 @@ export function OfficialProviderMark({
   className?: string;
 }) {
   const mark = PROVIDER_MARKS[provider];
-  const imageClassName = cn("h-full w-full object-contain", className);
+  const { theme } = useTheme();
+  const src = theme === "dark" && mark.darkSrc ? mark.darkSrc : mark.lightSrc;
 
   return (
     <span
@@ -281,10 +283,7 @@ export function OfficialProviderMark({
       aria-hidden="true"
       title={mark.label}
     >
-      <img src={mark.lightSrc} alt="" className={cn(imageClassName, mark.darkSrc && "dark:hidden")} />
-      {mark.darkSrc ? (
-        <img src={mark.darkSrc} alt="" className={cn(imageClassName, "hidden dark:block")} />
-      ) : null}
+      <img src={src} alt="" className={cn("h-full w-full object-contain", className)} />
     </span>
   );
 }

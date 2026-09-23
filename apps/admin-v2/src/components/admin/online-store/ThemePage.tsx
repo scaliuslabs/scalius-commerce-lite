@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type CSSProperties } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import {
@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
+import { SaveBarProvider, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
 import {
   footerQueryOptions,
@@ -121,6 +121,13 @@ function presetTheme(preset: (typeof PRESETS)[number]): Theme {
   return { colors, ...structuredClone(preset.style) };
 }
 
+const COLOR_FIELD_IDS: Record<string, string> = {
+  background: "theme-color-background",
+  foreground: "theme-color-text",
+  primary: "theme-color-buttons",
+  "primary-foreground": "theme-color-button-text",
+};
+
 /** Each merchant colour writes the storefront tokens that share its role. */
 const COLOR_ROLES = {
   background: ["background", "card", "popover"],
@@ -133,22 +140,20 @@ function colorValue(theme: Theme, token: string): string {
   return theme.colors[token] ?? DEFAULT_STOREFRONT_THEME_COLORS[token] ?? "";
 }
 
-/**
- * The only inline styles on the page: previews of the merchant's own storefront
- * colours, which are data and cannot be Tailwind classes.
- */
-function Swatch({ color, className, children }: { color: string; className: string; children?: ReactNode }) {
-  return <span className={className} style={{ background: color }}>{children}</span>;
-}
-
 function StylePreview({ theme }: { theme: Theme }) {
   return (
-    <Swatch color={colorValue(theme, "background")} className="flex h-16 items-end justify-between rounded-lg border p-2">
-      <span className="text-lg font-semibold leading-none" style={{ color: colorValue(theme, "foreground") }}>
-        Aa
-      </span>
-      <Swatch color={colorValue(theme, "primary")} className="h-5 w-10 rounded" />
-    </Swatch>
+    <span
+      // Merchant colours are data: they reach CSS only as custom properties (DESIGN.md).
+      style={{
+        "--swatch-bg": colorValue(theme, "background"),
+        "--swatch-fg": colorValue(theme, "foreground"),
+        "--swatch-primary": colorValue(theme, "primary"),
+      } as CSSProperties}
+      className="flex h-16 items-end justify-between rounded-lg border bg-(--swatch-bg) p-2"
+    >
+      <span className="text-heading-lg text-(--swatch-fg)">Aa</span>
+      <span className="h-5 w-10 rounded-md bg-(--swatch-primary)" />
+    </span>
   );
 }
 
@@ -173,42 +178,58 @@ function ColorField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useMessages(onlineStoreMessages);
   const valid = isSafeStorefrontThemeColorValue(value);
   // Presets may store oklch()/rgb(); merchants see and pick hex.
   const hex = value.startsWith("#") || !valid ? value : toHex(value);
+  const [left, setLeft] = useState(false);
+  const server = useServerFieldError(id);
+  const error = server.error ?? (!valid && (left || server.revealed) ? t("colorInvalid") : undefined);
   return (
-    <div className="flex items-center gap-3">
-      <label className="relative shrink-0 cursor-pointer">
-        <Swatch color={valid ? value : "transparent"} className="block size-10 rounded-lg border" />
-        <span className="sr-only">{label}</span>
-        <input
-          type="color"
-          value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#000000"}
-          onChange={(event) => onChange(event.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0"
-        />
-      </label>
-      <div className="min-w-0 flex-1 space-y-1">
-        <Label htmlFor={id}>{label}</Label>
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <label
+          style={{ "--swatch": valid ? value : "transparent" } as CSSProperties}
+          className="relative size-11 shrink-0 cursor-pointer rounded-lg border bg-(--swatch) sm:size-9"
+        >
+          <span className="sr-only">{t("pickColor", { name: label })}</span>
+          <input
+            type="color"
+            value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#000000"}
+            onChange={(event) => {
+              server.clear();
+              onChange(event.target.value);
+            }}
+            className="absolute inset-0 size-full cursor-pointer opacity-0"
+          />
+        </label>
         <Input
           id={id}
           value={hex}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={!valid}
-          className="font-mono"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-note` : undefined}
+          onBlur={() => setLeft(true)}
+          onChange={(event) => {
+            server.clear();
+            onChange(event.target.value);
+          }}
         />
       </div>
+      {error ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{error}</p> : null}
     </div>
   );
 }
 
 function ChoiceField<Value extends string>({
+  id,
   label,
   value,
   values,
   labelFor,
   onChange,
 }: {
+  id: string;
   label: string;
   value: Value;
   values: readonly Value[];
@@ -217,9 +238,9 @@ function ChoiceField<Value extends string>({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Select value={value} onValueChange={(next) => onChange(next as Value)}>
-        <SelectTrigger aria-label={label}>
+        <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -237,7 +258,9 @@ function ThemeCards() {
   const queryClient = useQueryClient();
   const { data, refetch } = useSuspenseQuery(themeQueryOptions());
   const { draft: theme, setDraft } = useDocumentDraft<Theme>({
+    label: t("themeTitle"),
     saved: data.theme as Theme,
+    fields: (path) => COLOR_FIELD_IDS[path.replace(/^theme\.colors\./, "")],
     invalid: (draft) => Object.values(draft.colors).some((value) => !isSafeStorefrontThemeColorValue(value)),
     save: async (next) => {
       try {
@@ -278,14 +301,14 @@ function ThemeCards() {
                 aria-pressed={selected}
                 onClick={() => setDraft(candidate)}
                 className={cn(
-                  "group rounded-xl border p-2 text-left transition-colors hover:border-foreground/40",
-                  selected && "border-primary ring-2 ring-primary/30",
+                  "rounded-xl border p-2 text-left hover:bg-accent",
+                  selected && "outline-2 outline-offset-1 outline-ring",
                 )}
               >
                 <StylePreview theme={candidate} />
-                <span className="mt-2 flex items-center justify-between gap-1 px-0.5 text-sm font-medium">
+                <span className="mt-2 flex items-center justify-between gap-1 px-0.5 text-body font-medium">
                   {t(`preset_${preset.key}` as MessageKey)}
-                  {selected ? <Check className="size-4 text-primary" aria-hidden /> : null}
+                  {selected ? <Check className="size-4" aria-hidden /> : null}
                 </span>
               </button>
             );
@@ -304,20 +327,20 @@ function ThemeCards() {
 
       <SectionCard title={t("fonts")}>
         <div className="grid gap-4 sm:grid-cols-3">
-          <ChoiceField label={t("fontHeadings")} value={theme.typography.heading} values={STOREFRONT_THEME_HEADING_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(heading) => set("typography", { ...theme.typography, heading })} />
-          <ChoiceField label={t("fontBody")} value={theme.typography.body} values={STOREFRONT_THEME_BODY_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(body) => set("typography", { ...theme.typography, body })} />
-          <ChoiceField label={t("textSize")} value={theme.typography.scale} values={STOREFRONT_THEME_TYPE_SCALES} labelFor={(value) => option(`scale_${value}`)} onChange={(scale) => set("typography", { ...theme.typography, scale })} />
+          <ChoiceField id="theme-font-headings" label={t("fontHeadings")} value={theme.typography.heading} values={STOREFRONT_THEME_HEADING_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(heading) => set("typography", { ...theme.typography, heading })} />
+          <ChoiceField id="theme-font-body" label={t("fontBody")} value={theme.typography.body} values={STOREFRONT_THEME_BODY_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(body) => set("typography", { ...theme.typography, body })} />
+          <ChoiceField id="theme-text-size" label={t("textSize")} value={theme.typography.scale} values={STOREFRONT_THEME_TYPE_SCALES} labelFor={(value) => option(`scale_${value}`)} onChange={(scale) => set("typography", { ...theme.typography, scale })} />
         </div>
       </SectionCard>
 
       <SectionCard title={t("layout")}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <ChoiceField label={t("corners")} value={theme.cornerStyle} values={STOREFRONT_THEME_CORNER_STYLES} labelFor={(value) => option(`corner_${value}`)} onChange={(value) => set("cornerStyle", value)} />
-          <ChoiceField label={t("buttonStyle")} value={theme.components.buttons} values={STOREFRONT_THEME_BUTTON_STYLES} labelFor={(value) => option(`button_${value}`)} onChange={(buttons) => set("components", { ...theme.components, buttons })} />
-          <ChoiceField label={t("cardStyle")} value={theme.components.cards} values={STOREFRONT_THEME_CARD_STYLES} labelFor={(value) => option(`card_${value}`)} onChange={(cards) => set("components", { ...theme.components, cards })} />
-          <ChoiceField label={t("inputStyle")} value={theme.components.inputs} values={STOREFRONT_THEME_INPUT_STYLES} labelFor={(value) => option(`input_${value}`)} onChange={(inputs) => set("components", { ...theme.components, inputs })} />
-          <ChoiceField label={t("spacing")} value={theme.density} values={STOREFRONT_THEME_DENSITIES} labelFor={(value) => option(`density_${value}`)} onChange={(value) => set("density", value)} />
-          <ChoiceField label={t("pageWidth")} value={theme.containerWidth} values={STOREFRONT_THEME_CONTAINER_WIDTHS} labelFor={(value) => option(`width_${value}`)} onChange={(value) => set("containerWidth", value)} />
+          <ChoiceField id="theme-corners" label={t("corners")} value={theme.cornerStyle} values={STOREFRONT_THEME_CORNER_STYLES} labelFor={(value) => option(`corner_${value}`)} onChange={(value) => set("cornerStyle", value)} />
+          <ChoiceField id="theme-buttons" label={t("buttonStyle")} value={theme.components.buttons} values={STOREFRONT_THEME_BUTTON_STYLES} labelFor={(value) => option(`button_${value}`)} onChange={(buttons) => set("components", { ...theme.components, buttons })} />
+          <ChoiceField id="theme-cards" label={t("cardStyle")} value={theme.components.cards} values={STOREFRONT_THEME_CARD_STYLES} labelFor={(value) => option(`card_${value}`)} onChange={(cards) => set("components", { ...theme.components, cards })} />
+          <ChoiceField id="theme-inputs" label={t("inputStyle")} value={theme.components.inputs} values={STOREFRONT_THEME_INPUT_STYLES} labelFor={(value) => option(`input_${value}`)} onChange={(inputs) => set("components", { ...theme.components, inputs })} />
+          <ChoiceField id="theme-spacing" label={t("spacing")} value={theme.density} values={STOREFRONT_THEME_DENSITIES} labelFor={(value) => option(`density_${value}`)} onChange={(value) => set("density", value)} />
+          <ChoiceField id="theme-page-width" label={t("pageWidth")} value={theme.containerWidth} values={STOREFRONT_THEME_CONTAINER_WIDTHS} labelFor={(value) => option(`width_${value}`)} onChange={(value) => set("containerWidth", value)} />
         </div>
       </SectionCard>
     </>
@@ -330,6 +353,7 @@ function LogoCard() {
   const header = useSuspenseQuery(headerQueryOptions());
   const footer = useSuspenseQuery(footerQueryOptions());
   const headerDraft = useDocumentDraft({
+    label: t("headerLogo"),
     saved: header.data.config,
     save: async (config) => {
       try {
@@ -343,6 +367,7 @@ function LogoCard() {
     },
   });
   const footerDraft = useDocumentDraft({
+    label: t("footerLogo"),
     saved: footer.data.config,
     save: async (config) => {
       try {
@@ -384,6 +409,7 @@ function LogoCard() {
               logo: { ...config.logo, width: Number(event.target.value) },
             }))}
             className="h-11 w-full accent-primary sm:h-6"
+            aria-valuetext={`${logoWidth}px`}
           />
         </div>
       ) : null}

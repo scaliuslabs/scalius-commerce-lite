@@ -4,6 +4,7 @@ import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
   getHeroSlideObjectPosition,
+  normalizeHeroSlideImageUrl,
   parseStoredHeroSlides,
   validateAndNormalizeHeroSlides,
 } from "./hero-slider";
@@ -94,6 +95,19 @@ describe("hero slider document", () => {
         })),
       ),
     ).toEqual({ ok: false, errors: ["Use at most 12 hero slides."] });
+  });
+
+  it("accepts plain HTTP images only from loopback hosts (local development)", () => {
+    expect(normalizeHeroSlideImageUrl("http://localhost:8787/media/a.png")).toBe("http://localhost:8787/media/a.png");
+    expect(normalizeHeroSlideImageUrl("http://127.0.0.1/a.png")).toBe("http://127.0.0.1/a.png");
+    expect(normalizeHeroSlideImageUrl("https://cdn.example.com/a.png")).toBe("https://cdn.example.com/a.png");
+    expect(normalizeHeroSlideImageUrl("http://cdn.example.com/a.png")).toBeUndefined();
+    expect(normalizeHeroSlideImageUrl("http://localhost.evil.com/a.png")).toBeUndefined();
+    expect(normalizeHeroSlideImageUrl("http://user:pass@localhost/a.png")).toBeUndefined();
+    expect(normalizeHeroSlideImageUrl("ftp://localhost/a.png")).toBeUndefined();
+    expect(
+      validateAndNormalizeHeroSlides([{ ...baseSlide, url: "http://localhost:8787/media/a.png" }]),
+    ).toMatchObject({ ok: true });
   });
 
   it("fails closed for malformed or unsafe persisted documents", () => {

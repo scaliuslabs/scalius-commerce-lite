@@ -58,6 +58,22 @@ describe("hero slider revision authority", () => {
     expect((await getHeroSlider(db, created.id)).revision).toBe(2);
   });
 
+  it("accepts local-development HTTP images only from loopback hosts", async () => {
+    const slide = { id: "img_1", title: "Local", link: "", focalPoint: { x: 50, y: 50 } };
+    const local = await createHeroSlider(db, {
+      type: "desktop",
+      images: [{ ...slide, url: "http://localhost:8787/media/hero.png" }],
+      isActive: true,
+    });
+    expect(local.images[0]?.url).toBe("http://localhost:8787/media/hero.png");
+
+    await expect(createHeroSlider(db, {
+      type: "mobile",
+      images: [{ ...slide, url: "http://cdn.example.com/hero.png" }],
+      isActive: true,
+    })).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
   it("requires content before activation and one current slider per viewport", async () => {
     await expect(createHeroSlider(db, {
       type: "mobile",
