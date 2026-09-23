@@ -4,15 +4,19 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { AnalyticsScriptsListResponse } from "~/types/api-responses";
 import {
-  deleteAnalyticsScript,
-  permanentlyDeleteAnalyticsScript,
-  restoreAnalyticsScript,
-  toggleAnalyticsScript,
-  type AnalyticsRevisionClaim,
-  type ToggleAnalyticsScriptInput,
-} from "../api-functions/analytics";
+  deleteApiV1AdminAnalyticsById,
+  deleteApiV1AdminAnalyticsByIdPermanent,
+  postApiV1AdminAnalyticsByIdRestore,
+  postApiV1AdminAnalyticsByIdToggle,
+} from "@scalius/api-client/sdk";
+import { apiData } from "../api";
+import type { AnalyticsScriptsListResponse } from "../api-query-options/analytics";
+
+interface AnalyticsRevisionClaim {
+  id: string;
+  expectedRevision: number;
+}
 import { getServerFnError, queryKeys } from "./shared";
 
 function invalidateAnalytics(queryClient: QueryClient) {
@@ -57,7 +61,13 @@ function reconcileAnalyticsLifecycleMove(queryClient: QueryClient, id: string) {
 export function useToggleAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ToggleAnalyticsScriptInput) => toggleAnalyticsScript({ data }),
+    mutationFn: ({ id, isActive, expectedRevision, allowDuplicateProvider }: AnalyticsRevisionClaim & {
+      isActive: boolean;
+      allowDuplicateProvider?: boolean;
+    }) => apiData(postApiV1AdminAnalyticsByIdToggle({
+      path: { id },
+      body: { isActive, expectedRevision, allowDuplicateProvider: allowDuplicateProvider ?? false },
+    })),
     onSuccess: (result) => {
       invalidateAnalytics(queryClient);
       toast.success(result.message);
@@ -71,7 +81,8 @@ export function useToggleAnalyticsScript() {
 export function useDeleteAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: AnalyticsRevisionClaim) => deleteAnalyticsScript({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: AnalyticsRevisionClaim) =>
+      apiData(deleteApiV1AdminAnalyticsById({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       reconcileAnalyticsLifecycleMove(queryClient, claim.id);
       queryClient.removeQueries({ queryKey: queryKeys.analytics.detail(claim.id) });
@@ -86,7 +97,8 @@ export function useDeleteAnalyticsScript() {
 export function useRestoreAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: AnalyticsRevisionClaim) => restoreAnalyticsScript({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: AnalyticsRevisionClaim) =>
+      apiData(postApiV1AdminAnalyticsByIdRestore({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       reconcileAnalyticsLifecycleMove(queryClient, claim.id);
       toast.success("Analytics script restored as inactive");
@@ -100,7 +112,8 @@ export function useRestoreAnalyticsScript() {
 export function usePermanentDeleteAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: AnalyticsRevisionClaim) => permanentlyDeleteAnalyticsScript({ data: claim }),
+    mutationFn: ({ id, expectedRevision }: AnalyticsRevisionClaim) =>
+      apiData(deleteApiV1AdminAnalyticsByIdPermanent({ path: { id }, body: { expectedRevision } })),
     onSuccess: (_data, claim) => {
       reconcileAnalyticsLifecycleMove(queryClient, claim.id);
       queryClient.removeQueries({ queryKey: queryKeys.analytics.detail(claim.id) });

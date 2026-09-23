@@ -7,7 +7,7 @@ import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/product-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
-import type { ProductOptionMatrixInput } from "~/lib/api-functions/products";
+import type { ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -51,10 +51,7 @@ export const Route = createFileRoute("/admin/products/new")({
 function NewProductPage() {
   const { data: categoryData } = useSuspenseQuery(categoryFormOptionsQueryOptions());
   const allCategories = categoryData.categories as Category[];
-  const [optionMatrixDraft, setOptionMatrixDraft] = useState<Omit<
-    ProductOptionMatrixInput,
-    "expectedAggregateRevision"
-  > | null>(null);
+  const [createComposition, setCreateComposition] = useState<ProductCreateComposition | null>(null);
   const [optionMatrixIssue, setOptionMatrixIssue] = useState<string | null>(null);
   const [optionMatrixDirty, setOptionMatrixDirty] = useState(false);
 
@@ -64,7 +61,7 @@ function NewProductPage() {
         categories={allCategories}
         defaultValues={defaultValues}
         isEdit={false}
-        optionMatrixDraft={optionMatrixDraft}
+        createComposition={createComposition}
         optionMatrixIssue={optionMatrixIssue}
         optionMatrixDirty={optionMatrixDirty}
         optionManager={({ skuImages, productName, productPrice, requestSave, productSaving }) => (
@@ -73,7 +70,7 @@ function NewProductPage() {
               productName={productName}
               productPrice={productPrice}
               images={skuImages}
-              onDraftChange={setOptionMatrixDraft}
+              onDraftChange={setCreateComposition}
               onDraftIssueChange={setOptionMatrixIssue}
               onDirtyChange={setOptionMatrixDirty}
               onSaveRequest={requestSave}

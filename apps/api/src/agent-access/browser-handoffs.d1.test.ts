@@ -1,14 +1,7 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { Buffer } from "node:buffer";
-import { drizzle } from "drizzle-orm/d1";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Database } from "@scalius/database/client";
-import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { AgentPrincipal } from "./types";
 import {
   claimAgentBrowserHandoff,
@@ -16,88 +9,7 @@ import {
   expireAgentBrowserHandoffs,
 } from "./browser-handoffs";
 
-interface D1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface D1Statement {
-  bind(...values: SQLInputValue[]): D1Statement;
-  run(): Promise<D1Result>;
-  all(): Promise<D1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): D1Result;
-}
-
-function rows(statement: StatementSync, values: SQLInputValue[]) {
-  return statement.all(...values) as Record<string, SQLOutputValue>[];
-}
-
-function statement(sqlite: DatabaseSync, query: string, values: SQLInputValue[] = []): D1Statement {
-  const execute = (): D1Result => ({
-    results: rows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...next) => statement(sqlite, query, next),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = rows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function harness() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`
-    CREATE TABLE agent_grants (
-      id TEXT PRIMARY KEY, kind TEXT NOT NULL, owner_user_id TEXT,
-      resource TEXT NOT NULL, authority_revision INTEGER NOT NULL,
-      status TEXT NOT NULL, expires_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_credentials (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, revoked_at INTEGER,
-      expires_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_browser_handoffs (
-      id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, credential_id TEXT,
-      owner_user_id TEXT NOT NULL, resource TEXT NOT NULL,
-      operation_id TEXT NOT NULL, authority_revision INTEGER NOT NULL,
-      encrypted_action TEXT NOT NULL, status TEXT NOT NULL,
-      expires_at INTEGER NOT NULL, consumed_at INTEGER,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-  `);
-  const binding = {
-    prepare: (query: string) => statement(sqlite, query),
-    async batch(statements: D1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((item) => item.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
-  return {
-    sqlite,
-    db: drizzle(binding, { schema }) as unknown as Database,
-  };
-}
+const harness = () => createSqliteD1Database();
 
 const grantId = "agr_0123456789abcdefghij";
 const credentialId = "agc_0123456789abcdefghij";
@@ -121,16 +33,17 @@ const action = {
 
 function seed(sqlite: DatabaseSync, kind: "pat" | "oauth" = "pat") {
   const now = Math.floor(Date.now() / 1000);
+  sqlite.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', 'owner@example.test')").run(ownerUserId);
   sqlite.prepare(`
-    INSERT INTO agent_grants
-      (id, kind, owner_user_id, resource, authority_revision, status, expires_at)
-    VALUES (?, ?, ?, 'dashboard', 1, 'active', ?)
-  `).run(grantId, kind, ownerUserId, now + 3600);
+    INSERT INTO agent_grants (id, kind, owner_user_id, resource, label, oauth_client_id, oauth_redirect_uris_json,
+      preset, risk_ceiling, authority_revision, status, expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, 'dashboard', 'Agent', ?, ?, 'full', 'security', 1, 'active', ?, ?, ?)
+  `).run(grantId, kind, ownerUserId, kind === "oauth" ? "client-1" : null, kind === "oauth" ? "[]" : null, now + 3600, now - 600, now - 600);
   if (kind === "pat") {
     sqlite.prepare(`
-      INSERT INTO agent_credentials (id, grant_id, revoked_at, expires_at)
-      VALUES (?, ?, NULL, ?)
-    `).run(credentialId, grantId, now + 3600);
+      INSERT INTO agent_credentials (id, grant_id, kind, token_hash, token_hint, expires_at, created_at, updated_at)
+      VALUES (?, ?, 'pat', ?, 'sc_pat_...hint', ?, ?, ?)
+    `).run(credentialId, grantId, "a".repeat(64), now + 3600, now - 600, now - 600);
   }
 }
 
@@ -241,8 +154,9 @@ describe("agent browser handoff relational authority", () => {
       action,
       env,
     );
-    sqlite.prepare("UPDATE agent_browser_handoffs SET expires_at = ? WHERE id = ?")
-      .run(Math.floor(Date.now() / 1000) - 1, created.handoffId);
+    const now = Math.floor(Date.now() / 1000);
+    sqlite.prepare("UPDATE agent_browser_handoffs SET created_at = ?, expires_at = ? WHERE id = ?")
+      .run(now - 60, now - 1, created.handoffId);
     expect(await expireAgentBrowserHandoffs(test.db)).toBe(1);
     expect(sqlite.prepare("SELECT count(*) count FROM agent_browser_handoffs").get())
       .toEqual({ count: 0 });
@@ -251,6 +165,7 @@ describe("agent browser handoff relational authority", () => {
   it("drains expired handoffs in deterministic bounded pages", async () => {
     const test = harness();
     sqlite = test.sqlite;
+    seed(sqlite, "oauth");
     const now = Math.floor(Date.now() / 1000);
     const insert = sqlite.prepare(`
       INSERT INTO agent_browser_handoffs (

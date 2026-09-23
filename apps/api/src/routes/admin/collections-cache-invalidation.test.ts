@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   bulkDeactivateCollections: vi.fn(),
   restoreCollections: vi.fn(),
   reorderCollections: vi.fn(),
-  invalidateCatalogCaches: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/collections", async () => {
@@ -40,13 +40,13 @@ vi.mock("@scalius/core/modules/collections", async () => {
   };
 });
 
-vi.mock("../../utils/cache-invalidation", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/cache-invalidation")>(
-    "../../utils/cache-invalidation",
+vi.mock("../../utils/cache-generation", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(
+    "../../utils/cache-generation",
   );
   return {
     ...actual,
-    invalidateCatalogCaches: mocks.invalidateCatalogCaches,
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
   };
 });
 
@@ -84,8 +84,6 @@ function createTestApp() {
   const db = createDb();
   const env = {
     CACHE: { id: "api-cache-kv" },
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
   mocks.createCollection.mockResolvedValue({
@@ -102,7 +100,7 @@ function createTestApp() {
   mocks.bulkDeactivateCollections.mockResolvedValue(undefined);
   mocks.restoreCollections.mockResolvedValue(undefined);
   mocks.reorderCollections.mockResolvedValue(undefined);
-  mocks.invalidateCatalogCaches.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -152,9 +150,7 @@ describe("admin collection cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "collections",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -170,9 +166,7 @@ describe("admin collection cache invalidation", () => {
     );
 
     expect(response.status).toBe(204);
-    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
-      "collections",
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -192,6 +186,6 @@ describe("admin collection cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.bulkDeleteCollections).not.toHaveBeenCalled();
-    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 });

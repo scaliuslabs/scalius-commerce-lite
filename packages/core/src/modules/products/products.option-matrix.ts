@@ -25,7 +25,12 @@ import {
     loadVariantSelectedOptions,
     normalizeOptionIdentity,
 } from "./products.option-model";
-import { MAX_PRODUCT_PRICE, expectedProductAggregateRevisionSchema } from "./products.types";
+import {
+    MAX_PRODUCT_PRICE,
+    STOCK_CHANGED_MESSAGE,
+    expectedProductAggregateRevisionSchema,
+    expectedStockVersionSchema,
+} from "./products.types";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -61,7 +66,9 @@ const matrixVariantInputSchema = z.object({
         .nullable(),
     sku: z.string().trim().min(3).max(100),
     price: z.number().min(0).max(MAX_PRODUCT_PRICE),
-    stock: z.number().int().min(0),
+    stock: z.number().int().min(0).optional()
+        .describe("On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."),
+    expectedStockVersion: expectedStockVersionSchema.optional(),
     trackInventory: z.boolean(),
     weight: z.number().min(0).nullable().describe("Weight in grams."),
     barcode: z.string().trim().max(50).nullable(),
@@ -86,7 +93,7 @@ type MatrixBarcodeType = z.infer<typeof matrixVariantInputSchema>["barcodeType"]
 export function mergeRetiredVariantRestoreFacts(
     input: {
         sku: string;
-        stock: number;
+        stock?: number;
         trackInventory: boolean;
         barcode: string | null;
         barcodeType: MatrixBarcodeType;
@@ -551,6 +558,16 @@ export async function saveProductOptionMatrix(
             ? mergeRetiredVariantRestoreFacts(variant, retiredVariant)
             : null;
         const persistedVariantId = activeVariant?.id ?? restoredFacts?.id ?? `var_${nanoid()}`;
+        // A saved row's quantity is a compare-and-set against the stockVersion
+        // the editor read; omitting it keeps whatever sales left on hand.
+        if (activeVariant && variant.stock !== undefined) {
+            if (variant.expectedStockVersion === undefined) {
+                throw new ValidationError("Send expectedStockVersion with stock for a saved SKU.");
+            }
+            if (variant.expectedStockVersion !== activeVariant.stockVersion) {
+                throw new ConflictError(STOCK_CHANGED_MESSAGE);
+            }
+        }
         const barcode = activeVariant
             ? normalizeVariantBarcode(variant.barcode, variant.barcodeType)
             : retiredVariant
@@ -563,7 +580,7 @@ export async function saveProductOptionMatrix(
             optionCombinationKey,
             // A draft row cannot authoritatively replace historical physical
             // stock. Restore first, then edit the persisted SKU if needed.
-            stock: restoredFacts?.stock ?? variant.stock,
+            stock: restoredFacts?.stock ?? variant.stock ?? activeVariant?.stock ?? 0,
             trackInventory: restoredFacts?.trackInventory ?? variant.trackInventory,
             ...barcode,
         };
@@ -895,11 +912,11 @@ export async function saveProductOptionMatrix(
             }
             statements.push(db.update(productVariants).set({
                 ...fields,
-                stock: variant.stock,
                 deletedAt: null,
                 version: sql`${productVariants.version} + 1`,
+                // Unchanged stock is never rewritten: the row may have sold since it was read.
                 ...(variant.stock !== existing.stock
-                    ? { stockVersion: sql`${productVariants.stockVersion} + 1` }
+                    ? { stock: variant.stock, stockVersion: sql`${productVariants.stockVersion} + 1` }
                     : {}),
             }).where(and(
                 eq(productVariants.id, variant.id),
@@ -966,9 +983,11 @@ export async function saveProductOptionMatrix(
         );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")) {
+            throw new ConflictError(STOCK_CHANGED_MESSAGE);
+        }
         if (
-            isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")
-            || isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
+            isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
             || isBatchGuardError(error, "OPTION_MATRIX_RETIRE_CONFLICT")
             || isBatchGuardError(error, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT")
             || isProductAggregateRevisionConflict(error)

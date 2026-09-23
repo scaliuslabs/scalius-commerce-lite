@@ -2,9 +2,8 @@
 // Simple email-based 2FA setup - sends code to email automatically
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  set2faMethod,
-} from "@/lib/api-functions/auth-management";
+import { postApiV1AdminAuth2FaMethod } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,9 +79,9 @@ export function TwoFactorSetup({ userEmail }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await set2faMethod({
-        data: { method: "email", code: verificationCode },
-      });
+      await apiData(postApiV1AdminAuth2FaMethod({
+        body: { method: "email", code: verificationCode },
+      }));
 
       setStep("backup");
     } catch (err: unknown) {

@@ -59,7 +59,6 @@ const STOREFRONT_CACHE_HEADER_PATHS = [
   "/search?q=release-check",
   "/checkout",
   "/api/product-feed.xml?limit=5",
-  "/api/purge-cache",
 ];
 const STRICT_SEO_DISCOVERY_POLICY = Object.freeze({
   source: "strict-default",
@@ -620,25 +619,20 @@ function hasHeaderToken(value, token) {
 
 function evaluatePublicStorefrontCacheHeaders(headers, { label }) {
   const cacheControl = normalizeHeaderValue(headers, "cache-control");
-  const cloudflareCacheStatus = normalizeHeaderValue(headers, "cf-cache-status");
   const cacheStatus = normalizeHeaderValue(headers, "x-cache-status");
   const errors = [];
 
-  if (!hasHeaderToken(cacheStatus.toLowerCase(), "native")) {
-    errors.push(`${label} X-Cache-Status must report NATIVE.`);
+  if (!/^(?:HIT|MISS)$/i.test(cacheStatus)) {
+    errors.push(`${label} X-Cache-Status must report the public cache lane (HIT or MISS).`);
   }
-  if (!/^(?:HIT|MISS|EXPIRED|REVALIDATED|UPDATING)$/i.test(cloudflareCacheStatus)) {
-    errors.push(`${label} CF-Cache-Status must prove an active native cache lookup.`);
-  }
-  if (headers.has("cloudflare-cdn-cache-control") || headers.has("cache-tag")) {
-    errors.push(`${label} must not expose internal native-cache directives.`);
+  if (/\bs-maxage=|\bpublic\b[^,]*max-age=[1-9]/i.test(cacheControl)) {
+    errors.push(`${label} must not expose the edge cache lifetime to browsers.`);
   }
 
   return {
     ok: errors.length === 0,
     errors,
     cacheControl: cacheControl || null,
-    cloudflareCacheStatus: cloudflareCacheStatus || null,
     cacheStatus: cacheStatus || null,
   };
 }
@@ -676,40 +670,16 @@ function evaluateCheckoutCacheHeaders(headers) {
 
 function evaluateProductFeedCacheHeaders(headers) {
   const discoveryCache = evaluateDiscoveryCacheHeaders(headers, { label: "product feed" });
-  const nativeCache = evaluatePublicStorefrontCacheHeaders(headers, {
+  const publicCache = evaluatePublicStorefrontCacheHeaders(headers, {
     label: "product feed",
   });
-  const errors = [...discoveryCache.errors, ...nativeCache.errors];
+  const errors = [...discoveryCache.errors, ...publicCache.errors];
 
   return {
     ok: errors.length === 0,
     errors,
     cacheControl: discoveryCache.cacheControl,
-    cloudflareCacheStatus: nativeCache.cloudflareCacheStatus,
-    cacheStatus: nativeCache.cacheStatus,
-  };
-}
-
-function evaluatePurgeGetHeaders(headers) {
-  const cacheControl = normalizeHeaderValue(headers, "cache-control");
-  const allow = normalizeHeaderValue(headers, "allow");
-  const normalizedCacheControl = cacheControl.toLowerCase();
-  const errors = [];
-
-  if (!hasHeaderToken(allow, "POST")) {
-    errors.push("purge-cache GET must advertise Allow: POST.");
-  }
-  if (!cacheControl) {
-    errors.push("purge-cache GET must include Cache-Control.");
-  } else if (!hasHeaderToken(normalizedCacheControl, "no-store")) {
-    errors.push("purge-cache GET Cache-Control must include no-store.");
-  }
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    allow: allow || null,
-    cacheControl: cacheControl || null,
+    cacheStatus: publicCache.cacheStatus,
   };
 }
 
@@ -1919,7 +1889,6 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       statusCode: response.statusCode,
       durationMs: response.durationMs,
       cacheControl: cache.cacheControl,
-      cloudflareCacheStatus: cache.cloudflareCacheStatus,
       cacheStatus: cache.cacheStatus,
     });
   }
@@ -1952,24 +1921,12 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   if (!productFeed.ok) {
     throw new Error(
       `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")} ` +
-      `(X-Cache-Status=${JSON.stringify(productFeed.cacheStatus)}, ` +
-      `CF-Cache-Status=${JSON.stringify(productFeed.cloudflareCacheStatus)})`,
+      `(X-Cache-Status=${JSON.stringify(productFeed.cacheStatus)})`,
     );
   }
 
-  const purgeGetResponse = await fetchText(buildUrl(options.storefrontUrl, "/api/purge-cache"), {
-    fetchImpl,
-    timeoutMs: options.timeoutMs,
-    accept: "text/plain, application/json, */*;q=0.8",
-  });
-  requireStatus(purgeGetResponse, "Storefront /api/purge-cache GET", (status) => status === 405);
-  const purgeGet = evaluatePurgeGetHeaders(purgeGetResponse.headers);
-  if (!purgeGet.ok) {
-    throw new Error(`Storefront /api/purge-cache GET headers failed: ${purgeGet.errors.join("; ")}`);
-  }
-
   logger?.log(
-    "PASS storefront cache headers: public pages and feed use native tag caching, checkout is no-store, and purge GET is non-mutating.",
+    "PASS storefront cache headers: public pages and feed use the generation-keyed cache and checkout is no-store.",
   );
   return {
     paths: [...STOREFRONT_CACHE_HEADER_PATHS],
@@ -1986,15 +1943,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       statusCode: productFeedResponse.statusCode,
       durationMs: productFeedResponse.durationMs,
       cacheControl: productFeed.cacheControl,
-      cloudflareCacheStatus: productFeed.cloudflareCacheStatus,
       cacheStatus: productFeed.cacheStatus,
-    },
-    purgeGet: {
-      path: "/api/purge-cache",
-      statusCode: purgeGetResponse.statusCode,
-      durationMs: purgeGetResponse.durationMs,
-      allow: purgeGet.allow,
-      cacheControl: purgeGet.cacheControl,
     },
   };
 }

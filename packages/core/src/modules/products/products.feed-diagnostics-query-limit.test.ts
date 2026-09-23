@@ -1,8 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
-import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getProductFeedDiagnostics } from "./products.feed-diagnostics";
@@ -15,89 +14,22 @@ const feedsPolicy: SeoDiscoverySettings["feeds"] = {
     description: "",
 };
 
-function createSchema(sqlite: DatabaseSync): void {
-    sqlite.exec(`
-        CREATE TABLE products (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            slug TEXT NOT NULL,
-            is_active INTEGER NOT NULL,
-            exclude_from_product_feed INTEGER NOT NULL,
-            price REAL NOT NULL,
-            discount_type TEXT,
-            discount_percentage REAL,
-            discount_amount REAL,
-            deleted_at INTEGER,
-            updated_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
-        );
-        CREATE TABLE media (
-            id TEXT PRIMARY KEY,
-            kind TEXT NOT NULL,
-            object_key TEXT NOT NULL,
-            poster_media_id TEXT,
-            alt_text TEXT,
-            caption TEXT,
-            width INTEGER,
-            height INTEGER,
-            variant_width INTEGER,
-            duration_ms INTEGER,
-            status TEXT NOT NULL
-        );
-        CREATE TABLE product_media (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            media_id TEXT NOT NULL,
-            alt_text TEXT,
-            sort_order INTEGER NOT NULL,
-            is_primary INTEGER NOT NULL
-        );
-        CREATE TABLE product_variants (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            option_combination_key TEXT,
-            stock INTEGER NOT NULL,
-            reserved_stock INTEGER NOT NULL,
-            is_default INTEGER NOT NULL,
-            track_inventory INTEGER NOT NULL,
-            price REAL NOT NULL,
-            discount_type TEXT,
-            discount_percentage REAL,
-            discount_amount REAL,
-            deleted_at INTEGER
-        );
-        CREATE TABLE inventory_reservation_lanes (
-            variant_id TEXT NOT NULL,
-            pool TEXT NOT NULL,
-            lane INTEGER NOT NULL,
-            reserved_quantity INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (variant_id, pool, lane)
-        );
-    `);
-}
-
 function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
     const insertProduct = sqlite.prepare(`
-        INSERT INTO products (
-            id, name, slug, is_active, exclude_from_product_feed, price,
-            discount_type, discount_percentage, discount_amount,
-            deleted_at, updated_at, created_at
-        ) VALUES (?, ?, ?, 1, 0, 1200, NULL, NULL, NULL, NULL, ?, ?)
+        INSERT INTO products (id, name, slug, is_active, price, updated_at, created_at)
+        VALUES (?, ?, ?, 1, 1200, ?, ?)
     `);
     const insertMedia = sqlite.prepare(`
-        INSERT INTO media (id, kind, object_key, alt_text, status)
-        VALUES (?, 'image', ?, ?, 'ready')
+        INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, status)
+        VALUES (?, ?, 'image', ?, 1, 'image/jpeg', ?, 'ready')
     `);
     const insertProductMedia = sqlite.prepare(`
         INSERT INTO product_media (id, product_id, media_id, alt_text, sort_order, is_primary)
         VALUES (?, ?, ?, ?, 0, 1)
     `);
     const insertVariant = sqlite.prepare(`
-        INSERT INTO product_variants (
-            id, product_id, option_combination_key, stock, reserved_stock, is_default,
-            track_inventory, price, discount_type, discount_percentage,
-            discount_amount, deleted_at
-        ) VALUES (?, ?, NULL, 0, 0, 1, 0, 1200, NULL, NULL, NULL, NULL)
+        INSERT INTO product_variants (id, product_id, sku, stock, is_default, track_inventory, price)
+        VALUES (?, ?, ?, 0, 1, 0, 1200)
     `);
 
     for (let index = 0; index < count; index += 1) {
@@ -110,9 +42,9 @@ function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
             index,
         );
         const mediaId = `media_${index}`;
-        insertMedia.run(mediaId, `products/product-${index}.jpg`, `Product ${index}`);
-        insertProductMedia.run(`pmed_${index}`, productId, mediaId, `Product ${index}`);
-        insertVariant.run(`var_default_${index}`, productId);
+        insertMedia.run(mediaId, `product-${index}.jpg`, `products/product-${index}.jpg`, `Product ${index}`);
+        insertProductMedia.run(`pmed_${productId}`, productId, mediaId, `Product ${index}`);
+        insertVariant.run(`var_default_${index}`, productId, `SKU-${index}`);
     }
 }
 
@@ -125,35 +57,20 @@ describe("product feed diagnostic D1 query limits", () => {
     });
 
     it("chunks more than 100 products while preserving every diagnostic row", async () => {
-        sqlite = new DatabaseSync(":memory:");
-        createSchema(sqlite);
+        const observedQueries: Array<{ query: string; params: readonly unknown[] }> = [];
+        const database = createSqliteD1Database({
+            onQuery(query, params) {
+                observedQueries.push({ query, params });
+                if (params.length > 100) {
+                    throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
+                }
+            },
+        });
+        sqlite = database.sqlite;
         seedSimpleProducts(sqlite, 205);
 
-        const observedQueries: Array<{ query: string; params: unknown[] }> = [];
-        const proxy = drizzle(async (query, params, method) => {
-            observedQueries.push({ query, params });
-            if (params.length > 100) {
-                throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
-            }
-
-            const statement = sqlite!.prepare(query);
-            statement.setReturnArrays(true);
-            if (method === "run") {
-                statement.run(...params);
-                return { rows: [] };
-            }
-            if (method === "get") {
-                return {
-                    rows: statement.get(...params) as unknown as unknown[],
-                };
-            }
-            return {
-                rows: statement.all(...params) as unknown as unknown[][],
-            };
-        });
-
         const report = await getProductFeedDiagnostics(
-            proxy as unknown as Database,
+            database.db,
             feedsPolicy,
             {
                 scanLimit: 200,

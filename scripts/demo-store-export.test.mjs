@@ -12,12 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { compileSqliteMigrationForProvider } from "../packages/database/src/migration-artifacts";
 import { CURRENT_DATABASE_SCHEMA } from "../packages/database/src/schema-contract";
+import { compiledMigrationSql } from "../packages/database/src/testing/sqlite-d1";
 
 import { main, parseDemoStoreArgs } from "./demo-store.mjs";
 import { collectExportTables } from "./demo-store/export/collect.mjs";
@@ -27,7 +26,6 @@ import { openSourceDatabase } from "./demo-store/export/source.mjs";
 import { EXPORTED_TABLES } from "./demo-store/export/tables.mjs";
 import { assertExportPreconditions } from "./demo-store/export/validate.mjs";
 
-const migrationDirectory = fileURLToPath(new URL("../packages/database/migrations/", import.meta.url));
 const FIXED_TIMESTAMP = 1_750_000_000;
 
 /**
@@ -37,12 +35,7 @@ const FIXED_TIMESTAMP = 1_750_000_000;
  */
 function migrateDatabase(file) {
   const database = new DatabaseSync(file);
-  const files = readdirSync(migrationDirectory)
-    .filter((candidate) => /^\d{4}_.+\.sql$/u.test(candidate))
-    .sort();
-  for (const name of files) {
-    database.exec(compileSqliteMigrationForProvider(readFileSync(path.join(migrationDirectory, name), "utf8"), "d1"));
-  }
+  database.exec(compiledMigrationSql("d1"));
   return database;
 }
 
@@ -561,17 +554,17 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0063_something_else' WHERE version = 63");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0064_something_else' WHERE version = 64");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 63\/0063_something_else .* can only be exported at revision 63\/0063_media_variants_drop_polar/su);
+      .rejects.toThrow(/is at schema revision 64\/0064_something_else .* can only be exported at revision 64\/0064_cache_generation/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 63`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 64`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))

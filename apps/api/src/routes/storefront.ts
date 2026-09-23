@@ -244,6 +244,14 @@ const layoutDataSchema = z.object({
   }),
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains: z.string(),
+  /** Product call-to-action copy from the active checkout language. */
+  storefrontCopy: z.object({
+    languageCode: z.string(),
+    addToCartText: z.string(),
+    buyNowText: z.string(),
+    selectOptionsText: z.string(),
+    unavailableText: z.string(),
+  }),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;
 

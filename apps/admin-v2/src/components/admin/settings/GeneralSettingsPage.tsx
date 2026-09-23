@@ -23,7 +23,7 @@ import type {
   GeneralSettingsPanel,
   GeneralSettingsSection,
 } from "./general-settings-sections";
-import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import type { Readiness as NavigationConfigSectionReadiness } from "@scalius/shared/readiness";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 import { PanelLoadingSkeleton } from "../shared/LoadingFallback";
 

@@ -20,7 +20,7 @@ export interface FilterableAttribute {
 /**
  * Fetches the filterable attributes and their unique values.
  * This can be scoped to a specific category or search query.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  *
  * @param options An object with either 'categorySlug' or 'searchQuery'.
  * @returns A promise resolving to an array of filterable attributes or null on failure.

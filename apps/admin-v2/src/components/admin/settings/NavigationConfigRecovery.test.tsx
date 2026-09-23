@@ -11,10 +11,11 @@ const mocks = vi.hoisted(() => ({
   getGeneralSettings: vi.fn(),
 }));
 
-vi.mock("~/lib/api-functions/settings", () => ({
-  saveHeaderConfig: mocks.saveHeaderConfig,
-  saveFooterConfig: mocks.saveFooterConfig,
-  getGeneralSettings: mocks.getGeneralSettings,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  postApiV1AdminSettingsHeader: mocks.saveHeaderConfig,
+  postApiV1AdminSettingsFooter: mocks.saveFooterConfig,
+  getApiV1AdminSettingsGeneral: mocks.getGeneralSettings,
 }));
 
 vi.mock("sonner", () => ({
@@ -92,7 +93,7 @@ describe("navigation configuration recovery", () => {
 
     expect(mocks.saveHeaderConfig).toHaveBeenCalledTimes(1);
     expect(mocks.saveHeaderConfig).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      body: expect.objectContaining({
         expectedRevision: 1,
         logo: expect.objectContaining({
           src: "/logo.svg",
@@ -262,7 +263,7 @@ describe("navigation configuration recovery", () => {
     mocks.saveHeaderConfig.mockResolvedValueOnce({ revision: 3 });
     await act(async () => save.click());
     expect(mocks.saveHeaderConfig).toHaveBeenLastCalledWith({
-      data: expect.objectContaining({
+      body: expect.objectContaining({
         expectedRevision: 2,
         topBar: { text: "Local promo", isEnabled: false },
         contact: latestConfig.contact,

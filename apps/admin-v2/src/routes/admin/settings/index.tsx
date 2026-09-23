@@ -6,7 +6,7 @@ import { generalSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { HeaderConfig } from "~/components/admin/header-builder/types";
 import type { FooterConfig } from "~/components/admin/footer-builder/types";
-import type { GeneralSettingsPayload } from "~/lib/api-functions/settings";
+import type { GeneralSettingsPayload } from "~/lib/api-query-options/settings";
 import {
   normalizeGeneralSettingsPanel,
   normalizeGeneralSettingsSection,

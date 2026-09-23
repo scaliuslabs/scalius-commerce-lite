@@ -23,13 +23,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  createTaxRate,
-  deleteTaxRate,
-  updateTaxRate,
-  type TaxConfigurationPayload,
-  type TaxJurisdictionType,
-  type TaxRateRecord,
-} from "@/lib/api-functions/taxes";
+  deleteApiV1AdminTaxesRatesById,
+  postApiV1AdminTaxesRates,
+  putApiV1AdminTaxesRatesById,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import type {
+  TaxConfigurationPayload,
+  TaxJurisdictionType,
+  TaxRateRecord,
+} from "@/lib/api-query-options/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -143,12 +146,11 @@ export function TaxRatesPanel({
         isActive: draft.isActive,
       };
       return editing
-        ? updateTaxRate({ data: {
-            id: editing.id,
-            expectedVersion: editing.version,
-            update,
-          } })
-        : createTaxRate({ data: update });
+        ? apiData(putApiV1AdminTaxesRatesById({
+            path: { id: editing.id },
+            body: { ...update, expectedVersion: editing.version },
+          }))
+        : apiData(postApiV1AdminTaxesRates({ body: update }));
     },
     onSuccess: async () => {
       toast.success(editing ? "Tax rate updated" : "Tax rate created");
@@ -159,10 +161,10 @@ export function TaxRatesPanel({
     onError: (error) => toast.error(getServerFnError(error, "Tax rate could not be saved.")),
   });
   const deleteMutation = useMutation({
-    mutationFn: (rate: TaxRateRecord) => deleteTaxRate({ data: {
-      id: rate.id,
-      expectedVersion: rate.version,
-    } }),
+    mutationFn: (rate: TaxRateRecord) => apiData(deleteApiV1AdminTaxesRatesById({
+      path: { id: rate.id },
+      query: { expectedVersion: rate.version },
+    })),
     onSuccess: async () => {
       toast.success("Tax rate deleted");
       setDeleting(null);

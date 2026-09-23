@@ -121,18 +121,18 @@ const LocationRow = React.memo(function LocationRow({
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <div className="flex flex-wrap gap-1">
-          {Object.entries(location.externalIds).map(
+          {Object.entries(location.externalIds ?? {}).map(
             ([provider, id]) => (
               <Badge
                 key={provider}
                 variant="outline"
                 className="text-xs"
               >
-                {provider}: {id}
+                {provider}: {String(id)}
               </Badge>
             ),
           )}
-          {Object.keys(location.externalIds).length === 0 && (
+          {Object.keys(location.externalIds ?? {}).length === 0 && (
             <span className="text-muted-foreground text-xs">
               None
             </span>

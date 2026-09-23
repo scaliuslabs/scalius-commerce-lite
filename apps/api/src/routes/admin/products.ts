@@ -34,10 +34,7 @@ import {
     productVariantMutationSchema,
     selectedProductOptionSchema,
 } from "../../schemas/entities";
-import {
-    invalidateCatalogCaches,
-    type WaitUntilExecutionContext,
-} from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -194,12 +191,6 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
 
 function parseLookupIds(ids: string | undefined): string[] {
     return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
-}
-
-async function invalidateProductCatalogCaches(
-    c: { env?: Env; executionCtx?: WaitUntilExecutionContext },
-) {
-    await invalidateCatalogCaches("products", c);
 }
 
 // ── Product Stats ──
@@ -505,7 +496,7 @@ app.openapi(createProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsAdmin.createProduct(db, data);
-        await invalidateCatalogCaches("products", c);
+        await bumpCacheGeneration(c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("slug")) {
@@ -550,7 +541,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         .filter((outcome) => outcome.status === "deleted")
         .map((outcome) => outcome.id);
     if (!data.permanent || deletedIds.length > 0) {
-        await invalidateCatalogCaches("products", c);
+        await bumpCacheGeneration(c);
     }
     return ok(c, {
         products: result.revisions.map((revision, index) => ({
@@ -652,7 +643,7 @@ app.openapi(updateProductSectionRoute, async (c) => {
     try {
         const result = await updateProductSemanticSection(db, id, patch);
         if (!result) throw new NotFoundError("Product not found");
-        await invalidateCatalogCaches("products", c);
+        await bumpCacheGeneration(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -718,7 +709,7 @@ app.openapi(updateProductRoute, async (c) => {
     const data = c.req.valid("json");
     try {
         const result = await ProductsAdmin.updateProduct(db, id, data);
-        await invalidateCatalogCaches("products", c);
+        await bumpCacheGeneration(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -755,7 +746,7 @@ app.openapi(deleteProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await ProductsAdmin.deleteProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -785,7 +776,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await ProductsAdmin.restoreProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -812,7 +803,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     await ProductsAdmin.permanentlyDeleteProduct(db, id, expectedAggregateRevision);
-    await invalidateCatalogCaches("products", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -844,7 +835,7 @@ app.openapi(createVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
-        await invalidateProductCatalogCaches(c);
+        await bumpCacheGeneration(c);
         return created(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
@@ -910,7 +901,7 @@ app.openapi(updateVariantRoute, async (c) => {
     try {
         const result = await ProductsVariants.updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
-        await invalidateProductCatalogCaches(c);
+        await bumpCacheGeneration(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -953,7 +944,7 @@ app.openapi(deleteVariantRoute, async (c) => {
             variantId,
             expectedAggregateRevision,
         );
-        await invalidateProductCatalogCaches(c);
+        await bumpCacheGeneration(c);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
@@ -985,7 +976,7 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const { id } = c.req.valid("param");
     const user = c.get("user");
     const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
-    await invalidateProductCatalogCaches(c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 

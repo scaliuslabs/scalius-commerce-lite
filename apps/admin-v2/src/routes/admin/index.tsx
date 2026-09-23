@@ -7,7 +7,7 @@ import {
   dashboardSummaryQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { RouteErrorComponent } from "~/lib/route-error";
-import type { DashboardSummaryData } from "~/lib/api-functions/dashboard-home";
+import type { DashboardSummaryData } from "~/lib/api-query-options/dashboard-home";
 import { isTransientD1Error } from "@scalius/core/utils/transient-d1";
 import { Skeleton } from "@/components/ui/skeleton";
 

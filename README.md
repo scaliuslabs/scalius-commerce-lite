@@ -246,7 +246,7 @@ Wrangler `vars`, everything else in the dashboard.**
 | `CREDENTIAL_ENCRYPTION_KEY` | API, dashboard | AES-256-GCM key for merchant provider credentials at rest; base64 of exactly 32 bytes, identical on both | `openssl rand -base64 32` |
 
 Every per-purpose secret — Better Auth session signing, JWT signing, the
-internal service token, the storefront purge token, the agent token pepper, the
+internal service token, the agent token pepper, the
 customer session hash key, and the three opt-in automation keys (first-admin
 setup token, front-proxy signing key, identity-handoff signing key) — is
 HKDF-SHA256 derived from `SCALIUS_SECRET` at Worker entry
@@ -257,7 +257,7 @@ Without `SCALIUS_SECRET` the API fails closed: every request except
 `/api/v1/health` and `/api/v1/readyz` returns `503 RUNTIME_SECRET_MISSING`.
 
 **Rotation.** Rotating `SCALIUS_SECRET` rotates every derived secret at once:
-admins are signed out, service tokens and purge tokens stop verifying, and agent
+admins are signed out, service tokens stop verifying, and agent
 credentials must be reissued. Encrypted provider credentials survive, because
 they use `CREDENTIAL_ENCRYPTION_KEY`. Rotating `CREDENTIAL_ENCRYPTION_KEY` makes
 stored provider credentials undecryptable — every payment, delivery, SMS, and
@@ -270,7 +270,7 @@ Public origins are database-backed merchant settings, not environment variables.
 
 | Setting | Required | Purpose |
 |---------|----------|---------|
-| Storefront URL | yes | Canonical storefront origin (canonical links, sitemaps, purge target) |
+| Storefront URL | yes | Canonical storefront origin (canonical links, sitemaps, feeds) |
 | API URL | yes | Public API origin browsers call |
 | Dashboard URL | yes | Dashboard origin, optionally with a path prefix such as `/dashboard` (Better Auth base URL) |
 | Media URL | yes | Public media base URL (R2 custom domain) |
@@ -291,8 +291,8 @@ per request, and the storefront receives the same origins inside
 `platform_config` check listing any missing origin.
 
 Names such as `env.STOREFRONT_URL`, `env.PUBLIC_API_BASE_URL`,
-`env.BETTER_AUTH_URL`, `env.R2_PUBLIC_URL`, `env.CDN_DOMAIN_URL`,
-`env.PURGE_URL`, and `env.CORS_ALLOWED_ORIGINS` still appear in code. They are
+`env.BETTER_AUTH_URL`, `env.R2_PUBLIC_URL`, `env.CDN_DOMAIN_URL`, and
+`env.CORS_ALLOWED_ORIGINS` still appear in code. They are
 composed from these settings at Worker entry
 (`apps/api/src/runtime/runtime-env.ts`) and are never configured in Wrangler or
 `.dev.vars`.

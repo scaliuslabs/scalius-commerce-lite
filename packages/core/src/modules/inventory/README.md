@@ -152,7 +152,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
 
-Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes should invalidate by affected variant through `invalidateProductAvailabilityCaches(db, { variantIds }, c)` after the write commits, avoiding broad catalog invalidation unless product metadata changed too.
+Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes call `bumpCacheGeneration(c)` after the write commits only when `findStockMutationAvailabilityTransitions()` reports an availability-band change; same-band writes leave public caches alone.
 
 ## Database Schema
 

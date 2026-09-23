@@ -6,7 +6,7 @@ import type {
   OrderFormValues,
   Product,
 } from "./types";
-import type { ManualOrderQuotePayload } from "@/lib/api-functions/orders";
+import type { ManualOrderQuotePayload } from "@/lib/api-query-options/orders";
 import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
 
 // Define the shape of the context state

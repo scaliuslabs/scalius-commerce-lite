@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getCollectionSection } from "./collections.service";
@@ -15,28 +15,8 @@ describe("bounded admin collection sections", () => {
   });
 
   function database(): Database {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE collections (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        content TEXT,
-        presentation TEXT NOT NULL,
-        config TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        version INTEGER NOT NULL DEFAULT 1,
-        meta_title TEXT,
-        meta_description TEXT,
-        canonical_path TEXT,
-        no_index INTEGER NOT NULL DEFAULT 0,
-        exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-    `);
+    const harness = createSqliteD1Database();
+    sqlite = harness.sqlite;
     sqlite.prepare(`
       INSERT INTO collections (
         id, name, description, content, presentation, config, created_at, updated_at
@@ -48,17 +28,7 @@ describe("bounded admin collection sections", () => {
       "C".repeat(100_000),
       JSON.stringify({ source: "manual", productIds: ["prod_1"] }),
     );
-
-    return drizzle(async (query, params, method) => {
-      const prepared = sqlite!.prepare(query);
-      prepared.setReturnArrays(true);
-      if (method === "run") {
-        prepared.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") return { rows: prepared.get(...params) as unknown as unknown[] };
-      return { rows: prepared.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    return harness.db;
   }
 
   it("reports lengths without loading either rich-text field", async () => {

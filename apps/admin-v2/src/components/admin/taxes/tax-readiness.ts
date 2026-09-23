@@ -1,4 +1,4 @@
-import type { TaxConfigurationPayload, TaxRateRecord } from "@/lib/api-functions/taxes";
+import type { TaxConfigurationPayload, TaxRateRecord } from "@/lib/api-query-options/taxes";
 import {
   getTaxRateDiagnostics,
   type TaxClassCoverageDiagnostic,

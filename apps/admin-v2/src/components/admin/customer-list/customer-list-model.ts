@@ -1,4 +1,4 @@
-import type { CustomersListPayload } from "~/lib/api-functions/customers";
+import type { CustomersListPayload } from "~/lib/api-query-options/customers";
 import { formatLocationParts } from "~/lib/location-presentation";
 
 /** Customer row derived from the generated admin list contract. */

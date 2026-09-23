@@ -32,7 +32,6 @@ import {
   prefixDashboardBasePath,
   stripDashboardBasePath,
   publicRequestOrigin,
-  storefrontPurgeUrl,
   withLocalDevelopmentDefaults,
   type PlatformConfig,
 } from "./platform-config";
@@ -503,19 +502,6 @@ describe("publicRequestOrigin", () => {
     expect(publicRequestOrigin("")).toBeNull();
     expect(publicRequestOrigin(null)).toBeNull();
     expect(publicRequestOrigin(undefined)).toBeNull();
-  });
-});
-
-describe("storefrontPurgeUrl", () => {
-  it("appends the purge path to a valid storefront origin", () => {
-    expect(storefrontPurgeUrl("https://shop.example.com/")).toBe("https://shop.example.com/api/purge-cache");
-    expect(storefrontPurgeUrl("http://localhost:4322")).toBe("http://localhost:4322/api/purge-cache");
-  });
-
-  it("returns an empty string when the storefront origin is missing or invalid", () => {
-    expect(storefrontPurgeUrl("")).toBe("");
-    expect(storefrontPurgeUrl("http://shop.example.com")).toBe("");
-    expect(storefrontPurgeUrl("https://shop.example.com/store")).toBe("");
   });
 });
 

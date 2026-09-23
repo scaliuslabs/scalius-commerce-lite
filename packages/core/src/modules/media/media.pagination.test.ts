@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { listMediaFiles } from "./media.service";
@@ -11,43 +11,7 @@ describe("media cursor pagination", () => {
     let db: Database;
 
     beforeEach(() => {
-        sqlite = new DatabaseSync(":memory:");
-        sqlite.exec(`
-            CREATE TABLE media (
-                id TEXT PRIMARY KEY,
-                filename TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                object_key TEXT NOT NULL UNIQUE,
-                size INTEGER NOT NULL,
-                mime_type TEXT NOT NULL,
-                alt_text TEXT,
-                caption TEXT,
-                width INTEGER,
-                height INTEGER,
-                variant_width INTEGER,
-                duration_ms INTEGER,
-                poster_media_id TEXT,
-                folder_id TEXT,
-                status TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                trashed_at INTEGER,
-                deleted_at INTEGER
-            );
-        `);
-        db = drizzle(async (query, params, method) => {
-            const statement = sqlite.prepare(query);
-            statement.setReturnArrays(true);
-            if (method === "run") {
-                statement.run(...params);
-                return { rows: [] };
-            }
-            if (method === "get") {
-                return { rows: statement.get(...params) as unknown as unknown[] };
-            }
-            return { rows: statement.all(...params) as unknown as unknown[][] };
-        }) as unknown as Database;
+        ({ sqlite, db } = createSqliteD1Database());
 
         const insert = sqlite.prepare(`
             INSERT INTO media (

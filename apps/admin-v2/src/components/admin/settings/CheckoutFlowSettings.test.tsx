@@ -8,16 +8,18 @@ import { toast } from "sonner";
 import CheckoutFlowSettings from "./CheckoutFlowSettings";
 import { queryKeys } from "~/lib/query-keys";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import type { CheckoutFlowSettingsPayload } from "~/lib/api-functions/settings";
+import type { CheckoutFlowSettingsPayload } from "~/lib/api-query-options/settings";
 
 const api = vi.hoisted(() => ({
-  get: vi.fn(), update: vi.fn(), payments: vi.fn(), blocker: vi.fn(),
+  get: vi.fn(), update: vi.fn(), payments: vi.fn(), readiness: vi.fn(), blocker: vi.fn(),
   proceed: vi.fn(), reset: vi.fn(),
 }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getCheckoutFlowSettings: api.get,
-  updateCheckoutFlowSettings: api.update,
-  getPaymentMethods: api.payments,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsCheckoutFlow: api.get,
+  putApiV1AdminSettingsCheckoutFlow: api.update,
+  getApiV1AdminSettingsPaymentMethods: api.payments,
+  getApiV1AdminSettingsCheckoutReadiness: api.readiness,
 }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: api.blocker }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -65,7 +67,7 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
         sslcommerz: { enabled: true, configured: true, usable: true },
       },
     });
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ success: true, data: readiness })));
+    api.readiness.mockResolvedValue(readiness);
   });
 
   afterEach(() => {
@@ -108,7 +110,7 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
     await click(radio("guest_cod_only"));
     await vi.waitFor(() => expect(button("Save checkout flow").disabled).toBe(false));
     await click(button("Save checkout flow"));
-    expect(api.update).toHaveBeenCalledWith({ data: {
+    expect(api.update).toHaveBeenCalledWith({ body: {
       guestCheckoutEnabled, checkoutMode: "guest_cod_only", partialPaymentEnabled: false,
       partialPaymentAmount: 150, expectedRevision: 1,
     } });
@@ -147,7 +149,7 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
     const secondSave = deferred<CheckoutFlowSettingsPayload>();
     api.update.mockReturnValueOnce(secondSave.promise);
     await click(button("Save checkout flow"));
-    expect(api.update).toHaveBeenLastCalledWith({ data: {
+    expect(api.update).toHaveBeenLastCalledWith({ body: {
       guestCheckoutEnabled: false, checkoutMode: newerMode, partialPaymentEnabled: false,
       partialPaymentAmount: 175, expectedRevision: 2,
     } });
@@ -266,7 +268,7 @@ describe("CheckoutFlowSettings save acknowledgment", () => {
     const secondSave = deferred<CheckoutFlowSettingsPayload>();
     api.update.mockReturnValueOnce(secondSave.promise);
     await click(button("Save checkout flow"));
-    expect(api.update).toHaveBeenLastCalledWith({ data: {
+    expect(api.update).toHaveBeenLastCalledWith({ body: {
       guestCheckoutEnabled: false, checkoutMode: newerMode, partialPaymentEnabled: false,
       partialPaymentAmount: 175, expectedRevision: 2,
     } });

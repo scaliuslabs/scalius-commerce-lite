@@ -4,10 +4,9 @@ import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const MASKED = "••••••••••••";
 const SMS_SECRET_MAX_LENGTH = 2_048;
 const SMS_USERNAME_MAX_LENGTH = 320;
@@ -132,7 +131,7 @@ app.openapi(saveSmsRoute, async (c) => {
     await clearNotificationProviderBlocks(db, { channel: "sms" });
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.
-    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     return ok(c, { message: "SMS settings saved successfully" });
 });
 

@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  bulkDeleteCustomers,
-  deleteCustomer,
-  permanentDeleteCustomer,
-  restoreCustomer,
-  type BulkDeleteCustomersInput,
-} from "../api-functions/customers";
+  deleteApiV1AdminCustomersById,
+  deleteApiV1AdminCustomersByIdPermanent,
+  postApiV1AdminCustomersBulkDelete,
+  postApiV1AdminCustomersByIdRestore,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import {
   getServerFnError,
   invalidateDashboardQueries,
@@ -16,7 +16,7 @@ import {
 export function useDeleteCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteCustomer({ data: { id } }),
+    mutationFn: (id: string) => apiData(deleteApiV1AdminCustomersById({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       invalidateDashboardQueries(queryClient);
@@ -31,7 +31,8 @@ export function useDeleteCustomer() {
 export function usePermanentDeleteCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => permanentDeleteCustomer({ data: { id } }),
+    mutationFn: (id: string) =>
+      apiData(deleteApiV1AdminCustomersByIdPermanent({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       invalidateDashboardQueries(queryClient);
@@ -48,7 +49,7 @@ export function usePermanentDeleteCustomer() {
 export function useRestoreCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreCustomer({ data: { id } }),
+    mutationFn: (id: string) => apiData(postApiV1AdminCustomersByIdRestore({ path: { id } })),
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       invalidateDashboardQueries(queryClient);
@@ -65,7 +66,8 @@ export function useRestoreCustomer() {
 export function useBulkDeleteCustomers() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: BulkDeleteCustomersInput) => bulkDeleteCustomers({ data }),
+    mutationFn: (body: ApiBody<typeof postApiV1AdminCustomersBulkDelete>) =>
+      apiData(postApiV1AdminCustomersBulkDelete({ body })),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() });
       invalidateDashboardQueries(queryClient);

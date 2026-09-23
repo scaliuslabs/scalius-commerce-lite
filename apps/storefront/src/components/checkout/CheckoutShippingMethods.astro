@@ -1,0 +1,94 @@
+---
+// Server-rendered delivery options. The cart page script keeps the selected
+// method in `window.lastShippingEventDetail` and swaps fee labels to "free"
+// when a cart item waives delivery (`enhanceShippingMethods`).
+import type { ShippingMethod } from "@/lib/api";
+import { formatPriceShort } from "@/lib/currency";
+
+interface Props {
+  shippingMethods: ShippingMethod[];
+  shippingMethodLabel: string;
+  freeText: string;
+  noShippingMethodsText: string;
+  waivedShippingFeeText: string;
+}
+
+const {
+  shippingMethods,
+  shippingMethodLabel,
+  freeText,
+  noShippingMethodsText,
+  waivedShippingFeeText,
+} = Astro.props;
+
+const methods = shippingMethods.map((method) => ({
+  ...method,
+  feeLabel: method.fee === 0 ? freeText : formatPriceShort(method.fee),
+}));
+const single = methods.length === 1 ? methods[0] : null;
+---
+
+<div
+  data-shipping-methods
+  data-free-text={freeText}
+  data-waived-text={waivedShippingFeeText}
+>
+  {
+    methods.length === 0 ? (
+      <>
+        <p class="mb-0.5 block text-xs font-medium sm:text-sm">{shippingMethodLabel}</p>
+        <p class="text-sm text-muted-foreground">{noShippingMethodsText}</p>
+      </>
+    ) : single ? (
+      <>
+        <p class="mb-2 block text-sm font-medium text-foreground">{shippingMethodLabel}</p>
+        <input
+          type="hidden"
+          name="shippingLocation"
+          value={single.id}
+          data-fee={single.fee}
+          data-name={single.name}
+        />
+        <div class="flex min-h-11 items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
+          <span class="text-sm font-medium text-foreground">{single.name}</span>
+          <span
+            class="ml-3 whitespace-nowrap text-sm font-semibold text-foreground"
+            data-fee-label={single.feeLabel}
+          >
+            {single.feeLabel}
+          </span>
+        </div>
+      </>
+    ) : (
+      <fieldset class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <legend class="mb-2 block text-sm font-medium text-foreground">
+          {shippingMethodLabel}
+        </legend>
+        {methods.map((method, index) => (
+          <label class="flex min-h-11 cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-white p-3 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 has-[:checked]:border-black has-[:checked]:ring-1 has-[:checked]:ring-black has-[:checked]:shadow-sm">
+            <span class="flex items-center gap-3">
+              <input
+                type="radio"
+                name="shippingLocation"
+                value={method.id}
+                checked={index === 0}
+                data-fee={method.fee}
+                data-name={method.name}
+                class="h-4 w-4 shrink-0 accent-black"
+              />
+              <span class="text-xs font-medium leading-tight text-gray-900 sm:text-sm">
+                {method.name}
+              </span>
+            </span>
+            <span
+              class="ml-2 whitespace-nowrap text-xs font-bold text-gray-900 sm:text-sm"
+              data-fee-label={method.feeLabel}
+            >
+              {method.feeLabel}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    )
+  }
+</div>

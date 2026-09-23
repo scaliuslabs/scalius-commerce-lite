@@ -32,11 +32,6 @@ function recovery(overrides: Partial<CustomerPaymentRecovery> = {}): CustomerPay
 }
 
 describe("account payment recovery", () => {
-  const accountPageSource = readFileSync(
-    storefrontSourcePath("pages", "account", "orders", "[id].astro"),
-    "utf8",
-  );
-
   it("builds retry and balance actions from backend recovery policy", () => {
     expect(getAccountPaymentRecoveryAction(recovery())).toMatchObject({
       visible: true,
@@ -106,15 +101,6 @@ describe("account payment recovery", () => {
     expect(normalizeHostedGatewayUrl("")).toBeNull();
   });
 
-  it("keeps balance recovery on the current gateway and replaces only untouched attempts", () => {
-    expect(accountPageSource).toContain('currentDetail?.paymentRecovery.paymentType === "balance"');
-    expect(accountPageSource).toContain("configuredGateway && isGatewayEligibleForPaymentAmount");
-    expect(accountPageSource).toContain("? [recoveryAction.gateway] : [];");
-    expect(accountPageSource).toContain(
-      'replaceExistingAttempt: currentDetail.paymentRecovery.paymentType !== "balance"',
-    );
-    expect(accountPageSource).toContain('gateway === detail.order.paymentMethod ? "Current method" : "Change method"');
-  });
 });
 
 describe("account timeline payment presentation", () => {

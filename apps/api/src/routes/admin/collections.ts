@@ -33,7 +33,7 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import { collectionSchema, collectionSummarySchema } from "../../schemas/entities";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -305,7 +305,7 @@ app.openapi(createCollectionRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const collection = await createCollection(db, data);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return created(c, toCollectionMutationResult(collection));
 });
 
@@ -339,7 +339,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { collectionIds, permanent } = c.req.valid("json");
     await bulkDeleteCollections(db, collectionIds, permanent);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -365,7 +365,7 @@ app.openapi(bulkActivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkActivateCollections(db, ids);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -390,7 +390,7 @@ app.openapi(bulkDeactivateRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await bulkDeactivateCollections(db, ids);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -416,7 +416,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("json");
     await restoreCollections(db, ids);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -447,7 +447,7 @@ app.openapi(restoreRoute, async (c) => {
     // Note: do NOT call getCollectionById here — it filters deletedAt IS NULL,
     // which would always 404 for soft-deleted collections being restored
     await restoreCollections(db, [id]);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return ok(c, { message: "Collection restored" });
 });
 
@@ -488,7 +488,7 @@ app.openapi(reorderRoute, async (c) => {
     const db = c.get("db");
     const { items } = c.req.valid("json");
     await reorderCollections(db, items);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return ok(c, {});
 });
 
@@ -597,7 +597,7 @@ app.openapi(updateCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const result = await updateCollection(db, id, c.req.valid("json"));
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return ok(c, toCollectionMutationResult(result));
 });
 
@@ -622,7 +622,7 @@ app.openapi(deleteCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await deleteCollection(db, id);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -647,7 +647,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await bulkDeleteCollections(db, [id], true);
-    await invalidateCatalogCaches("collections", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 

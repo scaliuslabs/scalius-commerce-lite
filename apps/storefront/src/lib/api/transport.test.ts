@@ -1,10 +1,7 @@
 // @vitest-environment node
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { storefrontRootPath } from "../test-source-paths";
 import { requestRuntime, type StorefrontRuntime } from "./runtime";
 import {
   apiFetch,
@@ -38,6 +35,31 @@ afterEach(() => {
 });
 
 describe("storefront API service-binding boundary", () => {
+  it("pins public reads to the render's cache generation and never sends it on private calls", async () => {
+    const seen: Request[] = [];
+    const backend = fetcher(async (request) => {
+      seen.push(request);
+      return new Response("{}");
+    });
+    const runtime: StorefrontRuntime = {
+      PUBLIC_API_URL: apiBaseUrl,
+      BACKEND_API: backend,
+      CACHE_GENERATION: "a1b2c3d4e5f60718",
+    };
+
+    await requestRuntime.run(runtime, async () => {
+      await apiFetch(`${apiBaseUrl}/products`, {}, { auth: false });
+      await apiFetch(`${apiBaseUrl}/checkout/config`, {}, { auth: false });
+      await apiFetch(`${apiBaseUrl}/orders`, { method: "POST", body: "{}" }, { auth: false });
+    });
+
+    expect(seen.map((request) => request.headers.get("X-Scalius-Cache-Generation"))).toEqual([
+      "a1b2c3d4e5f60718",
+      null,
+      null,
+    ]);
+  });
+
   it("uses one HTTPS fallback after a safe public binding read times out", async () => {
     const bindingFetch = vi.fn((request: Request) =>
       new Promise<Response>((_resolve, reject) => {
@@ -60,7 +82,10 @@ describe("storefront API service-binding boundary", () => {
     expect(httpFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("does not fall back after a sensitive public binding read times out", async () => {
+  it.each([
+    ["a credentialed read", "/seo", { Cookie: "session=placeholder" }],
+    ["a private-path read", "/checkout/config", {}],
+  ])("does not fall back after %s times out on the binding", async (_label, path, headers) => {
     const bindingFetch = vi.fn((request: Request) =>
       new Promise<Response>((_resolve, reject) => {
         request.signal.addEventListener("abort", () => reject(request.signal.reason));
@@ -69,8 +94,8 @@ describe("storefront API service-binding boundary", () => {
     vi.stubGlobal("fetch", httpFetch);
 
     await expect(runWithBackend(fetcher(bindingFetch), () => apiFetch(
-      `${apiBaseUrl}/seo`,
-      { headers: { Cookie: "session=placeholder" } },
+      `${apiBaseUrl}${path}`,
+      { headers },
       { retries: 3, timeout: 5, auth: false, logTerminalFailure: false },
     ))).rejects.toThrow("Storefront API service binding timed out");
 
@@ -308,52 +333,5 @@ describe("withEdgeCache", () => {
     await expect(withEdgeCache("settings", fetcher)).resolves.toBe("recovered");
     expect(fetcher).toHaveBeenCalledTimes(2);
     error.mockRestore();
-  });
-});
-
-describe("storefront browser API URL policy", () => {
-  const storefrontRoot = storefrontRootPath();
-
-  it("does not silently fall back to a nonexistent same-origin /api/v1 proxy", async () => {
-    const files = [
-      "src/lib/api/transport.ts",
-      "src/layouts/Layout.astro",
-      "src/components/AuthModal.tsx",
-      "src/components/search/CommandPalette.tsx",
-    ];
-
-    const sources = await Promise.all(
-      files.map((file) => readFile(join(storefrontRoot, file), "utf8")),
-    );
-
-    for (const source of sources) {
-      expect(source).not.toMatch(/\|\|\s*["']\/api\/v1["']/);
-      expect(source).not.toMatch(/return\s+["']\/api\/v1["']/);
-    }
-  });
-
-  it("keeps service-binding fallback limited to safe public reads", async () => {
-    const source = await readFile(
-      join(storefrontRoot, "src/lib/api/transport.ts"),
-      "utf8",
-    );
-
-    expect(source).toContain("const SERVICE_BINDING_READ_TIMEOUT_MS = 2_000;");
-    expect(source).toContain(
-      "/authorization|cookie|token|session|proof|secret|key/i",
-    );
-    expect(source).toContain("isPublicApiReadUrl(url)");
-    expect(source).toContain(
-      "hasSensitiveRequestHeaders(headers)",
-    );
-    expect(source).toContain(
-      "/^\\/api\\/v1\\/(auth|customer|checkout|orders?|payments?|refunds?|webhooks?|scanner|setup)\\b/i",
-    );
-    expect(source).toContain(
-      "!usedServiceBinding &&",
-    );
-    expect(source).toContain("throw error;");
-    expect(source).toContain("falling back to HTTPS API");
-    expect(source).toContain("Storefront API HTTPS fallback");
   });
 });

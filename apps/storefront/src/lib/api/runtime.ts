@@ -5,8 +5,10 @@
  * Wrangler vars, so every runtime value is resolved per request and kept in
  * AsyncLocalStorage:
  *
- * - Secrets: API_TOKEN and PURGE_TOKEN are derived from the master secret on
- *   every request (HKDF is cheap; nothing is retained in module globals).
+ * - Secrets: API_TOKEN is derived from the master secret on every request
+ *   (HKDF is cheap; nothing is retained in module globals).
+ * - Cache generation: set by the Worker gateway on public renders so API
+ *   reads use the same generation as the cached page.
  * - Origins and merchant CSP sources: applied by the middleware from the
  *   request's layout payload (`applyPlatformOrigins`), the same cached read
  *   every page already makes, so there is no separate platform sub-request.
@@ -31,6 +33,10 @@ import {
   RUNTIME_SECRET_PURPOSES,
   type MasterSecretEnvironment,
 } from "@scalius/shared/runtime-secrets";
+import {
+  CACHE_GENERATION_HEADER,
+  normalizeCacheGeneration,
+} from "@scalius/shared/cache-generation";
 import type { LayoutData } from "./storefront";
 
 /** Bindings and secrets the middleware hands to the request runtime. */
@@ -57,8 +63,8 @@ export interface StorefrontRuntime {
   STOREFRONT_URL?: string;
   /** Derived service token used to obtain the storefront API JWT. */
   API_TOKEN?: string;
-  /** Derived token the API presents when purging the storefront cache. */
-  PURGE_TOKEN?: string;
+  /** Public cache generation of this render (gateway-set; public pages only). */
+  CACHE_GENERATION?: string;
   /** Merchant CSP sources from the layout payload (Settings -> Security). */
   CSP_ALLOWED_DOMAINS?: string;
   /** The request's single layout read, shared by the middleware and pages. */
@@ -175,6 +181,11 @@ export function getRuntimeBackendApi(): Fetcher | undefined {
   return getRuntime()?.BACKEND_API;
 }
 
+/** Returns the public cache generation this render is pinned to, if any. */
+export function getRuntimeCacheGeneration(): string | undefined {
+  return getRuntime()?.CACHE_GENERATION;
+}
+
 /** Returns the request-local in-flight read map used to coalesce reads. */
 export function getRuntimeInflightReads():
   | Map<string, Promise<unknown>>
@@ -226,14 +237,12 @@ export function getRuntimeCspAllowedDomains(): string {
  */
 export async function deriveRuntimeTokens(
   env: RequestRuntimeEnv | null | undefined,
-): Promise<Pick<StorefrontRuntime, "API_TOKEN" | "PURGE_TOKEN">> {
+): Promise<Pick<StorefrontRuntime, "API_TOKEN">> {
   const master = readMasterSecret(env);
   if (!master) return {};
-  const [API_TOKEN, PURGE_TOKEN] = await Promise.all([
-    deriveRuntimeSecret(master, RUNTIME_SECRET_PURPOSES.API_TOKEN),
-    deriveRuntimeSecret(master, RUNTIME_SECRET_PURPOSES.PURGE_TOKEN),
-  ]);
-  return { API_TOKEN, PURGE_TOKEN };
+  return {
+    API_TOKEN: await deriveRuntimeSecret(master, RUNTIME_SECRET_PURPOSES.API_TOKEN),
+  };
 }
 
 /**
@@ -247,6 +256,9 @@ export async function createRequestRuntime(
   return {
     BACKEND_API: env?.BACKEND_API,
     STOREFRONT_URL: optional(publicRequestOrigin(request.url)),
+    CACHE_GENERATION: normalizeCacheGeneration(
+      request.headers.get(CACHE_GENERATION_HEADER),
+    ) ?? undefined,
     ...(await deriveRuntimeTokens(env)),
     inflightReads: new Map<string, Promise<unknown>>(),
     apiJwt: { token: null, expiresAt: null, refresh: null },

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "@tanstack/react-router";
-import { refreshShipmentStatus } from "~/lib/api-functions/orders";
+import { postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh } from "@scalius/api-client/sdk";
+import { apiData } from "~/lib/api";
 
 /**
  * Clean an orderId to remove any path-like prefixes
@@ -34,9 +35,9 @@ export function useShipmentStatus() {
 
     setIsRefreshing((prev) => ({ ...prev, [shipmentId]: true }));
     try {
-      const updatedShipment = await refreshShipmentStatus({
-        data: { orderId: cleanedOrderId, shipmentId },
-      });
+      const updatedShipment = await apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh({
+        path: { id: cleanedOrderId, shipmentId },
+      }));
 
       if (updatedShipment.statusChanged) {
         toast.success(`Status updated to: ${updatedShipment.status}`);

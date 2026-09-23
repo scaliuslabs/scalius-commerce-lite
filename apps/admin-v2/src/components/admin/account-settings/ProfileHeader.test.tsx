@@ -30,8 +30,9 @@ vi.mock("@tanstack/react-router", () => ({
   useBlocker: () => ({ proceed: vi.fn(), reset: vi.fn(), status: "idle" }),
 }));
 
-vi.mock("~/lib/api-functions/auth-management", () => ({
-  updateProfile: updateProfileMock,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  postApiV1AdminAuthUpdateProfile: updateProfileMock,
 }));
 
 vi.mock("~/lib/admin-route-context", () => ({
@@ -220,7 +221,7 @@ describe("ProfileHeader display-name editing", () => {
     await flushReactUpdates();
 
     expect(updateProfileMock).toHaveBeenCalledWith({
-      data: {
+      body: {
         name: "Arobi Owner",
         image: currentUser.image,
       },

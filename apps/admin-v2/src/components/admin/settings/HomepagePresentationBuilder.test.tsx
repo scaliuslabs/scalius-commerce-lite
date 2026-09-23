@@ -21,12 +21,11 @@ const api = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock("~/lib/api-functions/homepage-presentation", () => ({
-  getHomepagePresentation: api.getHomepagePresentation,
-  saveHomepagePresentation: api.saveHomepagePresentation,
-}));
-vi.mock("~/lib/api-functions/categories", () => ({
-  getCategoryFormOptions: api.getCategoryFormOptions,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsHomepagePresentation: api.getHomepagePresentation,
+  postApiV1AdminSettingsHomepagePresentation: api.saveHomepagePresentation,
+  getApiV1AdminCategoriesFormOptions: api.getCategoryFormOptions,
 }));
 vi.mock("sonner", () => ({ toast: { success: api.success, error: api.error } }));
 vi.mock("../shared/SortableList", () => ({ SortableList: () => null }));
@@ -142,14 +141,14 @@ describe("HomepagePresentationBuilder draft acknowledgement", () => {
     expect(heading().value).toBe("Submitted");
     expect(host.querySelector<HTMLButtonElement>("#homepage-trust-strip")?.getAttribute("aria-checked")).toBe("true");
     expect(api.saveHomepagePresentation).toHaveBeenCalledWith({
-      data: { ...config("  Submitted  "), expectedRevision: 7 },
+      body: { ...config("  Submitted  "), expectedRevision: 7 },
     });
 
     api.saveHomepagePresentation.mockResolvedValueOnce({ config: config("Submitted"), revision: 9 });
     act(() => button("Save homepage")?.click());
     await flush();
     expect(api.saveHomepagePresentation).toHaveBeenLastCalledWith({
-      data: { ...config("Submitted"), trustStrip: { enabled: true }, expectedRevision: 8 },
+      body: { ...config("Submitted"), trustStrip: { enabled: true }, expectedRevision: 8 },
     });
   });
 

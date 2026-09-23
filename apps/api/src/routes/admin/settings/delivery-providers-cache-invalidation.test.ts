@@ -5,7 +5,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { ServiceUnavailableError } from "../../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   getCredentialEncryptionKey: vi.fn(),
   requireEncryptionKey: vi.fn(),
   readStoredCredentialStrict: vi.fn(),
@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => ({
   deleteWhere: vi.fn(),
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("../../../utils/encryption-key", () => ({
@@ -72,12 +72,10 @@ function createTestApp() {
   const env = {
     CACHE: { id: "api-cache-kv" },
     CREDENTIAL_ENCRYPTION_KEY: "credential-secret",
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
   mocks.requireEncryptionKey.mockReturnValue("credential-key");
   mocks.readStoredCredentialStrict.mockImplementation(async (value: string) => ({
@@ -134,9 +132,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
     expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
@@ -218,7 +214,7 @@ describe("delivery provider cache invalidation", () => {
       },
     });
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("invalidates checkout caches after provider updates", async () => {
@@ -248,9 +244,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
     expect(mocks.saveDeliveryProvider).toHaveBeenCalledWith(
       expect.anything(),
@@ -493,9 +487,7 @@ describe("delivery provider cache invalidation", () => {
       "provider_pathao",
       "credential-key",
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -634,7 +626,7 @@ describe("delivery provider cache invalidation", () => {
       },
     });
     expect(mocks.saveDeliveryProvider).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("invalidates checkout caches after update creates a missing provider", async () => {
@@ -665,9 +657,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
     expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
   });
@@ -710,9 +700,7 @@ describe("delivery provider cache invalidation", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 });

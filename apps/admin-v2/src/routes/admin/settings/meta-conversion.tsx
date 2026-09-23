@@ -7,7 +7,6 @@ import {
   type MetaConversionsWorkspaceSection,
 } from "~/components/admin/meta-conversions/meta-conversions-workspace";
 import { metaConversionsSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import type { MetaConversionsSettingsResponse } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useWorkspaceScrollMemory } from "~/hooks/use-workspace-scroll-memory";
 
@@ -29,7 +28,7 @@ function MetaConversionPage() {
   const { data } = useSuspenseQuery(metaConversionsSettingsQueryOptions());
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const r = data as unknown as MetaConversionsSettingsResponse;
+  const r = data;
   const rememberWorkspaceScroll = useWorkspaceScrollMemory(search.section);
   const handleSectionChange = useCallback(
     (section: MetaConversionsWorkspaceSection) => {

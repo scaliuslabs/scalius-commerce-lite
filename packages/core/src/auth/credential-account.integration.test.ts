@@ -1,23 +1,10 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import type { DatabaseSync } from "node:sqlite";
 
 import { verifyPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { describe, expect, it } from "vitest";
 
-import {
-  createTursoDatabase,
-  safeBatch,
-  type Database,
-} from "@scalius/database/client";
-import { compileSqliteMigrationForProvider } from "@scalius/database/migration-artifacts";
+import { safeBatch, type Database } from "@scalius/database/client";
 import {
   account,
   adminInvitations,
@@ -27,7 +14,11 @@ import {
   user,
   userRoles,
 } from "@scalius/database/schema";
-import * as schema from "@scalius/database/schema";
+import {
+  createMigratedSqlite,
+  createSqliteD1Database,
+  createSqliteTursoDatabase,
+} from "@scalius/database/testing/sqlite-d1";
 
 import { ConflictError } from "../errors";
 import {
@@ -37,158 +28,19 @@ import {
   prepareCredentialIdentity,
 } from "./credential-account";
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
 interface ProviderHarness {
   db: Database;
   sqlite: DatabaseSync;
   d1Binding?: D1Database;
 }
 
-const migrationDirectory = fileURLToPath(new URL(
-  "../../../database/migrations/",
-  import.meta.url,
-));
-
-function createProviderSchemaDatabase(provider: "d1" | "turso"): DatabaseSync {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const name of readdirSync(migrationDirectory)
-    .filter((candidate) => /^\d{4}_.+\.sql$/.test(candidate))
-    .sort()) {
-    const migration = readFileSync(`${migrationDirectory}/${name}`, "utf8");
-    sqlite.exec(compileSqliteMigrationForProvider(migration, provider));
-  }
-  return sqlite;
-}
-
-function statementRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function d1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: statementRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => d1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = statementRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-function createD1Database(sqlite: DatabaseSync): {
-  db: Database;
-  binding: D1Database;
-} {
-  const binding = {
-    prepare: (query: string) => d1Statement(sqlite, query),
-    async batch(statements: SqliteD1Statement[]) {
-      sqlite.exec("BEGIN IMMEDIATE");
-      try {
-        const results = statements.map((statement) => statement.execute());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) {
-        if (sqlite.isTransaction) sqlite.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
-  const d1Binding = binding as unknown as D1Database;
-  return {
-    db: drizzle(d1Binding, { schema }) as unknown as Database,
-    binding: d1Binding,
-  };
-}
-
-function createStatefulTursoDatabase(sqlite: DatabaseSync): Database {
-  return createTursoDatabase(
-    { url: "turso://credential-conformance.turso.io", authToken: "test" },
-    {
-      connect: () => ({
-        async batch(statements, options) {
-          const transactional = options?.mode !== undefined;
-          if (transactional) {
-            sqlite.exec(options?.mode === "read" ? "BEGIN" : "BEGIN IMMEDIATE");
-          }
-          try {
-            const results = statements.map((statement) => {
-              const sqlText = typeof statement === "string" ? statement : statement.sql;
-              const args = typeof statement === "string" || statement.args === undefined
-                ? []
-                : statement.args;
-              if (!Array.isArray(args)) {
-                throw new Error("Credential Turso conformance accepts positional arguments only.");
-              }
-              const prepared = sqlite.prepare(sqlText);
-              if (prepared.columns().length === 0) {
-                const result = prepared.run(...args as SQLInputValue[]);
-                return { rows: [], rowsAffected: Number(result.changes) };
-              }
-              prepared.setReturnArrays(true);
-              return {
-                rows: prepared.all(
-                  ...args as SQLInputValue[],
-                ) as unknown as SQLOutputValue[][],
-                rowsAffected: 0,
-              };
-            });
-            if (transactional) sqlite.exec("COMMIT");
-            return results;
-          } catch (error) {
-            if (transactional && sqlite.isTransaction) sqlite.exec("ROLLBACK");
-            throw error;
-          }
-        },
-      }),
-      writeBatchMode: "concurrent",
-    },
-  );
-}
-
 async function createHarness(provider: "d1" | "turso"): Promise<ProviderHarness> {
-  const sqlite = createProviderSchemaDatabase(provider);
-  sqlite.exec("PRAGMA foreign_keys = ON");
+  const sqlite = createMigratedSqlite({ provider, foreignKeys: true });
   if (provider === "d1") {
-    const d1 = createD1Database(sqlite);
-    return { db: d1.db, sqlite, d1Binding: d1.binding };
+    const { db, binding } = createSqliteD1Database({ sqlite });
+    return { db, sqlite, d1Binding: binding };
   }
-  return {
-    db: createStatefulTursoDatabase(sqlite),
-    sqlite,
-  };
+  return { db: createSqliteTursoDatabase(sqlite), sqlite };
 }
 
 describe.each(["d1", "turso"] as const)(

@@ -119,6 +119,14 @@ export interface LayoutData {
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;
+  /** Product call-to-action copy from the active checkout language. */
+  storefrontCopy?: {
+    languageCode: string;
+    addToCartText: string;
+    buyNowText: string;
+    selectOptionsText: string;
+    unavailableText: string;
+  };
 }
 
 export interface ThemePreviewData {

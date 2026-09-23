@@ -100,21 +100,3 @@ export function canonicalizeStorefrontHtmlCachePath(
   const query = params.toString();
   return `${url.pathname}${query ? `?${query}` : ""}`;
 }
-
-export function normalizeStorefrontHtmlCachePaths(
-  paths: readonly string[],
-  maxPaths: number,
-): string[] {
-  const uniquePaths: string[] = [];
-  const seen = new Set<string>();
-
-  for (const rawPath of paths) {
-    const path = canonicalizeStorefrontHtmlCachePath(rawPath);
-    if (!path || seen.has(path)) continue;
-    seen.add(path);
-    uniquePaths.push(path);
-    if (uniquePaths.length >= maxPaths) break;
-  }
-
-  return uniquePaths;
-}

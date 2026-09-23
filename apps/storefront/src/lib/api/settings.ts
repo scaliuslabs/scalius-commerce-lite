@@ -38,7 +38,7 @@ export interface HeroSliderData {
 
 /**
  * Fetches the global SEO settings for the site.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getSeoSettings(): Promise<SeoSettings | null> {
   return withEdgeCache(
@@ -65,7 +65,7 @@ export async function getSeoSettings(): Promise<SeoSettings | null> {
 
 /**
  * Fetches all active analytics configurations.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getAnalyticsConfigurations(): Promise<
   AnalyticsConfig[] | null
@@ -89,7 +89,7 @@ export async function getAnalyticsConfigurations(): Promise<
 
 /**
  * Fetches the active language configuration for the checkout page.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData | null> {
   return withEdgeCache(
@@ -111,7 +111,7 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
 
 /**
  * Fetches hero sliders for the homepage.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  */
 export async function getHeroSliders(): Promise<HeroSliderData | null> {
   return withEdgeCache(

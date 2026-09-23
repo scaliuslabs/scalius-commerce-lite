@@ -1,23 +1,11 @@
 import type { MediaFile } from "~/components/admin/media-manager/types";
-import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
+import type { getApiV1AdminSettingsHeroSlidersById } from "@scalius/api-client/sdk";
+import type { ApiResult } from "~/lib/api";
 
 export type { MediaFile };
 
-export interface SliderImage {
-  id: string;
-  url: string;
-  title: string;
-  link: string;
-  focalPoint: HeroSlideFocalPoint;
-}
-
-export interface HeroSlider {
-  id: string;
-  type: "desktop" | "mobile";
-  images: SliderImage[];
-  isActive: boolean;
-  revision: number;
-}
+export type HeroSlider = ApiResult<typeof getApiV1AdminSettingsHeroSlidersById>;
+export type SliderImage = HeroSlider["images"][number];
 
 /** Generate a unique image ID using crypto.randomUUID() */
 export function generateImageId(): string {

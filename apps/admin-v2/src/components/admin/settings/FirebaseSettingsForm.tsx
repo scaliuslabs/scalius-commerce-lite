@@ -30,14 +30,16 @@ import { getSettingsLoadErrorMessage, mergeUneditedFields } from "~/hooks/use-se
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
-  getAdminNotificationChannels,
-  getFirebaseSettings,
   type FirebaseSettingsPayload,
-  type SettingsPayload,
-  updateFirebaseSettings,
-} from "~/lib/api-functions/settings";
+} from "~/lib/api-query-options/settings";
 import { queryKeys } from "~/lib/query-keys";
 import { isReady } from "@scalius/shared/readiness";
+import {
+  getApiV1AdminSettingsFirebase,
+  getApiV1AdminSettingsNotificationChannelsAdminChannels,
+  postApiV1AdminSettingsFirebase,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "~/lib/api";
 
 const MASKED_VALUE = "••••••••••••";
 const PUBLIC_CONFIG_FIELDS = [
@@ -77,7 +79,7 @@ interface FirebaseDraft {
   publicConfig: FirebasePublicConfig;
 }
 
-function normalizePublicConfig(value: SettingsPayload): FirebasePublicConfig {
+function normalizePublicConfig(value: Record<string, unknown>): FirebasePublicConfig {
   return PUBLIC_CONFIG_FIELDS.reduce<FirebasePublicConfig>((config, key) => {
     const field = value[key];
     config[key] = typeof field === "string" ? field : "";
@@ -180,13 +182,13 @@ export default function FirebaseSettingsForm() {
   const queryClient = useQueryClient();
   const firebaseQuery = useQuery({
     queryKey: queryKeys.settings.firebase(),
-    queryFn: getFirebaseSettings,
+    queryFn: () => apiData(getApiV1AdminSettingsFirebase()),
   });
   const isLoadError = firebaseQuery.isError;
   const loadError = firebaseQuery.error;
   const readinessQuery = useQuery({
     queryKey: queryKeys.settings.adminNotificationChannels(),
-    queryFn: getAdminNotificationChannels,
+    queryFn: () => apiData(getApiV1AdminSettingsNotificationChannelsAdminChannels()),
   });
   const dataUpdateCount = queryClient.getQueryState(queryKeys.settings.firebase())?.dataUpdateCount ?? 0;
   const [{ draft, savedDraft }, setEditor] = useState<{ draft: FirebaseDraft | null; savedDraft: FirebaseDraft | null }>({
@@ -221,13 +223,13 @@ export default function FirebaseSettingsForm() {
       const serviceAccountError = validateServiceAccountJson(nextDraft.serviceAccount);
       if (serviceAccountError) throw new Error(serviceAccountError);
 
-      const payload: SettingsPayload = {
+      const payload: ApiBody<typeof postApiV1AdminSettingsFirebase> = {
         publicConfig: nextDraft.publicConfig,
       };
       if (nextDraft.serviceAccount !== MASKED_VALUE) {
         payload.serviceAccount = nextDraft.serviceAccount;
       }
-      return updateFirebaseSettings({ data: payload });
+      return apiData(postApiV1AdminSettingsFirebase({ body: payload }));
     },
     onSuccess: async (_response, saved) => {
       // Ignore pre-acknowledgment reads even if their React effect is still queued.

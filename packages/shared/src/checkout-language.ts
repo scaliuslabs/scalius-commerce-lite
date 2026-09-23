@@ -349,6 +349,9 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   invalidDiscountCodeText: "Invalid discount code",
   discountApplyFailedText: "Could not apply the discount. Try again.",
   discountRemovedText: "Discount removed.",
+  addToCartText: "Add to Cart",
+  buyNowText: "Buy Now",
+  selectOptionsText: "Select Options",
 } as const;
 
 export type CheckoutLanguageData = {
@@ -705,13 +708,16 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   invalidDiscountCodeText: "ডিসকাউন্ট কোডটি সঠিক নয়",
   discountApplyFailedText: "ডিসকাউন্ট প্রয়োগ করা যায়নি। আবার চেষ্টা করুন।",
   discountRemovedText: "ডিসকাউন্ট সরানো হয়েছে।",
+  addToCartText: "কার্টে যোগ করুন",
+  buyNowText: "এখনই কিনুন",
+  selectOptionsText: "অপশন বেছে নিন",
 };
 
-export const CHECKOUT_LANGUAGE_KEYS = Object.freeze(
-  Object.keys(ENGLISH_CHECKOUT_LANGUAGE_DATA) as CheckoutLanguageKey[],
+export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(
+  /* @__PURE__ */ Object.keys(ENGLISH_CHECKOUT_LANGUAGE_DATA) as CheckoutLanguageKey[],
 );
 
-export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = new Set<CheckoutLanguageKey>([
+export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = /* @__PURE__ */ new Set<CheckoutLanguageKey>([
   "termsText",
   "emptyCartDescriptionText",
   "paymentRecoveryMessageText",
@@ -768,7 +774,7 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS = new Set<CheckoutLanguageKey>([
 ]);
 
 const CHECKOUT_LANGUAGE_PRESETS: Record<string, CheckoutLanguageData> = {
-  en: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
+  en: ENGLISH_CHECKOUT_LANGUAGE_DATA,
   bn: BANGLA_CHECKOUT_LANGUAGE_DATA,
 };
 
@@ -835,11 +841,5 @@ export function resolveCheckoutLanguageData(
   return resolved;
 }
 
-export function formatCheckoutLanguageText(
-  template: string,
-  values: Readonly<Record<string, string | number>>,
-): string {
-  return template.replace(/\{([a-zA-Z][a-zA-Z0-9]*)\}/g, (match, key: string) =>
-    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match,
-  );
-}
+// Separate module so browser bundles can format copy without the presets.
+export { formatCheckoutLanguageText } from "./checkout-language-format";

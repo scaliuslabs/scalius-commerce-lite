@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { OrderStatus } from "@/types/api-responses";
+import { OrderStatus } from "@/lib/admin-order-status-policy";
 import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
@@ -26,22 +26,25 @@ import {
   updateShippingCharge,
   updateDiscountAmount,
 } from "@/store/orderStore";
-import { getDeliveryLocations } from "@/lib/api-functions/delivery";
+import { getDeliveryLocations } from "@/lib/api-query-options/delivery";
 import {
   useConfirmManualOrderAmendment,
   useCreateOrder,
   useUpdateOrder,
 } from "@/lib/api-mutations/orders";
-import type {
-  CreateOrderInput,
-  ManualOrderAmendmentInput,
-  QuoteManualOrderInput,
-  UpdateOrderInput,
-} from "@/lib/api-functions/orders";
 import {
-  previewManualOrderAmendment,
-  quoteManualOrder,
-} from "@/lib/api-functions/orders";
+  postApiV1AdminOrdersByIdAmendmentsPreview,
+  postApiV1AdminOrdersQuote,
+  type postApiV1AdminOrders,
+  type putApiV1AdminOrdersById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "@/lib/api";
+
+type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
+type UpdateOrderInput = { id: string } & ApiBody<typeof putApiV1AdminOrdersById>;
+type QuoteManualOrderInput = ApiBody<typeof postApiV1AdminOrdersQuote>;
+type ManualOrderAmendmentInput = { id: string } &
+  ApiBody<typeof postApiV1AdminOrdersByIdAmendmentsPreview>;
 
 // Imports for our new, refactored components and types
 import {
@@ -254,15 +257,13 @@ export function OrderForm({
       isAmend ? `amend:${String(defaultValues?.id)}:${String(defaultValues?.version)}` : "create",
     ],
     queryFn: () => {
-      if (!isAmend) return quoteManualOrder({ data: debouncedQuoteInput });
+      if (!isAmend) return apiData(postApiV1AdminOrdersQuote({ body: debouncedQuoteInput }));
       const orderId = String(defaultValues?.id ?? "");
-      const values = form.getValues();
-      return previewManualOrderAmendment({
-        data: {
-          ...toManualOrderAmendmentInput(values, orderId),
-          ...debouncedQuoteInput,
-        },
-      });
+      const { id: _id, ...amendment } = toManualOrderAmendmentInput(form.getValues(), orderId);
+      return apiData(postApiV1AdminOrdersByIdAmendmentsPreview({
+        path: { id: orderId },
+        body: { ...amendment, ...debouncedQuoteInput },
+      }));
     },
     enabled: canRequestQuote,
     retry: false,
@@ -345,7 +346,7 @@ export function OrderForm({
 
   const loadCities = useCallback(async () => {
     try {
-      const data = await getDeliveryLocations({ data: { type: "city" } });
+      const data = await getDeliveryLocations({ type: "city" });
       setLocations((prev) => ({ ...prev, cities: data.locations as DeliveryLocation[] }));
     } catch (error: unknown) {
       console.error("Error loading cities:", error);
@@ -362,7 +363,7 @@ export function OrderForm({
     }
     setIsLoading((prev) => ({ ...prev, zones: true }));
     try {
-      const data = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
+      const data = await getDeliveryLocations({ type: "zone", parentId: cityId });
       setLocations((prev) => ({ ...prev, zones: data.locations as DeliveryLocation[], areas: [] }));
       form.setValue("area", null);
     } catch (error: unknown) {
@@ -381,7 +382,7 @@ export function OrderForm({
     }
     setIsLoading((prev) => ({ ...prev, areas: true }));
     try {
-      const data = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
+      const data = await getDeliveryLocations({ type: "area", parentId: zoneId });
       setLocations((prev) => ({ ...prev, areas: data.locations as DeliveryLocation[] }));
     } catch (error: unknown) {
       console.error("Error loading areas:", error);

@@ -16,18 +16,13 @@ import type {
   CartValidationIssue,
   CartValidationResult,
 } from "@/lib/api/orders";
+import type { CheckoutLanguageData } from "@/lib/api/types";
 import {
-  validateDiscount,
-  getActiveCheckoutLanguage,
-  type CheckoutLanguageData,
-  saveAbandonedCheckout,
-} from "@/lib/api";
+  saveAbandonedCheckoutFromBrowser as saveAbandonedCheckout,
+  validateDiscountFromBrowser as validateDiscount,
+} from "./browser-api";
 import { formatPriceShort } from "@scalius/shared/currency";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  formatCheckoutLanguageText,
-} from "@scalius/shared/checkout-language";
-import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -75,9 +70,18 @@ function inlineJsString(value: string): string {
   return escapeHtml(JSON.stringify(value));
 }
 
-let globalLangData: CheckoutLanguageData | null = null;
-const activeCheckoutCopy = () =>
-  globalLangData?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+// Pixel mappers load on first use, off the checkout's critical path.
+function withAnalytics(
+  run: (analytics: typeof import("@/lib/analytics")) => void,
+): void {
+  void import("@/lib/analytics").then(run).catch(() => undefined);
+}
+
+// cart.astro always serializes the fully resolved active checkout language
+// (English fallback included) before this module runs.
+const pageCheckoutLanguage = () =>
+  window.__CHECKOUT_LANGUAGE__ as CheckoutLanguageData;
+const activeCheckoutCopy = () => pageCheckoutLanguage().languageData;
 let hasTrackedInitiateCheckout = false;
 let cartValidationIssues: Record<string, CartValidationIssue[]> = {};
 let cartValidationGlobalError = "";
@@ -285,47 +289,6 @@ function handleAbandonedCheckout() {
   }, 1500); // Debounce for 1.5 seconds
 }
 
-// --- Language Data Management ---
-async function getLanguageData(): Promise<CheckoutLanguageData> {
-  if (globalLangData) return globalLangData;
-  const serverLanguage = window.__CHECKOUT_LANGUAGE__;
-  if (
-    serverLanguage &&
-    typeof serverLanguage === "object" &&
-    "languageData" in serverLanguage &&
-    typeof serverLanguage.languageData === "object" &&
-    serverLanguage.languageData !== null
-  ) {
-    globalLangData = serverLanguage as CheckoutLanguageData;
-    return globalLangData;
-  }
-  try {
-    const language = await getActiveCheckoutLanguage();
-    if (language) {
-      globalLangData = language;
-      return globalLangData;
-    }
-  } catch (error: unknown) {
-    console.error("Error fetching checkout language:", error);
-  }
-  // Fallback language object in case API fails
-  const fallbackLang: CheckoutLanguageData = {
-    id: "fallback",
-    name: "English (Fallback)",
-    code: "en",
-    languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
-    fieldVisibility: {
-      showEmailField: true,
-      showOrderNotesField: true,
-      showAreaField: true,
-    },
-    isActive: true,
-    isDefault: true,
-  };
-  globalLangData = fallbackLang;
-  return fallbackLang;
-}
-
 function syncCartPagePresentation(ready: boolean): void {
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
@@ -362,11 +325,15 @@ function processQuickBuy() {
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
           data.addToCartEvent.currency = dynamicCurrency;
-          trackFbAddToCart(data.addToCartEvent);
+          withAnalytics((analytics) =>
+            analytics.trackFbAddToCart(data.addToCartEvent),
+          );
         }
         if (data.initiateCheckoutEvent) {
           data.initiateCheckoutEvent.currency = dynamicCurrency;
-          trackFbInitiateCheckout(data.initiateCheckoutEvent);
+          withAnalytics((analytics) =>
+            analytics.trackFbInitiateCheckout(data.initiateCheckoutEvent),
+          );
         }
       }
     }
@@ -923,7 +890,7 @@ export async function updateTotals() {
 }
 
 export async function renderCartItems() {
-  const lang = await getLanguageData();
+  const lang = pageCheckoutLanguage();
   const cartItemsContainer = document.getElementById("cartItems");
   const cartItemsInput = document.getElementById(
     "cartItemsInput",
@@ -1057,7 +1024,7 @@ function attemptToTrackInitiateCheckout() {
 
   // The checkout is considered "initiated" once we have items and a valid phone number.
   if (Object.keys(items).length > 0 && isPhoneValid) {
-    trackFbInitiateCheckout({
+    const event = {
       content_ids: Object.values(items).map(
         (item) => item.variantId || item.id,
       ),
@@ -1072,7 +1039,8 @@ function attemptToTrackInitiateCheckout() {
         0,
       ),
       value: totalAmount,
-    });
+    };
+    withAnalytics((analytics) => analytics.trackFbInitiateCheckout(event));
 
     hasTrackedInitiateCheckout = true;
   }
@@ -1148,7 +1116,6 @@ async function handleApplyDiscount() {
   };
 
   try {
-    await getLanguageData();
     const result = await validateDiscount(
       code,
       totalAmount,
@@ -1363,16 +1330,8 @@ export async function initCartFunctionality() {
         areaId: typeof detail?.areaId === "string" ? detail.areaId : "",
         areaName: typeof detail?.areaName === "string" ? detail.areaName : "",
       };
+      if (latestCheckoutLocation.zoneId) attemptToTrackInitiateCheckout();
       void updateTotals();
-      handleAbandonedCheckout();
-    },
-    { signal: runtimeSignal },
-  );
-
-  document.addEventListener(
-    "zone-selected",
-    () => {
-      attemptToTrackInitiateCheckout();
       handleAbandonedCheckout();
     },
     { signal: runtimeSignal },
@@ -1409,7 +1368,6 @@ export async function initCartFunctionality() {
       signal: runtimeSignal,
     });
 
-  await getLanguageData();
   await renderCartItems();
   if (applyPendingCartRepairState()) {
     await renderCartItems();

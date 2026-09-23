@@ -38,9 +38,10 @@ vi.mock("~/hooks/use-settings-form", () => ({
   useSettingsForm: () => formState,
   getSettingsLoadErrorMessage: vi.fn((_error: unknown, fallback: string) => fallback),
 }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getBusinessSettings: vi.fn(),
-  updateBusinessSettings: vi.fn(),
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsBusiness: vi.fn(),
+  postApiV1AdminSettingsBusiness: vi.fn(),
 }));
 vi.mock("../shared/UnsavedChangesGuard", () => ({
   UnsavedChangesGuard: () => null,

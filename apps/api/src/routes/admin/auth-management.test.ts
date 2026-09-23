@@ -1,10 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 const mocks = vi.hoisted(() => ({
   autoSeedRbacIfNeeded: vi.fn(async () => undefined),
@@ -1050,25 +1048,6 @@ describe("admin auth management user permissions", () => {
     ]);
   });
 
-  it("does not re-check legacy user.role inside user-management handlers", () => {
-    const source = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
-      "utf8",
-    );
-
-    expect(source).not.toContain('sessionUser.role !== "admin"');
-    expect(source).not.toContain('.where(eq(user.role, "admin"))');
-    expect(source).toContain("selectDistinct");
-    expect(source).toContain("isNotNull(userRoles.id)");
-    expect(source).toContain("isNotNull(userPermissions.id)");
-    expect(source).toContain("eq(userPermissions.granted, true)");
-    expect(source).toContain("ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90");
-    expect(source).toContain("await safeBatch(db, [");
-    expect(source).not.toContain("adminUsers.map(async");
-    expect(source).not.toContain("Only administrators can create new admin users");
-    expect(source).not.toContain("Only administrators can delete admin users");
-  });
-
   it("deletes a role-bearing admin principal even when the legacy role is not admin", async () => {
     const db = createAdminDeleteDbMock();
     const app = createTestApp(db);
@@ -1123,16 +1102,27 @@ describe("admin auth management user permissions", () => {
 });
 
 describe("admin auth management suspension lifecycle", () => {
-  it("does not count unfinished invitations as lockout-safe administrators", () => {
-    const source = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
-      "utf8",
+  it("does not count unfinished invitations as lockout-safe administrators", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    const insertUser = sqlite.prepare(
+      "INSERT INTO user (id, name, email, role, must_change_password) VALUES (?, ?, ?, 'admin', ?)",
     );
+    insertUser.run("admin_2", "Target", "target@example.com", 0);
+    insertUser.run("admin_3", "Invited", "invited@example.com", 1);
+    const app = createTestApp(db);
+    const suspend = () => app.request("/api/v1/admin/auth/users/admin_2/suspension", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suspended: true }),
+    });
+    const targetBanned = () => sqlite.prepare("SELECT banned FROM user WHERE id = 'admin_2'").get();
 
-    expect(source).toContain("eq(user.mustChangePassword, false)");
-    expect(source).toContain("other_admin.must_change_password");
-    expect(source).toContain("other_admin.must_enroll_two_factor");
-    expect(source).toContain("other_admin.two_factor_enabled");
+    expect((await suspend()).status).toBe(400);
+    expect(targetBanned()).toEqual({ banned: 0 });
+
+    sqlite.exec("UPDATE user SET must_change_password = 0 WHERE id = 'admin_3'");
+    expect((await suspend()).status).toBe(200);
+    expect(targetBanned()).toEqual({ banned: 1 });
   });
 
   it("suspends an administrator and revokes every active session atomically", async () => {
@@ -1385,19 +1375,6 @@ describe("admin auth management team invites", () => {
     expect(response.status).toBe(403);
     expect(mocks.prepareCredentialIdentity).not.toHaveBeenCalled();
     expect(mocks.createInvitedAdminCredentialAccount).not.toHaveBeenCalled();
-  });
-
-  it("keeps team invites off raw credential emails", () => {
-    const source = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
-      "utf8",
-    );
-
-    expect(source).toContain("requestPasswordReset");
-    expect(source).toContain("createInvitedAdminCredentialAccount");
-    expect(source).not.toContain("signUpEmail");
-    expect(source).not.toContain("sendAdminInviteEmail");
-    expect(source).not.toContain("Temporary Password");
   });
 
   it("resends a one-use setup link only while password setup is pending", async () => {

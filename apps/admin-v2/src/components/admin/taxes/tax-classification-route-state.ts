@@ -1,4 +1,4 @@
-import type { TaxClassificationKind } from "@/lib/api-functions/taxes";
+import type { TaxClassificationKind } from "@/lib/api-query-options/taxes";
 
 export interface TaxClassificationRouteState {
   kind: TaxClassificationKind;

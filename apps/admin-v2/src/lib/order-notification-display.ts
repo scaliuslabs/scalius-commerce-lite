@@ -1,4 +1,4 @@
-import type { OrderNotificationOutboxDto, OrderNotificationReceiptDto } from "./api-functions/orders";
+import type { OrderNotificationOutboxDto, OrderNotificationReceiptDto } from "./api-query-options/orders";
 
 export interface OrderNotificationReceiptDisplayGroup {
   key: string;

@@ -1,7 +1,7 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -17,189 +17,11 @@ let sqlite: DatabaseSync;
 let db: Database;
 let maxBoundParameters: number;
 
-type ProxyMethod = "run" | "all" | "values" | "get";
-type ProxyQuery = { sql: string; params: unknown[]; method: ProxyMethod };
-
-function createDatabase(): Database {
-    const execute = async (query: string, params: unknown[], method: ProxyMethod) => {
-        maxBoundParameters = Math.max(maxBoundParameters, params.length);
-        if (params.length > 100) {
-            throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
-        }
-        const statement = sqlite.prepare(query);
-        statement.setReturnArrays(true);
-
-        if (method === "run") {
-            statement.run(...(params as SQLInputValue[]));
-            return { rows: [] };
-        }
-        if (method === "get") {
-            return {
-                rows: statement.get(...(params as SQLInputValue[])) as unknown as unknown[],
-            };
-        }
-        return {
-            rows: statement.all(...(params as SQLInputValue[])) as unknown as unknown[],
-        };
-    };
-    const batch = async (queries: ProxyQuery[]) => {
-        const results: Array<{ rows: unknown[] }> = [];
-        for (const query of queries) {
-            results.push(await execute(query.sql, query.params, query.method));
-        }
-        return results;
-    };
-    const proxy = drizzle(execute, batch);
-
-    return proxy as unknown as Database;
-}
-
-function createCatalogSchema(): void {
-    sqlite.exec(`
-        CREATE TABLE categories (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            slug TEXT NOT NULL UNIQUE,
-            description TEXT,
-            image_url TEXT,
-            meta_title TEXT,
-            meta_description TEXT,
-            canonical_path TEXT,
-            no_index INTEGER NOT NULL DEFAULT 0,
-            exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'draft',
-            revision INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            deleted_at INTEGER
-        );
-        CREATE VIRTUAL TABLE categories_fts USING fts5(name, description);
-
-        CREATE TABLE products (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            price REAL NOT NULL,
-            category_id TEXT,
-            slug TEXT NOT NULL UNIQUE,
-            meta_title TEXT,
-            meta_description TEXT,
-            canonical_path TEXT,
-            no_index INTEGER NOT NULL DEFAULT 0,
-            exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
-            exclude_from_product_feed INTEGER NOT NULL DEFAULT 0,
-            product_condition TEXT,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            deleted_at INTEGER,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            discount_percentage REAL DEFAULT 0,
-            discount_type TEXT DEFAULT 'percentage',
-            discount_amount REAL DEFAULT 0,
-            free_delivery INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX products_category_id_idx ON products(category_id);
-        CREATE VIRTUAL TABLE products_fts USING fts5(name, description);
-
-        CREATE TABLE pages (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            slug TEXT NOT NULL UNIQUE,
-            content TEXT NOT NULL DEFAULT '',
-            is_published INTEGER NOT NULL DEFAULT 0,
-            deleted_at INTEGER
-        );
-        CREATE VIRTUAL TABLE pages_fts USING fts5(title, content_col);
-
-        CREATE TABLE product_variants (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            option_combination_key TEXT,
-            image_id TEXT,
-            weight REAL,
-            sku TEXT NOT NULL UNIQUE,
-            price REAL NOT NULL,
-            stock INTEGER NOT NULL DEFAULT 0,
-            reserved_stock INTEGER NOT NULL DEFAULT 0,
-            low_stock_threshold INTEGER,
-            is_default INTEGER NOT NULL DEFAULT 0,
-            track_inventory INTEGER NOT NULL DEFAULT 1,
-            discount_percentage REAL DEFAULT 0,
-            discount_type TEXT DEFAULT 'percentage',
-            discount_amount REAL DEFAULT 0,
-            barcode TEXT,
-            barcode_type TEXT,
-            created_at INTEGER NOT NULL DEFAULT 1,
-            deleted_at INTEGER
-        );
-        CREATE INDEX product_variants_product_id_idx ON product_variants(product_id);
-
-        CREATE TABLE inventory_reservation_lanes (
-            variant_id TEXT NOT NULL,
-            pool TEXT NOT NULL,
-            lane INTEGER NOT NULL,
-            reserved_quantity INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (variant_id, pool, lane)
-        );
-
-        CREATE TABLE product_option_definitions (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            position INTEGER NOT NULL,
-            standard_mapping TEXT NOT NULL DEFAULT 'none',
-            deleted_at INTEGER
-        );
-        CREATE TABLE product_option_values (
-            id TEXT PRIMARY KEY,
-            option_definition_id TEXT NOT NULL,
-            value TEXT NOT NULL,
-            position INTEGER NOT NULL,
-            deleted_at INTEGER
-        );
-        CREATE TABLE product_variant_option_values (
-            variant_id TEXT NOT NULL,
-            option_definition_id TEXT NOT NULL,
-            option_value_id TEXT NOT NULL
-        );
-
-        CREATE TABLE media (
-            id TEXT PRIMARY KEY,
-            kind TEXT NOT NULL,
-            object_key TEXT NOT NULL,
-            poster_media_id TEXT,
-            alt_text TEXT,
-            caption TEXT,
-            width INTEGER,
-            height INTEGER,
-            variant_width INTEGER,
-            duration_ms INTEGER,
-            status TEXT NOT NULL
-        );
-        CREATE TABLE product_media (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            media_id TEXT NOT NULL,
-            alt_text TEXT,
-            is_primary INTEGER NOT NULL DEFAULT 0
-            ,sort_order INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX product_media_product_id_idx ON product_media(product_id);
-
-        CREATE TABLE product_attributes (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            slug TEXT NOT NULL,
-            filterable INTEGER NOT NULL DEFAULT 1,
-            deleted_at INTEGER
-        );
-        CREATE TABLE product_attribute_values (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            attribute_id TEXT NOT NULL,
-            value TEXT NOT NULL
-        );
-    `);
+function insertMedia(id: string, kind: "image" | "video", objectKey: string, altText: string, posterMediaId: string | null = null): void {
+    sqlite.prepare(
+        `INSERT INTO media (id, filename, kind, object_key, size, mime_type, poster_media_id, alt_text, status)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, 'ready')`,
+    ).run(id, objectKey, kind, objectKey, kind === "image" ? "image/jpeg" : "video/mp4", posterMediaId, altText);
 }
 
 function insertCategory(input: {
@@ -209,20 +31,9 @@ function insertCategory(input: {
     description?: string;
     status?: "draft" | "published" | "internal";
 }): void {
-    const description = input.description ?? "";
     sqlite
-        .prepare(
-            "INSERT INTO categories (id, name, slug, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, 1)",
-        )
-        .run(input.id, input.name, input.slug, description, input.status ?? "published");
-    const row = sqlite
-        .prepare("SELECT rowid FROM categories WHERE id = ?")
-        .get(input.id) as { rowid: number };
-    sqlite
-        .prepare(
-            "INSERT INTO categories_fts (rowid, name, description) VALUES (?, ?, ?)",
-        )
-        .run(row.rowid, input.name, description);
+        .prepare("INSERT INTO categories (id, name, slug, description, status) VALUES (?, ?, ?, ?, ?)")
+        .run(input.id, input.name, input.slug, input.description ?? "", input.status ?? "published");
 }
 
 function insertProduct(input: {
@@ -234,32 +45,12 @@ function insertProduct(input: {
 }): void {
     sqlite
         .prepare(
-            `INSERT INTO products (
-                id, name, description, price, category_id, slug,
-                created_at, updated_at, is_active, exclude_from_product_feed
-            ) VALUES (?, ?, '', 1000, ?, ?, ?, ?, 1, 0)`,
+            `INSERT INTO products (id, name, description, price, category_id, slug, created_at, updated_at)
+             VALUES (?, ?, '', 1000, ?, ?, ?, ?)`,
         )
-        .run(
-            input.id,
-            input.name,
-            input.categoryId,
-            input.slug,
-            input.createdAt,
-            input.createdAt,
-        );
-    const row = sqlite
-        .prepare("SELECT rowid FROM products WHERE id = ?")
-        .get(input.id) as { rowid: number };
-    sqlite
-        .prepare(
-            "INSERT INTO products_fts (rowid, name, description) VALUES (?, ?, '')",
-        )
-        .run(row.rowid, input.name);
+        .run(input.id, input.name, input.categoryId, input.slug, input.createdAt, input.createdAt);
     const mediaId = `media_${input.id}`;
-    sqlite.prepare(
-        `INSERT INTO media (id, kind, object_key, alt_text, status)
-         VALUES (?, 'image', ?, ?, 'ready')`,
-    ).run(mediaId, `products/${input.slug}.jpg`, input.name);
+    insertMedia(mediaId, "image", `products/${input.slug}.jpg`, input.name);
     sqlite.prepare(
         `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
          VALUES (?, ?, ?, ?, 1, 0)`,
@@ -269,29 +60,25 @@ function insertProduct(input: {
 function insertSimpleSku(productId: string): void {
     sqlite
         .prepare(
-            `INSERT INTO product_variants (
-                id, product_id, option_combination_key, image_id, weight, sku, price, stock,
-                reserved_stock, is_default, track_inventory
-            ) VALUES (?, ?, NULL, NULL, NULL, ?, 1000, 0, 0, 1, 0)`,
+            `INSERT INTO product_variants (id, product_id, sku, price, stock, is_default, track_inventory)
+             VALUES (?, ?, ?, 1000, 0, 1, 0)`,
         )
         .run(`var_default_${productId}`, productId, `SIMPLE-${productId}`);
 }
 
 function insertMixedTopologySkus(productId: string): void {
     sqlite.exec(`
-        INSERT INTO product_option_definitions (id, product_id, name, position, standard_mapping)
-        VALUES ('option_size', '${productId}', 'Size', 0, 'size'),
-               ('option_color', '${productId}', 'Color', 1, 'color');
-        INSERT INTO product_option_values (id, option_definition_id, value, position)
-        VALUES ('value_42', 'option_size', '42', 0),
-               ('value_41', 'option_size', '41', 1),
-               ('value_green', 'option_color', 'Green', 0);
+        INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping)
+        VALUES ('option_size', '${productId}', 'Size', 'size', 0, 'size'),
+               ('option_color', '${productId}', 'Color', 'color', 1, 'color');
+        INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position)
+        VALUES ('value_42', 'option_size', '42', '42', 0),
+               ('value_41', 'option_size', '41', '41', 1),
+               ('value_green', 'option_color', 'Green', 'green', 0);
     `);
     const statement = sqlite.prepare(
-        `INSERT INTO product_variants (
-            id, product_id, option_combination_key, image_id, weight, sku, price, stock,
-            reserved_stock, is_default, track_inventory
-        ) VALUES (?, ?, ?, NULL, NULL, ?, 1000, 5, 0, 0, 1)`,
+        `INSERT INTO product_variants (id, product_id, option_combination_key, sku, price, stock, is_default, track_inventory)
+         VALUES (?, ?, ?, ?, 1000, 5, 0, 1)`,
     );
     statement.run("var_mixed_size", productId, "value_42", "MIXED-SIZE");
     statement.run(
@@ -301,7 +88,7 @@ function insertMixedTopologySkus(productId: string): void {
         "MIXED-SIZE-COLOR",
     );
     sqlite.exec(`
-        INSERT INTO product_variant_option_values VALUES
+        INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES
             ('var_mixed_size', 'option_size', 'value_42'),
             ('var_mixed_size_color', 'option_size', 'value_41'),
             ('var_mixed_size_color', 'option_color', 'value_green');
@@ -323,10 +110,15 @@ function insertAttribute(
 
 describe("storefront feed category search", () => {
     beforeEach(() => {
-        sqlite = new DatabaseSync(":memory:");
         maxBoundParameters = 0;
-        createCatalogSchema();
-        db = createDatabase();
+        ({ sqlite, db } = createSqliteD1Database({
+            onQuery(_query, params) {
+                maxBoundParameters = Math.max(maxBoundParameters, params.length);
+                if (params.length > 100) {
+                    throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
+                }
+            },
+        }));
 
         insertCategory({ id: "cat_shoes", name: "Shoes", slug: "shoes" });
         insertCategory({
@@ -452,13 +244,6 @@ describe("storefront feed category search", () => {
             `INSERT INTO pages (id, title, slug, content, is_published)
              VALUES ('page_classic', 'Classic care guide', 'classic-care', ?, 1)`,
         ).run("A long rich-text body that predictive search must not return.");
-        const pageRow = sqlite
-            .prepare("SELECT rowid FROM pages WHERE id = 'page_classic'")
-            .get() as { rowid: number };
-        sqlite.prepare(
-            `INSERT INTO pages_fts (rowid, title, content_col)
-             VALUES (?, 'Classic care guide', 'A long rich-text body')`,
-        ).run(pageRow.rowid);
 
         const result = await searchCatalog(db, "classic", { limit: 10 });
 
@@ -479,14 +264,8 @@ describe("storefront feed category search", () => {
 
     it("uses a featured video poster as the predictive-search thumbnail", async () => {
         sqlite.prepare("DELETE FROM product_media WHERE product_id = ?").run("prod_runner");
-        sqlite.prepare(
-            `INSERT INTO media (id, kind, object_key, alt_text, status)
-             VALUES ('media_runner_poster', 'image', 'products/runner-poster.jpg', 'Runner video poster', 'ready'),
-                    ('media_runner_video', 'video', 'products/runner.mp4', 'Runner product video', 'ready')`,
-        ).run();
-        sqlite.prepare(
-            "UPDATE media SET poster_media_id = 'media_runner_poster' WHERE id = 'media_runner_video'",
-        ).run();
+        insertMedia("media_runner_poster", "image", "products/runner-poster.jpg", "Runner video poster");
+        insertMedia("media_runner_video", "video", "products/runner.mp4", "Runner product video", "media_runner_poster");
         sqlite.prepare(
             `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
              VALUES ('pmed_runner_video', 'prod_runner', 'media_runner_video', NULL, 1, 0)`,
@@ -601,16 +380,10 @@ describe("storefront feed category search", () => {
     });
 
     it("uses a featured video poster for image-only feed fields and exact SKU images when assigned", async () => {
-        sqlite.prepare("UPDATE product_media SET is_primary = 0 WHERE product_id = ?")
+        sqlite.prepare("UPDATE product_media SET is_primary = 0, sort_order = 1 WHERE product_id = ?")
             .run("prod_runner");
-        sqlite.prepare(
-            `INSERT INTO media (id, kind, object_key, alt_text, status)
-             VALUES ('media_runner_poster', 'image', 'products/runner-poster.jpg', 'Runner video poster', 'ready')`,
-        ).run();
-        sqlite.prepare(
-            `INSERT INTO media (id, kind, object_key, poster_media_id, alt_text, status)
-             VALUES ('media_runner_video', 'video', 'products/runner-demo.mp4', 'media_runner_poster', 'Runner demo', 'ready')`,
-        ).run();
+        insertMedia("media_runner_poster", "image", "products/runner-poster.jpg", "Runner video poster");
+        insertMedia("media_runner_video", "video", "products/runner-demo.mp4", "Runner demo", "media_runner_poster");
         sqlite.prepare(
             `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
              VALUES ('pmed_runner_video', 'prod_runner', 'media_runner_video', 'Runner demonstration', 1, 0)`,
@@ -647,7 +420,7 @@ describe("storefront feed category search", () => {
     it("excludes products without usable primary media before feed pagination", async () => {
         sqlite.prepare("DELETE FROM product_media WHERE product_id = ?")
             .run("prod_slip_on");
-        sqlite.prepare("UPDATE media SET status = 'deleted' WHERE id = ?")
+        sqlite.prepare("UPDATE media SET status = 'deleted', trashed_at = 1, deleted_at = 1 WHERE id = ?")
             .run("media_prod_loafer");
 
         const result = await getStorefrontFeedProducts(db, {

@@ -1,4 +1,5 @@
 import type { ColumnDef } from "../table-config";
+import type { DiscountListItem } from "~/lib/api-query-options/discounts";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
@@ -25,33 +26,7 @@ import {
   getDiscountRequirement,
 } from "../../discount/discount-list-model";
 
-export interface DiscountItem {
-  id: string;
-  revision: number;
-  code: string;
-  type: string;
-  valueType: string;
-  discountValue: number;
-  minPurchaseAmount: number | null;
-  minQuantity: number | null;
-  maxUsesPerOrder: number | null;
-  maxUses: number | null;
-  limitOnePerCustomer: boolean;
-  combineWithProductDiscounts: boolean;
-  combineWithOrderDiscounts: boolean;
-  combineWithShippingDiscounts: boolean;
-  customerSegment: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  isActive: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-  deletedAt: string | null;
-  relatedProducts: { buy: string[]; get: string[] };
-  relatedCollections: { buy: string[]; get: string[] };
-  usageCount?: number;
-  totalDiscountAmount?: number;
-}
+export type DiscountItem = DiscountListItem;
 
 interface DiscountColumnOptions {
   showTrashed: boolean;

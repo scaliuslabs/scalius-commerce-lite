@@ -8,7 +8,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   invalidateSiteSettingsCache: vi.fn(),
   invalidateStorefrontUrlCache: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   getCurrencySettings: vi.fn(),
   isCurrencyCodeLocked: vi.fn(),
   saveCurrencySettings: vi.fn(),
@@ -44,9 +44,9 @@ vi.mock("@scalius/core/modules/settings", () => ({
   invalidateStorefrontUrlCache: mocks.invalidateStorefrontUrlCache,
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups:
-    mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration:
+    mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
@@ -66,7 +66,6 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   rollbackThemeSettings: mocks.rollbackThemeSettings,
   createThemePreviewSession: mocks.createThemePreviewSession,
   getMediaOptimizationSettings: mocks.getMediaOptimizationSettings,
-  mediaOptimizationDocument: { invalidationGroups: ["media"] },
   isValidMediaHostInput: mocks.isValidMediaHostInput,
   saveMediaOptimizationSettings: mocks.saveMediaOptimizationSettings,
   getSeoSettings: mocks.getSeoSettings,
@@ -107,15 +106,13 @@ function createTestApp() {
   const kv = { delete: vi.fn() };
   const env = {
     CACHE: kv,
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
     STOREFRONT_URL: "https://storefront.example.com",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
   mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
     currencySymbol: "Tk",
@@ -634,7 +631,7 @@ describe("site settings cache invalidation", () => {
       expect(response.status).toBe(400);
       expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
       expect(
-        mocks.invalidateApiAndScheduleStorefrontGroups,
+        mocks.bumpCacheGeneration,
       ).not.toHaveBeenCalled();
     },
   );
@@ -772,9 +769,7 @@ describe("site settings cache invalidation", () => {
         },
       },
     });
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage", "layout", "discovery"],
-      expect.anything(),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
     );
   });
 
@@ -805,9 +800,7 @@ describe("site settings cache invalidation", () => {
         policyUrl: "/returns",
       },
     });
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["homepage", "layout", "discovery"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -829,7 +822,7 @@ describe("site settings cache invalidation", () => {
     expect(response.status).toBe(400);
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -961,7 +954,6 @@ describe("site settings cache invalidation", () => {
       path: "/currency",
       method: "POST" as const,
       body: { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "1" },
-      groups: ["layout", "checkout"],
     },
     {
       path: "/header",
@@ -975,7 +967,6 @@ describe("site settings cache invalidation", () => {
         social: [],
         navigation: [],
       },
-      groups: ["layout"],
     },
     {
       path: "/footer",
@@ -989,7 +980,6 @@ describe("site settings cache invalidation", () => {
         menus: [],
         social: [],
       },
-      groups: ["layout"],
     },
     {
       path: "/theme",
@@ -1001,25 +991,21 @@ describe("site settings cache invalidation", () => {
           colors: { primary: "#000000" },
         },
       },
-      groups: ["layout"],
     },
     {
       path: "/media",
       method: "POST" as const,
       body: { canonicalCdnUrl: "cdn.example.com" },
-      groups: ["media"],
     },
     {
       path: "/seo",
       method: "POST" as const,
       body: { siteTitle: "Site", homepageTitle: "Home" },
-      groups: ["homepage", "layout", "discovery"],
     },
     {
       path: "/storefront-url",
       method: "POST" as const,
       body: { storefrontUrl: "https://storefront.example.com" },
-      groups: ["homepage", "layout", "discovery"],
     },
     {
       path: "/homepage-presentation",
@@ -1033,25 +1019,23 @@ describe("site settings cache invalidation", () => {
         },
         trustStrip: { enabled: true },
       },
-      groups: ["homepage"],
     },
     {
       path: "/allowed-countries",
       method: "PUT" as const,
       body: { allowedCountries: ["BD"], mode: "include" },
-      groups: ["checkout"],
     },
   ])(
-    "invalidates $groups after $path saves",
-    async ({ path, method, body, groups }) => {
+    "bumps the cache generation after $path saves",
+    async ({ path, method, body }) => {
       const { app, env, kv } = createTestApp();
 
       const response = await requestJson(app, env, method, path, body);
 
       expect(response.status).toBe(200);
       expect(
-        mocks.invalidateApiAndScheduleStorefrontGroups,
-      ).toHaveBeenCalledWith(groups, expect.objectContaining({ env }));
+        mocks.bumpCacheGeneration,
+      ).toHaveBeenCalledWith(expect.objectContaining({ env }));
       if (path === "/storefront-url") {
         expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
         expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();
@@ -1077,9 +1061,7 @@ describe("site settings cache invalidation", () => {
       "[Settings] Legacy KV delete failed for gw:currency:",
       "kv unavailable",
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["layout", "checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
 
     warn.mockRestore();
@@ -1132,7 +1114,7 @@ describe("site settings cache invalidation", () => {
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
       expect(
-        mocks.invalidateApiAndScheduleStorefrontGroups,
+        mocks.bumpCacheGeneration,
       ).not.toHaveBeenCalled();
     },
   );
@@ -1151,7 +1133,7 @@ describe("site settings cache invalidation", () => {
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
       expect(
-        mocks.invalidateApiAndScheduleStorefrontGroups,
+        mocks.bumpCacheGeneration,
       ).not.toHaveBeenCalled();
     },
   );
@@ -1180,7 +1162,7 @@ describe("site settings cache invalidation", () => {
         "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
     });
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -1202,7 +1184,7 @@ describe("site settings cache invalidation", () => {
     expect(response.status).toBe(400);
     expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -1233,7 +1215,7 @@ describe("site settings cache invalidation", () => {
       null,
     );
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -1277,7 +1259,7 @@ describe("site settings cache invalidation", () => {
       null,
     );
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -1312,7 +1294,7 @@ describe("site settings cache invalidation", () => {
     expect(JSON.stringify(body.data)).not.toContain("/tpc_");
     expect(body.data).not.toHaveProperty("theme");
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).not.toHaveBeenCalled();
   });
 
@@ -1395,20 +1377,18 @@ describe("site settings cache invalidation", () => {
     expect(publishResponse.status).toBe(200);
     expect(rollbackResponse.status).toBe(200);
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).toHaveBeenCalledTimes(2);
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).toHaveBeenNthCalledWith(
       1,
-      expect.arrayContaining(["layout"]),
       expect.anything(),
     );
     expect(
-      mocks.invalidateApiAndScheduleStorefrontGroups,
+      mocks.bumpCacheGeneration,
     ).toHaveBeenNthCalledWith(
       2,
-      expect.arrayContaining(["layout"]),
       expect.anything(),
     );
   });

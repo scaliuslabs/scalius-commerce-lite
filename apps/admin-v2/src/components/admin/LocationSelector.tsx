@@ -3,7 +3,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 
 import type { CustomerFormValues } from "~/lib/form-schemas";
-import { getDeliveryLocations } from "~/lib/api-functions/delivery";
+import { getDeliveryLocations } from "~/lib/api-query-options/delivery";
 import {
   FormControl,
   FormField,
@@ -52,7 +52,7 @@ export function LocationSelector() {
     let active = true;
     setLoadingCities(true);
 
-    void getDeliveryLocations({ data: { type: "city" } })
+    void getDeliveryLocations({ type: "city" })
       .then((result) => {
         if (active) setCities(result.locations as Location[]);
       })
@@ -78,9 +78,7 @@ export function LocationSelector() {
     }
 
     setLoadingZones(true);
-    void getDeliveryLocations({
-      data: { type: "zone", parentId: cityValue },
-    })
+    void getDeliveryLocations({ type: "zone", parentId: cityValue })
       .then((result) => {
         if (requestId === zoneRequest.current) {
           setZones(result.locations as Location[]);
@@ -104,9 +102,7 @@ export function LocationSelector() {
     }
 
     setLoadingAreas(true);
-    void getDeliveryLocations({
-      data: { type: "area", parentId: zoneValue },
-    })
+    void getDeliveryLocations({ type: "area", parentId: zoneValue })
       .then((result) => {
         if (requestId === areaRequest.current) {
           setAreas(result.locations as Location[]);

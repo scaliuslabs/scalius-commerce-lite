@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -17,55 +17,6 @@ import {
 let sqlite: DatabaseSync;
 let db: Database;
 let boundParameterCounts: number[];
-
-function createDatabase(): Database {
-    const proxy = drizzle(async (query, params, method) => {
-        boundParameterCounts.push(params.length);
-        if (params.length > 100) {
-            throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
-        }
-
-        const statement = sqlite.prepare(query);
-        statement.setReturnArrays(true);
-        if (method === "run") {
-            statement.run(...params);
-            return { rows: [] };
-        }
-        if (method === "get") {
-            return { rows: statement.get(...params) as unknown as unknown[] };
-        }
-        return { rows: statement.all(...params) as unknown as unknown[][] };
-    });
-
-    return proxy as unknown as Database;
-}
-
-function createSchema(): void {
-    sqlite.exec(`
-        CREATE TABLE product_attributes (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            slug TEXT NOT NULL UNIQUE,
-            filterable INTEGER NOT NULL DEFAULT 1,
-            options TEXT,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            deleted_at INTEGER
-        );
-        CREATE TABLE products (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            deleted_at INTEGER
-        );
-        CREATE TABLE product_attribute_values (
-            id TEXT PRIMARY KEY,
-            product_id TEXT NOT NULL,
-            attribute_id TEXT NOT NULL,
-            value TEXT NOT NULL,
-            created_at INTEGER NOT NULL
-        );
-    `);
-}
 
 function insertAttribute(id: string, options: string[], deletedAt: number | null = null): void {
     sqlite.prepare(`
@@ -83,8 +34,8 @@ function insertValue(
 ): void {
     const productId = `product_${attributeId}_${productIndex}`;
     sqlite.prepare(
-        "INSERT INTO products (id, name, deleted_at) VALUES (?, ?, NULL)",
-    ).run(productId, `Product ${productIndex}`);
+        "INSERT INTO products (id, name, slug, price) VALUES (?, ?, ?, 100)",
+    ).run(productId, `Product ${productIndex}`, productId);
     sqlite.prepare(`
         INSERT INTO product_attribute_values (
             id, product_id, attribute_id, value, created_at
@@ -94,10 +45,15 @@ function insertValue(
 
 describe("attribute value pagination", () => {
     beforeEach(() => {
-        sqlite = new DatabaseSync(":memory:");
         boundParameterCounts = [];
-        createSchema();
-        db = createDatabase();
+        ({ sqlite, db } = createSqliteD1Database({
+            onQuery(_query, values) {
+                boundParameterCounts.push(values.length);
+                if (values.length > 100) {
+                    throw new Error(`D1 bound-parameter limit exceeded: ${values.length}`);
+                }
+            },
+        }));
     });
 
     afterEach(() => {

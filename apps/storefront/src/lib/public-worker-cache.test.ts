@@ -2,16 +2,64 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   applyPublicStorefrontPreconnectHint,
-  decoratePublicStorefrontResponse,
-  exposePublicStorefrontResponse,
   getPublicStorefrontCachePolicy,
-  normalizePublicStorefrontCacheTags,
-  recoverCurrentStorefrontBuild,
-  responseHasStorefrontBuild,
-  warmPublicStorefrontCache,
+  publicStorefrontCacheKey,
+  servePublicStorefrontRequest,
+  type PublicStorefrontCacheContext,
 } from "./public-worker-cache";
 
-describe("public storefront Worker cache policy", () => {
+const GENERATION_HEADER = "X-Scalius-Cache-Generation";
+
+/** Node's Request drops Cookie on construction, so model the Worker request. */
+function workerRequest(path: string, headers: Record<string, string> = {}): Request {
+  const normalized = new Map(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
+  );
+  return {
+    method: "GET",
+    url: `https://shop.example${path}`,
+    headers: {
+      get: (name: string) => normalized.get(name.toLowerCase()) ?? null,
+      has: (name: string) => normalized.has(name.toLowerCase()),
+    },
+  } as unknown as Request;
+}
+
+function renderedPage(body = "<html>page</html>", headers: Record<string, string> = {}) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+      "X-Cache-Status": "MISS",
+      ...headers,
+    },
+  });
+}
+
+function createContext(overrides: Partial<PublicStorefrontCacheContext> = {}) {
+  const store = new Map<string, Response>();
+  const pending: Promise<unknown>[] = [];
+  const render = vi.fn(async (_request: Request) => renderedPage());
+  const context: PublicStorefrontCacheContext = {
+    cache: {
+      match: vi.fn(async (key: RequestInfo | URL) => store.get(String(key))?.clone()),
+      put: vi.fn(async (key: RequestInfo | URL, response: Response) => {
+        store.set(String(key), response);
+      }),
+    } as unknown as PublicStorefrontCacheContext["cache"],
+    readGeneration: vi.fn(async () => "gen1"),
+    buildId: "build-a",
+    render,
+    waitUntil: (promise) => pending.push(promise),
+    ...overrides,
+  };
+  return { context, store, render, settle: () => Promise.all(pending) };
+}
+
+describe("public storefront cache policy", () => {
   it("adds only a stable HTTPS CDN preconnect candidate", () => {
     const response = new Response("page", {
       headers: { Link: "</_astro/app.js>; rel=preload; as=script" },
@@ -36,251 +84,156 @@ describe("public storefront Worker cache policy", () => {
     expect(response.headers.get("Link")).toBeNull();
   });
 
-  it("maps equivalent CMS query forms to one native cache URL", () => {
+  it("maps equivalent query forms and tracking parameters to one canonical URL", () => {
     const left = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about/?ref=footer&campaign=sale"),
     );
     const right = getPublicStorefrontCachePolicy(
       new Request("https://shop.example/about?campaign=sale&ref=footer"),
     );
-
-    expect(left).toMatchObject({
-      canonicalUrl: "https://shop.example/about?campaign=sale",
-      edgeTtlSeconds: 365 * 86_400,
-      tags: ["pages", "products", "layout", "media"],
-    });
-    expect(right?.canonicalUrl).toBe(left?.canonicalUrl);
+    expect(left).toEqual({ canonicalUrl: "https://shop.example/about?campaign=sale" });
+    expect(right).toEqual(left);
   });
 
   it.each([
-    ["https://shop.example", "https://shop.example/products/fish"],
-    ["https://preview.example", "https://preview.example/products/fish"],
-  ])("retains the request host in the canonical inner request for %s", (origin, canonicalUrl) => {
-    expect(getPublicStorefrontCachePolicy(
-      new Request(`${origin}/products/fish`),
-    )?.canonicalUrl).toBe(canonicalUrl);
+    "/",
+    "/products/fish",
+    "/categories/fish",
+    "/collections/featured",
+    "/search?q=fish",
+    "/blog/news",
+    "/blog/feed.xml",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/sitemap-products.xml",
+    "/api/product-feed.xml",
+    "/api/facebook-feed.xml",
+    "/.well-known/ucp",
+    "/llms.txt",
+  ])("caches public route %s", (path) => {
+    expect(getPublicStorefrontCachePolicy(new Request(`https://shop.example${path}`))).not.toBeNull();
   });
 
   it.each([
     ["checkout", "/checkout", {}],
+    ["cart", "/cart", {}],
+    ["account", "/account/orders", {}],
+    ["receipt", "/order-success", {}],
     ["recovery", "/payment-recovery", {}],
-    ["cookie", "/about", { Cookie: "_fbp=fb.1.1; cs_tok=private" }],
+    ["variant selection", "/products/fish?size=large", {}],
+    ["signed-in buyer", "/products/fish", { Cookie: "_fbp=fb.1.1; cs_auth=1" }],
+    ["session", "/about", { Cookie: "cs_tok=private" }],
+    ["theme preview", "/", { Cookie: "stp_theme_preview=tpv" }],
     ["authorization", "/about", { Authorization: "Bearer private" }],
-  ])("keeps $0 request off the cache lane", (_label, path, headers) => {
-    const normalizedHeaders = new Map(
-      Object.entries(headers).map(([key, value]) => [
-        key.toLowerCase(),
-        value,
-      ]),
-    );
-    const request = {
-      method: "GET",
-      url: `https://shop.example${path}`,
-      headers: {
-        get: (name: string) => normalizedHeaders.get(name.toLowerCase()) ?? null,
-        has: (name: string) => normalizedHeaders.has(name.toLowerCase()),
-      },
-    } as unknown as Request;
-
-    expect(
-      getPublicStorefrontCachePolicy(request),
-    ).toBeNull();
-  });
-
-  it.each([
-    ["/", ["homepage", "layout", "media", "products"]],
-    ["/products/fish", ["products", "product-schema", "layout", "media"]],
-    ["/categories/fish", ["categories", "products", "layout", "media"]],
-    ["/collections/featured", ["collections", "products", "layout", "media"]],
-    ["/search?q=fish", ["search", "products", "layout", "media"]],
-    ["/blog/news", ["pages", "products", "layout", "media"]],
-    ["/api/product-feed.xml", ["discovery", "products", "layout", "media"]],
-  ])("keeps availability-bearing public route %s resident for the one-year edge maximum", (path, tags) => {
-    const policy = getPublicStorefrontCachePolicy(
-      new Request(`https://shop.example${path}`),
-    );
-    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
-    expect(policy?.tags).toEqual(tags);
-  });
-
-  it.each([
-    ["/robots.txt", ["discovery", "products", "categories", "collections", "pages", "layout"]],
-    ["/llms.txt", ["discovery"]],
-    ["/sitemap.xml", ["discovery", "products", "categories", "collections", "pages", "layout"]],
-    ["/blog/feed.xml", ["pages", "products", "discovery"]],
-    ["/.well-known/ucp", ["discovery", "products", "layout"]],
-  ])("keeps mutation-purged content route %s resident for the one-year edge maximum", (path, tags) => {
-    const policy = getPublicStorefrontCachePolicy(
-      new Request(`https://shop.example${path}`),
-    );
-    expect(policy?.edgeTtlSeconds).toBe(365 * 86_400);
-    expect(policy?.tags).toEqual(tags);
+  ])("never caches a %s request", (_label, path, headers) => {
+    expect(getPublicStorefrontCachePolicy(workerRequest(path, headers))).toBeNull();
   });
 
   it("keeps tracking-cookie visitors on the shared cache lane", () => {
     const policy = getPublicStorefrontCachePolicy(
-      new Request("https://shop.example/products/fish", {
-        headers: { Cookie: "_fbp=fb.1.1; _fbc=fb.1.2.abc; _ga=GA1.1; scalius_gclid=x" },
-      }),
+      workerRequest("/products/fish", { Cookie: "_fbp=fb.1.1; _fbc=fb.1.2.abc; _ga=GA1.1" }),
     );
     expect(policy?.canonicalUrl).toBe("https://shop.example/products/fish");
   });
 
-  it("re-renders the homepage through the cache-enabled entrypoint after a purge", async () => {
-    const fetch = vi.fn(async (request: Request) => {
-      expect(request.url).toBe("https://shop.example/");
-      expect(request.headers.has("Cookie")).toBe(false);
-      return new Response("<html/>", { headers: { "Content-Type": "text/html" } });
+  it("keys entries by build, generation, and canonical URL", () => {
+    expect(publicStorefrontCacheKey("https://shop.example/search?q=fish", "build-a", "gen1"))
+      .toBe("https://shop.example/__cache/build-a/gen1/search?q=fish");
+    expect(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen2"))
+      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen1"));
+    expect(publicStorefrontCacheKey("https://shop.example/", "build-b", "gen1"))
+      .not.toBe(publicStorefrontCacheKey("https://shop.example/", "build-a", "gen1"));
+  });
+});
+
+describe("servePublicStorefrontRequest", () => {
+  it("renders a miss pinned to the generation, stores it, and serves the next visitor from cache", async () => {
+    const { context, render, settle } = createContext();
+
+    const first = await servePublicStorefrontRequest(
+      new Request("https://shop.example/products/fish?fbclid=ad"),
+      context,
+    );
+    await settle();
+    expect(first.headers.get("X-Cache-Status")).toBe("MISS");
+    expect(render).toHaveBeenCalledTimes(1);
+    const rendered = render.mock.calls[0]![0];
+    expect(rendered.url).toBe("https://shop.example/products/fish");
+    expect(rendered.headers.get(GENERATION_HEADER)).toBe("gen1");
+    expect(context.cache.put).toHaveBeenCalledWith(
+      "https://shop.example/__cache/build-a/gen1/products/fish",
+      expect.any(Response),
+    );
+
+    const second = await servePublicStorefrontRequest(
+      new Request("https://shop.example/products/fish"),
+      context,
+    );
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(second.headers.get("X-Cache-Status")).toBe("HIT");
+    expect(second.headers.get("Cache-Control")).toBe("no-cache, no-store, must-revalidate");
+    expect(await second.text()).toBe("<html>page</html>");
+  });
+
+  it("stores the edge copy with a bounded lifetime and restores browser headers on a hit", async () => {
+    const { context, store, settle } = createContext();
+    await servePublicStorefrontRequest(new Request("https://shop.example/sitemap.xml"), context);
+    await settle();
+
+    const stored = [...store.values()][0]!;
+    expect(stored.headers.get("Cache-Control")).toBe("public, max-age=86400");
+    expect(stored.headers.has("Expires")).toBe(false);
+
+    const hit = await servePublicStorefrontRequest(new Request("https://shop.example/sitemap.xml"), context);
+    expect(hit.headers.get("Cache-Control")).toBe("public, max-age=0, no-cache, must-revalidate");
+  });
+
+  it("misses after the generation changes, so a write needs no purge", async () => {
+    let generation = "gen1";
+    const { context, render, settle } = createContext({
+      readGeneration: async () => generation,
     });
-    await warmPublicStorefrontCache("https://shop.example", { fetch }, { delaysMs: [0] });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
+    await settle();
+    generation = "gen2";
+    const afterWrite = await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
+
+    expect(afterWrite.headers.get("X-Cache-Status")).toBe("MISS");
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render.mock.calls[1]![0].headers.get(GENERATION_HEADER)).toBe("gen2");
   });
 
-  it("warms again after the purge propagation delays", async () => {
-    vi.useFakeTimers();
-    try {
-      const fetch = vi.fn(async () => new Response("<html/>"));
-      const warm = warmPublicStorefrontCache("https://shop.example", { fetch });
-      expect(fetch).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(4_000);
-      expect(fetch).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(8_000);
-      expect(fetch).toHaveBeenCalledTimes(2);
-      await warm;
-    } finally {
-      vi.useRealTimers();
-    }
+  it("renders private requests directly without reading the generation or touching the cache", async () => {
+    const { context, render } = createContext();
+    const request = workerRequest("/checkout");
+
+    await servePublicStorefrontRequest(request, context);
+
+    expect(render).toHaveBeenCalledWith(request);
+    expect(context.readGeneration).not.toHaveBeenCalled();
+    expect(context.cache.match).not.toHaveBeenCalled();
+    expect(context.cache.put).not.toHaveBeenCalled();
   });
 
-  it("skips warm-up paths that are not public cache candidates and swallows failures", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const fetch = vi.fn(async () => {
-      throw new Error("render failed");
-    });
-    await warmPublicStorefrontCache(
-      "https://shop.example",
-      { fetch },
-      { paths: ["/checkout", "/"], delaysMs: [0] },
-    );
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-  });
+  it("strips a caller-supplied generation from uncached renders", async () => {
+    const { context, render } = createContext({ readGeneration: async () => null });
 
-  it("keeps product variant-specific HTML off the shared cache lane", () => {
-    expect(
-      getPublicStorefrontCachePolicy(
-        new Request("https://shop.example/products/fish?size=large"),
-      ),
-    ).toBeNull();
-  });
-
-  it("adds edge-only caching metadata to successful public responses", () => {
-    const policy = getPublicStorefrontCachePolicy(
-      new Request("https://shop.example/about"),
-    )!;
-    const response = decoratePublicStorefrontResponse(
-      new Response("page", {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "X-Cache-Status": "NATIVE",
-        },
-      }),
-      policy,
+    await servePublicStorefrontRequest(
+      new Request("https://shop.example/", { headers: { [GENERATION_HEADER]: "forged" } }),
+      context,
     );
 
-    expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      `public, max-age=${365 * 86_400}, must-revalidate`,
-    );
-    expect(response.headers.get("Cache-Tag")).toBe(
-      "pages,products,layout,media",
-    );
+    expect(render.mock.calls[0]![0].headers.has(GENERATION_HEADER)).toBe(false);
+    expect(context.cache.put).not.toHaveBeenCalled();
   });
 
-  it("keeps native cache directives inside the cache-enabled entrypoint", () => {
-    const response = exposePublicStorefrontResponse(
-      new Response("page", {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Cloudflare-CDN-Cache-Control": "public, max-age=86400",
-          "Cache-Tag": "products,layout",
-          "X-Cache-Status": "NATIVE",
-        },
-      }),
-    );
-
-    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBeNull();
-    expect(response.headers.get("Cache-Tag")).toBeNull();
-    expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(response.headers.get("X-Cache-Status")).toBe("NATIVE");
-  });
-
-  it("does not cache a no-store response that failed the inner public gate", () => {
-    const policy = getPublicStorefrontCachePolicy(
-      new Request("https://shop.example/about"),
-    )!;
-    const response = new Response("private", {
-      headers: { "Cache-Control": "private, no-store" },
-    });
-
-    expect(decoratePublicStorefrontResponse(response, policy)).toBe(response);
-  });
-
-  it("filters purge tags to the storefront lane's owned groups", () => {
-    expect(
-      normalizePublicStorefrontCacheTags([
-        "pages",
-        "products",
-        "layout",
-        "pages",
-      ]),
-    ).toEqual(["pages", "products", "layout"]);
-  });
-
-  it("detects a response produced by a superseded storefront build", () => {
-    expect(responseHasStorefrontBuild(
-      new Response("current", {
-        headers: { "X-Storefront-Build": "src-current" },
-      }),
-      "src-current",
-    )).toBe(true);
-    expect(responseHasStorefrontBuild(
-      new Response("old", {
-        headers: { "X-Storefront-Build": "src-old" },
-      }),
-      "src-current",
-    )).toBe(false);
-    expect(responseHasStorefrontBuild(new Response("unstamped"), "src-current"))
-      .toBe(false);
-  });
-
-  it("purges once, retries once, then renders directly on a repeated build mismatch", async () => {
-    const purge = vi.fn(async () => undefined);
-    const refetch = vi.fn(async () =>
-      new Response("still stale", {
-        headers: { "X-Storefront-Build": "src-old" },
-      }),
-    );
-    const renderDirect = vi.fn(async () =>
-      new Response("current direct", {
-        headers: { "X-Storefront-Build": "src-current" },
-      }),
-    );
-
-    const response = await recoverCurrentStorefrontBuild({
-      response: new Response("stale", {
-        headers: { "X-Storefront-Build": "src-old" },
-      }),
-      expectedBuildId: "src-current",
-      purge,
-      refetch,
-      renderDirect,
-    });
-
-    expect(purge).toHaveBeenCalledOnce();
-    expect(refetch).toHaveBeenCalledOnce();
-    expect(renderDirect).toHaveBeenCalledOnce();
-    await expect(response.text()).resolves.toBe("current direct");
+  it.each([
+    ["an error page", new Response("oops", { status: 500, headers: { "X-Cache-Status": "MISS" } })],
+    ["a response that sets a cookie", renderedPage("x", { "Set-Cookie": "cs_auth=1" })],
+    ["a response that failed the public gate", renderedPage("x", { "X-Cache-Status": "BYPASS" })],
+  ])("never stores %s", async (_label, response) => {
+    const { context } = createContext({ render: async () => response });
+    await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
+    expect(context.cache.put).not.toHaveBeenCalled();
   });
 });

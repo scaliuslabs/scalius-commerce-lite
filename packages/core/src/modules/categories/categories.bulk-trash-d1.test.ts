@@ -1,7 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
-import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
@@ -20,66 +19,28 @@ describe("category bulk trash D1 boundaries", () => {
   }: {
     beforeCategoryUpdate?: () => void;
   } = {}) {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        status TEXT NOT NULL,
-        revision INTEGER NOT NULL,
-        deleted_at INTEGER,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE products (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        category_id TEXT,
-        deleted_at INTEGER
-      );
-      CREATE INDEX products_category_id_idx ON products (category_id);
-      CREATE TABLE collections (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        config TEXT NOT NULL,
-        is_active INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-    `);
-
     const parameterCounts: number[] = [];
     let injected = false;
-    const db = drizzle(async (query, params, method) => {
-      parameterCounts.push(params.length);
-      if (
-        !injected
-        && beforeCategoryUpdate
-        && /^update "categories"/iu.test(query.trim())
-      ) {
-        injected = true;
-        beforeCategoryUpdate();
-      }
-      const statement = sqlite!.prepare(query);
-      statement.setReturnArrays(true);
-      if (method === "run") {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") {
-        return { rows: statement.get(...params) as unknown as unknown[] };
-      }
-      return { rows: statement.all(...params) as unknown as unknown[][] };
+    const harness = createSqliteD1Database({
+      onQuery(query, values) {
+        parameterCounts.push(values.length);
+        if (!injected && beforeCategoryUpdate && /^update "categories"/iu.test(query.trim())) {
+          injected = true;
+          beforeCategoryUpdate();
+        }
+      },
     });
-
-    return { db: db as unknown as Database, parameterCounts };
+    sqlite = harness.sqlite;
+    return { db: harness.db, parameterCounts };
   }
 
   function seedCategories(count: number) {
     const insert = sqlite!.prepare(`
-      INSERT INTO categories (id, name, status, revision, deleted_at, updated_at)
-      VALUES (?, ?, 'published', 1, NULL, 1)
+      INSERT INTO categories (id, name, slug, status, revision, deleted_at, updated_at)
+      VALUES (?, ?, ?, 'published', 1, NULL, 1)
     `);
     for (let index = 0; index < count; index += 1) {
-      insert.run(`cat_${index}`, `Category ${index}`);
+      insert.run(`cat_${index}`, `Category ${index}`, `cat-${index}`);
     }
   }
 
@@ -117,8 +78,8 @@ describe("category bulk trash D1 boundaries", () => {
     const { db } = createDatabase({
       beforeCategoryUpdate: () => {
         sqlite!.prepare(`
-          INSERT INTO products (id, name, category_id, deleted_at)
-          VALUES ('prod_race', 'Concurrent product', 'cat_1', NULL)
+          INSERT INTO products (id, name, slug, price, category_id)
+          VALUES ('prod_race', 'Concurrent product', 'prod-race', 100, 'cat_1')
         `).run();
       },
     });

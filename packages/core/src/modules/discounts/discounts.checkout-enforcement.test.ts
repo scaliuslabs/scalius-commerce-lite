@@ -1,8 +1,8 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
 import { DiscountType, DiscountValueType } from "@scalius/database/schema";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { calculateDiscountAmount, isDiscountValid } from "./discounts.eligibility";
@@ -20,87 +20,11 @@ describe("discount checkout enforcement", () => {
   });
 
   function createDatabase(): Database {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`
-      CREATE TABLE discounts (
-        id TEXT PRIMARY KEY,
-        code TEXT NOT NULL UNIQUE,
-        type TEXT NOT NULL,
-        value_type TEXT NOT NULL,
-        discount_value REAL NOT NULL,
-        min_purchase_amount REAL,
-        min_quantity INTEGER,
-        max_uses_per_order INTEGER,
-        max_uses INTEGER,
-        limit_one_per_customer INTEGER NOT NULL DEFAULT 0,
-        combine_with_product_discounts INTEGER NOT NULL DEFAULT 0,
-        combine_with_order_discounts INTEGER NOT NULL DEFAULT 0,
-        combine_with_shipping_discounts INTEGER NOT NULL DEFAULT 0,
-        customer_segment TEXT,
-        revision INTEGER NOT NULL DEFAULT 1,
-        start_date INTEGER NOT NULL,
-        end_date INTEGER,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-      CREATE TABLE discount_products (
-        id TEXT PRIMARY KEY,
-        discount_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        application_type TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE discount_collections (
-        id TEXT PRIMARY KEY,
-        discount_id TEXT NOT NULL,
-        collection_id TEXT NOT NULL,
-        application_type TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE discount_usage (
-        id TEXT PRIMARY KEY,
-        discount_id TEXT NOT NULL,
-        order_id TEXT NOT NULL,
-        customer_id TEXT,
-        amount_discounted REAL NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE discount_customer_redemptions (
-        discount_id TEXT NOT NULL,
-        customer_key TEXT NOT NULL,
-        order_id TEXT NOT NULL,
-        customer_id TEXT,
-        created_at INTEGER NOT NULL,
-        PRIMARY KEY (discount_id, customer_key)
-      );
-      CREATE TABLE products (
-        id TEXT PRIMARY KEY,
-        category_id TEXT,
-        is_active INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-      CREATE TABLE collections (
-        id TEXT PRIMARY KEY,
-        config TEXT NOT NULL,
-        is_active INTEGER NOT NULL,
-        deleted_at INTEGER
-      );
-    `);
-
-    return drizzle(async (query, params, method) => {
-      const statement = sqlite!.prepare(query);
-      statement.setReturnArrays(true);
-      if (method === "run") {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") {
-        return { rows: statement.get(...params) as unknown as unknown[] };
-      }
-      return { rows: statement.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
+    const fixture = createSqliteD1Database();
+    sqlite = fixture.sqlite;
+    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount, shipping_charge)
+      VALUES ('order_1', 'Buyer', ?, 'Address', 'city', 'zone', 500, 0)`).run(PHONE);
+    return fixture.db;
   }
 
   function seedDiscount({
@@ -239,6 +163,7 @@ describe("discount checkout enforcement", () => {
       code: "ACCOUNT_LIMIT",
       limitOnePerCustomer: true,
     });
+    sqlite!.exec("INSERT INTO customers (id, name, phone) VALUES ('cust_account', 'Account', '+8801912345678')");
     sqlite!.prepare(`
       INSERT INTO discount_customer_redemptions
         (discount_id, customer_key, order_id, customer_id, created_at)
@@ -274,8 +199,8 @@ describe("discount checkout enforcement", () => {
       discountValue: 50,
     });
     sqlite!.prepare(`
-      INSERT INTO products (id, is_active, deleted_at)
-      VALUES ('prod_eligible', 1, NULL), ('prod_other', 1, NULL)
+      INSERT INTO products (id, name, slug, price, is_active)
+      VALUES ('prod_eligible', 'Eligible', 'eligible', 100, 1), ('prod_other', 'Other', 'other', 100, 1)
     `).run();
     sqlite!.prepare(`
       INSERT INTO discount_products

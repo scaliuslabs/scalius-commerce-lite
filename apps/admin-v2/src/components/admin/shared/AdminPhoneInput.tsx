@@ -5,13 +5,16 @@ import "react-phone-number-input/style.css";
 import { Loader2, RefreshCw } from "lucide-react";
 import { FLAG_URL } from "@scalius/shared/phone-flags";
 import { Button } from "@/components/ui/button";
-import { getAllowedCountries } from "@/lib/api-functions/settings";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import {
   normalizePolicyCountries,
   resolveSelectablePhoneCountries,
 } from "./admin-phone-country-policy";
+import {
+  getApiV1AdminSettingsAllowedCountries,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 
 type NativePhoneInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
@@ -40,7 +43,7 @@ export const AdminPhoneInput = React.forwardRef<
 ) {
   const policyQuery = useQuery({
     queryKey: queryKeys.settings.allowedCountries(),
-    queryFn: () => getAllowedCountries(),
+    queryFn: () => apiData(getApiV1AdminSettingsAllowedCountries()),
     staleTime: 2 * 60 * 1000,
     retry: false,
   });

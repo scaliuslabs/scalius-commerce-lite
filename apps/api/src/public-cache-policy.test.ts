@@ -3,28 +3,25 @@ import { describe, expect, it } from "vitest";
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
-  normalizePublicApiCacheTags,
+  withCacheGeneration,
+  withoutCacheGeneration,
 } from "./public-cache-policy";
 
-describe("public API cache gateway policy", () => {
+describe("public API cache policy", () => {
   it.each([
-    ["/api/v1/products", ["products", "search", "discovery"]],
-    ["/api/v1/products/fresh-hilsa", ["products", "search", "discovery"]],
-    ["/api/v1/categories/example/products", ["categories", "products", "search"]],
-    ["/api/v1/collections/featured", ["collections", "products", "search"]],
-    ["/api/v1/storefront/homepage", ["homepage", "products", "categories", "collections"]],
-    ["/api/v1/categories", ["categories"]],
-    ["/api/v1/categories/example", ["categories"]],
-    ["/api/v1/storefront/pages/slug/about", ["pages", "layout"]],
-    ["/api/v1/checkout/config", ["checkout"]],
-  ])("allows declared anonymous reads for %s", (path, tags) => {
-    const policy = getPublicApiCachePolicy(
-      new Request(`https://api.example.com${path}`),
-    );
-
-    expect(policy?.tags).toEqual(tags);
-    expect(policy?.edgeTtlSeconds).toBeGreaterThan(0);
-    expect(policy?.canonicalUrl).toBe(`https://api.example.com${path}`);
+    "/api/v1/products",
+    "/api/v1/products/fresh-hilsa",
+    "/api/v1/categories/example/products",
+    "/api/v1/collections/featured",
+    "/api/v1/storefront/homepage",
+    "/api/v1/storefront/layout",
+    "/api/v1/categories",
+    "/api/v1/storefront/pages/slug/about",
+    "/api/v1/checkout/config",
+    "/api/v1/hero/sliders?type=mobile",
+  ])("caches the anonymous public read %s", (path) => {
+    expect(getPublicApiCachePolicy(new Request(`https://api.example.com${path}`)))
+      .toEqual({ canonicalUrl: `https://api.example.com${path}` });
   });
 
   it.each([
@@ -32,117 +29,60 @@ describe("public API cache gateway policy", () => {
     ["GET", "/api/v1/orders/status/status-token", {}],
     ["GET", "/api/v1/admin/products", {}],
     ["GET", "/api/v1/checkout/validate-cart", {}],
+    ["GET", "/api/v1/customer-auth/me", {}],
     ["GET", "/api/v1/products", { Cookie: "cs_tok=secret" }],
     ["GET", "/api/v1/products", { Authorization: "Bearer secret" }],
     ["GET", "/api/v1/products", { "X-API-Token": "secret" }],
     ["GET", "/api/v1/hero/sliders", {}],
     ["GET", "/api/v1/hero/sliders?type=tablet", {}],
-  ])("keeps private or undeclared request %s %s off the cache lane", (method, path, headers) => {
+    ["GET", "/api/v1/products?__cg=forged", {}],
+  ])("never caches %s %s", (method, path, headers) => {
     expect(
-      getPublicApiCachePolicy(
-        new Request(`https://api.example.com${path}`, { method, headers }),
-      ),
+      getPublicApiCachePolicy(new Request(`https://api.example.com${path}`, { method, headers })),
     ).toBeNull();
-  });
-
-  it("caches only explicit device-specific hero projections", () => {
-    expect(
-      getPublicApiCachePolicy(
-        new Request("https://api.example.com/api/v1/hero/sliders?type=mobile"),
-      )?.tags,
-    ).toEqual(["homepage"]);
-  });
-
-  it.each([
-    "/api/v1/products",
-    "/api/v1/products/fresh-hilsa",
-    "/api/v1/categories/fish/products",
-    "/api/v1/collections/featured",
-    "/api/v1/storefront/homepage",
-  ])("keeps availability-bearing %s responses resident for the one-year edge maximum", (path) => {
-    expect(
-      getPublicApiCachePolicy(
-        new Request(`https://api.example.com${path}`),
-      )?.edgeTtlSeconds,
-    ).toBe(365 * 86_400);
   });
 
   it("rejects unbounded query-cardinality inputs", () => {
     const params = new URLSearchParams();
-    for (let index = 0; index < 31; index += 1) {
-      params.set(`key${index}`, "value");
-    }
-
-    expect(
-      getPublicApiCachePolicy(
-        new Request(`https://api.example.com/api/v1/pages?${params}`),
-      ),
-    ).toBeNull();
+    for (let index = 0; index < 31; index += 1) params.set(`key${index}`, "value");
+    expect(getPublicApiCachePolicy(new Request(`https://api.example.com/api/v1/pages?${params}`)))
+      .toBeNull();
   });
 
-  it("gives Cloudflare an edge TTL and tags without extending browser freshness", () => {
-    const policy = getPublicApiCachePolicy(
-      new Request("https://api.example.com/api/v1/categories"),
-    );
-    expect(policy).not.toBeNull();
-
-    const response = decoratePublicApiResponse(
-      new Response("{}", {
-        headers: {
-          "Cache-Control": "public, max-age=0, no-cache, must-revalidate",
-        },
-      }),
-      policy!,
-    );
-
-    expect(response.headers.get("Cache-Control")).toBe(
-      "public, max-age=0, no-cache, must-revalidate",
-    );
-    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe(
-      `public, max-age=${365 * 86_400}, must-revalidate`,
-    );
-    expect(response.headers.get("Cache-Tag")).toBe("categories");
-  });
-
-  it("maps equivalent query orders to one native cache URL", () => {
+  it("maps equivalent query orders to one canonical URL", () => {
     const canonical = getPublicApiCachePolicy(
       new Request("https://api.example.com/api/v1/pages?page=2&tag=sale"),
     );
     const permuted = getPublicApiCachePolicy(
       new Request("https://api.example.com/api/v1/pages?tag=sale&page=2"),
     );
-
-    expect(canonical?.canonicalUrl).toBe(
-      "https://api.example.com/api/v1/pages?page=2&tag=sale",
-    );
-    expect(permuted?.canonicalUrl).toBe(canonical?.canonicalUrl);
+    expect(canonical?.canonicalUrl).toBe("https://api.example.com/api/v1/pages?page=2&tag=sale");
+    expect(permuted).toEqual(canonical);
   });
 
-  it("accepts only cache tags owned by the public API lane", () => {
-    expect(
-      normalizePublicApiCacheTags([
-        "layout",
-        "private-orders",
-        "layout",
-        "checkout",
-      ]),
-    ).toEqual(["layout", "checkout"]);
+  it("puts the cache generation in the cache key and removes it before the app", () => {
+    const keyed = withCacheGeneration("https://api.example.com/api/v1/pages?page=2", "a1b2");
+    expect(keyed).toBe("https://api.example.com/api/v1/pages?page=2&__cg=a1b2");
+    expect(withCacheGeneration("https://api.example.com/api/v1/pages?page=2", "c3d4")).not.toBe(keyed);
+
+    const appRequest = withoutCacheGeneration(new Request(keyed));
+    expect(appRequest.url).toBe("https://api.example.com/api/v1/pages?page=2");
+    expect(getPublicApiCachePolicy(appRequest)).not.toBeNull();
+  });
+
+  it("gives the edge a bounded lifetime without extending browser freshness", () => {
+    const response = decoratePublicApiResponse(
+      new Response("{}", { headers: { "Cache-Control": "public, max-age=0" } }),
+    );
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, no-cache, must-revalidate");
+    expect(response.headers.get("Cloudflare-CDN-Cache-Control")).toBe("public, max-age=86400");
+    expect(response.headers.has("Cache-Tag")).toBe(false);
   });
 
   it("does not make an error or private response cacheable", () => {
-    const policy = {
-      canonicalUrl: "https://api.example.com/api/v1/checkout/config",
-      edgeTtlSeconds: 60,
-      tags: ["checkout"],
-    };
     const error = new Response("unavailable", { status: 503 });
-    const privateResponse = new Response("{}", {
-      headers: { "Cache-Control": "private, no-store" },
-    });
-
-    expect(decoratePublicApiResponse(error, policy)).toBe(error);
-    expect(decoratePublicApiResponse(privateResponse, policy)).toBe(
-      privateResponse,
-    );
+    const privateResponse = new Response("{}", { headers: { "Cache-Control": "private, no-store" } });
+    expect(decoratePublicApiResponse(error)).toBe(error);
+    expect(decoratePublicApiResponse(privateResponse)).toBe(privateResponse);
   });
 });

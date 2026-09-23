@@ -125,10 +125,12 @@ export function buildAdminNotificationConfig(
   return config;
 }
 
+type CustomerChannelKey = (typeof CUSTOMER_NOTIFICATION_CHANNELS)[number]["key"];
+
 export function serializeCustomerNotificationConfig(
   config: CustomerNotificationConfig,
-): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
+): Record<OrderNotificationType, CustomerChannelKey[]> {
+  const result = {} as Record<OrderNotificationType, CustomerChannelKey[]>;
   for (const event of NOTIFICATION_EVENTS) {
     result[event.key] = CUSTOMER_NOTIFICATION_CHANNELS
       .filter((channel) => config[event.key]?.[channel.key])
@@ -139,8 +141,8 @@ export function serializeCustomerNotificationConfig(
 
 export function serializeAdminNotificationConfig(
   config: AdminNotificationConfig,
-): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
+): Record<OrderNotificationType, "push"[]> {
+  const result = {} as Record<OrderNotificationType, "push"[]>;
   for (const event of NOTIFICATION_EVENTS) {
     result[event.key] = config[event.key]?.push ? ["push"] : [];
   }

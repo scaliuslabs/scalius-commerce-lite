@@ -40,7 +40,7 @@ import {
     MEDIA_SIGNATURE_READ_BYTES,
 } from "@scalius/shared/media-policy";
 import { ValidationError } from "@scalius/core/errors";
-import { invalidateMediaDependentProductCaches } from "../../utils/media-cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { readExactMediaPart, readMediaVariantsForm } from "./media-upload-body";
 import { importMediaFromUrl } from "./media-url-import";
 
@@ -285,7 +285,7 @@ app.openapi(patchMediaRoute, async (c) => {
     const db = c.get("db");
     const id = c.req.valid("param").id;
     const file = await updateMediaFile(db, id, c.req.valid("json"));
-    await invalidateMediaDependentProductCaches(db, id, c);
+    await bumpCacheGeneration(c);
     return ok(c, { file });
 });
 
@@ -306,7 +306,7 @@ for (const [path, summary, operationId, action] of [
         const db = c.get("db");
         const id = c.req.valid("param").id;
         const file = await action(db, id, c.req.valid("json").expectedVersion);
-        await invalidateMediaDependentProductCaches(db, id, c);
+        await bumpCacheGeneration(c);
         return ok(c, { file });
     });
 }
@@ -332,7 +332,7 @@ app.openapi(saveVariantsRoute, async (c) => {
     const db = c.get("db");
     const id = c.req.valid("param").id;
     const file = await saveMediaVariants(db, id, await readMediaVariantsForm(c.req), c.env.BUCKET);
-    await invalidateMediaDependentProductCaches(db, id, c);
+    await bumpCacheGeneration(c);
     return ok(c, { file });
 });
 

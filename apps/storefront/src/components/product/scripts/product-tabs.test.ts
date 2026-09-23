@@ -1,13 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import { storefrontSourcePath } from "@/lib/test-source-paths";
 import { init } from "./product-tabs";
-
-const DETAILS_SOURCE = storefrontSourcePath(
-  "components/product/ProductDetails.astro",
-);
 
 function renderTabs() {
   document.body.innerHTML = `
@@ -36,21 +30,6 @@ beforeEach(() => {
 });
 
 describe("product detail tabs", () => {
-  it("keeps the information rail below the measured header without layout shims", () => {
-    const source = readFileSync(DETAILS_SOURCE, "utf8");
-
-    expect(source).toContain("product-details-tab-rail relative sticky z-40");
-    expect(source).toContain("border-gray-200 bg-white");
-    expect(source).not.toContain("product-details-tab-rail sticky z-40");
-    expect(source).not.toContain("backdrop-blur");
-    expect(source).toContain(
-      "top: calc(var(--header-height, 3.5rem) - 1px)",
-    );
-    expect(source).toContain("scroll-margin-top: calc(var(--header-height");
-    expect(source).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(source).not.toContain("position: fixed");
-  });
-
   it("switches only the product tabs and keeps URL anchor state in sync", () => {
     renderTabs();
 

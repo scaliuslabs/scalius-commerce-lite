@@ -1,7 +1,12 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { shippingMethodsQueryOptions } from "~/lib/api-query-options/shipping-methods";
+import {
+  shippingMethodsQueryOptions,
+  type ShippingMethod,
+  type ShippingMethodsPagination,
+  type ShippingMethodsQuery,
+} from "~/lib/api-query-options/shipping-methods";
 import { queryKeys } from "~/lib/query-keys";
 import {
   useCreateShippingMethod,
@@ -9,16 +14,10 @@ import {
   useDeleteShippingMethod,
   usePermanentDeleteShippingMethod,
   useRestoreShippingMethod,
+  permanentDeleteShippingMethod,
+  restoreShippingMethod,
+  trashShippingMethod,
 } from "~/lib/api-mutations/shipping-methods";
-import {
-  deleteShippingMethod as deleteShippingMethodFn,
-  permanentDeleteShippingMethod as permanentDeleteShippingMethodFn,
-  restoreShippingMethod as restoreShippingMethodFn,
-  type ShippingMethod,
-  type ShippingMethodWriteInput,
-  type ShippingMethodsPagination,
-  type ShippingMethodsQueryInput,
-} from "@/lib/api-functions/shipping-methods";
 import { getServerFnError } from "@/lib/api-helpers";
 
 export type { ShippingMethod };
@@ -37,8 +36,6 @@ const DEFAULT_PAGINATION: ShippingMethodsPagination = {
   page: 1,
   limit: 10,
   totalPages: 1,
-  hasNextPage: false,
-  hasPrevPage: false,
 };
 
 const EMPTY_SHIPPING_METHODS: ShippingMethod[] = [];
@@ -63,14 +60,14 @@ export function useShippingMethods() {
 
   // Build query params
   const queryParams = useMemo(() => {
-    const params: ShippingMethodsQueryInput = {
+    const params: ShippingMethodsQuery = {
       page,
       limit,
       sort: sort.field,
       order: sort.order,
     };
     if (appliedSearch) params.search = appliedSearch;
-    if (showTrashed) params.trashed = true;
+    if (showTrashed) params.trashed = "true";
     return params;
   }, [page, limit, sort.field, sort.order, appliedSearch, showTrashed]);
 
@@ -152,11 +149,11 @@ export function useShippingMethods() {
         if (editingMethodId) {
           await updateMutation.mutateAsync({
             id: editingMethodId,
-            update: formData as ShippingMethodWriteInput,
+            update: formData,
           });
         } else {
           await createMutation.mutateAsync(
-            formData as ShippingMethodWriteInput,
+            formData as Parameters<typeof createMutation.mutateAsync>[0],
           );
           setPage(1);
         }
@@ -215,11 +212,11 @@ export function useShippingMethods() {
         for (const id of ids) {
           try {
             if (action === "trash") {
-              await deleteShippingMethodFn({ data: { id } });
+              await trashShippingMethod(id);
             } else if (action === "deletePermanent") {
-              await permanentDeleteShippingMethodFn({ data: { id } });
+              await permanentDeleteShippingMethod(id);
             } else if (action === "restore") {
-              await restoreShippingMethodFn({ data: { id } });
+              await restoreShippingMethod(id);
             }
             successCount++;
           } catch {

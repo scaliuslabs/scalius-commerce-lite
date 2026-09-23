@@ -34,14 +34,14 @@ const validateCustomerSearch = createListSearchValidator(
   { limit: 10, sort: "updatedAt" },
 );
 
-function mapParams(deps: ReturnType<typeof validateCustomerSearch>) {
+function mapParams(deps: ReturnType<typeof validateCustomerSearch>): Parameters<typeof customersQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? "true" : undefined,
   };
 }
 

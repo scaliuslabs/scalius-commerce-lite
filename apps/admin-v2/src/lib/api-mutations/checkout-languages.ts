@@ -1,88 +1,71 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  createCheckoutLanguage,
-  deleteCheckoutLanguage,
-  restoreCheckoutLanguage,
-  softDeleteCheckoutLanguage,
-  type CheckoutLanguageWriteInput,
-  updateCheckoutLanguage,
-} from "../api-functions/checkout-languages";
+  deleteApiV1AdminSettingsCheckoutLanguagesById,
+  patchApiV1AdminSettingsCheckoutLanguagesById,
+  postApiV1AdminSettingsCheckoutLanguages,
+  postApiV1AdminSettingsCheckoutLanguagesByIdRestore,
+  putApiV1AdminSettingsCheckoutLanguagesById,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiBody } from "../api";
 import { getServerFnError, queryKeys } from "./shared";
 
-export function useCreateCheckoutLanguage() {
+function useCheckoutLanguageMutation<TVariables>(
+  mutationFn: (variables: TVariables) => Promise<unknown>,
+  success: string,
+  failure: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: CheckoutLanguageWriteInput) =>
-      createCheckoutLanguage({ data }),
+    mutationFn,
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.settings.checkoutLanguages(),
       });
-      toast.success("Checkout language created");
+      toast.success(success);
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to create checkout language")),
+    onError: (err) => toast.error(getServerFnError(err, failure)),
   });
 }
 
-export function useUpdateCheckoutLanguage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { id: string; update: CheckoutLanguageWriteInput }) =>
-      updateCheckoutLanguage({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.checkoutLanguages(),
-      });
-      toast.success("Checkout language updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update checkout language")),
-  });
-}
+export const useCreateCheckoutLanguage = () =>
+  useCheckoutLanguageMutation(
+    (body: ApiBody<typeof postApiV1AdminSettingsCheckoutLanguages>) =>
+      apiData(postApiV1AdminSettingsCheckoutLanguages({ body })),
+    "Checkout language created",
+    "Failed to create checkout language",
+  );
 
-export function useSoftDeleteCheckoutLanguage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { id: string }) => softDeleteCheckoutLanguage({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.checkoutLanguages(),
-      });
-      toast.success("Checkout language moved to trash");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to move to trash")),
-  });
-}
+export const useUpdateCheckoutLanguage = () =>
+  useCheckoutLanguageMutation(
+    ({ id, update }: {
+      id: string;
+      update: ApiBody<typeof putApiV1AdminSettingsCheckoutLanguagesById>;
+    }) => apiData(putApiV1AdminSettingsCheckoutLanguagesById({ path: { id }, body: update })),
+    "Checkout language updated",
+    "Failed to update checkout language",
+  );
 
-export function useDeleteCheckoutLanguage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { id: string }) => deleteCheckoutLanguage({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.checkoutLanguages(),
-      });
-      toast.success("Checkout language permanently deleted");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to permanently delete")),
-  });
-}
+export const useSoftDeleteCheckoutLanguage = () =>
+  useCheckoutLanguageMutation(
+    ({ id }: { id: string }) =>
+      apiData(patchApiV1AdminSettingsCheckoutLanguagesById({ path: { id } })),
+    "Checkout language moved to trash",
+    "Failed to move to trash",
+  );
 
-export function useRestoreCheckoutLanguage() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { id: string }) => restoreCheckoutLanguage({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.checkoutLanguages(),
-      });
-      toast.success("Checkout language restored");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to restore language")),
-  });
-}
+export const useDeleteCheckoutLanguage = () =>
+  useCheckoutLanguageMutation(
+    ({ id }: { id: string }) =>
+      apiData(deleteApiV1AdminSettingsCheckoutLanguagesById({ path: { id } })),
+    "Checkout language permanently deleted",
+    "Failed to permanently delete",
+  );
+
+export const useRestoreCheckoutLanguage = () =>
+  useCheckoutLanguageMutation(
+    ({ id }: { id: string }) =>
+      apiData(postApiV1AdminSettingsCheckoutLanguagesByIdRestore({ path: { id } })),
+    "Checkout language restored",
+    "Failed to restore language",
+  );

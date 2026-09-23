@@ -7,16 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getMoveOptions = vi.hoisted(() => vi.fn());
 
-vi.mock("~/lib/api-functions/navigation-authority", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("~/lib/api-functions/navigation-authority")>()),
-  getNavigationMenuMoveOptionsAuthority: getMoveOptions,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptions: getMoveOptions,
 }));
 
 import { NavigationAuthorityMoveDialog } from "./NavigationAuthorityMoveDialog";
 import type {
   NavigationMenuItemRow,
   NavigationMenuSummary,
-} from "~/lib/api-functions/navigation-authority";
+} from "~/lib/api-query-options/navigation";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

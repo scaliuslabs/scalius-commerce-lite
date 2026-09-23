@@ -1,15 +1,16 @@
-import { DatabaseSync, type SQLInputValue, type SQLOutputValue } from "node:sqlite";
-import { readdirSync, readFileSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { drizzle } from "drizzle-orm/d1";
+import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   bulkShipOrders,
   lookupUnknownOrderShipment,
   reconcileOrderShipment,
   resolveUnknownOrderShipment,
+  updateOrderStatus,
 } from "../orders/orders.fulfillment";
-import { checkShipmentStatus, deleteShipmentRecord } from "./delivery.service";
+import { checkShipmentStatus, deleteShipmentRecord, getShipments, ORDER_SHIPMENT_LIST_LIMIT } from "./delivery.service";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
 import { mapProviderStatus } from "./status-mapper";
@@ -19,57 +20,12 @@ import { updateOrderStatusFromShipment } from "./tracking";
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChangeWithImpact: vi.fn(),
 }));
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  query: string;
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: sqlite.prepare(query).all(...values),
-    success: true,
-    meta: {},
-  });
-
-  return {
-    query,
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = sqlite.prepare(query).all(...values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
 
 type Outcome = "network" | "invalid-json" | "http-502" | "missing-id" | "http-408" | "http-409" | "http-429" | "rejected" | "success";
 
 describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the persisted fulfillment flow", (providerType) => {
   let sqlite: DatabaseSync;
-  let db: ReturnType<typeof drizzle>;
+  let db: Database;
   let createPosts: number;
   const key = "synthetic-local-fingerprint-key";
 
@@ -78,27 +34,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     vi.mocked(applyInventoryForStatusChangeWithImpact).mockReset().mockResolvedValue({
       inventoryAction: "deducted", availabilityTransitionVariantIds: [],
     });
-    sqlite = new DatabaseSync(":memory:");
-    const migrations = new URL("../../../../database/migrations/", import.meta.url);
-    for (const name of readdirSync(migrations).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort()) {
-      sqlite.exec(readFileSync(new URL(name, migrations), "utf8"));
-    }
-    sqlite.exec("PRAGMA foreign_keys = ON");
-    const binding = {
-      prepare: (query: string) => createD1Statement(sqlite, query),
-      async batch(statements: SqliteD1Statement[]) {
-        sqlite.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    db = drizzle(binding as never, { schema });
+    ({ sqlite, db } = createSqliteD1Database({ foreignKeys: true }));
     const credentials = providerType === "pathao" ? {
       baseUrl: "https://courier.invalid", clientId: "synthetic-client-924", clientSecret: "synthetic-secret-924",
       username: "synthetic-user-924", password: "synthetic-password-924",
@@ -476,6 +412,31 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
   });
 
   if (providerType === "pathao") {
+    it("advances only provider-less manual shipments from the merchant delivered command", async () => {
+      sqlite.exec(`
+        UPDATE orders SET status = 'shipped', payment_method = 'stripe', payment_status = 'paid', paid_amount = 160, balance_due = 0;
+        UPDATE order_items SET fulfillment_status = 'shipped';
+        INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status) VALUES
+          ('courier_ship', 'order_local', 'provider_local', 'pathao', 'in_transit'),
+          ('manual_ship', 'order_local', NULL, 'manual', 'in_transit');
+      `);
+      await updateOrderStatus(db, "order_local", "delivered");
+      expect(sqlite.prepare("SELECT id, status FROM delivery_shipments ORDER BY id").all()).toEqual([
+        { id: "courier_ship", status: "in_transit" },
+        { id: "manual_ship", status: "delivered" },
+      ]);
+      expect(sqlite.prepare("SELECT fulfillment_status FROM order_items").get()).toEqual({ fulfillment_status: "delivered" });
+    });
+
+    it("lists a bounded newest-first shipment page with provider names in one read", async () => {
+      sqlite.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i <= ${ORDER_SHIPMENT_LIST_LIMIT})
+        INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status, created_at)
+        SELECT printf('ship_%03d', i), 'order_local', 'provider_local', 'pathao', 'failed', i FROM n`);
+      const rows = await getShipments(db, "order_local");
+      expect(rows).toHaveLength(ORDER_SHIPMENT_LIST_LIMIT);
+      expect(rows[0]).toMatchObject({ id: `ship_${ORDER_SHIPMENT_LIST_LIMIT + 1}`, providerName: "Synthetic provider" });
+    });
+
     it("releases a preparation failure before any shipment POST", async () => {
       vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("SENSITIVE-UPSTREAM-DETAIL token failure"); }));
       const first = await create();

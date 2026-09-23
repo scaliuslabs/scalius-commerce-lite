@@ -425,9 +425,8 @@ function trackTikTokEvent(
   eventName: TikTokStandardEvent,
   params: TikTokParams,
 ): void {
-  // Partytown installs the forwarded ttq.track bridge even when a merchant has
-  // not configured TikTok. Fail closed so the bridge cannot dispatch into an
-  // absent worker-side pixel and surface an unhandled `undefined.track` error.
+  // Only a configured TikTok pixel may receive events; fail closed otherwise
+  // so an unrelated `ttq` global cannot surface an `undefined.track` error.
   if (window.__TIKTOK_PIXEL_ENABLED__ !== true) {
     return;
   }

@@ -17,12 +17,11 @@ import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
-import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { requireEncryptionKey } from "../../../utils/encryption-key";
 import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
-const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 const PLACEHOLDER_CREDENTIALS = new Set([
     "dummy",
     "test",
@@ -227,7 +226,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
 
     if (!result) throw new ValidationError("Failed to save settings");
     await clearMetaCapiBrowserCircuit(c.env);
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    await bumpCacheGeneration(c);
     const maskedResult = {
         id: result.id,
         pixelId: result.pixelId,

@@ -65,7 +65,7 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
 
 /**
  * Fetches a list of all active collections.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @returns A promise resolving to an array of Collection objects or null on failure.
  */
 export async function getAllCollections(): Promise<Collection[] | null> {
@@ -88,7 +88,7 @@ export async function getAllCollections(): Promise<Collection[] | null> {
 
 /**
  * Fetches a single collection by its ID, including its associated products and category details.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param id The unique identifier of the collection.
  * @returns A promise resolving to a detailed Collection object or null if not found.
  */

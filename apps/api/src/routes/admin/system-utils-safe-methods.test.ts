@@ -1,27 +1,28 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath, URL } from "node:url";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { adminSystemUtilsRoutes } from "./system-utils";
 
-const ROUTES_DIR = fileURLToPath(new URL(".", import.meta.url));
-
 describe("admin system utility safe methods", () => {
-  it("keeps abandoned checkout listing GET side-effect free", () => {
-    const source = readFileSync(`${ROUTES_DIR}/system-utils.ts`, "utf8");
-    const listHandler = source.split("app.openapi(listAbandonedCheckoutsRoute")[1] ?? "";
-    const getHandler = listHandler.split("// ── Bulk Delete Abandoned Checkouts")[0] ?? "";
+  it("keeps abandoned checkout listing GET side-effect free", async () => {
+    const statements: string[] = [];
+    const { sqlite, db } = createSqliteD1Database({ onQuery: (query) => statements.push(query) });
+    sqlite.prepare(`INSERT INTO abandoned_checkouts (id, checkout_id, checkout_data, created_at, updated_at)
+      VALUES ('ac_stale', 'chk_stale', '{}', 1, 1)`).run();
+    const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
+    app.use("*", async (c, next) => {
+      c.set("db", db);
+      await next();
+    });
+    app.route("/", adminSystemUtilsRoutes);
 
-    expect(listHandler).not.toBe("");
-    expect(getHandler).not.toBe("");
-    expect(getHandler).toContain("db.select()");
-    expect(getHandler).not.toContain("db.delete(");
-    expect(getHandler).not.toContain("db.update(");
-    expect(getHandler).not.toContain("db.insert(");
-    expect(getHandler).not.toContain("archiveStaleIncompleteOrders");
-    expect(getHandler).not.toContain("cleanupStaleAbandonedCheckouts");
-    expect(source).not.toContain("List abandoned checkouts with cleanup");
+    const response = await app.request("/api/v1/admin/abandoned-checkouts");
+
+    expect(response.status).toBe(200);
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.filter((query) => !/^\s*select\b/i.test(query))).toEqual([]);
+    expect(sqlite.prepare("SELECT COUNT(*) AS total FROM abandoned_checkouts").get()).toEqual({ total: 1 });
   });
 
   it("publishes a bounded PII-minimized agent summary route", () => {

@@ -57,20 +57,21 @@ describe("api.server cookie forwarding", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiPost } = await import("./api.server");
-    await expect(apiPost("/auth/change-password", {})).resolves.toEqual({ ok: true });
+    const { apiData } = await import("./api");
+    const { postApiV1AdminAuthChangePassword } = await import("@scalius/api-client/sdk");
+    await expect(
+      apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword: "a", newPassword: "b" } })),
+    ).resolves.toEqual({ ok: true });
 
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8787/api/v1/admin/auth/change-password",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          authorization: "Bearer token",
-          cookie: "better-auth.session_token=old",
-        }),
-      }),
-    );
+    const [target, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(target).toBe("http://localhost:8787/api/v1/admin/auth/change-password");
+    expect(init.method).toBe("POST");
+    expect(init.signal).toBeUndefined();
+    expect(init.body).toBe(JSON.stringify({ currentPassword: "a", newPassword: "b" }));
+    const headers = new Headers(init.headers);
+    expect(headers.get("authorization")).toBe("Bearer token");
+    expect(headers.get("cookie")).toBe("better-auth.session_token=old");
+    expect(headers.get("content-type")).toBe("application/json");
 
     expect(splitSetCookieHeader(mocks.responseHeaders.get("set-cookie") ?? "")).toEqual([
       "better-auth.session_token=new.signature; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/; HttpOnly",
@@ -98,8 +99,11 @@ describe("api.server cookie forwarding", () => {
       ),
     );
 
-    const { apiPost } = await import("./api.server");
-    await expect(apiPost("/auth/change-password", {})).resolves.toEqual({ ok: true });
+    const { apiData } = await import("./api");
+    const { postApiV1AdminAuthChangePassword } = await import("@scalius/api-client/sdk");
+    await expect(
+      apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword: "a", newPassword: "b" } })),
+    ).resolves.toEqual({ ok: true });
   });
 
   it("bounds read-only API calls with a timeout signal", async () => {
@@ -116,8 +120,9 @@ describe("api.server cookie forwarding", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiGet } = await import("./api.server");
-    const result = apiGet("/dashboard/summary");
+    const { apiData } = await import("./api");
+    const { getApiV1AdminDashboardSummary } = await import("@scalius/api-client/sdk");
+    const result = apiData(getApiV1AdminDashboardSummary());
     const expectation = expect(result).rejects.toThrow("Admin API read timed out");
 
     await vi.advanceTimersByTimeAsync(ADMIN_API_READ_TIMEOUT_MS);
@@ -151,8 +156,9 @@ describe("api.server cookie forwarding", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiGet } = await import("./api.server");
-    const result = apiGet("/dashboard/summary");
+    const { apiData } = await import("./api");
+    const { getApiV1AdminDashboardSummary } = await import("@scalius/api-client/sdk");
+    const result = apiData(getApiV1AdminDashboardSummary());
     const expectation = expect(result).rejects.toThrow("Admin API read timed out");
 
     await vi.advanceTimersByTimeAsync(ADMIN_API_READ_TIMEOUT_MS);
@@ -178,11 +184,11 @@ describe("api.server cookie forwarding", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiBaseGet } = await import("./api.server");
-    await expect(apiBaseGet("/cache/stats")).resolves.toEqual({ ok: true });
+    const { apiClient, apiData } = await import("./api");
+    await expect(apiData(apiClient.get({ url: "/api/v1/admin/settings" }))).resolves.toEqual({ ok: true });
 
     expect(apiFetch).toHaveBeenCalledWith(
-      "https://api.internal/api/v1/cache/stats",
+      "https://api.internal/api/v1/admin/settings",
       expect.objectContaining({
         method: "GET",
         signal: expect.any(AbortSignal),
@@ -201,10 +207,11 @@ describe("api.server cookie forwarding", () => {
     vi.stubGlobal("fetch", vi.fn());
 
     const { runWithRuntimeEnv } = await import("./runtime-env.server");
-    const { apiGet } = await import("./api.server");
+    const { apiData } = await import("./api");
+    const { getApiV1AdminDashboardSummary } = await import("@scalius/api-client/sdk");
     await expect(
       runWithRuntimeEnv({ API: { fetch: apiFetch } } as unknown as Env, () =>
-        apiGet("/dashboard/summary"),
+        apiData(getApiV1AdminDashboardSummary()),
       ),
     ).resolves.toEqual({ ok: true });
 
@@ -219,8 +226,9 @@ describe("api.server cookie forwarding", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiGet } = await import("./api.server");
-    await expect(apiGet("/dashboard/summary")).rejects.toThrow(
+    const { apiData } = await import("./api");
+    const { getApiV1AdminDashboardSummary } = await import("@scalius/api-client/sdk");
+    await expect(apiData(getApiV1AdminDashboardSummary())).rejects.toThrow(
       "API service binding is not configured",
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -236,8 +244,9 @@ describe("api.server cookie forwarding", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { apiGet } = await import("./api.server");
-    await expect(apiGet("/dashboard/summary")).resolves.toEqual({ ok: true });
+    const { apiData } = await import("./api");
+    const { getApiV1AdminDashboardSummary } = await import("@scalius/api-client/sdk");
+    await expect(apiData(getApiV1AdminDashboardSummary())).resolves.toEqual({ ok: true });
 
     expect(apiFetch).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -262,8 +271,11 @@ describe("api.server cookie forwarding", () => {
         ),
       );
 
-      const { apiGet } = await import("./api.server");
-      await expect(apiGet("/products/product_1")).rejects.toMatchObject({
+      const { apiData } = await import("./api");
+      const { getApiV1AdminProductsById } = await import("@scalius/api-client/sdk");
+      await expect(
+        apiData(getApiV1AdminProductsById({ path: { id: "product_1" } })),
+      ).rejects.toMatchObject({
         name: "AdminApiResponseError",
         message: "Catalog request failed",
         status,
@@ -290,8 +302,10 @@ describe("api.server cookie forwarding", () => {
       ),
     );
 
-    const { apiPut } = await import("./api.server");
-    await expect(apiPut("/products/product_1", {})).rejects.toMatchObject({
+    const { apiData, apiClient } = await import("./api");
+    await expect(
+      apiData(apiClient.put({ url: "/api/v1/admin/products/product_1", body: {} })),
+    ).rejects.toMatchObject({
       status: 409,
       code: "PRODUCT_REVISION_CONFLICT",
       details: { expectedRevision: 7, currentRevision: 8 },

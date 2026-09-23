@@ -1,5 +1,5 @@
 import type { ProductFormValues } from "./types";
-import type { CreateProductInput } from "@/lib/api-functions/products";
+import type { CreateProductInput } from "@/lib/api-query-options/products";
 
 /** Convert the editor form into the stable product metadata contract. */
 export function formatFormValuesForSubmission(

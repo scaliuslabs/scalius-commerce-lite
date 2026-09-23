@@ -28,7 +28,8 @@ import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
 import type { ProductFormValues } from "./types";
 import { getServerFnError } from "@/lib/api-helpers";
-import { createCategory } from "@/lib/api-functions/categories";
+import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 export interface Category {
@@ -117,8 +118,8 @@ function CategoryCombobox({
       .replace(/[^a-z0-9-]/g, "");
 
     try {
-      const data = await createCategory({
-        data: {
+      const data = await apiData(postApiV1AdminCategories({
+        body: {
           name: search.trim(),
           slug,
           description: null,
@@ -130,7 +131,7 @@ function CategoryCombobox({
           excludeFromSitemap: false,
           image: null,
         },
-      });
+      }));
 
       const newCategory: Category = {
         id: data.id,

@@ -7,13 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import AllowedCountriesBuilder from "./AllowedCountriesBuilder";
 import { queryKeys } from "~/lib/query-keys";
-import type { AllowedCountriesPayload } from "~/lib/api-functions/settings";
+import type { AllowedCountriesPayload } from "~/lib/api-query-options/settings";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(), update: vi.fn(), blocker: vi.fn(), proceed: vi.fn(), reset: vi.fn(),
 }));
-vi.mock("~/lib/api-functions/settings", () => ({
-  getAllowedCountries: api.get, updateAllowedCountries: api.update,
+vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminSettingsAllowedCountries: api.get,
+  putApiV1AdminSettingsAllowedCountries: api.update,
 }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: api.blocker }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
@@ -106,7 +108,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
     const { write, refresh } = deferSave();
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     await click(button("Save country policy")!);
-    expect(api.update).toHaveBeenCalledWith({ data: {
+    expect(api.update).toHaveBeenCalledWith({ body: {
       allowedCountries: ["BD", "US", "AE", "CA"], mode: "include",
     } });
     if (phase === "refresh") await act(async () => { write.resolve(); });
@@ -158,7 +160,7 @@ describe("AllowedCountriesBuilder save acknowledgment", () => {
 
     api.get.mockResolvedValueOnce(base);
     await click(button("Save country policy")!);
-    expect(api.update).toHaveBeenLastCalledWith({ data: {
+    expect(api.update).toHaveBeenLastCalledWith({ body: {
       allowedCountries: ["US", "AE", "BD"], mode: "include",
     } });
     expect(countries()).toEqual(["Bangladesh", "United States", "United Arab Emirates"]);

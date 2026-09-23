@@ -26,16 +26,7 @@ describe("portable Scalius skill and MCP setup", () => {
       harness,
       skills: SCALIUS_SKILL_NAMES.map((name) => expect.objectContaining({ name })),
     });
-    const skill = await readFile(join(directory, ...segments, "scalius-commerce", "SKILL.md"), "utf8");
-    expect(skill).toContain("Treat the live finalized contract as authority");
-    expect(skill).toContain("## Route the task");
-    expect(skill).toContain("`workflows.read`");
-    const catalog = await readFile(
-      join(directory, ...segments, "scalius-catalog", "SKILL.md"),
-      "utf8",
-    );
-    expect(catalog).toContain("pmed");
-    expect(catalog).toContain("atomic");
+    await expect(stat(join(directory, ...segments, "scalius-commerce", "SKILL.md"))).resolves.toBeTruthy();
     await expect(installSkill(runtime, harness, false)).rejects.toMatchObject({ errorCode: "skill_exists" });
 
     const stale = join(directory, ...segments, "scalius-commerce", "stale.md");

@@ -37,7 +37,7 @@ import {
 } from "../../schemas/responses";
 import { categoryDetailSchema, categorySummarySchema } from "../../schemas/entities";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
-import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const categoryIdSchema = z.string().trim().min(1).max(180);
@@ -318,7 +318,7 @@ app.openapi(createCategoryRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const result = await createCategory(db, data);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return created(c, result);
 });
 
@@ -353,7 +353,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { categories: revisionClaims, permanent } = c.req.valid("json");
     await bulkDeleteCategories(db, revisionClaims, permanent);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -385,7 +385,7 @@ app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
     const { categories: revisionClaims } = c.req.valid("json");
     await restoreCategories(db, revisionClaims);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -416,7 +416,7 @@ app.openapi(updateCategoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateCategory(db, id, data);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -445,7 +445,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     const result = await updateCategoryStatus(db, id, data);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return ok(c, result);
 });
 
@@ -475,7 +475,7 @@ app.openapi(deleteCategoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
     await deleteCategory(db, id, expectedRevision);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -505,7 +505,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
     await permanentlyDeleteCategory(db, id, expectedRevision);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return noContent(c);
 });
 
@@ -538,7 +538,7 @@ app.openapi(restoreCategoryRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
     await restoreCategories(db, [{ id, expectedRevision }]);
-    await invalidateCatalogCaches("categories", c);
+    await bumpCacheGeneration(c);
     return ok(c, {});
 });
 

@@ -18,7 +18,6 @@ import {
   emptyPlatformConfig,
   mediaHostFromUrl,
   publicRequestOrigin,
-  storefrontPurgeUrl,
   withLocalDevelopmentDefaults,
   type PlatformConfig,
 } from "@scalius/shared/platform-config";
@@ -61,7 +60,6 @@ export async function composeApiRuntimeEnv(
     BETTER_AUTH_URL: optional(resolved.dashboardUrl),
     R2_PUBLIC_URL: optional(resolved.mediaUrl),
     CDN_DOMAIN_URL: optional(mediaHostFromUrl(resolved.mediaUrl)),
-    PURGE_URL: optional(storefrontPurgeUrl(resolved.storefrontUrl)),
     CUSTOMER_AUTH_COOKIE_DOMAIN: optional(resolved.customerAuthCookieDomain),
     CORS_ALLOWED_ORIGINS: optional(resolved.corsAllowedOrigins.join(",")),
   } as Env;

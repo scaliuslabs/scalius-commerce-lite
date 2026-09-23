@@ -20,6 +20,7 @@ import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/err
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
+    STOCK_CHANGED_MESSAGE,
     createVariantSchema,
     updateVariantSchema,
 } from "./products.types";
@@ -671,10 +672,17 @@ export async function updateVariant(
             ),
         ];
 
+    // Omitted stock keeps the current on-hand quantity, so an editor that did
+    // not touch quantity cannot overwrite a concurrent checkout or adjustment.
+    // A sent quantity must be based on the current stockVersion.
+    if (data.stock !== undefined && data.expectedStockVersion !== existingVariant.stockVersion) {
+        throw new ConflictError(STOCK_CHANGED_MESSAGE);
+    }
+    const stock = data.stock ?? existingVariant.stock;
     if (
         existingVariant.effectiveReservedStock > 0
         && (
-            data.stock < existingVariant.effectiveReservedStock
+            stock < existingVariant.effectiveReservedStock
             || updateValues.trackInventory === false
         )
     ) {
@@ -683,8 +691,8 @@ export async function updateVariant(
         );
     }
 
-    if (data.stock !== existingVariant.stock) {
-        const delta = data.stock - existingVariant.stock;
+    if (stock !== existingVariant.stock) {
+        const delta = stock - existingVariant.stock;
         const movementInsert = buildStockMovementClaim(db, {
             movementId: crypto.randomUUID(),
             variantId,
@@ -697,7 +705,7 @@ export async function updateVariant(
                 stockVersion: existingVariant.stockVersion,
             },
             after: {
-                stock: data.stock,
+                stock,
                 reservedStock: existingVariant.reservedStock,
                 preorderStock: existingVariant.preorderStock,
                 stockVersion: existingVariant.stockVersion + 1,
@@ -709,14 +717,14 @@ export async function updateVariant(
             .update(productVariants)
             .set({
                 ...updateValues,
-                stock: data.stock,
+                stock,
                 stockVersion: sql`${productVariants.stockVersion} + 1`,
             })
             .where(and(
                 eq(productVariants.id, variantId),
                 eq(productVariants.productId, productId),
                 eq(productVariants.stockVersion, existingVariant.stockVersion),
-                sql`${effectiveRegularReservedStockSql()} <= ${data.stock}`,
+                sql`${effectiveRegularReservedStockSql()} <= ${stock}`,
                 isNull(productVariants.deletedAt),
             ))
             .returning();
@@ -725,7 +733,7 @@ export async function updateVariant(
                 WHERE ${productVariants.id} = ${variantId}
                   AND ${productVariants.productId} = ${productId}
                   AND ${productVariants.stockVersion} = ${existingVariant.stockVersion}
-                  AND ${effectiveRegularReservedStockSql()} <= ${data.stock}
+                  AND ${effectiveRegularReservedStockSql()} <= ${stock}
                   AND ${productVariants.deletedAt} IS NULL
             )`, "VARIANT_EDIT_CONFLICT");
 
@@ -739,9 +747,7 @@ export async function updateVariant(
             );
         } catch (error) {
             if (isAtomicVariantConflict(error)) {
-                throw new ConflictError(
-                    "Stock changed concurrently before the SKU could be saved. Reload and try again.",
-                );
+                throw new ConflictError(STOCK_CHANGED_MESSAGE);
             }
             throw error;
         }
@@ -749,7 +755,7 @@ export async function updateVariant(
         const variantRows = result.mutationResults[2 + assignmentStatements.length] as PersistedVariant[];
 
         if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
-            throw new ConflictError("Stock changed concurrently before variant update could be saved");
+            throw new ConflictError(STOCK_CHANGED_MESSAGE);
         }
 
         await checkAndAlertLowStock(db, variantId);

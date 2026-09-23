@@ -5,10 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import {
-    invalidateApiAndScheduleStorefrontGroups,
-    type WaitUntilExecutionContext,
-} from "../../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     getPaymentGatewaySettingsSnapshot,
@@ -44,14 +41,9 @@ const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
     stripe: "Stripe",
     sslcommerz: "SSLCommerz",
 };
-const CHECKOUT_CACHE_GROUPS = ["checkout"];
 
 function getSandboxEnvironment(sandbox: boolean): "test" | "live" {
     return sandbox ? "test" : "live";
-}
-
-async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
-    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
 }
 
 async function assertDisablingGatewayKeepsCheckoutFlow(
@@ -473,7 +465,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         buildUpsertSettingStatement(db, "payment_methods", "default_method", data.defaultMethod),
     ]);
 
-    await invalidateCheckoutCaches(c);
+    await bumpCacheGeneration(c);
 
     return ok(c, { message: "Payment methods updated" });
 });
@@ -563,7 +555,7 @@ app.openapi(saveStripeRoute, async (c) => {
 
         await saveSettingAggregate(db, writes, encKey);
 
-        await invalidateCheckoutCaches(c);
+        await bumpCacheGeneration(c);
 
         return ok(c, { message: "Stripe settings saved successfully" });
 });
@@ -648,7 +640,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 
         await saveSettingAggregate(db, writes, encKey);
 
-        await invalidateCheckoutCaches(c);
+        await bumpCacheGeneration(c);
 
         return ok(c, { message: "SSLCommerz settings saved successfully" });
 });

@@ -1,4 +1,6 @@
-import type { DeliveryProviderRecord } from "@/types/api-responses";
+import type {
+  DeliveryProviderRecord,
+} from "~/lib/api-query-options/delivery";
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
 
 export type OrderTimestamp = Date | string | number;

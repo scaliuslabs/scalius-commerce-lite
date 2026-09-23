@@ -1,11 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import type {
-  GetApiV1AdminOrdersByIdInvoiceResponse,
-  PostApiV1AdminOrdersByIdInvoiceData,
-  PostApiV1AdminOrdersByIdInvoiceResponse,
-} from "@scalius/api-client/types";
+import {
+  getApiV1AdminOrdersByIdInvoice,
+  postApiV1AdminOrdersByIdInvoice,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiResult } from "~/lib/api";
 import { InvoiceActions } from "~/components/admin/InvoiceActions";
 import {
   formatSavedMinorAmount,
@@ -15,28 +15,8 @@ import {
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 
-type ApiData<T> = T extends { success: true; data: infer Data } ? Data : never;
-type InvoiceData = ApiData<GetApiV1AdminOrdersByIdInvoiceResponse>;
+type InvoiceData = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
 type OrderItem = InvoiceData["order"]["items"][number];
-type IssueInvoiceBody = NonNullable<PostApiV1AdminOrdersByIdInvoiceData["body"]>;
-
-const getOrderInvoiceData = createServerFn({ method: "GET" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    const { apiGet } = await import("~/lib/api.server");
-    return apiGet<InvoiceData>(`/orders/${data.id}/invoice`);
-  });
-
-const issueOrderInvoice = createServerFn({ method: "POST" })
-  .validator((data: { id: string } & IssueInvoiceBody) => data)
-  .handler(async ({ data }) => {
-    const { apiPost } = await import("~/lib/api.server");
-    const { id, ...body } = data;
-    return apiPost<ApiData<PostApiV1AdminOrdersByIdInvoiceResponse>>(
-      `/orders/${id}/invoice`,
-      body,
-    );
-  });
 
 /**
  * Verify that the user has a valid admin session.
@@ -64,7 +44,7 @@ const requireAuth = createServerFn().handler(async () => {
 export const Route = createFileRoute("/invoice/$orderId")({
   beforeLoad: () => requireAuth(),
   loader: async ({ params }) => {
-    return getOrderInvoiceData({ data: { id: params.orderId } });
+    return apiData(getApiV1AdminOrdersByIdInvoice({ path: { id: params.orderId } }));
   },
   head: ({ loaderData }) => ({
     meta: [
@@ -301,13 +281,13 @@ function InvoiceDraftActions({
     setIssuing(true);
     setError(null);
     try {
-      const document = await issueOrderInvoice({
-        data: {
-          id: orderId,
+      const document = await apiData(postApiV1AdminOrdersByIdInvoice({
+        path: { id: orderId },
+        body: {
           operationKey: operationKey.current,
           expectedOrderVersion,
         },
-      });
+      }));
       operationKey.current = null;
       onIssued(document);
     } catch (issueError) {

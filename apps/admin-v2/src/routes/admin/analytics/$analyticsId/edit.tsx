@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsForm } from "~/components/admin/AnalyticsForm";
 import { analyticsScriptQueryOptions } from "~/lib/api-query-options/analytics";
-import type { AnalyticsScript } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/form-schemas";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
@@ -19,7 +18,7 @@ export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
 function EditAnalyticsPage() {
   const { analyticsId } = Route.useParams();
   const { data } = useSuspenseQuery(analyticsScriptQueryOptions(analyticsId));
-  const s = data as AnalyticsScript;
+  const s = data;
 
   const validType = (analyticsScriptTypes.includes(s.type as AnalyticsScriptType) ? s.type : "custom") as AnalyticsScriptType;
   const validLocation = (["head", "body_start", "body_end"].includes(s.location) ? s.location : "head") as "head" | "body_start" | "body_end";

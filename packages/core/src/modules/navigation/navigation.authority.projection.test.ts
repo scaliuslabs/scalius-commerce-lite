@@ -1,6 +1,6 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -15,42 +15,8 @@ describe("navigation authority correlated projections", () => {
   let db: Database;
 
   beforeEach(() => {
-    sqlite = new DatabaseSync(":memory:");
+    ({ sqlite, db } = createSqliteD1Database());
     sqlite.exec(`
-      CREATE TABLE navigation_menus (
-        id TEXT PRIMARY KEY, name TEXT NOT NULL, handle TEXT NOT NULL,
-        revision INTEGER NOT NULL, published_revision INTEGER,
-        dependency_revision INTEGER NOT NULL, created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL, deleted_at INTEGER
-      );
-      CREATE TABLE navigation_menu_items (
-        id TEXT PRIMARY KEY, menu_id TEXT NOT NULL, parent_id TEXT,
-        position INTEGER NOT NULL, label TEXT NOT NULL, label_mode TEXT NOT NULL,
-        target_type TEXT NOT NULL, target_id TEXT, target_value TEXT,
-        target_query TEXT, open_in_new_tab INTEGER NOT NULL,
-        is_enabled INTEGER NOT NULL, created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE navigation_menu_publications (
-        menu_id TEXT NOT NULL, revision INTEGER NOT NULL,
-        published_at INTEGER NOT NULL, published_by TEXT,
-        item_count INTEGER NOT NULL, checksum TEXT NOT NULL,
-        PRIMARY KEY (menu_id, revision)
-      );
-      CREATE TABLE navigation_menu_publication_items (
-        menu_id TEXT NOT NULL, revision INTEGER NOT NULL, item_id TEXT NOT NULL,
-        parent_id TEXT, position INTEGER NOT NULL, label TEXT NOT NULL,
-        label_mode TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT,
-        target_value TEXT, target_query TEXT, open_in_new_tab INTEGER NOT NULL,
-        is_enabled INTEGER NOT NULL,
-        PRIMARY KEY (menu_id, revision, item_id)
-      );
-      CREATE TABLE navigation_placements (
-        id TEXT PRIMARY KEY, surface TEXT NOT NULL, slot TEXT NOT NULL,
-        position INTEGER NOT NULL, menu_id TEXT NOT NULL, label_override TEXT,
-        is_enabled INTEGER NOT NULL, revision INTEGER NOT NULL,
-        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-      );
       INSERT INTO navigation_menus VALUES
         ('menu_1', 'Main menu', 'main-menu', 1, 1, 1, 1, 1, NULL);
       INSERT INTO navigation_menu_items VALUES
@@ -64,18 +30,6 @@ describe("navigation authority correlated projections", () => {
       INSERT INTO navigation_placements VALUES
         ('placement_header', 'header', 'primary', 0, 'menu_1', NULL, 1, 1, 1, 1);
     `);
-    db = drizzle(async (query, params, method) => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      if (method === "run") {
-        statement.run(...params);
-        return { rows: [] };
-      }
-      if (method === "get") {
-        return { rows: statement.get(...params) as unknown as unknown[] };
-      }
-      return { rows: statement.all(...params) as unknown as unknown[][] };
-    }) as unknown as Database;
   });
 
   afterEach(() => sqlite.close());

@@ -1,14 +1,6 @@
-import {
-  DatabaseSync,
-  type SQLInputValue,
-  type SQLOutputValue,
-  type StatementSync,
-} from "node:sqlite";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "@scalius/database/schema";
+import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createNavigationMenu,
@@ -36,104 +28,6 @@ import {
   NavigationRevisionConflictError,
 } from "./navigation.authority";
 
-interface SqliteD1Result {
-  results: Record<string, SQLOutputValue>[];
-  success: true;
-  meta: Record<string, never>;
-}
-
-interface SqliteD1Statement {
-  bind(...values: SQLInputValue[]): SqliteD1Statement;
-  run(): Promise<SqliteD1Result>;
-  all(): Promise<SqliteD1Result>;
-  raw(): Promise<SQLOutputValue[][]>;
-  first(column?: string): Promise<unknown>;
-  execute(): SqliteD1Result;
-}
-
-function resultRows(
-  statement: StatementSync,
-  values: SQLInputValue[],
-): Record<string, SQLOutputValue>[] {
-  return statement.all(...values);
-}
-
-function createD1Statement(
-  sqlite: DatabaseSync,
-  query: string,
-  values: SQLInputValue[] = [],
-): SqliteD1Statement {
-  const execute = (): SqliteD1Result => ({
-    results: resultRows(sqlite.prepare(query), values),
-    success: true,
-    meta: {},
-  });
-  return {
-    bind: (...nextValues) => createD1Statement(sqlite, query, nextValues),
-    run: async () => execute(),
-    all: async () => execute(),
-    raw: async () => {
-      const statement = sqlite.prepare(query);
-      statement.setReturnArrays(true);
-      return statement.all(...values) as unknown as SQLOutputValue[][];
-    },
-    first: async (column) => {
-      const row = resultRows(sqlite.prepare(query), values)[0];
-      return column ? row?.[column] ?? null : row ?? null;
-    },
-    execute,
-  };
-}
-
-const migration = readFileSync(
-  resolve(import.meta.dirname, "../../../../database/migrations/0036_absent_living_lightning.sql"),
-  "utf8",
-).replaceAll("--> statement-breakpoint", "");
-
-const legacySchema = `
-  PRAGMA foreign_keys = ON;
-  CREATE TABLE site_settings (
-    id TEXT PRIMARY KEY NOT NULL,
-    singleton_key TEXT NOT NULL,
-    header_config TEXT NOT NULL,
-    footer_config TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-  CREATE TABLE pages (
-    id TEXT PRIMARY KEY NOT NULL,
-    content_type TEXT NOT NULL DEFAULT 'page',
-    title TEXT NOT NULL,
-    slug TEXT NOT NULL,
-    canonical_path TEXT,
-    is_published INTEGER NOT NULL,
-    deleted_at INTEGER
-  );
-  CREATE TABLE categories (
-    id TEXT PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL,
-    canonical_path TEXT,
-    status TEXT NOT NULL,
-    deleted_at INTEGER
-  );
-  CREATE TABLE collections (
-    id TEXT PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL,
-    canonical_path TEXT,
-    is_active INTEGER NOT NULL,
-    deleted_at INTEGER
-  );
-  CREATE TABLE products (
-    id TEXT PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL,
-    canonical_path TEXT,
-    is_active INTEGER NOT NULL,
-    deleted_at INTEGER
-  );
-`;
-
 describe("navigation authority D1 commands", () => {
   let sqlite: DatabaseSync | null = null;
 
@@ -143,32 +37,15 @@ describe("navigation authority D1 commands", () => {
   });
 
   function createDatabase(): Database {
-    sqlite = new DatabaseSync(":memory:");
-    sqlite.exec(`${legacySchema}
-      INSERT INTO site_settings VALUES ('site_1', 'default', '{}', '{}', 1, 1);
-      ${migration}
-    `);
-    const client = {
-      prepare: (query: string) => createD1Statement(sqlite!, query),
-      batch: async (statements: SqliteD1Statement[]) => {
-        sqlite!.exec("BEGIN IMMEDIATE");
-        try {
-          const results = statements.map((statement) => statement.execute());
-          sqlite!.exec("COMMIT");
-          return results;
-        } catch (error) {
-          sqlite!.exec("ROLLBACK");
-          throw error;
-        }
-      },
-    };
-    return drizzle(client as unknown as D1Database, { schema }) as unknown as Database;
+    const harness = createSqliteD1Database({ foreignKeys: true });
+    sqlite = harness.sqlite;
+    return harness.db;
   }
 
   it("pages beyond the old 100-resource cap and hydrates unavailable selections", async () => {
     const db = createDatabase();
     const insertProduct = sqlite!.prepare(
-      "INSERT INTO products (id, name, slug, canonical_path, is_active, deleted_at) VALUES (?, ?, ?, NULL, ?, ?)",
+      "INSERT INTO products (id, name, slug, price, is_active, deleted_at) VALUES (?, ?, ?, 100, ?, ?)",
     );
     for (let index = 1; index <= 125; index += 1) {
       const suffix = String(index).padStart(3, "0");
@@ -218,7 +95,7 @@ describe("navigation authority D1 commands", () => {
   it("uses the real article route in navigation resource results", async () => {
     const db = createDatabase();
     sqlite!.prepare(
-      "INSERT INTO pages (id, content_type, title, slug, canonical_path, is_published, deleted_at) VALUES (?, 'article', ?, ?, NULL, 1, NULL)",
+      "INSERT INTO pages (id, content_type, title, slug, content) VALUES (?, 'article', ?, ?, '')",
     ).run("page_article", "Buying guide", "buying-guide");
 
     const result = await listNavigationResources(db, {

@@ -63,8 +63,9 @@ media projection is the sole implicit request context: both Workers wrap each re
 `AsyncLocalStorage` with only the normalized public media base URL, allowing
 concurrent merchant requests to remain isolated without threading presentation
 configuration through every domain-service signature. The API production build
-runs `scripts/check-worker-request-isolation.mjs`, which rejects mutable server
-module variables and the known historical client/cache globals.
+runs `scripts/check-source-policies.mjs` (also run by `pnpm test`), which rejects mutable server
+module variables, the known historical client/cache globals, and the other
+structural import/sink policies listed in that file.
 
 ## Runtime Configuration Boundary
 

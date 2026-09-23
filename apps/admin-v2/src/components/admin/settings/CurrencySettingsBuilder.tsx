@@ -20,11 +20,14 @@ import {
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import {
-  getCurrencySettings,
+  getApiV1AdminSettingsCurrency,
+  postApiV1AdminSettingsCurrency,
+} from "@scalius/api-client/sdk";
+import { apiData } from "@/lib/api";
+import {
+  normalizeCurrencySettingsInput,
   type CurrencySettingsPayload,
-  type SettingsPayload,
-  updateCurrencySettings,
-} from "@/lib/api-functions/currency";
+} from "@/lib/api-query-options/currency";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
@@ -249,14 +252,14 @@ export default function CurrencySettingsBuilder() {
     refetch,
   } = useSettingsForm<CurrencySettings>({
     queryKey: queryKeys.settings.currency(),
-    fetchFn: () => getCurrencySettings(),
-    saveFn: (v) => updateCurrencySettings({
-      data: {
+    fetchFn: () => apiData(getApiV1AdminSettingsCurrency()),
+    saveFn: (v) => apiData(postApiV1AdminSettingsCurrency({
+      body: normalizeCurrencySettingsInput({
         currencyCode: v.currencyCode,
         currencySymbol: v.currencySymbol,
         usdExchangeRate: v.usdExchangeRate,
-      } as SettingsPayload,
-    }),
+      }),
+    })),
     defaultValues: {
       currencyCode: "BDT",
       currencySymbol: "\u09F3",

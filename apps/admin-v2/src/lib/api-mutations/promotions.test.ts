@@ -20,12 +20,12 @@ const toastMocks = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
-  activatePromotion: vi.fn(),
-  createPromotion: vi.fn(),
-  deletePromotion: vi.fn(),
-  pausePromotion: vi.fn(),
-  previewPromotion: vi.fn(),
-  updatePromotion: vi.fn(),
+  postApiV1AdminPromotionsByIdActivate: vi.fn(),
+  postApiV1AdminPromotions: vi.fn(),
+  deleteApiV1AdminPromotionsById: vi.fn(),
+  postApiV1AdminPromotionsByIdPause: vi.fn(),
+  postApiV1AdminPromotionsByIdPreview: vi.fn(),
+  putApiV1AdminPromotionsById: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -34,7 +34,8 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("sonner", () => ({ toast: toastMocks }));
-vi.mock("../api-functions/promotions", () => apiMocks);
+vi.mock("@scalius/api-client/sdk", () => apiMocks);
+vi.mock("../api", () => ({ apiData: (call: unknown) => call }));
 
 import { AdminApiResponseError } from "../admin-api-error";
 import { queryKeys } from "../query-keys";
@@ -79,8 +80,9 @@ describe("promotion mutations", () => {
     mutation.mutationFn?.(variables as never);
     mutation.onSuccess?.({}, variables);
 
-    expect(apiMocks.updatePromotion).toHaveBeenCalledWith({
-      data: { id: variables.id, ...variables.input },
+    expect(apiMocks.putApiV1AdminPromotionsById).toHaveBeenCalledWith({
+      path: { id: "promo_1" },
+      body: variables.input,
     });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.promotions.list(),
@@ -108,7 +110,11 @@ describe("promotion mutations", () => {
     mutation.mutationFn?.(variables as never);
     mutation.onSuccess?.({}, variables);
 
-    expect(apiMocks.previewPromotion).toHaveBeenCalledWith({ data: variables });
+    const { id: _id, ...previewBody } = variables;
+    expect(apiMocks.postApiV1AdminPromotionsByIdPreview).toHaveBeenCalledWith({
+      path: { id: "promo_1" },
+      body: previewBody,
+    });
     expect(reactQueryMocks.queryClient.invalidateQueries).not.toHaveBeenCalled();
     expect(toastMocks.success).not.toHaveBeenCalled();
   });
@@ -144,7 +150,10 @@ describe("promotion mutations", () => {
     mutation.mutationFn?.(variables as never);
     mutation.onSuccess?.(undefined, variables);
 
-    expect(apiMocks.deletePromotion).toHaveBeenCalledWith({ data: variables });
+    expect(apiMocks.deleteApiV1AdminPromotionsById).toHaveBeenCalledWith({
+      path: { id: "promo_1" },
+      body: { expectedRevision: 6 },
+    });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.promotions.list(),
     });

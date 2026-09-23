@@ -35,39 +35,18 @@ vi.mock("sonner", () => ({
   toast: toastMocks,
 }));
 
-vi.mock("../api-functions/orders", () => ({
-  approveOrderReturn: vi.fn(),
-  archiveOrders: vi.fn(),
-  bulkShipOrders: vi.fn(),
-  cancelOrderReturn: vi.fn(),
-  confirmManualOrderAmendment: vi.fn(),
-  createFulfillmentShipment: vi.fn(),
-  createOrder: vi.fn(),
-  createOrderReturn: vi.fn(),
-  createOrderShipment: vi.fn(),
-  issueOrderPaymentRecoveryLink: vi.fn(),
-  reconcileRefundAttempt: vi.fn(),
-  reconcileOrderReturn: vi.fn(),
-  reconcileShipment: vi.fn(),
-  receiveOrderReturn: vi.fn(),
-  refundOrder: vi.fn(),
-  resolveOrderSupportRequest: vi.fn(),
-  resendOrderNotification: vi.fn(),
-  retryOrderNotification: vi.fn(),
-  restoreOrder: vi.fn(),
-  updateOrder: vi.fn(),
-  updateOrderCod: vi.fn(),
-  updateOrderStatus: vi.fn(),
+const sdk = vi.hoisted(() => ({
+  postApiV1AdminOrdersByIdRefund: vi.fn(),
+  postApiV1AdminOrdersBulkShip: vi.fn(),
+  postApiV1AdminOrdersByIdNotificationsByOutboxIdResend: vi.fn(),
+  postApiV1AdminOrdersByIdPaymentRecoveryLink: vi.fn(),
+  postApiV1AdminOrdersByIdReturns: vi.fn(),
+  putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus: vi.fn(),
 }));
+vi.mock("@scalius/api-client/sdk", () => sdk);
+vi.mock("../api", () => ({ apiData: (call: unknown) => call }));
 
 import { queryKeys } from "../query-keys";
-import {
-  createOrderReturn,
-  bulkShipOrders,
-  issueOrderPaymentRecoveryLink,
-  resolveOrderSupportRequest,
-  resendOrderNotification,
-} from "../api-functions/orders";
 import {
   useBulkShipOrders,
   useCreateFulfillmentShipment,
@@ -240,7 +219,7 @@ describe("bulk ship order mutations", () => {
     mutation.mutationFn?.(variables);
     mutation.onSuccess?.(result, variables);
 
-    expect(bulkShipOrders).toHaveBeenCalledWith({ data: variables });
+    expect(sdk.postApiV1AdminOrdersBulkShip).toHaveBeenCalledWith({ body: variables });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.list(),
     });
@@ -362,7 +341,10 @@ describe("order notification mutations", () => {
     mutation.mutationFn?.(variables);
     mutation.onSuccess?.({ enqueued: true }, variables as never);
 
-    expect(resendOrderNotification).toHaveBeenCalledWith({ data: variables });
+    expect(sdk.postApiV1AdminOrdersByIdNotificationsByOutboxIdResend).toHaveBeenCalledWith({
+      path: { id: "ord_123", outboxId: "outbox_1" },
+      body: { resendRequestId: "req_1" },
+    });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.notifications("ord_123"),
     });
@@ -371,6 +353,22 @@ describe("order notification mutations", () => {
 });
 
 describe("order refund recovery mutations", () => {
+  it("sends the manual COD settlement confirmation with the refund", () => {
+    const mutation = useRefundOrder() as MutationOptions;
+
+    mutation.mutationFn?.({
+      orderId: "ord_123",
+      amount: 150,
+      reason: "Returned in store",
+      manualSettlementConfirmed: true,
+    });
+
+    expect(sdk.postApiV1AdminOrdersByIdRefund).toHaveBeenCalledWith({
+      path: { id: "ord_123" },
+      body: { amount: 150, reason: "Returned in store", manualSettlementConfirmed: true },
+    });
+  });
+
   it("treats a committed refund as success while surfacing failed follow-up work", () => {
     const mutation = useRefundOrder() as MutationOptions;
 
@@ -501,8 +499,8 @@ describe("order payment recovery link mutations", () => {
       variables,
     );
 
-    expect(issueOrderPaymentRecoveryLink).toHaveBeenCalledWith({
-      data: variables,
+    expect(sdk.postApiV1AdminOrdersByIdPaymentRecoveryLink).toHaveBeenCalledWith({
+      path: { id: "ord_123" },
     });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.list(),
@@ -532,7 +530,11 @@ describe("item-level return mutations", () => {
     mutation.mutationFn?.(variables);
     mutation.onSuccess?.({ status: "requested" }, variables);
 
-    expect(createOrderReturn).toHaveBeenCalledWith({ data: variables });
+    const { orderId: _orderId, ...returnBody } = variables;
+    expect(sdk.postApiV1AdminOrdersByIdReturns).toHaveBeenCalledWith({
+      path: { id: "ord_123" },
+      body: returnBody,
+    });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.returns("ord_123"),
     });
@@ -615,7 +617,10 @@ describe("customer return request mutations", () => {
     mutation.mutationFn?.(variables);
     mutation.onSuccess?.({}, variables);
 
-    expect(resolveOrderSupportRequest).toHaveBeenCalledWith({ data: variables });
+    expect(sdk.putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus).toHaveBeenCalledWith({
+      path: { id: "ord_123", requestId: "request_1" },
+      body: { status: "approved", note: null, returnRequest: variables.returnRequest },
+    });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.detail("ord_123"),
     });

@@ -1,32 +1,56 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
-  getOrderCatalogProducts,
-  getOrder,
-  getOrderCod,
-  getOrderFormData,
-  getOrderNotifications,
-  getOrders,
-  getOrderPayments,
-  getOrderReturns,
-  getOrderShipments,
-  type OrdersQueryInput,
-} from "../api-functions/orders";
+  getApiV1AdminOrders,
+  getApiV1AdminOrdersById,
+  getApiV1AdminOrdersByIdCod,
+  getApiV1AdminOrdersByIdFormData,
+  getApiV1AdminOrdersByIdItems,
+  getApiV1AdminOrdersByIdNotifications,
+  getApiV1AdminOrdersByIdPayments,
+  getApiV1AdminOrdersByIdReturns,
+  getApiV1AdminOrdersByIdShipments,
+  getApiV1AdminOrdersCatalogProducts,
+  type postApiV1AdminOrdersQuote,
+} from "@scalius/api-client/sdk";
+import { apiData, type ApiQuery, type ApiResult, type WithTimestamps } from "../api";
 import { queryKeys } from "../query-keys";
 
 const FAST_STALE_TIME_MS = 1000 * 30;
 const ORDER_CATALOG_STALE_TIME_MS = 1000 * 60 * 2;
 
-export const ordersQueryOptions = (params: OrdersQueryInput) =>
+export type OrdersQuery = ApiQuery<typeof getApiV1AdminOrders>;
+export type OrdersListPayload = ApiResult<typeof getApiV1AdminOrders>;
+export type OrderDetailDto = ApiResult<typeof getApiV1AdminOrdersById>;
+export type OrderItemDto = ApiResult<typeof getApiV1AdminOrdersByIdItems>[number];
+export type OrderShipmentDto = ApiResult<typeof getApiV1AdminOrdersByIdShipments>[number];
+export type OrderPaymentsPayload = ApiResult<typeof getApiV1AdminOrdersByIdPayments>;
+export type ManualOrderQuotePayload = ApiResult<typeof postApiV1AdminOrdersQuote>;
+
+type ApiNotification =
+  ApiResult<typeof getApiV1AdminOrdersByIdNotifications>["notifications"][number];
+export type OrderNotificationReceiptDto = WithTimestamps<
+  ApiNotification["receipts"][number],
+  "nextAttemptAt" | "lastAttemptAt" | "acceptedAt" | "deliveredAt" | "failedAt" | "skippedAt"
+>;
+export type OrderNotificationOutboxDto = WithTimestamps<
+  Omit<ApiNotification, "receipts">,
+  "queuedAt" | "sentAt"
+> & { receipts: OrderNotificationReceiptDto[] };
+
+export const getOrderItems = (orderId: string) =>
+  apiData(getApiV1AdminOrdersByIdItems({ path: { id: orderId } }));
+
+export const ordersQueryOptions = (query: OrdersQuery) =>
   queryOptions({
-    queryKey: queryKeys.orders.list(params),
-    queryFn: () => getOrders({ data: params }),
+    queryKey: queryKeys.orders.list(query),
+    queryFn: () => apiData(getApiV1AdminOrders({ query })),
     staleTime: FAST_STALE_TIME_MS,
   });
 
 export const orderQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.detail(id),
-    queryFn: () => getOrder({ data: { id } }),
+    queryFn: () => apiData(getApiV1AdminOrdersById({ path: { id } })),
     staleTime: 0,
   });
 
@@ -39,7 +63,9 @@ export const orderCatalogProductsQueryOptions = (input: {
   return infiniteQueryOptions({
     queryKey: queryKeys.orders.catalogProducts({ search, limit }),
     queryFn: ({ pageParam }) =>
-      getOrderCatalogProducts({ data: { page: pageParam, limit, search } }),
+      apiData(getApiV1AdminOrdersCatalogProducts({
+        query: { page: pageParam, limit, search: search || undefined },
+      })),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.pagination.page < lastPage.pagination.totalPages
@@ -52,41 +78,44 @@ export const orderCatalogProductsQueryOptions = (input: {
 export const orderFormDataQueryOptions = (id: string) =>
   queryOptions({
     queryKey: queryKeys.orders.formData(id),
-    queryFn: () => getOrderFormData({ data: { id } }),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdFormData({ path: { id } })),
     staleTime: 0,
   });
 
 export const orderPaymentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.payments(orderId),
-    queryFn: () => getOrderPayments({ data: { orderId } }),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdPayments({ path: { id: orderId } })),
     staleTime: 0,
   });
 
 export const orderNotificationsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.notifications(orderId),
-    queryFn: () => getOrderNotifications({ data: { orderId } }),
+    queryFn: async () =>
+      (await apiData(getApiV1AdminOrdersByIdNotifications({ path: { id: orderId } }))) as {
+        notifications: OrderNotificationOutboxDto[];
+      },
     staleTime: 0,
   });
 
 export const orderReturnsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.returns(orderId),
-    queryFn: () => getOrderReturns({ data: { orderId } }),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdReturns({ path: { id: orderId } })),
     staleTime: 0,
   });
 
 export const orderCodQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.cod(orderId),
-    queryFn: () => getOrderCod({ data: { orderId } }),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdCod({ path: { id: orderId } })),
     staleTime: 0,
   });
 
 export const orderShipmentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.shipments(orderId),
-    queryFn: () => getOrderShipments({ data: { orderId } }),
+    queryFn: () => apiData(getApiV1AdminOrdersByIdShipments({ path: { id: orderId } })),
     staleTime: 0,
   });

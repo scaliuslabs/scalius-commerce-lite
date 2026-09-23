@@ -3,7 +3,7 @@ import type {
   TaxJurisdictionType,
   TaxConfigurationPayload,
   UpdateTaxSettingsInput,
-} from "@/lib/api-functions/taxes";
+} from "@/lib/api-query-options/taxes";
 
 export function basisPointsToPercent(rateBps: number): string {
   if (!Number.isInteger(rateBps) || rateBps < 0) return "0";

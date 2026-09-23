@@ -3,7 +3,7 @@
  *
  * Every deployment installs exactly one master secret, `SCALIUS_SECRET`, on
  * each Worker. All other runtime secrets (session signing, JWT signing, the
- * storefront service token, the storefront purge token, the agent token
+ * storefront service token, the agent token
  * pepper, the customer session hash key, and the opt-in automation secrets for
  * first-admin setup, trusted front proxies, and identity handoff) are derived
  * from it with HKDF-SHA256 and a fixed purpose label. Operators derive the
@@ -26,7 +26,6 @@ export const RUNTIME_SECRET_PURPOSES = {
   BETTER_AUTH_SECRET: "better-auth-session",
   JWT_SECRET: "jwt-signing",
   API_TOKEN: "service-api-token",
-  PURGE_TOKEN: "storefront-purge-token",
   AGENT_TOKEN_PEPPER: "agent-token-pepper",
   CUSTOMER_SESSION_HASH_KEY: "customer-session-hash",
   /** Gates `POST /api/v1/setup` when the Platform setting requires a token. */

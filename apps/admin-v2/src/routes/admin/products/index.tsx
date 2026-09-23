@@ -73,15 +73,15 @@ function validateProductSearch(search: SearchValidatorInput<SearchParams>): Sear
 
 // ── Map search params to API params ───────────────────────────────
 
-function mapParams(deps: SearchParams) {
+function mapParams(deps: SearchParams): Parameters<typeof productsQueryOptions>[0] {
   return {
     page: deps.page,
     limit: deps.limit,
     search: deps.search || undefined,
-    categoryId: deps.category !== "all" ? deps.category : undefined,
+    category: deps.category !== "all" ? deps.category : undefined,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    trashed: deps.trashed ? ("true" as const) : undefined,
   };
 }
 

@@ -1,985 +1,328 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { getSSLCommerzSettings, getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
+import { saveSettingAggregate } from "@scalius/core/modules/settings/settings-write";
 
 import { errorResponseFromError } from "../../../utils/api-response";
-import { ServiceUnavailableError } from "../../../utils/api-error";
 
-const mocks = vi.hoisted(() => {
-    const stripePlaceholders = new Set([
-        "dummy",
-        "placeholder",
-        "example",
-        "demo",
-        "test",
-        "stripe_secret_key",
-        "stripe_publishable_key",
-        "stripe_webhook_secret",
-        "your_stripe_secret_key",
-        "your_stripe_publishable_key",
-        "your_stripe_webhook_secret",
-        "sk_test_your_key_here",
-        "pk_test_your_key_here",
-        "whsec_your_webhook_secret",
-    ]);
-    const isStripePlaceholder = (value: unknown) =>
-        typeof value === "string" && stripePlaceholders.has(value.trim().toLowerCase());
-    const stripeKeyEnvironment = (value: unknown, prefix: "sk" | "pk") => {
-        if (typeof value !== "string") return "unknown";
-        const normalized = value.trim().toLowerCase();
-        if (normalized === `${prefix}_test` || normalized.startsWith(`${prefix}_test_`)) return "test";
-        if (normalized === `${prefix}_live` || normalized.startsWith(`${prefix}_live_`)) return "live";
-        return "unknown";
-    };
-    const sslPlaceholders = new Set([
-        "dummy",
-        "test",
-        "testbox",
-        "qwerty",
-        "password",
-        "store_id",
-        "storeid",
-        "store_password",
-        "storepass",
-        "example",
-        "placeholder",
-        "demo",
-        "123456",
-        "000000",
-        "xxxxxx",
-        "__stored__",
-    ]);
-    const isSslPlaceholder = (value: unknown) =>
-        typeof value === "string" && sslPlaceholders.has(value.trim().toLowerCase());
-
-    return {
-        getCredentialEncryptionKey: vi.fn(),
-        requireEncryptionKey: vi.fn(),
-        invalidateApiAndScheduleStorefrontGroups: vi.fn(),
-        safeBatch: vi.fn(),
-        saveSettingAggregate: vi.fn(),
-        getPaymentMethodPreferences: vi.fn(),
-        getPaymentGatewaySettingsSnapshot: vi.fn(),
-        getActivePaymentMethods: vi.fn(),
-        getStripeSettings: vi.fn(),
-        getStripeCheckoutReadiness: vi.fn((settings: {
-            enabled?: boolean;
-            secretKey?: string;
-            publishableKey?: string;
-            webhookSecret?: string;
-        } | null | undefined) => {
-            const missingFields = [
-                !settings?.secretKey?.trim() ? "secretKey" : null,
-                !settings?.publishableKey?.trim() ? "publishableKey" : null,
-                !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
-            ].filter((field): field is string => Boolean(field));
-            const secretEnvironment = stripeKeyEnvironment(settings?.secretKey, "sk");
-            const publishableEnvironment = stripeKeyEnvironment(settings?.publishableKey, "pk");
-            const environmentMismatch = secretEnvironment !== "unknown"
-                && publishableEnvironment !== "unknown"
-                && secretEnvironment !== publishableEnvironment;
-            const credentialErrors = [
-                isStripePlaceholder(settings?.secretKey)
-                    ? "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."
-                    : null,
-                isStripePlaceholder(settings?.publishableKey)
-                    ? "Stripe publishable key looks like a placeholder. Enter the real Stripe publishable key from your merchant account."
-                    : null,
-                isStripePlaceholder(settings?.webhookSecret)
-                    ? "Stripe webhook secret looks like a placeholder. Enter the real Stripe webhook secret from your merchant account."
-                    : null,
-                environmentMismatch
-                    ? "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair."
-                    : null,
-            ].filter((error): error is string => Boolean(error));
-            const labels: Record<string, string> = {
-                secretKey: "secret key",
-                publishableKey: "publishable key",
-                webhookSecret: "webhook secret",
-            };
-            const enabled = settings?.enabled === true;
-            return {
-                configured: missingFields.length === 0 && credentialErrors.length === 0,
-                enabled,
-                usable: enabled && missingFields.length === 0 && credentialErrors.length === 0,
-                missingFields,
-                credentialErrors,
-                blockedReason: credentialErrors[0] ?? (missingFields.length > 0
-                    ? `Stripe needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
-                    : undefined),
-            };
-        }),
-        isStripeCheckoutUsable: vi.fn((settings: {
-            enabled?: boolean;
-            secretKey?: string;
-            publishableKey?: string;
-            webhookSecret?: string;
-        } | null | undefined) => (
-            settings?.enabled === true &&
-            Boolean(settings.secretKey?.trim()) &&
-            Boolean(settings.publishableKey?.trim()) &&
-            Boolean(settings.webhookSecret?.trim()) &&
-            !isStripePlaceholder(settings.secretKey) &&
-            !isStripePlaceholder(settings.publishableKey) &&
-            !isStripePlaceholder(settings.webhookSecret)
-        )),
-        isStripePlaceholderCredential: vi.fn(isStripePlaceholder),
-        getSSLCommerzCheckoutReadiness: vi.fn((settings: {
-            enabled?: boolean;
-            storeId?: string;
-            storePassword?: string;
-            credentialErrors?: string[];
-        } | null | undefined) => {
-            const missingFields = [
-                !settings?.storeId?.trim() ? "storeId" : null,
-                !settings?.storePassword?.trim() ? "storePassword" : null,
-            ].filter((field): field is string => Boolean(field));
-            const credentialErrors = [
-                ...(settings?.credentialErrors ?? []),
-                isSslPlaceholder(settings?.storeId)
-                    ? "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account."
-                    : null,
-                isSslPlaceholder(settings?.storePassword)
-                    ? "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account."
-                    : null,
-            ].filter((error): error is string => Boolean(error));
-            const labels: Record<string, string> = {
-                storeId: "store ID",
-                storePassword: "store password",
-            };
-            const enabled = settings?.enabled === true;
-            return {
-                configured: missingFields.length === 0 && credentialErrors.length === 0,
-                enabled,
-                usable: enabled && missingFields.length === 0 && credentialErrors.length === 0,
-                missingFields,
-                credentialErrors,
-                blockedReason: credentialErrors[0] ?? (missingFields.length > 0
-                    ? `SSLCommerz needs ${missingFields.map((field) => labels[field] ?? field).join(", ")} before it can be shown at checkout.`
-                    : undefined),
-            };
-        }),
-        isSSLCommerzCheckoutUsable: vi.fn((settings: {
-            enabled?: boolean;
-            storeId?: string;
-            storePassword?: string;
-        } | null | undefined) => (
-            settings?.enabled === true &&
-            Boolean(settings.storeId?.trim()) &&
-            Boolean(settings.storePassword?.trim()) &&
-            !isSslPlaceholder(settings.storeId) &&
-            !isSslPlaceholder(settings.storePassword)
-        )),
-        getSSLCommerzSettings: vi.fn(),
-        isSSLCommerzPlaceholderCredential: vi.fn(isSslPlaceholder),
-    };
-});
-
-vi.mock("../../../utils/encryption-key", () => ({
-    getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
-    requireEncryptionKey: mocks.requireEncryptionKey,
+const mocks = vi.hoisted(() => ({
+    bumpCacheGeneration: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-    invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
-}));
-
-vi.mock("@scalius/database/client", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("@scalius/database/client")>()),
-    safeBatch: mocks.safeBatch,
-}));
-
-vi.mock("@scalius/core/modules/settings/settings-write", () => ({
-    saveSettingAggregate: mocks.saveSettingAggregate,
-}));
-
-vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({
-    getPaymentMethodPreferences: mocks.getPaymentMethodPreferences,
-    getPaymentGatewaySettingsSnapshot: mocks.getPaymentGatewaySettingsSnapshot,
-    getActivePaymentMethods: mocks.getActivePaymentMethods,
-    getStripeSettings: mocks.getStripeSettings,
-    getStripeCheckoutReadiness: mocks.getStripeCheckoutReadiness,
-    isStripeCheckoutUsable: mocks.isStripeCheckoutUsable,
-    isStripePlaceholderCredential: mocks.isStripePlaceholderCredential,
-    getSSLCommerzCheckoutReadiness: mocks.getSSLCommerzCheckoutReadiness,
-    isSSLCommerzCheckoutUsable: mocks.isSSLCommerzCheckoutUsable,
-    getSSLCommerzSettings: mocks.getSSLCommerzSettings,
-    isSSLCommerzPlaceholderCredential: mocks.isSSLCommerzPlaceholderCredential,
+vi.mock("../../../utils/cache-generation", () => ({
+    bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 import { paymentSettingsRoutes } from "./payments";
 
-function createTestApp(
-    siteSettingsOverrides: Record<string, unknown> = {},
-    settingRows: Array<{ key: string; value: string }> = [],
-) {
-    const db = {
-        id: "db",
-        select: vi.fn(() => ({
-            from: vi.fn(() => ({
-                limit: vi.fn(async () => [{
-                    checkoutMode: "all",
-                    partialPaymentEnabled: false,
-                    partialPaymentAmount: 0,
-                    ...siteSettingsOverrides,
-                }]),
-                where: vi.fn(() => ({
-                    all: vi.fn(async () => settingRows),
-                })),
-            })),
-        })),
-        insert: vi.fn(() => ({
-            values: vi.fn(() => ({
-                onConflictDoUpdate: vi.fn(() => ({ statement: "upsert-payment-method-setting" })),
-            })),
-        })),
-    };
-    const kv = { id: "api-cache-kv" };
-    const env = {
-        CACHE: kv,
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
-        JWT_SECRET: "test-jwt-secret",
-    } as unknown as Env;
-    const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
+const CREDENTIAL_ENCRYPTION_KEY = btoa("p".repeat(32));
+const MASKED = "••••••••••••";
+const SECRET_KEYS = new Set(["secret_key", "webhook_secret", "store_password"]);
 
-    mocks.getCredentialEncryptionKey.mockReturnValue("enc-key");
-    mocks.requireEncryptionKey.mockReturnValue("credential-key");
-    mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-    mocks.safeBatch.mockResolvedValue([]);
-    mocks.saveSettingAggregate.mockResolvedValue(undefined);
-    mocks.getPaymentMethodPreferences.mockResolvedValue({
-        enabledMethods: ["cod"],
-        defaultMethod: "cod",
-        hasExplicitEnabledMethods: true,
-    });
-    mocks.getActivePaymentMethods.mockResolvedValue({ enabledMethods: ["cod"], defaultMethod: "cod" });
-    mocks.getStripeSettings.mockResolvedValue(null);
-    mocks.getSSLCommerzSettings.mockResolvedValue(null);
-    mocks.getPaymentGatewaySettingsSnapshot.mockImplementation(async (database, encryptionKey) => ({
-        preferences: await mocks.getPaymentMethodPreferences(database),
-        activePaymentMethods: await mocks.getActivePaymentMethods(database, encryptionKey),
-        settings: {
-            stripe: await mocks.getStripeSettings(database, encryptionKey),
-            sslcommerz: await mocks.getSSLCommerzSettings(database, encryptionKey),
-            cod: { enabled: true },
+const liveStripe = { secret_key: "sk_live_existing", publishable_key: "pk_live_existing", webhook_secret: "whsec_existing", enabled: "true" };
+const liveSsl = { store_id: "real_store_123", store_password: "stored-real-password", sandbox: "false", enabled: "true" };
+
+type Stored = Partial<Record<"stripe" | "sslcommerz" | "payment_methods" | "currency", Record<string, string>>>;
+
+async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?: boolean } = {}) {
+    let failNextBatch = false;
+    const { sqlite, db } = createSqliteD1Database({
+        beforeBatch: () => {
+            if (!failNextBatch) return;
+            failNextBatch = false;
+            throw new Error("atomic batch failed");
         },
-    }));
+    });
+    sqlite.prepare(`INSERT INTO site_settings (id, site_name, header_config, footer_config, checkout_mode,
+        partial_payment_enabled, partial_payment_amount) VALUES ('default', 'Store', '{}', '{}', 'all', ?, ?)`)
+        .run(site.partialPaymentEnabled ? 1 : 0, site.partialPaymentEnabled ? 500 : 0);
+    const writes = Object.entries(stored).flatMap(([category, values]) =>
+        Object.entries(values).map(([key, value]) => ({ category, key, value, encrypted: SECRET_KEYS.has(key) })));
+    await saveSettingAggregate(db, writes, CREDENTIAL_ENCRYPTION_KEY);
 
+    const env = { CREDENTIAL_ENCRYPTION_KEY } as unknown as Env;
+    const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
     });
     app.use("*", async (c, next) => {
-        c.set("db", db as never);
+        c.set("db", db);
         await next();
     });
     app.route("/admin/settings", paymentSettingsRoutes);
-    return { app, env };
-}
 
-async function postJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: string, body: unknown) {
-    return app.request(
+    const request = (path: string, body?: unknown, requestEnv: Env = env) => app.request(
         `/api/v1/admin/settings${path}`,
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-        },
-        env,
+        body === undefined
+            ? { method: "GET" }
+            : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+        requestEnv,
     );
+    return { request, db, sqlite, failNextBatch: () => { failNextBatch = true; } };
 }
 
-async function getJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, path: string) {
-    return app.request(
-        `/api/v1/admin/settings${path}`,
-        { method: "GET" },
-        env,
-    );
+function storedRows(sqlite: DatabaseSync, category: string) {
+    return Object.fromEntries((sqlite.prepare("SELECT key, value FROM settings WHERE category = ?").all(category) as Array<{
+        key: string;
+        value: string;
+    }>).map((row) => [row.key, row.value]));
 }
 
-describe("payment settings cache invalidation", () => {
-    afterEach(() => {
+async function expectValidationError(response: Response, message?: string) {
+    expect(response.status, await response.clone().text()).toBe(400);
+    if (message) {
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: { code: "VALIDATION_ERROR", message },
+        });
+    }
+}
+
+describe("payment settings", () => {
+    beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it("never returns stored gateway secrets from configuration reads", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "sk_live_private_credential" },
-            { key: "publishable_key", value: "pk_live_public_identifier" },
-            { key: "store_id", value: "ssl_store_identifier" },
-            { key: "store_password", value: "ssl_private_credential" },
-            { key: "webhook_secret", value: "provider_private_webhook" },
-            { key: "sandbox", value: "false" },
-            { key: "enabled", value: "true" },
-        ]);
+    describe("reads", () => {
+        it("never returns stored gateway secrets from configuration reads", async () => {
+            const { request } = await createTestApp({ stripe: liveStripe, sslcommerz: liveSsl });
 
-        const [stripeResponse, sslResponse] = await Promise.all([
-            getJson(app, env, "/stripe"),
-            getJson(app, env, "/sslcommerz"),
-        ]);
+            const [stripeResponse, sslResponse] = await Promise.all([request("/stripe"), request("/sslcommerz")]);
 
-        expect(stripeResponse.status).toBe(200);
-        expect(sslResponse.status).toBe(200);
-        await expect(stripeResponse.json()).resolves.toMatchObject({
-            data: {
-                secretKey: "••••••••••••",
-                publishableKey: "pk_live_public_identifier",
-                webhookSecret: "••••••••••••",
-            },
-        });
-        await expect(sslResponse.json()).resolves.toMatchObject({
-            data: {
-                storeId: "ssl_store_identifier",
-                storePassword: "••••••••••••",
-            },
-        });
-    });
-
-    it("invalidates API and storefront checkout caches after payment method saves", async () => {
-        const { app, env } = createTestApp();
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            enabled: true,
-            secretKey: "sk_live_existing",
-            publishableKey: "pk_live_existing",
-            webhookSecret: "whsec_existing",
+            await expect(stripeResponse.json()).resolves.toMatchObject({
+                data: { secretKey: MASKED, publishableKey: "pk_live_existing", webhookSecret: MASKED },
+            });
+            const ssl = await sslResponse.json() as { data: Record<string, unknown> };
+            expect(ssl.data).toMatchObject({ storeId: "real_store_123", storePassword: MASKED });
+            expect(JSON.stringify(ssl)).not.toContain("stored-real-password");
         });
 
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "stripe",
-        });
+        it("returns raw selected methods separately from effective active checkout methods", async () => {
+            const { request } = await createTestApp({
+                stripe: { ...liveStripe, publishable_key: "" },
+                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "stripe" },
+            });
 
-        expect(response.status).toBe(200);
-        expect(mocks.safeBatch).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            expect.arrayContaining([
-                expect.objectContaining({ statement: "upsert-payment-method-setting" }),
-            ]),
-        );
-        expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["checkout"],
-            expect.objectContaining({ env }),
-        );
-    });
+            const response = await request("/payment-methods");
 
-    it("allows an intentional COD-only save in standard checkout mode", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["cod"],
-            defaultMethod: "cod",
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.safeBatch).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            expect.arrayContaining([
-                expect.objectContaining({ statement: "upsert-payment-method-setting" }),
-            ]),
-        );
-        expect(mocks.safeBatch.mock.calls[0]?.[1]).toHaveLength(2);
-    });
-
-    it("rejects SSLCommerz buyer visibility when the store currency is not BDT", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "currency_code", value: "USD" },
-            { key: "currency_symbol", value: "$" },
-        ]);
-        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
-            enabled: true,
-            storeId: "ssl_store_identifier",
-            storePassword: "stored-real-password",
-            sandbox: true,
-        });
-
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["sslcommerz", "cod"],
-            defaultMethod: "sslcommerz",
-        });
-
-        expect(response.status).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
-            },
-        });
-        expect(mocks.safeBatch).not.toHaveBeenCalled();
-    });
-
-    it("rejects duplicate methods instead of persisting an ambiguous display order", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["cod", "cod"],
-            defaultMethod: "cod",
-        });
-
-        expect(response.status).toBe(400);
-        expect(mocks.safeBatch).not.toHaveBeenCalled();
-    });
-
-    it("reports Stripe as not checkout-configured without a publishable key", async () => {
-        const { app, env } = createTestApp();
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            enabled: true,
-            secretKey: "sk_live_existing",
-            publishableKey: "",
-            webhookSecret: "whsec_existing",
-        });
-
-        const response = await getJson(app, env, "/payment-methods");
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        await expect(response.json()).resolves.toMatchObject({
-            success: true,
-            data: {
-                gatewayStatus: {
-                    stripe: {
-                        configured: false,
-                        enabled: true,
-                        usable: false,
-                        environment: "live",
-                        missingFields: ["publishableKey"],
+            expect(response.status).toBe(200);
+            await expect(response.json()).resolves.toMatchObject({
+                data: {
+                    enabledMethods: ["stripe", "cod"],
+                    defaultMethod: "stripe",
+                    activeMethods: ["cod"],
+                    activeDefaultMethod: "cod",
+                    gatewayStatus: {
+                        stripe: {
+                            configured: false,
+                            enabled: true,
+                            usable: false,
+                            environment: "live",
+                            missingFields: ["publishableKey"],
+                            checkoutSelected: true,
+                            checkoutVisible: false,
+                        },
+                        cod: { checkoutSelected: true, checkoutVisible: true },
                     },
                 },
-            },
-        });
-    });
-
-    it("returns raw selected methods separately from effective active checkout methods", async () => {
-        const { app, env } = createTestApp();
-        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "stripe",
-            hasExplicitEnabledMethods: true,
-        });
-        mocks.getActivePaymentMethods.mockResolvedValueOnce({
-            enabledMethods: ["cod"],
-            defaultMethod: "cod",
-        });
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            enabled: true,
-            secretKey: "sk_live_existing",
-            publishableKey: "",
-            webhookSecret: "whsec_existing",
+            });
         });
 
-        const response = await getJson(app, env, "/payment-methods");
+        it("filters buyer-visible active methods through checkout flow rules", async () => {
+            const { request } = await createTestApp({
+                stripe: liveStripe,
+                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "cod" },
+            }, { partialPaymentEnabled: true });
 
-        expect(response.status, await response.clone().text()).toBe(200);
-        await expect(response.json()).resolves.toMatchObject({
-            success: true,
-            data: {
-                enabledMethods: ["stripe", "cod"],
-                defaultMethod: "stripe",
-                activeMethods: ["cod"],
-                activeDefaultMethod: "cod",
-                gatewayStatus: {
-                    stripe: {
-                        configured: false,
-                        enabled: true,
-                        usable: false,
-                        checkoutSelected: true,
-                        checkoutVisible: false,
-                        missingFields: ["publishableKey"],
-                    },
-                    cod: {
-                        checkoutSelected: true,
-                        checkoutVisible: true,
+            await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
+                data: {
+                    activeMethods: ["stripe"],
+                    activeDefaultMethod: "stripe",
+                    gatewayStatus: {
+                        stripe: { checkoutSelected: true, checkoutVisible: true, environment: "live" },
+                        cod: { checkoutSelected: true, checkoutVisible: false, environment: "not_applicable" },
                     },
                 },
-            },
-        });
-    });
-
-    it("filters buyer-visible active methods through checkout flow rules", async () => {
-        const { app, env } = createTestApp({
-            partialPaymentEnabled: true,
-            partialPaymentAmount: 500,
-        });
-        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "cod",
-            hasExplicitEnabledMethods: true,
-        });
-        mocks.getActivePaymentMethods.mockResolvedValueOnce({
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "cod",
-        });
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            enabled: true,
-            secretKey: "sk_live_existing",
-            publishableKey: "pk_live_existing",
-            webhookSecret: "whsec_existing",
+            });
         });
 
-        const response = await getJson(app, env, "/payment-methods");
+        it("excludes a configured SSLCommerz method from dashboard checkout readiness outside BDT", async () => {
+            const { request } = await createTestApp({
+                sslcommerz: liveSsl,
+                currency: { currency_code: "USD" },
+                payment_methods: { enabled_methods: JSON.stringify(["sslcommerz", "cod"]), default_method: "sslcommerz" },
+            });
 
-        expect(response.status, await response.clone().text()).toBe(200);
-        await expect(response.json()).resolves.toMatchObject({
-            success: true,
-            data: {
-                enabledMethods: ["stripe", "cod"],
-                defaultMethod: "cod",
-                activeMethods: ["stripe"],
-                activeDefaultMethod: "stripe",
-                gatewayStatus: {
-                    stripe: {
-                        checkoutSelected: true,
-                        checkoutVisible: true,
-                        environment: "live",
-                    },
-                    cod: {
-                        checkoutSelected: true,
-                        checkoutVisible: false,
-                        environment: "not_applicable",
+            await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
+                data: {
+                    activeMethods: ["cod"],
+                    activeDefaultMethod: "cod",
+                    gatewayStatus: {
+                        sslcommerz: {
+                            configured: true,
+                            usable: false,
+                            checkoutVisible: false,
+                            blockedReason: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
+                        },
                     },
                 },
-            },
+            });
         });
     });
 
-    it("excludes a configured SSLCommerz method from dashboard checkout readiness outside BDT", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "currency_code", value: "USD" },
-        ]);
-        mocks.getPaymentMethodPreferences.mockResolvedValueOnce({
-            enabledMethods: ["sslcommerz", "cod"],
-            defaultMethod: "sslcommerz",
-            hasExplicitEnabledMethods: true,
-        });
-        mocks.getActivePaymentMethods.mockResolvedValueOnce({
-            enabledMethods: ["sslcommerz", "cod"],
-            defaultMethod: "sslcommerz",
-        });
-        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
-            enabled: true,
-            storeId: "store-id",
-            storePassword: "stored-real-password",
-            sandbox: true,
+    describe("payment method saves", () => {
+        it("persists methods and invalidates checkout caches only after the save", async () => {
+            const { request, sqlite } = await createTestApp({ stripe: liveStripe });
+
+            const response = await request("/payment-methods", { enabledMethods: ["stripe", "cod"], defaultMethod: "stripe" });
+
+            expect(response.status).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({
+                enabled_methods: JSON.stringify(["stripe", "cod"]),
+                default_method: "stripe",
+            });
+            expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         });
 
-        const response = await getJson(app, env, "/payment-methods");
+        it("allows an intentional COD-only save in standard checkout mode", async () => {
+            const { request } = await createTestApp();
+            expect((await request("/payment-methods", { enabledMethods: ["cod"], defaultMethod: "cod" })).status).toBe(200);
+        });
 
-        expect(response.status, await response.clone().text()).toBe(200);
-        await expect(response.json()).resolves.toMatchObject({
-            success: true,
-            data: {
-                activeMethods: ["cod"],
-                activeDefaultMethod: "cod",
-                gatewayStatus: {
-                    sslcommerz: {
-                        configured: true,
-                        enabled: true,
-                        usable: false,
-                        checkoutSelected: true,
-                        checkoutVisible: false,
-                        blockedReason: "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.",
-                    },
-                    cod: {
-                        checkoutVisible: true,
-                    },
-                },
-            },
+        it.each([
+            ["duplicate methods", {}, {}, { enabledMethods: ["cod", "cod"], defaultMethod: "cod" }, undefined],
+            ["SSLCommerz outside BDT", { sslcommerz: liveSsl, currency: { currency_code: "USD" } }, {},
+                { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
+                "SSLCommerz checkout requires the store currency to be BDT. Current currency: USD."],
+            ["removing every online gateway under partial payments", {}, { partialPaymentEnabled: true },
+                { enabledMethods: ["cod"], defaultMethod: "cod" }, undefined],
+            ["a default method hidden by the checkout flow", { stripe: liveStripe }, { partialPaymentEnabled: true },
+                { enabledMethods: ["stripe", "cod"], defaultMethod: "cod" },
+                "Default method is hidden by the current checkout flow settings."],
+        ] as const)("rejects %s without persisting", async (_, stored, site, body, message) => {
+            const { request, sqlite } = await createTestApp(stored as Stored, site);
+
+            await expectValidationError(await request("/payment-methods", body), message);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({});
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
     });
 
-    it("rejects removing every configured online gateway while partial payments are enabled", async () => {
-        const { app, env } = createTestApp({
-            partialPaymentEnabled: true,
-            partialPaymentAmount: 500,
+    describe("gateway credential saves", () => {
+        it("encrypts a complete Stripe credential rotation in one atomic aggregate", async () => {
+            const { request, db, sqlite } = await createTestApp();
+
+            const response = await request("/stripe", {
+                secretKey: "sk_test_replacement",
+                publishableKey: "pk_test_replacement",
+                webhookSecret: "whsec_replacement",
+                enabled: true,
+            });
+
+            expect(response.status, await response.clone().text()).toBe(200);
+            const raw = storedRows(sqlite, "stripe");
+            expect(raw.secret_key).not.toContain("sk_test_replacement");
+            expect(raw.webhook_secret).not.toContain("whsec_replacement");
+            await expect(getStripeSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
+                secretKey: "sk_test_replacement",
+                publishableKey: "pk_test_replacement",
+                webhookSecret: "whsec_replacement",
+                enabled: true,
+            });
+            expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything());
         });
 
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["cod"],
-            defaultMethod: "cod",
+        it("encrypts SSLCommerz store passwords and keeps masked updates on the stored secret", async () => {
+            const { request, db, sqlite } = await createTestApp();
+
+            expect((await request("/sslcommerz", { storeId: "real_store_123", storePassword: "ssl_secret" })).status).toBe(200);
+            expect((await request("/sslcommerz", { storePassword: MASKED, sandbox: true, enabled: true })).status).toBe(200);
+
+            expect(storedRows(sqlite, "sslcommerz").store_password).not.toContain("ssl_secret");
+            await expect(getSSLCommerzSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
+                storeId: "real_store_123",
+                storePassword: "ssl_secret",
+                sandbox: true,
+                enabled: true,
+            });
         });
 
-        expect(response.status, await response.clone().text()).toBe(400);
-        expect(mocks.safeBatch).not.toHaveBeenCalled();
-    });
+        it.each([
+            ["/stripe", { secretKey: "sk_live_missing_key" }],
+            ["/sslcommerz", { storePassword: "ssl_secret_missing_key" }],
+        ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {
+            const { request, sqlite } = await createTestApp();
 
-    it("rejects saving a default method hidden by the current checkout flow", async () => {
-        const { app, env } = createTestApp({
-            partialPaymentEnabled: true,
-            partialPaymentAmount: 500,
-        });
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            enabled: true,
-            secretKey: "sk_live_existing",
-            publishableKey: "pk_live_existing",
-            webhookSecret: "whsec_existing",
-        });
+            const response = await request(path, body, {} as Env);
 
-        const response = await postJson(app, env, "/payment-methods", {
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "cod",
+            expect(response.status).toBe(503);
+            await expect(response.json()).resolves.toMatchObject({
+                error: { code: "SERVICE_UNAVAILABLE", message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials." },
+            });
+            expect(storedRows(sqlite, path.slice(1))).toEqual({});
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Default method is hidden by the current checkout flow settings.",
-            },
-        });
-        expect(mocks.safeBatch).not.toHaveBeenCalled();
-    });
+        it("does not invalidate checkout caches when the atomic gateway save fails", async () => {
+            const { request, sqlite, failNextBatch } = await createTestApp({ stripe: liveStripe });
+            failNextBatch();
 
-    it("invalidates API and storefront checkout caches after Stripe saves", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "encrypted-secret" },
-            { key: "webhook_secret", value: "encrypted-webhook" },
-        ]);
+            const response = await request("/stripe", { publishableKey: "pk_live_replacement" });
 
-        const response = await postJson(app, env, "/stripe", {
-            publishableKey: "pk_test",
-            enabled: true,
+            expect(response.status).toBe(500);
+            expect(storedRows(sqlite, "stripe").publishable_key).toBe("pk_live_existing");
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
-        expect(response.status).toBe(200);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["checkout"],
-            expect.objectContaining({ env }),
-        );
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-    });
+        it.each([
+            ["Stripe without an effective publishable key", "/stripe",
+                { stripe: { secret_key: "sk_live_existing", webhook_secret: "whsec_existing" } }, { enabled: true },
+                undefined],
+            ["Stripe with submitted placeholder credentials", "/stripe", {},
+                { secretKey: "stripe_secret_key", publishableKey: "pk_live_public", webhookSecret: "whsec_live", enabled: true },
+                "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."],
+            ["a live publishable key paired with a retained test secret", "/stripe",
+                { stripe: { ...liveStripe, secret_key: "sk_test_existing", publishable_key: "pk_test_existing" } },
+                { publishableKey: "pk_live_replacement", enabled: true },
+                "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair."],
+            ["Stripe when a masked stored credential is a placeholder", "/stripe",
+                { stripe: { ...liveStripe, secret_key: "sk_test_your_key_here", enabled: "false" } }, { enabled: true },
+                "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."],
+            ["SSLCommerz without an effective store password", "/sslcommerz", {},
+                { storeId: "store-id", enabled: true }, undefined],
+            ["SSLCommerz with submitted placeholder credentials", "/sslcommerz", {},
+                { storeId: "dummy", storePassword: "real-store-password", enabled: true },
+                "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account."],
+            ["SSLCommerz when a masked stored credential is a placeholder", "/sslcommerz",
+                { sslcommerz: { ...liveSsl, store_password: "password", enabled: "false" } }, { storePassword: MASKED, enabled: true },
+                "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account."],
+        ] as const)("rejects enabling %s without persisting", async (_, path, stored, body, message) => {
+            const { request, sqlite } = await createTestApp(stored as Stored);
+            const before = storedRows(sqlite, path.slice(1));
 
-    it("rejects enabling Stripe when the effective publishable key is missing", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "encrypted-secret" },
-            { key: "webhook_secret", value: "encrypted-webhook" },
-        ]);
-
-        const response = await postJson(app, env, "/stripe", {
-            enabled: true,
+            await expectValidationError(await request(path, body), message);
+            expect(storedRows(sqlite, path.slice(1))).toEqual(before);
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: expect.stringContaining("publishable key"),
-            },
+        it("keeps a compatible online gateway when partial payments require one", async () => {
+            const lastGateway = await createTestApp({
+                stripe: liveStripe,
+                payment_methods: { enabled_methods: JSON.stringify(["stripe", "cod"]), default_method: "stripe" },
+            }, { partialPaymentEnabled: true });
+            await expectValidationError(await lastGateway.request("/stripe", { enabled: false }));
+            expect(storedRows(lastGateway.sqlite, "stripe").enabled).toBe("true");
+
+            const withFallback = await createTestApp({
+                stripe: liveStripe,
+                sslcommerz: liveSsl,
+                payment_methods: { enabled_methods: JSON.stringify(["stripe", "sslcommerz", "cod"]), default_method: "sslcommerz" },
+            }, { partialPaymentEnabled: true });
+            expect((await withFallback.request("/stripe", { enabled: false })).status).toBe(200);
+            expect(storedRows(withFallback.sqlite, "stripe").enabled).toBe("false");
         });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling Stripe with submitted placeholder credentials", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/stripe", {
-            secretKey: "stripe_secret_key",
-            publishableKey: "pk_live_public",
-            webhookSecret: "whsec_live",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
-            },
-        });
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects a new live publishable key paired with a retained test secret", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "encrypted-secret" },
-            { key: "publishable_key", value: "pk_test_existing" },
-            { key: "webhook_secret", value: "encrypted-webhook" },
-            { key: "enabled", value: "true" },
-        ]);
-        mocks.getStripeSettings.mockResolvedValueOnce({
-            secretKey: "sk_test_existing",
-            publishableKey: "pk_test_existing",
-            webhookSecret: "whsec_existing",
-            enabled: true,
-        });
-
-        const response = await postJson(app, env, "/stripe", {
-            publishableKey: "pk_live_replacement",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair.",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling Stripe when a masked stored credential is a placeholder", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "sk_test_your_key_here" },
-            { key: "publishable_key", value: "pk_live_public" },
-            { key: "webhook_secret", value: "whsec_live" },
-            { key: "enabled", value: "false" },
-        ]);
-
-        const response = await postJson(app, env, "/stripe", {
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account.",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("requires the credential encryption key before saving Stripe secrets", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/stripe", {
-            secretKey: "sk_live_new",
-            webhookSecret: "whsec_new",
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            [
-                { category: "stripe", key: "secret_key", value: "sk_live_new", encrypted: true },
-                { category: "stripe", key: "webhook_secret", value: "whsec_new", encrypted: true },
-            ],
-            "credential-key",
-        );
-    });
-
-    it("submits one atomic aggregate for a complete Stripe credential rotation", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/stripe", {
-            secretKey: "sk_test_replacement",
-            publishableKey: "pk_test_replacement",
-            webhookSecret: "whsec_replacement",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledOnce();
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            [
-                { category: "stripe", key: "secret_key", value: "sk_test_replacement", encrypted: true },
-                { category: "stripe", key: "publishable_key", value: "pk_test_replacement" },
-                { category: "stripe", key: "webhook_secret", value: "whsec_replacement", encrypted: true },
-                { category: "stripe", key: "enabled", value: "true" },
-            ],
-            "credential-key",
-        );
-    });
-
-    it("does not invalidate checkout caches when an atomic gateway save fails", async () => {
-        mocks.saveSettingAggregate.mockRejectedValueOnce(new Error("atomic batch failed"));
-        const { app, env } = createTestApp({}, [
-            { key: "secret_key", value: "encrypted-secret" },
-            { key: "webhook_secret", value: "encrypted-webhook" },
-        ]);
-
-        const response = await postJson(app, env, "/stripe", {
-            publishableKey: "pk_test_existing",
-        });
-
-        expect(response.status, await response.clone().text()).toBe(500);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
-    });
-
-    it("rejects disabling the last configured online gateway while partial payments are enabled", async () => {
-        const { app, env } = createTestApp({
-            partialPaymentEnabled: true,
-            partialPaymentAmount: 500,
-        });
-        mocks.getActivePaymentMethods.mockResolvedValueOnce({
-            enabledMethods: ["stripe", "cod"],
-            defaultMethod: "stripe",
-        });
-
-        const response = await postJson(app, env, "/stripe", {
-            enabled: false,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("allows disabling one online gateway while partial payments still have another online gateway", async () => {
-        const { app, env } = createTestApp({
-            partialPaymentEnabled: true,
-            partialPaymentAmount: 500,
-        });
-        mocks.getActivePaymentMethods.mockResolvedValueOnce({
-            enabledMethods: ["stripe", "sslcommerz", "cod"],
-            defaultMethod: "sslcommerz",
-        });
-
-        const response = await postJson(app, env, "/stripe", {
-            enabled: false,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            [{ category: "stripe", key: "enabled", value: "false" }],
-            undefined,
-        );
-    });
-
-    it("invalidates API and storefront checkout caches after SSLCommerz saves", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "store_password", value: "encrypted-password" },
-        ]);
-        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
-            enabled: true,
-            storeId: "store-id",
-            storePassword: "stored-real-password",
-            sandbox: true,
-        });
-
-        const response = await postJson(app, env, "/sslcommerz", {
-            storeId: "store-id",
-            sandbox: true,
-            enabled: true,
-        });
-
-        expect(response.status).toBe(200);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["checkout"],
-            expect.objectContaining({ env }),
-        );
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling SSLCommerz when the effective store password is missing", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/sslcommerz", {
-            storeId: "store-id",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: expect.stringContaining("store password"),
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling SSLCommerz with submitted placeholder credentials", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/sslcommerz", {
-            storeId: "dummy",
-            storePassword: "real-store-password",
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.",
-            },
-        });
-        expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("rejects enabling SSLCommerz when a masked stored credential is a placeholder", async () => {
-        const { app, env } = createTestApp({}, [
-            { key: "store_id", value: "real_store_123" },
-            { key: "store_password", value: "password" },
-            { key: "enabled", value: "false" },
-        ]);
-        mocks.getSSLCommerzSettings.mockResolvedValueOnce({
-            enabled: false,
-            storeId: "real_store_123",
-            storePassword: "password",
-            sandbox: true,
-        });
-
-        const response = await postJson(app, env, "/sslcommerz", {
-            storePassword: "\u2022".repeat(12),
-            enabled: true,
-        });
-
-        expect(response.status, await response.clone().text()).toBe(400);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-    });
-
-    it("requires the credential encryption key before saving SSLCommerz secrets", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await postJson(app, env, "/sslcommerz", {
-            storePassword: "ssl_secret",
-        });
-
-        expect(response.status, await response.clone().text()).toBe(200);
-        expect(mocks.requireEncryptionKey).toHaveBeenCalledWith(env);
-        expect(mocks.saveSettingAggregate).toHaveBeenCalledWith(
-            expect.objectContaining({ id: "db" }),
-            [{ category: "sslcommerz", key: "store_password", value: "ssl_secret", encrypted: true }],
-            "credential-key",
-        );
-    });
-
-    it.each([
-        ["/stripe", { secretKey: "sk_live_missing_key" }],
-        ["/sslcommerz", { storePassword: "ssl_secret_missing_key" }],
-    ])("fails closed before saving %s secrets when CREDENTIAL_ENCRYPTION_KEY is missing", async (path, body) => {
-        const { app, env } = createTestApp();
-        mocks.requireEncryptionKey.mockImplementationOnce(() => {
-            throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
-        });
-
-        const response = await postJson(app, env, path, body);
-
-        expect(response.status, await response.clone().text()).toBe(503);
-        await expect(response.json()).resolves.toMatchObject({
-            success: false,
-            error: {
-                code: "SERVICE_UNAVAILABLE",
-                message: "CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.",
-            },
-        });
-        expect(mocks.saveSettingAggregate).not.toHaveBeenCalled();
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
     });
 });

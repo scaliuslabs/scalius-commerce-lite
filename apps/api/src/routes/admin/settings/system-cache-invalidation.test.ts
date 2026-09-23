@@ -6,7 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   invalidateSiteSettingsCache: vi.fn(),
-  invalidateApiAndScheduleStorefrontGroups: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
   getEmailProviderReadiness: vi.fn(),
   getEmailRuntimeSettings: vi.fn(),
   readEmailDocument: vi.fn(),
@@ -61,8 +61,8 @@ vi.mock("@scalius/core/modules/settings/checkout-flow-admin.service", async (imp
   };
 });
 
-vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+vi.mock("../../../utils/cache-generation", () => ({
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
   getOptionalExecutionContext: mocks.getOptionalExecutionContext,
 }));
 
@@ -83,7 +83,6 @@ vi.mock("@scalius/core/integrations/email", () => ({
   getEmailProviderReadiness: mocks.getEmailProviderReadiness,
   getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
   emailSettingsDocument: {
-    invalidationGroups: ["checkout"],
     prepareWrite: mocks.prepareEmailDocumentWrite,
     read: mocks.readEmailDocument,
   },
@@ -151,8 +150,6 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
   };
   const env = {
     CACHE: kv,
-    PURGE_URL: "https://storefront.example.com/api/purge-cache",
-    PURGE_TOKEN: "secret-token",
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
   } as unknown as Env;
   const executionCtx = {
@@ -162,7 +159,7 @@ function createTestApp(settingRows: Array<{ key: string; value: string }> = []) 
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
-  mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
+  mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.safeBatch.mockResolvedValue([]);
   mocks.prepareSettingAggregateStatements.mockResolvedValue([]);
   mocks.prepareWhatsAppDocumentWrite.mockResolvedValue({
@@ -378,9 +375,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledWith(kv);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -481,7 +476,7 @@ describe("system settings cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("rejects email customer auth policy before writes when no email provider is ready", async () => {
@@ -517,7 +512,7 @@ describe("system settings cache invalidation", () => {
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.safeBatch).not.toHaveBeenCalled();
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("allows email customer auth policy when Cloudflare Email and sender are ready", async () => {
@@ -871,9 +866,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["layout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -910,9 +903,7 @@ describe("system settings cache invalidation", () => {
       "security:csp_allowed_domains",
       "https://payments.example.com",
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["layout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -1057,9 +1048,7 @@ describe("system settings cache invalidation", () => {
       { channel: "email" },
     );
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -1083,9 +1072,7 @@ describe("system settings cache invalidation", () => {
       { channel: "email" },
     );
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
-      expect.objectContaining({ env }),
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
 
@@ -1108,7 +1095,7 @@ describe("system settings cache invalidation", () => {
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.safeBatch).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("does not invalidate checkout caches when the atomic email save fails", async () => {
@@ -1121,7 +1108,7 @@ describe("system settings cache invalidation", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(500);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("batches Firebase credentials, public config, and push health reset together", async () => {

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { formatAdminDate, formatAdminTimestamp } from "~/lib/admin-time";
-import { getCustomerHistory } from "~/lib/api-functions/customers";
+import { fetchCustomerHistory } from "~/lib/api-query-options/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Table,
@@ -42,11 +42,11 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import type {
-  Customer,
+  CustomerHistoryCustomer as Customer,
   CustomerHistoryRecord,
   CustomerHistoryPage,
   CustomerOrderSummary,
-} from "@/types/api-responses";
+} from "~/lib/api-query-options/customers";
 
 interface CustomerHistoryViewProps {
   customer: Customer;
@@ -109,14 +109,11 @@ export function CustomerHistoryView({
 
   const moreOrders = useMutation({
     mutationFn: () =>
-      getCustomerHistory({
-        data: {
-          id: customer.id,
-          ordersPage: ordersPage.page + 1,
-          ordersLimit: ordersPage.limit,
-          historyPage: 1,
-          historyLimit: 1,
-        },
+      fetchCustomerHistory(customer.id, {
+        ordersPage: ordersPage.page + 1,
+        ordersLimit: ordersPage.limit,
+        historyPage: 1,
+        historyLimit: 1,
       }),
     onSuccess: (data) => {
       setLoadedOrders((current) => appendUniqueById(current, data.orders));
@@ -126,14 +123,11 @@ export function CustomerHistoryView({
 
   const moreHistory = useMutation({
     mutationFn: () =>
-      getCustomerHistory({
-        data: {
-          id: customer.id,
-          historyPage: historyPage.page + 1,
-          historyLimit: historyPage.limit,
-          ordersPage: 1,
-          ordersLimit: 1,
-        },
+      fetchCustomerHistory(customer.id, {
+        historyPage: historyPage.page + 1,
+        historyLimit: historyPage.limit,
+        ordersPage: 1,
+        ordersLimit: 1,
       }),
     onSuccess: (data) => {
       setLoadedHistory((current) => appendUniqueById(current, data.history));

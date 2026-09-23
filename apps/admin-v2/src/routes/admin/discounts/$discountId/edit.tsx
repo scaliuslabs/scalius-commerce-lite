@@ -2,7 +2,6 @@ import { lazy, Suspense } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 
-import type { Discount } from "~/types/api-responses";
 import type { DiscountCollectionOption } from "~/components/admin/discount/CollectionSelector";
 import type { DiscountProductOption } from "~/components/admin/discount/ProductSelector";
 import {
@@ -50,10 +49,10 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
     // Read failures stay on this route and use RouteErrorComponent. Redirecting
     // every failed request to the list made outages look like missing records.
-    const discount = (await queryClient.ensureQueryData({
+    const discount = await queryClient.ensureQueryData({
       ...discountQueryOptions(params.discountId),
       staleTime: Infinity,
-    })) as Discount;
+    });
 
     if (discount.type === "amount_off_products" && typeof window !== "undefined") {
       const productIds = uniqueRelationIds(discount.relatedProducts);
@@ -85,7 +84,7 @@ function EditDiscountPage() {
   const { discountId } = Route.useParams();
   const { duplicate } = Route.useSearch();
   const { data } = useSuspenseQuery(discountQueryOptions(discountId));
-  const discount = data as Discount;
+  const discount = data;
 
   const productIds = uniqueRelationIds(discount.relatedProducts);
   const collectionIds = uniqueRelationIds(discount.relatedCollections);

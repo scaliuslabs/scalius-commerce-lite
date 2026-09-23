@@ -244,31 +244,36 @@ export function buildAdminOrderFullEditReadiness(
     return { allowed: true, reason: null };
 }
 
+// Drizzle renders `${orders.id}` unqualified in a single-table select, and an
+// unqualified `id` inside these EXISTS subqueries binds to the subquery table's
+// own id column. Qualify the outer order explicitly.
+const OUTER_ORDER_ID = sql.raw('"orders"."id"');
+
 function adminOrderFullEditEvidenceSelection() {
     return {
         hasTaxSnapshot: sql<number>`EXISTS (
             SELECT 1 FROM ${orderTaxSnapshots}
-            WHERE ${orderTaxSnapshots.orderId} = ${orders.id}
+            WHERE ${orderTaxSnapshots.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasPaymentHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderPayments}
-            WHERE ${orderPayments.orderId} = ${orders.id}
+            WHERE ${orderPayments.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasShipmentHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${deliveryShipments}
-            WHERE ${deliveryShipments.orderId} = ${orders.id}
+            WHERE ${deliveryShipments.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasRefundHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${refundAttempts}
-            WHERE ${refundAttempts.orderId} = ${orders.id}
+            WHERE ${refundAttempts.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasReturnHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderReturns}
-            WHERE ${orderReturns.orderId} = ${orders.id}
+            WHERE ${orderReturns.orderId} = ${OUTER_ORDER_ID}
         )`,
         hasInvoiceHistory: sql<number>`EXISTS (
             SELECT 1 FROM ${orderInvoices}
-            WHERE ${orderInvoices.orderId} = ${orders.id}
+            WHERE ${orderInvoices.orderId} = ${OUTER_ORDER_ID}
         )`,
     };
 }

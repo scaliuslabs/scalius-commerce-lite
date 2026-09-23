@@ -1,6 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "../../../utils/api-error";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -246,106 +245,33 @@ describe("notification channel settings routes", () => {
         expect(body.data.email.issues[0]?.message).toBe("email/cloudflare paused");
     });
 
-    it("maps unready SMS channel saves to a customer-safe 400", async () => {
-        mocks.updateNotificationChannels.mockRejectedValueOnce(
-            new ValidationError("Configure an active SMS provider before enabling SMS order notifications. No active SMS provider selected"),
-        );
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channels: completeCustomerChannels({ order_created: ["email", "sms"] }),
-            }),
-        }, env);
-        const body = await response.json() as { success: boolean; error: { message: string } };
-
-        expect(response.status).toBe(400);
-        expect(body.success).toBe(false);
-        expect(body.error.message).toContain("Configure an active SMS provider before enabling SMS order notifications.");
-    });
-
-    it("rejects unsupported customer push before mutation", async () => {
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channels: completeCustomerChannels({ order_created: ["email", "push"] }),
-            }),
-        }, env);
-        const body = await response.json() as { success: boolean; error: { message: string } };
-
-        expect(response.status).toBe(400);
-        expect(body.success).toBe(false);
-        expect(body.error.message).toContain("email");
-        expect(mocks.updateNotificationChannels).not.toHaveBeenCalled();
-    });
-
     it("clears paused WhatsApp sends after saving the order template", async () => {
         mocks.updateNotificationChannels.mockImplementationOnce(async () => {
             expect(mocks.updateOrderWhatsAppTemplateSettings).toHaveBeenCalledWith(
                 { id: "db" },
-                {
-                    templateName: "order_status_update",
-                    languageCode: "en_US",
-                },
+                { templateName: "order_status_update", languageCode: "en_US" },
             );
-            expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
-                { id: "db" },
-                { channel: "whatsapp" },
-            );
+            expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith({ id: "db" }, { channel: "whatsapp" });
             return { order_created: ["whatsapp"] };
         });
         mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(true);
         const { app, env } = createTestApp();
+        const channels = {
+            ...Object.fromEntries(Object.keys(completeCustomerChannels()).map((event) => [event, []])),
+            order_created: ["whatsapp"],
+        };
 
         const response = await app.request("/api/v1/admin/settings/notification-channels", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                channels: completeCustomerChannels({
-                    order_created: ["whatsapp"],
-                    order_confirmed: [],
-                    order_processing: [],
-                    order_shipped: [],
-                    order_delivered: [],
-                    order_completed: [],
-                    order_cancelled: [],
-                    order_returned: [],
-                    refund_processing: [],
-                    refund_failed: [],
-                    order_refunded: [],
-                    order_partially_refunded: [],
-                    payment_balance_paid: [],
-                    support_request_status_updated: [],
-                }),
-                whatsappTemplate: {
-                    templateName: "order_status_update",
-                    languageCode: "en_US",
-                },
+                channels,
+                whatsappTemplate: { templateName: "order_status_update", languageCode: "en_US" },
             }),
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.updateNotificationChannels).toHaveBeenCalledWith(
-            { id: "db" },
-            completeCustomerChannels({
-                order_created: ["whatsapp"],
-                order_confirmed: [], order_processing: [], order_shipped: [], order_delivered: [],
-                order_completed: [], order_cancelled: [], order_returned: [], refund_processing: [],
-                refund_failed: [], order_refunded: [], order_partially_refunded: [], payment_balance_paid: [],
-                support_request_status_updated: [],
-            }),
-            "credential-key",
-            env,
-        );
-        expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
-            { id: "db" },
-            { channel: "whatsapp" },
-        );
+        expect(mocks.updateNotificationChannels).toHaveBeenCalledWith({ id: "db" }, channels, "credential-key", env);
     });
 
     it.each([

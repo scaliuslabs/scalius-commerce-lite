@@ -129,8 +129,8 @@ The dashboard edits menus through the normalized navigation-authority workspace 
 | PUT | `/admin/navigation/{id}` | Deprecated compatibility update through the same CAS authority |
 | DELETE | `/admin/navigation/{id}` | Deprecated compatibility reset through the same CAS authority |
 
-After saving, the route invalidates the layout cache through its request-scoped
-`CACHE` binding and schedules the corresponding storefront purge.
+After saving, the route bumps the store cache generation (`bumpCacheGeneration`),
+so the layout and every storefront page refresh.
 
 ### Public Routes (Storefront)
 

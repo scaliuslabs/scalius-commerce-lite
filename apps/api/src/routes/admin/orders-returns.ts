@@ -22,7 +22,7 @@ import {
     serviceUnavailableResponse,
     successEnvelope,
 } from "../../schemas/responses";
-import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 
@@ -213,21 +213,11 @@ async function postReceiptSideEffects(
     c: Parameters<AdminRouteHandler<typeof receiveRoute>>[0],
     result: Awaited<ReturnType<typeof receiveOrderReturn>>,
 ) {
-    if (result.availabilityTransitionVariantIds?.length) {
-        await invalidateProductAvailabilityCaches(
-            c.get("db"),
-            { variantIds: result.availabilityTransitionVariantIds },
-            c,
-        );
-    } else if (
-        result.restockedQuantity > 0
-        && result.availabilityTransitionVariantIds === undefined
+    if (
+        result.availabilityTransitionVariantIds?.length
+        || (result.restockedQuantity > 0 && result.availabilityTransitionVariantIds === undefined)
     ) {
-        await invalidateProductAvailabilityCaches(
-            c.get("db"),
-            { orderIds: [result.orderId] },
-            c,
-        );
+        await bumpCacheGeneration(c);
     }
     if (result.wholeOrderReturned) {
         await enqueueOrderNotificationsForStatus({

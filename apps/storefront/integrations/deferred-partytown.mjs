@@ -20,37 +20,21 @@ function buildLoaderName(snippet) {
   return `${LOADER_PREFIX}.${digest}.js`;
 }
 
-/**
- * Keep Partytown's forwarding contract available immediately, but postpone its
- * runtime and sandbox until first-party resources have loaded and painted.
- * Calls made in the gap are replayed into Partytown's own forwarding buffer;
- * an early interaction starts delivery immediately rather than losing intent.
- */
-export function buildDeferredPartytownBootstrap({
-  forward = [],
-  loaderPath,
-}) {
-  const forwardPaths = forward.map((entry) =>
-    Array.isArray(entry) ? entry[0] : entry,
-  );
-
-  return `!function(w,d,p){var q=w.__scaliusPtq=w.__scaliusPtq||[],a=${JSON.stringify(
-    forwardPaths,
-  )},x=function(n){for(var s=n.split('.'),o=w,i=0;i<s.length-1;i++)o=o[s[i]]||(o[s[i]]=s[i+1]==='push'?[]:{});var k=s[s.length-1],f=o[k];o[k]=function(){var r=[].slice.call(arguments);q.push([n,r]);if(n==='dataLayer.push'&&typeof f==='function')return f.apply(o,r)}};a.forEach(x);var l=0,h=function(){if(l)return;l=1;var s=d.createElement('script');s.src=p;s.async=true;s.onload=function(){var b=q.splice(0);b.forEach(function(e){for(var s=e[0].split('.'),o=w,i=0;i<s.length-1;i++)o=o&&o[s[i]];var f=o&&o[s[s.length-1]];if(typeof f==='function')f.apply(o,e[1])})};d.head.appendChild(s)},r=w.requestAnimationFrame||function(f){return setTimeout(f,16)},g=function(){r(function(){r(h)})};d.readyState==='complete'?g():w.addEventListener('load',g,{once:true});['pointerdown','keydown','touchstart'].forEach(function(e){w.addEventListener(e,h,{once:true,passive:true})});setTimeout(h,4000)}(window,document,${JSON.stringify(
-    loaderPath,
-  )});`;
-}
-
 function contentTypeFor(name) {
   if (name.endsWith(".html")) return "text/html; charset=utf-8";
   if (name.endsWith(".wasm")) return "application/wasm";
   return "text/javascript; charset=utf-8";
 }
 
+const VIRTUAL_MODULE_ID = "virtual:scalius/partytown";
+const RESOLVED_VIRTUAL_MODULE_ID = `\0${VIRTUAL_MODULE_ID}`;
+
 /**
  * A deliberately small fork of Astro's official Partytown integration. The
- * library assets and configuration are unchanged; only the bootstrap delivery
- * moves from a large inline head script to a hashed, post-first-paint asset.
+ * library assets are unchanged; the loader is a hashed, post-first-paint
+ * asset, and nothing is injected globally. Layout.astro imports the loader
+ * path from `virtual:scalius/partytown` and renders the bootstrap
+ * (src/lib/partytown-config.ts) only on pages whose analytics run in Partytown.
  */
 export default function deferredPartytown(options = {}) {
   let loaderSource = "";
@@ -61,7 +45,7 @@ export default function deferredPartytown(options = {}) {
   return {
     name: "@scalius/deferred-partytown",
     hooks: {
-      "astro:config:setup": ({ config, command, injectScript }) => {
+      "astro:config:setup": ({ config, command, updateConfig }) => {
         libPath = withTrailingSlash(
           options.config?.lib || `${withTrailingSlash(config.base)}~partytown/`,
         );
@@ -74,13 +58,25 @@ export default function deferredPartytown(options = {}) {
         loaderSource = partytownSnippet(partytownConfig);
         loaderName = buildLoaderName(loaderSource);
         loaderPath = `${libPath}${loaderName}`;
-        injectScript(
-          "head-inline",
-          buildDeferredPartytownBootstrap({
-            forward: partytownConfig.forward,
-            loaderPath,
-          }),
-        );
+        updateConfig({
+          vite: {
+            plugins: [
+              {
+                name: "scalius-partytown-loader-path",
+                resolveId(id) {
+                  return id === VIRTUAL_MODULE_ID
+                    ? RESOLVED_VIRTUAL_MODULE_ID
+                    : undefined;
+                },
+                load(id) {
+                  return id === RESOLVED_VIRTUAL_MODULE_ID
+                    ? `export const partytownLoaderPath = ${JSON.stringify(loaderPath)};`
+                    : undefined;
+                },
+              },
+            ],
+          },
+        });
       },
 
       "astro:server:setup": ({ server }) => {

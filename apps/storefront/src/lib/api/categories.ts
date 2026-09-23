@@ -11,7 +11,7 @@ import {
 
 /**
  * Fetches a list of all categories.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @returns A promise resolving to an array of Category objects or null on failure.
  */
 export async function getAllCategories(): Promise<Category[] | null> {
@@ -34,7 +34,7 @@ export async function getAllCategories(): Promise<Category[] | null> {
 
 /**
  * Fetches a single category by its URL-friendly slug.
- * Wrapped with EdgeCache (TTL) - invalidated via purge-cache.
+ * Coalesced per request; the API caches it by cache generation.
  * @param slug The slug of the category.
  * @returns A promise resolving to a Category object or null if not found.
  */

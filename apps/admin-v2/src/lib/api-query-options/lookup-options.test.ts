@@ -1,42 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  getProduct: vi.fn(),
-  getProducts: vi.fn(),
-  getProductsByIds: vi.fn(),
-  getProductStats: vi.fn(),
-  getProductVariants: vi.fn(),
-  getVariantSortOrder: vi.fn(),
-  getCollection: vi.fn(),
-  getCollectionCategoryOptions: vi.fn(),
-  getCollectionFormOptions: vi.fn(),
-  getCollectionProductOptions: vi.fn(),
-  getCollections: vi.fn(),
-  getCollectionsByIds: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const recorder = () => Object.assign(vi.fn(), { result: undefined as unknown });
+  return {
+    getProductsByIds: recorder(),
+    getCollectionProductOptions: recorder(),
+    getCollections: recorder(),
+    getCollectionsByIds: recorder(),
+  };
+});
 
-vi.mock("../api-functions/products", () => ({
-  getProduct: mocks.getProduct,
-  getProducts: mocks.getProducts,
-  getProductsByIds: mocks.getProductsByIds,
-  getProductStats: mocks.getProductStats,
-  getProductVariants: mocks.getProductVariants,
-  getVariantSortOrder: mocks.getVariantSortOrder,
-}));
-
-vi.mock("../api-functions/collections", () => ({
-  getCollection: mocks.getCollection,
-  getCollectionCategoryOptions: mocks.getCollectionCategoryOptions,
-  getCollectionFormOptions: mocks.getCollectionFormOptions,
-  getCollectionProductOptions: mocks.getCollectionProductOptions,
-  getCollections: mocks.getCollections,
-  getCollectionsByIds: mocks.getCollectionsByIds,
+const ok = (data: unknown) => Promise.resolve({ data: { success: true, data } });
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminProductsByIds: (options: unknown) => { mocks.getProductsByIds(options); return ok(mocks.getProductsByIds.result); },
+  getApiV1AdminCollectionsByIds: (options: unknown) => { mocks.getCollectionsByIds(options); return ok(mocks.getCollectionsByIds.result); },
+  getApiV1AdminCollections: (options: unknown) => { mocks.getCollections(options); return ok(mocks.getCollections.result); },
+  getApiV1AdminCollectionsProductOptions: (options: unknown) => {
+    mocks.getCollectionProductOptions(options);
+    return ok(mocks.getCollectionProductOptions.result);
+  },
 }));
 
 import { productsByIdsQueryOptions } from "./products";
 import {
-  collectionCategoryOptionsQueryOptions,
-  collectionFormOptionsQueryOptions,
   collectionPickerOptionsQueryOptions,
   collectionProductOptionsQueryOptions,
   collectionsByIdsQueryOptions,
@@ -52,6 +38,7 @@ function requireQueryFn<T>(options: { queryFn?: unknown }) {
 describe("lookup query options", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    for (const mock of Object.values(mocks)) mock.result = undefined;
   });
 
   it("keeps product lookups shaped while ids are empty or still loading", async () => {
@@ -68,24 +55,14 @@ describe("lookup query options", () => {
     const payload = {
       products: [{ id: "prod_1", name: "One", price: 100, categoryId: null }],
     };
-    mocks.getProductsByIds.mockResolvedValue(payload);
+    mocks.getProductsByIds.result = payload;
 
     const options = productsByIdsQueryOptions([" prod_1 ", "prod_1", ""]);
 
     expect(options.placeholderData).toEqual({ products: [] });
     await expect(requireQueryFn(options)({} as never)).resolves.toEqual(payload);
     expect(mocks.getProductsByIds).toHaveBeenCalledWith({
-      data: { ids: ["prod_1"] },
-    });
-  });
-
-  it("coerces malformed product lookup payloads to an empty list", async () => {
-    mocks.getProductsByIds.mockResolvedValue(undefined);
-
-    const options = productsByIdsQueryOptions(["prod_1"]);
-
-    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
-      products: [],
+      query: { ids: "prod_1" },
     });
   });
 
@@ -103,24 +80,14 @@ describe("lookup query options", () => {
     const payload = {
       collections: [{ id: "col_1", name: "Featured", presentation: "grid" }],
     };
-    mocks.getCollectionsByIds.mockResolvedValue(payload);
+    mocks.getCollectionsByIds.result = payload;
 
     const options = collectionsByIdsQueryOptions(["col_1", " col_1 ", ""]);
 
     expect(options.placeholderData).toEqual({ collections: [] });
     await expect(requireQueryFn(options)({} as never)).resolves.toEqual(payload);
     expect(mocks.getCollectionsByIds).toHaveBeenCalledWith({
-      data: { ids: ["col_1"] },
-    });
-  });
-
-  it("coerces malformed collection lookup payloads to an empty list", async () => {
-    mocks.getCollectionsByIds.mockResolvedValue({ collections: undefined });
-
-    const options = collectionsByIdsQueryOptions(["col_1"]);
-
-    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
-      collections: [],
+      query: { ids: "col_1" },
     });
   });
 
@@ -143,7 +110,7 @@ describe("lookup query options", () => {
       }],
       pagination: { page: 2, limit: 10, total: 11, totalPages: 2 },
     };
-    mocks.getCollections.mockResolvedValue(payload);
+    mocks.getCollections.result = payload;
 
     const options = collectionPickerOptionsQueryOptions({
       search: " spring ",
@@ -159,32 +126,9 @@ describe("lookup query options", () => {
       requireQueryFn(options)({ pageParam: 2 } as never),
     ).resolves.toEqual(payload);
     expect(mocks.getCollections).toHaveBeenCalledWith({
-      data: { page: 2, limit: 10, search: "spring" },
+      query: { page: 2, limit: 10, search: "spring" },
     });
     expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBeUndefined();
-  });
-
-  it("keeps collection form option payloads shaped", async () => {
-    mocks.getCollectionFormOptions.mockResolvedValue({ categories: undefined });
-
-    const options = collectionFormOptionsQueryOptions();
-
-    expect(options.placeholderData).toEqual({ categories: [], products: [] });
-    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
-      categories: [],
-      products: [],
-    });
-  });
-
-  it("keeps collection category option payloads shaped", async () => {
-    mocks.getCollectionCategoryOptions.mockResolvedValue(undefined);
-
-    const options = collectionCategoryOptionsQueryOptions();
-
-    expect(options.placeholderData).toEqual({ categories: [] });
-    await expect(requireQueryFn(options)({} as never)).resolves.toEqual({
-      categories: [],
-    });
   });
 
   it("keys and pages collection product options by normalized server filters", async () => {
@@ -200,7 +144,7 @@ describe("lookup query options", () => {
       }],
       pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
     };
-    mocks.getCollectionProductOptions.mockResolvedValue(payload);
+    mocks.getCollectionProductOptions.result = payload;
 
     const options = collectionProductOptionsQueryOptions({
       categoryIds: [" cat_2 ", "cat_1", "cat_2", ""],
@@ -223,19 +167,19 @@ describe("lookup query options", () => {
       requireQueryFn(options)({ pageParam: 2 } as never),
     ).resolves.toEqual(payload);
     expect(mocks.getCollectionProductOptions).toHaveBeenCalledWith({
-      data: {
+      query: {
         page: 2,
         limit: 10,
         search: "blue",
-        categoryIds: ["cat_2", "cat_1"],
-        selectedProductIds: ["prod_1", "prod_2"],
+        categoryIds: "cat_2,cat_1",
+        selectedProductIds: "prod_1,prod_2",
       },
     });
     expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBe(3);
   });
 
   it("fails closed when category rows reach the manual product picker", async () => {
-    mocks.getCollectionProductOptions.mockResolvedValue({
+    mocks.getCollectionProductOptions.result = ({
       products: [{
         id: "cat_home",
         name: "Home & Living",

@@ -36,5 +36,4 @@ export const securitySettingsDocument = defineSettingsDocument<SecuritySettings>
   defaults: { cspAllowedDomains: "" },
   codec: rawStringSettingsCodec("cspAllowedDomains"),
   cache: { key: CSP_ALLOWED_DOMAINS_CACHE_KEY, ttlSeconds: 0 },
-  invalidationGroups: ["layout"],
 });
