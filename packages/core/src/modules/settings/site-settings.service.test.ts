@@ -141,41 +141,50 @@ describe("site SEO settings", () => {
   it("returns default-on discovery settings when nothing is saved", async () => {
     const { db } = createSqliteD1Database();
     await expect(getSeoSettings(db)).resolves.toMatchObject({
-      siteTitle: "",
+      homepageTitle: "",
+      socialImage: "",
       discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
       returnPolicy: { enabled: false },
     });
   });
 
-  it("merges saved discovery settings with safe defaults", async () => {
+  it("merges saved discovery settings with safe defaults and drops removed fields", async () => {
     const { db, sqlite } = createSqliteD1Database();
     storeDocument(sqlite, "seo", JSON.stringify({
-      siteTitle: "Store",
+      homepageTitle: "Store",
+      siteTitle: "Old",
+      robotsTxt: "User-agent: *",
       discovery: { sitemap: { products: false }, feeds: { variantStrategy: "bogus" } },
     }));
 
     const seo = await getSeoSettings(db);
-    expect(seo.siteTitle).toBe("Store");
-    expect(seo.discovery.sitemap).toEqual({ ...DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap, products: false });
-    expect(seo.discovery.feeds.variantStrategy).toBe(DEFAULT_SEO_DISCOVERY_SETTINGS.feeds.variantStrategy);
+    expect(seo.homepageTitle).toBe("Store");
+    expect(seo).not.toHaveProperty("siteTitle");
+    expect(seo).not.toHaveProperty("robotsTxt");
+    expect(seo.discovery).toEqual(DEFAULT_SEO_DISCOVERY_SETTINGS);
   });
 
   it("preserves existing nested discovery and return policy details on partial saves", async () => {
     const { db } = createSqliteD1Database();
     await saveSeoSettings(db, {
-      siteTitle: "Store",
-      discovery: { sitemap: { products: false }, feeds: { title: "Catalog" } },
+      homepageTitle: "Store",
+      socialImage: "https://cdn.example.com/social.jpg",
+      discovery: { feeds: { title: "Catalog", productCatalogEnabled: false } },
       returnPolicy: { enabled: true, category: "finite", returnWindowDays: 14 },
     });
     await saveSeoSettings(db, {
-      discovery: { sitemap: { categories: false } },
+      discovery: { feeds: { variantStrategy: "products" } },
       returnPolicy: { returnWindowDays: 30 },
     });
 
     const seo = await getSeoSettings(db);
-    expect(seo.siteTitle).toBe("Store");
-    expect(seo.discovery.sitemap).toMatchObject({ products: false, categories: false });
-    expect(seo.discovery.feeds.title).toBe("Catalog");
+    expect(seo.homepageTitle).toBe("Store");
+    expect(seo.socialImage).toBe("https://cdn.example.com/social.jpg");
+    expect(seo.discovery.feeds).toMatchObject({
+      title: "Catalog",
+      productCatalogEnabled: false,
+      variantStrategy: "products",
+    });
     expect(seo.returnPolicy).toMatchObject({ enabled: true, category: "finite", returnWindowDays: 30 });
   });
 });

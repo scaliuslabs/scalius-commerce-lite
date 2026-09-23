@@ -53,7 +53,6 @@ export interface HomepageHero {
 
 export interface HomepageData {
   seo: {
-    siteTitle: string | null;
     homepageTitle: string | null;
     homepageMetaDescription: string | null;
   };
@@ -109,6 +108,8 @@ export interface LayoutData {
   seo?: {
     discovery?: SeoDiscoverySettings;
     returnPolicy?: StorefrontReturnPolicySettings | null;
+    /** Default og:image: "" or an absolute https URL. */
+    socialImage?: string;
   };
   /** Public origins of this deployment (Settings -> System -> Platform). */
   platform?: {

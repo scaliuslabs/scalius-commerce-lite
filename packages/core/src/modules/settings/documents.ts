@@ -370,10 +370,10 @@ export const homepageDocument = defineSettingsDocument<HomepagePresentationConfi
 });
 
 export interface SeoSettings {
-  siteTitle: string;
   homepageTitle: string;
   homepageMetaDescription: string;
-  robotsTxt: string;
+  /** Default og:image for pages without their own: "" or an absolute https URL. */
+  socialImage: string;
   discovery: SeoDiscoverySettings;
   returnPolicy: SeoReturnPolicySettings;
 }
@@ -381,18 +381,16 @@ export interface SeoSettings {
 export const seoDocument = defineSettingsDocument<SeoSettings>({
   key: "seo",
   schema: z.object({
-    siteTitle: z.string(),
     homepageTitle: z.string(),
     homepageMetaDescription: z.string(),
-    robotsTxt: z.string(),
+    socialImage: z.string().max(2048),
     discovery: z.unknown().transform(normalizeSeoDiscoverySettings),
     returnPolicy: z.unknown().transform(normalizeSeoReturnPolicySettings),
   }),
   defaults: {
-    siteTitle: "",
     homepageTitle: "",
     homepageMetaDescription: "",
-    robotsTxt: "",
+    socialImage: "",
     discovery: normalizeSeoDiscoverySettings(undefined),
     returnPolicy: normalizeSeoReturnPolicySettings(undefined),
   },

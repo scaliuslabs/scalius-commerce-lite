@@ -25,7 +25,7 @@ import {
   buildStorefrontThemeTokens,
   sanitizeStorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   clearThemePreviewCookieHeader,
   readThemePreviewCookie,
@@ -132,9 +132,6 @@ const footerData = layoutData?.footer ?? {
   menus: [],
   social: [],
 };
-const discoverySettings = normalizeSeoDiscoverySettings(
-  layoutData?.seo?.discovery,
-);
 
 const faviconUrl = headerData?.favicon?.src
   ? mediaImageUrl(headerData.favicon.src, 160)
@@ -158,7 +155,7 @@ const logoUrl = headerData.logo.src
   : null;
 
 const onlineStoreJsonLd =
-  discoverySettings.structuredData.organization && storefrontUrl && logoUrl
+  storefrontUrl && logoUrl
     ? buildOnlineStoreJsonLd({
         storefrontUrl,
         logoUrl,
@@ -173,9 +170,7 @@ const orgJsonLd = onlineStoreJsonLd
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
 const websiteJsonLd =
-  discoverySettings.structuredData.websiteSearch &&
-  storefrontUrl &&
-  storeSchemaName
+  storefrontUrl && storeSchemaName
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "WebSite",
@@ -192,7 +187,14 @@ const websiteJsonLd =
       })
     : null;
 
-const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(ogImage);
+// Pages without their own image share the store-level social image.
+const socialImage = layoutData?.seo?.socialImage;
+const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
+  ogImage ||
+    (socialImage
+      ? mediaImageUrl(socialImage, MEDIA_DISCOVERY_IMAGE_WIDTH)
+      : undefined),
+);
 
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;

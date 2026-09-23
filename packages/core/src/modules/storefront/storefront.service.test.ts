@@ -68,11 +68,17 @@ describe("storefront homepage data", () => {
     }, 0);
 
     const unsaved = await getHomepageData(db);
-    expect(unsaved.seo.siteTitle).toBe("Scalius Commerce");
+    expect(unsaved.seo).toEqual({
+      homepageTitle: "Welcome to Scalius Commerce",
+      homepageMetaDescription: "Your one-stop shop for everything amazing.",
+    });
     expect(unsaved.presentation.categoryRail.categories.map((category) => category.id)).toEqual(["cat_b", "cat_a"]);
 
-    await seoDocument.write(db, { siteTitle: "River & Loom" });
-    expect((await getHomepageData(db)).seo.siteTitle).toBe("River & Loom");
+    await seoDocument.write(db, { homepageTitle: "River & Loom" });
+    expect((await getHomepageData(db)).seo).toEqual({
+      homepageTitle: "River & Loom",
+      homepageMetaDescription: "",
+    });
   });
 });
 

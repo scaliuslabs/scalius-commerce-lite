@@ -7,11 +7,9 @@
 
 import { generateSitemap, getBaseUrl, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
-import { getSeoSettings } from '@/lib/api';
 import { getSitemapProducts } from '@/lib/api/products';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
-import { normalizeSeoDiscoverySettings } from '@scalius/shared/seo-discovery';
 
 export const prerender = false;
 
@@ -31,17 +29,6 @@ function parsePositiveIntegerParam(
 export const GET: APIRoute = async ({ url }: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
-    const seo = await getSeoSettings();
-    if (!seo) {
-      return xmlDataUnavailableResponse('Product sitemap is temporarily unavailable');
-    }
-    const sitemapPolicy = normalizeSeoDiscoverySettings(seo.discovery).sitemap;
-    if (!sitemapPolicy.enabled || !sitemapPolicy.products) {
-      return new Response(generateSitemap([], baseUrl), {
-        status: 200,
-        headers: getSitemapHeaders(),
-      });
-    }
 
     // Get page number from query params (default to 1)
     const pageParam = url.searchParams.get('page');

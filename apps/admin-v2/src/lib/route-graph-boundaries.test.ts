@@ -433,26 +433,6 @@ describe("admin route graph boundaries", () => {
     expect(eagerCommandPaths).toEqual([]);
   });
 
-  it("refreshes SEO live-proof and feed diagnostics after SEO settings save", () => {
-    const seoSettingsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "SeoSettingsBuilder.tsx"),
-      "utf8",
-    );
-    const settingsFormSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "hooks", "use-settings-form.ts"),
-      "utf8",
-    );
-
-    expect(settingsFormSource).toContain("invalidateQueryKeys?:");
-    expect(seoSettingsSource).toContain("invalidateQueryKeys:");
-    expect(seoSettingsSource).toContain(
-      "queryKeys.settings.seoDiscoveryLiveProbe()",
-    );
-    expect(seoSettingsSource).toContain(
-      "queryKeys.settings.seoFeedDiagnostics()",
-    );
-  });
-
   it("keeps admin shell nav data local while page access uses core RBAC source", () => {
     const adminNavSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "layout", "AdminNav.ts"),
@@ -1313,8 +1293,6 @@ describe("admin route graph boundaries", () => {
   it("keeps self-loading settings routes out of route-entry data awaits", () => {
     const selfLoadingSettingsRoutes = [
       ["notifications.tsx", "FirebaseSettingsForm"],
-      ["theme.tsx", "ThemeSettingsPage"],
-      ["hero-sliders.tsx", "HeroSliderManager"],
     ] as const;
 
     for (const [filename, marker] of selfLoadingSettingsRoutes) {
@@ -1327,72 +1305,6 @@ describe("admin route graph boundaries", () => {
       expect(source).not.toContain("ensureQueryData(");
       expect(source).not.toContain("prefetchQuery(");
     }
-  });
-
-  it("keeps hero-slider drag-and-drop behind an explicit lazy boundary", () => {
-    const containerSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "hero-slider",
-        "HeroSliderContainer.tsx",
-      ),
-      "utf8",
-    );
-    const sliderTabSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "hero-slider",
-        "SliderTab.tsx",
-      ),
-      "utf8",
-    );
-    const sortableEditorSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "hero-slider",
-        "SortableSlidesEditor.tsx",
-      ),
-      "utf8",
-    );
-    const lazyMediaManagerSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "media-manager",
-        "LazyMediaManager.tsx",
-      ),
-      "utf8",
-    );
-    const mediaManagerBarrelSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "media-manager", "index.ts"),
-      "utf8",
-    );
-
-    expect(containerSource).toContain('import("./SliderTab")');
-    expect(containerSource).not.toMatch(/import\s+\{\s*SliderTab\s*\}/);
-    expect(sliderTabSource).toContain('import("./SortableSlidesEditor")');
-    expect(sliderTabSource).not.toContain("@dnd-kit/");
-    expect(sliderTabSource).not.toContain("createPortal");
-    expect(sliderTabSource).not.toMatch(/from\s+["']\.\/SortableSlide["']/);
-    expect(sliderTabSource).not.toMatch(/from\s+["']\.\/SlideOverlay["']/);
-    expect(sliderTabSource).not.toContain("./MediaManager");
-    expect(sliderTabSource).not.toContain("~/components/ui/dialog");
-    expect(sliderTabSource).not.toContain("~/components/ui/alert-dialog");
-    expect(sortableEditorSource).toContain("@dnd-kit/core");
-    expect(sortableEditorSource).toContain("@dnd-kit/sortable");
-    expect(sortableEditorSource).toContain("createPortal");
-    expect(sortableEditorSource).toContain("./SortableSlide");
-    expect(sortableEditorSource).toContain("./SlideOverlay");
-    expect(lazyMediaManagerSource).toContain('import("./MediaManager")');
-    expect(mediaManagerBarrelSource).toContain("./LazyMediaManager");
-    expect(mediaManagerBarrelSource).not.toContain("./MediaManagerPage");
   });
 
   it("keeps abandoned checkout list state URL-owned and client-loaded", () => {

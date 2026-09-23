@@ -204,35 +204,16 @@ function createTestApp() {
     canonicalHostAliases: [],
   });
   mocks.getSeoSettings.mockResolvedValue({
-    siteTitle: "Scalius",
     homepageTitle: "Scalius",
     homepageMetaDescription: "",
-    robotsTxt: "",
+    socialImage: "",
     discovery: {
-      sitemap: {
-        enabled: true,
-        staticPages: true,
-        products: true,
-        categories: true,
-        collections: true,
-        pages: true,
-      },
       feeds: {
         productCatalogEnabled: true,
         includeUnavailableProducts: false,
         variantStrategy: "variants",
         title: "",
         description: "",
-      },
-      robots: { advertiseSitemap: true },
-      structuredData: {
-        organization: true,
-        websiteSearch: true,
-        products: true,
-        productGroups: true,
-        offerShippingDetails: true,
-        breadcrumbs: true,
-        collections: true,
       },
     },
     returnPolicy: {
@@ -359,10 +340,8 @@ describe("site settings cache invalidation", () => {
     mocks.getSeoSettings.mockClear();
     mocks.getSeoSettings.mockResolvedValueOnce({
       ...baseline,
-      siteTitle: "t".repeat(2_000),
       homepageTitle: "h".repeat(2_000),
       homepageMetaDescription: "m".repeat(20_000),
-      robotsTxt: "r".repeat(100_000),
       discovery: {
         ...baseline.discovery,
         feeds: {
@@ -387,10 +366,8 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(200);
     expect(new TextEncoder().encode(responseText).byteLength).toBeLessThan(65_536);
-    expect(body.data.siteTitle).toHaveLength(200);
     expect(body.data.homepageTitle).toHaveLength(200);
     expect(body.data.homepageMetaDescription).toHaveLength(1_000);
-    expect(body.data.robotsTxt).toHaveLength(32_768);
     expect(body.data.discovery.feeds.title).toHaveLength(200);
     expect(body.data.discovery.feeds.description).toHaveLength(2_000);
     expect(body.data.returnPolicy.policyUrl).toHaveLength(2_048);
@@ -463,12 +440,41 @@ describe("site settings cache invalidation", () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, "POST", "/seo", {
-      robotsTxt: "r".repeat(32_769),
+      homepageMetaDescription: "m".repeat(1_001),
     });
 
     expect(response.status).toBe(400);
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
   });
+
+  it.each([
+    "http://cdn.example.com/social.jpg",
+    "https://user:pass@cdn.example.com/social.jpg",
+    "/media/social.jpg",
+    "//cdn.example.com/social.jpg",
+    " https://cdn.example.com/social.jpg",
+    `https://cdn.example.com/${"s".repeat(2_048)}.jpg`,
+  ])("rejects a social image that is not blank or an absolute https URL: %s", async (socialImage) => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(app, env, "POST", "/seo", { socialImage });
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "https://cdn.example.com/media/social.jpg"])(
+    "accepts a blank or absolute https social image: %j",
+    async (socialImage) => {
+      const { app, env } = createTestApp();
+
+      const response = await requestJson(app, env, "POST", "/seo", { socialImage });
+
+      expect(response.status).toBe(200);
+      expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), { socialImage });
+      expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("fails general settings reads visibly instead of returning empty success", async () => {
     const { app, env } = createTestApp();
@@ -740,24 +746,14 @@ describe("site settings cache invalidation", () => {
 
     const response = await requestJson(app, env, "POST", "/seo", {
       discovery: {
-        sitemap: { pages: false },
         feeds: { variantStrategy: "products" },
-        structuredData: {
-          websiteSearch: false,
-          productGroups: false,
-        },
       },
     });
 
     expect(response.status).toBe(200);
     expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), {
       discovery: {
-        sitemap: { pages: false },
         feeds: { variantStrategy: "products" },
-        structuredData: {
-          websiteSearch: false,
-          productGroups: false,
-        },
       },
     });
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
@@ -991,7 +987,7 @@ describe("site settings cache invalidation", () => {
     {
       path: "/seo",
       method: "POST" as const,
-      body: { siteTitle: "Site", homepageTitle: "Home" },
+      body: { homepageTitle: "Home", socialImage: "https://cdn.example.com/social.jpg" },
     },
     {
       path: "/storefront-url",

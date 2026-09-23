@@ -15,7 +15,6 @@ import {
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 
 const { slug } = Astro.params;
@@ -85,9 +84,8 @@ const readingMinutes = Math.max(
   1,
   Math.ceil(plainContent.split(/\s+/).filter(Boolean).length / 220),
 );
-const discovery = normalizeSeoDiscoverySettings(layoutData.seo?.discovery);
 const articleJsonLd =
-  discovery.structuredData.articles && canonicalUrl && !article.noIndex
+  canonicalUrl && !article.noIndex
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "BlogPosting",
@@ -106,7 +104,7 @@ const articleJsonLd =
       })
     : null;
 const breadcrumbJsonLd =
-  discovery.structuredData.breadcrumbs && canonicalUrl && !article.noIndex
+  canonicalUrl && !article.noIndex
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
