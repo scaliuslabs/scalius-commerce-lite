@@ -4,16 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSitemapProducts: vi.fn(),
-  getSeoSettings: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/products", () => ({
   getSitemapProducts: mocks.getSitemapProducts,
-}));
-
-vi.mock("@/lib/api", () => ({
-  getSeoSettings: mocks.getSeoSettings,
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
@@ -29,8 +24,6 @@ function context(url = "https://storefront.example.test/sitemap-products.xml") {
 describe("products sitemap route", () => {
   beforeEach(() => {
     mocks.getSitemapProducts.mockReset();
-    mocks.getSeoSettings.mockReset();
-    mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
@@ -56,25 +49,6 @@ describe("products sitemap route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     expect(body).toContain("<urlset");
-  });
-
-  it("returns empty XML without fetching products when product sitemap is disabled", async () => {
-    mocks.getSeoSettings.mockResolvedValueOnce({
-      discovery: {
-        sitemap: {
-          enabled: true,
-          products: false,
-        },
-      },
-    });
-
-    const response = await GET(context());
-    const body = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
-    expect(body).toContain("<urlset");
-    expect(body).not.toContain("/products/");
   });
 
   it("rejects malformed page query parameters", async () => {

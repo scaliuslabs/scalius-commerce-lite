@@ -63,7 +63,6 @@ const heroSliderSchema = z.object({
 });
 const homepageDataSchema = z.object({
   seo: z.object({
-    siteTitle: z.string().nullable(),
     homepageTitle: z.string().nullable(),
     homepageMetaDescription: z.string().nullable(),
   }),
@@ -144,32 +143,12 @@ const footerSchema = z.object({
   social: z.array(socialLinkSchema),
 });
 const discoverySchema = z.object({
-  sitemap: z.object({
-    enabled: z.boolean(),
-    staticPages: z.boolean(),
-    products: z.boolean(),
-    categories: z.boolean(),
-    collections: z.boolean(),
-    pages: z.boolean(),
-    articles: z.boolean(),
-  }),
   feeds: z.object({
     productCatalogEnabled: z.boolean(),
     includeUnavailableProducts: z.boolean(),
     variantStrategy: z.enum(["products", "variants"]),
     title: z.string(),
     description: z.string(),
-  }),
-  robots: z.object({ advertiseSitemap: z.boolean() }),
-  structuredData: z.object({
-    organization: z.boolean(),
-    websiteSearch: z.boolean(),
-    products: z.boolean(),
-    productGroups: z.boolean(),
-    offerShippingDetails: z.boolean(),
-    breadcrumbs: z.boolean(),
-    collections: z.boolean(),
-    articles: z.boolean(),
   }),
 });
 const returnPolicySchema = z.object({
@@ -234,6 +213,8 @@ const layoutDataSchema = z.object({
   seo: z.object({
     discovery: discoverySchema,
     returnPolicy: returnPolicySchema,
+    /** Default og:image: "" or an absolute https URL. */
+    socialImage: z.string(),
   }),
   /** Public origins of this deployment, so the storefront needs no separate platform read. */
   platform: z.object({

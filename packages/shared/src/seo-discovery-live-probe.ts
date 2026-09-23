@@ -1,7 +1,4 @@
-import {
-  normalizeSeoDiscoverySettings,
-  type SeoDiscoverySettings,
-} from "./seo-discovery";
+import { normalizeSeoDiscoverySettings } from "./seo-discovery";
 
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
@@ -43,37 +40,12 @@ export const SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS = [
 ];
 
 export const SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS = [
-  [
-    "staticPagesSitemap",
-    "Home + search sitemap",
-    "/sitemap-static.xml",
-    "staticPages",
-  ] as const,
-  [
-    "productsSitemap",
-    "Products sitemap",
-    "/sitemap-products.xml?page=1",
-    "products",
-  ] as const,
-  [
-    "categoriesSitemap",
-    "Categories sitemap",
-    "/sitemap-categories.xml",
-    "categories",
-  ] as const,
-  [
-    "collectionsSitemap",
-    "Collections sitemap",
-    "/sitemap-collections.xml",
-    "collections",
-  ] as const,
-  ["pagesSitemap", "Pages sitemap", "/sitemap-pages.xml", "pages"] as const,
-  [
-    "articlesSitemap",
-    "Articles sitemap",
-    "/sitemap-articles.xml",
-    "articles",
-  ] as const,
+  ["staticPagesSitemap", "Home + search sitemap", "/sitemap-static.xml"] as const,
+  ["productsSitemap", "Products sitemap", "/sitemap-products.xml?page=1"] as const,
+  ["categoriesSitemap", "Categories sitemap", "/sitemap-categories.xml"] as const,
+  ["collectionsSitemap", "Collections sitemap", "/sitemap-collections.xml"] as const,
+  ["pagesSitemap", "Pages sitemap", "/sitemap-pages.xml"] as const,
+  ["articlesSitemap", "Articles sitemap", "/sitemap-articles.xml"] as const,
 ];
 
 export type SeoDiscoveryLiveProbeKey =
@@ -596,16 +568,8 @@ async function probeEndpoint({
   }
 }
 
-function countEnabledSitemapSections(
-  sitemap: SeoDiscoverySettings["sitemap"],
-): number {
-  return SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS.filter(
-    ([, , , sectionKey]) => sitemap[sectionKey],
-  ).length;
-}
-
 function buildProbeTargets(discoveryValue: unknown, baseUrl: URL): ProbeTarget[] {
-  const discovery = normalizeSeoDiscoverySettings(discoveryValue);
+  const { feeds } = normalizeSeoDiscoverySettings(discoveryValue);
   const targets: ProbeTarget[] = SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS.map(
     ([key, label, path, kind]) => {
       if (kind === "ucpProfile") {
@@ -621,14 +585,7 @@ function buildProbeTargets(discoveryValue: unknown, baseUrl: URL): ProbeTarget[]
         };
       }
       if (kind === "robots") {
-        return {
-          key,
-          kind,
-          label,
-          path,
-          expectedRobotsSitemapLines:
-            discovery.sitemap.enabled && discovery.robots.advertiseSitemap ? 1 : 0,
-        };
+        return { key, kind, label, path, expectedRobotsSitemapLines: 1 };
       }
       if (kind === "sitemap") {
         return {
@@ -636,9 +593,7 @@ function buildProbeTargets(discoveryValue: unknown, baseUrl: URL): ProbeTarget[]
           kind,
           label,
           path,
-          minimumSitemapLocs: discovery.sitemap.enabled
-            ? countEnabledSitemapSections(discovery.sitemap)
-            : 0,
+          minimumSitemapLocs: SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS.length,
         };
       }
       return {
@@ -646,24 +601,20 @@ function buildProbeTargets(discoveryValue: unknown, baseUrl: URL): ProbeTarget[]
         kind,
         label,
         path,
-        disabledReason: discovery.feeds.productCatalogEnabled
+        disabledReason: feeds.productCatalogEnabled
           ? undefined
           : "Catalog feeds are disabled by the current SEO discovery policy.",
       };
     },
   );
 
-  for (const [key, label, path, sectionKey] of SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS) {
-    const enabled = discovery.sitemap.enabled && discovery.sitemap[sectionKey];
+  for (const [key, label, path] of SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS) {
     targets.push({
       key,
       kind: "sitemapChild",
       label,
       path,
-      disabledReason: enabled
-        ? undefined
-        : "This sitemap section is disabled by the current SEO discovery policy.",
-      minimumSitemapLocs: sectionKey === "staticPages" && enabled ? 1 : 0,
+      minimumSitemapLocs: key === "staticPagesSitemap" ? 1 : 0,
     });
   }
   return targets;

@@ -53,8 +53,17 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
 
-  // Reusable storefront menus
-  "/admin/navigation": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  // Online store
+  "/admin/online-store/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/online-store/navigation": {
+    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+  },
+  "/admin/online-store/banners": {
+    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+  },
+  "/admin/online-store/preferences": {
+    permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  },
 
   // Orders
   "/admin/orders": { permission: PERMISSIONS.ORDERS_VIEW },
@@ -85,12 +94,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     permission: PERMISSIONS.AGENT_ACCESS_VIEW,
   },
   "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/notifications": {
     permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-  },
-  "/admin/settings/hero-sliders": {
-    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
   },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/delivery-providers": {
@@ -114,6 +119,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/settings\/agent-access\/authorize\/[^/]+$/,
     config: { permission: PERMISSIONS.AGENT_ACCESS_MANAGE },
+  },
+
+  // Online store menu editor
+  {
+    pattern: /^\/admin\/online-store\/navigation\/[^/]+$/,
+    config: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
   },
 
   // Products

@@ -216,7 +216,7 @@ async function hashThemePreviewToken(token: string): Promise<string> {
 }
 
 type PartialSeoDiscoverySettings = {
-  [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
+  feeds?: Partial<SeoDiscoverySettings["feeds"]>;
 };
 type PartialSeoReturnPolicySettings = Partial<SeoReturnPolicySettings>;
 
@@ -1066,10 +1066,9 @@ export async function getSeoSettings(db: Database) {
 export async function saveSeoSettings(
   db: Database,
   data: {
-    siteTitle?: string;
     homepageTitle?: string;
     homepageMetaDescription?: string;
-    robotsTxt?: string;
+    socialImage?: string;
     discovery?: PartialSeoDiscoverySettings;
     returnPolicy?: PartialSeoReturnPolicySettings;
   },
@@ -1078,10 +1077,9 @@ export async function saveSeoSettings(
     ? await getSeoSettings(db)
     : null;
   await seoDocument.write(db, {
-    siteTitle: data.siteTitle,
     homepageTitle: data.homepageTitle,
     homepageMetaDescription: data.homepageMetaDescription,
-    robotsTxt: data.robotsTxt,
+    socialImage: data.socialImage,
     discovery: current && data.discovery !== undefined
       ? mergeSeoDiscoverySettings(current.discovery, data.discovery)
       : undefined,

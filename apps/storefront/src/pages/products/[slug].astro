@@ -36,7 +36,6 @@ import {
 } from "@/components/product/lib/pricing-engine";
 import { resolveExactVariantSelection } from "@/components/product/lib/variant-state-machine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
   normalizeSavedProductCondition,
   PRODUCT_CONDITION_SCHEMA_URLS,
@@ -172,9 +171,6 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   "product",
   `/products/${product.slug}`,
   product.canonicalPath,
-);
-const discoverySettings = normalizeSeoDiscoverySettings(
-  layoutData?.seo?.discovery,
 );
 
 // Shared product-image representation is first; remaining image associations
@@ -347,20 +343,16 @@ const productGroupVariesBy = productOptions
   )
   .filter((value, index, values) => values.indexOf(value) === index);
 const shouldEmitProductGroupJsonLd =
-  discoverySettings.structuredData.productGroups &&
   !selectedBuyerVariant &&
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
-const offerShippingDetails = discoverySettings.structuredData
-  .offerShippingDetails
-  ? buildOfferShippingDetails({
-      shippingMethods,
-      currencyCode,
-      freeDelivery: product.freeDelivery,
-      country: layoutData.business?.country,
-    })
-  : [];
+const offerShippingDetails = buildOfferShippingDetails({
+  shippingMethods,
+  currencyCode,
+  freeDelivery: product.freeDelivery,
+  country: layoutData.business?.country,
+});
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -397,7 +389,7 @@ const primarySchemaAvailability = selectedBuyerVariant
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
 const productJsonLd =
-  discoverySettings.structuredData.products && !product.noIndex && canonicalUrl
+  !product.noIndex && canonicalUrl
     ? serializeJsonForInlineScript(
         shouldEmitProductGroupJsonLd
           ? {
@@ -519,7 +511,6 @@ const breadcrumbItems = [
   },
 ];
 const breadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs &&
   !product.noIndex &&
   storefrontUrl &&
   canonicalUrl

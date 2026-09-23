@@ -406,11 +406,10 @@ export interface FooterData {
 }
 
 export interface SeoSettings {
-  siteTitle: string | null;
-  homepageTitle: string | null;
-  homepageMetaDescription: string | null;
-  robotsTxt: string | null;
-  discovery?: SeoDiscoverySettings;
+  homepageTitle: string;
+  homepageMetaDescription: string;
+  socialImage: string;
+  discovery: SeoDiscoverySettings;
 }
 
 // ---------------------------------------------------------------------------

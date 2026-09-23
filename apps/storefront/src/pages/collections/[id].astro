@@ -18,7 +18,6 @@ import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
   hasRenderableHtmlContent,
   htmlToPlainText,
@@ -91,9 +90,6 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
   collectionPath,
   collection.canonicalPath,
 );
-const discoverySettings = normalizeSeoDiscoverySettings(
-  layoutData?.seo?.discovery,
-);
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const firstProductImage =
@@ -129,7 +125,6 @@ const ogImageUrl = firstProductImage
   : undefined;
 
 const collectionBreadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs &&
   !collection.noIndex &&
   canonicalUrl &&
   storefrontUrl
@@ -154,7 +149,6 @@ const collectionBreadcrumbJsonLd =
     : null;
 
 const collectionJsonLd =
-  discoverySettings.structuredData.collections &&
   !collection.noIndex &&
   !hasListingQuery &&
   canonicalUrl &&

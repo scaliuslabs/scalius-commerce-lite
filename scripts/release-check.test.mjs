@@ -5,6 +5,8 @@ import {
   evaluateDiscoveryCacheHeaders,
   evaluateFeedContinuationLink,
   evaluateRequiredDocs,
+  evaluateRobotsTxt,
+  evaluateSitemapIndexSections,
   evaluateUcpProfile,
   firstUcpSearchCandidate,
   normalizeHttpBaseUrl,
@@ -140,6 +142,36 @@ describe("release documentation gate", () => {
 });
 
 describe("release discovery policy", () => {
+  const origin = "https://storefront.example.test";
+
+  it("requires exactly one canonical Sitemap line in robots.txt", () => {
+    const expectedSitemapUrl = `${origin}/sitemap.xml`;
+    const check = (body) =>
+      evaluateRobotsTxt(body, { storefrontOrigin: origin, expectedSitemapUrl });
+
+    expect(check(`User-agent: *\nAllow: /\n\nSitemap: ${expectedSitemapUrl}`).ok).toBe(true);
+    expect(check("User-agent: *\nAllow: /").ok).toBe(false);
+    expect(check(`Sitemap: ${expectedSitemapUrl}\nSitemap: ${expectedSitemapUrl}`).ok).toBe(false);
+    expect(check("Sitemap: /sitemap.xml").ok).toBe(false);
+  });
+
+  it("requires the sitemap index to advertise every section", () => {
+    const sections = [
+      "/sitemap-static.xml",
+      "/sitemap-products.xml?page=1",
+      "/sitemap-categories.xml",
+      "/sitemap-collections.xml",
+      "/sitemap-pages.xml",
+      "/sitemap-articles.xml",
+    ].map((path) => `${origin}${path}`);
+
+    expect(evaluateSitemapIndexSections(sections, { storefrontOrigin: origin }).ok).toBe(true);
+    expect(evaluateSitemapIndexSections(sections.slice(1), { storefrontOrigin: origin })).toMatchObject({
+      ok: false,
+      errors: ["sitemap index must advertise the static pages sitemap."],
+    });
+  });
+
   it("accepts public cache headers with a positive TTL", () => {
     expect(evaluateDiscoveryCacheHeaders(
       new Headers({ "Cache-Control": "public, max-age=60" }),

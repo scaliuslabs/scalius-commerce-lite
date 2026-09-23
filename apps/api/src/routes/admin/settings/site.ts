@@ -1053,10 +1053,9 @@ app.openapi(saveMediaOptimizationRoute, async (c) => {
 // SEO
 // ─────────────────────────────────────────
 
-const SEO_SITE_TITLE_MAX_LENGTH = 200;
 const SEO_HOMEPAGE_TITLE_MAX_LENGTH = 200;
 const SEO_META_DESCRIPTION_MAX_LENGTH = 1_000;
-const SEO_ROBOTS_TXT_MAX_LENGTH = 32_768;
+const SEO_SOCIAL_IMAGE_MAX_LENGTH = 2_048;
 const SEO_FEED_TITLE_MAX_LENGTH = 200;
 const SEO_FEED_DESCRIPTION_MAX_LENGTH = 2_000;
 const SEO_POLICY_URL_MAX_LENGTH = 2_048;
@@ -1066,15 +1065,12 @@ function projectSeoSettings(
 ): Awaited<ReturnType<typeof getSeoSettings>> {
   return {
     ...settings,
-    siteTitle: settings.siteTitle.slice(0, SEO_SITE_TITLE_MAX_LENGTH),
     homepageTitle: settings.homepageTitle.slice(0, SEO_HOMEPAGE_TITLE_MAX_LENGTH),
     homepageMetaDescription: settings.homepageMetaDescription.slice(
       0,
       SEO_META_DESCRIPTION_MAX_LENGTH,
     ),
-    robotsTxt: settings.robotsTxt.slice(0, SEO_ROBOTS_TXT_MAX_LENGTH),
     discovery: {
-      ...settings.discovery,
       feeds: {
         ...settings.discovery.feeds,
         title: settings.discovery.feeds.title.slice(0, SEO_FEED_TITLE_MAX_LENGTH),
@@ -1095,39 +1091,16 @@ function projectSeoSettings(
 }
 
 const seoSettingsSchema = z.object({
-  siteTitle: z.string().max(SEO_SITE_TITLE_MAX_LENGTH),
   homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH),
   homepageMetaDescription: z.string().max(SEO_META_DESCRIPTION_MAX_LENGTH),
-  robotsTxt: z.string().max(SEO_ROBOTS_TXT_MAX_LENGTH),
+  socialImage: z.string().max(SEO_SOCIAL_IMAGE_MAX_LENGTH),
   discovery: z.object({
-    sitemap: z.object({
-      enabled: z.boolean(),
-      staticPages: z.boolean(),
-      products: z.boolean(),
-      categories: z.boolean(),
-      collections: z.boolean(),
-      pages: z.boolean(),
-      articles: z.boolean(),
-    }),
     feeds: z.object({
       productCatalogEnabled: z.boolean(),
       includeUnavailableProducts: z.boolean(),
       variantStrategy: z.enum(["products", "variants"]),
       title: z.string().max(SEO_FEED_TITLE_MAX_LENGTH),
       description: z.string().max(SEO_FEED_DESCRIPTION_MAX_LENGTH),
-    }),
-    robots: z.object({
-      advertiseSitemap: z.boolean(),
-    }),
-    structuredData: z.object({
-      organization: z.boolean(),
-      websiteSearch: z.boolean(),
-      products: z.boolean(),
-      productGroups: z.boolean(),
-      offerShippingDetails: z.boolean(),
-      breadcrumbs: z.boolean(),
-      collections: z.boolean(),
-      articles: z.boolean(),
     }),
   }),
   returnPolicy: z.object({
@@ -1370,13 +1343,20 @@ app.openapi(getSeoLiveProbeRoute, async (c) => {
 });
 
 const saveSeoDiscoverySchema = z.object({
-  sitemap: seoSettingsSchema.shape.discovery.shape.sitemap.partial().optional(),
   feeds: seoSettingsSchema.shape.discovery.shape.feeds.partial().optional(),
-  robots: seoSettingsSchema.shape.discovery.shape.robots.partial().optional(),
-  structuredData: seoSettingsSchema.shape.discovery.shape.structuredData
-    .partial()
-    .optional(),
 });
+
+/** Blank, or an absolute https URL without credentials (the media library's CDN URL). */
+function isValidSocialImageUrl(value: string): boolean {
+  if (value === "") return true;
+  if (value.trim() !== value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
 
 const saveSeoReturnPolicySchema = z.object({
   enabled: z.boolean().optional(),
@@ -1399,13 +1379,19 @@ const saveSeoReturnPolicySchema = z.object({
 });
 
 const saveSeoSchema = z.object({
-  siteTitle: z.string().max(SEO_SITE_TITLE_MAX_LENGTH).optional(),
   homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH).optional(),
   homepageMetaDescription: z
     .string()
     .max(SEO_META_DESCRIPTION_MAX_LENGTH)
     .optional(),
-  robotsTxt: z.string().max(SEO_ROBOTS_TXT_MAX_LENGTH).optional(),
+  socialImage: z
+    .string()
+    .max(SEO_SOCIAL_IMAGE_MAX_LENGTH)
+    .refine(
+      isValidSocialImageUrl,
+      "Social image must be blank or an absolute https URL",
+    )
+    .optional(),
   discovery: saveSeoDiscoverySchema.optional(),
   returnPolicy: saveSeoReturnPolicySchema.optional(),
 });
