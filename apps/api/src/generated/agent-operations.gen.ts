@@ -48948,10 +48948,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "siteTitle": {
-              "type": "string",
-              "maxLength": 200
-            },
             "homepageTitle": {
               "type": "string",
               "maxLength": 200
@@ -48960,48 +48956,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "string",
               "maxLength": 1000
             },
-            "robotsTxt": {
+            "socialImage": {
               "type": "string",
-              "maxLength": 32768
+              "maxLength": 2048
             },
             "discovery": {
               "type": "object",
               "properties": {
-                "sitemap": {
-                  "type": "object",
-                  "properties": {
-                    "enabled": {
-                      "type": "boolean"
-                    },
-                    "staticPages": {
-                      "type": "boolean"
-                    },
-                    "products": {
-                      "type": "boolean"
-                    },
-                    "categories": {
-                      "type": "boolean"
-                    },
-                    "collections": {
-                      "type": "boolean"
-                    },
-                    "pages": {
-                      "type": "boolean"
-                    },
-                    "articles": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "enabled",
-                    "staticPages",
-                    "products",
-                    "categories",
-                    "collections",
-                    "pages",
-                    "articles"
-                  ]
-                },
                 "feeds": {
                   "type": "object",
                   "properties": {
@@ -49034,63 +48995,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "title",
                     "description"
                   ]
-                },
-                "robots": {
-                  "type": "object",
-                  "properties": {
-                    "advertiseSitemap": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "advertiseSitemap"
-                  ]
-                },
-                "structuredData": {
-                  "type": "object",
-                  "properties": {
-                    "organization": {
-                      "type": "boolean"
-                    },
-                    "websiteSearch": {
-                      "type": "boolean"
-                    },
-                    "products": {
-                      "type": "boolean"
-                    },
-                    "productGroups": {
-                      "type": "boolean"
-                    },
-                    "offerShippingDetails": {
-                      "type": "boolean"
-                    },
-                    "breadcrumbs": {
-                      "type": "boolean"
-                    },
-                    "collections": {
-                      "type": "boolean"
-                    },
-                    "articles": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "organization",
-                    "websiteSearch",
-                    "products",
-                    "productGroups",
-                    "offerShippingDetails",
-                    "breadcrumbs",
-                    "collections",
-                    "articles"
-                  ]
                 }
               },
               "required": [
-                "sitemap",
-                "feeds",
-                "robots",
-                "structuredData"
+                "feeds"
               ]
             },
             "returnPolicy": {
@@ -49148,10 +49056,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
-            "siteTitle",
             "homepageTitle",
             "homepageMetaDescription",
-            "robotsTxt",
+            "socialImage",
             "discovery",
             "returnPolicy"
           ]
@@ -49201,10 +49108,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
-                "siteTitle": {
-                  "type": "string",
-                  "maxLength": 200
-                },
                 "homepageTitle": {
                   "type": "string",
                   "maxLength": 200
@@ -49213,39 +49116,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "maxLength": 1000
                 },
-                "robotsTxt": {
+                "socialImage": {
                   "type": "string",
-                  "maxLength": 32768
+                  "maxLength": 2048
                 },
                 "discovery": {
                   "type": "object",
                   "properties": {
-                    "sitemap": {
-                      "type": "object",
-                      "properties": {
-                        "enabled": {
-                          "type": "boolean"
-                        },
-                        "staticPages": {
-                          "type": "boolean"
-                        },
-                        "products": {
-                          "type": "boolean"
-                        },
-                        "categories": {
-                          "type": "boolean"
-                        },
-                        "collections": {
-                          "type": "boolean"
-                        },
-                        "pages": {
-                          "type": "boolean"
-                        },
-                        "articles": {
-                          "type": "boolean"
-                        }
-                      }
-                    },
                     "feeds": {
                       "type": "object",
                       "properties": {
@@ -49269,43 +49146,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "description": {
                           "type": "string",
                           "maxLength": 2000
-                        }
-                      }
-                    },
-                    "robots": {
-                      "type": "object",
-                      "properties": {
-                        "advertiseSitemap": {
-                          "type": "boolean"
-                        }
-                      }
-                    },
-                    "structuredData": {
-                      "type": "object",
-                      "properties": {
-                        "organization": {
-                          "type": "boolean"
-                        },
-                        "websiteSearch": {
-                          "type": "boolean"
-                        },
-                        "products": {
-                          "type": "boolean"
-                        },
-                        "productGroups": {
-                          "type": "boolean"
-                        },
-                        "offerShippingDetails": {
-                          "type": "boolean"
-                        },
-                        "breadcrumbs": {
-                          "type": "boolean"
-                        },
-                        "collections": {
-                          "type": "boolean"
-                        },
-                        "articles": {
-                          "type": "boolean"
                         }
                       }
                     }
@@ -68905,10 +68745,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "seo": {
               "type": "object",
               "properties": {
-                "siteTitle": {
-                  "type": "string",
-                  "nullable": true
-                },
                 "homepageTitle": {
                   "type": "string",
                   "nullable": true
@@ -68919,7 +68755,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "siteTitle",
                 "homepageTitle",
                 "homepageMetaDescription"
               ]
@@ -70083,41 +69918,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discovery": {
                   "type": "object",
                   "properties": {
-                    "sitemap": {
-                      "type": "object",
-                      "properties": {
-                        "enabled": {
-                          "type": "boolean"
-                        },
-                        "staticPages": {
-                          "type": "boolean"
-                        },
-                        "products": {
-                          "type": "boolean"
-                        },
-                        "categories": {
-                          "type": "boolean"
-                        },
-                        "collections": {
-                          "type": "boolean"
-                        },
-                        "pages": {
-                          "type": "boolean"
-                        },
-                        "articles": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "enabled",
-                        "staticPages",
-                        "products",
-                        "categories",
-                        "collections",
-                        "pages",
-                        "articles"
-                      ]
-                    },
                     "feeds": {
                       "type": "object",
                       "properties": {
@@ -70148,63 +69948,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "title",
                         "description"
                       ]
-                    },
-                    "robots": {
-                      "type": "object",
-                      "properties": {
-                        "advertiseSitemap": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "advertiseSitemap"
-                      ]
-                    },
-                    "structuredData": {
-                      "type": "object",
-                      "properties": {
-                        "organization": {
-                          "type": "boolean"
-                        },
-                        "websiteSearch": {
-                          "type": "boolean"
-                        },
-                        "products": {
-                          "type": "boolean"
-                        },
-                        "productGroups": {
-                          "type": "boolean"
-                        },
-                        "offerShippingDetails": {
-                          "type": "boolean"
-                        },
-                        "breadcrumbs": {
-                          "type": "boolean"
-                        },
-                        "collections": {
-                          "type": "boolean"
-                        },
-                        "articles": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "organization",
-                        "websiteSearch",
-                        "products",
-                        "productGroups",
-                        "offerShippingDetails",
-                        "breadcrumbs",
-                        "collections",
-                        "articles"
-                      ]
                     }
                   },
                   "required": [
-                    "sitemap",
-                    "feeds",
-                    "robots",
-                    "structuredData"
+                    "feeds"
                   ]
                 },
                 "returnPolicy": {
@@ -70258,11 +70005,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "returnMethod",
                     "policyUrl"
                   ]
+                },
+                "socialImage": {
+                  "type": "string"
                 }
               },
               "required": [
                 "discovery",
-                "returnPolicy"
+                "returnPolicy",
+                "socialImage"
               ]
             },
             "platform": {
@@ -75663,60 +75414,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "siteTitle": {
-              "type": "string",
-              "nullable": true
-            },
             "homepageTitle": {
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
             "homepageMetaDescription": {
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
-            "robotsTxt": {
-              "type": "string",
-              "nullable": true
+            "socialImage": {
+              "type": "string"
             },
             "discovery": {
               "type": "object",
               "properties": {
-                "sitemap": {
-                  "type": "object",
-                  "properties": {
-                    "enabled": {
-                      "type": "boolean"
-                    },
-                    "staticPages": {
-                      "type": "boolean"
-                    },
-                    "products": {
-                      "type": "boolean"
-                    },
-                    "categories": {
-                      "type": "boolean"
-                    },
-                    "collections": {
-                      "type": "boolean"
-                    },
-                    "pages": {
-                      "type": "boolean"
-                    },
-                    "articles": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "enabled",
-                    "staticPages",
-                    "products",
-                    "categories",
-                    "collections",
-                    "pages",
-                    "articles"
-                  ]
-                },
                 "feeds": {
                   "type": "object",
                   "properties": {
@@ -75747,63 +75456,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "title",
                     "description"
                   ]
-                },
-                "robots": {
-                  "type": "object",
-                  "properties": {
-                    "advertiseSitemap": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "advertiseSitemap"
-                  ]
-                },
-                "structuredData": {
-                  "type": "object",
-                  "properties": {
-                    "organization": {
-                      "type": "boolean"
-                    },
-                    "websiteSearch": {
-                      "type": "boolean"
-                    },
-                    "products": {
-                      "type": "boolean"
-                    },
-                    "productGroups": {
-                      "type": "boolean"
-                    },
-                    "offerShippingDetails": {
-                      "type": "boolean"
-                    },
-                    "breadcrumbs": {
-                      "type": "boolean"
-                    },
-                    "collections": {
-                      "type": "boolean"
-                    },
-                    "articles": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "organization",
-                    "websiteSearch",
-                    "products",
-                    "productGroups",
-                    "offerShippingDetails",
-                    "breadcrumbs",
-                    "collections",
-                    "articles"
-                  ]
                 }
               },
               "required": [
-                "sitemap",
-                "feeds",
-                "robots",
-                "structuredData"
+                "feeds"
               ]
             },
             "returnPolicy": {
@@ -75860,10 +75516,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
-            "siteTitle",
             "homepageTitle",
             "homepageMetaDescription",
-            "robotsTxt",
+            "socialImage",
             "discovery",
             "returnPolicy"
           ]
