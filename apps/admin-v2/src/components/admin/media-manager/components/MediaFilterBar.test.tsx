@@ -44,14 +44,17 @@ describe("MediaFilterBar selection controls", () => {
         view="ready"
         selectionMode={selectionMode}
         selectedCount={selectedCount}
-        visibleCount={5}
         selectableCount={selectableCount}
         folders={[]}
+        currentFolderId="all"
         isMutating={false}
         allowManagement={allowManagement}
         onSearch={vi.fn()}
         onFiltersChange={vi.fn()}
-        onUpload={vi.fn()}
+        onFolderSelect={vi.fn()}
+        onFolderCreate={vi.fn()}
+        onFolderRename={vi.fn()}
+        onFolderDelete={vi.fn()}
         onBeginSelection={() => setSelectionMode(true)}
         onSelectAll={() => {
           onSelectAll();
@@ -67,7 +70,6 @@ describe("MediaFilterBar selection controls", () => {
         }}
         onMove={vi.fn()}
         onLifecycle={vi.fn()}
-        onAddSelected={persistentSelection ? vi.fn() : undefined}
       />
     );
   }
@@ -101,10 +103,10 @@ describe("MediaFilterBar selection controls", () => {
     expect(onSelectAll).toHaveBeenCalledOnce();
     expect(host.textContent).toContain("5 selected");
     expect(host.textContent).not.toContain("Select all shown");
-    expect(buttonByName(host, "Clear")).toBeTruthy();
+    expect(buttonByName(host, "Clear selection")).toBeTruthy();
     expect(buttonByName(host, "Cancel")).toBeTruthy();
 
-    act(() => buttonByName(host, "Clear").click());
+    act(() => buttonByName(host, "Clear selection").click());
 
     expect(host.textContent).toContain("0 selected");
     expect(buttonByName(host, "Select all shown")).toBeTruthy();
@@ -126,14 +128,12 @@ describe("MediaFilterBar selection controls", () => {
 
     expect(host.textContent).toContain("0 selected");
     expect(host.textContent).not.toContain("Cancel");
-    expect(buttonByName(host, "Add 0").disabled).toBe(true);
 
     act(() => buttonByName(host, "Select all shown").click());
-    act(() => buttonByName(host, "Clear").click());
+    act(() => buttonByName(host, "Clear selection").click());
 
     expect(host.textContent).toContain("0 selected");
     expect(buttonByName(host, "Select all shown")).toBeTruthy();
-    expect(buttonByName(host, "Add 0").disabled).toBe(true);
   });
 
   it("hides select-all when every visible picker asset is already attached", () => {
@@ -142,7 +142,6 @@ describe("MediaFilterBar selection controls", () => {
 
     expect(host.textContent).toContain("0 selected");
     expect(host.textContent).not.toContain("Select all shown");
-    expect(buttonByName(host, "Add 0").disabled).toBe(true);
   });
 
   it("keeps library-management commands out of multi-file pickers", () => {
@@ -151,7 +150,6 @@ describe("MediaFilterBar selection controls", () => {
     act(() => buttonByName(host, "Select all shown").click());
 
     expect(host.textContent).toContain("5 selected");
-    expect(buttonByName(host, "Add 5")).toBeTruthy();
     expect(host.textContent).not.toContain("Move to trash");
     expect(host.textContent).not.toContain("Move to folder");
   });
@@ -159,9 +157,8 @@ describe("MediaFilterBar selection controls", () => {
   it("separates selection commands into an accessible bulk-action toolbar", () => {
     act(() => buttonByName(host, "Select").click());
 
-    const toolbar = host.querySelector('[role="toolbar"][aria-label="Selected asset actions"]');
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Actions for selected files"]');
     expect(toolbar).toBeTruthy();
-    expect(toolbar?.textContent).toContain("Shift-click for a range · Esc to cancel");
     expect(toolbar?.textContent).toContain("0 selected");
   });
 });

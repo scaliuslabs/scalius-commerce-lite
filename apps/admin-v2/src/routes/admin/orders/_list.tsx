@@ -87,7 +87,7 @@ function OrdersFrame() {
           </>
         }
       />
-      <div className="overflow-hidden rounded-xl bg-card shadow-card">
+      <div className="overflow-clip rounded-xl bg-card shadow-card">
         <IndexTabs<OrdersTab>
           label={t("views")}
           value={tab}

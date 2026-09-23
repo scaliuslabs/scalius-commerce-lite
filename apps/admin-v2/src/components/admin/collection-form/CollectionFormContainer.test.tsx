@@ -4,199 +4,149 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CollectionForm } from "./CollectionFormContainer";
 import type { Category, CollectionFormValues, Product } from "./types";
 import { queryKeys } from "~/lib/query-keys";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const collectionApi = vi.hoisted(() => ({
+const api = vi.hoisted(() => ({
   createCollection: vi.fn(),
-  getCollectionProductOptions: vi.fn(),
   updateCollection: vi.fn(),
+  getCollectionProductOptions: vi.fn(),
 }));
-
-const productApi = vi.hoisted(() => ({
-  getProducts: vi.fn(),
-}));
-
-const routerMocks = vi.hoisted(() => ({
-  navigate: vi.fn(),
-  proceed: vi.fn(),
-  reset: vi.fn(),
-}));
-
-const toastMock = vi.hoisted(() => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
-
+const navigate = vi.hoisted(() => vi.fn());
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const permissionMock = vi.hoisted(() => ({ canCreate: true, canEdit: true }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
-  postApiV1AdminCollections: collectionApi.createCollection,
-  putApiV1AdminCollectionsById: collectionApi.updateCollection,
-  getApiV1AdminCollectionsProductOptions: collectionApi.getCollectionProductOptions,
-  getApiV1AdminProducts: productApi.getProducts,
+  postApiV1AdminCollections: api.createCollection,
+  putApiV1AdminCollectionsById: api.updateCollection,
+  getApiV1AdminCollectionsProductOptions: api.getCollectionProductOptions,
 }));
-
-vi.mock("sonner", () => ({
-  toast: toastMock,
+vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("~/hooks/use-storefront-url", () => ({
+  useStorefrontUrl: () => ({ storefrontUrl: "https://shop.test" }),
 }));
-
-vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({
-  UnsavedChangesGuard: () => null,
-}));
-
-vi.mock("~/components/admin/FormStickyHeader", () => ({
-  FormActionBar: ({
-    isSubmitting,
-    canSave,
-    onSave,
-  }: {
-    isSubmitting: boolean;
-    canSave: boolean;
-    onSave: () => void;
-  }) => (
-    <button type="button" disabled={isSubmitting || !canSave} onClick={onSave}>
-      Save Collection
-    </button>
-  ),
-}));
+vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
 
 vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => routerMocks.navigate,
-  useBlocker: () => ({
-    proceed: routerMocks.proceed,
-    reset: routerMocks.reset,
-    status: "idle",
-  }),
-  Link: ({
-    to,
-    children,
-    disabled: _disabled,
-    ...props
-  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
-    to: string;
-    children: ReactNode;
-    disabled?: boolean;
-  }) => (
-    <a href={to} {...props}>
-      {children}
-    </a>
+  useNavigate: () => navigate,
+  Link: ({ to, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; children: ReactNode }) => (
+    <a href={to} {...props}>{children}</a>
   ),
 }));
-
-vi.mock("~/components/admin/shared/ResourceDiscoveryReadiness", () => ({
-  ResourceDiscoveryReadiness: () => <div data-testid="discovery-readiness" />,
-}));
-
 vi.mock("~/hooks/use-catalog-action-permissions", () => ({
-  useCatalogActionPermissions: () => ({
-    collections: permissionMock,
-  }),
+  useCatalogActionPermissions: () => ({ collections: permissionMock }),
 }));
 
 const categories: Category[] = [
   { id: "cat_curated", name: "Curated Picks", status: "published" },
+  { id: "cat_draft", name: "Winter drafts", status: "draft" },
 ];
 
-const collectionDefaults: Partial<CollectionFormValues> = {
-  id: "col_late_labels",
+const savedCollection: Partial<CollectionFormValues> = {
+  id: "col_eid",
   version: 7,
-  name: "Late Label Collection",
+  name: "Eid collection",
   presentation: "grid",
   isActive: true,
-  canonicalPath: "/collections/col_late_labels",
+  canonicalPath: "/collections/col_eid",
   noIndex: false,
-  excludeFromSitemap: false,
+  excludeFromSitemap: true,
+  metaTitle: null,
+  metaDescription: null,
   config: {
     source: "manual",
-    categoryIds: ["cat_curated"],
-    productIds: ["prod_primary", "prod_secondary"],
+    categoryIds: [],
+    productIds: ["prod_panjabi", "prod_sari"],
     featuredProductId: "prod_featured",
     showOnHomepage: true,
     maxProducts: 8,
-    title: "Buyer-facing title",
-    subtitle: "Buyer-facing subtitle",
+    title: "Eid picks",
+    subtitle: "",
   },
 };
 
 const productLabels: Product[] = [
-  { id: "prod_primary", name: "Primary Linen Shirt", categoryId: "cat_curated" },
-  {
-    id: "prod_secondary",
-    name: "Secondary Cotton Sari",
-    categoryId: "cat_curated",
-  },
-  {
-    id: "prod_featured",
-    name: "Featured Jamdani Set",
-    categoryId: "cat_curated",
-  },
+  { id: "prod_panjabi", name: "Cotton panjabi" },
+  { id: "prod_sari", name: "Jamdani sari", isActive: false },
+  { id: "prod_featured", name: "Silk scarf" },
 ];
 
-async function flushAsyncWork() {
+async function settle() {
   await act(async () => {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 }
 
 async function waitFor(assertion: () => void) {
   let lastError: unknown;
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       assertion();
       return;
     } catch (error) {
       lastError = error;
-      await flushAsyncWork();
+      await settle();
     }
   }
-
   throw lastError;
 }
 
-function getButton(host: HTMLElement, label: string): HTMLButtonElement {
-  const button = Array.from(host.querySelectorAll("button")).find((candidate) =>
-    normalizeText(candidate.textContent).includes(label),
-  );
-  if (!button) throw new Error(`Expected button labeled ${label}`);
-  return button;
-}
-
-function getInputByPlaceholder(
-  host: HTMLElement,
-  placeholder: string,
-): HTMLInputElement {
-  const input = host.querySelector<HTMLInputElement>(
-    `input[placeholder="${placeholder}"]`,
-  );
-  if (!input) throw new Error(`Expected input with placeholder ${placeholder}`);
-  return input;
-}
-
-function normalizeText(value: string | null) {
+function text(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function button(label: string, scope: ParentNode = document.body): HTMLButtonElement {
+  const found = Array.from(scope.querySelectorAll<HTMLButtonElement>("button")).find(
+    (candidate) => text(candidate.textContent) === label || candidate.getAttribute("aria-label") === label,
+  );
+  if (!found) throw new Error(`Expected a button labeled ${label}`);
+  return found;
+}
+
+function field(label: string): HTMLInputElement | HTMLTextAreaElement {
+  const labelElement = Array.from(document.body.querySelectorAll("label")).find(
+    (candidate) => text(candidate.textContent) === label,
+  );
+  const control = labelElement?.htmlFor ? document.getElementById(labelElement.htmlFor) : null;
+  if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+    throw new Error(`Expected a field labeled ${label}`);
+  }
+  return control;
+}
+
+async function type(control: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = control instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(control, value);
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function click(element: HTMLElement) {
+  await act(async () => element.click());
+}
+
+async function choose(triggerLabel: string, option: string) {
+  const trigger = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button[role="combobox"]')).find(
+    (candidate) => candidate.getAttribute("aria-label") === triggerLabel || text(candidate.textContent) === triggerLabel,
+  );
+  if (!trigger) throw new Error(`Expected a select labeled ${triggerLabel}`);
+  await click(trigger);
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
+    (candidate) => text(candidate.textContent) === option,
+  );
+  if (!item) throw new Error(`Expected option ${option}`);
+  await click(item);
 }
 
 describe("CollectionForm", () => {
   let host: HTMLDivElement;
-  let appHost: HTMLDivElement;
   let root: Root;
   let queryClient: QueryClient;
 
@@ -206,291 +156,208 @@ describe("CollectionForm", () => {
     permissionMock.canEdit = true;
     document.body.innerHTML = "";
     host = document.createElement("div");
-    appHost = document.createElement("div");
-    const actionBarHost = document.createElement("div");
-    actionBarHost.id = "form-action-bar-slot";
-    host.append(appHost, actionBarHost);
     document.body.append(host);
-    root = createRoot(appHost);
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-    collectionApi.createCollection.mockResolvedValue({ id: "col_new" });
-    collectionApi.updateCollection.mockResolvedValue({ id: "col_late_labels" });
-    productApi.getProducts.mockResolvedValue({
-      products: [],
-      pagination: { totalPages: 1, total: 0 },
-    });
+    root = createRoot(host);
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    api.createCollection.mockResolvedValue({ id: "col_new", version: 1 });
+    api.updateCollection.mockResolvedValue({ id: "col_eid", version: 8 });
   });
 
   afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
+    act(() => root.unmount());
     queryClient.clear();
   });
 
-  async function renderCollectionForm(products: Product[]) {
+  async function render(props: Partial<Parameters<typeof CollectionForm>[0]> = {}) {
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
-          <CollectionForm
-            categories={categories}
-            products={products}
-            defaultValues={collectionDefaults}
-            isEdit
-          />
+          <CollectionForm categories={categories} {...props} />
         </QueryClientProvider>,
       );
     });
   }
 
-  it("keeps edit product ids hidden until labels arrive and submits canonical ids", async () => {
-    await renderCollectionForm([]);
+  const renderSaved = (products: Product[] = productLabels) =>
+    render({ products, defaultValues: savedCollection, isEdit: true });
 
-    await waitFor(() => {
-      expect(host.textContent).toContain("Save");
+  function lastUpdateBody() {
+    return api.updateCollection.mock.calls.at(-1)?.[0]?.body;
+  }
+
+  it("creates an inactive collection and opens it for editing", async () => {
+    await render();
+    expect(document.querySelector("h1")?.textContent).toBe("Add collection");
+
+    await type(field("Title"), "Summer sale");
+    await click(button("Save"));
+
+    await waitFor(() => expect(api.createCollection).toHaveBeenCalledTimes(1));
+    expect(api.createCollection.mock.calls[0]?.[0]?.body).toMatchObject({
+      name: "Summer sale",
+      isActive: false,
+      noIndex: false,
+      config: { source: "manual", productIds: [], categoryIds: [] },
     });
+    expect(api.updateCollection).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Changes saved"));
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
+      to: "/admin/collections/$collectionId/edit",
+      params: { collectionId: "col_new" },
+    }));
+  });
 
-    expect(getButton(host, "Save").disabled).toBe(false);
-    expect(getInputByPlaceholder(host, "Collection name").value).toBe(
-      "Late Label Collection",
-    );
-    expect(host.textContent).not.toContain("prod_primary");
-    expect(host.textContent).not.toContain("prod_secondary");
-    expect(host.textContent).not.toContain("prod_featured");
+  it("saves edits with the expected version and keeps the product order", async () => {
+    await renderSaved([]);
+    expect(host.textContent).not.toContain("prod_panjabi");
 
-    await renderCollectionForm(productLabels);
+    await renderSaved();
+    await waitFor(() => expect(host.textContent).toContain("Jamdani sari"));
+    expect(host.textContent).toContain("Silk scarf");
 
-    await waitFor(() => {
-      expect(host.textContent).toContain("Primary Linen Shirt");
-      expect(host.textContent).toContain("Secondary Cotton Sari");
-      expect(host.textContent).toContain("Featured Jamdani Set");
+    await click(button("Move Jamdani sari up"));
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await click(button("Save"));
+
+    await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(1));
+    expect(api.updateCollection.mock.calls[0]?.[0]?.path).toEqual({ id: "col_eid" });
+    expect(lastUpdateBody()).toMatchObject({
+      expectedVersion: 7,
+      canonicalPath: "/collections/col_eid",
+      excludeFromSitemap: true,
+      config: {
+        source: "manual",
+        productIds: ["prod_sari", "prod_panjabi"],
+        featuredProductId: "prod_featured",
+        showOnHomepage: true,
+      },
     });
-
-    expect(host.textContent).not.toContain("prod_primary");
-    expect(host.textContent).not.toContain("prod_secondary");
-    expect(host.textContent).not.toContain("prod_featured");
-
-    const moveSecondaryUp = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Move Secondary Cotton Sari up"]',
-    );
-    expect(moveSecondaryUp).not.toBeNull();
-    await act(async () => {
-      moveSecondaryUp?.click();
-    });
-    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-
-    await act(async () => {
-      getButton(host, "Save").dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-    });
-
-    await waitFor(() => {
-      expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
-    });
-
-    expect(collectionApi.updateCollection.mock.calls[0]?.[0]?.path).toEqual({
-      id: "col_late_labels",
-    });
-    const payload = collectionApi.updateCollection.mock.calls[0]?.[0]?.body;
-    expect(payload).toEqual(
-      expect.objectContaining({
-        expectedVersion: 7,
-        config: expect.objectContaining({
-          categoryIds: ["cat_curated"],
-          source: "manual",
-          productIds: ["prod_secondary", "prod_primary"],
-          featuredProductId: "prod_featured",
-          showOnHomepage: true,
-        }),
-      }),
-    );
-    expect(payload.config.productIds.every((id: unknown) => typeof id === "string")).toBe(
-      true,
-    );
-    expect(typeof payload.config.featuredProductId).toBe("string");
-    expect(collectionApi.createCollection).not.toHaveBeenCalled();
-    expect(invalidateQueries.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Changes saved"));
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
       queryKeys.collections.list(),
       queryKeys.collections.byIds(),
       queryKeys.collections.formOptions(),
-      queryKeys.collections.detail("col_late_labels"),
+      queryKeys.collections.detail("col_eid"),
     ]);
+    expect(navigate).not.toHaveBeenCalled();
+
+    // The next save sends the version the server returned.
+    await click(button("Move Jamdani sari down"));
+    await click(button("Save"));
+    await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(2));
+    expect(lastUpdateBody().expectedVersion).toBe(8);
   });
 
-  it("renders the editor read-only when collection edit permission is absent", async () => {
+  it("is read-only without edit permission", async () => {
     permissionMock.canEdit = false;
-    await renderCollectionForm(productLabels);
+    await renderSaved();
 
     expect(host.textContent).toContain("You can view this but not change it.");
-    expect(getButton(host, "Save").disabled).toBe(true);
-    expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
+    expect(host.querySelector("fieldset")?.disabled).toBe(true);
+    expect(() => button("Save")).toThrow();
   });
 
-  it("revalidates publication prerequisites when status or source changes", async () => {
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={queryClient}>
-          <CollectionForm
-            categories={categories}
-            products={[]}
-            defaultValues={{ name: "Draft collection" }}
-          />
-        </QueryClientProvider>,
-      );
-    });
-
-    const publishedSwitch = Array.from(
-      host.querySelectorAll<HTMLButtonElement>('button[role="switch"]'),
-    ).find((button) =>
-      normalizeText(button.parentElement?.parentElement?.textContent ?? "").includes(
-        "Published",
-      ),
-    );
-    if (!publishedSwitch) throw new Error("Expected published switch");
-
-    await act(async () => publishedSwitch.click());
-    await act(async () => getButton(host, "Save").click());
-    await waitFor(() => {
-      expect(host.textContent).toContain(
-        "Add at least one product before publishing a manual collection.",
-      );
-    });
-
-    await act(async () => publishedSwitch.click());
-    await waitFor(() => {
-      expect(host.textContent).not.toContain(
-        "Add at least one product before publishing a manual collection.",
-      );
-    });
-
-    await act(async () => publishedSwitch.click());
-    await waitFor(() => {
-      expect(host.textContent).toContain(
-        "Add at least one product before publishing a manual collection.",
-      );
-    });
-
-    await act(async () => getButton(host, "Choose products").click());
-    const dynamicOption = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="option"]'),
-    ).find((option) => normalizeText(option.textContent) === "Use categories");
-    if (!dynamicOption) throw new Error("Expected dynamic collection option");
-    await act(async () => dynamicOption.click());
-    await waitFor(() => {
-      expect(host.textContent).not.toContain(
-        "Add at least one product before publishing a manual collection.",
-      );
-      expect(host.textContent).toContain(
-        "Select at least one category before publishing a dynamic collection.",
-      );
-    });
-  });
-
-  it("reveals homepage settings immediately when placement is enabled", async () => {
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={queryClient}>
-          <CollectionForm
-            categories={categories}
-            products={productLabels}
-            defaultValues={{
-              ...collectionDefaults,
-              config: {
-                ...collectionDefaults.config!,
-                showOnHomepage: false,
-              },
-            }}
-            isEdit
-          />
-        </QueryClientProvider>,
-      );
-    });
-
-    await act(async () => getButton(host, "Homepage").click());
-    expect(host.textContent).toContain("Show on homepage");
-    expect(host.querySelector('input[placeholder="Homepage title"]')).toBeNull();
-
-    const homepageSwitch = Array.from(
-      host.querySelectorAll<HTMLButtonElement>('button[role="switch"]'),
-    ).find((button) =>
-      normalizeText(button.parentElement?.parentElement?.textContent ?? "").includes(
-        "Show on homepage",
-      ),
-    );
-    if (!homepageSwitch) throw new Error("Expected show-on-homepage switch");
-
-    await act(async () => homepageSwitch.click());
-    await waitFor(() => {
-      expect(host.querySelector('input[placeholder="Homepage title"]')).not.toBeNull();
-      expect(host.textContent).toContain("Display style");
-    });
-  });
-
-  it("appends one staged product batch and preserves its selection order", async () => {
-    collectionApi.getCollectionProductOptions.mockResolvedValue({
+  it("adds picked products after the ones already in the collection", async () => {
+    api.getCollectionProductOptions.mockResolvedValue({
       products: [
-        {
-          id: "prod_third",
-          name: "Third Woven Scarf",
-          price: 3200,
-          categoryId: "cat_curated",
-          categoryName: "Curated Picks",
-          isActive: true,
-          primaryImage: "/products/third-scarf.webp",
-        },
-        {
-          id: "prod_fourth",
-          name: "Fourth Canvas Tote",
-          price: 1800,
-          categoryId: "cat_curated",
-          categoryName: "Curated Picks",
-          isActive: true,
-          primaryImage: null,
-        },
+        { id: "prod_panjabi", name: "Cotton panjabi", price: 1500, categoryId: null, categoryName: null, isActive: true, primaryImage: null },
+        { id: "prod_tote", name: "Canvas tote", price: 800, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: "/p/tote.webp" },
+        { id: "prod_shawl", name: "Wool shawl", price: 2200, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null },
       ],
-      pagination: { page: 1, limit: 20, total: 2, totalPages: 1 },
+      pagination: { page: 1, limit: 20, total: 3, totalPages: 1 },
     });
-    await renderCollectionForm(productLabels);
+    await renderSaved();
 
-    await act(async () => getButton(host, "Add products").click());
+    await click(button("Add products"));
+    await waitFor(() => expect(document.body.textContent).toContain("Canvas tote"));
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const box = (name: string) => dialog.querySelector<HTMLButtonElement>(`button[role="checkbox"][aria-label="${name}"]`)!;
+    expect(box("Cotton panjabi").disabled).toBe(true);
+    await click(box("Wool shawl"));
+    await click(box("Canvas tote"));
+    expect(dialog.textContent).toContain("2 selected");
+    await click(button("Add", dialog));
+
+    expect(host.textContent).toContain("Canvas tote");
+    await click(button("Save"));
+    await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(1));
+    expect(lastUpdateBody().config.productIds).toEqual(["prod_panjabi", "prod_sari", "prod_shawl", "prod_tote"]);
+  });
+
+  it("sends search engine listing edits with the collection", async () => {
+    await renderSaved();
+    expect(host.textContent).toContain("https://shop.test/collections/col_eid");
+    expect(host.textContent).toContain("Eid collection");
+
+    await click(button("Edit search engine listing"));
+    await type(field("Page title"), "Eid panjabi and sari");
+    await type(field("Meta description"), "Festive picks, delivered across Bangladesh.");
+    const hide = Array.from(host.querySelectorAll("label")).find((label) =>
+      text(label.textContent).startsWith("Hide from search engines"),
+    )?.querySelector<HTMLButtonElement>('button[role="checkbox"]');
+    if (!hide) throw new Error("Expected the hide checkbox");
+    await click(hide);
+    expect(host.textContent).toContain("Hidden from search engines.");
+
+    await click(button("Save"));
+    await waitFor(() => expect(api.updateCollection).toHaveBeenCalledTimes(1));
+    expect(lastUpdateBody()).toMatchObject({
+      metaTitle: "Eid panjabi and sari",
+      metaDescription: "Festive picks, delivered across Bangladesh.",
+      noIndex: true,
+      canonicalPath: "/collections/col_eid",
+      excludeFromSitemap: true,
+    });
+  });
+
+  it("blocks an active collection that has nothing in it", async () => {
+    await render({ defaultValues: { name: "Draft collection" } });
+
+    await choose("Status", "Active");
+    await click(button("Save"));
+    await waitFor(() => expect(host.textContent).toContain("Add a product, or make the collection inactive."));
+
+    await click(host.querySelector<HTMLButtonElement>('button[role="radio"][value="dynamic"]')!);
     await waitFor(() => {
-      expect(document.body.textContent).toContain("Third Woven Scarf");
+      expect(host.textContent).not.toContain("Add a product, or make the collection inactive.");
+      expect(host.textContent).toContain("Choose a category, or make the collection inactive.");
     });
-    const third = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Third Woven Scarf"]',
-    );
-    const fourth = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select Fourth Canvas Tote"]',
-    );
-    if (!third || !fourth) throw new Error("Expected collection product options");
-    await act(async () => third.click());
-    await act(async () => fourth.click());
+    expect(api.createCollection).not.toHaveBeenCalled();
+  });
 
-    const addBatch = Array.from(
-      document.body.querySelectorAll<HTMLButtonElement>("button"),
-    ).find((button) => normalizeText(button.textContent) === "Add 2 products");
-    if (!addBatch) throw new Error("Expected staged add action");
-    await act(async () => addBatch.click());
-
-    expect(host.textContent).toContain("Third Woven Scarf");
-    expect(host.textContent).toContain("Fourth Canvas Tote");
-    await act(async () => getButton(host, "Save").click());
-    await waitFor(() => {
-      expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
+  it("won't activate an automatic collection built on unpublished categories", async () => {
+    await render({
+      defaultValues: {
+        name: "Winter",
+        isActive: true,
+        config: { ...savedCollection.config!, source: "dynamic", categoryIds: ["cat_draft"], productIds: [] },
+      },
     });
-    expect(
-      collectionApi.updateCollection.mock.calls[0]?.[0]?.body.config.productIds,
-    ).toEqual([
-      "prod_primary",
-      "prod_secondary",
-      "prod_third",
-      "prod_fourth",
-    ]);
+    expect(host.textContent).toContain("Winter drafts");
+    expect(host.textContent).toContain("Publish these categories before you make the collection active.");
+
+    await type(field("Title"), "Winter coats");
+    await click(button("Save"));
+    await waitFor(() =>
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "Publish these categories before you make the collection active.",
+      ),
+    );
+    expect(api.createCollection).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("shows homepage options once the collection is on the homepage", async () => {
+    await render({ defaultValues: { name: "Gifts" } });
+    expect(host.textContent).not.toContain("Products shown");
+
+    await click(host.querySelector<HTMLButtonElement>('button[role="switch"]')!);
+    await waitFor(() => expect(host.textContent).toContain("Products shown"));
+    expect(host.textContent).toContain("Appears once the collection is active.");
+    expect(field("Heading").placeholder).toBe("Gifts");
+    expect(host.textContent).toContain("Featured product");
+
+    await choose("Grid", "Carousel");
+    await waitFor(() => expect(host.textContent).not.toContain("Featured product"));
   });
 });

@@ -3,7 +3,9 @@ import { Link } from "@tanstack/react-router";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { OrderStatusBadge } from "~/components/admin/shared/StatusBadges";
+import { Badge } from "~/components/ui/badge";
+import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { fetchCustomerHistory } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { useCurrency } from "~/hooks/use-currency";
@@ -22,6 +24,7 @@ const day = (value: string | number | null | undefined) => {
 export function CustomerActivity({ customerId }: { customerId: string }) {
   const t = useMessages(customersMessages);
   const tr = useMessages(resourceMessages);
+  const to = useMessages(orderMessages);
   const { fmt } = useCurrency();
   const orders = useInfiniteQuery({
     queryKey: queryKeys.customers.history(customerId, { part: "orders" }),
@@ -81,7 +84,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                       <span className="block font-medium">#{order.id.slice(0, 8)}</span>
                       <span className="block text-muted-foreground">{day(order.createdAt)}</span>
                     </span>
-                    <OrderStatusBadge status={order.status} />
+                    <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
                     <span className="tabular-nums">{fmt(order.totalAmount)}</span>
                   </Link>
                 </li>

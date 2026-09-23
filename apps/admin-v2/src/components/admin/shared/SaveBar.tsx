@@ -64,6 +64,8 @@ interface SaveRegistry {
 }
 
 const SaveBarContext = createContext<SaveRegistry | null>(null);
+/** The scope's live state, for a page's own Save button or submit-on-Enter. */
+const SaveStateContext = createContext<SaveScopeState | null>(null);
 interface SaveFailure {
   errors: string[];
   fieldErrors: Record<string, string>;
@@ -215,8 +217,10 @@ export function SaveScope({
   return (
     <SaveBarContext.Provider value={registry}>
       <SaveErrorsContext.Provider value={errorsValue}>
-        {children}
-        {render(state)}
+        <SaveStateContext.Provider value={state}>
+          {children}
+          {render(state)}
+        </SaveStateContext.Provider>
       </SaveErrorsContext.Provider>
     </SaveBarContext.Provider>
   );
@@ -314,6 +318,7 @@ function SaveBar({ state }: { state: SaveScopeState }) {
         ? createPortal(
             <div
               role="region"
+              data-save-bar=""
               aria-label={t("unsavedChanges")}
               className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between gap-2 border-b border-topbar-hover bg-topbar px-3 text-topbar-foreground sm:inset-x-auto sm:left-1/2 sm:top-1.5 sm:h-11 sm:min-w-lg sm:-translate-x-1/2 sm:gap-6 sm:rounded-full sm:border sm:pl-4 sm:pr-1"
             >
@@ -353,6 +358,11 @@ function SaveBar({ state }: { state: SaveScopeState }) {
         : null}
     </>
   );
+}
+
+/** The nearest save scope's state (null outside one), e.g. for an editor's own Save button. */
+export function useSaveScope(): SaveScopeState | null {
+  return useContext(SaveStateContext);
 }
 
 /**

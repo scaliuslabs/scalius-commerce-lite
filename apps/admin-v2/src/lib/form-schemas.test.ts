@@ -1,40 +1,103 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLocale } from "~/i18n";
+import {
+  categoryFormSchema,
+  customerFormSchema,
+  pageFormSchema,
+} from "./form-schemas";
 
-const FORM_SCHEMAS_SOURCE = fileURLToPath(
-  new URL("./form-schemas.ts", import.meta.url),
-);
+const category = {
+  status: "draft",
+  name: "Eid panjabi",
+  description: null,
+  content: null,
+  slug: "eid-panjabi",
+  metaTitle: null,
+  metaDescription: null,
+  canonicalPath: null,
+  noIndex: false,
+  excludeFromSitemap: false,
+  image: null,
+} as const;
 
-describe("resource form canonical validation", () => {
-  it("uses resource-aware canonical route validators for category and page forms", () => {
-    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+const page = {
+  contentType: "page",
+  title: "About us",
+  slug: "about-us",
+  content: "<p>Hello</p>",
+  excerpt: null,
+  author: null,
+  tags: [],
+  metaTitle: null,
+  metaDescription: null,
+  canonicalPath: null,
+  noIndex: false,
+  excludeFromSitemap: false,
+  publicationMode: "draft",
+  publishedAt: null,
+  hideHeader: false,
+  hideFooter: false,
+  hideTitle: false,
+  featuredImage: null,
+} as const;
 
-    expect(formSchemasSource).toContain("isValidResourceCanonicalPath");
-    expect(formSchemasSource).toMatch(
-      /canonicalPathFormSchema\(\s*"category"\s*,\s*"\/categories\/summer-shoes"\s*,?\s*\)/,
-    );
-    expect(formSchemasSource).toContain('"/categories/summer-shoes"');
-    expect(formSchemasSource).toContain(
-      'const resourceKind = value.contentType === "article" ? "article" : "page"',
-    );
-    expect(formSchemasSource).toContain("`/blog/${value.slug}`");
-    expect(formSchemasSource).toContain(
-      "isValidResourceCanonicalPath(resourceKind, value.canonicalPath)",
-    );
+function errorsOf(result: { success: boolean; error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
+  return Object.fromEntries(
+    (result.error?.issues ?? []).map((issue) => [issue.path.join("."), issue.message]),
+  );
+}
+
+describe("resource form addresses", () => {
+  afterEach(() => setLocale("en"));
+
+  it("accepts a category's own address as its main address and nothing else", () => {
+    expect(categoryFormSchema.safeParse({ ...category, canonicalPath: "/categories/eid-panjabi" }).success).toBe(true);
+    expect(
+      errorsOf(categoryFormSchema.safeParse({ ...category, canonicalPath: "/categories/summer" })),
+    ).toEqual({ canonicalPath: "Use this item's own web address." });
+  });
+
+  it("accepts a page or blog post's own address as its main address and nothing else", () => {
+    expect(pageFormSchema.safeParse({ ...page, canonicalPath: "/about-us" }).success).toBe(true);
+    expect(errorsOf(pageFormSchema.safeParse({ ...page, canonicalPath: "/returns" }))).toEqual({
+      canonicalPath: "Use this item's own web address.",
+    });
+    const post = { ...page, contentType: "article", slug: "size-guide" } as const;
+    expect(pageFormSchema.safeParse({ ...post, canonicalPath: "/blog/size-guide" }).success).toBe(true);
+    expect(errorsOf(pageFormSchema.safeParse({ ...post, canonicalPath: "/size-guide" }))).toEqual({
+      canonicalPath: "Use this item's own web address.",
+    });
+  });
+
+  it("refuses page addresses the storefront owns", () => {
+    expect(errorsOf(pageFormSchema.safeParse({ ...page, slug: "checkout" }))).toEqual({
+      slug: "This web address is used by the store. Try another.",
+    });
+  });
+
+  it("explains a malformed address in the merchant's language", () => {
+    expect(errorsOf(categoryFormSchema.safeParse({ ...category, slug: "Eid Panjabi" }))).toEqual({
+      slug: "Use lowercase letters, numbers and dashes, e.g. summer-sale.",
+    });
+    setLocale("bn");
+    expect(errorsOf(categoryFormSchema.safeParse({ ...category, slug: "Eid Panjabi" }))).toEqual({
+      slug: "ছোট হাতের ইংরেজি অক্ষর, সংখ্যা ও ড্যাশ দিন, যেমন summer-sale।",
+    });
   });
 });
 
 describe("customer form phone validation", () => {
-  it("shares the strict phone parser used by the customer API", () => {
-    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+  const customer = {
+    name: "Rahim Uddin",
+    email: null,
+    address: null,
+    city: null,
+    zone: null,
+    area: null,
+  };
 
-    expect(formSchemasSource).toContain(
-      'import { phoneNumberSchema } from "@scalius/shared/customer-utils";',
-    );
-    expect(formSchemasSource).toContain("phone: phoneNumberSchema,");
-    expect(formSchemasSource).not.toMatch(
-      /phone:\s*z\s*\.string\(\)\s*\.min\(7/,
-    );
+  it("accepts a Bangladeshi mobile number and refuses a short one", () => {
+    expect(errorsOf(customerFormSchema.safeParse({ ...customer, phone: "+8801712345678" }))).toEqual({});
+    expect(errorsOf(customerFormSchema.safeParse({ ...customer, phone: "123" }))).toHaveProperty("phone");
   });
 });

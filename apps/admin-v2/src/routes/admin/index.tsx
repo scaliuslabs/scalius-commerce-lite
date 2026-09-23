@@ -6,7 +6,9 @@ import { getApiV1AdminInventoryAlerts, getApiV1AdminOrders } from "@scalius/api-
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { OrderStatusBadge } from "~/components/admin/shared/StatusBadges";
+import { Badge } from "~/components/ui/badge";
+import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { DashboardSalesChart } from "~/components/admin/DashboardSalesChart";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -35,6 +37,7 @@ const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhak
 
 function HomePage() {
   const t = useMessages(homeMessages);
+  const to = useMessages(orderMessages);
   const { fmt } = useCurrency();
   const { permissions, isSuperAdmin } = usePermissions();
   const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
@@ -128,7 +131,7 @@ function HomePage() {
                             {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
                           </span>
                         </span>
-                        <OrderStatusBadge status={order.status} />
+                        <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
                         <span className="tabular-nums">{fmt(order.totalAmount)}</span>
                       </Link>
                     </li>

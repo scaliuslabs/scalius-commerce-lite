@@ -417,6 +417,11 @@ html:lang(bn) {
   }
 }
 
+/* The contextual save bar takes the top bar's search slot while it shows. */
+body:has([data-save-bar]) [data-topbar-search] {
+  visibility: hidden;
+}
+
 /*
  * Shopify's navigation tree: a 1px line runs from the parent's icon down the
  * sub-items and turns into the active child with a 4px rounded elbow.

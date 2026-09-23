@@ -55,9 +55,6 @@ export const catalogMessages = defineMessages({
     cancel: "Cancel",
     created: "Attribute created",
     categoryCreated: "Category created",
-    categorySaved: "Category saved",
-    collectionCreated: "Collection created",
-    collectionSaved: "Collection saved",
     saved: "Attribute saved",
   },
   bn: {
@@ -113,9 +110,6 @@ export const catalogMessages = defineMessages({
     cancel: "বাতিল",
     created: "অ্যাট্রিবিউট তৈরি হয়েছে",
     categoryCreated: "ক্যাটাগরি তৈরি হয়েছে",
-    categorySaved: "ক্যাটাগরি সেভ হয়েছে",
-    collectionCreated: "কালেকশন তৈরি হয়েছে",
-    collectionSaved: "কালেকশন সেভ হয়েছে",
     saved: "অ্যাট্রিবিউট সেভ হয়েছে",
   },
 });

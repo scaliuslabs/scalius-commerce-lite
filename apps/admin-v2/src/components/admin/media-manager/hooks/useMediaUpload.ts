@@ -5,6 +5,7 @@ import {
   validateMediaFileMetadata,
 } from "@scalius/shared/media-policy";
 import { toast } from "sonner";
+import { mediaText as t } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import type { LibraryMediaFile, MediaCapability, UploadQueueItem } from "../types";
 import { readIntrinsicMediaMetadata } from "../utils/intrinsic-metadata";
@@ -100,7 +101,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
           mutate(id, {
             status: "paused",
             sessionId: session.id,
-            error: "Server cancellation was not confirmed. Choose cancel again.",
+            error: t("cancelUnconfirmed"),
           });
         }
         return;
@@ -149,7 +150,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
         try {
           file = await MediaApiClient.saveVariants(file.id, variants);
         } catch {
-          warning = "Uploaded, but optimized copies could not be saved. Use Optimize images in the media library.";
+          warning = t("variantsNotSaved");
         }
       } else {
         const metadata = await intrinsicMetadata;
@@ -157,7 +158,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
           try {
             file = await MediaApiClient.updateFile(file, metadata);
           } catch {
-            warning = "Uploaded, but dimensions or duration could not be saved. The asset is still usable.";
+            warning = t("metadataNotSaved");
           }
         }
       }
@@ -174,7 +175,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       mutate(id, {
         status: "failed",
         failedPart,
-        error: error instanceof Error ? error.message : "Upload failed. Retry to continue from the last saved part.",
+        error: error instanceof Error ? error.message : t("uploadFailed"),
       });
     }
   }, [folderId, mutate, onUploadComplete]);
@@ -197,7 +198,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     if (!files?.length) return;
     const incoming = Array.from(files);
     if (incoming.length > MEDIA_MAX_FILES_PER_UPLOAD) {
-      toast.error("Too many files", { description: `Choose up to ${MEDIA_MAX_FILES_PER_UPLOAD} files at once.` });
+      toast.error(t("tooManyFiles", { count: MEDIA_MAX_FILES_PER_UPLOAD }));
       return;
     }
 
@@ -210,7 +211,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
         continue;
       }
       if (capability !== "both" && validation.value.kind !== capability) {
-        rejected.push(`${file.name}: this picker accepts ${capability}s only`);
+        rejected.push(`${file.name}: ${t(capability === "image" ? "imagesOnly" : "videosOnly")}`);
         continue;
       }
       accepted.push({
@@ -229,7 +230,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       });
     }
     if (rejected.length) {
-      toast.error(`${rejected.length} file${rejected.length === 1 ? "" : "s"} not added`, {
+      toast.error(rejected.length === 1 ? t("notAddedOne") : t("notAddedMany", { count: rejected.length }), {
         description: rejected.slice(0, 3).join("\n"),
       });
     }
@@ -259,7 +260,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     mutate(id, { status: "cancelled", error: null });
     controllersRef.current.get(id)?.abort();
     if (item.sessionId) void MediaApiClient.abortUpload(item.sessionId).catch(() => {
-      mutate(id, { status: "paused", error: "Server cancellation was not confirmed. Choose cancel again." });
+      mutate(id, { status: "paused", error: t("cancelUnconfirmed") });
     });
   }, [mutate]);
 

@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
@@ -19,7 +18,6 @@ import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
-import { resourceMessages } from "~/i18n/resource";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -45,7 +43,6 @@ function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1Ad
  */
 export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProps) {
   const t = useMessages(customersMessages);
-  const tr = useMessages(resourceMessages);
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
@@ -70,27 +67,22 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
   });
 
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CustomerFormValues>({
-    entityName: "Customer",
     isEdit,
     entityId: defaultValues?.id,
     createFn: (data) => apiData(postApiV1AdminCustomers({ body: toCustomerInput(data) })),
     updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerInput(data) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
-    navigateTo: "/admin/customers",
     onSuccess: (result) => {
       const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id || defaultValues?.id;
       form.reset({ ...form.getValues(), ...(id ? { id } : {}) });
-      toast.success(isEdit ? t("saved") : t("created"));
       if (!isEdit && id) {
         void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id }, replace: true });
       }
     },
     onError: (_error, message) => {
-      if (message.toLowerCase().includes("phone number already exists")) {
-        form.setError("phone", { type: "server", message: t("phoneTaken") });
-        return true;
-      }
-      return false;
+      if (!message.toLowerCase().includes("phone number already exists")) return undefined;
+      form.setError("phone", { type: "server", message: t("phoneTaken") });
+      return t("phoneTaken");
     },
   });
 
@@ -176,18 +168,12 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
 
   return (
     <FormContainer
-      title="Customers"
       heading={isEdit ? defaultValues?.name || t("customer") : t("newCustomer")}
-      isEdit={isEdit}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
-      canCreateNew={false}
       canSave={canSave}
-      isFormValid={form.formState.isValid}
-      saveLabel={tr("save")}
-      saveDisabledReason={tr("noPermissionToSave")}
       form={form}
-      onSubmit={form.handleSubmit((values) => submitEntity(values))}
+      onSave={submitEntity}
     >
       {canViewHistory && defaultValues?.id ? (
         <div className="grid gap-4 lg:grid-cols-3">

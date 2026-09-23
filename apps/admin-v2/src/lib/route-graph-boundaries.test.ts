@@ -611,13 +611,6 @@ describe("admin route graph boundaries", () => {
         ADMIN_SRC_ROOT,
         "components",
         "admin",
-        "collection-form",
-        "CollectionFormContainer.tsx",
-      ),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
         "orderview",
         "ManualFulfillmentDialog.tsx",
       ),

@@ -310,7 +310,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     <div className="pb-8">
       <PageHeader title={props.title} actions={trashed || nothingYet ? undefined : props.actions} />
       {nothingYet ? (
-        <div className="overflow-hidden rounded-xl bg-card shadow-card">
+        <div className="overflow-clip rounded-xl bg-card shadow-card">
           {tabBar}
           <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} />
         </div>

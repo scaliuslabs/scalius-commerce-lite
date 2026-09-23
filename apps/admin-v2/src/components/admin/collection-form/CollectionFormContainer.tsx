@@ -1,44 +1,38 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
-import { toast } from "sonner";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "../../ui/form";
-import { Input } from "../../ui/input";
-import { FormActionBar } from "~/components/admin/FormStickyHeader";
-import { PageHeader } from "~/components/admin/resource/PageHeader";
-import { ReadOnlyNotice } from "~/components/admin/resource/ReadOnlyNotice";
-import { useMessages } from "~/i18n";
-import { catalogMessages } from "~/i18n/catalog";
-import { resourceMessages } from "~/i18n/resource";
+import { useForm, useFormState, useWatch } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
-import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useQueryClient } from "@tanstack/react-query";
-import { getServerFnError } from "~/lib/api-helpers";
-import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import {
   postApiV1AdminCollections,
   putApiV1AdminCollectionsById,
 } from "@scalius/api-client/sdk";
+import { FormContainer } from "~/components/admin/shared/FormContainer";
+import { SaveNotCompleted } from "~/components/admin/shared/use-form-save-bar";
+import { ReadOnlyNotice } from "~/components/admin/resource/ReadOnlyNotice";
+import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
+import { useMessages } from "~/i18n";
+import { catalogMessages } from "~/i18n/catalog";
+import { collectionFormMessages } from "~/i18n/collection-form";
+import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
+import { getPlainText } from "~/lib/format-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { ProductSelectionSection } from "./ProductSelectionSection";
-import { LayoutSettingsSection } from "./LayoutSettingsSection";
 import { CollectionContentSection } from "./CollectionContentSection";
+import { LayoutSettingsSection } from "./LayoutSettingsSection";
+import { ProductSelectionSection } from "./ProductSelectionSection";
 import {
   collectionFormSchema,
+  MAX_MEMBERSHIP_IDS,
   type CollectionFormInput,
-  type CollectionFormValues,
   type CollectionFormProps,
+  type CollectionFormValues,
   type Product,
 } from "./types";
+
+type CollectionFormApi = UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 
 const DEFAULT_CONFIG = {
   source: "manual" as const,
@@ -51,8 +45,37 @@ const DEFAULT_CONFIG = {
 } as const;
 
 const EMPTY_PRODUCTS: Product[] = [];
-const PENDING_PRODUCT_LABEL = "Loading product label...";
 
+/** The shared search engine listing card, bound to the collection's search fields. */
+function CollectionSearchListing({ form, disabled }: { form: CollectionFormApi; disabled: boolean }) {
+  const [id, name, description, canonicalPath, metaTitle, metaDescription, noIndex] = useWatch({
+    control: form.control,
+    name: ["id", "name", "description", "canonicalPath", "metaTitle", "metaDescription", "noIndex"],
+  });
+  const { errors } = useFormState({ control: form.control, name: ["metaTitle", "metaDescription"] });
+  const edit = { shouldDirty: true, shouldValidate: true } as const;
+  return (
+    <SearchListingCard
+      resource="collection"
+      path={canonicalPath || (id ? `/collections/${id}` : undefined)}
+      value={{ title: metaTitle ?? "", description: metaDescription ?? "", hidden: noIndex === true }}
+      onChange={(next) => {
+        if (next.title !== undefined) form.setValue("metaTitle", next.title || null, edit);
+        if (next.description !== undefined) form.setValue("metaDescription", next.description || null, edit);
+        if (next.hidden !== undefined) form.setValue("noIndex", next.hidden, edit);
+      }}
+      fallbackTitle={name}
+      fallbackDescription={getPlainText(description ?? null, 320)}
+      errors={{ title: errors.metaTitle?.message, description: errors.metaDescription?.message }}
+      disabled={disabled}
+    />
+  );
+}
+
+/**
+ * The collection editor. Main column: title and description, products,
+ * search engine listing. Side column: status and homepage.
+ */
 export function CollectionForm({
   categories,
   products = EMPTY_PRODUCTS,
@@ -61,11 +84,13 @@ export function CollectionForm({
 }: CollectionFormProps) {
   const navigate = useNavigate();
   const t = useMessages(catalogMessages);
+  const tf = useMessages(collectionFormMessages);
   const tr = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const { collections: collectionActions } = useCatalogActionPermissions();
   const canSave = isEdit ? collectionActions.canEdit : collectionActions.canCreate;
   const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<CollectionFormInput, unknown, CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
@@ -84,65 +109,41 @@ export function CollectionForm({
     },
   });
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [selectedSource, selectedCategoryIds, selectedProductIds] = useWatch({
+    control: form.control,
+    name: ["config.source", "config.categoryIds", "config.productIds"],
+  });
 
-  const selectedPresentation = form.watch("presentation");
-  const selectedSource = form.watch("config.source");
-  const selectedCategoryIds = form.watch("config.categoryIds");
-  const selectedProductIds = form.watch("config.productIds");
-
-  React.useEffect(() => {
+  const rememberProducts = React.useCallback((incoming: Product[]) => {
     setKnownProducts((current) => {
       const byId = new Map(current.map((product) => [product.id, product]));
-      for (const product of products) {
-        byId.set(product.id, product);
-      }
-      return Array.from(byId.values());
-    });
-  }, [products]);
-
-  const selectedCategories = React.useMemo(() => {
-    return categories.filter((cat) => selectedCategoryIds.includes(cat.id));
-  }, [selectedCategoryIds, categories]);
-
-  const productsById = React.useMemo(
-    () => new Map(knownProducts.map((product) => [product.id, product])),
-    [knownProducts],
-  );
-
-  const selectedProducts = React.useMemo(() => {
-    return selectedProductIds.map(
-      (id) => productsById.get(id) ?? { id, name: PENDING_PRODUCT_LABEL },
-    );
-  }, [productsById, selectedProductIds]);
-
-  const rememberProduct = React.useCallback((product: Product) => {
-    setKnownProducts((current) => {
-      const byId = new Map(current.map((item) => [item.id, item]));
-      byId.set(product.id, product);
+      for (const product of incoming) byId.set(product.id, product);
       return Array.from(byId.values());
     });
   }, []);
+  const rememberProduct = React.useCallback((product: Product) => rememberProducts([product]), [rememberProducts]);
 
-  const handleSubmit: SubmitHandler<CollectionFormValues> = async (values) => {
+  React.useEffect(() => rememberProducts(products), [products, rememberProducts]);
+
+  const loadingName = tf("loadingName");
+  const selectedProducts = React.useMemo(() => {
+    const byId = new Map(knownProducts.map((product) => [product.id, product]));
+    return selectedProductIds.map((id) => byId.get(id) ?? { id, name: loadingName });
+  }, [knownProducts, selectedProductIds, loadingName]);
+
+  const saveCollection = async (values: CollectionFormValues) => {
+    if (
+      values.isActive &&
+      values.config.source === "dynamic" &&
+      categories.some((category) =>
+        values.config.categoryIds.includes(category.id) &&
+        category.status !== "published")
+    ) {
+      form.setError("config.categoryIds", { type: "validate", message: tf("publishCategories") });
+      throw new SaveNotCompleted(tf("publishCategories"));
+    }
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-      if (
-        values.isActive &&
-        values.config.source === "dynamic" &&
-        categories.some((category) =>
-          values.config.categoryIds.includes(category.id) &&
-          category.status !== "published")
-      ) {
-        form.setError("config.categoryIds", {
-          type: "validate",
-          message: "Publish every selected category before activating this collection.",
-        });
-        toast.error("Collection is not ready to publish", {
-          description: "Publish the selected categories or keep this collection inactive.",
-        });
-        return;
-      }
       const submission = {
         ...values,
         config: {
@@ -153,45 +154,29 @@ export function CollectionForm({
       let savedCollectionId: string;
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
-        if (!entityId) throw new Error("Collection ID is required for update");
         const expectedVersion = values.version || defaultValues?.version;
-        if (!expectedVersion) throw new Error("Collection version is required for update");
+        if (!entityId || !expectedVersion) throw new SaveNotCompleted(tr("saveFailedHelp"));
         const result = await apiData(putApiV1AdminCollectionsById({
           path: { id: entityId },
           body: { ...submission, expectedVersion },
         }));
-        form.reset({
-          ...values,
-          id: result.id,
-          version: result.version,
-        });
+        form.reset({ ...values, id: result.id, version: result.version });
         savedCollectionId = entityId;
       } else {
         const result = await apiData(postApiV1AdminCollections({ body: submission }));
-        form.reset({
-          ...values,
-          id: result.id,
-          version: result.version,
-        });
+        form.reset({ ...values, id: result.id, version: result.version });
         savedCollectionId = result.id;
       }
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.collections.byIds() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.collections.formOptions(),
-        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.collections.formOptions() }),
         ...(isEdit
-          ? [
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.collections.detail(savedCollectionId),
-              }),
-            ]
+          ? [queryClient.invalidateQueries({ queryKey: queryKeys.collections.detail(savedCollectionId) })]
           : []),
       ]);
 
-      toast.success(t(isEdit ? "collectionSaved" : "collectionCreated"));
       if (!isEdit) {
         void navigate({
           to: "/admin/collections/$collectionId/edit",
@@ -199,163 +184,88 @@ export function CollectionForm({
           replace: true,
         });
       }
-
-    } catch (error: unknown) {
-      console.error("Error submitting form:", error);
-      toast.error("Failed to save collection", {
-        description: getServerFnError(error, "Failed to save collection"),
-      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const setIds = React.useCallback(
+    (name: "config.categoryIds" | "config.productIds", ids: string[]) =>
+      form.setValue(name, ids, { shouldDirty: true, shouldValidate: true }),
+    [form],
+  );
+
   const addCategory = React.useCallback((categoryId: string) => {
-    const currentIds = form.getValues("config.categoryIds");
-    if (currentIds.length < 90 && !currentIds.includes(categoryId)) {
-      form.setValue("config.categoryIds", [...currentIds, categoryId], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+    const current = form.getValues("config.categoryIds");
+    if (current.length < MAX_MEMBERSHIP_IDS && !current.includes(categoryId)) {
+      setIds("config.categoryIds", [...current, categoryId]);
     }
-  }, [form]);
+  }, [form, setIds]);
 
   const removeCategory = React.useCallback((categoryId: string) => {
-    const currentIds = form.getValues("config.categoryIds");
-    form.setValue(
-      "config.categoryIds",
-      currentIds.filter((id) => id !== categoryId),
-      { shouldDirty: true, shouldValidate: true },
-    );
-  }, [form]);
+    setIds("config.categoryIds", form.getValues("config.categoryIds").filter((id) => id !== categoryId));
+  }, [form, setIds]);
 
   const addProducts = React.useCallback((newProducts: Product[]) => {
-    const currentIds = form.getValues("config.productIds");
-    const nextIds = [...currentIds];
+    rememberProducts(newProducts);
+    const current = form.getValues("config.productIds");
+    const next = [...current];
     for (const product of newProducts) {
-      rememberProduct(product);
-      if (nextIds.length < 90 && !nextIds.includes(product.id)) {
-        nextIds.push(product.id);
-      }
+      if (next.length < MAX_MEMBERSHIP_IDS && !next.includes(product.id)) next.push(product.id);
     }
-    if (nextIds.length !== currentIds.length) {
-      form.setValue("config.productIds", nextIds, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    }
-  }, [form, rememberProduct]);
+    if (next.length !== current.length) setIds("config.productIds", next);
+  }, [form, rememberProducts, setIds]);
 
   const removeProduct = React.useCallback((productId: string) => {
-    const currentIds = form.getValues("config.productIds");
-    form.setValue(
-      "config.productIds",
-      currentIds.filter((id) => id !== productId),
-      { shouldDirty: true, shouldValidate: true },
-    );
-  }, [form]);
+    setIds("config.productIds", form.getValues("config.productIds").filter((id) => id !== productId));
+  }, [form, setIds]);
 
   const moveProduct = React.useCallback((productId: string, direction: -1 | 1) => {
-    const currentIds = form.getValues("config.productIds");
-    const currentIndex = currentIds.indexOf(productId);
-    const targetIndex = currentIndex + direction;
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= currentIds.length) return;
-    const reordered = [...currentIds];
-    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex]!, reordered[currentIndex]!];
-    form.setValue("config.productIds", reordered, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  }, [form]);
+    const current = form.getValues("config.productIds");
+    const from = current.indexOf(productId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    const reordered = [...current];
+    [reordered[from], reordered[to]] = [reordered[to]!, reordered[from]!];
+    setIds("config.productIds", reordered);
+  }, [form, setIds]);
 
   return (
-    <>
-      <UnsavedChangesGuard
-        isDirty={form.formState.isDirty}
-        isSubmitting={isSubmitting}
-      />
-      <Form {...form}>
-        <form
-          method="post"
-          onSubmit={canSave && form.formState.isDirty
-            ? form.handleSubmit(handleSubmit)
-            : (event) => event.preventDefault()}
-          className="pb-6"
-          noValidate
-        >
-          <PageHeader
-            backTo="/admin/collections"
-            title={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
+    <FormContainer
+      heading={isEdit ? defaultValues?.name || t("collection") : t("addCollection")}
+      isSubmitting={isSubmitting}
+      backUrl="/admin/collections"
+      canSave={canSave}
+      form={form}
+      onSave={saveCollection}
+      formClassName="mx-auto max-w-5xl pb-6"
+    >
+      {!canSave ? <ReadOnlyNotice /> : null}
+      <fieldset disabled={!canSave} className="grid min-w-0 gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          <CollectionContentSection form={form} />
+          <ProductSelectionSection
+            form={form}
+            selectedSource={selectedSource}
+            categories={categories}
+            selectedProducts={selectedProducts}
+            selectedCategoryIds={selectedCategoryIds}
+            selectedProductIds={selectedProductIds}
+            addCategory={addCategory}
+            removeCategory={removeCategory}
+            addProducts={addProducts}
+            removeProduct={removeProduct}
+            moveProduct={moveProduct}
           />
-          {!canSave ? <ReadOnlyNotice /> : null}
-          <fieldset disabled={!canSave} className="grid grid-cols-1 gap-3 disabled:opacity-70 lg:grid-cols-3 lg:gap-4">
-            {/* Left Column (2/3) - Main content */}
-            <div className="space-y-3 lg:col-span-2">
-              {/* Name field */}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      Name <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Collection name"
-                        maxLength={100}
-                        {...field}
-                        className="min-h-11 text-base md:h-9 md:min-h-9"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <CollectionContentSection form={form} />
-
-              <ProductSelectionSection
-                form={form}
-                selectedSource={selectedSource}
-                categories={categories}
-                selectedCategories={selectedCategories}
-                selectedProducts={selectedProducts}
-                selectedCategoryIds={selectedCategoryIds}
-                selectedProductIds={selectedProductIds}
-                addCategory={addCategory}
-                removeCategory={removeCategory}
-                addProducts={addProducts}
-                removeProduct={removeProduct}
-                moveProduct={moveProduct}
-              />
-            </div>
-
-            {/* Right Column (1/3) - Settings */}
-            <LayoutSettingsSection
-              form={form}
-              selectedPresentation={selectedPresentation}
-              knownProducts={knownProducts}
-              selectedCategoryIds={selectedSource === "dynamic" ? selectedCategoryIds : []}
-              onProductDiscovered={rememberProduct}
-            />
-          </fieldset>
-        </form>
-      </Form>
-      <FormActionBar
-        title="Collections"
-        isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
-        cancelUrl="/admin/collections"
-        newUrl="/admin/collections/new"
-        newLabel={t("addCollection")}
-        canCreateNew={collectionActions.canCreate}
-        canSave={canSave}
-        saveLabel={tr("save")}
-        saveDisabledReason={tr("noPermissionToSave")}
-        onSave={() => form.handleSubmit(handleSubmit)()}
-      />
-    </>
+          <CollectionSearchListing form={form} disabled={!canSave} />
+        </div>
+        <LayoutSettingsSection
+          form={form}
+          knownProducts={knownProducts}
+          selectedCategoryIds={selectedSource === "dynamic" ? selectedCategoryIds : []}
+          onProductDiscovered={rememberProduct}
+        />
+      </fieldset>
+    </FormContainer>
   );
 }

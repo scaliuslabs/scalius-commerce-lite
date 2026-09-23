@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageForm } from "~/components/admin/PageForm";
+import { translate } from "~/i18n";
+import { pageFormMessages } from "~/i18n/page-form";
 
 export const Route = createFileRoute("/admin/pages/new")({
-  head: () => ({ meta: [{ title: "New Page | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: translate(pageFormMessages, "addPage") }] }),
   component: NewPagePage,
 });
 

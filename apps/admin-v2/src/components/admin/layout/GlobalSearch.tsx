@@ -64,6 +64,7 @@ export function GlobalSearch(props: GlobalSearchProps) {
         type="button"
         onClick={() => setOpen(true)}
         aria-keyshortcuts={isMac ? "Meta+K S" : "Control+K S"}
+        data-topbar-search=""
         className="flex h-9 w-full max-w-160 items-center gap-2 rounded-xl bg-topbar-subdued pl-3 pr-2 text-body text-topbar-foreground outline-none hover:bg-topbar-hover focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Search className="size-4 shrink-0" aria-hidden />

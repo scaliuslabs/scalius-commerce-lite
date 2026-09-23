@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { Folder, FolderOpen, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
+import { useState } from "react";
+import { FolderPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useMessages } from "~/i18n";
+import { mediaMessages } from "~/i18n/media";
+import { resourceMessages } from "~/i18n/resource";
 import type { MediaFolder } from "../types";
 
 interface FolderBrowserProps {
@@ -17,82 +21,117 @@ interface FolderBrowserProps {
   onFolderDelete: (folder: MediaFolder) => Promise<void>;
 }
 
+/** Folder filter for the files toolbar, with new/rename/delete in a menu. Folders are one level deep. */
 export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFolderCreate, onFolderRename, onFolderDelete }: FolderBrowserProps) {
-  const activeCompactFolderRef = useRef<HTMLDivElement | null>(null);
+  const t = useMessages(mediaMessages);
+  const r = useMessages(resourceMessages);
   const [dialog, setDialog] = useState<{ mode: "create" } | { mode: "rename"; folder: MediaFolder } | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<MediaFolder | null>(null);
+  const current = folders.find((folder) => folder.id === currentFolderId);
+  const value = currentFolderId === "all" ? "all" : currentFolderId === null ? "unfiled" : currentFolderId;
 
-  useEffect(() => {
-    activeCompactFolderRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [currentFolderId, folders]);
-
-  const open = (next: typeof dialog) => {
+  const open = (next: NonNullable<typeof dialog>) => {
     setDialog(next);
-    setName(next?.mode === "rename" ? next.folder.name : "");
+    setName(next.mode === "rename" ? next.folder.name : "");
   };
   const save = async () => {
     const value = name.trim();
-    if (!dialog || !value) return;
+    if (!dialog || !value || busy) return;
     setBusy(true);
     try {
       if (dialog.mode === "create") await onFolderCreate(value);
       else await onFolderRename(dialog.folder, value);
       setDialog(null);
-    } finally { setBusy(false); }
+    } catch {
+      // The folder hook shows the error; keep the dialog and the typed name.
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const row = (id: string | null | "all", label: string, icon: React.ReactNode, actions?: React.ReactNode, compact = false) => (
-    <div
-      ref={compact && currentFolderId === id ? activeCompactFolderRef : undefined}
-      className={cn("group flex items-center gap-0.5", compact ? "shrink-0" : "w-full min-w-0")}
-      key={`${compact ? "mobile" : "desktop"}-${String(id)}`}
-    >
-      <button type="button" aria-current={currentFolderId === id ? "page" : undefined} onClick={() => onFolderSelect(id)} className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", compact ? "h-11 max-w-40 border bg-background" : "h-8", currentFolderId === id && "bg-muted font-medium")}>{icon}<span className="truncate">{label}</span></button>
-      {actions}
-    </div>
-  );
-
-  const folderActions = (folder: MediaFolder, compact = false) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className={cn("shrink-0 text-muted-foreground hover:text-foreground", compact ? "h-11 w-11 border bg-background" : "h-7 w-7")} aria-label={`Actions for ${folder.name}`}><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => open({ mode: "rename", folder })}><Pencil className="mr-2 h-3.5 w-3.5" />Rename</DropdownMenuItem>
-        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteFolder(folder)}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
   return (
-    <>
-      <aside className="flex min-h-0 w-full shrink-0 flex-col border-b bg-muted/15 md:w-48 md:border-b-0 md:border-r">
-        <div className="flex h-12 items-center justify-between border-b px-3 md:h-10">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Folders</span>
-          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 md:h-7 md:w-7" onClick={() => open({ mode: "create" })} aria-label="Create folder"><Plus className="h-3.5 w-3.5" /></Button>
-        </div>
-        <nav aria-label="Media folders" className="flex w-full gap-1 overflow-x-auto p-2 md:hidden">
-          {row("all", "All assets", <FolderOpen className="h-3.5 w-3.5 shrink-0" />, undefined, true)}
-          {row(null, "Unfiled", <Folder className="h-3.5 w-3.5 shrink-0" />, undefined, true)}
-          {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, folderActions(folder, true), true))}
-        </nav>
-        <nav aria-label="Media folders" className="hidden min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 md:block">
-          {row("all", "All assets", <FolderOpen className="h-3.5 w-3.5 shrink-0" />)}
-          {row(null, "Unfiled", <Folder className="h-3.5 w-3.5 shrink-0" />)}
-          {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, folderActions(folder)))}
-        </nav>
-      </aside>
+    <div className="flex items-center gap-1">
+      <Select value={value} onValueChange={(next) => onFolderSelect(next === "all" ? "all" : next === "unfiled" ? null : next)}>
+        <SelectTrigger aria-label={t("folder")} className="w-40">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t("allFolders")}</SelectItem>
+          <SelectItem value="unfiled">{t("unfiled")}</SelectItem>
+          {folders.map((folder) => (
+            <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" aria-label={t("folderActions")}>
+            <MoreHorizontal aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => open({ mode: "create" })}>
+            <FolderPlus aria-hidden="true" />
+            {t("newFolder")}
+          </DropdownMenuItem>
+          {current ? (
+            <>
+              <DropdownMenuItem onSelect={() => open({ mode: "rename", folder: current })}>
+                <Pencil aria-hidden="true" />
+                {t("renameFolder")}
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteFolder(current)}>
+                <Trash2 aria-hidden="true" />
+                {t("deleteFolder")}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <Dialog open={!!dialog} onOpenChange={(value) => !value && setDialog(null)}>
+      <Dialog open={dialog !== null} onOpenChange={(next) => !next && !busy && setDialog(null)}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>{dialog?.mode === "rename" ? "Rename folder" : "Create folder"}</DialogTitle><DialogDescription>Folders cannot be nested.</DialogDescription></DialogHeader>
-          <Input value={name} maxLength={100} autoFocus placeholder="Folder name" onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void save(); }} />
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button type="button" disabled={!name.trim() || busy} onClick={() => void save()}>{dialog?.mode === "rename" ? "Save name" : "Create folder"}</Button></DialogFooter>
+          <DialogHeader>
+            <DialogTitle>{t(dialog?.mode === "rename" ? "renameFolder" : "newFolder")}</DialogTitle>
+            <DialogDescription>{t("folderHelp")}</DialogDescription>
+          </DialogHeader>
+          <form
+            method="post"
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              // The picker can open inside another form; keep this submit to itself.
+              event.preventDefault();
+              event.stopPropagation();
+              void save();
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="media-folder-name">{t("folderName")}</Label>
+              <Input id="media-folder-name" value={name} maxLength={100} autoFocus onChange={(event) => setName(event.target.value)} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog(null)}>{r("cancel")}</Button>
+              <Button type="submit" loading={busy} disabled={!name.trim()}>
+                {dialog?.mode === "rename" ? r("save") : t("createFolder")}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
-      <AlertDialog open={!!deleteFolder} onOpenChange={(value) => !value && setDeleteFolder(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {deleteFolder?.name}?</AlertDialogTitle><AlertDialogDescription>Only empty folders can be deleted. Assets are never deleted with a folder.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep folder</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => { if (deleteFolder) void onFolderDelete(deleteFolder); setDeleteFolder(null); }}>Delete folder</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-      </AlertDialog>
-    </>
+      <ConfirmDialog
+        open={deleteFolder !== null}
+        onOpenChange={(next) => !next && setDeleteFolder(null)}
+        title={t("deleteFolderTitle", { name: deleteFolder?.name ?? "" })}
+        description={t("deleteFolderBody")}
+        confirmLabel={t("deleteFolder")}
+        cancelLabel={r("cancel")}
+        onConfirm={() => {
+          if (deleteFolder) void onFolderDelete(deleteFolder);
+          setDeleteFolder(null);
+        }}
+      />
+    </div>
   );
 }

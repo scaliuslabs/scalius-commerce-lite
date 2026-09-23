@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { mediaText as t } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import type { MediaFolder } from "../types";
 
@@ -15,28 +16,34 @@ export function useFolders(autoLoad = false) {
       setFolders(await MediaApiClient.fetchFolders());
       setLoadError(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Try again.";
+      const message = error instanceof Error ? error.message : t("tryAgain");
       setLoadError(message);
-      toast.error("Folders could not be loaded", { description: message });
+      toast.error(t("foldersLoadFailed"), { description: message });
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const createFolder = useCallback(async (name: string) => {
-    const folder = await MediaApiClient.createFolder(name);
-    setFolders((current) => [...current, folder].sort((a, b) => a.name.localeCompare(b.name)));
-    toast.success("Folder created");
-    return folder;
+    try {
+      const folder = await MediaApiClient.createFolder(name);
+      setFolders((current) => [...current, folder].sort((a, b) => a.name.localeCompare(b.name)));
+      toast.success(t("folderCreated"));
+      return folder;
+    } catch (error) {
+      toast.error(t("folderCreateFailed"), { description: error instanceof Error ? error.message : undefined });
+      throw error;
+    }
   }, []);
 
   const renameFolder = useCallback(async (folder: MediaFolder, name: string) => {
     try {
       const updated = await MediaApiClient.renameFolder(folder, name);
       setFolders((current) => current.map((item) => item.id === updated.id ? updated : item).sort((a, b) => a.name.localeCompare(b.name)));
-      toast.success("Folder renamed");
+      toast.success(t("folderRenamed"));
     } catch (error) {
-      toast.error("Folder was not renamed", { description: error instanceof Error ? error.message : "Refresh and try again." });
+      toast.error(t("folderRenameFailed"), { description: error instanceof Error ? error.message : undefined });
+      throw error;
     }
   }, []);
 
@@ -45,10 +52,10 @@ export function useFolders(autoLoad = false) {
       await MediaApiClient.deleteFolder(folder);
       setFolders((current) => current.filter((item) => item.id !== folder.id));
       setCurrentFolderId((current) => current === folder.id ? "all" : current);
-      toast.success("Folder deleted");
+      toast.success(t("folderDeleted"));
       return true;
     } catch (error) {
-      toast.error("Folder was not deleted", { description: error instanceof Error ? error.message : "Move its assets, refresh, and try again." });
+      toast.error(t("folderDeleteFailed"), { description: error instanceof Error ? error.message : t("folderNotEmpty") });
       return false;
     }
   }, []);

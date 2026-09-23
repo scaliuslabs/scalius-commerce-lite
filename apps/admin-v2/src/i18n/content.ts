@@ -24,10 +24,6 @@ export const contentMessages = defineMessages({
     published: "Published",
     movedToDraft: "Moved to draft",
     files: "Files",
-    pageCreated: "Page created",
-    pageSaved: "Page saved",
-    postCreated: "Blog post created",
-    postSaved: "Blog post saved",
   },
   bn: {
     pages: "পেজ",
@@ -51,9 +47,5 @@ export const contentMessages = defineMessages({
     published: "প্রকাশিত হয়েছে",
     movedToDraft: "ড্রাফটে সরানো হয়েছে",
     files: "ফাইল",
-    pageCreated: "পেজ তৈরি হয়েছে",
-    pageSaved: "পেজ সেভ হয়েছে",
-    postCreated: "ব্লগ পোস্ট তৈরি হয়েছে",
-    postSaved: "ব্লগ পোস্ট সেভ হয়েছে",
   },
 });

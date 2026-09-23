@@ -1,0 +1,41 @@
+import { defineMessages } from "./index";
+
+/** Field errors shared by the catalogue, content and customer editors. */
+export const formMessages = defineMessages({
+  en: {
+    nameLength: "Use 3 to 100 characters.",
+    textTooLong: "This text is too long. Shorten it and try again.",
+    contentRequired: "Add some content before saving.",
+    addressLength: "Use 3 to 100 characters for the web address.",
+    addressFormat: "Use lowercase letters, numbers and dashes, e.g. summer-sale.",
+    addressReserved: "This web address is used by the store. Try another.",
+    searchTitleTooLong: "Keep the search title to 70 characters.",
+    searchDescriptionTooLong: "Keep the search description to 200 characters.",
+    ownAddressOnly: "Use this item's own web address.",
+    excerptTooLong: "Keep the summary to 500 characters.",
+    authorTooLong: "Keep the author name to 100 characters.",
+    tagsInvalid: "Use up to 20 tags of 60 characters each.",
+    pageHasBlogFields: "Pages can't have a summary, author or tags.",
+    futureTime: "Choose a time in the future.",
+    addressTooLong: "Keep the address to 500 characters.",
+    emailInvalid: "Enter an email address like name@example.com.",
+  },
+  bn: {
+    nameLength: "৩ থেকে ১০০ অক্ষর লিখুন।",
+    textTooLong: "লেখাটি অনেক বড়। ছোট করে আবার চেষ্টা করুন।",
+    contentRequired: "সেভ করার আগে কিছু লেখা যোগ করুন।",
+    addressLength: "ওয়েব ঠিকানায় ৩ থেকে ১০০ অক্ষর দিন।",
+    addressFormat: "ছোট হাতের ইংরেজি অক্ষর, সংখ্যা ও ড্যাশ দিন, যেমন summer-sale।",
+    addressReserved: "এই ওয়েব ঠিকানাটি স্টোর নিজে ব্যবহার করে। অন্যটি দিন।",
+    searchTitleTooLong: "সার্চ টাইটেল ৭০ অক্ষরের মধ্যে রাখুন।",
+    searchDescriptionTooLong: "সার্চ বিবরণ ২০০ অক্ষরের মধ্যে রাখুন।",
+    ownAddressOnly: "এটির নিজের ওয়েব ঠিকানাই ব্যবহার করুন।",
+    excerptTooLong: "সারাংশ ৫০০ অক্ষরের মধ্যে রাখুন।",
+    authorTooLong: "লেখকের নাম ১০০ অক্ষরের মধ্যে রাখুন।",
+    tagsInvalid: "সর্বোচ্চ ২০টি ট্যাগ দিন, প্রতিটি ৬০ অক্ষরের মধ্যে।",
+    pageHasBlogFields: "পেজে সারাংশ, লেখক বা ট্যাগ থাকতে পারে না।",
+    futureTime: "ভবিষ্যতের একটি সময় বেছে নিন।",
+    addressTooLong: "ঠিকানা ৫০০ অক্ষরের মধ্যে রাখুন।",
+    emailInvalid: "name@example.com এর মতো একটি ইমেইল ঠিকানা দিন।",
+  },
+});
