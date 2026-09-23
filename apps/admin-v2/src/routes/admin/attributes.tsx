@@ -56,7 +56,14 @@ function AttributesPage() {
   const search = Route.useSearch();
   const t = useMessages(catalogMessages);
   const { attributes: can } = useCatalogActionPermissions();
-  const [editing, setEditing] = useState<AttributeDto | "new" | null>(null);
+  const [editing, setEditingState] = useState<AttributeDto | "new" | null>(null);
+  // The dialog stays mounted so it can animate closed; each opening gets a
+  // fresh form by bumping its key, while closing keeps the last target.
+  const [dialog, setDialog] = useState<{ key: number; target: AttributeDto | "new" }>({ key: 0, target: "new" });
+  const setEditing = (target: AttributeDto | "new" | null) => {
+    if (target !== null) setDialog((current) => ({ key: current.key + 1, target }));
+    setEditingState(target);
+  };
   const [values, setValues] = useState<AttributeDto | null>(null);
   const valuesOpener = useRef<HTMLElement | null>(null);
 
@@ -143,7 +150,12 @@ function AttributesPage() {
           },
         }}
       />
-      {editing ? <AttributeDialog attribute={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} /> : null}
+      <AttributeDialog
+        key={dialog.key}
+        open={editing !== null}
+        attribute={dialog.target === "new" ? undefined : dialog.target}
+        onClose={() => setEditing(null)}
+      />
       {can.canEdit ? (
         <AttributeValueEditor
           key={values?.id ?? "closed"}
