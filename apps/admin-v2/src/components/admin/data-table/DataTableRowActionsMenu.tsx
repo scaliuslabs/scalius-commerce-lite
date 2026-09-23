@@ -60,7 +60,7 @@ export function DataTableRowActionsMenu({
           <DropdownMenuItem
             key={action.label}
             onClick={() => action.onClick()}
-            className={action.destructive ? "text-destructive" : ""}
+            variant={action.destructive ? "destructive" : "default"}
           >
             {action.icon && <action.icon className="mr-2 h-3.5 w-3.5" />}
             {action.label}
@@ -78,10 +78,7 @@ export function DataTableRowActionsMenu({
               </DropdownMenuItem>
             )}
             {onPermanentDelete && (
-              <DropdownMenuItem
-                onClick={onPermanentDelete}
-                className="text-destructive"
-              >
+              <DropdownMenuItem onClick={onPermanentDelete} variant="destructive">
                 <AlertTriangle className="mr-2 h-3.5 w-3.5" />
                 {t("deletePermanently")}
               </DropdownMenuItem>
@@ -89,7 +86,7 @@ export function DataTableRowActionsMenu({
           </>
         ) : (
           onDelete && (
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
+            <DropdownMenuItem onClick={onDelete} variant="destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
               {t("moveToTrash")}
             </DropdownMenuItem>

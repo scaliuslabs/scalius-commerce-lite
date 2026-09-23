@@ -8,7 +8,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -20,6 +19,7 @@ import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 import { LOCALES, setLocale, useLocale, useMessages, type Locale } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
+import { TOP_BAR_BUTTON } from "@/components/admin/layout/top-bar";
 
 export interface UserMenuUser {
   id: string;
@@ -56,19 +56,19 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="flex h-11 items-center gap-2 rounded-md px-1.5 text-white hover:bg-white/10 sm:h-9">
+        <button type="button" className={TOP_BAR_BUTTON}>
           <Avatar className="h-7 w-7">
             {user.image ? <AvatarImage src={mediaImageUrl(user.image, 160)} alt="" className="object-cover" /> : null}
-            <AvatarFallback><span className="text-xs font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
+            <AvatarFallback><span className="text-caption font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
           </Avatar>
-          <span className="hidden max-w-40 truncate text-sm font-medium md:inline">{user.name}</span>
+          <span className="hidden max-w-40 truncate text-body font-medium md:inline">{user.name}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="font-normal">
-          <p className="truncate text-sm font-medium">{user.name}</p>
-          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
-        </DropdownMenuLabel>
+        <div className="px-2 py-1.5">
+          <p className="truncate text-body font-medium">{user.name}</p>
+          <p className="truncate text-body text-muted-foreground">{user.email}</p>
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/admin/account">
@@ -77,10 +77,10 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center text-sm font-normal text-muted-foreground">
-          <Languages className="mr-2 h-4 w-4" />
+        <div className="flex items-center gap-2 px-2 pb-1 pt-1.5 text-body text-muted-foreground">
+          <Languages className="size-4" aria-hidden />
           {t("language")}
-        </DropdownMenuLabel>
+        </div>
         <DropdownMenuRadioGroup value={locale} onValueChange={(value) => setLocale(value as Locale)}>
           {LOCALES.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value} lang={option.value}>
@@ -89,7 +89,7 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-2 text-sm">
+        <div className="flex items-center justify-between px-2 text-body">
           <span>{t("darkMode")}</span>
           <DarkModeToggle />
         </div>

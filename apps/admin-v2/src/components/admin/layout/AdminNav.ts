@@ -27,6 +27,8 @@ export interface NavItem {
   to?: string;
   icon: LucideIcon;
   children?: NavLink[];
+  /** Sits under a small group label (Shopify's "Sales channels ›"). */
+  group?: ShellKey;
 }
 
 export const ADMIN_NAV: readonly NavItem[] = [
@@ -56,6 +58,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   },
   {
     key: "onlineStore",
+    group: "salesChannels",
     icon: Store,
     children: [
       { key: "theme", to: "/admin/online-store/theme" },
@@ -73,13 +76,42 @@ export interface VisibleNavItem {
   to: string;
   icon: LucideIcon;
   children: NavLink[];
+  group?: ShellKey;
 }
+
+/** Shopify-style sequences: G then the letter, within a second. */
+export const GO_SHORTCUTS: Readonly<Record<string, string>> = {
+  h: "/admin",
+  o: "/admin/orders",
+  p: "/admin/products",
+  c: "/admin/customers",
+  d: "/admin/discounts",
+  s: "/admin/settings",
+};
+
+/**
+ * Settings pages as search destinations. Keywords are the words merchants
+ * type (English and Bangla), so "cod", "bkash" or "কুরিয়ার" lands on the page.
+ */
+export const SETTINGS_DESTINATIONS: ReadonlyArray<{ key: ShellKey; to: string; keywords: string }> = [
+  { key: "settingsStore", to: "/admin/settings/store", keywords: "store name address phone logo currency domain country স্টোর ঠিকানা মুদ্রা" },
+  { key: "settingsUsers", to: "/admin/settings/users", keywords: "staff team users roles permissions ইউজার স্টাফ" },
+  { key: "settingsPayments", to: "/admin/settings/payments", keywords: "payment cod cash on delivery bkash nagad sslcommerz stripe card advance পেমেন্ট ক্যাশ বিকাশ নগদ" },
+  { key: "settingsCheckout", to: "/admin/settings/checkout", keywords: "checkout guest form fields language চেকআউট" },
+  { key: "settingsShipping", to: "/admin/settings/shipping", keywords: "shipping delivery courier pathao steadfast redx area charge ডেলিভারি কুরিয়ার শিপিং" },
+  { key: "settingsTaxes", to: "/admin/settings/taxes", keywords: "tax vat ট্যাক্স ভ্যাট" },
+  { key: "settingsNotifications", to: "/admin/settings/notifications", keywords: "notification sms email whatsapp push নোটিফিকেশন এসএমএস" },
+  { key: "settingsPolicies", to: "/admin/settings/policies", keywords: "policy return refund নীতিমালা রিটার্ন" },
+  { key: "settingsApps", to: "/admin/settings/apps", keywords: "apps tracking facebook meta pixel google analytics fraud scanner ai অ্যাপ" },
+  { key: "settingsCustomerAccounts", to: "/admin/settings/customer-accounts", keywords: "customer sign in login otp কাস্টমার লগইন" },
+  { key: "settingsAdvanced", to: "/admin/settings/advanced", keywords: "advanced developer sso setup token refresh অ্যাডভান্সড" },
+];
 
 export function visibleNav(canOpen: (path: string) => boolean): VisibleNavItem[] {
   return ADMIN_NAV.flatMap((item) => {
     const children = (item.children ?? []).filter((child) => canOpen(child.to));
     const to = item.to && canOpen(item.to) ? item.to : children[0]?.to;
-    return to ? [{ key: item.key, to, icon: item.icon, children }] : [];
+    return to ? [{ key: item.key, to, icon: item.icon, children, group: item.group }] : [];
   });
 }
 

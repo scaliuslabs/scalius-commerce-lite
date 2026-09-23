@@ -17,7 +17,7 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { ResourceListPage, ResourceRowLink, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -46,9 +46,11 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
   const editTo = (row: PageListItem) => (canEdit ? `${base}/${row.id}/edit` : undefined);
   const publish = useResourceMutation(
     ({ rows, live }: { rows: PageListItem[]; live: boolean }) =>
-      live
-        ? apiData(postApiV1AdminPagesBulkPublish({ body: { pages: claims(rows) } }))
-        : apiData(postApiV1AdminPagesBulkUnpublish({ body: { pages: claims(rows) } })),
+      inChunks(rows, (chunk) =>
+        live
+          ? apiData(postApiV1AdminPagesBulkPublish({ body: { pages: claims(chunk) } }))
+          : apiData(postApiV1AdminPagesBulkUnpublish({ body: { pages: claims(chunk) } })),
+      ),
     INVALIDATE,
   );
 
@@ -94,6 +96,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       ) : null}
       search={search}
       query={contentListQuery(type, search)}
+      pageQuery={(page, limit) => contentListQuery(type, { ...search, page, limit })}
       dataKey="pages"
       columns={columns}
       invalidate={INVALIDATE}
@@ -106,6 +109,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
         { value: "draft", label: t("draft") },
       ] }}
       rowTo={editTo}
+      rowLabel={(row) => row.title}
       viewUrl={(row) => (isPageLive(row) ? getStorefrontPath(isBlog ? `/blog/${row.slug}` : `/${row.slug}`) : undefined)}
       bulkActions={canPublish ? (rows, done) => (
         <>

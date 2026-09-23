@@ -109,7 +109,7 @@ export function DataTable<TData extends TableRowData>({
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
       <AlertTriangle className="mb-3 h-10 w-10 text-destructive/70" />
-      <p className="text-sm font-medium text-foreground">{t("loadFailed")}</p>
+      <p className="text-body font-medium text-foreground">{t("loadFailed")}</p>
       {onRetry && (
         <Button
           type="button"
@@ -133,6 +133,7 @@ export function DataTable<TData extends TableRowData>({
             {headerGroup.headers.map((header) => (
               <TableHead
                 key={header.id}
+                className={header.column.columnDef.meta?.numeric ? "text-right" : undefined}
                 style={{
                   width: header.getSize() !== 150 ? header.getSize() : undefined,
                 }}
@@ -190,7 +191,7 @@ export function DataTable<TData extends TableRowData>({
   );
 
   return (
-    <div className={cn(isCard && "overflow-hidden rounded-xl border bg-card shadow-xs", className)}>
+    <div className={cn(isCard && "overflow-hidden rounded-xl bg-card shadow-card", className)}>
       {toolbar}
 
       <div

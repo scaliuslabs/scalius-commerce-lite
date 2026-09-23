@@ -113,9 +113,11 @@ function AttributesPage() {
         actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
         search={search}
         query={listQuery(search)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
         dataKey="attributes"
         columns={columns}
         invalidate={INVALIDATE}
+        rowLabel={(row) => row.name}
         empty={{ icon: ListTree, title: t("attributesEmptyTitle"), description: t("attributesEmptyBody") }}
         rowActions={(row) => [
           ...(can.canEdit ? [{ label: t("editAttribute"), onClick: () => setEditing(row) }] : []),

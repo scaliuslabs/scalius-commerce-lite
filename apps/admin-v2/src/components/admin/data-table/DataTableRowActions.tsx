@@ -92,8 +92,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
   const trigger = (
     <Button
       variant="ghost"
-      size="sm"
-      className="h-11 w-11 p-0 sm:h-8 sm:w-8"
+      size="icon-sm"
       data-state={open ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={open}

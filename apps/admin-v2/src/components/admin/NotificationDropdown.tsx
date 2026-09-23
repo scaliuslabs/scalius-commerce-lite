@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
+import { TOP_BAR_BUTTON } from "./layout/top-bar";
 
 interface AdminNotification {
   id: string;
@@ -83,7 +84,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="relative flex h-11 w-11 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white sm:h-9 sm:w-9"
+          className={cn(TOP_BAR_BUTTON, "relative")}
           aria-label={unread > 0 ? t("unreadNotifications", { count: unread }) : t("notifications")}
         >
           <Bell className="h-4 w-4" />
@@ -92,7 +93,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-80 p-0">
         <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
-          <h2 className="text-sm font-semibold">{t("notifications")}</h2>
+          <h2 className="text-body font-semibold">{t("notifications")}</h2>
           {unread > 0 ? (
             <Button variant="ghost" size="sm" onClick={() => update((current) => current.map((n) => ({ ...n, read: true })))}>
               {t("markAllRead")}
@@ -101,7 +102,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
         </div>
         {pushNote ? (
           <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
-            <div className="min-w-0 text-sm">
+            <div className="min-w-0 text-body">
               <p className="font-medium">{t("pushAlerts")}</p>
               <p className="truncate text-muted-foreground">{pushNote}</p>
             </div>
@@ -117,7 +118,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
         ) : null}
         <div className="max-h-96 overflow-y-auto p-1">
           {notifications.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("noNotifications")}</p>
+            <p className="py-8 text-center text-body text-muted-foreground">{t("noNotifications")}</p>
           ) : (
             notifications.map((notification) => (
               <button
@@ -129,9 +130,9 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                 }}
                 className={cn("block w-full rounded-md px-3 py-2 text-left hover:bg-muted", !notification.read && "bg-muted/50")}
               >
-                <p className={cn("truncate text-sm", !notification.read && "font-medium")}>{notification.title}</p>
-                <p className="line-clamp-2 text-sm text-muted-foreground">{notification.message}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
+                <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p>
+                <p className="mt-0.5 text-caption text-muted-foreground">
                   {formatDateTime(new Date(notification.timestamp), { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               </button>

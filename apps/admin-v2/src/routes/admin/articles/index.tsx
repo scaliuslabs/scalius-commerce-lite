@@ -11,6 +11,10 @@ export const Route = createFileRoute("/admin/articles/")({
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, contentListQuery("article", deps)),
   head: () => ({ meta: [{ title: translate(contentMessages, "blogPosts") }] }),
-  component: () => <ContentList type="article" search={Route.useSearch()} />,
+  component: BlogPostsPage,
   errorComponent: RouteErrorComponent,
 });
+
+function BlogPostsPage() {
+  return <ContentList type="article" search={Route.useSearch()} />;
+}

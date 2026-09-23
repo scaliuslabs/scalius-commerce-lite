@@ -114,6 +114,7 @@ function CategoriesPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
       search={search}
       query={listQuery(search)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
       dataKey="categories"
       columns={columns}
       invalidate={[queryKeys.categories.all, queryKeys.collections.categoryOptions(), queryKeys.products.stats()]}
@@ -124,6 +125,7 @@ function CategoriesPage() {
         { value: "internal", label: t("hidden") },
       ] }}
       rowTo={editTo}
+      rowLabel={(row) => row.name}
       viewUrl={(row) => (row.status === "published" ? getStorefrontPath(`/categories/${row.slug}`) : undefined)}
       lifecycle={{
         canTrash: can.canDelete,

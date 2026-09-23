@@ -19,16 +19,17 @@ interface PageHeaderProps {
 export function PageHeader({ title, backTo, badge, actions }: PageHeaderProps) {
   const t = useMessages(resourceMessages);
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="mb-4 flex flex-wrap items-start gap-2">
       {backTo ? (
         <Button variant="ghost" size="icon" asChild>
           <Link to={backTo} aria-label={t("back")}>
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="size-4" />
           </Link>
         </Button>
       ) : null}
-      <div className="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-2">
-        <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
+      {/* Titles wrap, never truncate (only table cells truncate). */}
+      <div className="flex min-h-9 min-w-0 flex-1 basis-64 flex-wrap items-center gap-2">
+        <h1 className="min-w-0 break-words text-heading-lg">{title}</h1>
         {badge}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

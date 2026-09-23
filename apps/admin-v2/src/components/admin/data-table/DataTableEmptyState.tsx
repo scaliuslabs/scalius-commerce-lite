@@ -17,8 +17,8 @@ export const DataTableEmptyState = memo(function DataTableEmptyState({ config }:
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <Icon className="mb-3 h-8 w-8 text-muted-foreground" />
-      <p className="text-sm font-semibold">{config?.title ?? t("noResults")}</p>
-      {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+      <p className="text-body font-semibold">{config?.title ?? t("noResults")}</p>
+      {description ? <p className="mt-1 text-body text-muted-foreground">{description}</p> : null}
       {config?.action ? <div className="mt-4">{config.action}</div> : null}
     </div>
   );

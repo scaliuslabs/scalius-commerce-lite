@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
+import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -21,6 +21,18 @@ import { EmptyState } from "./EmptyState";
 
 export type ResourceAction = "trash" | "restore" | "delete";
 
+/** Rows per bulk request: D1 allows 100 bound parameters, so stay at 90. */
+export const BULK_CHUNK = 90;
+/** "Select all N" gathers at most this many rows; larger lists act per page. */
+export const SELECT_ALL_LIMIT = 500;
+
+/** Runs a bulk request over rows in D1-sized chunks, one after another. */
+export async function inChunks<T>(rows: T[], run: (chunk: T[]) => Promise<unknown>) {
+  for (let start = 0; start < rows.length; start += BULK_CHUNK) {
+    await run(rows.slice(start, start + BULK_CHUNK));
+  }
+}
+
 export interface ResourceLifecycle<T> {
   canTrash: boolean;
   canRestore: boolean;
@@ -39,6 +51,12 @@ export interface ResourceListPageProps<T extends { id: string }> {
   search: ListSearchParams & Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: UseQueryOptions<any, any, any, any>;
+  /**
+   * The same list for any page, used by "Select all N" to gather every row
+   * across pages (up to SELECT_ALL_LIMIT); without it selection stays per page.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pageQuery?: (page: number, limit: number) => UseQueryOptions<any, any, any, any>;
   /** Response field holding the rows, e.g. "categories". */
   dataKey: string;
   /** Content columns. The kit adds the checkbox and actions columns. */
@@ -53,6 +71,8 @@ export interface ResourceListPageProps<T extends { id: string }> {
   /** Extra bulk buttons for the non-trash tabs; call `done` after success. */
   bulkActions?: (rows: T[], done: () => void) => ReactNode;
   rowTo?: (row: T) => string | undefined;
+  /** Names the row for its checkbox and menu ("Select Cotton panjabi"). */
+  rowLabel?: (row: T) => string;
   viewUrl?: (row: T) => string | undefined;
   rowActions?: (row: T) => ExtraAction[] | undefined;
   canSelectRow?: (row: T) => boolean;
@@ -84,10 +104,11 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     : Boolean(lifecycle?.canTrash || props.bulkActions);
 
   const mutation = useMutation({
-    mutationFn: ({ action, rows }: { action: ResourceAction; rows: T[] }) => lifecycle!.run(action, rows),
+    mutationFn: ({ action, rows }: { action: ResourceAction; rows: T[] }) =>
+      inChunks(rows, (chunk) => lifecycle!.run(action, chunk)),
     onSuccess: (_data, { action }) => {
       toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"));
-      clearSelection();
+      clearAll();
     },
     onError: (error) => toast.error(getServerFnError(error, t("actionFailed"))),
     onSettled: () => {
@@ -105,13 +126,13 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     [mutate],
   );
 
-  const { rowTo, viewUrl, rowActions, columns: contentColumns } = props;
+  const { rowTo, viewUrl, rowActions, rowLabel, columns: contentColumns } = props;
   const columns = useMemo<ColumnDef<T, unknown>[]>(() => {
     const canTrash = !trashed && lifecycle?.canTrash;
     const canRestore = trashed && lifecycle?.canRestore;
     const canDelete = trashed && lifecycle?.canDelete;
     return [
-      ...(canBulk ? [createSelectColumn<T>()] : []),
+      ...(canBulk ? [createSelectColumn<T>({ getLabel: (row) => (rowLabel ? rowLabel(row as T) : t("selectRow")) })] : []),
       ...contentColumns,
       createActionsColumn<T>({
         showTrashed: trashed,
@@ -126,9 +147,10 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         onPermanentDelete: canDelete ? (row) => request("delete", [row]) : undefined,
         canPermanentDelete: lifecycle?.canDeleteRow,
         getExtraActions: trashed ? undefined : rowActions,
+        getMenuLabel: rowLabel ? (row) => t("actionsFor", { name: rowLabel(row) }) : undefined,
       }),
     ];
-  }, [canBulk, contentColumns, lifecycle, navigate, request, rowActions, rowTo, trashed, viewUrl]);
+  }, [canBulk, contentColumns, lifecycle, navigate, request, rowActions, rowLabel, rowTo, t, trashed, viewUrl]);
 
   const dataSelector = useMemo(() => createDataSelector<T>(props.dataKey), [props.dataKey]);
   const { table, error, isFetching, isLoading, refetch, selectedRows, clearSelection, pagination } = useServerTable<T>({
@@ -143,6 +165,41 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     onSortingChange: (sort, order) => setSearch({ sort, order, page: 1 }),
     enableRowSelection: props.canSelectRow ? (row) => props.canSelectRow!(row.original) : true,
   });
+
+  // "Select all N" across pages (Polaris IndexTable): offered once the whole
+  // page is ticked; it loads every row so bulk actions keep their contracts.
+  const [allRows, setAllRows] = useState<T[] | null>(null);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const scope = hashKey(props.query.queryKey);
+  const pageAllSelected = table.getIsAllPageRowsSelected();
+  useEffect(() => setAllRows(null), [scope]);
+  useEffect(() => {
+    if (!pageAllSelected) setAllRows(null);
+  }, [pageAllSelected]);
+  const clearAll = () => {
+    setAllRows(null);
+    clearSelection();
+  };
+  const bulkRows = allRows ?? selectedRows;
+  const canSelectAll =
+    Boolean(props.pageQuery) && pageAllSelected && !allRows && pagination.total > selectedRows.length && pagination.total <= SELECT_ALL_LIMIT;
+  const selectAll = async () => {
+    if (!props.pageQuery) return;
+    setLoadingAll(true);
+    try {
+      const rows: T[] = [];
+      for (let page = 1; ; page += 1) {
+        const { data, pagination: pages } = dataSelector(await queryClient.fetchQuery(props.pageQuery(page, 100)));
+        rows.push(...data);
+        if (page >= pages.totalPages || data.length === 0) break;
+      }
+      setAllRows(props.canSelectRow ? rows.filter(props.canSelectRow) : rows);
+    } catch (error) {
+      toast.error(getServerFnError(error, t("actionFailed")));
+    } finally {
+      setLoadingAll(false);
+    }
+  };
 
   const viewParam = props.views?.param;
   const currentView = trashed ? "trash" : viewParam ? String(search[viewParam] ?? "all") : "all";
@@ -163,24 +220,50 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const emptyState = trashed
     ? { icon: Icon, title: t("trashEmpty"), description: "" }
     : filtered
-      ? { icon: Icon, title: t("noResults"), description: t("noResultsHint") }
+      ? {
+          icon: Icon,
+          title: t("noResults"),
+          description: t("noResultsHint"),
+          action: (
+            <Button variant="outline" size="sm" onClick={() => setSearch({ search: undefined, ...(viewParam ? { [viewParam]: undefined } : {}), page: 1 })}>
+              {t("clearFilters")}
+            </Button>
+          ),
+        }
       : props.empty;
 
   const bulkButtons = selectedRows.length > 0 ? (
     <>
+      {allRows ? (
+        <span className="flex items-center gap-1 text-body">
+          {t("allSelected", { count: allRows.length })}
+          <Button variant="link" size="sm" onClick={clearAll}>
+            {t("clearSelection")}
+          </Button>
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-body">
+          {t("selected", { count: selectedRows.length })}
+          {canSelectAll ? (
+            <Button variant="link" size="sm" loading={loadingAll} onClick={() => void selectAll()}>
+              {t("selectAllCount", { count: pagination.total })}
+            </Button>
+          ) : null}
+        </span>
+      )}
       {trashed && lifecycle?.canRestore ? (
-        <Button variant="outline" size="sm" disabled={mutation.isPending} onClick={() => request("restore", selectedRows)}>
+        <Button variant="outline" size="sm" loading={mutation.isPending && mutation.variables?.action === "restore"} onClick={() => request("restore", bulkRows)}>
           {t("restore")}
         </Button>
       ) : null}
       {trashed && lifecycle?.canDelete ? (
-        <Button variant="destructive" size="sm" onClick={() => request("delete", selectedRows)}>
+        <Button variant="destructive" size="sm" onClick={() => request("delete", bulkRows)}>
           {t("deletePermanently")}
         </Button>
       ) : null}
-      {!trashed ? props.bulkActions?.(selectedRows, clearSelection) : null}
+      {!trashed ? props.bulkActions?.(bulkRows, clearAll) : null}
       {!trashed && lifecycle?.canTrash ? (
-        <Button variant="outline" size="sm" onClick={() => request("trash", selectedRows)}>
+        <Button variant="outline" size="sm" onClick={() => request("trash", bulkRows)}>
           {t("moveToTrash")}
         </Button>
       ) : null}
@@ -201,13 +284,13 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
             onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
-            aria-label={t("selectRow")}
+            aria-label={rowLabel ? t("select", { name: rowLabel(row.original) }) : t("selectRow")}
             className="mt-3"
           />
         ) : null}
         <div className="min-w-0 flex-1 space-y-1">
           {slot("primary")}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">{slot("secondary")}</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{slot("secondary")}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {slot("status")}
@@ -227,7 +310,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     <div className="pb-8">
       <PageHeader title={props.title} actions={trashed || nothingYet ? undefined : props.actions} />
       {nothingYet ? (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
+        <div className="overflow-hidden rounded-xl bg-card shadow-card">
           {tabBar}
           <EmptyState icon={Icon} title={props.empty.title} description={props.empty.description} action={props.empty.action ?? props.actions} />
         </div>
@@ -254,7 +337,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
                 searchValue={search.search}
                 onSearchChange={(value) => setSearch({ search: value || undefined, page: 1 })}
                 searchPlaceholder={t("search")}
-                selectedCount={selectedRows.length}
+                selectedCount={bulkRows.length}
                 filters={props.filters}
                 bulkActions={bulkButtons}
               />

@@ -56,7 +56,7 @@ function HomePage() {
       <div>
         <PageHeader title={t("home")} />
         <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 text-sm">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             {t("loadFailed")}
             <Button variant="outline" size="sm" onClick={() => void summary.refetch()}>{t("retry")}</Button>
           </CardHeader>
@@ -93,14 +93,14 @@ function HomePage() {
           {days.some((day) => day.revenue > 0) ? (
             <DashboardSalesChart days={days} money={fmt} />
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("noSalesYet")}</p>
+            <p className="py-8 text-center text-body text-muted-foreground">{t("noSalesYet")}</p>
           )}
         </CardContent>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{t("recentOrders")}</CardTitle>
             {canOpen("/admin/orders") ? (
               <Button variant="ghost" size="sm" asChild>
@@ -110,7 +110,7 @@ function HomePage() {
           </CardHeader>
           <CardContent className="p-0">
             {recentOrders.length === 0 ? (
-              <p className="px-6 pb-6 text-sm text-muted-foreground">{t("noOrders")}</p>
+              <p className="px-4 pb-4 text-body text-muted-foreground">{t("noOrders")}</p>
             ) : (
               <ul className="divide-y border-t">
                 {recentOrders.map((order) => {
@@ -120,7 +120,7 @@ function HomePage() {
                       <Link
                         to="/admin/orders/$orderId"
                         params={{ orderId: order.id }}
-                        className="flex min-h-11 items-center gap-3 px-6 py-2 text-sm hover:bg-muted"
+                        className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-medium">{order.customerName}</span>
@@ -154,7 +154,7 @@ function HomePage() {
                 {lowCount === 1 ? t("lowStockOne") : t("lowStock", { count: lowCount })}
               </TodoLink>
             ) : null}
-            {openCount === 0 && lowCount === 0 ? <p className="text-sm text-muted-foreground">{t("allDone")}</p> : null}
+            {openCount === 0 && lowCount === 0 ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -167,11 +167,11 @@ function Metric({ label, value, change }: { label: string; value: string; change
   return (
     <Card>
       <CardHeader className="space-y-1">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
+        <p className="text-body text-muted-foreground">{label}</p>
+        <p className="text-heading-xl font-semibold tabular-nums">{value}</p>
         {/* Compare only against a real baseline: no badge when last month had nothing. */}
         {typeof change === "number" ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("vsLastMonth", { change: `${formatNumber(Math.round(change), { signDisplay: "exceptZero" })}%` })}
           </p>
         ) : null}
@@ -182,7 +182,7 @@ function Metric({ label, value, change }: { label: string; value: string; change
 
 function TodoLink({ to, search, icon, children }: { to: string; search: Record<string, string>; icon: ReactNode; children: ReactNode }) {
   return (
-    <Link to={to} search={search as never} className="flex min-h-11 items-center gap-3 rounded-md px-2 text-sm font-medium hover:bg-muted">
+    <Link to={to} search={search as never} className="flex min-h-11 items-center gap-3 rounded-md px-2 text-body font-medium hover:bg-muted">
       {icon}
       <span className="flex-1">{children}</span>
       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -204,8 +204,8 @@ function SetupCards({ canOpen }: { canOpen: (to: string) => boolean }) {
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{t("welcome")}</h1>
-        <p className="text-sm text-muted-foreground">{t("welcomeBody")}</p>
+        <h1 className="text-heading-lg font-semibold">{t("welcome")}</h1>
+        <p className="text-body text-muted-foreground">{t("welcomeBody")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {SETUP.filter((step) => canOpen(step.to)).map((step) => (
@@ -214,7 +214,7 @@ function SetupCards({ canOpen }: { canOpen: (to: string) => boolean }) {
               <step.icon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <h2 className="font-semibold">{t(step.title)}</h2>
-                <p className="text-sm text-muted-foreground">{t(step.body)}</p>
+                <p className="text-body text-muted-foreground">{t(step.body)}</p>
               </div>
               <Button variant="outline" size="sm" asChild>
                 <Link to={step.to}>{t(step.action)}</Link>

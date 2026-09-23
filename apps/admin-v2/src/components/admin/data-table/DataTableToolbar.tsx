@@ -104,7 +104,8 @@ export function DataTableToolbar({
             aria-label={searchPlaceholder ?? t("search")}
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="h-11 pl-8 pr-11 sm:h-9 sm:pr-9"
+            // eslint-disable-next-line shadcn/no-restyle -- room for the inline search icon and clear button
+            className="pl-8 pr-11 sm:pr-9"
           />
           {localSearch && (
             <button

@@ -26,7 +26,7 @@ export function IndexTabs<T extends string>({ tabs, value, onChange, label }: In
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              "min-h-11 shrink-0 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8",
+              "min-h-11 shrink-0 rounded-md px-3 text-body font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8",
               active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
             )}
           >

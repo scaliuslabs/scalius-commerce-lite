@@ -33,7 +33,7 @@ export function DashboardSalesChart({ days, money }: { days: DailySales[]; money
 
   return (
     <figure className="space-y-2">
-      <p className="h-5 text-sm text-muted-foreground" aria-live="polite">
+      <p className="h-5 text-body text-muted-foreground" aria-live="polite">
         {shown ? describe(shown) : null}
       </p>
       <svg
@@ -64,7 +64,7 @@ export function DashboardSalesChart({ days, money }: { days: DailySales[]; money
           );
         })}
       </svg>
-      <figcaption className="flex justify-between text-sm text-muted-foreground">
+      <figcaption className="flex justify-between text-body text-muted-foreground">
         <span>{days[0] ? dayLabel(days[0].date, { day: "numeric", month: "short" }) : null}</span>
         <span>{days.length ? dayLabel(days[days.length - 1]!.date, { day: "numeric", month: "short" }) : null}</span>
       </figcaption>
