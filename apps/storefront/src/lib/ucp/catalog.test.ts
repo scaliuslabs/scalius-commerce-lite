@@ -311,13 +311,13 @@ describe("UCP catalog mapping", () => {
     });
   });
 
-  it("discounts raw prices before currency rounding in UCP", async () => {
+  it("discounts stored minor-unit prices in UCP exactly as checkout does", async () => {
     const product = productFixture();
     product.price = 1.005;
     product.discountType = "percentage";
     product.discountPercentage = 10;
     product.discountAmount = null;
-    product.discountedPrice = 0.9;
+    product.discountedPrice = 0.91;
     product.variants![0]!.price = 1.005;
     product.variants![0]!.discountType = null;
     product.variants![0]!.discountAmount = null;
@@ -331,7 +331,7 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(result.body.products[0].variants[0]).toMatchObject({
-      price: { amount: 90, currency: "BDT" },
+      price: { amount: 91, currency: "BDT" },
       list_price: { amount: 101, currency: "BDT" },
     });
   });

@@ -1254,7 +1254,7 @@ describe("Facebook product feed route", () => {
     }
   });
 
-  it("rounds the exact 1.005 boundary identically in Google and Meta feeds", async () => {
+  it("rounds the 1.005 boundary to stored minor units identically in Google and Meta feeds", async () => {
     mocks.getFeedProducts.mockResolvedValue({
       data: [
         {
@@ -1285,7 +1285,7 @@ describe("Facebook product feed route", () => {
       const body = await response.text();
       const item = feedItemById(body, "prod_rounding_boundary");
       expect(item).toContain("<g:price>1.01 BDT</g:price>");
-      expect(item).toContain("<g:sale_price>0.90 BDT</g:sale_price>");
+      expect(item).toContain("<g:sale_price>0.91 BDT</g:sale_price>");
       expectFeedPriceInvariant(body);
     }
   });
