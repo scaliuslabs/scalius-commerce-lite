@@ -46,6 +46,10 @@ export const checkoutMessages = defineMessages({
     placeOrderText: "Place order button",
     processingText: "While the order is placed",
     termsText: "Terms text",
+    termsTextHelp: "{terms} and {privacy} become links to your Terms and Privacy pages (Settings → Policies).",
+    termsLinksMissing: "The Terms and Privacy links will be missing. Keep {terms} and {privacy} in the text.",
+    termsLinkText: "Terms link text",
+    privacyLinkText: "Privacy link text",
 
     requestsTitle: "Customer requests",
     requestsDescription: "What customers can ask for from their order page.",
@@ -105,6 +109,10 @@ export const checkoutMessages = defineMessages({
     placeOrderText: "অর্ডার দেওয়ার বাটন",
     processingText: "অর্ডার দেওয়ার সময়ের লেখা",
     termsText: "শর্তাবলীর লেখা",
+    termsTextHelp: "{terms} আর {privacy} আপনার শর্তাবলি ও গোপনীয়তা নীতির পেজের লিংক হয়ে যাবে (সেটিংস → পলিসি)।",
+    termsLinksMissing: "শর্তাবলি ও গোপনীয়তা নীতির লিংক থাকবে না। লেখায় {terms} আর {privacy} রাখুন।",
+    termsLinkText: "শর্তাবলি লিংকের লেখা",
+    privacyLinkText: "গোপনীয়তা লিংকের লেখা",
 
     requestsTitle: "কাস্টমার রিকোয়েস্ট",
     requestsDescription: "অর্ডার পেজ থেকে কাস্টমার যা চাইতে পারে।",
