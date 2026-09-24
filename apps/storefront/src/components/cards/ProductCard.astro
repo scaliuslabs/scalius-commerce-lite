@@ -27,6 +27,11 @@ interface Props {
    * grid beside the filter sidebar, or a horizontal collection rail.
    */
   context?: ProductGridContext;
+  /**
+   * The page container's max width when it is not the theme's (the product
+   * page keeps `max-w-7xl` at 80rem), so `sizes` caps where the grid does.
+   */
+  containerWidth?: string;
   headingLevel?: "h2" | "h3";
 }
 
@@ -37,6 +42,7 @@ const {
   index,
   aboveFold = false,
   context = "grid",
+  containerWidth: containerWidthOverride,
   headingLevel = "h3",
 } = Astro.props;
 const TitleTag = headingLevel;
@@ -48,7 +54,8 @@ const money = (price: number) =>
 // the fluid grid the image `sizes` follow.
 const { theme, layout } = await currentRequestTheme(Astro.locals);
 const card = layout.productCard;
-const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
+const containerWidth =
+  containerWidthOverride ?? buildStorefrontThemeTokens(theme)["theme-container-width"]!;
 const imageLoading = productCardImageLoading(
   productGridFirstRow(layout.grid, containerWidth),
   { index, aboveFold },

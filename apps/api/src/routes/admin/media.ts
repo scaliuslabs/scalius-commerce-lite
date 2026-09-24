@@ -15,6 +15,7 @@ import {
     createFolderSchema,
     createMediaFolder,
     deleteMediaFolder,
+    enqueueMediaVariantsJob,
     getMediaUploadSession,
     initiateMediaUpload,
     initiateMediaUploadSchema,
@@ -143,14 +144,16 @@ const importUrlRoute = createRoute({
 });
 app.openapi(importUrlRoute, async (c) => {
     const input = c.req.valid("json");
-    return created(c, { file: await importMediaFromUrl({
+    const file = await importMediaFromUrl({
         db: c.get("db"),
         bucket: c.env.BUCKET,
         images: c.env.IMAGES,
         sourceUrl: input.sourceUrl,
         filename: input.filename,
         folderId: input.folderId,
-    }) });
+    });
+    await enqueueMediaVariantsJob(c.env.JOBS_QUEUE, c.env.IMAGES, file);
+    return created(c, { file });
 });
 
 const getUploadRoute = createRoute({
@@ -242,12 +245,18 @@ const completeRoute = createRoute({
         503: serviceUnavailableResponse,
     },
 });
-app.openapi(completeRoute, async (c) => ok(c, { file: await completeMediaUpload(
-    c.get("db"),
-    c.req.valid("param").id,
-    c.env.BUCKET,
-    c.req.valid("query").variants === "server" ? c.env.IMAGES : undefined,
-) }));
+app.openapi(completeRoute, async (c) => {
+    const file = await completeMediaUpload(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.env.BUCKET,
+        c.req.valid("query").variants === "server" ? c.env.IMAGES : undefined,
+    );
+    // Whatever the browser pipeline does next, the server renders this
+    // upload's renditions shortly after if they are still missing.
+    await enqueueMediaVariantsJob(c.env.JOBS_QUEUE, c.env.IMAGES, file);
+    return ok(c, { file });
+});
 
 const abortRoute = createRoute({
     method: "delete",

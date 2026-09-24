@@ -3062,6 +3062,66 @@ export type GetApiV1StorefrontLayoutResponses = {
 
 export type GetApiV1StorefrontLayoutResponse = GetApiV1StorefrontLayoutResponses[keyof GetApiV1StorefrontLayoutResponses];
 
+export type GetApiV1StorefrontBatchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Part path and query, repeated once per part
+         */
+        r: string | Array<string>;
+    };
+    url: '/api/v1/storefront/batch';
+};
+
+export type GetApiV1StorefrontBatchErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontBatchError = GetApiV1StorefrontBatchErrors[keyof GetApiV1StorefrontBatchErrors];
+
+export type GetApiV1StorefrontBatchResponses = {
+    /**
+     * Each part's status and body, in request order
+     */
+    200: {
+        success: true;
+        data: {
+            parts: Array<{
+                status: number;
+                contentType: string;
+                /**
+                 * The part's response body, exactly as its own GET returns it
+                 */
+                body: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1StorefrontBatchResponse = GetApiV1StorefrontBatchResponses[keyof GetApiV1StorefrontBatchResponses];
+
 export type PostApiV1StorefrontThemePreviewResolveData = {
     body?: {
         token: string;

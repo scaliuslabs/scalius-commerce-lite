@@ -27,6 +27,8 @@ interface Props {
 const { headerData, hasNavigation, variant } = Astro.props;
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
+// Logos without renditions get a plain src (no stray `sizes`).
+const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
 // Social links live in the footer and the phone menu, so the desktop header
 // reaches My Account and the cart in a few tab stops (logo, search, call).
 const phoneHref =
@@ -95,8 +97,8 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             headerData.logo.src ? (
               <img
                 src={mediaImageUrl(headerData.logo.src, 320)}
-                srcset={mediaImageSrcSet(headerData.logo.src)}
-                sizes={`(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px`}
+                srcset={logoSrcSet}
+                sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
                 alt={headerData.logo.alt}
                 class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-[max-height,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
                 style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}

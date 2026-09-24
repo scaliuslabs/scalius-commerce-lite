@@ -38,6 +38,7 @@ import {
   normalizeCacheGeneration,
 } from "@scalius/shared/cache-generation";
 import type { LayoutData } from "./storefront";
+import type { PendingReadBatch } from "./transport";
 
 /** Bindings and secrets the middleware hands to the request runtime. */
 export interface RequestRuntimeEnv extends MasterSecretEnvironment {
@@ -71,6 +72,8 @@ export interface StorefrontRuntime {
   layout?: Promise<LayoutData | null>;
   /** Request-local read coalescing. Never share in-flight I/O across requests. */
   inflightReads?: Map<string, Promise<unknown>>;
+  /** Public reads waiting to be sent together (see transport `joinReadBatch`). */
+  readBatch?: PendingReadBatch | null;
   /** Request-local API credential derived from the current request bindings. */
   apiJwt?: {
     token: string | null;

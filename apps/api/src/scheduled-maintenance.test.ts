@@ -92,7 +92,9 @@ import {
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
-  MEDIA_RENDITION_BACKFILL_LIMIT,
+  MEDIA_RENDITION_BACKFILL_CONCURRENCY,
+  MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
+  MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
@@ -238,7 +240,7 @@ describe("runScheduledMaintenance", () => {
       limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
       hasMore: false,
     });
-    mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0 });
+    mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
   });
 
   afterEach(() => {
@@ -545,21 +547,47 @@ describe("runScheduledMaintenance", () => {
     await runScheduledMaintenance(createEnv(), createExecutionContext());
     expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
 
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 2, generated: 0, failed: 2 });
+    const startedAt = new Date("2026-06-20T12:00:00.000Z");
+    vi.setSystemTime(startedAt);
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 2, generated: 0, failed: 2, hasMore: false });
     await runScheduledMaintenance(env, createExecutionContext());
     expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
       mocks.db,
       env.BUCKET,
       images,
-      { limit: MEDIA_RENDITION_BACKFILL_LIMIT },
+      {
+        deadline: startedAt.getTime() + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
+        concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
+        maxImages: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+      },
     );
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
 
     const executionCtx = createExecutionContext();
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 3, generated: 2, failed: 1 });
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });
     await runScheduledMaintenance(env, executionCtx);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
+  });
+
+  it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {
+    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+
+    await runScheduledMaintenance(env, createExecutionContext());
+
+    const backfillOrder = mocks.backfillMissingMediaVariants.mock.invocationCallOrder[0]!;
+    for (const sweep of [
+      mocks.releaseExpiredReservations,
+      mocks.flushPendingOrderNotificationOutbox,
+      mocks.reconcileDueRefundAttempts,
+      mocks.cleanupExpiredCustomerSessions,
+      mocks.pruneExpiredIdentityHandoffEvents,
+    ]) {
+      expect(sweep.mock.invocationCallOrder[0]).toBeLessThan(backfillOrder);
+    }
+    // The deadline leaves the rest of the 15-minute cron wall window as slack.
+    expect(MEDIA_RENDITION_BACKFILL_DEADLINE_MS).toBeLessThanOrEqual(10 * 60 * 1_000);
+    expect(MEDIA_RENDITION_BACKFILL_CONCURRENCY).toBeLessThanOrEqual(3);
   });
 
   it("logs operation and run failure timings before rethrowing scheduled errors", async () => {
