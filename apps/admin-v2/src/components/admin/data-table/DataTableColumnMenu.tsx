@@ -42,7 +42,11 @@ export function DataTableColumnMenu<TData extends TableRowData>({
   const sorting = table.state.sorting[0];
   const sortColumn = sorting ? table.getColumn(sorting.id) : undefined;
   const hiddenCount = layout.autoHidden.size;
-  const items = layout.arrangeable.map((column) => ({ id: column.id, column }));
+  // The title column is always first and always shown: a fixed row above the
+  // sortable list, so neither drag nor arrow keys can put a column above it.
+  const title = layout.arrangeable.find(isPrimaryColumn);
+  const offset = title ? 1 : 0;
+  const items = layout.arrangeable.filter((column) => column !== title).map((column) => ({ id: column.id, column }));
 
   const moveBy = (event: KeyboardEvent, id: string, index: number) => {
     const step = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
@@ -50,7 +54,7 @@ export function DataTableColumnMenu<TData extends TableRowData>({
     event.preventDefault();
     const target = index + step;
     if (target < 0 || target >= items.length) return;
-    layout.move(id, target);
+    layout.move(id, target + offset);
     // Keep focus on the moved row's handle.
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-column-handle="${CSS.escape(id)}"]`)?.focus());
   };
@@ -100,16 +104,24 @@ export function DataTableColumnMenu<TData extends TableRowData>({
 
           <section className={cn("space-y-2", sortable.length > 0 && "border-t pt-3")} aria-labelledby="table-columns-heading">
             <h2 id="table-columns-heading" className="text-body font-medium">{t("columns")}</h2>
+            {title ? (
+              <div data-column-fixed={title.id} className="flex min-h-9 items-center gap-1 rounded-md">
+                <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground" title={t("alwaysShown")}>
+                  <Lock className="size-4" aria-hidden />
+                  <span className="sr-only">{t("alwaysShown")}</span>
+                </span>
+                <span className="min-w-0 flex-1 truncate text-body">{columnLabel(title)}</span>
+              </div>
+            ) : null}
             <SortableList
               items={items}
               className="space-y-0.5"
               onReorder={(next) => {
                 const moved = next.find((item, index) => item.id !== items[index]?.id);
-                if (moved) layout.move(moved.id, next.indexOf(moved));
+                if (moved) layout.move(moved.id, next.indexOf(moved) + offset);
               }}
               renderItem={({ id, column }, sortableProps) => {
                 const name = columnLabel(column);
-                const primary = isPrimaryColumn(column);
                 const hidden = layout.isHiddenByChoice(id);
                 const index = items.findIndex((item) => item.id === id);
                 return (
@@ -129,23 +141,16 @@ export function DataTableColumnMenu<TData extends TableRowData>({
                       <GripVertical className="size-4" aria-hidden />
                     </button>
                     <span className={cn("min-w-0 flex-1 truncate text-body", hidden && "text-muted-foreground")}>{name}</span>
-                    {primary ? (
-                      <span className="flex size-8 items-center justify-center text-muted-foreground" title={t("alwaysShown")}>
-                        <Lock className="size-4" aria-hidden />
-                        <span className="sr-only">{t("alwaysShown")}</span>
-                      </span>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-pressed={!hidden}
-                        aria-label={t(hidden ? "showColumn" : "hideColumn", { name })}
-                        onClick={() => layout.toggle(id)}
-                      >
-                        {hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-pressed={!hidden}
+                      aria-label={t(hidden ? "showColumn" : "hideColumn", { name })}
+                      onClick={() => layout.toggle(id)}
+                    >
+                      {hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+                    </Button>
                   </div>
                 );
               }}
