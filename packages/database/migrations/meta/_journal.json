@@ -519,6 +519,13 @@
       "when": 1790300004000,
       "tag": "0073_combinable_discount_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1790300005000,
+      "tag": "0074_verified_customer_identity",
+      "breakpoints": true
     }
   ]
 }

@@ -179,6 +179,8 @@ describe("useMediaManager route authority", () => {
       updatedAt: new Date("2026-08-30T00:00:00.000Z"),
       trashedAt: null,
       deletedAt: null,
+      usageCount: 0,
+      keptForOrders: false,
     };
 
     act(() => mocks.onUploadComplete?.([uploaded]));

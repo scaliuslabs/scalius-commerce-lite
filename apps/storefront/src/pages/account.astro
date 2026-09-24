@@ -3,6 +3,7 @@
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
 import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 
 const layoutData = await getLayoutData();
 const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive disabled:opacity-50";
@@ -48,10 +49,23 @@ const error = "mt-1 hidden text-sm text-destructive";
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-10">
         <div class="space-y-6">
           <section class="rounded-xl border border-border bg-card p-5" aria-labelledby="profileHeading">
-            <h2 id="profileHeading" class="text-base font-semibold text-foreground">Profile</h2>
-            <p id="profileName" class="mt-3 break-words text-sm font-medium text-foreground"></p>
+            <div class="flex items-center justify-between gap-3">
+              <h2 id="profileHeading" class="text-base font-semibold text-foreground">Profile</h2>
+              <button type="button" id="nameToggle" aria-expanded="false" aria-controls="nameForm" class="min-h-11 whitespace-nowrap text-sm font-medium text-primary hover:underline">Edit</button>
+            </div>
+            <p id="profileName" class="mt-2 break-words text-sm font-medium text-foreground"></p>
             <p id="profileEmail" class="break-all text-sm text-muted-foreground"></p>
             <p id="profilePhone" class="text-sm text-muted-foreground"></p>
+            <p id="nameSaved" role="status" class="mt-2 hidden text-sm text-primary">Name saved</p>
+            <form id="nameForm" method="post" class="mt-4 hidden space-y-4" novalidate>
+              <div>
+                <label for="fieldProfileName" class={label}>Full name</label>
+                <input id="fieldProfileName" type="text" autocomplete="name" required aria-describedby="fieldProfileNameError" class={field} />
+                <p id="fieldProfileNameError" class={error}></p>
+              </div>
+              <p id="nameSaveStatus" role="status" aria-live="polite" class="text-sm text-destructive empty:hidden"></p>
+              <button id="saveNameBtn" type="submit" class="min-h-11 w-full rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">Save name</button>
+            </form>
           </section>
 
           <section class="rounded-xl border border-border bg-card p-5" aria-labelledby="deliveryHeading">
@@ -69,18 +83,18 @@ const error = "mt-1 hidden text-sm text-destructive";
               </div>
               <div>
                 <label for="fieldAddress" class={label}>Address</label>
-                <input id="fieldAddress" type="text" autocomplete="street-address" aria-describedby="fieldAddressError" placeholder="House, road, area" class={field} />
+                <input id="fieldAddress" type="text" autocomplete="street-address" required aria-describedby="fieldAddressError" placeholder="House, road, area" class={field} />
                 <p id="fieldAddressError" class={error}></p>
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label for="fieldCity" class={label}>City</label>
-                  <select id="fieldCity" aria-describedby="fieldCityError" class={field}><option value="">Select a city</option></select>
+                  <select id="fieldCity" required aria-describedby="fieldCityError" class={field}><option value="">Select a city</option></select>
                   <p id="fieldCityError" class={error}></p>
                 </div>
                 <div>
-                  <label for="fieldZone" class={label}>Zone</label>
-                  <select id="fieldZone" disabled aria-describedby="fieldZoneError" class={field}><option value="">Select a zone</option></select>
+                  <label for="fieldZone" class={label}>{copy.zoneLabel}</label>
+                  <select id="fieldZone" required disabled aria-describedby="fieldZoneError" class={field}><option value="">{copy.selectZonePlaceholder}</option></select>
                   <p id="fieldZoneError" class={error}></p>
                 </div>
               </div>

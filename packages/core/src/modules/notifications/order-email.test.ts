@@ -385,6 +385,104 @@ describe("customer order email composition and delivery", () => {
     expect(email.visible).toContain("Email Buyer অর্ডার #order_email করেছেন, মোট ৳258।");
   });
 
+  it("lists each discount by name and code and shows free delivery on the delivery line, for buyers and staff", async () => {
+    sqlite.exec(`INSERT INTO promotions (id, name, method) VALUES ('promo_code', 'Eid sale', 'code'), ('promo_auto', 'Weekend deal', 'automatic'), ('promo_ship', 'Free delivery', 'code');
+      INSERT INTO promotion_effects (id, promotion_id, kind, target, allocation, config, position) VALUES
+        ('eff_code', 'promo_code', 'percentage_off', 'line', 'across', '{"basisPoints":500}', 0),
+        ('eff_auto', 'promo_auto', 'fixed_amount_off', 'order', 'once', '{"amountMinor":400,"currencyCode":"BDT"}', 0),
+        ('eff_ship', 'promo_ship', 'free', 'shipping', 'once', '{}', 0);
+      INSERT INTO promotion_codes (id, promotion_id, code, normalized_code) VALUES
+        ('code_eid', 'promo_code', 'EID10', 'EID10'), ('code_ship', 'promo_ship', 'SHIPFREE', 'SHIPFREE');
+      INSERT INTO order_discount_allocations (id, order_id, order_item_id, promotion_id, effect_id, promotion_revision, evaluator_version,
+        method, promotion_name, promotion_code, effect_kind, target, currency_code, base_amount_minor, discount_amount_minor, quantity) VALUES
+        ('oda_code', 'order_email', 'item', 'promo_code', 'eff_code', 1, 1, 'code', 'Eid sale', 'EID10', 'percentage_off', 'line', 'BDT', 20000, 1000, 2),
+        ('oda_auto', 'order_email', 'item', 'promo_auto', 'eff_auto', 1, 1, 'automatic', 'Weekend deal', NULL, 'fixed_amount_off', 'order', 'BDT', 19000, 400, 2),
+        ('oda_ship', 'order_email', NULL, 'promo_ship', 'eff_ship', 1, 1, 'code', 'Free delivery', 'SHIPFREE', 'free', 'shipping', 'BDT', 6000, 6000, NULL);
+      UPDATE orders SET discount_amount_minor = 7400, total_amount_minor = 20400, balance_due_minor = 20400;`);
+    setDocument("notifications", { staffEmailRecipients: ["owner@shop.test"] });
+
+    await send("order_created");
+    await sendStaffOrderEmails(db, { id: "order_email", customerName: "Email Buyer", notificationType: "order_created" }, {});
+
+    const [buyer, staff] = transport.sendEmail.mock.calls.map((call) => call[0] as SendEmailOptions);
+    for (const email of [buyer!, staff!]) {
+      expect(email.text).toContain("Discount · Eid sale (EID10): −৳10\nDiscount · Weekend deal: −৳4\nDelivery: Free (was ৳60)");
+      expect(email.text).toContain("Total: ৳204");
+      expect(email.text).not.toMatch(/Free delivery|SHIPFREE|Delivery: ৳60/);
+      expect(email.html).toContain('<s style="color:#5f6368;">৳60</s> Free');
+    }
+  });
+
+  it("shows a waived delivery fee as free with the fee it replaced", async () => {
+    sqlite.exec(`UPDATE orders SET shipping_amount_minor = 0, shipping_fee_waived = 1, shipping_method_base_amount_minor = 6000,
+      discount_amount_minor = 0, total_amount_minor = 21800, balance_due_minor = 21800`);
+    await send();
+    const email = message();
+    expect(email.text).toContain("Subtotal: ৳200\nDelivery: Free (was ৳60)\nVAT: ৳18\nTotal: ৳218");
+    expect(email.text).not.toContain("Discount");
+  });
+
+  it("keeps a subject whose store-name variable is empty, and never sends a blank subject", async () => {
+    sqlite.exec("DELETE FROM settings WHERE category = 'business'");
+    setTemplates({ email: { order_confirmed: { subject: "R2-SET B {{order_number}} {{store_name}}", body: "Thanks {{store_name}}\n\nSee you" } } });
+    await send();
+    expect(message().subject).toBe("R2-SET B #order_email");
+    expect(message().text).toContain("See you");
+    expect(message().text).not.toContain("Thanks");
+
+    transport.sendEmail.mockClear();
+    sqlite.exec("DELETE FROM order_notification_delivery_receipts; DELETE FROM settings WHERE category = 'notification_templates'");
+    setTemplates({ email: { order_confirmed: { subject: "{{store_name}}", body: "Hi" } } });
+    await send();
+    expect(message().subject).toBe("Order #order_email confirmed");
+  });
+
+  it("names the store by its Store URL host when no business name is set", async () => {
+    sqlite.exec("DELETE FROM settings WHERE category = 'business'");
+    setDocument("platform", { storefrontUrl: "https://www.storefront.scalius.com" });
+    setTemplates({ email: { order_confirmed: { subject: "{{store_name}}: order {{order_number}}", body: "Hi" } } });
+    await send();
+    const email = message();
+    expect(email.fromName).toBe("storefront.scalius.com");
+    expect(email.subject).toBe("storefront.scalius.com: order #order_email");
+    expect(email.text?.startsWith("storefront.scalius.com")).toBe(true);
+  });
+
+  it("logs a message the merchant turned off as not sent, without reading or sending anything", async () => {
+    failItemRead = true;
+    setDocument("notifications", { orderChannels: { support_request_submitted: [] } });
+    const result = await sendOrderNotificationEmail("buyer@example.test", "Buyer", "order_email", "support_request_submitted",
+      { supportRequestType: "cancel_pre_shipment" }, db, { outboxId: "outbox_email" });
+
+    expect(transport.sendEmail).not.toHaveBeenCalled();
+    expect(result).toEqual({ hasRetryableFailure: false, outcomes: [expect.objectContaining({ channel: "email", status: "skipped", providerStatus: "notification_turned_off" })] });
+    expect(sqlite.prepare("SELECT channel, status, last_error, recipient_masked FROM order_notification_delivery_receipts").all())
+      .toEqual([{ channel: "email", status: "skipped", last_error: "notification_turned_off", recipient_masked: "b***@example.test" }]);
+    expect(reads.some((query) => query.includes('"order_items"') || query.includes('"business"'))).toBe(false);
+  });
+
+  it("names the courier and links its tracking page in the shipped email and SMS", async () => {
+    sqlite.exec(`INSERT INTO delivery_shipments (id, order_id, provider_type, tracking_id, status)
+      VALUES ('ship_1', 'order_email', 'steadfast', 'SF987', 'in_transit')`);
+    await send("order_shipped", { data: { trackingId: "SF987" } });
+    const email = message();
+    expect(email.text).toContain("Courier: Steadfast\nTracking ID: SF987\nTrack your parcel: https://steadfast.com.bd/t/SF987");
+    expect(email.links).toContain("https://steadfast.com.bd/t/SF987");
+  });
+
+  it("leaves out the courier lines when the parcel has no tracking yet", async () => {
+    await send("order_shipped");
+    const email = message();
+    expect(email.text).toContain("Your order is on its way.");
+    expect(email.text).not.toMatch(/Courier:|Tracking ID:|Track your parcel:/);
+  });
+
+  it("says how much was refunded, in the order's currency", async () => {
+    sqlite.exec("UPDATE orders SET status = 'partially_refunded', payment_status = 'partially_refunded'");
+    await send("order_partially_refunded", { data: { amount: 120 } });
+    expect(message().text).toContain("A partial refund for this order has been processed.\nRefund: ৳120");
+  });
+
   it("sends no staff email for other events or when nobody is listed", async () => {
     const other = await sendStaffOrderEmails(db, { id: "order_email", customerName: "B", notificationType: "order_confirmed" }, { outboxId: "outbox_email" });
     const nobody = await sendStaffOrderEmails(db, { id: "order_email", customerName: "B", notificationType: "order_created" }, { outboxId: "outbox_email" });

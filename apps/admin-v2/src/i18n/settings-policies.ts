@@ -42,6 +42,8 @@ export const policiesMessages = defineMessages({
     createFromTemplate: "Create from template",
     templateHelp: "Adds a draft page with starting text you can edit.",
     templateFailed: "Couldn't create the page. Try again.",
+    templateCreated: "Page created",
+    templateCreatedHelp: "A draft page is linked. Read it through and publish it so customers can see it.",
     needPagesAccess: "You need access to pages to change this.",
   },
   bn: {
@@ -85,6 +87,8 @@ export const policiesMessages = defineMessages({
     createFromTemplate: "টেমপ্লেট থেকে তৈরি করুন",
     templateHelp: "শুরুর লেখাসহ একটি ড্রাফট পেজ যোগ হয়, আপনি এডিট করতে পারবেন।",
     templateFailed: "পেজ তৈরি করা যায়নি। আবার চেষ্টা করুন।",
+    templateCreated: "পেজ তৈরি হয়েছে",
+    templateCreatedHelp: "একটি ড্রাফট পেজ যুক্ত হয়েছে। পড়ে দেখে পাবলিশ করুন, তাহলে কাস্টমার দেখতে পাবে।",
     needPagesAccess: "এটি বদলাতে পেজ দেখার অনুমতি লাগবে।",
   },
 });

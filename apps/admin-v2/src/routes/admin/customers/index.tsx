@@ -10,7 +10,7 @@ import {
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -46,7 +46,7 @@ function listQuery(search: ReturnType<typeof validateCustomerSearch>, term: stri
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("customers"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("customers", deps.q))),
   head: () => ({ meta: [{ title: translate(customersMessages, "customers") }] }),
   component: CustomersPage,
   errorComponent: RouteErrorComponent,

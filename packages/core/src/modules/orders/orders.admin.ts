@@ -51,8 +51,10 @@ import {
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
+import { listOrderDiscountLines } from "../promotions/order-discount-lines";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, notInArray, and, type SQL } from "drizzle-orm";
+import { guestRecordForPhone } from "../customers/customer-identity";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     ftsMatch,
@@ -2033,23 +2035,7 @@ async function getOrderDetailsOnce(
             .limit(1),
         listOrderRefundAttempts(db, id, { audience: "admin" }),
         listOrderSupportRequests(db, id),
-        db
-            .select({
-                promotionId: orderDiscountAllocations.promotionId,
-                method: orderDiscountAllocations.method,
-                name: orderDiscountAllocations.promotionName,
-                code: orderDiscountAllocations.promotionCode,
-                amountMinor: sql<number>`SUM(${orderDiscountAllocations.discountAmountMinor})`,
-            })
-            .from(orderDiscountAllocations)
-            .where(eq(orderDiscountAllocations.orderId, id))
-            .groupBy(
-                orderDiscountAllocations.promotionId,
-                orderDiscountAllocations.method,
-                orderDiscountAllocations.promotionName,
-                orderDiscountAllocations.promotionCode,
-            )
-            .orderBy(orderDiscountAllocations.promotionName),
+        listOrderDiscountLines(db, id),
         listOrderPaymentSessionAttempts(db, id),
     ]);
 
@@ -2111,10 +2097,12 @@ async function getOrderDetailsOnce(
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         discounts: promotionRows.map((row) => ({
             promotionId: row.promotionId,
-            name: row.name,
+            name: row.title,
             code: row.code,
             method: row.method,
-            amount: fromMinor(Number(row.amountMinor) || 0, order.currencyDecimalPlaces),
+            kind: row.kind,
+            amount: fromMinor(row.amountMinor + row.shippingAmountMinor, order.currencyDecimalPlaces),
+            shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
         })),
         items: formattedItems,
         itemCount: formattedItems.length,
@@ -2197,7 +2185,7 @@ export async function createOrder(
         const existingCustomer = await db
             .select()
             .from(customers)
-            .where(eq(customers.phone, data.customerPhone))
+            .where(guestRecordForPhone(data.customerPhone))
             .get();
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
@@ -2758,9 +2746,11 @@ export async function confirmManualOrderAmendment(
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;
-    if (data.customerPhone !== order.customerPhone || !customerId) {
+    // An order an account owns stays filed under that account; a contact
+    // edit only changes the order's own contact snapshot.
+    if (!order.accountOwnerCustomerId && (data.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(eq(customers.phone, data.customerPhone)).get();
+            .where(guestRecordForPhone(data.customerPhone)).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }
@@ -3129,9 +3119,11 @@ export async function updateOrderDetails(
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;
-    if (next.customerPhone !== order.customerPhone || !customerId) {
+    // An order an account owns stays filed under that account; a contact
+    // edit only changes the order's own contact snapshot.
+    if (!order.accountOwnerCustomerId && (next.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(eq(customers.phone, next.customerPhone)).get();
+            .where(guestRecordForPhone(next.customerPhone)).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }

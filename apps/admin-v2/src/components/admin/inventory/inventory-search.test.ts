@@ -6,7 +6,7 @@ describe("inventory URL state", () => {
     expect(validateInventorySearch({})).toEqual(INVENTORY_SEARCH_DEFAULTS);
   });
 
-  it("keeps only known filter values and calendar dates, never a search term", () => {
+  it("keeps only known filter values, calendar dates and a one-time search link", () => {
     expect(validateInventorySearch({
       section: "movements",
       q: "01712345678",
@@ -15,7 +15,7 @@ describe("inventory URL state", () => {
       type: "deducted",
       from: "2026-09-01",
       to: "tomorrow",
-    })).toEqual({ section: "movements", stock: "low", alert: "active", type: "deducted", from: "2026-09-01", to: "" });
+    })).toEqual({ section: "movements", q: "01712345678", stock: "low", alert: "active", type: "deducted", from: "2026-09-01", to: "" });
   });
 
   it("builds the same variants query for the route prefetch and the tab", () => {

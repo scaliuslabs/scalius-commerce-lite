@@ -6,8 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
+import { resourceMessages } from "~/i18n/resource";
 
-const mocks = vi.hoisted(() => ({ canEdit: false }));
+const mocks = vi.hoisted(() => ({ canEdit: false, saveStoreLevel: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
@@ -19,11 +20,13 @@ vi.mock("~/hooks/use-catalog-action-permissions", () => ({
   }),
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@scalius/api-client/sdk", () => ({
   patchApiV1AdminInventoryAlerts: vi.fn(),
   postApiV1AdminInventoryByVariantIdAdjust: vi.fn(),
   postApiV1AdminInventoryStockSet: vi.fn(),
   putApiV1AdminInventoryByVariantIdAlertLevel: vi.fn(),
+  putApiV1AdminInventoryDefaultAlertLevel: mocks.saveStoreLevel,
   getApiV1AdminInventory: async ({ query }: { query: { section: string } }) => query.section === "alerts"
     ? {
         alerts: [{
@@ -32,6 +35,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
           variantSku: "KORI-42", variantLabel: "42",
         }],
         pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        defaultLowStockThreshold: 5,
       }
     : {
         variants: [{
@@ -50,6 +54,7 @@ import { VariantsTab } from "./VariantsTab";
 const adjustLabel = translate(inventoryMessages, "adjustFor", { name: "Kori Trainer · 42" });
 const markSeen = translate(inventoryMessages, "markSeen");
 const review = translate(inventoryMessages, "review");
+const storeLevel = translate(inventoryMessages, "storeAlertLevelValue", { level: 5 });
 
 describe("inventory actions follow stock permissions", () => {
   let host: HTMLDivElement;
@@ -91,7 +96,7 @@ describe("inventory actions follow stock permissions", () => {
 
   it.each([true, false])("alerts: Mark as seen is shown only with stock permission (%s)", async (canEdit) => {
     mocks.canEdit = canEdit;
-    await render(<AlertsTab filters={{ q: "", alert: "active" }} onFiltersChange={() => undefined} onReview={() => undefined} onSetAlertLevels={() => undefined} />);
+    await render(<AlertsTab filters={{ q: "", alert: "active" }} onFiltersChange={() => undefined} onReview={() => undefined} />);
     expect(buttonNamed(review)).toBeDefined();
     const button = buttonNamed(markSeen);
     if (canEdit) {
@@ -99,5 +104,26 @@ describe("inventory actions follow stock permissions", () => {
     } else {
       expect(button).toBeUndefined();
     }
+    // The store alert level is always visible; only staff who can change stock can edit it.
+    await vi.waitFor(() => expect(host.textContent).toContain(storeLevel));
+    expect(Boolean(buttonNamed(storeLevel))).toBe(canEdit);
+  });
+
+  it("alerts: the store alert level saves from its popover", async () => {
+    mocks.canEdit = true;
+    mocks.saveStoreLevel.mockResolvedValue({ defaultLowStockThreshold: 8 });
+    await render(<AlertsTab filters={{ q: "", alert: "active" }} onFiltersChange={() => undefined} onReview={() => undefined} />);
+    await vi.waitFor(() => expect(buttonNamed(storeLevel)).toBeDefined());
+    await act(async () => buttonNamed(storeLevel)!.click());
+
+    const input = document.getElementById("inventory-store-alert-level") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "৮");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const save = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === translate(resourceMessages, "save"))!;
+    await act(async () => save.click());
+
+    expect(mocks.saveStoreLevel).toHaveBeenCalledWith({ body: { defaultLowStockThreshold: 8 } });
   });
 });

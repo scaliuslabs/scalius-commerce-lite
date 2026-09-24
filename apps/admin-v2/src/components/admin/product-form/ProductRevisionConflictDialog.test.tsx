@@ -1,16 +1,17 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { ProductRevisionConflictDialog } from "./ProductRevisionConflictDialog";
 
-const t = (key: ProductMessageKey) => translate(productMessages, key);
+const t = (key: ProductMessageKey, vars?: Record<string, string>) => translate(productMessages, key, vars);
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type Props = ComponentProps<typeof ProductRevisionConflictDialog>;
 
 describe("ProductRevisionConflictDialog", () => {
   let host: HTMLDivElement;
@@ -28,89 +29,63 @@ describe("ProductRevisionConflictDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps the edits by default and focuses the safe action", async () => {
-    const keepDraft = vi.fn();
+  async function render(overrides: Partial<Props>) {
+    const props: Props = {
+      open: true,
+      conflict: { expectedRevision: 7, currentRevision: 9 },
+      isReloading: false,
+      reloadError: null,
+      onOpenChange: vi.fn(),
+      changedFields: [t("title")],
+      variantsChanged: false,
+      overlap: null,
+      onApplyMine: vi.fn(async () => undefined),
+      onReloadLatest: vi.fn(async () => undefined),
+      onProductUnavailable: vi.fn(),
+      ...overrides,
+    };
     await act(async () => {
-      root.render(
-        <ProductRevisionConflictDialog
-          open
-          conflict={{ expectedRevision: 7, currentRevision: 9 }}
-          isReloading={false}
-          reloadError={null}
-          onOpenChange={vi.fn()}
-          onKeepDraft={keepDraft}
-          onReloadLatest={vi.fn(async () => undefined)}
-          onProductUnavailable={vi.fn()}
-        />,
-      );
+      root.render(<ProductRevisionConflictDialog {...props} />);
       await Promise.resolve();
     });
+    return props;
+  }
 
+  it("names the merchant's changes and applies them on top of the latest version by default", async () => {
+    const props = await render({});
     const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain(t("conflictTitle"));
+    expect(dialog?.textContent).toContain(t("conflictMineBody", { fields: t("title") }));
 
-    const keepButton = buttonNamed(t("keepMyEdits"));
-    expect(document.activeElement).toBe(keepButton);
-    act(() => keepButton.click());
-    expect(keepDraft).toHaveBeenCalledTimes(1);
+    const apply = buttonNamed(t("applyMine"));
+    expect(document.activeElement).toBe(apply);
+    await act(async () => apply.click());
+    expect(props.onApplyMine).toHaveBeenCalledTimes(1);
+    expect(props.onReloadLatest).not.toHaveBeenCalled();
+    expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("discarding says so before loading the latest version", async () => {
+    const props = await render({});
+    await act(async () => buttonNamed(t("discardMineLoadLatest")).click());
+    expect(props.onReloadLatest).toHaveBeenCalledTimes(1);
+    expect(props.onApplyMine).not.toHaveBeenCalled();
+  });
+
+  it("when both saves changed the same fields, names them and offers only a safe way out", async () => {
+    const props = await render({ overlap: [t("price")] });
+    expect(document.body.textContent).toContain(t("conflictOverlapBody", { fields: t("price") }));
+    expect(buttonNamed(t("keepEditing"))).toBe(document.activeElement);
+    expect(Array.from(document.querySelectorAll("button")).some((button) => button.textContent === t("applyMine"))).toBe(false);
+    await act(async () => buttonNamed(t("loadLatest")).click());
+    expect(props.onReloadLatest).toHaveBeenCalledTimes(1);
   });
 
   it("offers a terminal return action when the product no longer exists", async () => {
-    const reloadLatest = vi.fn(async () => undefined);
-    const productUnavailable = vi.fn();
-    await act(async () => {
-      root.render(
-        <ProductRevisionConflictDialog
-          open
-          conflict={{ expectedRevision: 2, currentRevision: null }}
-          isReloading={false}
-          reloadError={null}
-          onOpenChange={vi.fn()}
-          onKeepDraft={vi.fn()}
-          onReloadLatest={reloadLatest}
-          onProductUnavailable={productUnavailable}
-        />,
-      );
-      await Promise.resolve();
-    });
-
+    const props = await render({ conflict: { expectedRevision: 2, currentRevision: null } });
     expect(document.body.textContent).toContain(t("conflictDeletedTitle"));
-    const returnButton = buttonNamed(t("backToProducts"));
-    act(() => returnButton.click());
-    expect(productUnavailable).toHaveBeenCalledTimes(1);
-    expect(reloadLatest).not.toHaveBeenCalled();
-  });
-
-  it("starts reload without dismissing the dialog and lets Escape keep the draft", async () => {
-    const reloadLatest = vi.fn(async () => undefined);
-    const openChange = vi.fn();
-    await act(async () => {
-      root.render(
-        <ProductRevisionConflictDialog
-          open
-          conflict={{ expectedRevision: 3, currentRevision: 4 }}
-          isReloading={false}
-          reloadError={null}
-          onOpenChange={openChange}
-          onKeepDraft={vi.fn()}
-          onReloadLatest={reloadLatest}
-          onProductUnavailable={vi.fn()}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      buttonNamed(t("loadLatest")).click();
-      await Promise.resolve();
-    });
-    expect(reloadLatest).toHaveBeenCalledTimes(1);
-    expect(openChange).not.toHaveBeenCalledWith(false);
-
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    expect(openChange).toHaveBeenCalledWith(false);
+    act(() => buttonNamed(t("backToProducts")).click());
+    expect(props.onProductUnavailable).toHaveBeenCalledTimes(1);
+    expect(props.onReloadLatest).not.toHaveBeenCalled();
   });
 });
 

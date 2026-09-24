@@ -1,4 +1,5 @@
-import { allocateMinorAmount, multiplyMinorByRate } from "./money";
+import { cashRoundingMinor } from "@scalius/shared/money";
+import { allocateMinorAmount, multiplyMinorByRate, roundToUnit } from "./money";
 import type {
     CalculateTaxQuoteInput,
     TaxClassDefinition,
@@ -32,6 +33,7 @@ function applicableRates(
 function exclusiveComponents(
     baseMinor: number,
     rates: TaxRateDefinition[],
+    unitMinor: number,
 ): TaxComponentSnapshot[] {
     // Priority is a calculation layer, not merely a display order. Rates in
     // the same layer must see the same base; otherwise the opaque rate id
@@ -51,7 +53,7 @@ function exclusiveComponents(
         const componentBase = rate.isCompound
             ? baseMinor + completedPriorityTaxMinor
             : baseMinor;
-        const amountMinor = multiplyMinorByRate(componentBase, rate.rateBps);
+        const amountMinor = multiplyMinorByRate(componentBase, rate.rateBps, unitMinor);
         currentPriorityTaxMinor += amountMinor;
         return {
             rateId: rate.id,
@@ -73,6 +75,7 @@ function componentTotal(components: TaxComponentSnapshot[]): number {
 function inclusiveTax(
     grossMinor: number,
     rates: TaxRateDefinition[],
+    unitMinor: number,
 ): { taxableAmountMinor: number; taxMinor: number; components: TaxComponentSnapshot[] } {
     if (grossMinor === 0 || rates.length === 0) {
         return { taxableAmountMinor: rates.length > 0 ? grossMinor : 0, taxMinor: 0, components: [] };
@@ -82,15 +85,16 @@ function inclusiveTax(
     let high = grossMinor;
     while (low < high) {
         const mid = Math.ceil((low + high) / 2);
-        const components = exclusiveComponents(mid, rates);
+        const components = exclusiveComponents(mid, rates, 1);
         const inclusiveTotal = mid + componentTotal(components);
         if (inclusiveTotal <= grossMinor) low = mid;
         else high = mid - 1;
     }
 
-    const taxableAmountMinor = low;
-    const components = exclusiveComponents(taxableAmountMinor, rates);
-    const taxMinor = grossMinor - taxableAmountMinor;
+    // The included tax is shown in whole cash units (BDT: whole taka).
+    const taxMinor = Math.min(grossMinor, roundToUnit(grossMinor - low, unitMinor));
+    const taxableAmountMinor = grossMinor - taxMinor;
+    const components = exclusiveComponents(taxableAmountMinor, rates, unitMinor);
     const componentRemainder = taxMinor - componentTotal(components);
     if (componentRemainder !== 0 && components.length > 0) {
         const last = components[components.length - 1]!;
@@ -103,12 +107,13 @@ function calculateAmountTax(
     netGrossMinor: number,
     rates: TaxRateDefinition[],
     pricesIncludeTax: boolean,
+    unitMinor: number,
 ): { taxableAmountMinor: number; taxMinor: number; components: TaxComponentSnapshot[] } {
     if (rates.length === 0) {
         return { taxableAmountMinor: 0, taxMinor: 0, components: [] };
     }
-    if (pricesIncludeTax) return inclusiveTax(netGrossMinor, rates);
-    const components = exclusiveComponents(netGrossMinor, rates);
+    if (pricesIncludeTax) return inclusiveTax(netGrossMinor, rates, unitMinor);
+    const components = exclusiveComponents(netGrossMinor, rates, unitMinor);
     return {
         taxableAmountMinor: netGrossMinor,
         taxMinor: componentTotal(components),
@@ -148,7 +153,7 @@ function resolveDiscountAllocation(
             allocations: allocateMinorAmount(discountMinor, input.lines.map((line) => ({
                 key: `line:${line.lineId}`,
                 weightMinor: line.unitPriceMinor * line.quantity,
-            }))),
+            })), cashRoundingMinor(input.currencyCode)),
         };
     }
 
@@ -203,6 +208,8 @@ export function calculateTaxQuote(input: CalculateTaxQuoteInput): TaxQuote {
         throw new RangeError("Tax quote total exceeds the safe integer range.");
     }
     const { discountMinor, allocations } = resolveDiscountAllocation(input, subtotalMinor);
+    // BDT is cash rounded: tax is whole taka, so a COD total is always whole taka.
+    const unitMinor = cashRoundingMinor(input.currencyCode);
 
     const taxEnabled = input.settings.enabled === true;
     const lines = input.lines.map((line) => {
@@ -215,6 +222,7 @@ export function calculateTaxQuote(input: CalculateTaxQuoteInput): TaxQuote {
             grossAmountMinor - lineDiscountMinor,
             rates,
             input.settings.pricesIncludeTax,
+            unitMinor,
         );
         return {
             lineId: line.lineId,
@@ -245,6 +253,7 @@ export function calculateTaxQuote(input: CalculateTaxQuoteInput): TaxQuote {
         input.shippingMinor - shippingDiscountMinor,
         shippingRates,
         input.settings.pricesIncludeTax,
+        unitMinor,
     );
     const shipping = {
         taxClassId: shippingClass?.id ?? null,

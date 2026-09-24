@@ -22,6 +22,7 @@ import { getDb } from "@scalius/database/client";
 import {
   customerAuthOtpChallenges,
   orderPaymentRecoveryChallenges,
+  orders,
 } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
 import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "@scalius/core/modules/payments/process-payment";
@@ -1000,6 +1001,8 @@ type ResolvedAuthOtpQueueMessage = AuthOtpQueueMessage & {
   deliveryKey: string;
   identifier: string;
   name: string;
+  /** Order codes name their order ("view order #1057"). */
+  orderNumber?: number | null;
 };
 
 type AuthOtpDeliveryChallengeRow = {
@@ -1008,6 +1011,7 @@ type AuthOtpDeliveryChallengeRow = {
   method: "email" | "phone";
   channel: AuthOtpDeliveryChannel;
   expiresAt: number;
+  orderNumber?: number | null;
 };
 
 async function resolveAuthOtpQueueDeliveryPayload(
@@ -1118,6 +1122,7 @@ async function resolveAuthOtpQueueDeliveryPayload(
       identifier: target.value.trim(),
       // A missing or unreadable name only drops the name from the greeting.
       name: name.error ? "" : name.value.trim(),
+      orderNumber: row.orderNumber ?? null,
     },
   };
 }
@@ -1134,8 +1139,10 @@ async function selectAuthOtpDeliveryChallengeRow(
       method: orderPaymentRecoveryChallenges.method,
       channel: orderPaymentRecoveryChallenges.channel,
       expiresAt: orderPaymentRecoveryChallenges.expiresAt,
+      orderNumber: orders.orderNumber,
     })
       .from(orderPaymentRecoveryChallenges)
+      .leftJoin(orders, eq(orders.id, orderPaymentRecoveryChallenges.orderId))
       .where(and(
         eq(orderPaymentRecoveryChallenges.challengeKey, input.challengeKey),
         eq(orderPaymentRecoveryChallenges.deliveryKey, input.deliveryKey),
@@ -1285,6 +1292,7 @@ async function sendAuthOtpByChannel(
     purpose: payload.purpose,
     code,
     name: payload.name,
+    orderNumber: payload.orderNumber,
   });
   return payload.method === "email"
     ? sendAuthOtpEmail(payload, message, target, db, env)

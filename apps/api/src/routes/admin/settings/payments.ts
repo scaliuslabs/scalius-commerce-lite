@@ -36,6 +36,7 @@ import {
     isCheckoutGatewayUsableForFlow,
 } from "@scalius/core/modules/settings/checkout-flow";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
+import { writeSettingsDocuments } from "@scalius/core/modules/settings/settings-store";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
@@ -48,11 +49,8 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
     env: Env,
     gatewayId: string,
 ): Promise<void> {
-    const checkout = await checkoutDocument.readDetailed(db);
-    if (!checkout.stored) return;
-    const checkoutSettings = checkout.value;
-
-    const [activePaymentMethods, currencySettings] = await Promise.all([
+    const [checkoutSettings, activePaymentMethods, currencySettings] = await Promise.all([
+        checkoutDocument.read(db),
         getActivePaymentMethods(
             db,
             getCredentialEncryptionKey(env as Record<string, unknown>),
@@ -513,5 +511,68 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
 
         return ok(c, { message: "SSLCommerz settings saved successfully", revision });
 });
+
+// ─────────────────────────────────────────
+// REMOVE KEYS (Shopify/Stripe apps: Disconnect)
+// ─────────────────────────────────────────
+
+const removeKeysSchema = z.object({ expectedRevision: revisionSchema });
+
+/**
+ * Deletes every stored credential of a gateway and turns it off, and takes it
+ * out of the checkout selection in the same batch. Refused, like turning it
+ * off, when checkout would be left without a payment method.
+ */
+async function removeGatewayKeys(
+    db: Database,
+    env: Env,
+    gatewayId: "stripe" | "sslcommerz",
+    expectedRevision: number,
+): Promise<number> {
+    await assertDisablingGatewayKeepsCheckoutFlow(db, env, gatewayId);
+    const methods = await paymentMethodsDocument.readDetailed(db);
+    const selected = methods.value.enabledMethods;
+    const remaining = selected?.filter((method) => method !== gatewayId) ?? null;
+    const [written] = await writeSettingsDocuments(db, [
+        gatewayId === "stripe"
+            ? { document: stripeDocument, patch: { secretKey: "", publishableKey: "", webhookSecret: "", enabled: false }, expectedRevision }
+            : { document: sslcommerzDocument, patch: { storeId: "", storePassword: "", sandbox: true, enabled: false }, expectedRevision },
+        ...(remaining && remaining.length !== selected!.length
+            ? [{
+                document: paymentMethodsDocument,
+                patch: {
+                    enabledMethods: remaining,
+                    defaultMethod: remaining.includes(methods.value.defaultMethod)
+                        ? methods.value.defaultMethod
+                        : remaining[0] ?? COD_PAYMENT_METHOD,
+                },
+                expectedRevision: methods.revision,
+            }]
+            : []),
+    ]);
+    return written!.revision;
+}
+
+for (const gateway of ["stripe", "sslcommerz"] as const) {
+    const label = paymentMethodLabel(gateway);
+    app.openapi(createRoute({
+        method: "delete",
+        path: `/${gateway}`,
+        operationId: `dashboard.payments.${gateway}_remove`,
+        tags: ["Admin - Settings"],
+        summary: `Remove the saved ${label} keys and turn ${label} off`,
+        request: { body: { required: true, content: { "application/json": { schema: removeKeysSchema } } } },
+        responses: {
+            200: { description: `${label} keys removed`, content: { "application/json": { schema: savedRevisionResponse } } },
+            ...errorResponses,
+            409: conflictResponse,
+        },
+    }), async (c) => {
+        const { expectedRevision } = c.req.valid("json");
+        const revision = await removeGatewayKeys(c.get("db"), c.env, gateway, expectedRevision);
+        await bumpCacheGeneration(c);
+        return ok(c, { message: `${label} keys removed`, revision });
+    });
+}
 
 export { app as paymentSettingsRoutes };

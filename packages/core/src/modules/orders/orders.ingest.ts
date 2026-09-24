@@ -45,6 +45,13 @@ import {
 } from "../notifications/order-notification-outbox";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
+import {
+    chooseOrderCustomer,
+    normalizeContactEmail,
+    selectContactCustomerCandidates,
+    type ContactCustomerCandidate,
+    type OrderContact,
+} from "../customers/customer-identity";
 import type { StorefrontCartItemIssue } from "./cart-validation";
 import {
     getPromotionRedemptionConstraintError,
@@ -139,6 +146,7 @@ function checkoutGuardError(error: unknown): Error | null {
     return null;
 }
 
+/** Two guest checkouts raced to create the same phone's guest record. */
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
     for (let depth = 0; depth < 5 && current; depth += 1) {
@@ -149,7 +157,7 @@ function isCustomerPhoneConstraintError(error: unknown): boolean {
                 : "";
         if (
             message.includes("UNIQUE constraint failed: customers.phone")
-            || message.includes("customers.phone")
+            || message.includes("customers_guest_phone_unique")
         ) {
             return true;
         }
@@ -172,39 +180,19 @@ async function loadExistingCommittedOrder(db: Database, orderId: string) {
         .get();
 }
 
-interface OrderCustomerRow {
+interface ResolvedOrderCustomer {
     id: string;
-    accountClaimedAt: Date | null;
-    deletedAt: Date | null;
-}
-
-interface ResolvedOrderCustomer extends OrderCustomerRow {
     accountOwnerCustomerId: string | null;
+    /** No customer owns this contact yet: a new guest record is created. */
     createProfile: boolean;
-    updateGuestProfile: boolean;
 }
 
-async function loadActiveCustomerById(db: Database, id: string): Promise<OrderCustomerRow | undefined> {
+async function loadActiveAccountById(db: Database, id: string) {
     return db
-        .select({
-            id: customers.id,
-            accountClaimedAt: customers.accountClaimedAt,
-            deletedAt: customers.deletedAt,
-        })
+        .select({ id: customers.id, accountClaimedAt: customers.accountClaimedAt })
         .from(customers)
         .where(and(eq(customers.id, id), isNull(customers.deletedAt)))
         .get();
-}
-
-function selectCustomerByPhone(db: Database, phone: string) {
-    return db
-        .select({
-            id: customers.id,
-            accountClaimedAt: customers.accountClaimedAt,
-            deletedAt: customers.deletedAt,
-        })
-        .from(customers)
-        .where(eq(customers.phone, phone));
 }
 
 /**
@@ -212,8 +200,8 @@ function selectCustomerByPhone(db: Database, phone: string) {
  * single read batch. Everything stays re-guarded inside the commit batch.
  */
 export interface StorefrontOrderCommitReads {
-    customerPhone: string;
-    customerByPhone: OrderCustomerRow | undefined;
+    contact: OrderContact;
+    contactCustomers: ContactCustomerCandidate[];
     variantStates: ReservationVariantState[];
 }
 
@@ -236,7 +224,7 @@ function tagCheckoutError(error: unknown, code: string): unknown {
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
     identity: CheckoutAttemptIdentity,
-    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string },
+    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string; customerEmail?: string | null },
     credentialEncryptionKey?: string,
 ): Promise<{
     existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
@@ -244,13 +232,14 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     authority(): StorefrontCheckoutAuthoritySnapshot;
 }> {
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, authorityInput);
+    const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
     const variantIds = [...new Set(authorityInput.items
         .map((item) => item.variantId)
         .filter((variantId): variantId is string => typeof variantId === "string" && variantId.length > 0))];
     const statements = [
         ...plan.statements,
         selectCheckoutAttemptByKey(db, identity.requestKey),
-        selectCustomerByPhone(db, authorityInput.customerPhone),
+        selectContactCustomerCandidates(db, contact),
         selectReservationVariantStates(db, variantIds),
     ];
     let results: unknown[];
@@ -261,7 +250,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     }
     const [attemptRows, customerRows, variantRows] = results.slice(plan.statements.length) as [
         CheckoutAttemptRow[],
-        OrderCustomerRow[],
+        ContactCustomerCandidate[],
         ReservationVariantState[],
     ];
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(attemptRows[0], identity);
@@ -276,8 +265,8 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     return {
         existingAttempt,
         commitReads: {
-            customerPhone: authorityInput.customerPhone,
-            customerByPhone: customerRows[0],
+            contact,
+            contactCustomers: customerRows,
             variantStates: variantRows,
         },
         authority() {
@@ -287,44 +276,35 @@ export async function loadStorefrontCheckoutReads<TResponse>(
     };
 }
 
+/**
+ * Signed in: the account. Guest: the customer who PROVED the order's phone or
+ * email, else the phone's guest record, else a new guest record. A guest
+ * checkout never writes to an existing customer's profile (see
+ * customers/customer-identity.ts).
+ */
 async function resolveCustomerForOrder(
     db: Database,
     payload: StorefrontOrderCommitPayload,
     reads?: StorefrontOrderCommitReads,
 ): Promise<ResolvedOrderCustomer> {
     if (payload.existingCustomer?.id) {
-        const authenticatedCustomer = await loadActiveCustomerById(db, payload.existingCustomer.id);
-        if (!authenticatedCustomer?.accountClaimedAt) {
+        const account = await loadActiveAccountById(db, payload.existingCustomer.id);
+        if (!account?.accountClaimedAt) {
             throw new ValidationError("Customer account is no longer active. Please sign in again.");
         }
-        return {
-            ...authenticatedCustomer,
-            accountOwnerCustomerId: authenticatedCustomer.id,
-            createProfile: false,
-            updateGuestProfile: false,
-        };
+        return { id: account.id, accountOwnerCustomerId: account.id, createProfile: false };
     }
 
-    const existingProfile = reads?.customerPhone === payload.orderData.customerPhone
-        ? reads.customerByPhone
-        : await selectCustomerByPhone(db, payload.orderData.customerPhone).get();
-    if (existingProfile) {
-        return {
-            ...existingProfile,
-            accountOwnerCustomerId: null,
-            createProfile: false,
-            updateGuestProfile: existingProfile.accountClaimedAt === null,
-        };
-    }
-
-    return {
-        id: "cust_" + nanoid(),
-        accountClaimedAt: null,
-        deletedAt: null,
-        accountOwnerCustomerId: null,
-        createProfile: true,
-        updateGuestProfile: false,
-    };
+    const contact: OrderContact = { phone: payload.orderData.customerPhone, email: payload.orderData.customerEmail };
+    const candidates = reads
+        && reads.contact.phone === contact.phone
+        && normalizeContactEmail(reads.contact.email) === normalizeContactEmail(contact.email)
+        ? reads.contactCustomers
+        : await selectContactCustomerCandidates(db, contact);
+    const chosen = chooseOrderCustomer(candidates, contact);
+    return chosen
+        ? { id: chosen.customerId, accountOwnerCustomerId: chosen.accountOwnerCustomerId, createProfile: false }
+        : { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createProfile: true };
 }
 
 function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
@@ -460,51 +440,17 @@ function buildOrderWriteBatch(
             }),
         );
     } else {
-        const guestProfileUpdates = customer.updateGuestProfile
-            ? {
-                name: od.customerName,
-                ...(od.customerEmail ? { email: od.customerEmail } : {}),
-                address: od.shippingAddress,
-                city: od.city,
-                zone: od.zone,
-                area: od.area,
-                cityName: od.cityName,
-                zoneName: od.zoneName,
-                areaName: od.areaName,
-            }
-            : {};
+        // Counters only: the order's contact never rewrites the customer.
         writes.push(
             db
             .update(customers)
             .set({
-                ...guestProfileUpdates,
                 totalOrders: sql`${customers.totalOrders} + 1`,
                 lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
-                deletedAt: null,
             })
             .where(eq(customers.id, customer.id)),
         );
-        if (customer.updateGuestProfile) {
-            writes.push(
-                db.insert(customerHistory).values({
-                    id: "hist_" + nanoid(),
-                    customerId: customer.id,
-                    name: od.customerName,
-                    email: od.customerEmail,
-                    phone: od.customerPhone,
-                    address: od.shippingAddress,
-                    city: od.city,
-                    zone: od.zone,
-                    area: od.area,
-                    cityName: od.cityName,
-                    zoneName: od.zoneName,
-                    areaName: od.areaName,
-                    changeType: "updated",
-                    createdAt: sql`unixepoch()`,
-                }),
-            );
-        }
     }
 
     writes.push(

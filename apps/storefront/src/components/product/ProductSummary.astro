@@ -1,5 +1,5 @@
 ---
-import { Circle, Minus, Plus, ShoppingCart, Tag, Truck } from "lucide-react";
+import { Circle, Minus, Plus, ShoppingCart, Tag } from "lucide-react";
 import ProductDetails from "./ProductDetails.astro";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
@@ -161,7 +161,6 @@ function optionAriaLabel(
         <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
           <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
         </div>
-        {product.freeDelivery ? <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm font-medium text-primary"><Truck className="mr-1 h-3 w-3" aria-hidden="true" />Free Delivery</span> : null}
       </div>
       {offers.length > 0 && (
         <ul class="mt-2 space-y-1" data-product-offers>

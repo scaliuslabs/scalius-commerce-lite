@@ -177,6 +177,39 @@ describe("sign-in forms keep credentials out of URLs", () => {
     expect(navigate).toHaveBeenCalledWith({ to: "/admin", replace: true });
   });
 
+  it("goes from a new invite password straight to the emailed code, never asking for the password again", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#invite=proof-proof-proof-1234");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: true, purpose: "invite" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: true,
+        signedIn: true,
+        twoFactorSetup: { backupCodes: ["k7qx4-mn2pa", "b3cde-fgh45"] },
+      }), { status: 200 }));
+    await render(<ResetPasswordForm />);
+    type(container.querySelector("#new-password"), SECRET);
+    await submit();
+    expect(navigate).toHaveBeenCalledWith({ to: "/auth/setup-2fa", replace: true });
+    expect(window.sessionStorage.length).toBe(0);
+
+    await render(<TwoFactorSetup userEmail="karim@example.com" />);
+    expect(container.querySelector("#setup-password")).toBeNull();
+    expect(container.textContent).toContain("Check your email");
+    expect(authClient.twoFactor.sendOtp).toHaveBeenCalledOnce();
+    expect(authClient.twoFactor.enable).not.toHaveBeenCalled();
+
+    container.querySelectorAll("form input").forEach((box, index) => type(box, String(index + 1)));
+    await flush();
+    expect(sdk.postApiV1AdminAuth2FaMethod).toHaveBeenCalledWith({ body: { method: "email", code: "123456" } });
+    expect(container.textContent).toContain("k7qx4-mn2pa");
+
+    // The hand-off is used once: a later visit starts with the password again.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(<TwoFactorSetup userEmail="karim@example.com" />);
+    expect(container.querySelector("#setup-password")).not.toBeNull();
+  });
+
   it("hands a reset for a two-step account to the code screen", async () => {
     window.history.replaceState(null, "", "/auth/reset-password#token=proof-proof-proof-1234");
     fetchMock
@@ -314,6 +347,21 @@ describe("sign-in error states", () => {
     expect(container.querySelector("form")).toBeNull();
     expect(container.textContent).toContain("This invite has expired");
     expect(container.textContent).toContain("Ask the store owner to resend it.");
+  });
+
+  it("says a used invite was already used and offers sign-in", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#invite=proof-proof-proof-1234");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "TOKEN_USED" }), { status: 400 }));
+    await render(<ResetPasswordForm />);
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("This invite was already used");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("/auth/login");
+    expect(container.querySelector("a")?.textContent).toBe("Sign in");
+  });
+
+  it("tells staff whose access was changed why they were signed out, before they type anything", async () => {
+    await render(<LoginForm signedOut="access_changed" />);
+    expect(alertText()).toBe("You were signed out because your access changed. Contact the store owner.");
   });
 
   it("tells a suspended staff member why sign-in stopped", async () => {

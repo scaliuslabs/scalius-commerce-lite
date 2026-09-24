@@ -121,11 +121,13 @@ describe("agent storefront checkout submission on D1 storage", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM customers").get()).toEqual({ count: 1 });
   });
 
-  it("never grants account ownership to a guest who enters an account holder's phone", async () => {
+  it("never files a guest's order under an account whose phone was only typed, not proven", async () => {
     const { response } = await submit({ customerPhone: ACCOUNT_PHONE });
 
-    expect(sqlite.prepare("SELECT customer_id, account_owner_customer_id FROM orders WHERE id = ?")
-      .get(response.orderId)).toEqual({ customer_id: "cust_account", account_owner_customer_id: null });
+    const links = sqlite.prepare("SELECT customer_id, account_owner_customer_id FROM orders WHERE id = ?")
+      .get(response.orderId);
+    expect(links).toMatchObject({ account_owner_customer_id: null });
+    expect(links?.customer_id).not.toBe("cust_account");
   });
 
   it.each([

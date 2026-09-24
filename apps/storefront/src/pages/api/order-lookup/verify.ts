@@ -28,5 +28,5 @@ export const POST: APIRoute = async ({ request }) => {
   const result = await verifyOrderLookupCode({ reference: input.reference, phone: input.phone, code: fields.code });
   return result.ok
     ? verifiedReceiptResponse(result.data, "json")
-    : orderCodeFailureResponse(result.failure, { includeMessage: true });
+    : orderCodeFailureResponse(result.failure);
 };

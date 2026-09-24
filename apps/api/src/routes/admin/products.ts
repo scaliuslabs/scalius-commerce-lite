@@ -563,7 +563,7 @@ const bulkUpdateRoute = createRoute({
     operationId: "dashboard.products.bulk_update",
     tags: ["Admin - Products"],
     summary: "Set status and/or category on several products",
-    description: "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    description: "Changes every listed product together, except that activating skips (and lists in `skipped`) products where the product or one of its live SKUs has no price above 0.",
     request: {
         body: {
             content: {
@@ -582,6 +582,7 @@ const bulkUpdateRoute = createRoute({
             description: "Products updated",
             content: { "application/json": { schema: successEnvelope(z.object({
                 products: z.array(z.object({ id: z.string(), aggregateRevision: z.number().int().min(1) })),
+                skipped: z.array(z.object({ id: z.string(), name: z.string(), reason: z.enum(["needs_price"]) })),
             })) } },
         },
         ...conflictMutationErrorResponses,
@@ -591,14 +592,9 @@ const bulkUpdateRoute = createRoute({
 app.openapi(bulkUpdateRoute, async (c) => {
     const db = c.get("db");
     const { products, ...changes } = c.req.valid("json");
-    const revisions = await ProductsAdmin.bulkUpdateProducts(db, products, changes);
-    await bumpCacheGeneration(c);
-    return ok(c, {
-        products: revisions.map((revision, index) => ({
-            id: products[index]!.id,
-            aggregateRevision: revision.aggregateRevision,
-        })),
-    });
+    const result = await ProductsAdmin.bulkUpdateProducts(db, products, changes);
+    if (result.products.length > 0) await bumpCacheGeneration(c);
+    return ok(c, result);
 });
 
 // ── Duplicate Product ──

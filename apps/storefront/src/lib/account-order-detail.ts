@@ -25,6 +25,7 @@ import {
   formatDeliveryArea,
   orderPaymentLine,
 } from "@/lib/account-format";
+import { addOrderToCart } from "@/lib/account-buy-again";
 import { getProductImageUrl } from "@/lib/product-media";
 import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
@@ -33,6 +34,15 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import {
+  orderProgressMarkup,
+  orderShipmentMarkup,
+  orderTimelineMarkup,
+  safeTrackingUrl,
+  type OrderTrackingText,
+} from "@/lib/order-tracking-markup";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -93,18 +103,15 @@ function writeError(result: { status?: number; error?: string }, fallback: strin
   return !result.status || result.status >= 500 ? ACCOUNT_OFFLINE_MESSAGE : result.error || fallback;
 }
 
-function safeUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
-  } catch {
-    return null;
-  }
-}
+const trackingText: OrderTrackingText = {
+  done: copy.orderTrackingStepDoneText,
+  trackingId: copy.orderTrackingIdText,
+  trackWithCourier: copy.orderTrackWithCourierText,
+  formatDate: (iso) => formatAccountDate(iso),
+};
 
 function trackingUrl(shipment: CustomerOrderShipment): string | null {
-  const explicitUrl = safeUrl(shipment.trackingUrl);
+  const explicitUrl = safeTrackingUrl(shipment.trackingUrl, window.location.origin);
   if (explicitUrl) return explicitUrl;
   if (!shipment.trackingId) return null;
   if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
@@ -440,21 +447,31 @@ async function submitSupportRequest(): Promise<void> {
   await loadOrderDetail();
 }
 
+// ---------- buy again ----------
+
+async function buyAgain(): Promise<void> {
+  const button = byId<HTMLButtonElement>("orderBuyAgain");
+  const message = byId("orderBuyAgainMessage");
+  if (!currentDetail || !button || button.disabled) return;
+  button.disabled = true;
+  if (message) message.textContent = "";
+  const result = await addOrderToCart(currentDetail.items);
+  button.disabled = false;
+  if (!message) return;
+  message.textContent = !result
+    ? ACCOUNT_OFFLINE_MESSAGE
+    : result.added === 0
+      ? "These items are no longer available."
+      : result.missing > 0
+        ? "Some items are no longer available, so they weren't added."
+        : "";
+}
+
 // ---------- page ----------
 
 function renderProgress(detail: AccountOrderDetail): void {
   const progress = byId("orderProgress");
-  if (progress && detail.progress) {
-    const { steps, outcome } = detail.progress;
-    const current = steps.reduce((last, step, index) => (step.done ? index : last), 0);
-    progress.innerHTML = outcome
-      ? `<p class="text-base font-semibold text-foreground">${escapeHtml(outcome.label)}</p>${outcome.happenedAt ? `<p class="text-sm text-muted-foreground">${escapeHtml(formatAccountDate(outcome.happenedAt))}</p>` : ""}`
-      : `<ol class="grid grid-cols-4 gap-2">${steps.map((step, index) => `
-          <li class="flex flex-col gap-2" ${index === current ? 'aria-current="step"' : ""}>
-            <span class="h-1.5 rounded-full ${step.done ? "bg-primary" : "bg-muted"}" aria-hidden="true"></span>
-            <span class="text-sm ${step.done ? "font-medium text-foreground" : "text-muted-foreground"}">${escapeHtml(step.label)}${step.done && index !== current ? '<span class="sr-only"> (done)</span>' : ""}</span>
-          </li>`).join("")}</ol>`;
-  }
+  if (progress && detail.progress) progress.innerHTML = orderProgressMarkup(detail.progress, trackingText);
   const expected = byId("orderExpectedDelivery");
   if (expected) {
     const show = Boolean(detail.order.expectedDelivery) && !detail.progress?.outcome && !detail.progress?.steps[3]?.done;
@@ -462,14 +479,7 @@ function renderProgress(detail: AccountOrderDetail): void {
     expected.classList.toggle("hidden", !show);
   }
   const timeline = byId("orderTimeline");
-  if (timeline) {
-    timeline.innerHTML = detail.timeline.map((event) => `
-      <li>
-        <p class="text-sm font-medium text-foreground">${escapeHtml(event.label)}</p>
-        ${event.details ? `<p class="text-sm text-muted-foreground">${escapeHtml(event.details)}</p>` : ""}
-        ${event.happenedAt ? `<time class="text-sm text-muted-foreground" datetime="${escapeHtml(event.happenedAt)}">${escapeHtml(formatAccountDate(event.happenedAt))}</time>` : ""}
-      </li>`).join("");
-  }
+  if (timeline) timeline.innerHTML = orderTimelineMarkup(detail.timeline, trackingText);
 }
 
 function renderItemsAndSummary(detail: AccountOrderDetail): void {
@@ -500,17 +510,33 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
 
   const summary = byId("orderSummary");
   if (summary) {
-    const row = (label: string, value: string, total = false) =>
-      `<div class="flex justify-between gap-4 ${total ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"><dt>${escapeHtml(label)}</dt><dd class="tabular-nums">${escapeHtml(value)}</dd></div>`;
-    const shipping = order.shippingAmountMinor ?? 0;
-    const discount = order.discountAmountMinor ?? 0;
+    const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
+    const row = (label: string, valueHtml: string, total = false) =>
+      `<div class="flex justify-between gap-4 ${total ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}"><dt>${escapeHtml(label)}</dt><dd class="text-right tabular-nums">${valueHtml}</dd></div>`;
+    const major = (value: number) => fromMinor(value, places);
+    const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
+    const { delivery, lines } = summarizeOrderDiscounts({
+      discounts: detail.discounts,
+      shipping: major(order.shippingAmountMinor ?? 0),
+      deliveryFee: order.shippingMethodBaseAmountMinor != null ? major(order.shippingMethodBaseAmountMinor) : null,
+      discount: major(order.discountAmountMinor ?? 0),
+      decimalPlaces: places,
+      discountText: copy.discountText,
+    });
     summary.innerHTML = [
-      row("Subtotal", minor(order.subtotalAmountMinor ?? 0)),
-      row(order.shippingMethodName ? `Delivery (${order.shippingMethodName})` : "Delivery", shipping > 0 ? minor(shipping) : "Free"),
-      discount > 0 ? row("Discount", `-${minor(discount)}`) : "",
-      tax > 0 ? row(`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, minor(tax)) : "",
-      row("Total", minor(order.totalAmountMinor ?? 0), true),
+      row("Subtotal", cell(minor(order.subtotalAmountMinor ?? 0))),
+      row(
+        order.shippingMethodName ? `Delivery (${order.shippingMethodName})` : "Delivery",
+        [
+          delivery.charged < delivery.fee ? `<s class="mr-1.5">${escapeHtml(money(delivery.fee))}</s>` : "",
+          cell(delivery.charged === 0 ? copy.freeText : money(delivery.charged), "text-foreground"),
+          delivery.codes ? ` ${cell(`(${delivery.codes})`)}` : "",
+        ].join(""),
+      ),
+      ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
+      tax > 0 ? row(`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, cell(minor(tax))) : "",
+      row("Total", cell(minor(order.totalAmountMinor ?? 0)), true),
     ].join("");
   }
 }
@@ -527,17 +553,24 @@ function renderDelivery(detail: AccountOrderDetail): void {
       order.shippingMethodName ? `Delivery method: ${order.shippingMethodName}` : null,
     ].filter(Boolean).map((line) => `<p>${escapeHtml(String(line))}</p>`).join("");
   }
+  const note = byId("orderNote");
+  if (note) {
+    note.classList.toggle("hidden", !order.notes);
+    note.innerHTML = order.notes
+      ? `<p class="font-medium text-foreground">${escapeHtml(copy.orderReceiptNoteText)}</p><p class="whitespace-pre-line break-words text-muted-foreground">${escapeHtml(order.notes)}</p>`
+      : "";
+  }
   const shipments = byId("orderShipments");
   if (shipments) {
     shipments.innerHTML = detail.shipments.map((shipment) => {
-      const url = trackingUrl(shipment);
-      const courier = shipment.providerName || shipment.courierName;
-      return `<article class="rounded-lg border border-border p-4 text-sm">
-        <p class="font-medium text-foreground">${escapeHtml([shipment.statusLabel, courier].filter(Boolean).join(" · "))}</p>
-        ${shipment.trackingId ? `<p class="text-muted-foreground">Tracking ID <span class="font-mono">${escapeHtml(shipment.trackingId)}</span></p>` : ""}
-        ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" data-astro-prefetch="false" class="inline-flex min-h-11 items-center font-medium text-primary hover:underline">Track with courier</a>` : ""}
-        <p class="text-muted-foreground">Updated ${escapeHtml(formatAccountDate(shipment.lastChecked || shipment.updatedAt || shipment.createdAt))}</p>
-      </article>`;
+      const updated = formatAccountDate(shipment.lastChecked || shipment.updatedAt || shipment.createdAt);
+      return orderShipmentMarkup({
+        statusLabel: shipment.statusLabel,
+        courier: shipment.providerName || shipment.courierName,
+        trackingId: shipment.trackingId,
+        trackingUrl: trackingUrl(shipment),
+        updated: updated ? `Updated ${updated}` : null,
+      }, trackingText);
     }).join("");
   }
 }
@@ -584,6 +617,8 @@ function renderReturnNotice(): void {
 export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: CheckoutConfig | null): void {
   currentDetail = detail;
   currentCheckoutConfig = checkoutConfig;
+  const buyAgainMessage = byId("orderBuyAgainMessage");
+  if (buyAgainMessage) buyAgainMessage.textContent = "";
   const { order } = detail;
   const title = byId("orderTitle");
   if (title) title.textContent = `Order ${formatOrderNumber(order.orderNumber, order.id)}`;
@@ -606,13 +641,15 @@ function showOnly(state: "loading" | "unauth" | "error" | "content"): void {
   }
 }
 
-function showError(title: string, message: string): void {
+/** A missing order can't be retried; an outage can. */
+function showError(title: string, message: string, retry = true): void {
   currentDetail = null;
   hideRecovery();
   const titleEl = byId("orderErrorTitle");
   const messageEl = byId("orderErrorMessage");
   if (titleEl) titleEl.textContent = title;
   if (messageEl) messageEl.textContent = message;
+  byId("orderRetry")?.classList.toggle("hidden", !retry);
   showOnly("error");
 }
 
@@ -623,7 +660,7 @@ export async function loadOrderDetail(): Promise<void> {
   detailWindow.__scaliusOrderDetailRun = run;
   showOnly("loading");
   const orderId = root.dataset.orderId ?? "";
-  if (!orderId) return showError("Order not found", "This order link is incomplete.");
+  if (!orderId) return showError("Order not found", "This order link is incomplete.", false);
 
   const session = await getCustomerSession();
   if (detailWindow.__scaliusOrderDetailRun !== run) return;
@@ -639,7 +676,7 @@ export async function loadOrderDetail(): Promise<void> {
   if (!result.success || !result.detail) {
     if (result.status === 401) return showOnly("unauth");
     return result.status === 404
-      ? showError("Order not found", "We couldn't find this order in your account.")
+      ? showError("Order not found", "We couldn't find this order in your account.", false)
       : showError("We couldn't reach the store", ACCOUNT_OFFLINE_MESSAGE);
   }
   try {
@@ -668,5 +705,6 @@ export function bindOrderDetailPage(): void {
     if (type === "cancel_pre_shipment" || type === "return" || type === "refund") openSupportForm(type);
   });
   on("orderSupportCancel", () => hideSupportForm());
+  on("orderBuyAgain", () => void buyAgain());
   on("orderSupportSubmit", () => void submitSupportRequest());
 }

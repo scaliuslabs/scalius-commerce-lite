@@ -66,10 +66,12 @@ describe("order payment recovery routes", () => {
     vi.clearAllMocks();
     mocks.sendOrderPaymentRecoveryOtp.mockResolvedValue({
       queued: true,
-      message: "Verification code sent.",
+      message: "We sent a code to 01•••••888.",
       channel: "sms",
       method: "phone",
-      identifierMasked: "*******8888",
+      destination: "01•••••888",
+      orderNumber: 1048,
+      resendAfterSeconds: 60,
       challengeKey: "order_payrec:challenge",
       deliveryKey: "otp_delivery",
       queuePayload: {
@@ -99,7 +101,7 @@ describe("order payment recovery routes", () => {
     mocks.deleteOrderPaymentRecoveryChallenge.mockResolvedValue(undefined);
   });
 
-  it("accepts a recovery OTP request without exposing proof or contact hints", async () => {
+  it("says where the code went without exposing proof or the full contact", async () => {
     const { app, env, queue } = createTestApp();
 
     const response = await app.request(
@@ -129,7 +131,7 @@ describe("order payment recovery routes", () => {
     }));
     expect(JSON.stringify(body)).not.toContain("chk_");
     expect(JSON.stringify(body)).not.toContain("+8801775528888");
-    expect(JSON.stringify(body)).not.toContain("8888");
+    expect(JSON.stringify(body)).not.toContain("775528888");
     expect(JSON.stringify(queue.send.mock.calls)).not.toContain("123456");
     expect(JSON.stringify(queue.send.mock.calls)).not.toContain("+8801775528888");
     expect(JSON.stringify(queue.send.mock.calls)).not.toContain("Buyer");
@@ -140,7 +142,10 @@ describe("order payment recovery routes", () => {
     expect(body).toMatchObject({
       success: true,
       data: {
-        message: "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.",
+        message: "We sent a code to 01•••••888.",
+        destination: "01•••••888",
+        orderNumber: 1048,
+        resendAfterSeconds: 60,
       },
     });
   });
@@ -196,7 +201,7 @@ describe("order payment recovery routes", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "123456" }),
+        body: JSON.stringify({ orderId: "order_1", code: "123456" }),
       },
       env,
     );
@@ -216,7 +221,7 @@ describe("order payment recovery routes", () => {
           "Content-Type": "application/json",
           Authorization: "Bearer service.jwt",
         },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "123456" }),
+        body: JSON.stringify({ orderId: "order_1", code: "123456" }),
       },
       env,
     );
@@ -225,7 +230,6 @@ describe("order payment recovery routes", () => {
     expect(response.status).toBe(200);
     expect(mocks.verifyOrderPaymentRecoveryOtp).toHaveBeenCalledWith(db, {
       orderId: "order_1",
-      channel: "sms",
       code: "123456",
       encryptionKey: "test-credential-key",
     });

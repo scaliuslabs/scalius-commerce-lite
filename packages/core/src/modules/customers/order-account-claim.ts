@@ -1,5 +1,5 @@
 import type { Database } from "@scalius/database/client";
-import { customers, orders } from "@scalius/database/schema";
+import { orders } from "@scalius/database/schema";
 import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import { ConflictError, ForbiddenError, NotFoundError } from "@scalius/core/errors";
@@ -32,6 +32,9 @@ export async function issueAccountOwnerReceipt(
   return { orderId: owned.id, receiptToken, expiresAt: receipt.expiresAt };
 }
 
+const CONTACT_MISMATCH_MESSAGE =
+  "This order was placed with a different phone number and email, so it can't be added to your account.";
+
 export interface ClaimGuestOrderToAccountInput {
   orderId: string;
   customerId: string;
@@ -60,53 +63,6 @@ function immutableContactConditions(input: ClaimGuestOrderToAccountInput): SQL[]
   if (phone) conditions.push(eq(orders.customerPhone, phone));
   if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
   return conditions;
-}
-
-/**
- * The statement that adds unowned orders placed with an account's VERIFIED
- * email or phone to that account's history (Shopify attaches orders by
- * verified contact). Returns null when the account has nothing verified.
- * Only private account ownership changes; the merchant CRM link and the
- * order's own contact snapshot stay as they are.
- */
-export function buildVerifiedContactOrderLink(
-  db: Database,
-  input: { customerId: string; email?: string | null; phone?: string | null },
-) {
-  const conditions: SQL[] = [];
-  const phone = normalizePhone(input.phone);
-  const email = normalizeEmail(input.email);
-  if (phone) conditions.push(eq(orders.customerPhone, phone));
-  if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
-  if (conditions.length === 0) return null;
-  return db
-    .update(orders)
-    .set({ accountOwnerCustomerId: input.customerId })
-    .where(and(
-      isNull(orders.accountOwnerCustomerId),
-      isNull(orders.deletedAt),
-      or(...conditions),
-    ));
-}
-
-/** Links verified-contact guest orders for a signed-in account (any device). */
-export async function linkVerifiedContactOrders(db: Database, customerId: string): Promise<void> {
-  const account = await db
-    .select({
-      email: customers.email,
-      phone: customers.phone,
-      emailVerifiedAt: customers.emailVerifiedAt,
-      phoneVerifiedAt: customers.phoneVerifiedAt,
-    })
-    .from(customers)
-    .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
-    .get();
-  if (!account) return;
-  await buildVerifiedContactOrderLink(db, {
-    customerId,
-    email: account.emailVerifiedAt ? account.email : null,
-    phone: account.phoneVerifiedAt ? account.phone : null,
-  });
 }
 
 /**
@@ -142,7 +98,7 @@ export async function claimGuestOrderToAccount(
 
   const contactConditions = immutableContactConditions(input);
   if (contactConditions.length === 0) {
-    throw new ForbiddenError("The signed-in account does not match this order contact.");
+    throw new ForbiddenError(CONTACT_MISMATCH_MESSAGE);
   }
   const contactMatches = (
     normalizePhone(input.customerPhone) !== "" &&
@@ -152,12 +108,14 @@ export async function claimGuestOrderToAccount(
     normalizeEmail(input.customerEmail) === normalizeEmail(order.customerEmail)
   );
   if (!contactMatches) {
-    throw new ForbiddenError("The signed-in account does not match this order contact.");
+    throw new ForbiddenError(CONTACT_MISMATCH_MESSAGE);
   }
 
   const claimed = await db
     .update(orders)
     .set({
+      // Filed under the account on both sides (see customer-identity.ts).
+      customerId: input.customerId,
       accountOwnerCustomerId: input.customerId,
       updatedAt: sql`unixepoch()`,
     })

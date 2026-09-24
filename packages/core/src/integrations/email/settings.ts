@@ -2,7 +2,8 @@
 // Runtime settings for transactional email providers.
 
 import type { Database } from "@scalius/database/client";
-import { businessDocument, emailDocument } from "@scalius/core/modules/settings/documents";
+import { storeDisplayName } from "@scalius/core/modules/notifications/store-messages";
+import { businessDocument, emailDocument, platformDocument } from "@scalius/core/modules/settings/documents";
 import { selectSettingsDocuments } from "@scalius/core/modules/settings/settings-store";
 import {
   readiness,
@@ -71,14 +72,15 @@ export async function getEmailRuntimeSettings(
 
   try {
     const db = await resolveDb(context);
-    // One read for the email document and the store name used as the sender name.
-    const rows = await selectSettingsDocuments(db, [emailDocument, businessDocument]);
+    // One read for the email document and the store's display name, the sender name.
+    const rows = await selectSettingsDocuments(db, [emailDocument, businessDocument, platformDocument]);
     const ctx = { encryptionKey: encryptionKeyFromContext(context) };
-    const [stored, business] = await Promise.all([
+    const [stored, business, platform] = await Promise.all([
       emailDocument.fromRows(rows, ctx),
       businessDocument.fromRows(rows, ctx),
+      platformDocument.fromRows(rows, ctx),
     ]);
-    const senderName = business.value.companyName.trim() || business.value.legalName.trim();
+    const senderName = storeDisplayName(business.value, platform.value.storefrontUrl) ?? "";
 
     const resendCredentialError = stored.secretErrors.resendApiKey ?? null;
     const resendApiKey = stored.value.resendApiKey || null;

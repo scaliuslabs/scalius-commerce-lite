@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { percentOfMinor } from "@scalius/shared/money";
+import { cashRoundingMinor, percentOfMinor } from "@scalius/shared/money";
 
 export const PROMOTION_EVALUATOR_VERSION = 2;
 
@@ -400,9 +400,24 @@ function toSafeNumber(value: bigint, label: string): number {
 
 /**
  * Splits a fixed amount across weights by largest remainder (ties by id), so
- * the parts always sum to the amount and never exceed their weight.
+ * the parts always sum to the amount and never exceed their weight. In a
+ * cash-rounded currency (BDT) whole-taka amounts over whole-taka lines split
+ * into whole taka, so no line carries paisa.
  */
-function splitAcross(totalMinor: number, weights: Array<{ id: string; baseMinor: number }>): Map<string, number> {
+function splitAcross(
+    totalMinor: number,
+    weights: Array<{ id: string; baseMinor: number }>,
+    currencyCode: string,
+): Map<string, number> {
+    const unit = cashRoundingMinor(currencyCode);
+    if (unit > 1 && totalMinor % unit === 0 && weights.every(({ baseMinor }) => baseMinor % unit === 0)) {
+        const units = splitUnits(totalMinor / unit, weights.map(({ id, baseMinor }) => ({ id, baseMinor: baseMinor / unit })));
+        return new Map([...units].map(([id, part]) => [id, part * unit]));
+    }
+    return splitUnits(totalMinor, weights);
+}
+
+function splitUnits(totalMinor: number, weights: Array<{ id: string; baseMinor: number }>): Map<string, number> {
     const result = new Map<string, number>();
     const totalBase = weights.reduce((total, item) => total + BigInt(item.baseMinor), 0n);
     if (totalBase === 0n || totalMinor <= 0) return result;
@@ -505,7 +520,11 @@ function computeProduct(eligible: Eligible, lines: CartLine[], currencyCode: str
                 amounts.set(line.id, Math.min(line.unitPriceMinor, effect.config.amountMinor) * line.quantity);
             }
         } else {
-            const split = splitAcross(effect.config.amountMinor, scoped.map((line) => ({ id: line.id, baseMinor: base(line) })));
+            const split = splitAcross(
+                effect.config.amountMinor,
+                scoped.map((line) => ({ id: line.id, baseMinor: base(line) })),
+                currencyCode,
+            );
             split.forEach((amount, lineId) => amounts.set(lineId, amount));
         }
     } else if (effect.kind === "percentage_off" && effect.config.buy) {
@@ -528,7 +547,7 @@ function computeOrder(eligible: Eligible, remaining: Map<string, number>, curren
     const amount = effect.kind === "percentage_off"
         ? percentOfMinor(subtotal, effect.config.basisPoints, currencyCode)
         : effect.kind === "fixed_amount_off" ? Math.min(subtotal, effect.config.amountMinor) : 0;
-    return finish(eligible, effect, splitAcross(amount, weights));
+    return finish(eligible, effect, splitAcross(amount, weights, currencyCode));
 }
 
 function computeShipping(eligible: Eligible, effect: PromotionEffect, shippingMinor: number, currencyCode: string): Computed {

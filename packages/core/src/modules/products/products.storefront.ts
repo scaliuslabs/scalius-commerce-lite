@@ -1,5 +1,6 @@
 // src/modules/products/products.storefront.ts
 // Storefront product queries — public-facing read-only operations.
+import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
 import {
     products,
     categories,
@@ -758,7 +759,7 @@ async function readStorefrontFeedVariantMap(
                 priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
@@ -1387,7 +1388,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const promises: Promise<{ type: string; data: unknown }>[] = [
         mediaMapPromise.then((mediaMap) => ({
             type: "media",
-            data: mediaMap.get(product.id) ?? [],
+            // Buyers never need the file's name in Files.
+            data: (mediaMap.get(product.id) ?? []).map(({ filename: _filename, ...item }) => item),
         })),
 
         db.select({
@@ -1402,7 +1404,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             reservedStock: productVariants.reservedStock,
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
-            lowStockThreshold: productVariants.lowStockThreshold,
+            lowStockThreshold: effectiveLowStockThresholdSql(),
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
@@ -1582,7 +1584,7 @@ async function readStorefrontSearchVariantMap(
                 priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,

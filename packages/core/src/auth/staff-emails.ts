@@ -1,10 +1,11 @@
 // Emails the dashboard sends to staff: invite, password reset, sign-in code
-// and the password-changed notice. They carry the store's name from Business
-// settings, never the product brand, and the sender name is the store too.
+// and the password-changed notice. They carry the store's display name
+// (`readStoreName`), never the product brand, and the sender name is the store too.
 
 import type { Database } from "@scalius/database/client";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { joinPlatformUrl } from "@scalius/shared/platform-config";
+import { readStoreName } from "../modules/notifications/store-messages";
 
 export const STAFF_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const PASSWORD_RESET_TTL_SECONDS = 60 * 60;
@@ -13,17 +14,6 @@ export interface StaffEmail {
   subject: string;
   html: string;
   text: string;
-}
-
-/** The store name from Business settings, or null while the merchant hasn't set one. */
-export async function readStoreName(db: Database): Promise<string | null> {
-  try {
-    const { getBusinessSettings } = await import("../modules/settings/business-settings.service");
-    const business = await getBusinessSettings(db);
-    return business.companyName.trim() || business.legalName.trim() || null;
-  } catch {
-    return null;
-  }
 }
 
 interface Layout {

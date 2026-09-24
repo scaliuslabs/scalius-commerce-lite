@@ -207,4 +207,54 @@ describe("OptionMatrixEditor inventory for products without options", () => {
     expect(stockRows[0]).toMatchObject({ id: "var_s", stock: 8, expectedStockVersion: 4 });
     expect("stock" in stockRows[1]!).toBe(false);
   });
+
+  it("asks before removing a value whose variants still hold stock, naming them, and then saves without them", async () => {
+    const sizeOption = {
+      id: "popt_size", name: "Size", position: 0, standardMapping: "size" as const,
+      values: [{ id: "pval_s", value: "S", position: 0 }, { id: "pval_m", value: "M", position: 1 }],
+    };
+    const sized = (id: string, valueId: string, value: string): ProductVariant => ({
+      ...defaultSku,
+      id,
+      isDefault: false,
+      trackInventory: true,
+      optionCombinationKey: valueId,
+      sku: `MUG-${value}`,
+      barcode: `MUG-${value}-BARCODE`,
+      selectedOptions: [{
+        optionDefinitionId: "popt_size", optionValueId: valueId, name: "Size", value,
+        position: 0, valuePosition: 0, standardMapping: "size",
+      }],
+    });
+    const ref = React.createRef<OptionMatrixEditorHandle>();
+    await render(
+      <OptionMatrixEditor
+        ref={ref}
+        productId="prod_1"
+        productName="Mug"
+        productPrice={250}
+        options={[sizeOption]}
+        variants={[sized("var_s", "pval_s", "S"), sized("var_m", "pval_m", "M")]}
+        images={[]}
+        aggregateRevision={3}
+      />,
+    );
+
+    const removeM = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(productMessages, "removeValue", { value: "M" })}"]`)!;
+    await act(async () => removeM.click());
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain(translate(productMessages, "removeValueTitle", { value: "M" }));
+    expect(dialog?.textContent).toContain("M (5)");
+    // Nothing changes until the merchant confirms.
+    expect(host.textContent).toContain("MUG-M");
+
+    const confirm = Array.from(document.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === translate(productMessages, "removeAnyway"))!;
+    await act(async () => confirm.click());
+    await act(async () => ref.current!.save());
+    const rows = (mocks.putApiV1AdminProductsByIdOptionsMatrix.mock.lastCall?.[0] as {
+      body: { variants: Array<{ id: string }> };
+    }).body.variants;
+    expect(rows.map((row) => row.id)).toEqual(["var_s"]);
+  });
 });
