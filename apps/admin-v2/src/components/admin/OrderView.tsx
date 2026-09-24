@@ -210,7 +210,7 @@ export function OrderView({ order }: { order: Order }) {
 
           {notice ? (
             <Alert variant="warning">
-              <div className="col-start-2 flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <p>{notice}</p>
                 <Button variant="ghost" size="sm" onClick={() => clearOrderNotice(order.id)}>{t("dismiss")}</Button>
               </div>

@@ -84,7 +84,16 @@ interface DataTableProps<TData extends TableRowData> {
   paginate?: boolean;
   /** What the list is sorted by when no sort is chosen (the column menu's first choice); false for none. */
   defaultSortLabel?: string | false;
+  /**
+   * Below this width of the table's own container the rows become phone
+   * cards: a 768px tablet with the sidebar open leaves a table too narrow for
+   * more than two columns.
+   */
+  cardLayoutBelow?: number;
 }
+
+/** The container width under which rows become cards, unless a list says otherwise. */
+export const CARD_LAYOUT_BELOW = 640;
 
 export function DataTable<TData extends TableRowData>({
   table,
@@ -105,6 +114,7 @@ export function DataTable<TData extends TableRowData>({
   layoutKey,
   paginate = true,
   defaultSortLabel,
+  cardLayoutBelow = CARD_LAYOUT_BELOW,
 }: DataTableProps<TData>) {
   const t = useMessages(resourceMessages);
   const navigate = useNavigate();
@@ -125,6 +135,9 @@ export function DataTable<TData extends TableRowData>({
   // Columns in the merchant's order, minus those hidden by choice or to fit this width.
   const resultsRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(resultsRef);
+  // Cards by the space the table really has, not the window; the window only
+  // decides before the container is measured, so phones never flash a table.
+  const cardLayout = width > 0 ? width < cardLayoutBelow : isMobile;
   // When the rendered cells still overflow the minimums' estimate, step aside
   // one more column at a time; sideways scrolling is the last resort.
   const [extraHidden, setExtraHidden] = useState({ width, count: 0 });
@@ -269,7 +282,7 @@ export function DataTable<TData extends TableRowData>({
         </span>
         <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
-        {isMobile ? (
+        {cardLayout ? (
           // Mobile card view
           <div className="divide-y">
             {showError ? (

@@ -1,5 +1,5 @@
 import { createContext, useContext, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, Columns3, Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -51,6 +51,7 @@ export function DataTableColumnMenu<TData extends TableRowData>({
 }) {
   const t = useMessages(dataTableMessages);
   const sortable = table.getAllLeafColumns().filter((column) => column.getCanSort() && column.getIsVisible());
+  const menuName = sortable.length > 0 ? t("columnMenu") : t("columns");
   const sorting = table.state.sorting[0];
   // A sort on a field that is not a column here (e.g. the route's "updatedAt") is the list's default order.
   const sortColumn = sorting ? sortable.find((column) => column.id === sorting.id) : undefined;
@@ -74,8 +75,10 @@ export function DataTableColumnMenu<TData extends TableRowData>({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="icon" aria-label={t("columnMenu")} title={t("columnMenu")}>
-          <ArrowUpDown />
+        {/* Says what it holds: "Sort and columns" when the list sorts, else "Columns" (text from sm up). */}
+        <Button type="button" variant="outline" aria-label={menuName} title={menuName}>
+          <Columns3 aria-hidden />
+          <span className="max-sm:sr-only">{menuName}</span>
         </Button>
       </PopoverTrigger>
       {/* As tall as the screen allows (not the popover's 24rem): every column in view. */}
