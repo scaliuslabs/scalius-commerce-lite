@@ -28,6 +28,11 @@ export const onlineStoreMessages = defineMessages({
 
     // Theme
     themeTitle: "Theme",
+    themeSaved: "Theme saved",
+    menuSaved: "Menu saved",
+    navigationSaved: "Navigation saved",
+    bannersSaved: "Banners saved",
+    preferencesSaved: "Preferences saved",
     themeStyles: "Style",
     themeStylesHelp: "Pick a complete look, then fine-tune it below.",
     preset_classic: "Classic retail",
@@ -333,6 +338,11 @@ export const onlineStoreMessages = defineMessages({
     removeItem: "{name} সরান",
 
     themeTitle: "থিম",
+    themeSaved: "থিম সেভ হয়েছে",
+    menuSaved: "মেনু সেভ হয়েছে",
+    navigationSaved: "নেভিগেশন সেভ হয়েছে",
+    bannersSaved: "ব্যানার সেভ হয়েছে",
+    preferencesSaved: "পছন্দসমূহ সেভ হয়েছে",
     themeStyles: "স্টাইল",
     themeStylesHelp: "একটি পুরো লুক বেছে নিন, তারপর নিচে নিজের মতো সাজান।",
     preset_classic: "ক্লাসিক রিটেইল",

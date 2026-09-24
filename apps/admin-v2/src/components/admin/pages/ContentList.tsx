@@ -76,7 +76,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       meta: { mobile: "status", priority: 80, minWidth: 110 },
       cell: ({ row }) => {
         const mode = getPagePublicationMode(row.original);
-        return <StatusBadge tone={mode === "published" ? "success" : "neutral"}>{t(mode === "published" ? "live" : mode)}</StatusBadge>;
+        return <StatusBadge tone={mode === "published" ? "success" : "neutral"}>{t(mode === "published" ? "visible" : mode)}</StatusBadge>;
       },
     },
     {
@@ -114,7 +114,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
         ? { icon: Newspaper, title: t("blogEmptyTitle"), description: t("blogEmptyBody") }
         : { icon: FileText, title: t("pagesEmptyTitle"), description: t("pagesEmptyBody") }}
       views={{ param: "status", tabs: [
-        { value: "published", label: t("live") },
+        { value: "published", label: t("visible") },
         { value: "scheduled", label: t("scheduled") },
         { value: "draft", label: t("draft") },
       ] }}

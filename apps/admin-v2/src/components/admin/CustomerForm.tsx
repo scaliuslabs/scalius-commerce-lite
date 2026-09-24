@@ -175,7 +175,7 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("customer") : t("newCustomer")}
       unsavedLabel={isEdit ? undefined : t("unsavedCustomer")}
-      savedMessage={isEdit ? undefined : t("customerCreated")}
+      savedMessage={t(isEdit ? "customerSaved" : "customerCreated")}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       canSave={canSave}

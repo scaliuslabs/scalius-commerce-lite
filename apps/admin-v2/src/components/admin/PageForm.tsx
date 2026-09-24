@@ -196,7 +196,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     <FormContainer
       heading={isEdit ? defaultValues?.title || t(isArticle ? "blogPost" : "page") : t(isArticle ? "addBlogPost" : "addPage")}
       unsavedLabel={isEdit ? undefined : t(isArticle ? "unsavedBlogPost" : "unsavedPage")}
-      savedMessage={isEdit ? undefined : t(isArticle ? "blogPostCreated" : "pageCreated")}
+      savedMessage={t(isEdit ? (isArticle ? "blogPostSaved" : "pageSaved") : isArticle ? "blogPostCreated" : "pageCreated")}
       isSubmitting={isSubmitting}
       backUrl={backUrl ?? (isArticle ? "/admin/articles" : "/admin/pages")}
       canSave={canSave}
