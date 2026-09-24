@@ -2,9 +2,9 @@
 // Runtime settings for transactional email providers.
 
 import type { Database } from "@scalius/database/client";
-import { storeDisplayName } from "@scalius/core/modules/notifications/store-messages";
-import { businessDocument, emailDocument, platformDocument } from "@scalius/core/modules/settings/documents";
-import { selectSettingsDocuments } from "@scalius/core/modules/settings/settings-store";
+import { storeDisplayName } from "../../modules/notifications/store-messages";
+import { businessDocument, emailDocument, platformDocument } from "../../modules/settings/documents";
+import { selectSettingsDocuments } from "../../modules/settings/settings-store";
 import {
   readiness,
   readinessIssue,

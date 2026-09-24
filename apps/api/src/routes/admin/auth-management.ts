@@ -27,9 +27,7 @@ import {
 import {
     adminPrincipalExists,
 } from "@scalius/core/auth/admin-setup";
-import {
-    noDeletingMediaReferences,
-} from "@scalius/core/modules/media/media-reference-guard";
+import { noDeletingMediaReferences } from "@scalius/core/modules/media";
 import {
     AUTH_PASSWORD_MAX_LENGTH,
     AUTH_PASSWORD_MIN_LENGTH,

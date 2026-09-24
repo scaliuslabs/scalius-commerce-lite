@@ -15,17 +15,19 @@ import {
     bulkDeleteCategories,
     restoreCategories,
     permanentlyDeleteCategory,
-    createCategorySchema,
-    updateCategorySchema,
-    updateCategoryStatusSchema,
-    categoryRevisionClaimSchema,
     getCategoryPublishReadiness,
-    CATEGORY_BATCH_LIMIT,
     categorySectionValues,
     categoryTextFieldValues,
     getCategorySection,
     listCategoryAgentSummaries,
 } from "@scalius/core/modules/categories";
+import {
+    createCategorySchema,
+    updateCategorySchema,
+    updateCategoryStatusSchema,
+    categoryRevisionClaimSchema,
+    CATEGORY_BATCH_LIMIT,
+} from "@scalius/core/modules/categories/browser";
 import { categories } from "@scalius/database/schema";
 import { asc, isNull } from "drizzle-orm";
 import {

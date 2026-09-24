@@ -26,8 +26,8 @@ vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions",
   isStockReservableStatus: (status: string) => ["incomplete", "pending", "processing", "confirmed"].includes(status),
 }));
 
-type UpdateOrder = typeof import("../../../../packages/core/src/modules/orders/orders.admin").updateOrder;
-type RestoreOrder = typeof import("../../../../packages/core/src/modules/orders/orders.admin").restoreOrder;
+type UpdateOrder = typeof import("../../../../packages/core/src/modules/orders/admin/archive").updateOrder;
+type RestoreOrder = typeof import("../../../../packages/core/src/modules/orders/admin/archive").restoreOrder;
 
 type MockChain = {
   __kind?: string;
@@ -130,7 +130,7 @@ beforeEach(async () => {
   });
   inventoryMocks.applyInventoryForStatusChange.mockResolvedValue("reserved");
 
-  ({ updateOrder, restoreOrder } = await import("../../../../packages/core/src/modules/orders/orders.admin"));
+  ({ updateOrder, restoreOrder } = await import("../../../../packages/core/src/modules/orders/admin/archive"));
 });
 
 function createChain(result: unknown): MockChain {

@@ -1,6 +1,10 @@
-// src/modules/payments/index.ts
 // Barrel exports for the payments module. Gateway adapters live in
 // ./gateways (port.ts, one file per provider, registry.ts).
+export * from "./browser";
+export * from "./gateways/port";
+export * from "./gateways/correlation";
+export * from "./payable-order";
+export * from "./payment-state";
 
 export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {
@@ -96,11 +100,7 @@ export {
   listOrderRefundAttempts,
   summarizeActiveRefundOperation,
 } from "./refund-attempt-visibility";
-export type {
-  ActiveRefundOperationView,
-  OrderRefundAttemptView,
-  RefundAttemptVisibilityRow,
-} from "./refund-attempt-visibility";
+export type { RefundAttemptVisibilityRow } from "./refund-attempt-visibility";
 
 // --- Public payment session attempts ---
 export {
@@ -123,3 +123,13 @@ export type {
   ClaimedPaymentSessionAttempt,
   PaymentSessionAttemptClaimResult,
 } from "./payment-session-attempts";
+export { PartialRefundProcessedError } from "./refund-service";
+export { getPaymentGatewaySettingsSnapshot, getPaymentMethodPreferences, getSSLCommerzCheckoutReadiness, getStripeCheckoutReadiness, resolveActivePaymentMethodsFromRows } from "./gateway-settings";
+export type { GatewaySettingsStoredRow } from "./gateway-settings";
+export { COD_LABEL, filterPaymentMethodsForCurrency, getCheckoutGatewayPrecommitIssue, getGatewayAmountIssue, getPaymentMethodCurrencyIssue, isPaymentMethodCurrencyEligible, publicAmountLimits } from "./gateways/registry";
+export { REFUND_OBSERVED_EVENT_TYPE } from "./refund-reconciliation";
+export { reconcileHostedPaymentReturn } from "./hosted-payment-return";
+export type { HostedPaymentReturnResult } from "./hosted-payment-return";
+export type { PaymentSessionAttemptProcessingResult } from "./payment-session-attempts";
+export { createCODTrackingInsertValues, validateCODCollectionDetails } from "./cod";
+export { resolveActiveRefundOperationsForOrders, selectActiveRefundAttemptRowsForOrders } from "./refund-attempt-visibility";

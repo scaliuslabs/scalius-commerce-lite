@@ -3,7 +3,7 @@ import {
     getBusinessSettingsDocument,
     saveBusinessSettings,
     type BusinessInfo,
-} from "@scalius/core/modules/settings/business-settings.service";
+} from "@scalius/core/modules/settings";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";

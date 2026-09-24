@@ -21,13 +21,13 @@ import {
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
   resolveExistingCheckoutAttempt,
-  type StorefrontOrderCommitPayload,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/checkout";
+import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,
   isOnlinePaymentMethod,
-} from "@scalius/core/modules/payments/gateways/registry";
+} from "../payments/gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";

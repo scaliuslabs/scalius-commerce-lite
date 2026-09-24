@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "@scalius/database/client";
-import { securityDocument } from "@scalius/core/modules/settings/documents";
+import { securityDocument } from "@scalius/core/modules/settings";
 import { errorResponses } from "../schemas/responses";
 
 const ALLOWED_PROXY_PROTOCOLS = new Set(["https:"]);

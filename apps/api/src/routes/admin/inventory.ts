@@ -2,19 +2,37 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getInventoryOverview, getInventoryLabelVariants, adjustInventory, adjustInventoryRequestSchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT, INVENTORY_LABEL_ARTIFACT_MAX_COPIES, INVENTORY_LABEL_ARTIFACT_MAX_BYTES, buildInventoryLabelArtifact, buildInventoryMovementCsvArtifact, INVENTORY_MOVEMENT_EXPORT_MAX_BYTES, INVENTORY_MOVEMENT_EXPORT_MAX_ROWS, lowStockThresholdSchema } from "@scalius/core/modules/inventory";
-import { acknowledgeLowStockAlert, setDefaultLowStockThreshold, setLowStockThreshold } from "@scalius/core/modules/inventory/alerts";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import {
+    getInventoryOverview,
+    getInventoryLabelVariants,
+    adjustInventory,
+    adjustInventoryRequestSchema,
+    adjustStock,
+    setStock,
+    lookupByBarcodeOrSku,
+    inventoryOperationKeySchema,
+    INVENTORY_LABEL_VARIANT_LIMIT,
+    INVENTORY_LABEL_ARTIFACT_MAX_COPIES,
+    INVENTORY_LABEL_ARTIFACT_MAX_BYTES,
+    buildInventoryLabelArtifact,
+    buildInventoryMovementCsvArtifact,
+    INVENTORY_MOVEMENT_EXPORT_MAX_BYTES,
+    INVENTORY_MOVEMENT_EXPORT_MAX_ROWS,
+    lowStockThresholdSchema,
+    acknowledgeLowStockAlert,
+    setDefaultLowStockThreshold,
+    setLowStockThreshold,
+} from "@scalius/core/modules/inventory";
+import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
+import { bumpCacheGeneration, type CacheWriteContext } from "../../utils/cache-generation";
 import {
-    bumpCacheGeneration,
     findStockMutationAvailabilityTransitions,
-    type CacheWriteContext,
     type StockAvailabilityMutationInput,
-} from "../../utils/cache-generation";
+} from "../../utils/availability-transitions";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";

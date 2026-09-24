@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { bulkShipOrders } from "../fulfilment/bulk";
 import {
-  bulkShipOrders,
-  lookupUnknownOrderShipment,
-  reconcileOrderShipment,
-  resolveUnknownOrderShipment,
-  markOrderDelivered,
-} from "../orders/orders.fulfillment";
+    lookupUnknownOrderShipment,
+    reconcileOrderShipment,
+    resolveUnknownOrderShipment,
+} from "../fulfilment/reconcile";
+import { markOrderDelivered } from "../fulfilment/delivery-outcomes";
 import { checkShipmentStatus, deleteShipmentRecord, getShipments, ORDER_SHIPMENT_LIST_LIMIT } from "./delivery.service";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";

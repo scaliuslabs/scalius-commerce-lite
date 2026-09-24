@@ -23,10 +23,8 @@ import {
   validateAgentStorefrontCheckout,
 } from "@scalius/core/modules/agent-storefront";
 import { ForbiddenError, ValidationError } from "@scalius/core/errors";
-import {
-  getOrderSupportRequestStatusLabel,
-  runStorefrontOrderPostCommitSideEffects,
-} from "@scalius/core/modules/orders";
+import { getOrderSupportRequestStatusLabel } from "@scalius/core/modules/orders";
+import { runStorefrontOrderPostCommitSideEffects } from "@scalius/core/modules/checkout";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import type { AgentPrincipal } from "../agent-access/types";
 import { created, ok } from "../utils/api-response";
@@ -39,7 +37,7 @@ import {
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { bumpCacheGeneration, getOptionalExecutionContext } from "../utils/cache-generation";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
-import { listPaymentMethodIds } from "@scalius/core/modules/payments/gateways/registry";
+import { listPaymentMethodIds } from "@scalius/core/modules/payments";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

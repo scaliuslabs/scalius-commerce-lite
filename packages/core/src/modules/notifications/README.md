@@ -136,5 +136,5 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
 - `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
 - `@scalius/core/integrations/whatsapp` -- encrypted Meta Cloud API credential resolver and template sender for order/customer WhatsApp notifications
-- `@scalius/core/modules/settings/settings.service` -- `getNotificationChannels()`, `getOrderWhatsAppTemplateSettings()`, and `isWhatsAppCloudApiConfigured()`
+- `../settings/settings.service` -- `getNotificationChannels()`, `getOrderWhatsAppTemplateSettings()`, and `isWhatsAppCloudApiConfigured()`
 - `@scalius/shared/html-escape` -- `escapeHtml()` for XSS prevention in notification content

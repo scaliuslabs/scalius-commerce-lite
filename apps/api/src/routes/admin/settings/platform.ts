@@ -2,12 +2,9 @@
 // Settings -> System -> Platform: the deployment's public origins.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
+import { getPlatformSettingsDocument, savePlatformSettings } from "@scalius/core/modules/platform";
 import {
-  getPlatformSettingsDocument,
-  savePlatformSettings,
-} from "@scalius/core/modules/settings/platform-settings.service";
-import type { PlatformConfig } from "@scalius/shared/platform-config";
-import {
+  type PlatformConfig,
   IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
   PLATFORM_URL_KEYS,

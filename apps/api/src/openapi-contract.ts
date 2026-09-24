@@ -18,7 +18,7 @@ import {
  * Finalizes the `/api/v1` OpenAPI document.
  *
  * This module holds no operation policy. Every per-operation fact is derived:
- * agent metadata expands from the single `openapi/operation-registry.ts` table,
+ * agent metadata expands from the `openapi/operation-registry/` tables (one file per domain),
  * RBAC from `getRoutePermission()`, and identity from the route itself. What
  * stays here is the document-level seam: security schemes, the shared error
  * responses, the security requirement each route family uses, operation-ID
@@ -231,7 +231,7 @@ function generatedOperationId(path: string, method: string): string {
 }
 
 /**
- * Fail-closed metadata for a route with no `operation-registry.ts` row. It is
+ * Fail-closed metadata for a route with no `operation-registry/` row. It is
  * deliberately generic so `assertNoGenericPendingAgentOperations()` rejects the
  * generated manifest until the route is registered.
  */

@@ -32,7 +32,7 @@ import { getBusinessSettings } from "./business-settings.service";
 import { getCheckoutFlowSettingsDocument } from "./checkout-flow-admin.service";
 import { getCustomerRequestPolicy } from "./customer-request-policy";
 import { customerAuthDocument, securityDocument } from "./documents";
-import { getPlatformSettings } from "./platform-settings.service";
+import { getPlatformSettings } from "../platform/platform-settings.service";
 import {
   getAdminNotificationChannels,
   getNotificationChannels,

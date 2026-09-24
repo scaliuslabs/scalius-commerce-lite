@@ -5,8 +5,8 @@ import {
   getDeliveryProvider,
   getShipment,
   type ShipmentView,
-} from "@scalius/core/modules/delivery/delivery.service";
-import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery/tracking";
+  updateOrderStatusFromShipment,
+} from "@scalius/core/modules/delivery";
 import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../utils/api-error";

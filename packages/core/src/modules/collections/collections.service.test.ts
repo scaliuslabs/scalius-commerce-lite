@@ -11,7 +11,7 @@ import {
     updateCollection,
 } from "./collections.service";
 
-vi.mock("../products/products.media", () => ({
+vi.mock("../products/media", () => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
     resolveProductImageRepresentation: vi.fn(() => null),
     resolveProductCardImages: vi.fn(() => ({

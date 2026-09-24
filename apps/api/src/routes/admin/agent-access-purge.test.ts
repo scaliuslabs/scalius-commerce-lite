@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({
   logOpsEvent: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/agent-access/agent-access.service", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/agent-access/agent-access.service")>()),
+vi.mock("@scalius/core/modules/agent-access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/agent-access")>()),
   purgeRevokedAgentGrants: mocks.purgeRevokedAgentGrants,
   listAgentConnections: mocks.listAgentConnections,
 }));

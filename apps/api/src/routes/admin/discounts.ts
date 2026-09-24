@@ -9,10 +9,10 @@ import {
     listPromotionDrafts,
     previewPersistedPromotion,
     pausePromotion,
-    promotionEvaluationCartSchema,
     updatePromotionDraft,
     updatePromotionDraftSchema,
 } from "@scalius/core/modules/promotions";
+import { promotionEvaluationCartSchema } from "@scalius/core/modules/promotions/browser";
 
 import { NotFoundError } from "../../utils/api-error";
 import { created, noContent, ok } from "../../utils/api-response";
