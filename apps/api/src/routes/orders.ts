@@ -28,6 +28,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { issueAccountOwnerReceipt } from "@scalius/core/modules/customers/order-account-claim";
 import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/order-lookup";
 import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
 import { fromMinor, toMinor } from "@scalius/shared/money";
@@ -1029,6 +1030,50 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       supportRequestIntro: supportState.supportRequestIntro,
     },
   });
+});
+
+const createOwnerReceiptProofRoute = createRoute({
+  method: "post",
+  path: "/receipt/{id}/owner-proof",
+  tags: ["Orders"],
+  summary: "Issue a private receipt proof to the signed-in account that owns the order",
+  request: {
+    params: z.object({ id: z.string().trim().min(1).max(128) }),
+    headers: z.object({ [CUSTOMER_SESSION_HEADER]: z.string().optional() }),
+  },
+  responses: {
+    200: {
+      description: "Receipt proof for the account owner",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            receiptToken: z.string(),
+            expiresAt: z.number(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+// Storefront-server only (service JWT): the storefront keeps the proof in its
+// httpOnly receipt cookie. Ownership is the account order page's rule.
+app.use("/receipt/:id/owner-proof", authMiddleware);
+app.openapi(createOwnerReceiptProofRoute, async (c) => {
+  const db = c.get("db");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const sessionToken = getCustomerSessionTokenFromRequest(c);
+  const session = sessionToken
+    ? await getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
+    : null;
+  if (!session?.customerId) throw new UnauthorizedError("Sign in to open this receipt.");
+
+  return ok(c, await issueAccountOwnerReceipt(db, {
+    customerId: session.customerId,
+    orderId: c.req.valid("param").id,
+  }));
 });
 
 const createReceiptSupportRequestRoute = createRoute({
