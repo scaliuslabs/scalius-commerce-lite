@@ -129,6 +129,19 @@ describe("navigation authority D1 commands", () => {
     expect(tree.items).toEqual([
       expect.objectContaining({ href: "/blog/buying-guide" }),
     ]);
+
+    // The editor names where each item goes, even when its label is custom.
+    await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: publication.revision,
+      label: "Read this first",
+      labelMode: "custom",
+      target: { type: "system", key: "home" },
+    });
+    const rows = await listNavigationMenuItems(db, menu.id, { parentId: null });
+    expect(rows.items.map(({ item, targetTitle }) => [item.label, targetTitle])).toEqual([
+      ["Buying guide", "Buying guide"],
+      ["Read this first", null],
+    ]);
   });
 
   it("creates, edits, moves, publishes, and manifests one menu with monotonic CAS", async () => {

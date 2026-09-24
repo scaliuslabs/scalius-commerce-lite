@@ -4,6 +4,7 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import {
+  HERO_SLIDE_BUTTON_LABEL_LIMIT,
   HERO_SLIDE_PRESENTATION,
   HERO_SLIDE_TITLE_LIMIT,
   getHeroSlideObjectPosition,
@@ -21,7 +22,7 @@ import { NavigationResourcePicker } from "./NavigationResourcePicker";
 import { Field } from "./shared";
 
 /** Control ids of one banner, so server errors mark the right field. */
-export const bannerFieldId = (slideId: string, field: "text" | "link") => `banner-${field}-${slideId}`;
+export const bannerFieldId = (slideId: string, field: "text" | "heading" | "button" | "link") => `banner-${field}-${slideId}`;
 
 export function SlideRow({
   slide,
@@ -42,6 +43,8 @@ export function SlideRow({
   const presentation = HERO_SLIDE_PRESENTATION[viewport];
   const textId = bannerFieldId(slide.id, "text");
   const linkId = bannerFieldId(slide.id, "link");
+  const headingId = bannerFieldId(slide.id, "heading");
+  const buttonId = bannerFieldId(slide.id, "button");
   return (
     <div
       ref={sortable.ref}
@@ -96,6 +99,7 @@ export function SlideRow({
         <Field
           id={textId}
           label={t("bannerText")}
+          help={t("bannerTextHelp")}
           error={slide.title.trim() ? undefined : t("bannerTextRequired")}
         >
           <Input
@@ -103,6 +107,14 @@ export function SlideRow({
             value={slide.title}
             maxLength={HERO_SLIDE_TITLE_LIMIT}
             onChange={(event) => onChange({ title: event.target.value })}
+          />
+        </Field>
+        <Field id={headingId} label={t("bannerHeading")} help={t("bannerHeadingHelp")}>
+          <Input
+            id={headingId}
+            value={slide.heading}
+            maxLength={HERO_SLIDE_TITLE_LIMIT}
+            onChange={(event) => onChange({ heading: event.target.value })}
           />
         </Field>
         <Field
@@ -130,6 +142,16 @@ export function SlideRow({
           }
           onValueChange={(option) => onChange({ link: option.url })}
         />
+        {slide.link.trim() ? (
+          <Field id={buttonId} label={t("bannerButton")} help={t("bannerButtonHelp")}>
+            <Input
+              id={buttonId}
+              value={slide.buttonLabel}
+              maxLength={HERO_SLIDE_BUTTON_LABEL_LIMIT}
+              onChange={(event) => onChange({ buttonLabel: event.target.value })}
+            />
+          </Field>
+        ) : null}
       </div>
       <Button
         type="button"

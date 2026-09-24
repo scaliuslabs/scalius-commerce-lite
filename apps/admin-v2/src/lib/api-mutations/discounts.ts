@@ -10,7 +10,6 @@ import {
 
 import { discountsMessages, type DiscountMessageKey } from "~/i18n/discounts";
 import { translate } from "~/i18n";
-import { readPromotionRevisionConflict } from "../admin-api-error";
 import { apiData } from "../api";
 import type { DiscountInput, DiscountUpdateInput } from "../api-query-options/discounts";
 import { getServerFnError, queryKeys } from "./shared";
@@ -23,9 +22,9 @@ function invalidate(queryClient: QueryClient, id?: string) {
   if (id) void queryClient.invalidateQueries({ queryKey: queryKeys.discounts.detail(id) });
 }
 
-/** Revision conflicts are shown by the editor; other failures toast. */
-function onFailure(error: unknown) {
-  if (!readPromotionRevisionConflict(error)) toast.error(getServerFnError(error, t("saveFailed")));
+/** Why a discount action failed, in the API's merchant words (or a generic line). */
+export function discountFailureText(error: unknown): string {
+  return getServerFnError(error, t("saveFailed"));
 }
 
 /**
@@ -61,7 +60,7 @@ export function useUpdateDiscount() {
   });
 }
 
-/** Callers toast success: once per discount in the editor, once per batch in the list. */
+/** Callers report the result: once per discount in the editor, once per batch in the list. */
 export function useSetDiscountActive() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -70,7 +69,6 @@ export function useSetDiscountActive() {
       return apiData(command({ path: { id }, body: { expectedRevision } }));
     },
     onSuccess: (_result, { id }) => invalidate(queryClient, id),
-    onError: onFailure,
   });
 }
 
@@ -83,6 +81,5 @@ export function useDeleteDiscount() {
       invalidate(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
     },
-    onError: onFailure,
   });
 }

@@ -67,7 +67,7 @@ export const SEARCH_SHORTCUTS = [
 
 export type SearchShortcut = (typeof SEARCH_SHORTCUTS)[number];
 
-function words(text: string): string[] {
+export function words(text: string): string[] {
   return text.normalize("NFC").toLocaleLowerCase().split(/[\s,.&/·()-]+/).filter(Boolean);
 }
 
@@ -76,7 +76,7 @@ function haystack(...texts: string[]): string[] {
 }
 
 /** Every query word must start one of the entry's words, in either language. */
-function matches(query: string[], entry: string[]): boolean {
+export function matches(query: string[], entry: string[]): boolean {
   return query.every((term) => entry.some((word) => word.startsWith(term)));
 }
 
