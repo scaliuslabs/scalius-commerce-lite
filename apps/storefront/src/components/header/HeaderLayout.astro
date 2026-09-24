@@ -1,6 +1,6 @@
 ---
 import SearchBar from "../search/SearchBar.astro";
-import { Phone, ShoppingCart, Menu, Search, Check, Copy } from "lucide-react";
+import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
 import type { HeaderData, SocialLink } from "@/lib/api";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -8,6 +8,7 @@ import {
   normalizeHeaderLogoWidth,
 } from "@scalius/shared/brand-presentation";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { telHref } from "@/lib/store-identity";
 
 interface Props {
   headerData: HeaderData;
@@ -19,8 +20,9 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 const socialLinks = (headerData.social ?? []).filter(
   (item): item is SocialLink & { url: string } => Boolean(item.url),
 );
-const hasDesktopPhone =
-  headerData.contact.isEnabled !== false && Boolean(headerData.contact.phone);
+const phoneHref =
+  headerData.contact.isEnabled !== false ? telHref(headerData.contact.phone) : null;
+const hasDesktopPhone = Boolean(phoneHref);
 const desktopSocialWidth =
   socialLinks.length > 0
     ? socialLinks.length * 36 + (socialLinks.length - 1) * 4
@@ -189,34 +191,15 @@ const expandedActionsXlWidth =
             }
 
             {
-              hasDesktopPhone && headerData.contact.phone && (
-                <button
-                  type="button"
-                  id="desktop-phone-btn"
-                  data-phone={headerData.contact.phone}
-                  class="group relative hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input bg-background text-muted-foreground transition-all duration-200 hover:border-primary/50 hover:text-foreground hover:shadow-sm active:scale-95 xl:flex"
-                  aria-label="Copy phone number"
+              phoneHref && (
+                <a
+                  href={phoneHref}
+                  class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-input bg-background text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground xl:flex"
+                  aria-label={`Call ${headerData.contact.phone}`}
                   title={headerData.contact.phone}
                 >
-                  <div
-                    class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-full"
-                    id="phone-icon-normal"
-                  >
-                    <Phone className="h-4 w-4 stroke-[1.5]" />
-                  </div>
-                  <div
-                    class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-300 group-hover:translate-y-0"
-                    id="phone-icon-hover"
-                  >
-                    <Copy className="h-4 w-4 stroke-2" />
-                  </div>
-                  <div
-                    class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-200 text-primary bg-primary/10"
-                    id="phone-icon-success"
-                  >
-                    <Check className="h-4 w-4 stroke-[2.5]" />
-                  </div>
-                </button>
+                  <Phone className="h-4 w-4 stroke-[1.5]" />
+                </a>
               )
             }
           </div>

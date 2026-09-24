@@ -14,10 +14,11 @@ import {
 import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 
 const { slug } = Astro.params;
 
@@ -91,7 +92,8 @@ if (!layoutData) {
   return response;
 }
 const title = page.metaTitle || page.title;
-const description = page.metaDescription || "";
+const description =
+  page.metaDescription || htmlToPlainText(page.content).slice(0, 160).trim();
 const sanitizedPageContent = sanitizeHtml(page.content || "");
 const isStandaloneShortcodePage =
   isStandaloneShortcodeContent(sanitizedPageContent);
@@ -141,7 +143,11 @@ const richContentClasses =
   hideFooter={page.hideFooter}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
-  ogImage={featuredImageUrl || undefined}
+  ogImage={
+    (featuredImage?.url ? mediaImageUrl(featuredImage.url, MEDIA_DISCOVERY_IMAGE_WIDTH) : null) ||
+    firstRichContentImageUrl(sanitizedPageContent, MEDIA_DISCOVERY_IMAGE_WIDTH) ||
+    undefined
+  }
   ogType="website"
   noindex={page.noIndex === true}
 >

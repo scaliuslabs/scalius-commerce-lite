@@ -164,7 +164,7 @@ function updateActiveThumbnails(
       button.tabIndex = button === roving ? 0 : -1;
       button
         .querySelector<HTMLElement>("[data-thumb-ring]")
-        ?.classList.toggle("!border-black", isActive);
+        ?.classList.toggle("!border-foreground", isActive);
     });
   });
 }

@@ -7,9 +7,16 @@ import {
     productRichContent,
     productAttributeValues,
     productAttributes,
+    productOptionDefinitions,
+    productOptionValues,
+    productVariantOptionValues,
 } from "@scalius/database/schema";
+import { alias } from "drizzle-orm/sqlite-core";
+import { normalizeProductOptionIdentity } from "@scalius/shared/product-options";
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
+import { suggestSearchCorrection } from "../../search/correct";
+import { productCategoryNameMatch, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
@@ -65,11 +72,9 @@ type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilter
 type StorefrontProductConditionOptions = {
     includeLookupHandles?: boolean;
     includeVariantLookups?: boolean;
-    includeCategorySearchMatches?: boolean;
 };
 
 const MAX_PUBLIC_LOOKUP_TOKENS = 100;
-const MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH = 160;
 // Leave room for non-IN predicates under D1's 100 bound-parameter limit.
 const STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE = 90;
 
@@ -214,32 +219,6 @@ function buildCategoryLookupCondition(category: string): SQL {
     )`;
 }
 
-function buildFeedCategorySearchCondition(db: Database, search: string): SQL | undefined {
-    const normalizedSlug = search.trim().toLowerCase();
-    const categoryNameCondition = ftsMatch(
-        db,
-        "categories_fts",
-        "categories",
-        search,
-        { column: "name" },
-    );
-    const categoryMatch = or(
-        categoryNameCondition,
-        normalizedSlug.length <= MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH
-            ? eq(categories.slug, normalizedSlug)
-            : undefined,
-    );
-    if (!categoryMatch) return undefined;
-
-    return sql`EXISTS (
-        SELECT 1
-        FROM "categories"
-        WHERE ${eq(categories.id, products.categoryId)}
-          AND ${and(...publicCategoryConditions())}
-          AND ${categoryMatch}
-    )`;
-}
-
 function buildProductLookupCondition(
     lookupTokens: string[],
     options: StorefrontProductConditionOptions = {},
@@ -306,16 +285,9 @@ function buildStorefrontProductConditions(
 
     if (category) conditions.push(buildCategoryLookupCondition(category));
     if (search) {
-        const searchConditions = [ftsMatch(db, "products_fts", "products", search)];
-        if (options.includeCategorySearchMatches) {
-            searchConditions.push(buildFeedCategorySearchCondition(db, search));
-        }
         conditions.push(
-            or(
-                ...searchConditions.filter(
-                    (condition): condition is SQL => Boolean(condition),
-                ),
-            ) ?? sql`0 = 1`,
+            or(ftsMatch(db, "products_fts", "products", search), productCategoryNameMatch(db, search))
+                ?? sql`0 = 1`,
         );
     }
     if (buyerPricing && (minPriceMinor !== undefined || maxPriceMinor !== undefined)) {
@@ -434,7 +406,102 @@ type PublicProductFacetRow = {
     slug: string;
     value: string;
     count: number;
+    position?: number;
 };
+
+/** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
+export const OPTION_FACET_PREFIX = "option.";
+
+function isOptionFilter(filter: AttributeFilter): boolean {
+    return filter.slug.startsWith(OPTION_FACET_PREFIX);
+}
+
+// Option axes are merchant-defined per product; products share a facet when
+// their axis names normalize to the same key ("Size", " size " → `option.size`).
+const OPTION_AXIS_KEY_SQL = (axis: string) => sql.raw(`replace(${axis}.normalized_name, ' ', '-')`);
+
+/**
+ * Products that have a live SKU for one of the selected values of every
+ * selected option axis (OR within an axis, AND across axes). `exceptAxis`
+ * skips the axis whose own facet counts are being computed.
+ */
+function buildOptionFilterCondition(optionFilters: AttributeFilter[], exceptAxis?: SQL): SQL | undefined {
+    if (optionFilters.length === 0) return undefined;
+    const filtersJson = JSON.stringify(optionFilters.map((filter) => ({
+        key: filter.slug.slice(OPTION_FACET_PREFIX.length),
+        values: filter.values.map(normalizeProductOptionIdentity),
+    })));
+    return sql`NOT EXISTS (
+        SELECT 1
+        FROM json_each(${filtersJson}) AS selected_option
+        WHERE ${exceptAxis ? sql`CAST(json_extract(selected_option.value, '$.key') AS TEXT) <> ${exceptAxis} AND ` : sql``}NOT EXISTS (
+            SELECT 1
+            FROM product_variants AS option_filter_sku
+            INNER JOIN product_variant_option_values AS option_filter_assignment
+                ON option_filter_assignment.variant_id = option_filter_sku.id
+            INNER JOIN product_option_definitions AS option_filter_axis
+                ON option_filter_axis.id = option_filter_assignment.option_definition_id
+               AND option_filter_axis.deleted_at IS NULL
+            INNER JOIN product_option_values AS option_filter_value
+                ON option_filter_value.id = option_filter_assignment.option_value_id
+               AND option_filter_value.deleted_at IS NULL
+            WHERE option_filter_sku.product_id = ${products.id}
+              AND option_filter_sku.deleted_at IS NULL
+              AND ${OPTION_AXIS_KEY_SQL("option_filter_axis")} = CAST(json_extract(selected_option.value, '$.key') AS TEXT)
+              AND option_filter_value.normalized_value IN (
+                  SELECT CAST(value AS TEXT)
+                  FROM json_each(json_extract(selected_option.value, '$.values'))
+              )
+        )
+    )`;
+}
+
+function buildResultScopedOptionFacetQuery(
+    db: Database,
+    buyerPricing: BuyerCatalogPricingProjection,
+    baseConditions: SQL[],
+    attributeFilters: AttributeFilter[],
+    optionFilters: AttributeFilter[],
+) {
+    const facetSku = alias(productVariants, "facet_option_sku");
+    const facetAssignment = alias(productVariantOptionValues, "facet_option_assignment");
+    const facetAxis = alias(productOptionDefinitions, "facet_option_axis");
+    const facetValue = alias(productOptionValues, "facet_option_value");
+    const axisKey = OPTION_AXIS_KEY_SQL("facet_option_axis");
+    const matchesOtherSelectedAxes = buildOptionFilterCondition(optionFilters, axisKey) ?? sql`1 = 1`;
+    let query = db
+        .select({
+            id: sql<string>`${OPTION_FACET_PREFIX} || ${axisKey}`,
+            name: sql<string>`MIN(${facetAxis.name})`,
+            slug: sql<string>`${OPTION_FACET_PREFIX} || ${axisKey}`,
+            value: sql<string>`MIN(${facetValue.value})`,
+            position: sql<number>`MIN(${facetValue.position})`,
+            count: sql<number>`COUNT(DISTINCT CASE
+                WHEN ${matchesOtherSelectedAxes} THEN ${products.id}
+                ELSE NULL
+            END)`,
+        })
+        .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .innerJoin(facetSku, and(eq(facetSku.productId, products.id), isNull(facetSku.deletedAt)))
+        .innerJoin(facetAssignment, eq(facetAssignment.variantId, facetSku.id))
+        .innerJoin(facetAxis, and(
+            eq(facetAxis.id, facetAssignment.optionDefinitionId),
+            isNull(facetAxis.deletedAt),
+        ))
+        .innerJoin(facetValue, and(
+            eq(facetValue.id, facetAssignment.optionValueId),
+            isNull(facetValue.deletedAt),
+        ))
+        .where(and(...baseConditions))
+        .groupBy(axisKey, facetValue.normalizedValue)
+        .$dynamic();
+    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "option_facet_filtered_products");
+    if (attributeSubquery) {
+        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
+    }
+    return query;
+}
 
 function buildResultScopedFacetQuery(
     db: Database,
@@ -500,7 +567,9 @@ function groupResultScopedFacets(
     selectedFilters: AttributeFilter[],
 ): PublicProductFacet[] {
     const facetsBySlug = new Map<string, PublicProductFacet>();
+    const positions = new Map<string, number>();
     for (const row of rows) {
+        positions.set(row.value, Number(row.position) || 0);
         const facet = facetsBySlug.get(row.slug) ?? {
             id: row.id,
             name: row.name,
@@ -526,9 +595,14 @@ function groupResultScopedFacets(
     }
 
     return Array.from(facetsBySlug.values())
-        .map((facet) => ({
-            ...facet,
-            values: facet.values.sort((a, b) => a.value.localeCompare(b.value)),
+        .map(({ id, name, slug, values }) => ({
+            id,
+            name,
+            slug,
+            values: values
+                .sort((a, b) => (positions.get(a.value) ?? 0) - (positions.get(b.value) ?? 0)
+                    || a.value.localeCompare(b.value, undefined, { numeric: true }))
+                .map(({ value, count }) => ({ value, count })),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -708,28 +782,59 @@ type StorefrontCatalogScope = {
     fixedCategory?: StorefrontCategoryProductCategory;
 };
 
+/**
+ * Reads one catalog page. A search that matches nothing is retried once with
+ * the closest catalog words ("kettel" → "kettle", "ব্যাগ" → "bag"); the
+ * response then carries `correctedQuery` so the storefront can say so.
+ */
 async function readStorefrontCatalogPage(
     db: Database,
     params: StorefrontProductFilterInput,
     scope: StorefrontCatalogScope = {},
 ) {
+    const result = await readStorefrontCatalogResults(db, params, scope);
+    if (!params.search || result.pagination.total > 0) return { ...result, correctedQuery: null };
+    const correctedQuery = await suggestSearchCorrection(db, params.search);
+    if (!correctedQuery) return { ...result, correctedQuery: null };
+    const corrected = await readStorefrontCatalogResults(db, { ...params, search: correctedQuery }, scope);
+    return corrected.pagination.total > 0
+        ? { ...corrected, correctedQuery }
+        : { ...result, correctedQuery: null };
+}
+
+async function readStorefrontCatalogResults(
+    db: Database,
+    params: StorefrontProductFilterInput,
+    scope: StorefrontCatalogScope,
+) {
     const {
         page = 1,
         limit = 20,
-        sort = "newest",
-        attributeFilters = [],
+        search,
+        sort = search ? "relevance" : "newest",
     } = params;
+    const optionFilters = (params.attributeFilters ?? []).filter(isOptionFilter);
+    const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    const conditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
+    // Option-facet counts exclude their own axis, so they read the conditions
+    // before the option filter is applied; every other query reads both.
+    const unfilteredOptionConditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
     const priceRangeConditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
     if (scope.condition) {
-        conditions.push(scope.condition);
+        unfilteredOptionConditions.push(scope.condition);
         priceRangeConditions.push(scope.condition);
     }
+    const optionCondition = buildOptionFilterCondition(optionFilters);
+    const conditions = optionCondition ? [...unfilteredOptionConditions, optionCondition] : unfilteredOptionConditions;
+    if (optionCondition) priceRangeConditions.push(optionCondition);
     const orderBy = typeof scope.orderBy === "function"
-        ? scope.orderBy(buyerPricing)
-        : scope.orderBy ?? getStorefrontProductOrderBy(sort, buyerPricing);
+        ? [scope.orderBy(buyerPricing)]
+        : scope.orderBy
+            ? [scope.orderBy]
+            : sort === "relevance" && search
+                ? [...productSearchRelevanceOrder(db, search), desc(products.createdAt)]
+                : [getStorefrontProductOrderBy(sort, buyerPricing)];
     const offset = (page - 1) * limit;
 
     let query = db
@@ -797,11 +902,19 @@ async function readStorefrontCatalogPage(
         conditions,
         attributeFilters,
     );
-    const [productsList, totalCount, rawPriceRange, facetRows] = await Promise.all([
-        query.orderBy(orderBy, products.id).limit(limit).offset(offset).all(),
+    const optionFacetQuery = buildResultScopedOptionFacetQuery(
+        db,
+        buyerPricing,
+        unfilteredOptionConditions,
+        attributeFilters,
+        optionFilters,
+    );
+    const [productsList, totalCount, rawPriceRange, facetRows, optionFacetRows] = await Promise.all([
+        query.orderBy(...orderBy, products.id).limit(limit).offset(offset).all(),
         countQuery.get(),
         priceRangeQuery.get(),
         facetQuery.all() as Promise<PublicProductFacetRow[]>,
+        optionFacetQuery.all() as Promise<PublicProductFacetRow[]>,
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
 
@@ -857,7 +970,10 @@ async function readStorefrontCatalogPage(
             min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
             max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
         },
-        facets: groupResultScopedFacets(facetRows, attributeFilters),
+        facets: [
+            ...groupResultScopedFacets(optionFacetRows, optionFilters),
+            ...groupResultScopedFacets(facetRows, attributeFilters),
+        ],
     };
 }
 
@@ -898,7 +1014,6 @@ export async function getStorefrontFeedProducts(
     }, {
         includeLookupHandles: true,
         includeVariantLookups: true,
-        includeCategorySearchMatches: true,
     }, buyerPricing);
     conditions.push(eq(products.excludeFromProductFeed, false));
     conditions.push(publicProductHasPrimaryDiscoveryImage());

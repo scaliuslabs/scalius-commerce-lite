@@ -31,7 +31,13 @@ length and part-1 signature checks finish before the storage side effect.
 - Metadata, moves, folders, trash, and restore use optimistic revisions.
 - Successful metadata/poster, trash, restore, and rendition mutations bump the
   store cache generation after they commit, so every page that shows the image
-  refreshes without a dependency scan.
+  refreshes without a dependency scan. Renditions are derived storage and do
+  not advance the media revision.
+- The API cron (`backfillMissingMediaVariants`, when the `IMAGES` binding
+  exists) renders missing renditions for up to 4 still images per run, least
+  recently touched first, skipping media touched in the last hour. A failure
+  only touches `updated_at`, so a broken image waits an hour and goes behind
+  every other candidate.
 - Permanent delete requires trash and zero live poster/product associations or
   retained order-item image snapshots,
   returns bounded dependency counts/samples, atomically claims `deleting`

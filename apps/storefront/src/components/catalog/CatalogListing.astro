@@ -1,0 +1,211 @@
+---
+// The shared product listing body for /search, categories and collections:
+// filter sheet/sidebar, sort, applied-filter chips, grid and pagination.
+import type { BuyerPriceRange, Product, ProductFacet } from "@/lib/api";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import AppliedCatalogFilters from "./AppliedCatalogFilters.astro";
+import CatalogFilters from "./CatalogFilters.astro";
+import CatalogPagination from "./CatalogPagination.astro";
+import {
+  buildProductListHref,
+  countActiveProductListFilters,
+  type ProductListQueryState,
+} from "@/lib/product-list-query";
+import { SlidersHorizontal, X } from "lucide-react";
+
+interface Props {
+  products: Product[];
+  pagination: { page: number; totalPages: number; total: number };
+  facets: ProductFacet[];
+  priceRange?: BuyerPriceRange;
+  queryState: ProductListQueryState;
+  pathname: string;
+  resetPath: string;
+  searchLabel: string;
+  /** Label of the default "newest" order ("Latest", or "Featured" for curated collections). */
+  newestLabel?: string;
+  /** Product-list API path used for the live "Show N products" count. */
+  countEndpoint: string;
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const {
+  products,
+  pagination,
+  facets,
+  priceRange,
+  queryState,
+  pathname,
+  resetPath,
+  searchLabel,
+  newestLabel = "Latest",
+  countEndpoint,
+  currencySymbol,
+  currencyCode,
+} = Astro.props;
+const { currentFilters, sortBy, defaultSort, query } = queryState;
+// Filters beyond the search itself (a search is undone by its chip).
+const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
+// Sorting or filtering one product (or none) helps nobody, unless the buyer
+// needs the controls to undo a filter.
+const showControls = pagination.total > 1 || refinementCount > 0;
+const productCountLabel = `${pagination.total} ${pagination.total === 1 ? "product" : "products"}`;
+const sortOptions = [
+  ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
+  { value: "newest", label: newestLabel },
+  { value: "price-asc", label: "Price: Low to High" },
+  { value: "price-desc", label: "Price: High to Low" },
+  { value: "name-asc", label: "Name: A to Z" },
+  { value: "name-desc", label: "Name: Z to A" },
+  { value: "discount", label: "Biggest discount" },
+];
+const sortAttributes = {
+  name: "sortBy",
+  "data-catalog-sort": true,
+  "data-list-pathname": pathname,
+  "data-default-sort": defaultSort,
+  "data-current-filters": JSON.stringify(currentFilters),
+};
+const pageUrl = (page: number) =>
+  buildProductListHref({ pathname, currentFilters, overrides: { page }, defaultSort });
+---
+
+{showControls && (
+  <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden">
+    <button
+      type="button"
+      id="mobile-filter-toggle"
+      aria-controls="filter-section"
+      aria-expanded="false"
+      class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground shadow-sm"
+    >
+      <SlidersHorizontal className="h-4 w-4" />
+      <span>Filters</span>
+      {refinementCount > 0 && (
+        <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
+          {refinementCount}
+        </span>
+      )}
+    </button>
+    <label class="relative block">
+      <span class="sr-only">Sort products</span>
+      <select
+        id="sortByMobile"
+        {...sortAttributes}
+        class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+      >
+        {sortOptions.map(({ value, label }) => <option value={value} selected={sortBy === value}>{label}</option>)}
+      </select>
+    </label>
+  </div>
+)}
+
+<div class="flex flex-col gap-6 lg:flex-row">
+  {showControls && (
+    <aside
+      id="filter-section"
+      aria-labelledby="mobile-filter-title"
+      class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
+    >
+      <div class="flex h-full w-full flex-col bg-background text-foreground lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
+        <div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden">
+          <h2 id="mobile-filter-title" class="text-lg font-semibold">Filters</h2>
+          <button
+            type="button"
+            id="mobile-filter-close"
+            aria-label="Close filters"
+            class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <CatalogFilters
+          facets={facets}
+          priceRange={priceRange}
+          currentFilters={currentFilters}
+          query={query}
+          sortBy={sortBy}
+          defaultSort={defaultSort}
+          total={pagination.total}
+          resetPath={resetPath}
+          searchLabel={searchLabel}
+          countEndpoint={countEndpoint}
+          currencySymbol={currencySymbol}
+          currencyCode={currencyCode}
+        />
+      </div>
+    </aside>
+  )}
+
+  <div class="min-w-0 flex-1">
+    {showControls && (
+      <div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 shadow-sm lg:flex">
+        <p class="text-sm font-medium text-foreground">
+          Showing <span class="font-bold text-primary">{products.length}</span> of{" "}
+          <span class="font-bold text-primary">{pagination.total}</span>{" "}
+          {pagination.total === 1 ? "product" : "products"}
+        </p>
+        <div class="flex items-center gap-3">
+          <label for="sortByDesktop" class="whitespace-nowrap text-sm font-medium text-foreground">Sort by:</label>
+          <select
+            id="sortByDesktop"
+            {...sortAttributes}
+            class="min-w-[160px] rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"
+          >
+            {sortOptions.map(({ value, label }) => <option value={value} selected={sortBy === value}>{label}</option>)}
+          </select>
+        </div>
+      </div>
+    )}
+
+    {products.length > 0 && !query && (
+      <p class="mb-3 text-sm text-muted-foreground lg:hidden">
+        <span class="font-semibold text-foreground">{productCountLabel}</span>
+      </p>
+    )}
+
+    <AppliedCatalogFilters
+      facets={facets}
+      currentFilters={currentFilters}
+      pathname={pathname}
+      resetPath={resetPath}
+      defaultSort={defaultSort}
+      currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
+    />
+
+    {products.length === 0 ? (
+      <slot name="empty" />
+    ) : (
+      <Fragment>
+        <div class="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+          {products.map((product, index) => (
+            <ProductCard
+              product={product}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              priority={index < 2}
+              headingLevel="h2"
+            />
+          ))}
+        </div>
+        <CatalogPagination page={pagination.page} totalPages={pagination.totalPages} getPageUrl={pageUrl} />
+      </Fragment>
+    )}
+  </div>
+</div>
+
+<script>
+  import { setupCatalogFilterDialog } from "@/lib/catalog-filter-dialog";
+  import { setupCatalogFilters } from "@/lib/catalog-filters";
+  import { setupCatalogSorts } from "@/lib/catalog-sort";
+
+  const setupCatalog = () => {
+    setupCatalogFilterDialog();
+    setupCatalogFilters();
+    setupCatalogSorts();
+  };
+  document.addEventListener("DOMContentLoaded", setupCatalog);
+  document.addEventListener("astro:page-load", setupCatalog);
+</script>

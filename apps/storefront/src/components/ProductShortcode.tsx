@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { addToCart } from "@/store/cart";
 import { Minus, Plus, ShoppingCart, Check } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { formatPrice, getCurrencyCode, getCurrencySymbol, getDecimalPlaces } from "@/lib/currency";
+import { formatMoney, getCurrencyCode, getCurrencySymbol, getDecimalPlaces } from "@/lib/currency";
 import { getBuyerVariantPricePresentation, type ProductPricing } from "@/components/product/lib/pricing-engine";
 import {
   createInitialSelection,
@@ -40,7 +40,7 @@ export default function ProductShortcode({ productData }: { productData: Product
   const decimals = typeof window !== "undefined" && Number.isInteger(window.__CURRENCY_DECIMAL_PLACES__)
     ? window.__CURRENCY_DECIMAL_PLACES__!
     : getDecimalPlaces(currencyCode);
-  const formatBuyerPrice = (price: number) => formatPrice(price, { symbol: currencySymbol, code: currencyCode, precision: decimals });
+  const formatBuyerPrice = (price: number) => formatMoney(price, { symbol: currencySymbol, code: currencyCode });
   const primaryImage = product.imageUrl
     ?? images.find((image) => image.isPrimary && hasProductImage(image.url))?.url
     ?? images.find((image) => hasProductImage(image.url))?.url

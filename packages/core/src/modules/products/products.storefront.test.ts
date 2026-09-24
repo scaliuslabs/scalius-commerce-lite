@@ -60,3 +60,112 @@ describe("storefront product reads", () => {
         await expect(getStorefrontProductBySlug(db, "inactive")).resolves.toBeNull();
     });
 });
+
+function optionedCatalog(onQuery?: (params: readonly unknown[]) => void) {
+    const harness = createSqliteD1Database({ onQuery: (_query, params) => onQuery?.(params) });
+    harness.sqlite.exec(`
+        INSERT INTO categories (id, name, slug, status) VALUES ('cat_shoes', 'Footwear', 'footwear', 'published');
+        INSERT INTO products (id, name, description, price_minor, slug, category_id, is_active, created_at) VALUES
+            ('p_runner', 'Trail Runner', 'Grippy sole', 10000, 'trail-runner', 'cat_shoes', 1, 300),
+            ('p_loafer', 'City Loafer', 'Leather', 10000, 'city-loafer', 'cat_shoes', 1, 200),
+            ('p_sandal', 'Beach Sandal', 'Pairs well with a runner outfit', 10000, 'beach-sandal', 'cat_shoes', 1, 400),
+            ('p_kettle', 'Copper Tea Kettle', 'Stovetop', 10000, 'copper-kettle', NULL, 1, 50);
+        INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+            ('v_kettle', 'p_kettle', 'KETTLE-1', 10000, 0, 0, 1, 0);
+    `);
+    const axes = harness.sqlite.prepare(
+        "INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position) VALUES (?, ?, ?, ?, ?)",
+    );
+    const values = harness.sqlite.prepare(
+        "INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES (?, ?, ?, ?, ?)",
+    );
+    const skus = harness.sqlite.prepare(
+        `INSERT INTO product_variants (id, product_id, option_combination_key, sku, price_minor, stock, is_default, track_inventory)
+         VALUES (?, ?, ?, ?, 10000, 5, 0, 1)`,
+    );
+    const assignments = harness.sqlite.prepare(
+        "INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)",
+    );
+    // Option axes are merchant-defined per product: the loafer names its axis
+    // in lower case, and the sandal sells by colour only.
+    const catalog: Array<[string, string, string[]]> = [
+        ["p_runner", "Size", ["40", "41"]],
+        ["p_loafer", "size", ["41", "42"]],
+        ["p_sandal", "Color", ["Black", "Sand"]],
+    ];
+    for (const [productId, axisName, axisValues] of catalog) {
+        const axisId = `axis_${productId}`;
+        axes.run(axisId, productId, axisName, axisName.toLowerCase(), 0);
+        axisValues.forEach((value, position) => {
+            const valueId = `value_${productId}_${value}`;
+            values.run(valueId, axisId, value, value.toLowerCase(), position);
+            skus.run(`sku_${productId}_${value}`, productId, valueId, `${productId}-${value}`);
+            assignments.run(`sku_${productId}_${value}`, axisId, valueId);
+        });
+    }
+    return harness;
+}
+
+describe("storefront catalog search and option facets", () => {
+    it("ranks title matches above description-only matches unless the buyer picks a sort", async () => {
+        const { db } = optionedCatalog();
+
+        const relevant = await getStorefrontProducts(db, { search: "runner" });
+        const newest = await getStorefrontProducts(db, { search: "runner", sort: "newest" });
+
+        expect(relevant.products.map((product) => product.id)).toEqual(["p_runner", "p_sandal"]);
+        expect(newest.products.map((product) => product.id)).toEqual(["p_sandal", "p_runner"]);
+        expect(relevant.correctedQuery).toBeNull();
+    });
+
+    it("returns corrected results with the corrected query when the typed query matches nothing", async () => {
+        const { db } = optionedCatalog();
+
+        const result = await getStorefrontProducts(db, { search: "kettel" });
+
+        expect(result.correctedQuery).toBe("kettle");
+        expect(result.products.map((product) => product.id)).toEqual(["p_kettle"]);
+        expect(result.pagination.total).toBe(1);
+    });
+
+    it("offers merchant option axes as facets and filters by them within D1's bind limit", async () => {
+        let maxParams = 0;
+        const { db } = optionedCatalog((params) => {
+            maxParams = Math.max(maxParams, params.length);
+        });
+        const size = { id: "option.size", name: "size", slug: "option.size" };
+
+        const all = await getStorefrontProducts(db, { category: "cat_shoes" });
+        const filtered = await getStorefrontProducts(db, {
+            category: "cat_shoes",
+            attributeFilters: [{ ...size, values: ["42"] }],
+        });
+
+        expect(all.facets).toEqual([
+            { id: "option.color", name: "Color", slug: "option.color", values: [
+                { value: "Black", count: 1 },
+                { value: "Sand", count: 1 },
+            ] },
+            { id: "option.size", name: "Size", slug: "option.size", values: [
+                { value: "40", count: 1 },
+                { value: "41", count: 2 },
+                { value: "42", count: 1 },
+            ] },
+        ]);
+        expect(filtered.products.map((product) => product.id)).toEqual(["p_loafer"]);
+        // OR within the selected axis keeps its own counts; other axes only
+        // count products that also match the selection.
+        expect(filtered.facets).toEqual([
+            { id: "option.color", name: "Color", slug: "option.color", values: [
+                { value: "Black", count: 0 },
+                { value: "Sand", count: 0 },
+            ] },
+            { id: "option.size", name: "Size", slug: "option.size", values: [
+                { value: "40", count: 1 },
+                { value: "41", count: 2 },
+                { value: "42", count: 1 },
+            ] },
+        ]);
+        expect(maxParams).toBeLessThanOrEqual(100);
+    });
+});

@@ -1,9 +1,13 @@
 ---
 import {
+  getCheckoutConfig,
   getLayoutData,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
+import DeliveryFacts from "@/components/DeliveryFacts.astro";
+import { buildDeliveryFacts } from "@/lib/delivery-facts";
+import { formatMoney } from "@/lib/currency";
 import Layout from "@/layouts/Layout.astro";
 import productCriticalCss from "@/styles/product-critical.css?inline";
 import { PRODUCT_CRITICAL_CSS_MEDIA } from "@/lib/product-style-delivery";
@@ -53,12 +57,14 @@ if (!slug) {
 const layoutPromise = getLayoutData();
 const productPromise = getProductBySlugResult(slug);
 const shippingMethodsPromise = getShippingMethods();
+const checkoutConfigPromise = getCheckoutConfig();
 
-// Parallel fetch: layout, product, and shipping data in the first cold-cache wave.
-const [layoutData, productResult, shippingMethods] = await Promise.all([
+// Parallel fetch: layout, product, shipping and payment data in the first cold-cache wave.
+const [layoutData, productResult, shippingMethods, checkoutConfig] = await Promise.all([
   layoutPromise,
   productPromise,
   shippingMethodsPromise,
+  checkoutConfigPromise,
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
 if (productResult.state === "not_found") {
@@ -353,6 +359,14 @@ const offerShippingDetails = buildOfferShippingDetails({
   freeDelivery: product.freeDelivery,
   country: layoutData.business?.country,
 });
+// Delivery fees, cash on delivery and returns, stated under the buy buttons.
+const deliveryFacts = buildDeliveryFacts({
+  shippingMethods,
+  checkoutConfig,
+  returnPolicy: layoutData.seo?.returnPolicy,
+  freeDelivery: product.freeDelivery,
+  formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+});
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -569,7 +583,7 @@ const productCategoryAnalytics = productCategory
   </Fragment>
 
   <div
-    class="min-h-screen bg-white product-container"
+    class="min-h-screen bg-background product-container"
     id="product-container"
     data-product-id={product.id}
     data-product-slug={product.slug}
@@ -613,7 +627,9 @@ const productCategoryAnalytics = productCategory
           initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
           quickBuyNotice={quickBuyNotice}
           actionCopy={layoutData.storefrontCopy}
-        />
+        >
+          <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />
+        </ProductSummary>
       </div>
     </section>
 

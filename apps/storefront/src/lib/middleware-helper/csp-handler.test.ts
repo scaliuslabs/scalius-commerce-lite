@@ -120,4 +120,17 @@ describe("setPageCspHeader", () => {
     expect(frameSrc).not.toContain("https://*.youtube.com");
     expect(frameSrc).not.toContain("https://*.vimeo.com");
   });
+
+  it("lists each source once per directive even when lists overlap", () => {
+    const csp = setPageCspHeader(
+      new Response("ok"),
+      { apiBaseUrl: "https://api.example.com", mediaUrl: "https://api.example.com/api/v1/media" },
+      "https://www.facebook.com, analytics.tiktok.com, api.example.com",
+    ).headers.get("Content-Security-Policy")!;
+
+    for (const entry of csp.split("; ")) {
+      const sources = entry.split(" ").slice(1);
+      expect(sources, entry.split(" ")[0]).toEqual([...new Set(sources)]);
+    }
+  });
 });

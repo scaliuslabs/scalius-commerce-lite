@@ -69,9 +69,9 @@ function switchTab(
     button.classList.toggle("border-primary", isActive);
     button.classList.toggle("text-primary", isActive);
     button.classList.toggle("border-transparent", !isActive);
-    button.classList.toggle("text-gray-500", !isActive);
-    button.classList.toggle("hover:border-gray-300", !isActive);
-    button.classList.toggle("hover:text-gray-700", !isActive);
+    button.classList.toggle("text-muted-foreground", !isActive);
+    button.classList.toggle("hover:border-muted-foreground", !isActive);
+    button.classList.toggle("hover:text-foreground", !isActive);
   });
 
   elements.panels.forEach((panel) => {

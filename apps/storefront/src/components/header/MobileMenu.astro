@@ -3,6 +3,7 @@ import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { telHref } from "@/lib/store-identity";
 
 interface Props {
   navigation: NavigationItem[];
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const { navigation = [], contact, social = [] } = Astro.props;
+const phoneHref = telHref(contact.phone);
 
 // Helper function to generate unique IDs for nested items
 function generateMenuId(item: NavigationItem, prefix: string = ""): string {
@@ -256,39 +258,9 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
       }
     </ul>
 
-    <div class="h-4"></div>
-  </nav>
-
-  <div
-    class="z-20 shrink-0 space-y-3 border-t border-border bg-muted p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.55)]"
-  >
-    {
-      contact.phone && (
-        <a
-          href={`tel:${contact.phone}`}
-          class="flex items-center gap-3 p-3 bg-card border border-border rounded-xl shadow-sm active:scale-[0.99] transition-all group hover:border-primary/50"
-        >
-          <div class="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-            <Phone className="h-4.5 w-4.5 fill-current" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-[11px] text-muted-foreground font-semibold leading-none mb-0.5">
-              Call support
-            </p>
-            <p class="text-sm font-bold text-foreground tracking-tight truncate">
-              {contact.phone}
-            </p>
-          </div>
-          <div class="w-8 h-8 rounded-full bg-muted flex items-center justify-center group-hover:bg-accent transition-colors">
-            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
-          </div>
-        </a>
-      )
-    }
-
     {
       social && social.length > 0 && (
-        <div class="grid grid-cols-3 place-items-center gap-2 min-[375px]:flex min-[375px]:justify-center">
+        <div class="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
           {social.map((item) => {
             if (!item.url) return null;
             const displayTitle = item.label || item.platform || "Social";
@@ -334,5 +306,31 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
         </div>
       )
     }
-  </div>
+
+    <div class="h-4"></div>
+  </nav>
+
+  {
+    phoneHref && (
+      <div class="z-20 shrink-0 border-t border-border bg-muted p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <a
+          href={phoneHref}
+          class="flex items-center gap-3 p-3 bg-card border border-border rounded-xl shadow-sm active:scale-[0.99] transition-all group hover:border-primary/50"
+        >
+          <div class="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Phone className="h-4.5 w-4.5 fill-current" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-muted-foreground font-semibold leading-none mb-1">
+              Call support
+            </p>
+            <p class="text-sm font-bold text-foreground tracking-tight truncate">
+              {contact.phone}
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
+        </a>
+      </div>
+    )
+  }
 </div>

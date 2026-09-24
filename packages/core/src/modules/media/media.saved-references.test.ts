@@ -218,7 +218,7 @@ describe("pre-generated media renditions", () => {
       variantWidth: 1000,
       width: 1000,
       height: 800,
-      version: 2,
+      version: 1,
     });
     expect([...storage.objects].sort()).toEqual([160, 1000, 320, 480, 640, 960].map((width) => `${file.objectKey}/${width}.webp`).sort());
     expect((await listMediaFiles(db, { variants: "missing" })).files).toEqual([]);
@@ -246,7 +246,7 @@ describe("pre-generated media renditions", () => {
     const saved = await saveHeaderConfig(db, {
       logo: { src: `https://media.example/${file.objectKey}/320.webp`, alt: "Logo" },
     }, 0);
-    const trashed = await trashMediaFile(db, file.id, 2);
+    const trashed = await trashMediaFile(db, file.id, 1);
 
     await expect(permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket))
       .rejects.toBeInstanceOf(MediaDependencyConflictError);

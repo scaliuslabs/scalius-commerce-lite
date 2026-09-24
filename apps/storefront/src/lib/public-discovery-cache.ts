@@ -1,4 +1,7 @@
-const HTML_BROWSER_CACHE_CONTROL = "no-cache, no-store, must-revalidate";
+// Public catalog HTML carries no personal data: browsers revalidate every
+// load but may keep the page for back/forward navigation (bfcache). Private
+// pages (cart, checkout, account, receipts) are set to no-store elsewhere.
+const HTML_BROWSER_CACHE_CONTROL = "no-cache";
 // The gateway owns edge storage (keyed by cache generation). Browser
 // copies must revalidate so crawlers never outlive the bounded edge policy.
 const DISCOVERY_BROWSER_CACHE_CONTROL =
@@ -58,8 +61,8 @@ export function applyBrowserCachePolicyForPublicResponse(
   }
 
   response.headers.set("Cache-Control", HTML_BROWSER_CACHE_CONTROL);
-  response.headers.set("Pragma", "no-cache");
-  response.headers.set("Expires", "0");
+  response.headers.delete("Pragma");
+  response.headers.delete("Expires");
 }
 
 export function isSuccessfulPublicDiscoveryResponse(

@@ -1,0 +1,66 @@
+---
+// A category/collection description that stays at two lines until the buyer
+// asks for more, so products start above the fold on phones (Baymard). The
+// clamp is decided on the server (no layout shift); without JavaScript the
+// full text shows.
+import RichContent from "@/components/RichContent.astro";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+
+interface Props {
+  content: string;
+}
+
+const { content } = Astro.props;
+// Roughly two lines at phone width; shorter descriptions never need the toggle.
+const clamp = htmlToPlainText(content).length > 110;
+---
+
+<div data-catalog-description={clamp ? "" : undefined}>
+  <RichContent
+    content={content}
+    className={`text-base leading-relaxed text-muted-foreground sm:text-lg ${clamp ? "catalog-description-clamp" : ""}`}
+    processShortcodes={false}
+  />
+  {clamp && (
+    <button
+      type="button"
+      aria-expanded="false"
+      class="catalog-description-toggle min-h-11 text-sm font-semibold text-foreground underline underline-offset-4 hover:text-primary"
+    >
+      Read more
+    </button>
+  )}
+</div>
+{clamp && (
+  <noscript>
+    <style>
+      .catalog-description-clamp { max-height: none !important; }
+      .catalog-description-toggle { display: none !important; }
+    </style>
+  </noscript>
+)}
+
+<style is:global>
+  .catalog-description-clamp:not([data-expanded]) {
+    max-height: 2lh;
+    overflow: hidden;
+  }
+</style>
+
+<script>
+  const setupDescription = () => {
+    const root = document.querySelector<HTMLElement>("[data-catalog-description]");
+    const body = root?.querySelector<HTMLElement>(".catalog-description-clamp");
+    const toggle = root?.querySelector<HTMLButtonElement>(".catalog-description-toggle");
+    if (!root || !body || !toggle || root.dataset.bound === "true") return;
+    root.dataset.bound = "true";
+    toggle.addEventListener("click", () => {
+      const expand = !body.hasAttribute("data-expanded");
+      body.toggleAttribute("data-expanded", expand);
+      toggle.setAttribute("aria-expanded", String(expand));
+      toggle.textContent = expand ? "Read less" : "Read more";
+    });
+  };
+  document.addEventListener("DOMContentLoaded", setupDescription);
+  document.addEventListener("astro:page-load", setupDescription);
+</script>
