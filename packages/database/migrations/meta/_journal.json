@@ -554,6 +554,13 @@
       "when": 1790300009000,
       "tag": "0078_theme_document_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1790300010000,
+      "tag": "0079_guest_record_origin",
+      "breakpoints": true
     }
   ]
 }

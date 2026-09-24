@@ -8302,23 +8302,14 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 nextCursor: string | null;
             };
             /**
-             * Orders on a guest record whose other orders already joined this account, placed with a phone the account hasn't proven.
+             * Set when the account's own phone is unverified and a text/WhatsApp code can reach it. Proving it adds orders placed with that phone.
              */
-            unclaimedGuestOrders: Array<{
+            phoneVerification: {
                 /**
-                 * Opaque id for the send-code / verify calls
+                 * The account's own phone (E.164)
                  */
-                id: string;
-                /**
-                 * Masked phone the orders were placed with
-                 */
-                destination: string;
-                orderCount: number;
-                /**
-                 * False when the store can't send a text or WhatsApp code
-                 */
-                canVerify: boolean;
-            }>;
+                phone: string;
+            } | null;
             customer: {
                 id?: string;
                 name: string;
@@ -8338,16 +8329,14 @@ export type GetApiV1CustomerAuthOrdersResponses = {
 
 export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersResponses[keyof GetApiV1CustomerAuthOrdersResponses];
 
-export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeData = {
+export type PostApiV1CustomerAuthPhoneSendCodeData = {
     body?: never;
-    path: {
-        id: string;
-    };
+    path?: never;
     query?: never;
-    url: '/api/v1/customer-auth/guest-orders/{id}/send-code';
+    url: '/api/v1/customer-auth/phone/send-code';
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors = {
+export type PostApiV1CustomerAuthPhoneSendCodeErrors = {
     /**
      * Validation error
      */
@@ -8393,6 +8382,17 @@ export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -8427,9 +8427,9 @@ export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors = {
     };
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeError = PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors[keyof PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors];
+export type PostApiV1CustomerAuthPhoneSendCodeError = PostApiV1CustomerAuthPhoneSendCodeErrors[keyof PostApiV1CustomerAuthPhoneSendCodeErrors];
 
-export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses = {
+export type PostApiV1CustomerAuthPhoneSendCodeResponses = {
     /**
      * Code sent
      */
@@ -8437,26 +8437,23 @@ export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses = {
         success: true;
         data: {
             message: string;
-            destination: string;
             resendAfterSeconds: number;
         };
     };
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponse = PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses[keyof PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses];
+export type PostApiV1CustomerAuthPhoneSendCodeResponse = PostApiV1CustomerAuthPhoneSendCodeResponses[keyof PostApiV1CustomerAuthPhoneSendCodeResponses];
 
-export type PostApiV1CustomerAuthGuestOrdersByIdVerifyData = {
+export type PostApiV1CustomerAuthPhoneVerifyData = {
     body?: {
         code: string;
     };
-    path: {
-        id: string;
-    };
+    path?: never;
     query?: never;
-    url: '/api/v1/customer-auth/guest-orders/{id}/verify';
+    url: '/api/v1/customer-auth/phone/verify';
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors = {
+export type PostApiV1CustomerAuthPhoneVerifyErrors = {
     /**
      * Validation error
      */
@@ -8536,11 +8533,11 @@ export type PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors = {
     };
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdVerifyError = PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors[keyof PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors];
+export type PostApiV1CustomerAuthPhoneVerifyError = PostApiV1CustomerAuthPhoneVerifyErrors[keyof PostApiV1CustomerAuthPhoneVerifyErrors];
 
-export type PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses = {
+export type PostApiV1CustomerAuthPhoneVerifyResponses = {
     /**
-     * Orders added to the account
+     * Phone verified
      */
     200: {
         success: true;
@@ -8551,7 +8548,7 @@ export type PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses = {
     };
 };
 
-export type PostApiV1CustomerAuthGuestOrdersByIdVerifyResponse = PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses[keyof PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses];
+export type PostApiV1CustomerAuthPhoneVerifyResponse = PostApiV1CustomerAuthPhoneVerifyResponses[keyof PostApiV1CustomerAuthPhoneVerifyResponses];
 
 export type PostApiV1CustomerAuthOrdersByIdClaimReceiptData = {
     body?: {
@@ -16634,10 +16631,8 @@ export type GetApiV1AdminCustomersResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 accountClaimedAt: string | null;
-                linkedAccount: {
-                    id: string;
-                    name: string;
-                } | null;
+                kind: 'account' | 'guest' | 'merchant';
+                latestOrderName: string | null;
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: string | null;
@@ -16908,12 +16903,18 @@ export type GetApiV1AdminCustomersByIdResponses = {
             zoneName: string | null;
             areaName: string | null;
             accountClaimedAt: NullableTimestamp;
+            kind: 'account' | 'guest' | 'merchant';
+            latestOrderName: string | null;
             totalOrders: number;
             totalSpent: number;
             lastOrderAt: NullableTimestamp;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: NullableTimestamp;
+            mergedInto: {
+                id: string;
+                name: string;
+            } | null;
         };
     };
 };
@@ -17163,20 +17164,23 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 accountClaimedAt: NullableTimestamp;
+                kind: 'account' | 'guest' | 'merchant';
+                latestOrderName: string | null;
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: NullableTimestamp;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt?: NullableTimestamp;
-                linkedAccount: {
+                mergedInto: {
                     id: string;
                     name: string;
                 } | null;
-                guestRecords: Array<{
+                samePhone: Array<{
                     id: string;
                     name: string;
-                    orderCount: number;
+                    phone: string;
+                    kind: 'account' | 'guest' | 'merchant';
                 }>;
             };
             history: Array<{
@@ -17192,9 +17196,14 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 /**
-                 * created, updated, deleted, or order_moved_in / order_moved_out (see `order` and `relatedCustomer`)
+                 * created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)
                  */
                 changeType: string;
+                verifiedContact: 'email' | 'phone' | null;
+                author: {
+                    kind: 'staff' | 'buyer' | 'system';
+                    name: string | null;
+                } | null;
                 order: {
                     id: string;
                     orderNumber: number | null;
@@ -17202,12 +17211,15 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 relatedCustomer: {
                     id: string;
                     name: string;
+                    phone: string;
+                    kind: 'account' | 'guest' | 'merchant';
                 } | null;
                 createdAt: string | number;
             }>;
             orders: Array<{
                 id: string;
                 orderNumber: number | null;
+                customerName: string;
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
@@ -44553,6 +44565,12 @@ export type GetApiV1AdminOrdersByIdResponses = {
             customerPhone: string;
             customerEmail: string | null;
             customerId: string | null;
+            customerRecord: {
+                id: string;
+                name: string;
+                phone: string;
+                kind: 'account' | 'guest' | 'merchant';
+            } | null;
             totalAmount: number;
             shippingCharge: number;
             discountAmount: number;

@@ -275,6 +275,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 79,
+        name: "0079_guest_record_origin",
+        sqliteStatements: 10,
+        postgresStatements: 10,
+      },
     ]);
   });
 
@@ -402,6 +408,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 76, name: "0076_guest_record_links" },
           { version: 77, name: "0077_optioned_product_price" },
           { version: 78, name: "0078_theme_document_v2" },
+          { version: 79, name: "0079_guest_record_origin" },
         ],
       });
     } finally {

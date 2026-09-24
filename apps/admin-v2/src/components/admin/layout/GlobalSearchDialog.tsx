@@ -35,6 +35,8 @@ import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { LOCALES, setLocale, useLocale, useMessages } from "~/i18n";
 import { navKeywordMessages, shellMessages } from "~/i18n/shell";
 import { settingsNavMessages } from "~/i18n/settings";
+import { customersMessages } from "~/i18n/customers";
+import { customerTitle } from "~/lib/customer-title";
 import { settingsSearchMessages } from "~/i18n/settings-search";
 import { SETTINGS_NAV } from "../settings/settings-nav";
 import { matches, searchSettings, words } from "../settings/settings-search";
@@ -59,6 +61,8 @@ interface Entry {
   hint?: string;
   /** Muted second part of the label: the settings page a card is on, a customer's phone, "Draft". */
   detail?: string;
+  /** A guest record is titled by its phone, so it never goes into the device's recents. */
+  titledByPhone?: boolean;
 }
 
 type ShellKey = keyof (typeof shellMessages)["en"];
@@ -96,7 +100,7 @@ function readRecent(): Recent[] {
 
 /** Remembers what was opened on this device: never the typed query, nor a customer's phone. */
 function remember(entry: Entry) {
-  if (!entry.to) return;
+  if (!entry.to || entry.titledByPhone) return;
   try {
     const { id, label, to, hash, search } = entry;
     const detail = id.startsWith("u:") ? undefined : entry.detail;
@@ -117,6 +121,7 @@ function remember(entry: Entry) {
  */
 export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearchProps & { open: boolean; setOpen: (open: boolean) => void }) {
   const t = useMessages(shellMessages);
+  const customerT = useMessages(customersMessages);
   const settingsPage = useMessages(settingsNavMessages);
   const settingsCard = useMessages(settingsSearchMessages);
   const locale = useLocale();
@@ -199,13 +204,18 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
         to: `/admin/orders/${order.id}`,
         icon: Inbox,
       })),
-      ...(customers.data?.customers ?? []).map((customer) => ({
-        id: `u:${customer.id}`,
-        label: customer.name || formatPhoneForDisplay(customer.phone),
-        detail: customer.name ? formatPhoneForDisplay(customer.phone) : undefined,
-        to: `/admin/customers/${customer.id}/edit`,
-        icon: UserRound,
-      })),
+      ...(customers.data?.customers ?? []).map((customer) => {
+        const { title, detail } = customerTitle(customer, customerT);
+        const guest = customer.kind === "guest";
+        return {
+          id: `u:${customer.id}`,
+          label: title,
+          detail: guest ? detail ?? undefined : formatPhoneForDisplay(customer.phone),
+          to: `/admin/customers/${customer.id}/edit`,
+          icon: UserRound,
+          titledByPhone: guest,
+        };
+      }),
       ...discountMatches.slice(0, PER_TYPE).map((discount) => ({
         id: `d:${discount.id}`,
         label: discount.codes[0]?.code ?? discount.name,
@@ -230,7 +240,7 @@ export function GlobalSearchDialog({ nav, canOpen, open, setOpen }: GlobalSearch
         icon: FileText,
       })),
     ];
-  }, [categories.data, collections.data, customers.data, discounts.data, lookupTerm, orders.data, pages.data, products.data, searching, t]);
+  }, [categories.data, collections.data, customers.data, customerT, discounts.data, lookupTerm, orders.data, pages.data, products.data, searching, t]);
 
   const recent = useMemo<Entry[]>(
     () => (open && !term ? readRecent().map((item) => ({ ...item, icon: Clock })) : []),

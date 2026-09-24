@@ -1,25 +1,43 @@
 ---
-// "Contact the store: 01711-000000 · shop@example.com" from Business settings.
-// Pages that can hit a dead end (no code channel, a declined request) show it.
+// "Contact the store: 01711-000000 · WhatsApp · shop@example.com" from Business
+// settings, or nothing when the store has no phone or email. Pages that can hit
+// a dead end (no code channel, a declined request) show it.
 import type { LayoutData } from "@/lib/api";
-import { formatBdMobile } from "@scalius/shared/phone-input";
+import { storeContactLinks } from "@/lib/store-contact";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 interface Props {
   layoutData: LayoutData | null;
   hidden?: boolean;
   class?: string;
+  id?: string;
+  /** "Contact the store:" in the page's checkout language. */
+  label?: string;
 }
 
-const { layoutData, hidden = false, class: className = "text-sm text-muted-foreground" } = Astro.props;
-const phone = layoutData?.business?.phone?.trim() || "";
-const email = layoutData?.business?.email?.trim() || "";
+const {
+  layoutData,
+  hidden = false,
+  class: className = "text-sm text-muted-foreground",
+  id,
+  label = ENGLISH_CHECKOUT_LANGUAGE_DATA.storeContactLabelText,
+} = Astro.props;
+const links = storeContactLinks(layoutData?.business);
 ---
 
-{(phone || email) && (
-  <p data-store-contact hidden={hidden} class={className}>
-    Contact the store:
-    {phone && <a href={`tel:${phone}`} class="font-medium text-primary hover:underline">{formatBdMobile(phone)}</a>}
-    {phone && email && " · "}
-    {email && <a href={`mailto:${email}`} class="break-all font-medium text-primary hover:underline">{email}</a>}
+{links.length > 0 && (
+  <p id={id} data-store-contact hidden={hidden} class={className}>
+    {label}{" "}
+    {links.map((link, index) => (
+      <>
+        {index > 0 && " · "}
+        <a
+          href={link.href}
+          data-store-contact-link={link.kind}
+          class={`font-medium text-primary hover:underline${link.kind === "email" ? " break-all" : ""}`}
+          {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >{link.label}</a>
+      </>
+    ))}
   </p>
 )}

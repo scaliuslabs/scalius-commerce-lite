@@ -44,6 +44,11 @@ export interface ResourceLifecycle<T> {
   deleteBlockedNote?: (count: number) => string;
   /** Runs one action for one or more rows; send revision claims from the rows. */
   run: (action: ResourceAction, rows: T[]) => Promise<unknown>;
+  /**
+   * The "Moved to trash" toast offers Undo (a restore of the same rows). Only
+   * for resources whose restore needs nothing from the trashed rows (no revision claim).
+   */
+  undoTrash?: boolean;
 }
 
 export interface ResourceListPageProps<T extends { id: string }> {
@@ -136,8 +141,15 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const mutation = useMutation({
     mutationFn: ({ action, rows }: { action: ResourceAction; rows: T[] }) =>
       inChunks(rows, (chunk) => lifecycle!.run(action, chunk)),
-    onSuccess: (_data, { action }) => {
-      toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"));
+    onSuccess: (_data, { action, rows }) => {
+      if (action === "trash" && lifecycle?.undoTrash && lifecycle.canRestore) {
+        toast.success(t("movedToTrash"), {
+          duration: 10_000,
+          action: { label: t("undo"), onClick: () => { mutation.mutate({ action: "restore", rows }); } },
+        });
+      } else {
+        toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"));
+      }
       clearAll();
     },
     onError: (error) => toast.error(getServerFnError(error, t("actionFailed"))),

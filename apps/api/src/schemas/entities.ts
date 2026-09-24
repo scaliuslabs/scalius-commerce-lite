@@ -416,6 +416,13 @@ export const orderDetailSchema = z.object({
   customerPhone: z.string(),
   customerEmail: z.string().nullable(),
   customerId: z.string().nullable(),
+  /** The customer record the order is filed under; its title can differ from the order's own name. */
+  customerRecord: z.object({
+    id: z.string(),
+    name: z.string(),
+    phone: z.string(),
+    kind: z.enum(["account", "guest", "merchant"]),
+  }).nullable(),
   totalAmount: z.number(),
   shippingCharge: z.number(),
   discountAmount: z.number(),
@@ -538,6 +545,17 @@ export const categoryStatsSchema = z.object({
 // ─────────────────────────────────────────
 
 /** Customer summary — returned by listCustomers (admin). */
+/**
+ * How the dashboard titles a customer: accounts and merchant-made customers by
+ * name; a checkout guest record by its phone ("01712-345678 · guest orders"),
+ * since different people can order with one phone.
+ */
+const customerTitleFields = {
+  kind: z.enum(["account", "guest", "merchant"]),
+  /** The name on the record's most recent order (a guest record's secondary text). */
+  latestOrderName: z.string().nullable(),
+};
+
 export const customerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -551,8 +569,7 @@ export const customerSummarySchema = z.object({
   zoneName: z.string().nullable(),
   areaName: z.string().nullable(),
   accountClaimedAt: z.string().nullable(),
-  /** On a guest record: the account that took its orders placed with a contact it proved. */
-  linkedAccount: z.object({ id: z.string(), name: z.string() }).nullable(),
+  ...customerTitleFields,
   totalOrders: z.number(),
   totalSpent: z.number(),
   lastOrderAt: z.string().nullable(),
@@ -574,12 +591,15 @@ export const customerDetailSchema = z.object({
   zoneName: z.string().nullable(),
   areaName: z.string().nullable(),
   accountClaimedAt: nullableTimestampSchema,
+  ...customerTitleFields,
   totalOrders: z.number(),
   totalSpent: z.number(),
   lastOrderAt: nullableTimestampSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   deletedAt: nullableTimestampSchema,
+  /** On a retired guest record whose every order joined this account by a verified contact. */
+  mergedInto: z.object({ id: z.string(), name: z.string() }).nullable(),
 });
 
 // ─────────────────────────────────────────
