@@ -871,12 +871,22 @@ export const OPERATIONS = {
   "dashboard.payments.methods_get": {},
   "dashboard.payments.methods_update": { revision: "required" },
   "dashboard.payments.sslcommerz_get": {},
+  "dashboard.payments.sslcommerz_remove": {
+    revision: "required",
+    risk: "destructive",
+    batch: "forbidden",
+  },
   "dashboard.payments.sslcommerz_update": {
     revision: "required",
     risk: "security",
     batch: "forbidden",
   },
   "dashboard.payments.stripe_get": {},
+  "dashboard.payments.stripe_remove": {
+    revision: "required",
+    risk: "destructive",
+    batch: "forbidden",
+  },
   "dashboard.payments.stripe_update": {
     revision: "required",
     risk: "security",

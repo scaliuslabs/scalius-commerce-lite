@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Check, Copy, Download } from "lucide-react";
 import { postApiV1AdminAuth2FaMethod } from "@scalius/api-client/sdk";
@@ -20,6 +20,7 @@ import {
   linkClassName,
   useResendCooldown,
 } from "./auth-ui";
+import { clearTwoFactorSetup, peekTwoFactorSetup } from "./two-factor-setup-handoff";
 
 type Step = "password" | "verify" | "backup";
 
@@ -37,10 +38,13 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
   const t = useMessages(authMessages);
   const navigate = useNavigate();
   const busy = useRef(false);
-  const [step, setStep] = useState<Step>("password");
+  // Right after an invite or reset set the password, the server already
+  // started the setup with it: go straight to the emailed code.
+  const [started] = useState(peekTwoFactorSetup);
+  const [step, setStep] = useState<Step>(started ? "verify" : "password");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [backupCodes, setBackupCodes] = useState<string[]>(started ?? []);
   const [savedCodes, setSavedCodes] = useState(false);
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null);
   const [fieldError, setFieldError] = useState<AuthMessageKey | null>(null);
@@ -48,6 +52,14 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
   const [notice, setNotice] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { seconds: resendIn, start: startCooldown, reset: resetCooldown } = useResendCooldown();
+  const sentOnStart = useRef(false);
+  useEffect(() => {
+    clearTwoFactorSetup();
+    if (!started || sentOnStart.current) return;
+    sentOnStart.current = true;
+    void sendCode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for a setup started before this page
+  }, []);
 
   function fail(error: unknown, pick: (code: string, status: number | null) => AuthMessageKey | null) {
     setFailure(authFailureMessage(error, ({ code: errorCode, status }) => pick(errorCode, status)));

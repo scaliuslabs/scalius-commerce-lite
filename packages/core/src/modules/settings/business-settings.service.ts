@@ -9,7 +9,7 @@ import {
     MEDIA_REFERENCE_DELETING_MESSAGE,
     noDeletingMediaReferences,
 } from "../media/media-reference-guard";
-import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { normalizeBdLandline, validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import { businessDocument, customerCountriesDocument, type BusinessInfo } from "./documents";
 import type { SettingsDocumentWriteResult } from "./settings-store";
@@ -32,14 +32,15 @@ type ContactIssue = { path: [keyof BusinessInfo]; message: string };
 
 /**
  * The store's contact phone: a Bangladesh mobile in any typing becomes
- * 01XXXXXXXXX (as printed on invoices); another number must be a full
- * international number from a country the store accepts, stored as E.164.
+ * 01XXXXXXXXX (as printed on invoices); a Bangladesh landline (02-9876543)
+ * or any other number, a full international one from a country the store
+ * accepts, is stored as E.164.
  */
 async function normalizeBusinessPhone(db: Database, value: string): Promise<string | ContactIssue> {
     if (value === "") return "";
     const countries = await customerCountriesDocument.read(db);
     try {
-        const e164 = validateAndFormatPhone(value, {
+        const e164 = validateAndFormatPhone(normalizeBdLandline(value) ?? value, {
             countries: countries.allowedCountries,
             mode: countries.allowedCountriesMode,
         });
@@ -51,7 +52,7 @@ async function normalizeBusinessPhone(db: Database, value: string): Promise<stri
             path: ["phone"],
             message: notAccepted
                 ? "Numbers from this country aren't accepted. Change it in Customer countries."
-                : "Enter a mobile number like 01712-345678, or a full number starting with +.",
+                : "Enter a number like 01712-345678 or 02-9876543, or a full number starting with +.",
         };
     }
 }

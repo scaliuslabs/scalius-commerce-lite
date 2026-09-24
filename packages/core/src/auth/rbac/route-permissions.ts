@@ -701,10 +701,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/stripe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/sslcommerz": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/auth": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

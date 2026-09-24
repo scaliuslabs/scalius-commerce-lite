@@ -29,6 +29,8 @@ export interface DashboardSessionState {
     twoFactorVerified: boolean;
     permissions: string[] | null;
   };
+  /** Someone else ended this browser's session (suspended, removed, signed out elsewhere). */
+  signedOut?: "access_changed";
 }
 
 export type AdminRouteContext = {
@@ -68,9 +70,13 @@ export async function adminRouteGuard(): Promise<AdminRouteContext> {
   };
 }
 
-/** The sign-in page: setup first, then send signed-in users onward. */
+/**
+ * The sign-in page: setup first, then send signed-in users onward. When the
+ * server says someone else ended this browser's session, the page says why
+ * (the reason comes from the session read, never from the URL).
+ */
 export async function loginPageGuard() {
-  const { adminExists, signIn, session } = await readDashboardSession();
+  const { adminExists, signIn, session, signedOut } = await readDashboardSession();
   if (!adminExists) throw redirect({ to: "/auth/setup" });
   if (session) {
     const { user } = session;
@@ -79,5 +85,5 @@ export async function loginPageGuard() {
     if (user.mustEnrollTwoFactor && !user.twoFactorEnabled) throw redirect({ to: "/auth/setup-2fa" });
     throw redirect({ to: "/admin" });
   }
-  return { signIn };
+  return { signIn, signedOut };
 }
