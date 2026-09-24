@@ -3,6 +3,7 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import {
+  getAccountOwnerReceiptProof,
   getActiveCheckoutLanguage,
   getOrderReceipt,
   getLayoutData,
@@ -30,9 +31,11 @@ import {
 } from "@/lib/order-success-payment-retry";
 import {
   clearOrderReceiptFinalizeCookieHeader,
+  createOrderReceiptCookieHeader,
   readOrderReceiptFinalizeCookie,
   readOrderReceiptCookie,
 } from "@/lib/order-receipt-cookie";
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -70,9 +73,20 @@ const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const requestedOrderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
 const orderId = ORDER_ID_PATTERN.test(requestedOrderId) ? requestedOrderId : "";
 const requestCookieHeader = Astro.request.headers.get("cookie");
-const receiptToken = orderId
+let receiptToken = orderId
   ? readOrderReceiptCookie(requestCookieHeader, orderId)
   : "";
+// A signed-in account owner (order email link, another device) proves the
+// order with their customer session; the proof lands in the httpOnly cookie.
+const customerSessionToken = getCustomerSessionTokenFromCookie(requestCookieHeader);
+if (orderId && !receiptToken && customerSessionToken) {
+  const ownerProof = await getAccountOwnerReceiptProof(orderId, customerSessionToken).catch(() => null);
+  const ownerCookie = ownerProof ? createOrderReceiptCookieHeader(orderId, ownerProof) : null;
+  if (ownerProof && ownerCookie) {
+    receiptToken = ownerProof;
+    Astro.response.headers.append("Set-Cookie", ownerCookie);
+  }
+}
 const currentCheckoutFinalizeMarker = orderId
   ? readOrderReceiptFinalizeCookie(requestCookieHeader, orderId)
   : null;

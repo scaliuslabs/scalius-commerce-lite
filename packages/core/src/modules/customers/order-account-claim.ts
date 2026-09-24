@@ -3,6 +3,34 @@ import { customers, orders } from "@scalius/database/schema";
 import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import { ConflictError, ForbiddenError, NotFoundError } from "@scalius/core/errors";
+import { createOrderReceiptToken, recordOrderReceipt } from "../orders/order-receipts";
+import { customerAccountOrderVisibilityCondition } from "./customers.service";
+
+/**
+ * A signed-in account owner opens their own receipt without the checkout
+ * browser's cookie: the customer session proves ownership (the same check as
+ * the account order page) and a fresh private receipt proof is issued, which
+ * the storefront keeps in its httpOnly receipt cookie, never in a URL.
+ */
+export async function issueAccountOwnerReceipt(
+  db: Database,
+  input: { customerId: string; orderId: string },
+): Promise<{ orderId: string; receiptToken: string; expiresAt: number }> {
+  const owned = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.id, input.orderId), customerAccountOrderVisibilityCondition(input.customerId)))
+    .get();
+  if (!owned) throw new NotFoundError("Order receipt not found");
+
+  const receiptToken = createOrderReceiptToken();
+  const receipt = await recordOrderReceipt(db, {
+    orderId: owned.id,
+    token: receiptToken,
+    source: "account_owner",
+  });
+  return { orderId: owned.id, receiptToken, expiresAt: receipt.expiresAt };
+}
 
 export interface ClaimGuestOrderToAccountInput {
   orderId: string;
