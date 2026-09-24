@@ -19,8 +19,20 @@ import { effectivePriceMinorSql } from "./products.money";
  * This is a derived query rather than N correlated SKU lookups. SQLite ranks
  * the active SKU rows once and every list/filter/sort consumer joins the same
  * projection.
+ *
+ * `productScope` is a condition on `products` rows that every row the caller
+ * keeps already satisfies: a category, a collection's members, search hits,
+ * a list of ids. SQLite cannot push the caller's join into a windowed
+ * subquery, so an unscoped projection ranks every live SKU in the store for
+ * each statement that joins it (about 80k SKUs, 0.3-1.3 s of D1 time per
+ * statement at 30k products), even to show eight cards of one category. The
+ * scope must never be narrower than the caller's own conditions, or rows
+ * would lose their pricing.
  */
-export function buildBuyerCatalogPricingProjection(db: Database) {
+export function buildBuyerCatalogPricingProjection(
+    db: Database,
+    options: { productScope?: SQL } = {},
+) {
     const pricingProduct = alias(products, "buyer_pricing_product");
     const pricingSku = alias(productVariants, "buyer_pricing_sku");
     const availableStock = sql`(${pricingSku.stock} - ${pricingSku.reservedStock})`;
@@ -95,6 +107,9 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
         .from(pricingSku)
         .innerJoin(pricingProduct, eq(pricingProduct.id, pricingSku.productId))
         .where(and(
+            options.productScope
+                ? sql`${pricingSku.productId} IN (SELECT ${products.id} FROM ${products} WHERE ${options.productScope})`
+                : undefined,
             isNull(pricingSku.deletedAt),
             sql`${pricingSku.id} <> 'default'`,
             sql`(

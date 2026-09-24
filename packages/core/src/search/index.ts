@@ -20,7 +20,7 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../integrations/storage";
 import { suggestSearchCorrection } from "./correct";
-import { productCategoryNameMatch, productSearchRelevanceOrder } from "./relevance";
+import { productCategoryNameMatch, productSearchRankJoin, productSearchRelevanceOrder } from "./relevance";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -187,13 +187,14 @@ async function runSearch(
 
   try {
     // Build Product Query
-    const productConditions: SQL[] = publicProductBaseConditions();
+    // Set conditions (search hits, category) also scope the pricing projection.
+    const setConditions: SQL[] = [];
     if (hasValidQuery) {
       const cond = or(ftsMatch(db, "products_fts", "products", query), productCategoryNameMatch(db, query));
-      if (cond) productConditions.push(cond);
+      if (cond) setConditions.push(cond);
     }
     if (options?.categoryId) {
-      productConditions.push(
+      setConditions.push(
         eq(products.categoryId, options.categoryId),
         sql`EXISTS (
           SELECT 1 FROM ${categories}
@@ -202,6 +203,7 @@ async function runSearch(
         )`,
       );
     }
+    const productConditions: SQL[] = [...publicProductBaseConditions(), ...setConditions];
     if (
       typeof options?.minPrice === "number" ||
       typeof options?.maxPrice === "number"
@@ -214,7 +216,11 @@ async function runSearch(
         buyerCatalogHasSkuInPriceRange(bound(options?.minPrice), bound(options?.maxPrice)),
       );
     }
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    // Scoped to the search hits (and category) so the projection ranks only
+    // their SKUs, not every SKU in the store.
+    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
+      productScope: setConditions.length > 0 ? and(...setConditions) : undefined,
+    });
 
     const productQuery = db
       .select({
@@ -241,6 +247,10 @@ async function runSearch(
         eq(products.categoryId, categories.id),
         ...publicCategoryConditions(),
       ))
+      .$dynamic();
+    const rankJoin = hasValidQuery ? productSearchRankJoin(db, query) : undefined;
+    if (rankJoin) productQuery.leftJoin(rankJoin.table, rankJoin.on);
+    productQuery
       .where(and(...productConditions))
       .orderBy(...(hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]))
       .limit(limit);

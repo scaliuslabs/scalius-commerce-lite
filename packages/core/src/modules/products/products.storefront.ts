@@ -17,7 +17,7 @@ import { normalizeProductOptionIdentity } from "@scalius/shared/product-options"
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { suggestSearchCorrection } from "../../search/correct";
-import { productCategoryNameMatch, productSearchRelevanceOrder } from "../../search/relevance";
+import { productCategoryNameMatch, productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { listProductBuyGetOffers } from "../promotions/promotions.checkout";
@@ -61,7 +61,6 @@ import {
 } from "./products.option-model";
 import {
     publicCategoryConditions,
-    publishedCategoryIdExists,
 } from "../categories/categories.publication";
 import {
     loadProductMediaProjections,
@@ -218,14 +217,25 @@ function parsePublicLookupTokens(ids: string | undefined): string[] {
     );
 }
 
-function buildCategoryLookupCondition(category: string): SQL {
-    return sql`EXISTS (
-        SELECT 1
-        FROM "categories"
-        WHERE ${eq(categories.id, products.categoryId)}
+/**
+ * Membership sets are written as `column IN (subquery)` rather than a
+ * correlated EXISTS, so SQLite can drive the read from the matching index
+ * (products_category_id_idx, the primary key) instead of testing every
+ * public product in the store.
+ */
+function publishedCategoryIdSet(where: SQL): SQL {
+    return sql`(
+        SELECT ${categories.id}
+        FROM ${categories}
+        WHERE ${where}
           AND ${and(...publicCategoryConditions())}
-          AND (${categories.id} = ${category} OR ${categories.slug} = ${category})
     )`;
+}
+
+function buildCategoryLookupCondition(category: string): SQL {
+    return sql`${products.categoryId} IN ${publishedCategoryIdSet(
+        sql`(${categories.id} = ${category} OR ${categories.slug} = ${category})`,
+    )}`;
 }
 
 function buildProductLookupCondition(
@@ -244,13 +254,21 @@ function buildProductLookupCondition(
     }
 
     if (options.includeVariantLookups) {
+        // SKUs match on their identity key, lower(trim(sku)), the only SKU
+        // index (product_variants_sku_identity_uidx); a raw `sku = ?` read
+        // every SKU in the store per lookup.
         lookupBranches.push(sql`
             SELECT lookup_variant.product_id
             FROM "product_variants" AS lookup_variant
             INNER JOIN public_lookup
                 ON lookup_variant.id = public_lookup.value
-                OR lookup_variant.sku = public_lookup.value
             WHERE lookup_variant.deleted_at IS NULL
+        `, sql`
+            SELECT lookup_sku.product_id
+            FROM "product_variants" AS lookup_sku
+            INNER JOIN public_lookup
+                ON lower(trim(lookup_sku.sku)) = lower(trim(public_lookup.value))
+            WHERE lookup_sku.deleted_at IS NULL
         `);
     }
 
@@ -290,15 +308,11 @@ function buildStorefrontProductConditions(
         ids,
     } = params;
 
-    const conditions: (SQL | undefined)[] = publicProductBaseConditions();
+    const conditions: (SQL | undefined)[] = [
+        ...publicProductBaseConditions(),
+        ...storefrontProductSetConditions(db, { category, search, ids }, options),
+    ];
 
-    if (category) conditions.push(buildCategoryLookupCondition(category));
-    if (search) {
-        conditions.push(
-            or(ftsMatch(db, "products_fts", "products", search), productCategoryNameMatch(db, search))
-                ?? sql`0 = 1`,
-        );
-    }
     if (buyerPricing && (minPriceMinor !== undefined || maxPriceMinor !== undefined)) {
         conditions.push(buyerCatalogHasSkuInPriceRange(minPriceMinor, maxPriceMinor));
     } else {
@@ -316,14 +330,41 @@ function buildStorefrontProductConditions(
             ? eq(buyerPricing.hasDiscount, 0)
             : sql`${products.discountBps} = 0 AND ${products.discountAmountMinor} = 0`);
     }
-    if (ids) {
-        const lookupTokens = parsePublicLookupTokens(ids);
+
+    return conditions.filter((condition): condition is SQL => Boolean(condition));
+}
+
+/**
+ * The request's set-narrowing conditions (category, search hits, id lookup).
+ * They are cheap to test without the public eligibility checks, so they also
+ * scope the buyer pricing projection (buildBuyerCatalogPricingProjection).
+ */
+function storefrontProductSetConditions(
+    db: Database,
+    params: Pick<StorefrontProductFilterInput, "category" | "search" | "ids">,
+    options: StorefrontProductConditionOptions = {},
+): SQL[] {
+    const conditions: SQL[] = [];
+    if (params.category) conditions.push(buildCategoryLookupCondition(params.category));
+    if (params.search) {
+        conditions.push(
+            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(db, params.search))
+                ?? sql`0 = 1`,
+        );
+    }
+    if (params.ids) {
+        const lookupTokens = parsePublicLookupTokens(params.ids);
         if (lookupTokens.length > 0) {
             conditions.push(buildProductLookupCondition(lookupTokens, options));
         }
     }
+    return conditions;
+}
 
-    return conditions.filter((condition): condition is SQL => Boolean(condition));
+/** A pricing-projection scope from the given set conditions, or none. */
+function storefrontPricingScope(conditions: Array<SQL | undefined>): SQL | undefined {
+    const present = conditions.filter((condition): condition is SQL => Boolean(condition));
+    return present.length > 0 ? and(...present) : undefined;
 }
 
 function getStorefrontProductOrderBy(
@@ -845,7 +886,9 @@ async function readStorefrontCatalogResults(
     const optionFilters = (params.attributeFilters ?? []).filter(isOptionFilter);
     const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: storefrontPricingScope([scope.condition, ...storefrontProductSetConditions(db, params)]),
+    });
     // Facet counts apply every selection except their own facet's, so they
     // read the scope conditions before the option filter is applied.
     const unfilteredOptionConditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
@@ -890,6 +933,10 @@ async function readStorefrontCatalogResults(
     if (attributeSubquery) {
         query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
     }
+    const rankJoin = !scope.orderBy && sort === "relevance" && search
+        ? productSearchRankJoin(db, search)
+        : undefined;
+    if (rankJoin) query = query.leftJoin(rankJoin.table, rankJoin.on);
 
     let countQuery = db
         .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
@@ -1033,24 +1080,32 @@ export async function getStorefrontFeedProducts(
     if (sort !== "newest") {
         throw new ValidationError("Product feed pagination supports newest order only.");
     }
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const feedCreatedAt = sql<number>`CAST(${products.createdAt} AS INTEGER)`;
-    const conditions = buildStorefrontProductConditions(db, {
+    const conditions: SQL[] = [];
+    if (cursor) {
+        // The keyset compares the stored column, never a CAST, so the page
+        // seeks products_public_newest_idx instead of sorting the catalogue.
+        // `<=` is the index range; the OR only breaks created_at ties.
+        const position = decodeFeedCursor(cursor);
+        conditions.push(
+            sql`${products.createdAt} <= ${position.createdAt}`,
+            or(
+                sql`${products.createdAt} < ${position.createdAt}`,
+                lt(products.id, position.id),
+            )!,
+        );
+    }
+    // The projection passed here only selects SKU-level price-range filters;
+    // the page query itself never joins it (see below).
+    conditions.push(...buildStorefrontProductConditions(db, {
         ...params,
         ...priceFilterBoundsMinor(params),
     }, {
         includeLookupHandles: true,
         includeVariantLookups: true,
-    }, buyerPricing);
+    }, buildBuyerCatalogPricingProjection(db)));
     conditions.push(eq(products.excludeFromProductFeed, false));
     conditions.push(publicProductHasPrimaryDiscoveryImage());
-    if (cursor) {
-        const position = decodeFeedCursor(cursor);
-        conditions.push(or(
-            sql`${feedCreatedAt} < ${position.createdAt}`,
-            and(sql`${feedCreatedAt} = ${position.createdAt}`, lt(products.id, position.id)),
-        )!);
-    }
 
     const query = db
         .select({
@@ -1069,16 +1124,16 @@ export async function getStorefrontFeedProducts(
             excludeFromProductFeed: products.excludeFromProductFeed,
             createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
-            hasCustomerOptions: buyerPricing.hasCustomerOptions,
-            availableForSale: buyerPricing.availableForSale,
             storeCurrencyCode: storeCurrencyCodeSql(),
         })
         .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
+    // The public eligibility conditions already guarantee a buyer SKU, so the
+    // page needs no pricing join; the page's own availability is read with
+    // the enrichment below from a projection scoped to these ids.
     const scannedProducts = await query
-        .orderBy(desc(feedCreatedAt), desc(products.id))
+        .orderBy(desc(products.createdAt), desc(products.id))
         .limit(limit + 1)
         .all();
     const hasNextPage = scannedProducts.length > limit;
@@ -1087,8 +1142,11 @@ export async function getStorefrontFeedProducts(
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
     const mediaMapPromise = loadProductMediaProjections(db, productIds);
+    const pagePricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)}))`,
+    });
 
-    const [mediaMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([
+    const [mediaMap, categoriesData, attributeMap, variantMap, optionMap, pricingRows] = await Promise.all([
         mediaMapPromise,
         categoryIds.length > 0
             ? db
@@ -1103,11 +1161,25 @@ export async function getStorefrontFeedProducts(
         readStorefrontFeedAttributeMap(db, productIds),
         readStorefrontFeedVariantMap(db, productIds, decimalPlaces, mediaMapPromise),
         loadProductOptions(db, productIds),
+        productIds.length > 0
+            ? db.select({
+                productId: pagePricing.productId,
+                hasCustomerOptions: pagePricing.hasCustomerOptions,
+                availableForSale: pagePricing.availableForSale,
+            }).from(pagePricing).all()
+            : Promise.resolve([]),
     ]);
     const imageMap = productImageMapFromMedia(mediaMap);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
+    const pricingByProduct = new Map(pricingRows.map((row) => [row.productId, row]));
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, ...product }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, ...productRow }) => {
+        const pricing = pricingByProduct.get(productRow.id);
+        const product = {
+            ...productRow,
+            hasCustomerOptions: pricing?.hasCustomerOptions ?? 0,
+            availableForSale: pricing?.availableForSale ?? 0,
+        };
         const imgData = imageMap.get(product.id);
         const category = product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         const price = presentCatalogPrice(product, decimalPlaces);
@@ -1301,20 +1373,21 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
         ...categoryIds.map((id) => ({ kind: "category", id })),
     ];
     const membershipJson = JSON.stringify(membershipEntries);
-    const condition = membershipEntries.length > 0
-        ? sql`EXISTS (
-            SELECT 1
-            FROM json_each(${membershipJson}) AS collection_membership
-            WHERE (
-                json_extract(collection_membership.value, '$.kind') = 'product'
-                AND json_extract(collection_membership.value, '$.id') = ${products.id}
-            ) OR (
-                json_extract(collection_membership.value, '$.kind') = 'category'
-                AND json_extract(collection_membership.value, '$.id') = ${products.categoryId}
-                AND ${publishedCategoryIdExists(products.categoryId)}
-            )
-        )`
-        : sql`0 = 1`;
+    // Two index-driven sets rather than one json_each probe per product: the
+    // probe tested every public product against every member (11-17 s for a
+    // 90-product collection on a 30k-product catalogue).
+    const branches: SQL[] = [];
+    if (productIds.length > 0) {
+        branches.push(sql`${products.id} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})
+        )`);
+    }
+    if (categoryIds.length > 0) {
+        branches.push(sql`${products.categoryId} IN ${publishedCategoryIdSet(sql`${categories.id} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
+        )`)}`);
+    }
+    const condition = branches.length > 0 ? sql`(${sql.join(branches, sql` OR `)})` : sql`0 = 1`;
     return { productIds, membershipJson, condition };
 }
 
@@ -1323,12 +1396,13 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
  * own count (public products with a buyer-resolvable SKU), for batching.
  */
 export function storefrontCollectionVisibleCountQuery(db: Database, membership: StorefrontCollectionMembership) {
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const { condition } = storefrontCollectionMembership(membership);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db, { productScope: condition });
     return db
         .select({ count: sql<number>`count(*)` })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...publicProductBaseConditions(), storefrontCollectionMembership(membership).condition));
+        .where(and(...publicProductBaseConditions(), condition));
 }
 
 export async function getStorefrontCollectionProducts(
