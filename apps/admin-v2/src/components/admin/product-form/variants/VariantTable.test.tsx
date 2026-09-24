@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import type { DraftOption, DraftVariant } from "./option-matrix-editor-model";
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn(), removed: vi.fn() }));
@@ -198,4 +199,23 @@ describe("VariantTable", () => {
     await act(async () => button(label("showAllVariants", { count: 3 })).click());
     expect(host.querySelector('[data-variant-row="sw"]')).not.toBeNull();
   });
+
+  it("opens a large product with its groups closed, and still selects every variant", async () => {
+    const many = Array.from({ length: 32 }, (_, index) =>
+      variant(`v${index}`, index % 2 ? "m" : "s", index % 4 < 2 ? "w" : "b", 2000 + index));
+    await render(many);
+    expect(host.querySelector("[data-variant-row]")).toBeNull();
+    expect(input(label("priceForGroup", { name: "S" }))).not.toBeNull();
+
+    const toggle = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.startsWith("S"))!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => toggle.click());
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(16);
+
+    const selectAll = host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;
+    await act(async () => selectAll.click());
+    // Selection covers the closed groups too.
+    expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 32 }));
+  });
 });
+
