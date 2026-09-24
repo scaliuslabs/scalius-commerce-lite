@@ -114,6 +114,52 @@ describe("storefront batch route", () => {
     ]);
   });
 
+  describe("when the cache entrypoint answers", () => {
+    const batchWithCache = async (cacheResponse: () => Response) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const ctx = {
+        waitUntil: () => undefined,
+        passThroughOnException: () => undefined,
+        exports: { PublicApi: { fetch: async () => cacheResponse() } },
+      } as unknown as ExecutionContext;
+      try {
+        const response = await fetchRuntimeApiApp(
+          new Request(batchUrl(["/api/v1/shipping-methods?zone=secret-zone"]), {
+            headers: { "X-Scalius-Cache-Generation": "abc123" },
+          }),
+          env(),
+          ctx,
+        );
+        return { part: (await parts(response))[0]!, warnings: warn.mock.calls.map((call) => String(call[0])) };
+      } finally {
+        warn.mockRestore();
+      }
+    };
+
+    it("a platform 500 without our headers, it renders the part directly and logs one masked line", async () => {
+      const { part, warnings } = await batchWithCache(() => new Response(null, { status: 500 }));
+
+      expect(part).toMatchObject({ status: 200, body: { success: true, data: { shippingMethods: [] } } });
+      expect(warnings).toEqual(["[PublicCache] cache layer answered 500 for /api/v1/shipping-methods; rendering it directly"]);
+    });
+
+    it("our own 5xx, it passes it through without a second render", async () => {
+      const { part, warnings } = await batchWithCache(() => Response.json(
+        { success: false, error: "ours" },
+        { status: 503, headers: { "X-Content-Type-Options": "nosniff" } },
+      ));
+
+      expect(part).toEqual({ status: 503, body: { success: false, error: "ours" } });
+      expect(warnings).toEqual([]);
+    });
+
+    it("a 200, it leaves it untouched", async () => {
+      const { part } = await batchWithCache(() => Response.json({ success: true, data: "cached" }));
+
+      expect(part).toEqual({ status: 200, body: { success: true, data: "cached" } });
+    });
+  });
+
   it("renders parts directly without a cache entrypoint, keeping each part's status", async () => {
     const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
 
