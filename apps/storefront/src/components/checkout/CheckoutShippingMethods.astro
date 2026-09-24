@@ -1,105 +1,46 @@
 ---
-// Server-rendered delivery options. The cart page script keeps the selected
-// method in `window.lastShippingEventDetail` and, when a cart item waives
-// delivery, shows "Free" with the waived fee (`enhanceShippingMethods`).
+// Delivery options. The list follows the chosen address, so the browser
+// renders it (`enhanceShippingMethods`); the server ships every active rate
+// only so pickup can be offered before an address is chosen.
 import type { ShippingMethod } from "@/lib/api";
-import { formatMoney } from "@/lib/currency";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 interface Props {
   shippingMethods: ShippingMethod[];
   shippingMethodLabel: string;
   freeText: string;
-  noShippingMethodsText: string;
+  freeOverText: string;
   waivedShippingFeeText: string;
   pickupFromText: string;
+  chooseAddressText: string;
+  noDeliveryText: string;
+  failedText: string;
+  retryText: string;
+  loadingText: string;
 }
 
-const {
-  shippingMethods,
-  shippingMethodLabel,
-  freeText,
-  noShippingMethodsText,
-  waivedShippingFeeText,
-  pickupFromText,
-} = Astro.props;
-
-const methods = shippingMethods.map((method) => ({
-  ...method,
-  feeLabel: method.fee === 0 ? freeText : formatMoney(method.fee),
-  pickup: method.kind === "pickup" && method.pickupAddress
-    ? [formatCheckoutLanguageText(pickupFromText, { address: method.pickupAddress }), method.pickupHours]
-        .filter(Boolean).join(" · ")
-    : null,
-}));
-const single = methods.length === 1 ? methods[0] : null;
-const waivedText = (feeLabel: string) =>
-  formatCheckoutLanguageText(waivedShippingFeeText, { fee: feeLabel });
+const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
 ---
 
 <div
   data-shipping-methods
-  data-free-text={freeText}
+  data-free-text={copy.freeText}
+  data-free-over-text={copy.freeOverText}
+  data-waived-text={copy.waivedShippingFeeText}
+  data-pickup-from-text={copy.pickupFromText}
+  data-choose-address-text={copy.chooseAddressText}
+  data-no-delivery-text={copy.noDeliveryText}
+  data-failed-text={copy.failedText}
+  data-retry-text={copy.retryText}
+  data-loading-text={copy.loadingText}
 >
-  {
-    methods.length === 0 ? (
-      <>
-        <p class="mb-1 block text-sm font-medium text-foreground">{shippingMethodLabel}</p>
-        <p class="text-sm text-muted-foreground">{noShippingMethodsText}</p>
-      </>
-    ) : single ? (
-      <>
-        <p class="mb-2 block text-sm font-medium text-foreground">{shippingMethodLabel}</p>
-        <input
-          type="hidden"
-          name="shippingLocation"
-          value={single.id}
-          data-fee={single.fee}
-          data-name={single.name}
-        />
-        <div class="rounded-lg border border-border bg-background px-3 py-2.5">
-          <div class="flex items-start justify-between gap-3">
-            <span class="text-sm font-medium text-foreground">{single.name}</span>
-            <span class="whitespace-nowrap text-sm font-semibold text-foreground" data-fee-label={single.feeLabel}>
-              {single.feeLabel}
-            </span>
-          </div>
-          {single.description && <p class="mt-0.5 text-sm text-muted-foreground">{single.description}</p>}
-          {single.pickup && <p class="mt-0.5 text-sm text-foreground">{single.pickup}</p>}
-          <p class="mt-0.5 hidden text-sm text-muted-foreground" data-waived-note>{waivedText(single.feeLabel)}</p>
-        </div>
-      </>
-    ) : (
-      <fieldset id="shippingMethods" aria-describedby="shippingMethodError" class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <legend class="mb-2 block text-sm font-medium text-foreground">
-          {shippingMethodLabel}
-        </legend>
-        {methods.map((method, index) => (
-          <label class="flex min-h-11 cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
-            <input
-              type="radio"
-              name="shippingLocation"
-              value={method.id}
-              checked={index === 0}
-              data-fee={method.fee}
-              data-name={method.name}
-              class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-            />
-            <span class="min-w-0 flex-1">
-              <span class="flex items-start justify-between gap-2">
-                <span class="text-sm font-medium leading-snug text-foreground">{method.name}</span>
-                <span class="whitespace-nowrap text-sm font-semibold text-foreground" data-fee-label={method.feeLabel}>
-                  {method.feeLabel}
-                </span>
-              </span>
-              {method.description && <span class="mt-0.5 block text-sm text-muted-foreground">{method.description}</span>}
-              {method.pickup && <span class="mt-0.5 block text-sm text-foreground">{method.pickup}</span>}
-              <span class="mt-0.5 hidden text-sm text-muted-foreground" data-waived-note>{waivedText(method.feeLabel)}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-    )
-  }
+  <script is:inline type="application/json" data-shipping-rates set:html={serializeJsonForInlineScript(shippingMethods)} />
+  <fieldset id="shippingMethods" aria-describedby="shippingMethodNote shippingMethodError">
+    <legend class="mb-2 block text-sm font-medium text-foreground">{shippingMethodLabel}</legend>
+    <p id="shippingMethodNote" class="mb-2 text-sm text-muted-foreground" role="status" data-shipping-note>
+      {copy.chooseAddressText}
+    </p>
+    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" data-shipping-options></div>
+  </fieldset>
   <p id="shippingMethodError" class="mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
 </div>

@@ -543,6 +543,8 @@ export interface ShippingMethod {
   id: string;
   name: string;
   fee: number;
+  /** Delivery is free once the items subtotal (before discounts) reaches this. */
+  freeOver?: number | null;
   description: string | null;
   /** Pickup rates name the place the buyer collects from. */
   kind?: "delivery" | "pickup";

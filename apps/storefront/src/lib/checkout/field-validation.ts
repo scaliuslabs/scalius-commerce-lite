@@ -70,17 +70,17 @@ export function checkoutInformationFields(
     if (!value(root, "city")) return copy.cityZoneRequiredText;
     return value(root, "zone") ? "" : copy.zoneRequiredText;
   });
-  const method = root.querySelector<HTMLElement>('[name="shippingLocation"]');
+  // The delivery options are re-rendered for each address, so the field is their fieldset.
+  const methods = root.querySelector<HTMLElement>("#shippingMethods");
   const methodError = root.querySelector<HTMLElement>("#shippingMethodError");
-  if (method && methodError) {
+  if (methods && methodError) {
     fields.push({
-      control: method.closest("fieldset") ?? method,
+      control: methods,
       error: methodError,
-      check: () => {
-        const chosen = root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')
-          ?? root.querySelector<HTMLInputElement>('input[type="hidden"][name="shippingLocation"]');
-        return chosen?.value ? "" : copy.deliveryRequiredText;
-      },
+      check: () =>
+        root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value
+          ? ""
+          : copy.deliveryRequiredText,
     });
   }
   return fields;

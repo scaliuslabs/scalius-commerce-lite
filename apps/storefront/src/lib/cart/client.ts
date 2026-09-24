@@ -49,7 +49,10 @@ import {
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteDeliveryRateError,
 } from "../checkout/tax-quote-client";
+import { isDeliveryRateUnavailable } from "../checkout/tax-quote-error-contract";
+import type { ShippingMethodDetail } from "../checkout/shipping-methods";
 import type {
   CheckoutDiscountFacts,
   CheckoutDiscountOffer,
@@ -266,7 +269,7 @@ function getCheckoutFormData(): CheckoutFormData {
   data.shipping = selectedShipping
     ? {
         ...selectedShipping,
-        fee: getEffectiveCartShippingFee(items, selectedShipping.fee),
+        fee: getEffectiveCartShippingFee(items, selectedShipping.fee, selectedShipping.freeOver),
       }
     : undefined;
 
@@ -427,9 +430,7 @@ function formCanonicalPhoneValue(): string | null {
 function cartTaxQuoteInput(): Record<string, unknown> | null {
   const city = latestCheckoutLocation?.cityId || formStringValue("city");
   const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
-  const shippingMethodId =
-    window.lastShippingEventDetail?.id ||
-    document.getElementById("checkout-meta")?.dataset.defaultShippingId;
+  const shippingMethodId = window.lastShippingEventDetail?.id;
   const cartItems = (
     document.getElementById("cartItemsInput") as HTMLInputElement | null
   )?.value;
@@ -548,13 +549,9 @@ function setTaxStatus(elements: TotalsElements, message: string): void {
 function cartValidationDeliveryPayload() {
   const city = formStringValue("city");
   const zone = formStringValue("zone");
-  if (!city || !zone) return {};
-
-  const meta = document.getElementById("checkout-meta");
-  const shippingMethodId =
-    window.lastShippingEventDetail?.id ??
-    meta?.dataset.defaultShippingId ??
-    null;
+  // Delivery is checked only against a rate chosen for this address.
+  const shippingMethodId = window.lastShippingEventDetail?.id;
+  if (!city || !zone || !shippingMethodId) return {};
 
   return {
     city,
@@ -728,9 +725,14 @@ export async function validateCartSnapshot(): Promise<boolean> {
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
+    const deliveryRateRefused =
+      !response.ok && issues.length === 0 && isDeliveryRateUnavailable(json);
+    if (deliveryRateRefused) {
+      window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
+    }
     if (!response.ok || !json?.success) {
       cartValidationGlobalError =
-        issues.length > 0
+        issues.length > 0 || deliveryRateRefused
           ? ""
           : json?.error ||
             json?.details?.message ||
@@ -800,8 +802,10 @@ function renderCartItemIssues(cartKey: string): string {
 export async function updateTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
   const { items, totalAmount, discountCodes } = cartStore.get();
-  const selectedMethodFee = window.lastShippingEventDetail?.fee ?? 0;
-  const shippingFee = getEffectiveCartShippingFee(items, selectedMethodFee);
+  const selectedMethod = window.lastShippingEventDetail;
+  const shippingFee = selectedMethod
+    ? getEffectiveCartShippingFee(items, selectedMethod.fee, selectedMethod.freeOver)
+    : 0;
 
   const subtotalEl = document.getElementById("subtotal");
   const shippingEl = document.getElementById("shippingCost");
@@ -826,8 +830,10 @@ export async function updateTotals() {
   };
 
   subtotalEl.textContent = formatMoney(totalAmount);
-  shippingEl.textContent =
-    shippingFee === 0 ? activeCheckoutCopy().freeText : formatMoney(shippingFee);
+  // Before a delivery option applies to the address, shipping isn't known yet.
+  shippingEl.textContent = !selectedMethod
+    ? "—"
+    : shippingFee === 0 ? activeCheckoutCopy().freeText : formatMoney(shippingFee);
   elements.taxRow?.classList.add("hidden");
   if (Object.keys(items).length === 0) return;
 
@@ -863,10 +869,13 @@ export async function updateTotals() {
     renderAuthoritativeCartQuote(quote, elements);
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
-    // An item that changed is shown on its line; only a real outage asks for a retry.
+    // An item that changed is shown on its line and a refused delivery rate
+    // re-reads the address's rates; only a real outage asks for a retry.
     const cartChanged = error instanceof TaxQuoteCartChangedError;
+    const rateRefused = error instanceof TaxQuoteDeliveryRateError;
     if (cartChanged) scheduleCartValidation();
-    await renderEstimate(cartChanged ? "" : activeCheckoutCopy().taxVerificationFailedText);
+    if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
+    await renderEstimate(cartChanged || rateRefused ? "" : activeCheckoutCopy().taxVerificationFailedText);
     updateCheckoutButtonState();
   }
 }
@@ -1063,7 +1072,11 @@ async function handleApplyDiscount() {
     const preview = await previewCartDiscounts(
       [...discountCodes, code],
       Object.values(items),
-      getEffectiveCartShippingFee(items, window.lastShippingEventDetail?.fee ?? 0),
+      getEffectiveCartShippingFee(
+        items,
+        window.lastShippingEventDetail?.fee ?? 0,
+        window.lastShippingEventDetail?.freeOver ?? null,
+      ),
       formCanonicalPhoneValue() || undefined,
     );
     if (pendingDiscountValidation !== requestSequence) return;
@@ -1140,21 +1153,6 @@ export async function initCartFunctionality() {
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
-
-  // The server-rendered default delivery method, before any buyer choice.
-  if (!window.lastShippingEventDetail) {
-    const meta = document.getElementById("checkout-meta");
-    const defaultId = meta?.dataset.defaultShippingId;
-    const defaultFee = meta?.dataset.defaultShippingFee;
-    const defaultName = meta?.dataset.defaultShippingName;
-    if (defaultId) {
-      window.lastShippingEventDetail = {
-        id: defaultId,
-        fee: Number(defaultFee) || 0,
-        name: defaultName || "",
-      };
-    }
-  }
 
   processQuickBuy();
   syncCheckoutIdInput();
@@ -1268,9 +1266,12 @@ export async function initCartFunctionality() {
   window.addEventListener(
     "shippingLocationChange",
     (e) => {
-      window.lastShippingEventDetail = (e as CustomEvent).detail;
+      const detail = (e as CustomEvent<ShippingMethodDetail | null>).detail;
+      window.lastShippingEventDetail = detail ?? undefined;
       void updateTotals();
       handleAbandonedCheckout();
+      // A delivery refusal belongs to the previous choice: check the new one.
+      if (detail) scheduleCartValidation();
     },
     { signal: runtimeSignal },
   );
@@ -1297,7 +1298,8 @@ export async function initCartFunctionality() {
         areaName: typeof detail?.areaName === "string" ? detail.areaName : "",
       };
       if (latestCheckoutLocation.zoneId) attemptToTrackInitiateCheckout();
-      void updateTotals();
+      // Totals follow the delivery options, which re-read the rates for this
+      // address and announce the choice with `shippingLocationChange`.
       handleAbandonedCheckout();
     },
     { signal: runtimeSignal },

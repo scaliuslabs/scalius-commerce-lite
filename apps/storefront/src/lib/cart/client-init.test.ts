@@ -17,6 +17,7 @@ import {
   isDiscountValidationPending,
   resumeCartPageFromHistory,
 } from "./client";
+import { TaxQuoteDeliveryRateError } from "../checkout/tax-quote-client";
 
 const apiMocks = vi.hoisted(() => ({
   saveAbandonedCheckout: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@/lib/analytics", () => ({
 vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
+  TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
 }));
 
 const NO_DISCOUNTS = { ok: true, totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
@@ -141,9 +143,18 @@ function installStorageMocks() {
   });
 }
 
+/** The delivery rate the address's options chose (see lib/checkout/shipping-methods). */
+const STANDARD_RATE = { id: "standard", fee: 60, freeOver: null, name: "Standard", kind: "delivery" as const };
+
+/** A new address: the options re-read its rates, then announce the chosen one. */
+function moveTo(detail: Record<string, string>) {
+  window.dispatchEvent(new CustomEvent("checkout-location-change", { detail }));
+  window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail: STANDARD_RATE }));
+}
+
 function renderCartDom() {
   document.body.innerHTML = `
-    <div id="checkout-meta" data-default-shipping-id="standard" data-default-shipping-fee="60"></div>
+    <div id="checkout-meta"></div>
     <div id="cartPageRoot" data-cart-ready="false" data-cart-has-items="false">
       <div id="checkoutPanel" class="hidden">
         <form id="checkoutForm">
@@ -178,6 +189,31 @@ function renderCartDom() {
   `;
 }
 
+const VALID_CART = {
+  success: true,
+  data: {
+    valid: true,
+    issues: [],
+    items: [
+      {
+        index: 0,
+        cartKey: CART_LINE_KEY,
+        productId: "prod_1",
+        variantId: "var_1",
+        quantity: 1,
+        unitPrice: 100,
+        productName: "Rice",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: false,
+        availableQuantity: null,
+      },
+    ],
+    subtotal: 100,
+    hasFreeDeliveryProduct: false,
+  },
+};
+
 describe("initCartFunctionality", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -189,39 +225,17 @@ describe("initCartFunctionality", () => {
     localStorage.clear();
     sessionStorage.clear();
     renderCartDom();
+    window.lastShippingEventDetail = STANDARD_RATE;
     localStorage.setItem("cart", JSON.stringify(cartState));
     cartStore.set(cartState);
     window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA };
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              valid: true,
-              issues: [],
-              items: [
-                {
-                  index: 0,
-                  cartKey: CART_LINE_KEY,
-                  productId: "prod_1",
-                  variantId: "var_1",
-                  quantity: 1,
-                  unitPrice: 100,
-                  productName: "Rice",
-                  variantLabel: null,
-                  freeDelivery: false,
-                  inventoryTracked: false,
-                  availableQuantity: null,
-                },
-              ],
-              subtotal: 100,
-              hasFreeDeliveryProduct: false,
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+      vi.fn(async () =>
+        new Response(JSON.stringify(VALID_CART), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
       ),
     );
   });
@@ -229,6 +243,7 @@ describe("initCartFunctionality", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    delete window.lastShippingEventDetail;
   });
 
   it("keeps one checkout id and one abandoned-checkout listener across repeated init", async () => {
@@ -469,15 +484,7 @@ describe("initCartFunctionality", () => {
     });
 
     await initCartFunctionality();
-    window.dispatchEvent(
-      new CustomEvent("checkout-location-change", {
-        detail: {
-          cityId: "city_dhaka",
-          zoneId: "zone_banani",
-          areaId: "",
-        },
-      }),
-    );
+    moveTo({ cityId: "city_dhaka", zoneId: "zone_banani", areaId: "", });
     await vi.waitFor(() => {
       expect(document.getElementById("taxAmount")?.textContent).toBe("৳11.20");
     });
@@ -508,15 +515,7 @@ describe("initCartFunctionality", () => {
     taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(171.2));
 
     await initCartFunctionality();
-    window.dispatchEvent(
-      new CustomEvent("checkout-location-change", {
-        detail: {
-          cityId: "city_bagerhat",
-          zoneId: "zone_bagerhat_sadar",
-          areaId: "",
-        },
-      }),
-    );
+    moveTo({ cityId: "city_bagerhat", zoneId: "zone_bagerhat_sadar", areaId: "", });
 
     await vi.waitFor(() => {
       expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalledWith(
@@ -550,17 +549,9 @@ describe("initCartFunctionality", () => {
       );
 
     await initCartFunctionality();
-    window.dispatchEvent(
-      new CustomEvent("checkout-location-change", {
-        detail: { cityId: "city_bagerhat", zoneId: "zone_bajua", areaId: "" },
-      }),
-    );
+    moveTo({ cityId: "city_bagerhat", zoneId: "zone_bajua", areaId: "" });
     await Promise.resolve();
-    window.dispatchEvent(
-      new CustomEvent("checkout-location-change", {
-        detail: { cityId: "city_baria", zoneId: "zone_akhaura", areaId: "" },
-      }),
-    );
+    moveTo({ cityId: "city_baria", zoneId: "zone_akhaura", areaId: "" });
     await Promise.resolve();
 
     resolveSecond?.(taxQuote(175, "zone_akhaura"));
@@ -676,18 +667,7 @@ describe("initCartFunctionality", () => {
   it("keeps readable delivery names in abandoned checkout recovery context", async () => {
     await initCartFunctionality();
 
-    window.dispatchEvent(
-      new CustomEvent("checkout-location-change", {
-        detail: {
-          cityId: "city_dhaka",
-          cityName: "Dhaka",
-          zoneId: "zone_banani",
-          zoneName: "Banani",
-          areaId: "area_11",
-          areaName: "Road 11",
-        },
-      }),
-    );
+    moveTo({ cityId: "city_dhaka", cityName: "Dhaka", zoneId: "zone_banani", zoneName: "Banani", areaId: "area_11", areaName: "Road 11", });
     await vi.advanceTimersByTimeAsync(1500);
 
     expect(apiMocks.saveAbandonedCheckout).toHaveBeenCalledWith(
@@ -936,5 +916,87 @@ describe("initCartFunctionality", () => {
     expect(undo.textContent).toContain("Rice removed");
     undo.querySelector("button")!.click();
     expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
+  });
+
+  const withAddress = () =>
+    document.getElementById("checkoutForm")?.insertAdjacentHTML(
+      "beforeend",
+      `<input name="city" value="city_ctg" /><input name="zone" value="zone_agrabad" />`,
+    );
+  const jsonResponse = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  it("re-reads the delivery options instead of reporting a failed total when the quote refuses the rate", async () => {
+    withAddress();
+    const rejected = vi.fn();
+    window.addEventListener("delivery-rate-rejected", rejected);
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteDeliveryRateError());
+
+    await initCartFunctionality();
+    await vi.waitFor(() => expect(rejected).toHaveBeenCalled());
+
+    expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
+    expect(document.getElementById("taxStatus")?.textContent).not.toContain("couldn't update");
+    window.removeEventListener("delivery-rate-rejected", rejected);
+  });
+
+  it("clears a delivery refusal once the buyer picks an option that applies", async () => {
+    withAddress();
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(310));
+    await initCartFunctionality();
+
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({
+      success: false,
+      error: "This delivery option isn't available for the selected address. Choose another delivery option.",
+    }, 400));
+    await window.validateCartSnapshot?.();
+    const message = document.getElementById("cartValidationMessage")!;
+    const submit = document.getElementById("submitButton") as HTMLButtonElement;
+    expect(message.textContent).toContain("isn't available");
+    expect(submit.disabled).toBe(true);
+
+    vi.mocked(fetch).mockImplementation(async () => jsonResponse(VALID_CART));
+    window.dispatchEvent(new CustomEvent("shippingLocationChange", {
+      detail: { id: "ctg", fee: 150, freeOver: 3000, name: "Ctg Delivery", kind: "delivery" },
+    }));
+    await vi.advanceTimersByTimeAsync(400);
+
+    await vi.waitFor(() => expect(message.classList).toContain("hidden"));
+    expect(message.textContent).toBe("");
+    expect(submit.disabled).toBe(false);
+  });
+
+  it("does not block checkout on a refused rate the options can replace", async () => {
+    withAddress();
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue(taxQuote(310));
+    await initCartFunctionality();
+    const rejected = vi.fn();
+    window.addEventListener("delivery-rate-rejected", rejected);
+
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({
+      success: false,
+      error: "This delivery option isn't available for the selected address.",
+      details: { reason: "delivery_rate_unavailable" },
+    }, 400));
+    await window.validateCartSnapshot?.();
+
+    expect(rejected).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("cartValidationMessage")?.classList).toContain("hidden");
+    window.removeEventListener("delivery-rate-rejected", rejected);
+  });
+
+  it("charges nothing for a rate once the items reach its free-over threshold", async () => {
+    window.lastShippingEventDetail = { id: "ctg", fee: 150, freeOver: 100, name: "Ctg", kind: "delivery" };
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById("shippingCost")?.textContent).toBe("Free");
+  });
+
+  it("shows shipping as not yet known before an option applies to the address", async () => {
+    delete window.lastShippingEventDetail;
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById("shippingCost")?.textContent).toBe("—");
+    expect(document.getElementById("total")?.textContent).toBe("৳100");
   });
 });

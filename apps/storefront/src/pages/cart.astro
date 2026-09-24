@@ -23,6 +23,7 @@ import {
   createOrderReceiptFinalizeCookieHeader,
 } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
+import { termsSegments } from "@/lib/checkout/terms-text";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
@@ -71,6 +72,12 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   isDefault: true,
 };
 const copy = lang.languageData;
+const policyPath = (kind: "terms" | "privacy") =>
+  layoutData?.policies?.find((policy) => policy.kind === kind)?.path ?? null;
+const agreement = termsSegments(copy.termsText, {
+  terms: { label: copy.termsLinkText, href: policyPath("terms") },
+  privacy: { label: copy.privacyLinkText, href: policyPath("privacy") },
+});
 const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
   copy.existingCheckoutMessage.split("{orderId}", 2);
 
@@ -265,9 +272,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false
       ? "true"
       : "false"}
-    data-default-shipping-id={shippingMethods[0]?.id || ""}
-    data-default-shipping-fee={String(shippingMethods[0]?.fee ?? 0)}
-    data-default-shipping-name={shippingMethods[0]?.name || ""}
     hidden
   >
   </div>
@@ -488,9 +492,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 shippingMethods={shippingMethods}
                 shippingMethodLabel={copy.shippingMethodLabel}
                 freeText={copy.freeText}
-                noShippingMethodsText={copy.noShippingMethodsText}
+                freeOverText={copy.freeOverText}
                 waivedShippingFeeText={copy.waivedShippingFeeText}
                 pickupFromText={copy.pickupFromText}
+                chooseAddressText={copy.chooseAddressForDeliveryText}
+                noDeliveryText={copy.noDeliveryToAddressText}
+                failedText={copy.deliveryOptionsFailedText}
+                retryText={copy.retryText}
+                loadingText={copy.loadingText}
               />
 
               {
@@ -534,7 +543,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               {
                 codOnly && (
                   <p class="mt-3 text-center text-sm text-muted-foreground">
-                    {copy.termsText}
+                    {agreement.map((segment) =>
+                      segment.href ? (
+                        <a href={segment.href} class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
+                      ) : (
+                        segment.text
+                      ),
+                    )}
                   </p>
                 )
               }
@@ -663,10 +678,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import {
     cartHasFreeDeliveryItem,
+    cartItemsSubtotal,
     cartStore,
     getEffectiveCartShippingFee,
   } from "@/store/cart";
-  import { enhanceShippingMethods } from "@/lib/checkout/shipping-methods";
+  import { enhanceShippingMethods, fetchDeliveryRates } from "@/lib/checkout/shipping-methods";
+  import { formatMoney } from "@/lib/currency";
   import { browserApiUrl } from "@/lib/api/browser-url";
   import {
     enhanceLocationSelects,
@@ -757,19 +774,42 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   void initCartFunctionality();
 
   // Wired after the cart runtime so its listeners receive the initial
-  // delivery-method and location events.
+  // delivery-method and location events. The delivery options follow the
+  // address, so they are wired first and re-read on every location change.
+  const shippingMethods = enhanceShippingMethods(document, {
+    loadRates: (address) => fetchDeliveryRates(browserApiUrl(""), address),
+    readDraftMethod: () => readCheckoutFormDraft()?.shippingLocation,
+    readSubtotal: () => cartItemsSubtotal(cartStore.get().items),
+    isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
+    formatMoney,
+    signal: cartPageSignal,
+  });
+  window.addEventListener(
+    "delivery-rate-rejected",
+    () => void shippingMethods?.rejectSelected(),
+    { signal: cartPageSignal },
+  );
   const locationRoot = document.querySelector<HTMLElement>("[data-location-fields]");
   const locationSelects = locationRoot
     ? enhanceLocationSelects(locationRoot, {
         load: (level, parentId) =>
           fetchLocationOptions(browserApiUrl(""), level, parentId),
-        onChange: (detail) =>
+        onChange: (detail) => {
           window.dispatchEvent(
             new CustomEvent("checkout-location-change", { detail }),
-          ),
+          );
+          void shippingMethods?.setAddress(detail);
+        },
         signal: cartPageSignal,
       })
     : null;
+  // An address already in the form (restored by the browser) gets its rates too.
+  const formLocation = (name: string) => findNamedCheckoutControl(document, name)?.value ?? "";
+  void shippingMethods?.setAddress({
+    cityId: formLocation("city"),
+    zoneId: formLocation("zone"),
+    areaId: formLocation("area"),
+  });
   window.addEventListener(
     "location-prefill",
     (event) =>
@@ -779,11 +819,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     { signal: cartPageSignal },
   );
 
-  const shippingMethods = enhanceShippingMethods(document, {
-    readDraftMethod: () => readCheckoutFormDraft()?.shippingLocation,
-    isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
-    signal: cartPageSignal,
-  });
   const unsubscribeShippingFees = cartStore.subscribe(() =>
     shippingMethods?.refreshFees(),
   );
@@ -881,16 +916,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const expectedQuoteFingerprint = (
       document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
     )?.value;
-    const shippingMethodId =
-      window.lastShippingEventDetail?.id || values.shippingLocation;
+    const shippingMethodId = window.lastShippingEventDetail?.id;
     const shippingMethodName = window.lastShippingEventDetail?.name;
     let shippingCharge = "";
-    if (cartItems) {
+    if (cartItems && window.lastShippingEventDetail) {
       try {
         shippingCharge = String(
           getEffectiveCartShippingFee(
             JSON.parse(cartItems),
-            window.lastShippingEventDetail?.fee ?? 0,
+            window.lastShippingEventDetail.fee,
+            window.lastShippingEventDetail.freeOver,
           ),
         );
       } catch {
@@ -1406,17 +1441,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             if (el) checkoutData[f] = el.value;
           }
 
-          // The selected delivery method, or the server default before any choice.
-          const selectedShippingFee =
-            window.lastShippingEventDetail?.fee ?? parseFloat(meta?.dataset.defaultShippingFee || "0");
-          const shippingMethodId =
-            window.lastShippingEventDetail?.id ?? meta?.dataset.defaultShippingId;
-          const shippingMethodName = window.lastShippingEventDetail?.name
-            ?? meta?.dataset.defaultShippingName;
+          // The delivery option chosen for this address (validation required one).
+          const shippingMethodId = window.lastShippingEventDetail?.id;
+          const shippingMethodName = window.lastShippingEventDetail?.name;
 
           checkoutData["shippingCharge"] = String(getEffectiveCartShippingFee(
             JSON.parse(submittedCart),
-            selectedShippingFee,
+            window.lastShippingEventDetail?.fee ?? 0,
+            window.lastShippingEventDetail?.freeOver ?? null,
           ));
           if (shippingMethodId) checkoutData["shippingMethodId"] = shippingMethodId;
           if (shippingMethodName) checkoutData["shippingMethodName"] = shippingMethodName;
