@@ -16,6 +16,7 @@ import { MediaManager } from "../LazyMediaManager";
 import type { LibraryMediaFile, MediaFile } from "../types";
 import { formatDate, formatDuration, formatFileSize, formatFileType } from "../utils";
 import { resolveSavedPoster } from "../utils/poster";
+import { MediaUsage } from "./MediaUsage";
 
 interface MediaPreviewProps {
   open: boolean;
@@ -168,6 +169,8 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
                     />
                   </div>
                 ) : null}
+                {/* The picker keeps the merchant in their editor; "Used in" links live on the Files page. */}
+                {onSelect ? null : <MediaUsage file={file} />}
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" onClick={() => void copyLink()}>
                     <Copy aria-hidden="true" />

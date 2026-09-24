@@ -54,6 +54,7 @@ export const productMediaSchema = z.object({
   posterUrl: z.string().nullable(),
   altText: z.string(),
   contextualAltText: z.string().nullable().optional(),
+  filename: z.string().openapi({ description: "The file's name in Files." }),
   caption: z.string().nullable(),
   width: z.number().int().positive().nullable(),
   height: z.number().int().positive().nullable(),

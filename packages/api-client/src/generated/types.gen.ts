@@ -19245,6 +19245,14 @@ export type GetApiV1AdminMediaResponses = {
                 updatedAt: string | number;
                 trashedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.
+                 */
+                usageCount: number;
+                /**
+                 * Past orders show this picture, so it can never be deleted permanently.
+                 */
+                keptForOrders: boolean;
             }>;
             pagination: {
                 limit: number;
@@ -20776,6 +20784,118 @@ export type GetApiV1AdminMediaByIdOriginalResponses = {
 
 export type GetApiV1AdminMediaByIdOriginalResponse = GetApiV1AdminMediaByIdOriginalResponses[keyof GetApiV1AdminMediaByIdOriginalResponses];
 
+export type GetApiV1AdminMediaByIdUsageData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/usage';
+};
+
+export type GetApiV1AdminMediaByIdUsageErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageError = GetApiV1AdminMediaByIdUsageErrors[keyof GetApiV1AdminMediaByIdUsageErrors];
+
+export type GetApiV1AdminMediaByIdUsageResponses = {
+    /**
+     * Where the file is used
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+            references: Array<{
+                kind: 'product' | 'category' | 'collection' | 'page' | 'article' | 'banner' | 'theme' | 'navigation' | 'invoice' | 'social_image' | 'video_cover' | 'staff_photo';
+                id: string | null;
+                name: string | null;
+                trashed: boolean;
+            }>;
+            orderCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageResponse = GetApiV1AdminMediaByIdUsageResponses[keyof GetApiV1AdminMediaByIdUsageResponses];
+
 export type DeleteApiV1AdminMediaByIdPermanentData = {
     body?: never;
     path: {
@@ -21605,6 +21725,10 @@ export type GetApiV1AdminInventoryResponses = {
                 hasMore: boolean;
                 nextCursor: string | null;
             };
+            /**
+             * Store-wide alert level for SKUs without their own (variants and alerts sections)
+             */
+            defaultLowStockThreshold?: number | null;
             [key: string]: unknown;
         };
     };
@@ -22067,6 +22191,45 @@ export type PutApiV1AdminInventoryByVariantIdAlertLevelResponses = {
 };
 
 export type PutApiV1AdminInventoryByVariantIdAlertLevelResponse = PutApiV1AdminInventoryByVariantIdAlertLevelResponses[keyof PutApiV1AdminInventoryByVariantIdAlertLevelResponses];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelData = {
+    body: {
+        defaultLowStockThreshold: number | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/default-alert-level';
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelError = PutApiV1AdminInventoryDefaultAlertLevelErrors[keyof PutApiV1AdminInventoryDefaultAlertLevelErrors];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponses = {
+    /**
+     * Store alert level saved
+     */
+    200: {
+        success: true;
+        data: {
+            defaultLowStockThreshold: number | null;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponse = PutApiV1AdminInventoryDefaultAlertLevelResponses[keyof PutApiV1AdminInventoryDefaultAlertLevelResponses];
 
 export type GetApiV1AdminInventoryScannerLookupData = {
     body?: never;
@@ -45772,6 +45935,11 @@ export type PostApiV1AdminProductsBulkUpdateResponses = {
                 id: string;
                 aggregateRevision: number;
             }>;
+            skipped: Array<{
+                id: string;
+                name: string;
+                reason: 'needs_price';
+            }>;
         };
     };
 };
@@ -46593,6 +46761,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 posterUrl: string | null;
                 altText: string;
                 contextualAltText?: string | null;
+                /**
+                 * The file's name in Files.
+                 */
+                filename: string;
                 caption: string | null;
                 width: number | null;
                 height: number | null;

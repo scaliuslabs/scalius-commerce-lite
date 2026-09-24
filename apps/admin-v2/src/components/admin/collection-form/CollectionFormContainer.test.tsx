@@ -382,7 +382,7 @@ describe("CollectionForm", () => {
     expect(api.getCollectionProductOptions).toHaveBeenCalledWith({
       query: expect.objectContaining({ categoryIds: "cat_curated", limit: 10 }),
     });
-    expect(host.textContent).toContain("2 of max 90 categories");
+    expect(host.textContent).toContain("2 categories (max 90)");
   });
 
   it("shows homepage options once the collection is on the homepage", async () => {

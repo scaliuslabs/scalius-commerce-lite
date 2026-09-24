@@ -49,7 +49,7 @@ describe("SKU alert levels on D1 storage", () => {
     expect(movementCount()).toBe(0);
   });
 
-  it("turns the alert off with an empty level", async () => {
+  it("an empty level falls back to the store default (none set: no alert)", async () => {
     await setLowStockThreshold(db, "var_l_white", 5);
     await setLowStockThreshold(db, "var_l_white", null);
 

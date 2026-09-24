@@ -560,6 +560,7 @@ export const OPERATIONS = {
   },
   "dashboard.inventory.set_stock": { idempotency: "required" },
   "dashboard.inventory.set_alert_level": {},
+  "dashboard.inventory.set_default_alert_level": {},
 
   "dashboard.media_folders.create": {},
   "dashboard.media_folders.delete": {
@@ -592,6 +593,7 @@ export const OPERATIONS = {
     limits: { response: 16_384 },
   },
   "dashboard.media.update": { revision: "required" },
+  "dashboard.media.usage": {},
   "dashboard.media.upload_abort": { limits: { response: 16_384 } },
   "dashboard.media.upload_complete": {},
   "dashboard.media.upload_get": { limits: { response: 16_384 } },

@@ -1827,16 +1827,23 @@ export async function bulkDeleteProducts(
 
 export type ProductBulkChanges = { isActive?: boolean; categoryId?: string };
 
+export type ProductBulkUpdateResult = {
+    products: Array<{ id: string; aggregateRevision: number }>;
+    /** Left unchanged, with why (activating needs a price above 0). */
+    skipped: Array<{ id: string; name: string; reason: "needs_price" }>;
+};
+
 /**
- * Sets status and/or category on up to 90 products in one batch. Every claim
- * is revision-guarded, so the whole change applies or none of it does.
- * Activating requires a positive price on the product and every live SKU.
+ * Sets status and/or category on up to 90 products in one batch. Every applied
+ * claim is revision-guarded, so those change together or not at all. Activating
+ * skips (and reports) products without a positive price on the product and
+ * every live SKU; the others still change.
  */
 export async function bulkUpdateProducts(
     db: Database,
     claims: ProductAggregateRevisionClaim[],
     changes: ProductBulkChanges,
-): Promise<ProductAggregateRevisionResult[]> {
+): Promise<ProductBulkUpdateResult> {
     const ids = claims.map((claim) => claim.id);
     if (ids.length === 0) throw new ValidationError("No product IDs provided");
     if (new Set(ids).size !== ids.length) {
@@ -1853,8 +1860,9 @@ export async function bulkUpdateProducts(
             .get();
         if (!category) throw new ValidationError("That category no longer exists.", { field: "categoryId" });
     }
-    if (changes.isActive) {
-        const unpriced = await db
+    // Activating skips products (or variants) without a price above 0; the rest still change.
+    const skipped = changes.isActive
+        ? await db
             .select({ id: products.id, name: products.name })
             .from(products)
             .where(and(
@@ -1863,15 +1871,13 @@ export async function bulkUpdateProducts(
                     sql`${products.priceMinor} <= 0`,
                     sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${productVariants.priceMinor} <= 0)`,
                 ),
-            ));
-        if (unpriced.length > 0) {
-            throw new ValidationError(
-                `Add a price to ${unpriced[0]!.name}${unpriced.length > 1 ? ` and ${unpriced.length - 1} more` : ""} before making ${unpriced.length > 1 ? "them" : "it"} active.`,
-                { field: "isActive", products: unpriced },
-            );
-        }
-    }
-    const statements = claims.flatMap((claim) => [
+            ))
+        : [];
+    const skippedIds = new Set(skipped.map((row) => row.id));
+    const applied = claims.filter((claim) => !skippedIds.has(claim.id));
+    const skippedRows = skipped.map((row) => ({ ...row, reason: "needs_price" as const }));
+    if (applied.length === 0) return { products: [], skipped: skippedRows };
+    const statements = applied.flatMap((claim) => [
         buildProductAggregateRevisionGuard(db, claim.id, claim.expectedAggregateRevision),
         db
             .update(products)
@@ -1886,10 +1892,16 @@ export async function bulkUpdateProducts(
     ]);
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
-        return claims.map((_, index) => readProductAggregateRevisionResult(results[index * 2 + 1]));
+        return {
+            products: applied.map((claim, index) => ({
+                id: claim.id,
+                aggregateRevision: readProductAggregateRevisionResult(results[index * 2 + 1]).aggregateRevision,
+            })),
+            skipped: skippedRows,
+        };
     } catch (error) {
         if (isProductAggregateRevisionConflict(error)) {
-            const staleClaim = await findStaleProductAggregateRevisionClaim(db, claims, "active");
+            const staleClaim = await findStaleProductAggregateRevisionClaim(db, applied, "active");
             if (staleClaim) {
                 return rethrowProductAggregateRevisionConflictIfStale(
                     db,

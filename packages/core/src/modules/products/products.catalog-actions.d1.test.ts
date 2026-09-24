@@ -96,24 +96,34 @@ describe("catalog actions on D1 storage", () => {
     })).rejects.toMatchObject({ status: 400, details: { field: "variants.0.price" } });
   });
 
-  it("sets status and category on many products at once, and refuses to activate unpriced ones", async () => {
+  it("sets status and category on many products at once, skipping and naming unpriced ones", async () => {
     const tee = await create({ name: "Cotton tee", slug: "cotton-tee" });
     const mug = await create({ name: "Mug", slug: "mug" });
     const free = await create({ name: "Free sample", slug: "free-sample", price: 0 });
 
-    const revisions = await bulkUpdateProducts(db, [
+    const first = await bulkUpdateProducts(db, [
       { id: tee.id, expectedAggregateRevision: 1 },
       { id: mug.id, expectedAggregateRevision: 1 },
     ], { isActive: true, categoryId: "cat_2" });
-    expect(revisions.map((revision) => revision.aggregateRevision)).toEqual([2, 2]);
+    expect(first).toEqual({
+      products: [{ id: tee.id, aggregateRevision: 2 }, { id: mug.id, aggregateRevision: 2 }],
+      skipped: [],
+    });
     expect(sqlite.prepare("SELECT is_active, category_id FROM products WHERE id IN (?, ?)").all(tee.id, mug.id))
       .toEqual([{ is_active: 1, category_id: "cat_2" }, { is_active: 1, category_id: "cat_2" }]);
 
-    await expect(bulkUpdateProducts(db, [
-      { id: tee.id, expectedAggregateRevision: 2 },
+    // The priced product still changes; the unpriced one is left as it was and named.
+    const mixed = await bulkUpdateProducts(db, [
+      { id: mug.id, expectedAggregateRevision: 2 },
       { id: free.id, expectedAggregateRevision: 1 },
-    ], { isActive: true })).rejects.toMatchObject({ status: 400, details: { field: "isActive" } });
-    // All or nothing: the stale claim rolls every change back.
+    ], { isActive: true, categoryId: "cat_1" });
+    expect(mixed).toEqual({
+      products: [{ id: mug.id, aggregateRevision: 3 }],
+      skipped: [{ id: free.id, name: "Free sample", reason: "needs_price" }],
+    });
+    expect(sqlite.prepare("SELECT is_active, category_id FROM products WHERE id = ?").get(free.id))
+      .toEqual({ is_active: 0, category_id: "cat_1" });
+    // A stale claim rolls every applied change back.
     await expect(bulkUpdateProducts(db, [
       { id: tee.id, expectedAggregateRevision: 2 },
       { id: mug.id, expectedAggregateRevision: 1 },
