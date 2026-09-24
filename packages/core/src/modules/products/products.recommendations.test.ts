@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -13,6 +13,7 @@ import { getStorefrontProductBySlug } from "./products.storefront";
 let sqlite: DatabaseSync;
 let db: Database;
 let statements: string[];
+let statementParams: Array<readonly SQLInputValue[]>;
 let maxBoundParameters: number;
 const NOW = Math.floor(Date.now() / 1000);
 
@@ -84,6 +85,7 @@ function attribute(productId: string, attributeId: string, value: string): void 
 
 async function recommend(productIds: string[], limit = 12) {
     statements = [];
+    statementParams = [];
     return getStorefrontProductRecommendations(db, { productIds, limit });
 }
 
@@ -91,11 +93,13 @@ const ids = (result: { products: Array<{ id: string }> }) => result.products.map
 
 beforeEach(() => {
     statements = [];
+    statementParams = [];
     maxBoundParameters = 0;
     orderSequence = 0;
     ({ sqlite, db } = createSqliteD1Database({
         onQuery(query, params) {
             statements.push(query);
+            statementParams.push(params);
             maxBoundParameters = Math.max(maxBoundParameters, params.length);
             if (params.length > 100) throw new Error(`D1 bound-parameter limit exceeded: ${params.length}`);
         },
@@ -246,6 +250,28 @@ describe("product recommendations", () => {
         expect(ids(result).every((id) => many.indexOf(id) >= MAX_RECOMMENDATION_SOURCE_IDS)).toBe(true);
         expect(statements).toHaveLength(2);
         expect(maxBoundParameters).toBeLessThanOrEqual(90);
+    });
+
+    it("expands only the source's collections and orders, never the whole store", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_trousers" });
+        collection("col_menswear", { source: "dynamic", categoryIds: ["cat_shirts", "cat_trousers"] });
+        collection("col_pick", { source: "manual", productIds: ["source", "peer"] });
+
+        expect(ids(await recommend(["source"]))).toEqual(["peer"]);
+
+        // Without statistics SQLite used to start the dynamic-collection
+        // expansion from every published category and every product in the
+        // store (1.3 s per product page at 30k products).
+        const index = statements.findIndex((query) => query.includes("rec_collection_peer"));
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`)
+            .all(...statementParams[index]!)
+            .map((step) => String(step.detail));
+        expect(plan.join("\n")).not.toMatch(/SEARCH rec_(peer|source)_category USING INDEX categories_public_idx/);
+        expect(plan.join("\n")).not.toMatch(/SCAN rec_(peer|source)_product/);
+        // Also-bought starts from the source products' order lines, not from
+        // every order of the last year.
+        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line USING INDEX order_items_product_id_idx/);
     });
 
     it("ships ranked recommendations on the product page payload", async () => {
