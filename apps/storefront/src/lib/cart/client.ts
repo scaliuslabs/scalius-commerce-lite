@@ -568,8 +568,16 @@ function renderAuthoritativeCartQuote(
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
+  const quotedFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
+  // The merchant changed this rate since the options were read: the options
+  // re-read the rates and say "Delivery fee changed…" now, so the option label
+  // and the summary never disagree.
+  const chosen = window.lastShippingEventDetail;
+  if (chosen && chosen.id === quote.shippingMethod.id && chosen.fee !== quotedFee) {
+    window.dispatchEvent(new CustomEvent("delivery-rate-changed"));
+  }
   renderShippingLine(elements.shipping, {
-    baseFee: quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces,
+    baseFee: quotedFee,
     charged: quote.shippingAmount,
     discounts: quote.discounts,
   });
