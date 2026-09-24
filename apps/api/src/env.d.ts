@@ -127,6 +127,11 @@ interface WorkerEntrypointFetcher<Props = unknown> {
   ): Promise<Response>;
 }
 
+/** The data center's default cache (Cache API), used for public reads. */
+interface CacheStorage {
+  readonly default: Cache;
+}
+
 interface WorkerExports {
   PublicApi: WorkerEntrypointFetcher;
   [name: string]: WorkerEntrypointFetcher | undefined;

@@ -37,12 +37,38 @@ check it. The release-wide evidence lives in
 3. **The batch in the API** (`routes/storefront.ts` `storefront.batch.get`,
    `storefront-batch.ts`). Only public generation-cached routes can be parts
    (`@scalius/shared/public-api-cache-routes`, the same list the API cache
-   policy uses). The route runs each part through the `PublicApi` Workers Cache
-   entrypoint under `path + sorted query + __cg=<generation>`, so parts shared
-   by many pages (layout, shipping methods, checkout settings) are computed once
-   per generation. The batch response is `private, no-store`. Each part keeps
-   its own status, a failed part fails only that part (as a failed read did
-   before), and error parts are never cached.
+   policy uses). The route serves every part **inside its own invocation**
+   (`apps/api/src/public-read.ts`):
+   - It first looks the part up in the data center's Cache API
+     (`caches.default`) under `publicReadCacheKey`: `path + sorted query +
+     __cg=<generation>`. That is the same function the `PublicApi` entrypoint
+     path uses, so the two cannot drift apart.
+   - On a miss it renders the part in-process with `renderPublicRead`. That
+     is the render `PublicApi` itself runs: the runtime app, the baseline
+     security headers, and the public cache headers.
+   - It stores a part only when the result is a 200 this Worker produced,
+     with the public cache headers and no cookie. The stored copy lives
+     `PUBLIC_CACHE_MAX_AGE_SECONDS`.
+   - Parts shared by many pages (layout, shipping methods, checkout
+     settings) are therefore computed once per generation per data center.
+   - Up to four parts render at once (`MAX_BATCH_PART_RENDERS`); D1 queues
+     the rest on the invocation's six connections.
+   - The batch response is `private, no-store`. Each part keeps its own
+     status, a failed part fails only that part, and error parts are never
+     stored.
+
+   Why the batch does not call the `PublicApi` Workers Cache entrypoint: live
+   tails on 2026-09-25 showed that each entrypoint miss runs in a separate
+   isolate pool behind the cache layer. At this traffic level that pool is
+   usually cold, so each miss paid 350-600 ms of isolate start-up plus
+   150-330 ms of CPU for module initialisation, while the storefront's own
+   API isolate was warm. With that hop, a product page miss took 0.7-1.2 s.
+   Without it, the batch costs about as much as its slowest part. Direct
+   browser reads on `api.<store>` still go through the `PublicApi`
+   entrypoint (with the cache-layer 5xx fallback below).
+   `apps/api/src/storefront-batch-route.test.ts` checks that a part answered
+   in-process has the same status, body and cache headers as the same read
+   through `PublicApi`.
 4. **Placement.** `apps/api/wrangler.jsonc` uses **targeted placement by
    region**: `"placement": { "region": "aws:ap-southeast-1" }`. The API's fetch
    handler runs beside the D1 primary (APAC, served from SIN) instead of beside
@@ -78,9 +104,11 @@ bundle size, not with what a request runs.
 
 What the render path does about it:
 
-- A page is one batch (the cart adds one uncached language read), so a
-  render usually pays for at most one API isolate start.
-  The batch's parts share the module promises, so each family loads once.
+- A page is one batch (the cart adds one uncached language read), and every
+  part is served inside the batch's own invocation. A render therefore pays
+  for at most one API isolate start, and usually none, because the isolate
+  that serves storefront renders stays warm. The parts share the module
+  promises, so each family loads once.
 - `/api/v1/checkout/config` used to sit in the `buyer` family, so every
   home, product and cart render also loaded orders, customer auth and agent
   contexts. It now belongs to `config` beside the layout, which saves
@@ -141,8 +169,9 @@ Handling: the API treats the generation cache as a hint
 cache entrypoint returns a 5xx without the baseline security headers that
 every response of ours carries, the read is rendered directly and uncached,
 and one masked `[PublicCache] cache layer answered ...` warning is logged with
-the path and colo and no query values. This happens both for single reads
-(`worker.ts`) and for batch parts (`storefront.batch.get`). Our own 5xx
+the path and colo and no query values. This applies to single reads through
+the entrypoint (`worker.ts`); storefront batch parts no longer go through the
+entrypoint at all (see the render path above). Our own 5xx
 passes through untouched, so a real outage does not double the database load.
 Bumping the cache generation (any buyer-visible save) also clears it at once.
 
@@ -214,6 +243,15 @@ from `cf-ray` before blaming the server.
   ladder (`packages/shared/src/media-variants.ts`). Every storefront surface
   uses `srcset` + `sizes` from those renditions. Cloudflare Image
   Transformations are not used.
+- The two LCP images, the home hero banner and the product gallery's main
+  photo, use `capSizesDensity` (`apps/storefront/src/lib/responsive-image.ts`).
+  Every `sizes` entry is repeated first under `(min-resolution: 2.5dppx)`
+  with its width scaled by 2/3, so DPR 3 phones fetch about 2x pixels.
+  Measured on a 390 px phone:
+  - product photo: 960w (9.6 KB) instead of 1600w (25.7 KB);
+  - home hero: 960w (29.9 KB) instead of the 1080w master (52.8 KB).
+
+  Thumbnails, cards and every screen below DPR 2.5 keep their full density.
 - The product gallery swaps `src`, `srcset`, `sizes` and `alt` together on a
   variant or thumbnail switch and waits for the new image to decode (up to
   500 ms) before swapping. After load it prefetches the images a switch can

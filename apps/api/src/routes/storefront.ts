@@ -20,12 +20,16 @@ import {
   STOREFRONT_BATCH_PART_PARAM,
 } from "@scalius/shared/public-api-cache-routes";
 import { serveStorefrontBatch } from "../storefront-batch";
-import {
-  getPublicApiCachePolicy,
-  isCacheLayerServerError,
-  logCacheLayerFallback,
-  withCacheGeneration,
-} from "../public-cache-policy";
+import { createLocalPublicReader, renderPublicRead } from "../public-read";
+
+/**
+ * Parts of one batch rendered at once: every part of a page (layout, page
+ * data, shipping, checkout settings), as when each was its own invocation.
+ * Usually only the page data misses; right after a generation bump all four
+ * do, and their D1 queries queue on the invocation's six connections. A
+ * lower limit would serialise the parts and add whole D1 waves instead.
+ */
+const MAX_BATCH_PART_RENDERS = 4;
 import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
@@ -379,26 +383,23 @@ app.openapi(batchRoute, async (c) => {
   } catch {
     ctx = undefined;
   }
+  // Parts are served inside this invocation: the data center's Cache API
+  // under the key the PublicApi cache uses (publicReadCacheKey), else
+  // rendered here exactly as PublicApi renders them (renderPublicRead). A
+  // PublicApi miss would instead wait for a separate, usually cold, isolate.
+  const readPart = createLocalPublicReader({
+    cache: typeof caches === "undefined" ? null : caches.default,
+    render: (part) => renderPublicRead(part, c.env, ctx as ExecutionContext),
+    waitUntil: (promise) => ctx?.waitUntil(promise),
+    maxConcurrentRenders: MAX_BATCH_PART_RENDERS,
+  });
   const response = await serveStorefrontBatch(request, {
     // A render pins its reads to its page's generation. Generations are
     // unguessable, so a caller-supplied one can only select existing entries.
     readGeneration: async () =>
       normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
       ?? await readCacheGeneration(c.env, ctx),
-    fetchPart: async (part, generation) => {
-      const cachePolicy = getPublicApiCachePolicy(part);
-      const publicApi = ctx?.exports?.PublicApi;
-      if (cachePolicy && generation && publicApi) {
-        const cached = await publicApi.fetch(new Request(withCacheGeneration(cachePolicy.canonicalUrl, generation), part));
-        // The cache is a hint: a server error from the cache layer itself (a
-        // stuck entry answers an empty platform 500) is rendered directly.
-        if (!isCacheLayerServerError(cached)) return cached;
-        await cached.body?.cancel();
-        logCacheLayerFallback(part.url, request, cached.status);
-      }
-      const { fetchRuntimeApiApp } = await import("../runtime/fetch-runtime-app");
-      return fetchRuntimeApiApp(part, c.env, ctx as ExecutionContext);
-    },
+    fetchPart: readPart,
   });
   return response as never;
 });
