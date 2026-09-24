@@ -480,6 +480,8 @@ export function customerAccountOrderVisibilityCondition(customerId: string): SQL
     )!;
 }
 
+const linkedAccount = alias(customers, "linked_account");
+
 export async function listCustomers(
     db: Database,
     options: {
@@ -503,7 +505,8 @@ export async function listCustomers(
 
     const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
-        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL`);
+        // A retired guest record (all its orders joined an account) is merged, not trashed.
+        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.linkedAccountId} IS NULL`);
     } else {
         whereConditions.push(sql`${customers.deletedAt} IS NULL`);
     }
@@ -559,6 +562,8 @@ export async function listCustomers(
             zoneName: sql<string | null>`COALESCE(${customerZoneLocation.name}, ${customers.zone})`,
             areaName: sql<string | null>`COALESCE(${customerAreaLocation.name}, ${customers.area})`,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
+            linkedAccountId: sql<string | null>`${linkedAccount.id}`.as("linked_account_id"),
+            linkedAccountName: sql<string | null>`${linkedAccount.name}`.as("linked_account_name"),
             totalOrders: metrics.totalOrders,
             totalSpentMinor: metrics.totalSpentMinor,
             spendDecimalPlaces: metrics.spendDecimalPlaces,
@@ -570,6 +575,11 @@ export async function listCustomers(
         .leftJoin(orders, and(
             eq(orders.customerId, customers.id),
             isNull(orders.deletedAt),
+        ))
+        // A guest record whose other orders already joined an account says whose.
+        .leftJoin(linkedAccount, and(
+            eq(linkedAccount.id, customers.linkedAccountId),
+            isNull(customers.accountClaimedAt),
         ))
         .leftJoin(customerCityLocation, and(
             eq(customerCityLocation.id, customers.city),
@@ -586,6 +596,7 @@ export async function listCustomers(
         .where(whereClause)
         .groupBy(
             customers.id,
+            linkedAccount.id,
             customerCityLocation.name,
             customerZoneLocation.name,
             customerAreaLocation.name,
@@ -599,12 +610,13 @@ export async function listCustomers(
         resultsQuery,
     ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; linkedAccountId: string | null; linkedAccountName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
     ];
     const count = countArr[0]?.count ?? 0;
 
-    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, ...c }) => ({
+    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, linkedAccountId, linkedAccountName, ...c }) => ({
         ...c,
+        linkedAccount: linkedAccountId ? { id: linkedAccountId, name: linkedAccountName ?? "" } : null,
         totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: c.accountClaimedAt ? new Date(c.accountClaimedAt * 1000).toISOString() : null,
         lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,

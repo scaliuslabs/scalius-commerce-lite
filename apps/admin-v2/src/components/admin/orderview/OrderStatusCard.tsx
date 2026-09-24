@@ -26,10 +26,11 @@ import { resourceMessages } from "~/i18n/resource";
 import { useUpdateOrderStatus, type UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import {
-  getAdminOrderCancellationBlockedReason,
-  getAdminOrderStatusTransitions,
+  getAdminOrderStatusOptions,
   isAdminOrderStatus,
+  type AdminOrderStatusBlock,
 } from "~/lib/admin-order-status-policy";
+import type { OrderDetailMessageKey } from "~/i18n/order-detail";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { formatOrderTimestamp } from "./formatters";
@@ -59,6 +60,24 @@ export function shippedCancelReason(
   return count === 0 ? null : t(count === 1 ? "cancel.shippedOne" : "cancel.shippedMany", { count });
 }
 
+/** Why a status can't be chosen, in the same words the server uses. */
+export function statusBlockText(
+  block: AdminOrderStatusBlock,
+  order: Pick<Order, "items">,
+  t: (key: OrderDetailMessageKey, vars?: { count: number }) => string,
+): string {
+  switch (block.code) {
+    case "with_courier":
+      return shippedCancelReason(order, t) ?? t("statusBlock.withCourier");
+    case "cancel_needs_refund":
+      return t("status.refundToCancel");
+    case "cash_not_collected":
+      return t("statusBlock.cashFirst");
+    case "money_due":
+      return t("statusBlock.moneyDue");
+  }
+}
+
 export function OrderStatusCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
@@ -71,18 +90,17 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const status = order.status.toLowerCase();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const transitions = getAdminOrderStatusTransitions(status, order);
-  const cancelBlocked = getAdminOrderCancellationBlockedReason(status, order) !== null;
-  const shippedReason = transitions.includes("cancelled") ? shippedCancelReason(order, t) : null;
+  // Every next status is listed; one that can't be chosen says why, right in the menu.
+  const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
+  const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
   const placedAt = formatOrderTimestamp(order.createdAt);
   const restock = restockedUnits(order);
-  const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && transitions.length > 0;
+  const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && options.length > 0;
 
   const change = (next: string) => {
-    if (!isAdminOrderStatus(next)) return;
+    if (!isAdminOrderStatus(next) || blocked.has(next)) return;
     clearOrderNotice(order.id);
     if (next === "cancelled") {
-      if (shippedReason) return;
       setReason("");
       setConfirmCancel(true);
       return;
@@ -92,7 +110,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
     else run();
   };
 
-  const help = transitions.length === 0
+  const help = options.length === 0
     ? status === "cancelled" ? t("status.cancelledFinal") : t("status.final")
     : !canChangeStatus
       ? r("readOnly")
@@ -100,9 +118,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
         ? t("locked.refund")
         : shipmentLocked
           ? t("locked.shipment")
-          : cancelBlocked
-            ? t("status.refundToCancel")
-            : shippedReason;
+          : null;
 
   return (
     <Card>
@@ -116,9 +132,15 @@ export function OrderStatusCard({ order }: { order: Order }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[status, ...transitions].map((value) => (
-                <SelectItem key={value} value={value} disabled={value === "cancelled" && shippedReason !== null}>
-                  {orderStatusLabel(o, value)}
+              <SelectItem value={status}>{orderStatusLabel(o, status)}</SelectItem>
+              {options.map(({ status: value, block }) => (
+                <SelectItem key={value} value={value} disabled={block !== null}>
+                  {block ? (
+                    <span className="flex flex-col items-start">
+                      <span>{orderStatusLabel(o, value)}</span>
+                      <span className="text-muted-foreground">{statusBlockText(block, order, t)}</span>
+                    </span>
+                  ) : orderStatusLabel(o, value)}
                 </SelectItem>
               ))}
             </SelectContent>

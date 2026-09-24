@@ -42,8 +42,17 @@ const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 );
 SheetHeader.displayName = "SheetHeader";
 
+/**
+ * The sheet's action bar: a bordered bar under a scrolling body, so the
+ * actions never scroll away. Put the body in a `min-h-0 flex-1 overflow-y-auto`
+ * box inside a `flex flex-col` SheetContent.
+ */
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
+  <div
+    data-slot="sheet-footer"
+    className={cn("flex shrink-0 flex-col-reverse gap-2 border-t bg-card px-6 py-4 max-sm:pb-safe sm:flex-row sm:justify-end", className)}
+    {...props}
+  />
 );
 SheetFooter.displayName = "SheetFooter";
 

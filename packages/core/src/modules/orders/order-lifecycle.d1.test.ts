@@ -223,6 +223,11 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(one("SELECT status, payment_status, balance_due_minor, paid_amount_minor FROM orders WHERE id = ?", id))
             .toEqual({ status: "delivered", payment_status: "partially_refunded", balance_due_minor: 0, paid_amount_minor: 88000 });
         expect(await getOrderDetails(db, id)).toMatchObject({ refundDue: 0, refundedAmount: 1600 });
+
+        // Nothing is owed on a partly refunded order, so it can be completed.
+        const { updateOrderStatus } = await import("./orders.fulfillment");
+        await updateOrderStatus(db, id, "completed");
+        expect(one("SELECT status FROM orders WHERE id = ?", id)).toEqual({ status: "completed" });
     });
 
     it("lets a storefront COD order be edited before shipment, at the price the buyer agreed", async () => {

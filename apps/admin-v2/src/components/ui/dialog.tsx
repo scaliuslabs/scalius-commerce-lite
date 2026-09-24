@@ -61,8 +61,18 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 DialogHeader.displayName = "DialogHeader";
 
+/**
+ * A modal scrolls as a whole when its content is taller than the screen; the
+ * footer is a bordered bar pinned to its bottom edge so the actions never
+ * scroll away. It bleeds over the panel's padding (`p-5`, `pb-safe` on
+ * phones): the negative margin and sticky offset both equal that padding,
+ * because sticky insets are measured inside the scroll container's padding.
+ */
+export const dialogFooterClassName =
+  "sticky -bottom-5 z-10 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t bg-card px-5 pb-5 pt-4 max-sm:bottom-[calc(-1*max(1.25rem,env(safe-area-inset-bottom)))] max-sm:mb-[calc(-1*max(1.25rem,env(safe-area-inset-bottom)))] max-sm:pb-safe sm:flex-row sm:justify-end";
+
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
+  <div data-slot="dialog-footer" className={cn(dialogFooterClassName, className)} {...props} />
 );
 DialogFooter.displayName = "DialogFooter";
 

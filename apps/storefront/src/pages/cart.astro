@@ -792,6 +792,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     signal: cartPageSignal,
   });
   window.addEventListener(
+    "delivery-rate-changed",
+    () => void shippingMethods?.recheck(),
+    { signal: cartPageSignal },
+  );
+  window.addEventListener(
     "delivery-rate-rejected",
     () => void shippingMethods?.rejectSelected(),
     { signal: cartPageSignal },

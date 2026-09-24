@@ -8,8 +8,9 @@ import {
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
 import {
-  getAdminOrderCancellationBlockedReason,
-  getAdminOrderStatusTransitions,
+  getAdminOrderStatusOptions,
+  type AdminOrderStatusBlock,
+  type AdminOrderStatusFacts,
 } from "@/lib/admin-order-status-policy";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -17,8 +18,7 @@ import { orderListMessages } from "~/i18n/order-list";
 
 export interface OrderStatusSelectorMenuProps {
   status: string;
-  paymentStatus: string | null;
-  paidAmount: number;
+  facts: AdminOrderStatusFacts;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStatusUpdate: (newStatus: string) => void;
@@ -27,8 +27,7 @@ export interface OrderStatusSelectorMenuProps {
 
 export function OrderStatusSelectorMenu({
   status,
-  paymentStatus,
-  paidAmount,
+  facts,
   open,
   onOpenChange,
   onStatusUpdate,
@@ -36,9 +35,16 @@ export function OrderStatusSelectorMenu({
 }: OrderStatusSelectorMenuProps) {
   const t = useMessages(orderListMessages);
   const to = useMessages(orderMessages);
-  const paymentState = { paymentStatus, paidAmount };
-  const transitions = getAdminOrderStatusTransitions(status, paymentState);
-  const cancelNeedsRefund = getAdminOrderCancellationBlockedReason(status, paymentState) !== null;
+  const options = getAdminOrderStatusOptions(status, facts);
+  // A status that can't be chosen stays in the menu, greyed out, with the reason under it.
+  const reason = (block: AdminOrderStatusBlock) => {
+    switch (block.code) {
+      case "cancel_needs_refund": return t("cancelNeedsRefund");
+      case "with_courier": return t("statusBlock.withCourier");
+      case "cash_not_collected": return t("statusBlock.cashFirst");
+      case "money_due": return t("statusBlock.moneyDue");
+    }
+  };
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -49,15 +55,17 @@ export function OrderStatusSelectorMenu({
           value={status}
           onValueChange={onStatusUpdate}
         >
-          {transitions.map((next) => (
-            <DropdownMenuRadioItem key={next} value={next}>
-              {orderStatusLabel(to, next)}
+          {options.map(({ status: next, block }) => (
+            <DropdownMenuRadioItem key={next} value={next} disabled={block !== null}>
+              {block ? (
+                <span className="flex flex-col items-start">
+                  <span>{orderStatusLabel(to, next)}</span>
+                  <span className="text-muted-foreground">{reason(block)}</span>
+                </span>
+              ) : orderStatusLabel(to, next)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-        {cancelNeedsRefund ? (
-          <p className="border-t px-2 py-2 text-body text-muted-foreground">{t("cancelNeedsRefund")}</p>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

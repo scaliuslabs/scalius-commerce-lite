@@ -385,6 +385,20 @@ describe("customer order email composition and delivery", () => {
     expect(email.visible).toContain("Email Buyer অর্ডার #order_email করেছেন, মোট ৳258।");
   });
 
+  it("names a discount by its code alone when the title is the code", async () => {
+    sqlite.exec(`INSERT INTO promotions (id, name, method) VALUES ('promo_r3', 'r3-order10', 'code');
+      INSERT INTO promotion_effects (id, promotion_id, kind, target, allocation, config, position) VALUES
+        ('eff_r3', 'promo_r3', 'percentage_off', 'line', 'across', '{"basisPoints":500}', 0);
+      INSERT INTO promotion_codes (id, promotion_id, code, normalized_code) VALUES ('code_r3', 'promo_r3', 'R3-ORDER10', 'R3-ORDER10');
+      INSERT INTO order_discount_allocations (id, order_id, order_item_id, promotion_id, effect_id, promotion_revision, evaluator_version,
+        method, promotion_name, promotion_code, effect_kind, target, currency_code, base_amount_minor, discount_amount_minor, quantity) VALUES
+        ('oda_r3', 'order_email', 'item', 'promo_r3', 'eff_r3', 1, 1, 'code', 'r3-order10', 'R3-ORDER10', 'percentage_off', 'line', 'BDT', 20000, 1000, 2);`);
+    await send("order_created");
+    const email = message();
+    expect(email.text).toContain("Discount · r3-order10: −৳10");
+    expect(email.text).not.toContain("(R3-ORDER10)");
+  });
+
   it("lists each discount by name and code and shows free delivery on the delivery line, for buyers and staff", async () => {
     sqlite.exec(`INSERT INTO promotions (id, name, method) VALUES ('promo_code', 'Eid sale', 'code'), ('promo_auto', 'Weekend deal', 'automatic'), ('promo_ship', 'Free delivery', 'code');
       INSERT INTO promotion_effects (id, promotion_id, kind, target, allocation, config, position) VALUES

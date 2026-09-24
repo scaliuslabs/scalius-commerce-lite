@@ -62,6 +62,8 @@ export const authMessages = defineMessages({
     inviteExpiredBody: "Ask the store owner to resend it.",
     inviteUsedTitle: "This invite was already used",
     inviteUsedBody: "Your account is set up. Sign in to continue.",
+    inviteCancelledTitle: "This invite was cancelled",
+    inviteCancelledBody: "Ask the store owner to invite you again.",
     requestNewLink: "Request a new link",
     // Two-step verification
     twoFactorTitle: "Two-step verification",
@@ -173,6 +175,8 @@ export const authMessages = defineMessages({
     inviteExpiredBody: "স্টোরের মালিককে আবার পাঠাতে বলুন।",
     inviteUsedTitle: "এই আমন্ত্রণ আগেই ব্যবহার করা হয়েছে",
     inviteUsedBody: "আপনার অ্যাকাউন্ট তৈরি আছে। চালিয়ে যেতে সাইন ইন করুন।",
+    inviteCancelledTitle: "এই আমন্ত্রণ বাতিল করা হয়েছে",
+    inviteCancelledBody: "স্টোরের মালিককে আবার আমন্ত্রণ পাঠাতে বলুন।",
     requestNewLink: "নতুন লিংক চান",
     twoFactorTitle: "দুই ধাপে যাচাই",
     totpDescription: "আপনার অথেনটিকেটর অ্যাপ থেকে ৬ সংখ্যার কোডটি দিন।",

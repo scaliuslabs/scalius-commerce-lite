@@ -106,12 +106,36 @@ describe("column menu and width-aware columns", () => {
       handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
     });
     expect(shown()).toBe("select,name,stock,sku,vendor,actions");
-    await act(async () => {
-      document.querySelector<HTMLElement>('[data-column-handle="name"]')!
-        .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-    });
-    expect(shown()).toBe("select,stock,name,sku,vendor,actions");
-    expect(JSON.parse(localStorage.getItem("scalius.table.inventory")!).order).toEqual(["stock", "name", "sku", "vendor"]);
+    expect(JSON.parse(localStorage.getItem("scalius.table.inventory")!).order).toEqual(["name", "stock", "sku", "vendor"]);
+  });
+
+  it("keeps the title column first: it has no handle and nothing moves above it", async () => {
+    await render(1440);
+    await openMenu();
+    expect(document.querySelector('[data-column-handle="name"]')).toBeNull();
+    expect(document.querySelector('[data-column-fixed="name"]')?.textContent).toContain("Product");
+    const up = async (id: string) =>
+      act(async () => {
+        document.querySelector<HTMLElement>(`[data-column-handle="${id}"]`)!
+          .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      });
+    await up("sku");
+    await up("sku");
+    expect(shown()).toBe("select,name,sku,stock,vendor,actions");
+    await up("stock");
+    await up("stock");
+    expect(shown()).toBe("select,name,stock,sku,vendor,actions");
+  });
+
+  it("puts the title column back first when a saved order has it elsewhere", async () => {
+    localStorage.setItem("scalius.table.inventory", JSON.stringify({ order: ["stock", "vendor", "name", "sku"], hidden: [] }));
+    await render(1440);
+    expect(shown()).toBe("select,name,stock,vendor,sku,actions");
+    await openMenu();
+    const rows = [...document.querySelectorAll("[data-column-fixed], [data-column-handle]")].map(
+      (node) => node.getAttribute("data-column-fixed") ?? node.getAttribute("data-column-handle"),
+    );
+    expect(rows).toEqual(["name", "stock", "vendor", "sku"]);
   });
 
   it("sorts by the chosen field and direction", async () => {

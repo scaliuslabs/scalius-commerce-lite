@@ -36,7 +36,7 @@ export function AdminHeader({ user, nav, canOpen, showMenu }: AdminHeaderProps) 
   const t = useMessages(shellMessages);
   const { toggleSidebar } = useSidebar();
   return (
-    <header className="relative z-20 flex h-14 shrink-0 items-center gap-2 bg-topbar px-2 text-topbar-foreground">
+    <header data-slot="topbar" className="relative z-20 flex h-14 shrink-0 items-center gap-2 bg-topbar px-2 text-topbar-foreground">
       {showMenu ? (
         <button type="button" onClick={toggleSidebar} aria-label={t("toggleSidebar")} className={cn(TOP_BAR_BUTTON, "md:hidden")}>
           <Menu className="size-5" aria-hidden />
