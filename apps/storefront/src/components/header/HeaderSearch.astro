@@ -1,0 +1,216 @@
+---
+// The header's search, in the shape a header variant asks for. Fields are a
+// real GET form to /search, so searching works before hydration and without
+// JavaScript; with it, a pointer press on the field opens the typeahead
+// palette instead (keyboard users type in place and press Enter). The
+// department select scopes the search to a category page (?q= there), with
+// JavaScript only: without it the select is inert and the whole store is
+// searched.
+// - icon: a 44px button (Dawn) that opens the palette (a link to /search
+//   before hydration).
+// - field: a filled field with a button inside (Star Tech 580x42, Fabrilife
+//   300x44, Chaldal 792x48).
+// - pill: a fully rounded field (Apple Gadgets 584x48, Target 628x44).
+// - scoped: department select, field and a filled button as one unit
+//   (Amazon 790x40).
+import type { NavigationItem } from "@/lib/api";
+
+interface Props {
+  shape: "icon" | "field" | "pill" | "scoped";
+  /** Unique per instance (ids of the field and its label). */
+  id: string;
+  /** Top-level menu items that link a category: the scope choices. */
+  departments?: NavigationItem[];
+  class?: string;
+}
+
+const { shape, id, departments = [], class: className } = Astro.props;
+const scopes = departments
+  .filter((item) => item.href?.startsWith("/categories/"))
+  .slice(0, 24);
+---
+
+{
+  shape === "icon" ? (
+    <a href="/search" class:list={["hsearch-icon", className]} aria-label="Search" aria-haspopup="dialog" data-search-open>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+    </a>
+  ) : (
+    <form
+      role="search"
+      action="/search"
+      method="get"
+      class:list={["hsearch", `hsearch--${shape}`, className]}
+      data-header-search
+    >
+      {shape === "scoped" && scopes.length > 0 && (
+        <select class="hsearch-scope" aria-label="Search in" data-search-scope>
+          <option value="">All</option>
+          {scopes.map((item) => (
+            <option value={item.href}>{item.title}</option>
+          ))}
+        </select>
+      )}
+      <label for={id} class="sr-only">
+        Search products
+      </label>
+      <input
+        id={id}
+        class="hsearch-input"
+        type="search"
+        name="q"
+        placeholder="Search products"
+        autocomplete="off"
+        enterkeyhint="search"
+        maxlength="200"
+        data-search-inline
+      />
+      <button type="submit" class="hsearch-submit" aria-label="Search">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      </button>
+    </form>
+  )
+}
+
+<style>
+  .hsearch-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    color: inherit;
+  }
+
+  .hsearch-icon:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* The field is always the card surface with its own ink, whatever the
+     header tone around it (an AA pair of the base set). */
+  .hsearch {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 2.75rem;
+    overflow: hidden;
+    border: 1px solid var(--input);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--card-foreground);
+  }
+
+  .hsearch:focus-within {
+    outline: 2px solid var(--ring, var(--foreground));
+    outline-offset: 1px;
+  }
+
+  .hsearch--field {
+    background: var(--muted);
+    color: var(--foreground);
+    border-color: transparent;
+  }
+
+  .hsearch--pill {
+    border-radius: 9999px;
+  }
+
+  @media (min-width: 64rem) {
+    .hsearch--pill {
+      height: 3rem;
+    }
+  }
+
+  .hsearch-scope {
+    flex-shrink: 0;
+    max-width: 9rem;
+    padding-inline: 0.75rem 0.5rem;
+    border: 0;
+    border-right: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--foreground);
+    font-size: 0.8125rem;
+  }
+
+  .hsearch-input {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 1rem 0.5rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 0.9375rem;
+  }
+
+  .hsearch-input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
+
+  .hsearch-input:focus,
+  .hsearch-scope:focus {
+    outline: none;
+  }
+
+  .hsearch-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+
+  .hsearch-submit {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    color: var(--muted-foreground);
+  }
+
+  .hsearch-submit:hover {
+    color: var(--foreground);
+  }
+
+  .hsearch-submit:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -4px;
+  }
+
+  /* The scoped search ends in a filled button (Amazon's 45px). */
+  .hsearch--scoped .hsearch-submit {
+    width: 3rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .hsearch--pill .hsearch-submit {
+    margin: 0.25rem;
+    width: 2.25rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  @media (min-width: 64rem) {
+    .hsearch--pill .hsearch-submit {
+      width: 2.5rem;
+    }
+  }
+</style>

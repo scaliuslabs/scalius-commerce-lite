@@ -20,9 +20,11 @@ interface Props {
   /** Unique per rendered instance; prefixes every id inside. */
   id: string;
   navStyle: "menu" | "mega";
+  /** Mega panels show linked items that have photos as 120px tiles (Fabrilife). */
+  promoImages?: boolean;
 }
 
-const { navigation = [], id, navStyle } = Astro.props;
+const { navigation = [], id, navStyle, promoImages = false } = Astro.props;
 const items = (Array.isArray(navigation) ? navigation : []).filter((item) => item?.title);
 const moreId = `${id}-more`;
 ---
@@ -69,7 +71,7 @@ const moreId = `${id}-more`;
             )}
             {children.length > 0 &&
               (navStyle === "mega" ? (
-                <MegaMenuPanel id={panelId} item={item} />
+                <MegaMenuPanel id={panelId} item={item} promoImages={promoImages} />
               ) : (
                 <div id={panelId} class="desktop-nav-dropdown" hidden>
                   <RecursiveDesktopNav items={children} />
@@ -93,20 +95,16 @@ const moreId = `${id}-more`;
         </svg>
       </button>
       <div id={moreId} class="desktop-nav-dropdown" hidden>
-        <ul class="nav-dropdown-list">
-          {
-            items.map((item, index) => (
-              <li data-nav-more-index={index} hidden>
-                <RecursiveDesktopNav
-                  items={[{ ...item, subMenu: navigationChildren(item).map((child) => ({ ...child, subMenu: undefined })) }]}
-                />
-              </li>
-            ))
-          }
-        </ul>
+        {/* Filled from the row by nav-disclosure.ts, so each link is in the HTML once. */}
+        <ul class="nav-dropdown-list" data-nav-more-list></ul>
       </div>
     </li>
   </ul>
+  <template data-nav-more-template>
+    <li data-nav-more-index="" hidden>
+      <RecursiveDesktopNav items={[{ title: "More", href: "#", subMenu: [{ title: "More", href: "#" }] }]} />
+    </li>
+  </template>
 </nav>
 
 <style>
@@ -173,7 +171,7 @@ const moreId = `${id}-more`;
     font-weight: 500;
     letter-spacing: 0.01em;
     white-space: nowrap;
-    color: var(--foreground);
+    color: var(--nav-ink, var(--foreground));
     background-image: linear-gradient(currentColor, currentColor);
     background-repeat: no-repeat;
     background-position: 50% calc(100% - 0.5rem);
@@ -211,12 +209,12 @@ const moreId = `${id}-more`;
     height: 2.5rem;
     margin-right: 0.25rem;
     border-radius: var(--radius);
-    color: var(--muted-foreground);
+    color: var(--nav-ink-muted, var(--muted-foreground));
   }
 
   .desktop-nav-toggle:not(.desktop-nav-link):hover,
   .desktop-nav-toggle[aria-expanded="true"] {
-    color: var(--foreground);
+    color: var(--nav-ink, var(--foreground));
   }
 
   .desktop-nav-chevron {
@@ -236,7 +234,7 @@ const moreId = `${id}-more`;
 
   .desktop-nav-link:focus-visible,
   .desktop-nav-toggle:focus-visible {
-    outline: 2px solid var(--foreground);
+    outline: 2px solid var(--nav-ink, var(--foreground));
     outline-offset: 2px;
   }
 

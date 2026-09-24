@@ -1,0 +1,188 @@
+---
+// support-dark (Star Tech, 448px): in the header's tone. Support first: a
+// large phone card (and WhatsApp), then the store's menus as link columns,
+// then "Stay connected" (address, email). Contact cards appear only for the
+// facts the store has.
+import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+import type { FooterModel } from "./footer-model";
+
+interface Props {
+  model: FooterModel;
+}
+
+const { model } = Astro.props;
+const { brandName, tagline, phoneHref, chatHref, storePhone, storeEmail, storeAddress, menus } = model;
+const hasSupport = Boolean(phoneHref || chatHref);
+const hasConnect = Boolean(storeEmail || storeAddress);
+---
+
+<div class="support-footer">
+  {
+    hasSupport && (
+      <section class="support-cards" aria-labelledby="footer-support-title">
+        <h2 id="footer-support-title" class="footer-heading">Support</h2>
+        {phoneHref && (
+          <a href={phoneHref} class="support-card" data-footer-contact>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />
+            </svg>
+            <span>
+              <small>Call us</small>
+              <strong>{storePhone}</strong>
+            </span>
+          </a>
+        )}
+        {chatHref && (
+          <a href={chatHref} class="support-card" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
+            </svg>
+            <span>
+              <small>Message us</small>
+              <strong>WhatsApp</strong>
+            </span>
+          </a>
+        )}
+      </section>
+    )
+  }
+
+  {
+    menus.length > 0 && (
+      <nav class="support-menus" aria-label={brandName ? `About ${brandName}` : "About"}>
+        {menus.map((menu) => (
+          <div>
+            <h2 class="footer-heading">{menu.title}</h2>
+            <RecursiveFooterLink links={menu.links} />
+          </div>
+        ))}
+      </nav>
+    )
+  }
+
+  {
+    (hasConnect || tagline) && (
+      <section class="support-connect" aria-labelledby="footer-connect-title">
+        <h2 id="footer-connect-title" class="footer-heading">Stay connected</h2>
+        {tagline && <p class="support-tagline">{tagline}</p>}
+        {storeAddress && <address>{storeAddress}</address>}
+        {storeEmail && (
+          <a href={`mailto:${storeEmail}`} class="support-email">
+            {storeEmail}
+          </a>
+        )}
+      </section>
+    )
+  }
+</div>
+
+<style>
+  .support-footer {
+    display: grid;
+    gap: 1.75rem;
+    padding-block: 0.75rem 0.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .support-footer {
+      grid-template-columns: minmax(15rem, 1fr) minmax(0, 2fr) minmax(14rem, 1fr);
+      gap: 2.5rem;
+    }
+  }
+
+  .footer-heading {
+    margin-bottom: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .support-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Star Tech's large phone-number card. */
+  .support-card {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 4.5rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 0.25rem);
+    color: inherit;
+  }
+
+  .support-card:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  .support-card:focus-visible,
+  .support-email:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  .support-card svg {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .support-card span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .support-card small {
+    font-size: 0.8125rem;
+  }
+
+  .support-card strong {
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    overflow-wrap: anywhere;
+  }
+
+  .support-menus {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 1.5rem 2rem;
+  }
+
+  .support-connect {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+  }
+
+  .support-connect address {
+    font-style: normal;
+  }
+
+  .support-email {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 40rem) {
+    .support-email {
+      min-height: 0;
+    }
+  }
+</style>

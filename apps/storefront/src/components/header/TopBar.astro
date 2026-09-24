@@ -1,0 +1,264 @@
+---
+// The bar above the header (theme block `topBar`). Its text is the
+// announcement in Header settings; a variant without text to show renders
+// nothing rather than an empty strip.
+// - announcement: one centred line on the action colour (Dawn 39px).
+// - utility: computers only, 36px on the muted surface; the announcement at
+//   the start, then call, track order and account (Game Ghor 38px, Target).
+//   Phones reach the same links in the menu drawer.
+// - app-banner: phones only, 60px, dismissible (Apple Gadgets, Amazon). The
+//   close control is the <summary> of an open <details>, so it works before
+//   hydration; a dismissal lasts for the session.
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { telHref } from "@/lib/store-identity";
+
+interface Props {
+  variant: string;
+  text: string;
+  storeName: string;
+  phone: string | null;
+}
+
+const { variant, text: rawText, storeName, phone } = Astro.props;
+const text = rawText.trim();
+const phoneHref = telHref(phone);
+---
+
+{
+  variant === "announcement" && text && (
+    <div class="relative z-50 bg-primary text-primary-foreground overflow-hidden shrink-0 w-full h-8 sm:h-9 flex items-center justify-center border-b border-white/10">
+      <div class="max-w-7xl mx-auto px-4 w-full">
+        <p class="text-xs sm:text-[0.8125rem] font-medium text-center tracking-[0.08em] uppercase truncate">
+          {text}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+{
+  variant === "utility" && (
+    <div class="top-utility" data-top-bar="utility">
+      <div class="top-utility-inner">
+        <p class="top-utility-text">{text}</p>
+        <ul class="top-utility-links">
+          {phoneHref && (
+            <li>
+              <a href={phoneHref}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
+                {phone}
+              </a>
+            </li>
+          )}
+          <li>
+            <a href="/track-order" data-astro-prefetch="false">Track your order</a>
+          </li>
+          <li>
+            <a href="/account" data-account-link data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}>
+              My account
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+{
+  variant === "app-banner" && text && (
+    <details class="top-app-banner" data-top-bar="app-banner" open>
+      <summary aria-label="Dismiss">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </summary>
+      <div class="top-app-banner-body">
+        <span class="top-app-banner-mark" aria-hidden="true">{storeName.charAt(0)}</span>
+        <p>
+          <strong>{storeName}</strong>
+          <span>{text}</span>
+        </p>
+      </div>
+    </details>
+    <script is:inline>
+      (function () {
+        const key = "scalius:app-banner-dismissed";
+        const banner = document.currentScript && document.currentScript.previousElementSibling;
+        if (!banner) return;
+        try {
+          if (sessionStorage.getItem(key) === "1") banner.removeAttribute("open");
+        } catch {
+          // Storage blocked: the banner shows; dismissing still works for this page.
+        }
+        banner.addEventListener("toggle", function () {
+          if (banner.open) return;
+          try {
+            sessionStorage.setItem(key, "1");
+          } catch {
+            // Storage blocked: nothing to remember.
+          }
+        });
+      })();
+    </script>
+  )
+}
+
+<style>
+  .top-utility {
+    display: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  @media (min-width: 64rem) {
+    .top-utility {
+      display: block;
+    }
+  }
+
+  .top-utility-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    max-width: var(--theme-container-width, 80rem);
+    height: 2.25rem;
+    margin-inline: auto;
+    padding-inline: 2rem;
+    font-size: 0.8125rem;
+  }
+
+  .top-utility-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .top-utility-links {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .top-utility-links li + li {
+    border-left: 1px solid var(--border);
+  }
+
+  .top-utility-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+    color: inherit;
+    white-space: nowrap;
+  }
+
+  .top-utility-links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .top-utility-links a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+
+  .top-utility-links svg,
+  .top-app-banner svg {
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .top-app-banner {
+    position: relative;
+    display: block;
+    border-bottom: 1px solid var(--border);
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .top-app-banner:not([open]) {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .top-app-banner {
+      display: none;
+    }
+  }
+
+  .top-app-banner summary {
+    position: absolute;
+    top: 50%;
+    right: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    transform: translateY(-50%);
+    border-radius: 9999px;
+    list-style: none;
+    cursor: pointer;
+    color: var(--foreground);
+  }
+
+  .top-app-banner summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .top-app-banner summary svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .top-app-banner summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -4px;
+  }
+
+  .top-app-banner-body {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.75rem;
+    padding: 0.5rem 3.25rem 0.5rem 1rem;
+  }
+
+  .top-app-banner-mark {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .top-app-banner-body p {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    font-size: 0.875rem;
+    line-height: 1.3;
+  }
+
+  .top-app-banner-body strong,
+  .top-app-banner-body span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

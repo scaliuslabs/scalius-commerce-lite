@@ -101,7 +101,7 @@ numbers come from the storefront study
 | `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / sidebar-grid / thumbs-below / tech / brand-black | comfortable, soft, pill, raised, dark header |
 | `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / marketplace / sidebar-grid / thumbs-below / marketplace-3col / directory | dense, flat type, brand header, full width |
 | `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / bar-drawer (list rows on phones) / image-grid / retail / minimal-columns | comfortable, rounded, pill, brand header |
-| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / departments-rail / accordion-drawer / standard / sidebar-grid / classic / classic / product-widgets | compact, subtle, hairline cards, 1440 |
+| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / dropdown / accordion-drawer / standard / sidebar-grid / classic / classic / product-widgets | compact, subtle, hairline cards, 1440 |
 | `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid / thumbs-below / classic / minimal-columns | compact, rounded, pill, contain, full width |
 | `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / bar-drawer / stacked / boutique / minimal-columns | comfortable, display, rounded, pill, 1200 |
 
@@ -111,6 +111,10 @@ Where the data departs from SYNTHESIS.md, and why:
   cards, a 1440px container, today's homepage order and product page)
   instead of the study's pill buttons, flat cards and Game Ghor order: it is
   the default, and today's store and product page must stay pixel-identical.
+  For the same reason it uses the announcement top bar and the dropdown menu
+  row (today's bar and row) instead of the study's utility bar and
+  "All departments" rail; both stay available as `utility` and
+  `departments-rail` for any other mix.
 - **Card minimums** are grid minimums, not the measured card widths: an
   auto-fill grid stretches cards, and two cards must fit a 360px phone.
   `dense` shares compact's type scale (the 14px phone floor) and uses a 12px

@@ -347,9 +347,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       headerTone: "light", container: "1440",
     },
     blocks: blocks({
-      topBar: "utility",
+      topBar: "announcement",
       header: ["mall-departments"],
-      desktopNav: ["departments-rail", { open: "home" }],
+      desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["standard"],
       listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "result-count", "sort", "per-page"], phoneLayout: "grid", paging: "numbered" },
