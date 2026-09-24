@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
-import { deliveryLocations } from "@scalius/database/schema";
+import { deliveryLocations, deliveryZoneLocations } from "@scalius/database/schema";
 import { ValidationError } from "@scalius/core/errors";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export interface DeliveryLocationSelectionInput {
     city: string;
@@ -22,6 +22,8 @@ export interface ActiveDeliveryLocationRow {
     parentId: string | null;
     isActive: boolean;
     deletedAt: Date | number | null;
+    /** The delivery zone this location is assigned to, if any. */
+    deliveryZoneId?: string | null;
 }
 
 function deliveryLocationIds(data: DeliveryLocationSelectionInput): string[] {
@@ -43,6 +45,7 @@ export function selectActiveDeliveryLocationRowsByIds(
             parentId: deliveryLocations.parentId,
             isActive: deliveryLocations.isActive,
             deletedAt: deliveryLocations.deletedAt,
+            deliveryZoneId: sql<string | null>`(SELECT ${deliveryZoneLocations.zoneId} FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.locationId} = ${deliveryLocations.id})`,
         })
         .from(deliveryLocations);
 

@@ -1058,7 +1058,7 @@ describe("createStorefrontOrder shipping verification", () => {
         zone: "zone_1",
         shippingMethodId: "ship_standard",
       },
-      { hasFreeDeliveryProduct: false },
+      { hasFreeDeliveryProduct: false, subtotalMinor: 0 },
     );
 
     expect(result.shippingMinor).toBe(1_235);
@@ -1325,6 +1325,7 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         undefined,
         undefined,
         {
+          kind: "delivery",
           shippingMinor: 0,
           shippingMethod: {
             id: "forged_shipping",

@@ -8,6 +8,7 @@
  * The guards redirect; the admin API enforces the same gates on every call.
  */
 import { redirect } from "@tanstack/react-router";
+import { AdminApiResponseError } from "./admin-api-error";
 import { withDashboardBasePath } from "./dashboard-base-path";
 
 export interface DashboardSessionState {
@@ -43,9 +44,9 @@ export async function readDashboardSession(): Promise<DashboardSessionState> {
     cache: "no-store",
     headers: { Accept: "application/json" },
   });
-  if (!response.ok) {
-    throw new Error(`Dashboard session is unavailable (${response.status})`);
-  }
+  // The server answered: carry its status, so a 502 reads as "Scalius isn't
+  // responding" rather than as the merchant's connection being down.
+  if (!response.ok) throw new AdminApiResponseError("Dashboard session is unavailable", response.status);
   return response.json() as Promise<DashboardSessionState>;
 }
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   purgeRevokedAgentGrants: vi.fn(),
+  listAgentConnections: vi.fn(),
   deleteAgentArtifactObjects: vi.fn(),
   logOpsEvent: vi.fn(),
 }));
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/agent-access/agent-access.service", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/agent-access/agent-access.service")>()),
   purgeRevokedAgentGrants: mocks.purgeRevokedAgentGrants,
+  listAgentConnections: mocks.listAgentConnections,
 }));
 vi.mock("../../agent-access/artifact-delivery", () => ({
   deleteAgentArtifactObjects: mocks.deleteAgentArtifactObjects,
@@ -126,5 +128,20 @@ describe("DELETE /admin/agent-access/connections/revoked", () => {
     expect(response.status).toBe(403);
     expect(mocks.purgeRevokedAgentGrants).not.toHaveBeenCalled();
     expect(mocks.logOpsEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /admin/agent-access/connections", () => {
+  it.each([
+    ["a two-step verified store owner", {}, true],
+    ["an owner without two-step verification", { user: { twoFactorEnabled: false } }, false],
+    ["a session that hasn't finished two-step verification", { session: { twoFactorVerified: false } }, false],
+    ["staff who aren't the store owner", { user: { isSuperAdmin: false } }, false],
+  ] as const)("tells the dashboard whether %s may manage access", async (_, options, canManage) => {
+    mocks.listAgentConnections.mockResolvedValue({ connections: [], pagination: { page: 1, limit: 1, total: 0 } });
+    const response = await createApp(options).request("/api/v1/admin/agent-access/connections", {}, env);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true, data: { connections: [], canManage } });
   });
 });

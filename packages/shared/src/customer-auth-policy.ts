@@ -303,6 +303,10 @@ function enforceRuntimeContactConstraints(policy: CustomerAuthPolicyConfig): Cus
   if (!required.includes("phone")) {
     required.push("phone");
   }
+  // Codes sent only by email need every customer's email, so it can't be optional.
+  if (policy.otpChannels.length === 1 && policy.otpChannels[0] === "email" && !required.includes("email")) {
+    required.push("email");
+  }
 
   return {
     ...policy,

@@ -124,10 +124,15 @@ export function getStripeCheckoutMissingFields(
   return missing;
 }
 
+/** "Add the publishable key and webhook secret to turn on Stripe." */
+function missingFieldsReason(gateway: string, labels: string[]): string | undefined {
+  if (labels.length === 0) return undefined;
+  const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+  return `Add the ${list} to turn on ${gateway}.`;
+}
+
 function stripeBlockedReason(missingFields: StripeCheckoutRequiredField[]): string | undefined {
-  if (missingFields.length === 0) return undefined;
-  const labels = missingFields.map((field) => STRIPE_CHECKOUT_FIELD_LABELS[field]);
-  return `Stripe needs ${labels.join(", ")} before it can be shown at checkout.`;
+  return missingFieldsReason("Stripe", missingFields.map((field) => STRIPE_CHECKOUT_FIELD_LABELS[field]));
 }
 
 function getStripePlaceholderCredentialErrors(
@@ -236,9 +241,7 @@ export function getSSLCommerzCheckoutMissingFields(
 }
 
 function sslCommerzBlockedReason(missingFields: SSLCommerzCheckoutRequiredField[]): string | undefined {
-  if (missingFields.length === 0) return undefined;
-  const labels = missingFields.map((field) => SSLCOMMERZ_CHECKOUT_FIELD_LABELS[field]);
-  return `SSLCommerz needs ${labels.join(", ")} before it can be shown at checkout.`;
+  return missingFieldsReason("SSLCommerz", missingFields.map((field) => SSLCOMMERZ_CHECKOUT_FIELD_LABELS[field]));
 }
 
 function getSSLCommerzPlaceholderCredentialErrors(

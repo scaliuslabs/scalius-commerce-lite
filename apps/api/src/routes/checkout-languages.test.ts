@@ -20,6 +20,7 @@ const languageRecord = {
   fieldVisibility: "{}",
   isActive: true,
   isDefault: true,
+  revision: 0,
   createdAt: 1,
   updatedAt: 1,
   deletedAt: null,
@@ -272,7 +273,7 @@ describe("checkout language route boundaries", () => {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: true, isDefault: true }),
+        body: JSON.stringify({ isActive: true, isDefault: true, expectedRevision: 0 }),
       },
       env,
     );
@@ -292,7 +293,7 @@ describe("checkout language route boundaries", () => {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: false, isDefault: false }),
+        body: JSON.stringify({ isActive: false, isDefault: false, expectedRevision: 0 }),
       },
       env,
     );
@@ -314,6 +315,7 @@ describe("checkout language route boundaries", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fieldVisibility: { showEmailField: true },
+          expectedRevision: 0,
         }),
       },
       env,

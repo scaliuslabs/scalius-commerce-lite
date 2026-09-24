@@ -337,7 +337,7 @@ export const OPERATIONS = {
     risk: "destructive",
     limits: { request: 16_384, response: 8_192 },
   },
-  "dashboard.checkout_languages.update": { limits: { request: 65_536, response: 16_384 } },
+  "dashboard.checkout_languages.update": { revision: "required", limits: { request: 65_536, response: 16_384 } },
 
   "dashboard.checkout.flow_get": {},
   "dashboard.checkout.flow_update": { revision: "required" },
@@ -401,7 +401,7 @@ export const OPERATIONS = {
   "dashboard.content.update": { revision: "required" },
 
   "dashboard.customer_requests.policy_get": {},
-  "dashboard.customer_requests.policy_update": {},
+  "dashboard.customer_requests.policy_update": { revision: "required" },
 
   "dashboard.customers.bulk_delete": {
     risk: "destructive",
@@ -523,14 +523,6 @@ export const OPERATIONS = {
   "dashboard.hero_sliders.update": { revision: "required" },
 
   "dashboard.home.activity": { limits: { request: 16_384, response: 32_768 } },
-  "dashboard.home.full_summary": { limits: { request: 16_384 } },
-  "dashboard.home.legacy_combined": {
-    exposure: "excluded",
-    limits: { request: 16_384 },
-    reason:
-      "Superseded by the bounded dashboard.home.summary and dashboard.home.activity operations.",
-  },
-  "dashboard.home.metrics": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.home.summary": { limits: { request: 16_384 } },
 
   "dashboard.inventory_alerts.acknowledge": {},
@@ -628,6 +620,7 @@ export const OPERATIONS = {
   },
   "dashboard.meta_conversions.logs_list": {},
   "dashboard.meta_conversions.update": {
+    revision: "required",
     risk: "security",
     batch: "forbidden",
     limits: { response: 16_384 },
@@ -672,10 +665,9 @@ export const OPERATIONS = {
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
 
-  "dashboard.notifications.admin_rules_get": {},
-  "dashboard.notifications.admin_rules_update": {},
+  "dashboard.notifications.admin_rules_update": { revision: "required" },
   "dashboard.notifications.customer_rules_get": {},
-  "dashboard.notifications.customer_rules_update": {},
+  "dashboard.notifications.customer_rules_update": { revision: "required" },
   "dashboard.notifications.fcm_device_register": {
     exposure: "device",
     risk: "security",
@@ -690,9 +682,13 @@ export const OPERATIONS = {
   },
   "dashboard.notifications.firebase_get": {},
   "dashboard.notifications.firebase_update": {
+    revision: "required",
     risk: "security",
     batch: "forbidden",
   },
+  "dashboard.notifications.template_test_send": { openWorld: true, batch: "forbidden" },
+  "dashboard.notifications.templates_get": {},
+  "dashboard.notifications.templates_update": { revision: "required" },
 
   "dashboard.orders.amendment_confirm": {
     idempotency: "required",
@@ -860,17 +856,22 @@ export const OPERATIONS = {
   },
 
   "dashboard.payments.methods_get": {},
-  "dashboard.payments.methods_update": {},
+  "dashboard.payments.methods_update": { revision: "required" },
   "dashboard.payments.sslcommerz_get": {},
   "dashboard.payments.sslcommerz_update": {
+    revision: "required",
     risk: "security",
     batch: "forbidden",
   },
   "dashboard.payments.stripe_get": {},
   "dashboard.payments.stripe_update": {
+    revision: "required",
     risk: "security",
     batch: "forbidden",
   },
+
+  "dashboard.policies.get": {},
+  "dashboard.policies.update": { revision: "required" },
 
   "dashboard.product_options.save_matrix": { revision: "required" },
 
@@ -937,6 +938,7 @@ export const OPERATIONS = {
 
   "dashboard.security.policy_get": { limits: { request: 16_384 } },
   "dashboard.security.policy_update": {
+    revision: "required",
     risk: "security",
     limits: { request: 131_072, response: 8_192 },
   },
@@ -953,7 +955,7 @@ export const OPERATIONS = {
     limits: { request: 16_384 },
   },
   "dashboard.seo.settings_get": { limits: { request: 16_384 } },
-  "dashboard.seo.settings_update": { limits: { request: 65_536, response: 16_384 } },
+  "dashboard.seo.settings_update": { revision: "required", limits: { request: 65_536, response: 16_384 } },
 
   "dashboard.settings_abandoned_checkouts_cleanup.cleanup": {
     exposure: "excluded",
@@ -994,28 +996,31 @@ export const OPERATIONS = {
   },
   "dashboard.settings_sms.sms": {
     risk: "security",
+    revision: "required",
     limits: { request: 16_384, response: 8_192 },
   },
 
   "dashboard.settings.business_get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.business_update": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.business_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.currency_get": { limits: { request: 16_384, response: 8_192 } },
-  "dashboard.settings.currency_update": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.currency_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.customer_auth_get": {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
   "dashboard.settings.customer_auth_update": {
+    revision: "required",
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
   "dashboard.settings.customer_countries_get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.customer_countries_update": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.customer_countries_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.email_get": {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
   "dashboard.settings.email_update": {
+    revision: "required",
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
@@ -1026,11 +1031,11 @@ export const OPERATIONS = {
       "Legacy aggregate of independently managed header and footer documents; excluded until those documents are exposed as bounded semantic read projections.",
   },
   "dashboard.settings.media_delivery_get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.media_delivery_update": { limits: { request: 16_384, response: 16_384 } },
+  "dashboard.settings.media_delivery_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.platform_get": { limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.platform_update": { limits: { request: 16_384, response: 16_384 } },
+  "dashboard.settings.platform_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.storefront_url_get": { limits: { request: 16_384, response: 8_192 } },
-  "dashboard.settings.storefront_url_update": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.storefront_url_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
 
   "dashboard.shipments.delete": {
     exposure: "excluded",
@@ -1048,16 +1053,12 @@ export const OPERATIONS = {
     reason: "Legacy duplicate; use dashboard.orders.shipment_refresh.",
   },
 
-  "dashboard.shipping_methods.create": {},
-  "dashboard.shipping_methods.delete_permanently": {
-    risk: "destructive",
-    batch: "forbidden",
-  },
-  "dashboard.shipping_methods.get": {},
   "dashboard.shipping_methods.list": {},
-  "dashboard.shipping_methods.restore": {},
-  "dashboard.shipping_methods.trash": { risk: "destructive" },
-  "dashboard.shipping_methods.update": {},
+  "dashboard.shipping_zones.apply_template": { revision: "required", batch: "forbidden" },
+  "dashboard.shipping_zones.create": {},
+  "dashboard.shipping_zones.delete": { risk: "destructive" },
+  "dashboard.shipping_zones.everywhere_else_update": { revision: "required" },
+  "dashboard.shipping_zones.update": { revision: "required" },
 
   "dashboard.taxes.classes_create": {},
   "dashboard.taxes.classes_delete": {
@@ -1130,6 +1131,11 @@ export const OPERATIONS = {
     limits: { response: 16_384 },
   },
   "dashboard.team.users.list": {},
+  "dashboard.team.users.remove": {
+    risk: "destructive",
+    batch: "forbidden",
+    limits: { response: 16_384 },
+  },
   "dashboard.team.users.resend_invitation": {
     risk: "security",
     openWorld: true,

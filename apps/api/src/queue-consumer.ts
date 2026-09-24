@@ -28,7 +28,7 @@ import { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } 
 import {
   processExistingMetaPurchaseOutboxForOrder,
 } from "@scalius/core/integrations/meta/purchase-outbox";
-import { sendOrderNotificationEmail, sendOrderNotification } from "@scalius/core/modules/notifications/notifications.service";
+import { sendOrderNotificationEmail, sendOrderNotification, sendStaffOrderEmails } from "@scalius/core/modules/notifications/notifications.service";
 import type { OrderNotificationQueueMessage, OrderNotificationType } from "@scalius/core/modules/notifications";
 import {
   claimOrderNotificationOutboxForProcessing,
@@ -777,6 +777,25 @@ async function processQueueMessage(
         } catch (fcmError) {
           console.error(`[Queue] Admin notification check/send failed for ${payload.orderId}:`, fcmError);
           retryableFailures.push(`admin push: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
+        }
+
+        // Staff order emails (new orders only); receipts keep retries from resending.
+        try {
+          const staffEmailResult = await sendStaffOrderEmails(db, {
+            id: payload.orderId,
+            customerName: payload.customerName,
+            notificationType: payload.notificationType,
+          }, {
+            encryptionKey,
+            env: env as unknown as Record<string, unknown>,
+            outboxId: payload.outboxId,
+          });
+          if (staffEmailResult.hasRetryableFailure) {
+            retryableFailures.push(`staff email: ${summarizeNotificationFailures(staffEmailResult.outcomes)}`);
+          }
+        } catch (staffEmailError) {
+          console.error(`[Queue] Staff order email failed for ${payload.orderId}:`, staffEmailError instanceof Error ? staffEmailError.message : "unknown error");
+          retryableFailures.push("staff email: settings or order read failed");
         }
 
         if (retryableFailures.length > 0) {

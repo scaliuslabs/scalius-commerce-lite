@@ -4,7 +4,7 @@ import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
-import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
+import { successEnvelope, conflictResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods,
@@ -39,6 +39,9 @@ import { getCurrencySettings } from "@scalius/core/modules/settings/site-setting
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
+const revisionSchema = z.number().int().nonnegative();
+/** A save answers with the document revision the next save must send back. */
+const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), revision: revisionSchema }));
 
 async function assertDisablingGatewayKeepsCheckoutFlow(
     db: Database,
@@ -84,9 +87,11 @@ const updateMethodsSchema = z.object({
         .max(listPaymentMethodIds().length)
         .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
     defaultMethod: paymentMethodIdSchema,
+    expectedRevision: revisionSchema,
 });
 
 const saveStripeSchema = z.object({
+    expectedRevision: revisionSchema,
     secretKey: z.string().optional(),
     publishableKey: z.string().optional(),
     webhookSecret: z.string().optional(),
@@ -94,6 +99,7 @@ const saveStripeSchema = z.object({
 });
 
 const saveSSLCommerzSchema = z.object({
+    expectedRevision: revisionSchema,
     storeId: z.string().optional(),
     storePassword: z.string().optional(),
     sandbox: z.boolean().optional(),
@@ -101,6 +107,26 @@ const saveSSLCommerzSchema = z.object({
 });
 
 type SaveStripeInput = z.infer<typeof saveStripeSchema>;
+
+/**
+ * Keys may be saved a few at a time while a gateway stays off; turning it on
+ * needs every key. Missing keys are named against their fields.
+ */
+function assertGatewayCanTurnOn(label: string, readiness: {
+    enabled: boolean;
+    configured: boolean;
+    missingFields: readonly string[];
+    credentialErrors?: string[];
+    blockedReason?: string;
+}): void {
+    if (!readiness.enabled || readiness.configured) return;
+    const message = readiness.blockedReason ?? `${label} is not ready for checkout.`;
+    const missing = readiness.credentialErrors?.length ? [] : readiness.missingFields;
+    throw new ValidationError(
+        message,
+        missing.length ? { issues: missing.map((field) => ({ path: [field], message })) } : undefined,
+    );
+}
 
 function submittedSecret(value: string | undefined): string | undefined {
     return value && value !== MASKED && value.trim() ? value.trim() : undefined;
@@ -160,6 +186,7 @@ const gatewayStatusSchema = z.object({
 const paymentMethodsResponseSchema = z.object({
     enabledMethods: z.array(z.string()),
     defaultMethod: z.string(),
+    revision: revisionSchema,
     activeMethods: z.array(z.string()).optional(),
     activeDefaultMethod: z.string().optional(),
     /** Keyed by payment method id: every registered gateway plus cod. */
@@ -186,9 +213,10 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const activeConfig = gatewaySnapshot.activePaymentMethods;
     const savedSettings = gatewaySnapshot.settings as unknown as Record<string, GatewaySettings | null | undefined>;
 
-    const [checkoutSettings, currencySettings] = await Promise.all([
+    const [checkoutSettings, currencySettings, { revision }] = await Promise.all([
         checkoutDocument.read(db),
         getCurrencySettings(db),
+        paymentMethodsDocument.readDetailed(db),
     ]);
 
     const flowActiveMethods = filterPaymentMethodsForCurrency(
@@ -239,6 +267,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         defaultMethod: rawConfig.enabledMethods.includes(rawConfig.defaultMethod)
             ? rawConfig.defaultMethod
             : (rawConfig.enabledMethods[0] ?? COD_PAYMENT_METHOD),
+        revision,
         activeMethods: flowActiveMethods,
         ...(flowDefaultMethod ? { activeDefaultMethod: flowDefaultMethod } : {}),
         gatewayStatus,
@@ -253,8 +282,9 @@ const savePaymentMethodsRoute = createRoute({
     summary: "Save payment methods configuration",
     request: { body: { required: true, content: { "application/json": { schema: updateMethodsSchema } } } },
     responses: {
-        200: { description: "Payment methods saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "Payment methods saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -299,14 +329,14 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         throw new ValidationError("Default method is hidden by the current checkout flow settings.");
     }
 
-    await paymentMethodsDocument.write(db, {
+    const { revision } = await paymentMethodsDocument.write(db, {
         enabledMethods: data.enabledMethods,
         defaultMethod: data.defaultMethod,
-    });
+    }, {}, { expectedRevision: data.expectedRevision });
 
     await bumpCacheGeneration(c);
 
-    return ok(c, { message: "Payment methods updated" });
+    return ok(c, { message: "Payment methods updated", revision });
 });
 
 // ─────────────────────────────────────────
@@ -314,6 +344,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
 // ─────────────────────────────────────────
 
 const stripeSettingsResponseSchema = z.object({
+    revision: revisionSchema,
     secretKey: z.string(),
     publishableKey: z.string(),
     webhookSecret: z.string(),
@@ -337,6 +368,7 @@ app.openapi(getStripeRoute, async (c) => {
         const stored = await stripeDocument.readDetailed(db);
 
         return ok(c, {
+            revision: stored.revision,
             secretKey: maskedSecret(stored, "secretKey"),
             publishableKey: stored.value.publishableKey,
             webhookSecret: maskedSecret(stored, "webhookSecret"),
@@ -352,8 +384,9 @@ const saveStripeRoute = createRoute({
     summary: "Save Stripe settings",
     request: { body: { required: true, content: { "application/json": { schema: saveStripeSchema } } } },
     responses: {
-        200: { description: "Stripe settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "Stripe settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
@@ -365,9 +398,7 @@ app.openapi(saveStripeRoute, async (c) => {
         const storedSettings = await getStripeSettings(db, configuredEncryptionKey);
         const effectiveSettings = getEffectiveStripeCheckoutSettings(body, storedSettings);
         const stripeReadiness = getStripeCheckoutReadiness(effectiveSettings);
-        if (stripeReadiness.enabled && !stripeReadiness.configured) {
-            throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
-        }
+        assertGatewayCanTurnOn("Stripe", stripeReadiness);
         const hasSecretWrite = Boolean(
             (body.secretKey && body.secretKey !== MASKED && body.secretKey.trim()) ||
             (body.webhookSecret && body.webhookSecret !== MASKED && body.webhookSecret.trim()),
@@ -388,13 +419,13 @@ app.openapi(saveStripeRoute, async (c) => {
             webhookSecret: submittedSecret(body.webhookSecret),
             enabled: body.enabled,
         };
-        if (Object.values(patch).some((value) => value !== undefined)) {
-            await stripeDocument.write(db, patch, { encryptionKey: encKey });
-        }
+        const { revision } = await stripeDocument.write(db, patch, { encryptionKey: encKey }, {
+            expectedRevision: body.expectedRevision,
+        });
 
         await bumpCacheGeneration(c);
 
-        return ok(c, { message: "Stripe settings saved successfully" });
+        return ok(c, { message: "Stripe settings saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -402,6 +433,7 @@ app.openapi(saveStripeRoute, async (c) => {
 // ─────────────────────────────────────────
 
 const sslCommerzSettingsResponseSchema = z.object({
+    revision: revisionSchema,
     storeId: z.string(),
     storePassword: z.string(),
     sandbox: z.boolean(),
@@ -425,6 +457,7 @@ app.openapi(getSSLCommerzRoute, async (c) => {
         const stored = await sslcommerzDocument.readDetailed(db);
 
         return ok(c, {
+            revision: stored.revision,
             storeId: stored.value.storeId,
             storePassword: maskedSecret(stored, "storePassword"),
             sandbox: stored.value.sandbox,
@@ -440,8 +473,9 @@ const saveSSLCommerzRoute = createRoute({
     summary: "Save SSLCommerz settings",
     request: { body: { required: true, content: { "application/json": { schema: saveSSLCommerzSchema } } } },
     responses: {
-        200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "SSLCommerz settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
@@ -455,9 +489,7 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
         );
         const effectiveSettings = getEffectiveSSLCommerzCheckoutSettings(body, storedSettings);
         const sslReadiness = getSSLCommerzCheckoutReadiness(effectiveSettings);
-        if (sslReadiness.enabled && !sslReadiness.configured) {
-            throw new ValidationError(sslReadiness.blockedReason ?? "SSLCommerz is not ready for checkout.");
-        }
+        assertGatewayCanTurnOn("SSLCommerz", sslReadiness);
         const hasSecretWrite = Boolean(body.storePassword && body.storePassword !== MASKED && body.storePassword.trim());
         const encKey = hasSecretWrite
             ? requireEncryptionKey(c.env as Record<string, unknown>)
@@ -473,13 +505,13 @@ app.openapi(saveSSLCommerzRoute, async (c) => {
             sandbox: body.sandbox,
             enabled: body.enabled,
         };
-        if (Object.values(patch).some((value) => value !== undefined)) {
-            await sslcommerzDocument.write(db, patch, { encryptionKey: encKey });
-        }
+        const { revision } = await sslcommerzDocument.write(db, patch, { encryptionKey: encKey }, {
+            expectedRevision: body.expectedRevision,
+        });
 
         await bumpCacheGeneration(c);
 
-        return ok(c, { message: "SSLCommerz settings saved successfully" });
+        return ok(c, { message: "SSLCommerz settings saved successfully", revision });
 });
 
 export { app as paymentSettingsRoutes };

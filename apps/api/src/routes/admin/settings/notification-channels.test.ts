@@ -1,436 +1,235 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { errorResponseFromError } from "../../../utils/api-response";
 
+// Provider readiness is external setup; the notifications document is real.
 const mocks = vi.hoisted(() => ({
-    getNotificationChannels: vi.fn(),
-    updateNotificationChannels: vi.fn(),
-    getAdminNotificationChannels: vi.fn(),
-    updateAdminNotificationChannels: vi.fn(),
-    getOrderWhatsAppTemplateSettings: vi.fn(),
-    updateOrderWhatsAppTemplateSettings: vi.fn(),
-    isWhatsAppCloudApiConfigured: vi.fn(),
-    getNotificationProviderBlock: vi.fn(),
     getEmailProviderReadiness: vi.fn(),
     getSmsProviderReadiness: vi.fn(),
     getFirebaseServiceAccountReadiness: vi.fn(),
+    getWhatsAppCloudApiSettings: vi.fn(),
+    getNotificationProviderBlock: vi.fn(),
     clearNotificationProviderBlocks: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/settings.service", () => ({
-    getNotificationChannels: mocks.getNotificationChannels,
-    updateNotificationChannels: mocks.updateNotificationChannels,
-    getAdminNotificationChannels: mocks.getAdminNotificationChannels,
-    updateAdminNotificationChannels: mocks.updateAdminNotificationChannels,
-    getOrderWhatsAppTemplateSettings: mocks.getOrderWhatsAppTemplateSettings,
-    updateOrderWhatsAppTemplateSettings: mocks.updateOrderWhatsAppTemplateSettings,
-    isWhatsAppCloudApiConfigured: mocks.isWhatsAppCloudApiConfigured,
-}));
-
-vi.mock("@scalius/core/integrations/sms", () => ({
-    getSmsProviderReadiness: mocks.getSmsProviderReadiness,
-}));
-
-vi.mock("@scalius/core/integrations/email", () => ({
-    getEmailProviderReadiness: mocks.getEmailProviderReadiness,
-}));
-
+vi.mock("@scalius/core/integrations/sms", () => ({ getSmsProviderReadiness: mocks.getSmsProviderReadiness }));
+vi.mock("@scalius/core/integrations/email", () => ({ getEmailProviderReadiness: mocks.getEmailProviderReadiness }));
+vi.mock("@scalius/core/integrations/whatsapp", () => ({ getWhatsAppCloudApiSettings: mocks.getWhatsAppCloudApiSettings }));
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
     getFirebaseServiceAccountReadiness: mocks.getFirebaseServiceAccountReadiness,
 }));
-
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
     clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
-    describeNotificationProviderBlock: (block: { channel: string; provider: string; reason: string }) =>
+    describeNotificationProviderBlock: (block: { channel: string; provider: string }) =>
         `${block.channel}/${block.provider} paused`,
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
+import { ORDER_NOTIFICATION_TYPES } from "@scalius/core/modules/notifications/notification-types";
 import { notificationChannelsRoutes } from "./notification-channels";
 
-const completeAdminChannels = (override: Record<string, string[]> = {}) => ({
-    order_created: ["push"],
-    order_confirmed: [],
-    order_processing: [],
-    order_shipped: [],
-    order_delivered: [],
-    order_completed: [],
-    order_cancelled: [],
-    order_returned: [],
-    refund_processing: [],
-    refund_failed: [],
-    order_refunded: [],
-    order_partially_refunded: [],
-    payment_balance_paid: [],
-    support_request_submitted: [],
-    support_request_status_updated: [],
+const rules = (channels: string[], override: Record<string, string[]> = {}) => ({
+    ...Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, channels])),
     ...override,
 });
 
-const completeCustomerChannels = (override: Record<string, string[]> = {}) => ({
-    order_created: ["email"],
-    order_confirmed: ["email"],
-    order_processing: ["email"],
-    order_shipped: ["email"],
-    order_delivered: ["email"],
-    order_completed: ["email"],
-    order_cancelled: ["email"],
-    order_returned: ["email"],
-    refund_processing: ["email"],
-    refund_failed: ["email"],
-    order_refunded: ["email"],
-    order_partially_refunded: ["email"],
-    payment_balance_paid: ["email"],
-    support_request_submitted: [],
-    support_request_status_updated: ["email"],
-    ...override,
-});
+const ready = { status: "ready", issues: [] };
+const notReady = (message: string) => ({ status: "incomplete", issues: [{ code: "missing", message }] });
 
 function createTestApp() {
+    const { db, sqlite } = createSqliteD1Database();
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin/settings");
-    const env = {
-        CREDENTIAL_ENCRYPTION_KEY: "credential-key",
-    } as unknown as Env;
-
+    const env = { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as unknown as Env;
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
     });
     app.use("*", async (c, next) => {
-        c.set("db", { id: "db" } as never);
+        c.set("db", db);
         await next();
     });
     app.route("/notification-channels", notificationChannelsRoutes);
 
-    return { app, env };
+    const request = async (path: string, method = "GET", body?: unknown) => {
+        const response = await app.request(`/api/v1/admin/settings/notification-channels${path}`, {
+            method,
+            ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+        }, env);
+        return { status: response.status, body: await response.json() as Record<string, any> };
+    };
+    const stored = () => {
+        const row = sqlite.prepare("SELECT value, revision FROM settings WHERE category = 'notifications'").get() as
+            { value: string; revision: number } | undefined;
+        return row ? { ...JSON.parse(row.value), revision: row.revision } : null;
+    };
+    return { request, stored, env, db };
 }
 
-describe("notification channel settings routes", () => {
+describe("notification settings routes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mocks.getNotificationChannels.mockResolvedValue({
-            order_created: ["email"],
-        });
-        mocks.updateNotificationChannels.mockResolvedValue({
-            order_created: ["email"],
-        });
-        mocks.getAdminNotificationChannels.mockResolvedValue({
-            order_created: ["push"],
-        });
-        mocks.updateAdminNotificationChannels.mockResolvedValue({
-            order_created: ["push"],
-        });
-        mocks.getOrderWhatsAppTemplateSettings.mockResolvedValue({
-            templateName: "order_status_update",
-            languageCode: "en_US",
-        });
-        mocks.updateOrderWhatsAppTemplateSettings.mockResolvedValue({
-            templateName: "order_status_update",
-            languageCode: "en_US",
-        });
-        mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(false);
-        mocks.getEmailProviderReadiness.mockResolvedValue({
-            status: "ready",
-            issues: [],
-            provider: "cloudflare",
-        });
-        mocks.getSmsProviderReadiness.mockResolvedValue({
-            status: "incomplete",
-            issues: [{
-                code: "missing_sms_provider_credentials",
-                message: "No active SMS provider selected",
-            }],
-            activeProvider: null,
-        });
+        mocks.getEmailProviderReadiness.mockResolvedValue({ ...ready, provider: "cloudflare" });
+        mocks.getSmsProviderReadiness.mockResolvedValue({ ...notReady("No active SMS provider selected"), activeProvider: null });
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValue(ready);
+        mocks.getWhatsAppCloudApiSettings.mockResolvedValue({ accessTokenConfigured: false, phoneNumberId: "" });
         mocks.getNotificationProviderBlock.mockResolvedValue(null);
-        mocks.getFirebaseServiceAccountReadiness.mockResolvedValue({
-            status: "ready",
-            issues: [],
-            source: "settings",
-        });
         mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
     });
 
-    it("returns SMS readiness with customer notification channels", async () => {
-        const { app, env } = createTestApp();
+    it("returns customer rules, staff alerts, readiness and the revision in one read", async () => {
+        const { request } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            success: boolean;
-            data: {
-                sms: { status: string; issues: Array<{ message: string }> };
-                email: { status: string; issues: Array<{ message: string }> };
-                whatsapp: { status: string };
-            };
-        };
+        const { status, body } = await request("");
 
-        expect(response.status).toBe(200);
-        expect(body).toMatchObject({
-            success: true,
-            data: {
-                sms: {
-                    status: "incomplete",
-                    issues: [{ message: "No active SMS provider selected" }],
-                },
-                email: { status: "ready", issues: [] },
-                whatsapp: { status: "incomplete" },
-            },
+        expect(status).toBe(200);
+        expect(body.data).toMatchObject({
+            channels: { order_created: ["email"], support_request_submitted: ["email"] },
+            adminChannels: { order_created: ["push"], order_delivered: [] },
+            staffEmailRecipients: [],
+            whatsappTemplate: { templateName: "order_status_update", languageCode: "en_US" },
+            sms: { status: "incomplete", issues: [{ message: "No active SMS provider selected" }] },
+            email: { status: "ready", issues: [] },
+            whatsapp: { status: "incomplete" },
+            push: { status: "ready" },
+            revision: 0,
         });
-        expect(mocks.getEmailProviderReadiness).toHaveBeenCalledWith({
-            db: { id: "db" },
-            encryptionKey: "credential-key",
-            env,
-        });
-        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith({ id: "db" }, "credential-key");
     });
 
-    it("reports configured SMS providers as unready while delivery is paused", async () => {
-        mocks.getSmsProviderReadiness.mockResolvedValueOnce({
-            status: "ready",
-            issues: [],
-            activeProvider: "smsnetbd",
+    it("reports a configured provider as not ready while its delivery is paused", async () => {
+        mocks.getSmsProviderReadiness.mockResolvedValue({ ...ready, activeProvider: "smsnetbd" });
+        mocks.getNotificationProviderBlock.mockImplementation(async (_db, { channel, provider }) =>
+            channel === "sms" && provider === "smsnetbd" ? { channel, provider, reason: "401", blockedAt: 1 } : null);
+        const { request } = createTestApp();
+
+        const { body } = await request("");
+
+        expect(body.data.sms).toEqual({
+            status: "incomplete",
+            issues: [expect.objectContaining({ message: "sms/smsnetbd paused" })],
         });
-        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
-            options.channel === "sms" && options.provider === "smsnetbd"
-                ? {
-                    channel: "sms",
-                    provider: "smsnetbd",
-                    reason: "error=405: Authorization required",
-                    blockedAt: 1_782_684_758,
-                }
-                : null,
-        );
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            data: {
-                sms: { status: string; issues: Array<{ message: string }> };
-            };
-        };
-
-        expect(response.status).toBe(200);
-        expect(body.data.sms.status).toBe("incomplete");
-        expect(body.data.sms.issues[0]?.message).toBe("sms/smsnetbd paused");
     });
 
-    it("reports email notifications as unready while provider delivery is paused", async () => {
-        mocks.getNotificationProviderBlock.mockImplementation(async (_db, options: { channel: string; provider: string }) =>
-            options.channel === "email" && options.provider === "cloudflare"
-                ? {
-                    channel: "email",
-                    provider: "cloudflare",
-                    reason: "Resend API error 401",
-                    blockedAt: 1_782_684_758,
-                }
-                : null,
-        );
-        const { app, env } = createTestApp();
+    it("saves customer rules and the WhatsApp template in one revisioned write", async () => {
+        mocks.getWhatsAppCloudApiSettings.mockResolvedValue({ accessTokenConfigured: true, phoneNumberId: "123" });
+        const { request, stored } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            data: {
-                email: { status: string; issues: Array<{ message: string }> };
-            };
-        };
+        const { status, body } = await request("", "PUT", {
+            channels: rules([], { order_created: ["whatsapp"] }),
+            whatsappTemplate: { templateName: "order_update_bn", languageCode: "bn" },
+            expectedRevision: 0,
+        });
 
-        expect(response.status).toBe(200);
-        expect(body.data.email.status).toBe("incomplete");
-        expect(body.data.email.issues[0]?.message).toBe("email/cloudflare paused");
+        expect(status).toBe(200);
+        expect(body.data).toMatchObject({
+            channels: { order_created: ["whatsapp"] },
+            whatsappTemplate: { templateName: "order_update_bn", languageCode: "bn" },
+            revision: 1,
+        });
+        expect(stored()).toMatchObject({ revision: 1, whatsappOrderTemplateName: "order_update_bn" });
+        expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(expect.anything(), { channel: "whatsapp" });
     });
 
-    it("clears paused WhatsApp sends after saving the order template", async () => {
-        mocks.updateNotificationChannels.mockImplementationOnce(async () => {
-            expect(mocks.updateOrderWhatsAppTemplateSettings).toHaveBeenCalledWith(
-                { id: "db" },
-                { templateName: "order_status_update", languageCode: "en_US" },
-            );
-            expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith({ id: "db" }, { channel: "whatsapp" });
-            return { order_created: ["whatsapp"] };
+    it("refuses a save from a stale page with a revision conflict and keeps the newer save", async () => {
+        const { request, stored } = createTestApp();
+        await request("", "PUT", { channels: rules(["email"], { order_created: [] }), expectedRevision: 0 });
+
+        const { status, body } = await request("", "PUT", { channels: rules([]), expectedRevision: 0 });
+
+        expect(status).toBe(409);
+        expect(body.error).toMatchObject({
+            code: "SETTINGS_REVISION_CONFLICT",
+            details: { expectedRevision: 0, currentRevision: 1 },
         });
-        mocks.isWhatsAppCloudApiConfigured.mockResolvedValue(true);
-        const { app, env } = createTestApp();
-        const channels = {
-            ...Object.fromEntries(Object.keys(completeCustomerChannels()).map((event) => [event, []])),
-            order_created: ["whatsapp"],
-        };
-
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channels,
-                whatsappTemplate: { templateName: "order_status_update", languageCode: "en_US" },
-            }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.updateNotificationChannels).toHaveBeenCalledWith({ id: "db" }, channels, "credential-key", env);
+        expect(stored()).toMatchObject({ revision: 1, orderChannels: { order_created: [], order_confirmed: ["email"] } });
     });
 
     it.each([
-        ["partial event maps", { channels: { order_created: ["email"] } }],
-        ["unsupported customer channels", { channels: completeCustomerChannels({ order_created: ["push"] }) }],
-        ["unknown event keys", { channels: { ...completeCustomerChannels(), arbitrary_event: [] } }],
-    ])("rejects malformed customer notification settings: %s", async (_label, payload) => {
-        const { app, env } = createTestApp();
-        const response = await app.request("/api/v1/admin/settings/notification-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        }, env);
+        ["no revision", { channels: rules(["email"]) }],
+        ["partial event maps", { channels: { order_created: ["email"] }, expectedRevision: 0 }],
+        ["unsupported customer channels", { channels: rules(["email"], { order_created: ["push"] }), expectedRevision: 0 }],
+        ["unknown event keys", { channels: { ...rules(["email"]), arbitrary_event: [] }, expectedRevision: 0 }],
+    ])("rejects malformed customer settings: %s", async (_label, payload) => {
+        const { request, stored } = createTestApp();
 
-        expect(response.status).toBe(400);
-        expect(mocks.updateNotificationChannels).not.toHaveBeenCalled();
+        expect((await request("", "PUT", payload)).status).toBe(400);
+        expect(stored()).toBeNull();
     });
 
-    it("returns Firebase push readiness with admin notification channels", async () => {
-        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            status: "incomplete",
-            issues: [{
-                code: "missing_firebase_service_account",
-                message: "Configure Firebase service account credentials before enabling admin push notifications.",
-            }],
-            source: "none",
-        });
-        const { app, env } = createTestApp();
+    it("saves staff email recipients normalised, and keeps push on while Firebase is down", async () => {
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValue(notReady("Configure Firebase."));
+        const { request, stored } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            success: boolean;
-            data: {
-                channels: Record<string, string[]>;
-                push: { status: string; issues: Array<{ message: string }> };
-            };
-        };
-
-        expect(response.status).toBe(200);
-        expect(body).toMatchObject({
-            success: true,
-            data: {
-                channels: { order_created: ["push"] },
-                push: {
-                    status: "incomplete",
-                    issues: [{
-                        message: "Configure Firebase service account credentials before enabling admin push notifications.",
-                    }],
-                },
-            },
+        const { status, body } = await request("/admin-channels", "PUT", {
+            channels: rules([], { order_created: ["push"] }),
+            emailRecipients: [" Owner@Shop.test ", "owner@shop.test", "packing@shop.test"],
+            expectedRevision: 0,
         });
-        expect(mocks.getFirebaseServiceAccountReadiness).toHaveBeenCalledWith(
-            { id: "db" },
-            "credential-key",
-        );
+
+        expect(status).toBe(200);
+        expect(body.data).toMatchObject({
+            staffEmailRecipients: ["owner@shop.test", "packing@shop.test"],
+            adminChannels: { order_created: ["push"], order_cancelled: [] },
+            revision: 1,
+        });
+        expect(stored()).toMatchObject({ staffEmailRecipients: ["owner@shop.test", "packing@shop.test"] });
     });
 
-    it("reports configured admin push as unready while FCM delivery is paused", async () => {
-        mocks.getNotificationProviderBlock.mockResolvedValueOnce({
-            channel: "push",
-            provider: "fcm",
-            reason: "invalid_grant service account disabled",
-            blockedAt: 1_782_684_758,
+    it("refuses newly switching on push before Firebase is set up", async () => {
+        mocks.getFirebaseServiceAccountReadiness.mockResolvedValue(notReady("Configure Firebase first."));
+        const { request, stored } = createTestApp();
+
+        const { status, body } = await request("/admin-channels", "PUT", {
+            channels: rules([], { order_created: ["push"], order_delivered: ["push"] }),
+            emailRecipients: [],
+            expectedRevision: 0,
         });
-        const { app, env } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
-            method: "GET",
-        }, env);
-        const body = await response.json() as {
-            data: {
-                push: { status: string; issues: Array<{ message: string }> };
-            };
-        };
-
-        expect(response.status).toBe(200);
-        expect(body.data.push.status).toBe("incomplete");
-        expect(body.data.push.issues[0]?.message).toBe("push/fcm paused");
+        expect(status).toBe(400);
+        expect(body.error.message).toBe("Configure Firebase first.");
+        expect(stored()).toBeNull();
     });
 
-    it("rejects admin push saves when Firebase readiness is not configured", async () => {
-        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            status: "incomplete",
-            issues: [{
-                code: "unusable_firebase_service_account",
-                message: "Saved Firebase service account is not usable. Save a valid service account or disable admin push notifications.",
-            }],
-            source: "settings",
+    it("names the invalid staff email so the dashboard marks that field", async () => {
+        const { request, stored } = createTestApp();
+
+        const { status, body } = await request("/admin-channels", "PUT", {
+            channels: rules([]),
+            emailRecipients: ["owner@shop.test", "not-an-email"],
+            expectedRevision: 0,
         });
-        const { app, env } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channels: completeAdminChannels(),
-            }),
-        }, env);
-        const body = await response.json() as { success: boolean; error: { message: string } };
-
-        expect(response.status).toBe(400);
-        expect(body.success).toBe(false);
-        expect(body.error.message).toContain("Saved Firebase service account is not usable.");
-        expect(mocks.updateAdminNotificationChannels).not.toHaveBeenCalled();
+        expect(status).toBe(400);
+        expect(body.error.details.issues).toEqual([
+            { path: ["emailRecipients", 1], message: "Enter an email like name@example.com." },
+        ]);
+        expect(stored()).toBeNull();
     });
 
-    it("allows disabling admin push even when Firebase is not configured", async () => {
-        mocks.getFirebaseServiceAccountReadiness.mockResolvedValueOnce({
-            status: "incomplete",
-            issues: [{
-                code: "missing_firebase_service_account",
-                message: "Configure Firebase service account credentials before enabling admin push notifications.",
-            }],
-            source: "none",
-        });
-        mocks.updateAdminNotificationChannels.mockResolvedValueOnce({
-            order_created: [],
-        });
-        const { app, env } = createTestApp();
+    it("lets the second card save after the first once it has the newer revision", async () => {
+        const { request } = createTestApp();
+        const first = await request("", "PUT", { channels: rules(["email"]), expectedRevision: 0 });
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                channels: completeAdminChannels({ order_created: [] }),
-            }),
-        }, env);
-        const body = await response.json() as { success: boolean; data: { channels: Record<string, string[]> } };
-
-        expect(response.status).toBe(200);
-        expect(body).toMatchObject({
-            success: true,
-            data: {
-                channels: { order_created: [] },
-                push: { status: "incomplete" },
-            },
+        const staleStaff = await request("/admin-channels", "PUT", {
+            channels: rules([]), emailRecipients: ["owner@shop.test"], expectedRevision: 0,
         });
-        expect(mocks.updateAdminNotificationChannels).toHaveBeenCalledWith(
-            { id: "db" },
-            completeAdminChannels({ order_created: [] }),
-        );
+        const freshStaff = await request("/admin-channels", "PUT", {
+            channels: rules([]), emailRecipients: ["owner@shop.test"], expectedRevision: first.body.data.revision,
+        });
+
+        expect(staleStaff.status).toBe(409);
+        expect(freshStaff.status).toBe(200);
+        expect(freshStaff.body.data).toMatchObject({ channels: { order_created: ["email"] }, revision: 2 });
     });
 
     it.each([
-        ["partial event maps", { channels: { order_created: ["push"] } }],
-        ["unsupported admin channels", { channels: completeAdminChannels({ order_created: ["email"] }) }],
-        ["unknown event keys", { channels: { ...completeAdminChannels(), arbitrary_event: [] } }],
-    ])("rejects %s before mutating notification settings", async (_label, payload) => {
-        const { app, env } = createTestApp();
+        ["too many recipients", { channels: rules([]), emailRecipients: Array.from({ length: 11 }, (_, i) => `s${i}@shop.test`), expectedRevision: 0 }],
+        ["unsupported staff channels", { channels: rules([], { order_created: ["email"] }), emailRecipients: [], expectedRevision: 0 }],
+        ["partial event maps", { channels: { order_created: ["push"] }, emailRecipients: [], expectedRevision: 0 }],
+    ])("rejects %s before writing", async (_label, payload) => {
+        const { request, stored } = createTestApp();
 
-        const response = await app.request("/api/v1/admin/settings/notification-channels/admin-channels", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        }, env);
-
-        expect(response.status).toBe(400);
-        expect(mocks.updateAdminNotificationChannels).not.toHaveBeenCalled();
+        expect((await request("/admin-channels", "PUT", payload)).status).toBe(400);
+        expect(stored()).toBeNull();
     });
 });

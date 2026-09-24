@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "~/components/ui/skeleton";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
 import {
   accountSessionsQueryOptions,
   type AccountSession,
@@ -19,6 +18,7 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
+import { accountFailureKey } from "./account-error";
 
 const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Laptop, unknown: MonitorSmartphone } as const;
 
@@ -48,7 +48,7 @@ export function AccountSessions() {
       keep((session) => session.commandId !== commandId);
       toast.success(t("deviceSignedOut"));
     },
-    onError: (error) => toast.error(getServerFnError(error, t("signOutFailed"))),
+    onError: (error) => toast.error(t(accountFailureKey(error, () => "signOutFailed"))),
     onSettled: settle,
   });
 
@@ -59,15 +59,20 @@ export function AccountSessions() {
       const count = result.revokedCount;
       toast.success(count === 0 ? t("noOtherDevices") : count === 1 ? t("devicesSignedOutOne") : t("devicesSignedOutMany", { count }));
     },
-    onError: (error) => toast.error(getServerFnError(error, t("signOutFailed"))),
+    onError: (error) => toast.error(t(accountFailureKey(error, () => "signOutFailed"))),
     onSettled: settle,
   });
 
   const pending = signOutOne.isPending || signOutOthers.isPending;
+  // `localNetwork` is new in the API; the generated client type catches up at the next SDK build.
+  // The API names browsers and systems only; an unrecognised device is named here.
+  const deviceName = (session: AccountSession) => session.deviceLabel || t("unknownDevice");
+  const networkOf = (session: AccountSession & { localNetwork?: boolean }) =>
+    session.localNetwork ? t("localNetwork") : session.networkHint ? t("network", { hint: session.networkHint }) : null;
   const loadFailed = Boolean(sessionsQuery.error) || (sessionsQuery.isSuccess && sessions.length === 0);
 
   return (
-    <Card>
+    <Card id="sessions" className="scroll-mt-4">
       <CardHeader>
         <CardTitle>{t("devices")}</CardTitle>
         <CardDescription>{t("devicesHelp")}</CardDescription>
@@ -108,13 +113,13 @@ export function AccountSessions() {
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-body font-medium">{session.deviceLabel}</span>
+                      <span className="text-body font-medium">{deviceName(session)}</span>
                       {session.current ? <Badge variant="info">{t("thisDevice")}</Badge> : null}
                       {session.impersonated ? <Badge variant="attention">{t("openedByAdmin")}</Badge> : null}
                     </span>
                     <span className="text-body text-muted-foreground">
                       {t("lastActive", { time: when(session.lastActiveAt) })}
-                      {session.networkHint ? ` · ${t("network", { hint: session.networkHint })}` : ""}
+                      {networkOf(session) ? ` · ${networkOf(session)}` : ""}
                     </span>
                   </div>
                   {!session.current ? (
@@ -150,7 +155,7 @@ export function AccountSessions() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        title={confirm === "others" ? t("signOutOthersTitle") : t("signOutOneTitle", { device: confirm?.deviceLabel ?? "" })}
+        title={confirm === "others" ? t("signOutOthersTitle") : t("signOutOneTitle", { device: confirm ? deviceName(confirm) : "" })}
         description={t(confirm === "others" ? "signOutOthersBody" : "signOutOneBody")}
         confirmLabel={t(confirm === "others" ? "signOutOthers" : "signOut")}
         cancelLabel={t("cancel")}

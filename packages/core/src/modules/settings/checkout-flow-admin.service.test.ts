@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
 
+import { SettingsRevisionConflictError } from "./settings-store";
 import {
-    CheckoutFlowRevisionConflictError,
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,
 } from "./checkout-flow-admin.service";
@@ -46,11 +46,11 @@ describe("checkout flow settings revision authority", () => {
             availablePaymentMethods: ["cod"],
         }).catch((cause: unknown) => cause);
 
-        expect(error).toBeInstanceOf(CheckoutFlowRevisionConflictError);
+        expect(error).toBeInstanceOf(SettingsRevisionConflictError);
         expect(error).toMatchObject({
             status: 409,
-            code: "CHECKOUT_FLOW_REVISION_CONFLICT",
-            details: { expectedRevision: 0, currentRevision: 1 },
+            code: "SETTINGS_REVISION_CONFLICT",
+            details: { document: "checkout", expectedRevision: 0, currentRevision: 1 },
         });
         await expect(getCheckoutFlowSettingsDocument(db)).resolves.toMatchObject({ revision: 1, checkoutMode: "gateways_only" });
     });

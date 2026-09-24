@@ -14,7 +14,11 @@
 //                  a provider with unreadable ciphertext. Obvious placeholders
 //                  read as not configured when the document says so.
 //   * writes     - always compare-and-swap on the revision that was read, so a
-//                  concurrent save can never be silently overwritten.
+//                  concurrent save can never be silently overwritten. Editors
+//                  send the revision they loaded (`expectedRevision`); a stale
+//                  one is a 409 SETTINGS_REVISION_CONFLICT. Several documents
+//                  saved by one request commit all-or-nothing through
+//                  `writeSettingsDocuments()`.
 //   * cache      - an optional KV mirror (never for documents with secrets) for
 //                  Worker-entry readers that must not open the database.
 //
@@ -26,8 +30,8 @@ import type { ZodType } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { settings as settingsTable } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, ValidationError } from "@scalius/core/errors";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { AppError, ValidationError } from "@scalius/core/errors";
 import {
   encodeEncryptedCredential,
   encryptCredentials,
@@ -38,6 +42,21 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 
 /** The `settings.key` value every document row uses. */
 export const SETTINGS_DOCUMENT_ROW_KEY = "document";
+
+export const SETTINGS_REVISION_CONFLICT = "SETTINGS_REVISION_CONFLICT";
+
+/** A save based on a revision that is no longer current. Nothing was written. */
+export class SettingsRevisionConflictError extends AppError {
+  constructor(document: string, expectedRevision: number, currentRevision: number | null) {
+    super(
+      409,
+      SETTINGS_REVISION_CONFLICT,
+      "These settings changed in another session. Reload to see the latest, then save again.",
+      { document, expectedRevision, currentRevision },
+    );
+    this.name = "SettingsRevisionConflictError";
+  }
+}
 
 /** The KV surface the store needs. Cloudflare `KVNamespace` satisfies it. */
 export interface SettingsStoreKv {
@@ -90,16 +109,43 @@ export interface SettingsDocumentReadResult<T> {
   secretsConfigured: Partial<Record<keyof T & string, boolean>>;
 }
 
-export interface SettingsDocumentWriteOptions {
-  /** Compare-and-swap against this revision (0 = the document must not exist). */
+export interface SettingsDocumentWriteOptions extends SettingsBatchOptions {
+  /**
+   * Compare-and-swap against this revision (0 = the document must not exist).
+   * Without it a plain patch is re-applied on a newer document (internal
+   * writers only; merchant editors always send the revision they loaded).
+   */
   expectedRevision?: number;
-  /** Builds the error thrown when `expectedRevision` does not match. */
-  conflict?: (currentRevision: number | null) => Error;
   /** Replace the whole document (over the defaults) instead of patching it. */
   replace?: boolean;
-  /** Statements committed in the same batch before / after the document write. */
+}
+
+export interface SettingsBatchOptions {
+  /** Statements committed in the same batch before / after the document writes. */
   before?: SQLiteBatchItem[];
   after?: SQLiteBatchItem[];
+}
+
+/** One document's part of a `writeSettingsDocuments()` batch. */
+export interface SettingsDocumentWriteRequest<T extends object = object> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  document: SettingsDocument<any>;
+  patch: Partial<T>;
+  ctx?: SettingsDocumentContext;
+  expectedRevision?: number;
+  replace?: boolean;
+}
+
+/** A validated, encoded write that has not been committed yet. */
+export interface PreparedSettingsWrite<T extends object> {
+  key: string;
+  /** The revision the write was built on; the batch fails if it moved. */
+  baseRevision: number;
+  value: T;
+  guard: SQLiteBatchItem;
+  statement: SQLiteBatchItem;
+  /** Refreshes the KV mirror once the batch committed. */
+  committed(): Promise<void>;
 }
 
 export interface SettingsDocumentWriteResult<T> {
@@ -127,6 +173,13 @@ export interface SettingsDocument<T extends object> {
     ctx?: SettingsDocumentContext,
     options?: SettingsDocumentWriteOptions,
   ): Promise<SettingsDocumentWriteResult<T>>;
+  /** Reads, merges, validates and encodes one write; see `writeSettingsDocuments()`. */
+  prepareWrite(
+    db: Database,
+    patch: Partial<T>,
+    ctx?: SettingsDocumentContext,
+    options?: { expectedRevision?: number; replace?: boolean },
+  ): Promise<PreparedSettingsWrite<T>>;
   /** Cache-only read, for Worker-entry paths that must not open the database. */
   readCached(ctx?: SettingsDocumentContext): Promise<T | null>;
   writeCached(ctx: SettingsDocumentContext | undefined, value: T): Promise<void>;
@@ -179,6 +232,76 @@ function decodeRecord(raw: string): Record<string, unknown> | null {
 }
 
 const WRITE_ATTEMPTS = 3;
+const REVISION_GUARD_MARKER = "SETTINGS_REVISION_CONFLICT";
+
+/** Fails the batch unless the document is still at `revision` (0 = absent). */
+function revisionGuard(db: Database, key: string, revision: number): SQLiteBatchItem {
+  const matching = sql`SELECT 1 FROM ${settingsTable} WHERE ${settingsTable.key} = ${SETTINGS_DOCUMENT_ROW_KEY} AND ${settingsTable.category} = ${key}`;
+  return buildBatchGuard(
+    db,
+    revision === 0
+      ? sql`NOT EXISTS (${matching})`
+      : sql`EXISTS (${matching} AND ${settingsTable.revision} = ${revision})`,
+    REVISION_GUARD_MARKER,
+  );
+}
+
+/**
+ * Commits one or more document writes in one batch, all-or-nothing: each
+ * write is checked against the revision it was built on (and the
+ * `expectedRevision` its editor loaded), so a stale write aborts the whole
+ * batch, including `before`/`after`. Writes without an expected revision are
+ * rebuilt on the newer documents and retried.
+ */
+export async function writeSettingsDocuments(
+  db: Database,
+  requests: readonly SettingsDocumentWriteRequest[],
+  options: SettingsBatchOptions = {},
+): Promise<Array<SettingsDocumentWriteResult<object>>> {
+  const before = options.before ?? [];
+  const after = options.after ?? [];
+  const retryable = requests.every((request) => request.expectedRevision === undefined);
+  for (let attempt = 1; ; attempt += 1) {
+    const prepared: Array<PreparedSettingsWrite<object>> = [];
+    for (const request of requests) {
+      prepared.push(await request.document.prepareWrite(db, request.patch, request.ctx, request));
+    }
+    let results: unknown[] | null = null;
+    let failure: unknown = null;
+    try {
+      results = await safeBatch(db, [
+        ...prepared.map((write) => write.guard),
+        ...before,
+        ...prepared.map((write) => write.statement),
+        ...after,
+      ] as never) as unknown[];
+    } catch (error) {
+      failure = error;
+    }
+    const offset = prepared.length + before.length;
+    const written = results
+      ? prepared.map((_, index) => (results[offset + index] as Array<{ revision: number }> | undefined)?.[0])
+      : [];
+    if (results && written.every(Boolean)) {
+      await Promise.all(prepared.map((write) => write.committed()));
+      return prepared.map((write, index) => ({ value: write.value, revision: written[index]!.revision }));
+    }
+
+    // Tell a moved revision apart from any other failure (e.g. a media guard).
+    const rows = await selectSettingsDocuments(db, prepared.map((write) => ({ key: write.key })));
+    const current = (key: string) => rows.find((row) => row.category === key)?.revision ?? 0;
+    const moved = prepared.find((write) => current(write.key) !== write.baseRevision);
+    if (!moved && failure) throw failure;
+    const conflicted = moved ?? prepared[0]!;
+    if (!retryable || attempt >= WRITE_ATTEMPTS) {
+      throw new SettingsRevisionConflictError(
+        conflicted.key,
+        conflicted.baseRevision,
+        current(conflicted.key),
+      );
+    }
+  }
+}
 
 export function defineSettingsDocument<T extends object>(
   definition: SettingsDocumentDefinition<T>,
@@ -374,63 +497,49 @@ export function defineSettingsDocument<T extends object>(
     return result;
   }
 
-  async function write(
+  async function prepareWrite(
     db: Database,
     patch: Partial<T>,
     ctx: SettingsDocumentContext = {},
-    options: SettingsDocumentWriteOptions = {},
-  ): Promise<SettingsDocumentWriteResult<T>> {
+    options: { expectedRevision?: number; replace?: boolean } = {},
+  ): Promise<PreparedSettingsWrite<T>> {
     const patched = new Set(
       Object.keys(patch).filter((field) => patch[field as keyof T] !== undefined),
     );
-
-    for (let attempt = 1; ; attempt += 1) {
-      const row = await readRow(db);
-      const current = await resolveRow(row, ctx);
-      const conflict = (currentRevision: number | null) => options.conflict?.(currentRevision)
-        ?? new ConflictError("Settings changed in another session. Reload and try again.");
-      if (options.expectedRevision !== undefined && options.expectedRevision !== current.revision) {
-        throw conflict(current.revision);
-      }
-
-      const merged: Record<string, unknown> = {
-        ...((options.replace ? definition.defaults : current.value) as Record<string, unknown>),
-      };
-      for (const field of patched) merged[field] = patch[field as keyof T];
-      const validated = validate(merged);
-      if (!validated.ok) {
-        throw new ValidationError(
-          `${label} settings ${describeValidationFailure(validated.error)}`,
-        );
-      }
-
-      const encoded = await encodeRow(
-        validated.value,
-        patched,
-        row ? decodeRecord(row.value) : null,
-        ctx,
-      );
-      const before = options.before ?? [];
-      const after = options.after ?? [];
-      const statement = writeStatement(db, encoded, current.revision);
-      const results = before.length + after.length === 0
-        ? [await statement]
-        : await safeBatch(db, [...before, statement, ...after] as never) as unknown[];
-      const written = (results[before.length] as Array<{ revision: number }> | undefined)?.[0];
-
-      if (written) {
-        await writeCache(ctx, validated.value);
-        return { value: validated.value, revision: written.revision };
-      }
-      // Lost a race. A caller holding an expected revision must reload; a
-      // plain patch is re-applied on the newer document.
-      if (options.expectedRevision !== undefined || attempt >= WRITE_ATTEMPTS) {
-        throw conflict((await readRow(db))?.revision ?? null);
-      }
+    const row = await readRow(db);
+    const current = await resolveRow(row, ctx);
+    if (options.expectedRevision !== undefined && options.expectedRevision !== current.revision) {
+      throw new SettingsRevisionConflictError(label, options.expectedRevision, current.revision);
     }
+
+    const merged: Record<string, unknown> = {
+      ...((options.replace ? definition.defaults : current.value) as Record<string, unknown>),
+    };
+    for (const field of patched) merged[field] = patch[field as keyof T];
+    const validated = validate(merged);
+    if (!validated.ok) {
+      throw new ValidationError(
+        `${label} settings ${describeValidationFailure(validated.error)}`,
+      );
+    }
+
+    const encoded = await encodeRow(
+      validated.value,
+      patched,
+      row ? decodeRecord(row.value) : null,
+      ctx,
+    );
+    return {
+      key: label,
+      baseRevision: current.revision,
+      value: validated.value,
+      guard: revisionGuard(db, label, current.revision),
+      statement: writeStatement(db, encoded, current.revision),
+      committed: () => writeCache(ctx, validated.value),
+    };
   }
 
-  return {
+  const document: SettingsDocument<T> = {
     key: definition.key,
     defaults: definition.defaults,
     fromRows(rows, ctx = {}) {
@@ -440,7 +549,17 @@ export function defineSettingsDocument<T extends object>(
     async read(db, ctx) {
       return (await readDetailed(db, ctx)).value;
     },
-    write,
+    async write(db, patch, ctx, options = {}) {
+      const [written] = await writeSettingsDocuments(db, [{
+        document,
+        patch,
+        ctx,
+        expectedRevision: options.expectedRevision,
+        replace: options.replace,
+      }], options);
+      return written as SettingsDocumentWriteResult<T>;
+    },
+    prepareWrite,
     readCached(ctx = {}) {
       return readCache(ctx);
     },
@@ -456,4 +575,5 @@ export function defineSettingsDocument<T extends object>(
       }
     },
   };
+  return document;
 }

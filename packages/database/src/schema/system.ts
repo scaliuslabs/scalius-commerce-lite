@@ -1,6 +1,5 @@
 // src/db/schema/system.ts
-// System/platform tables: settings, analytics, adminFcmTokens,
-// shippingMethods, checkoutLanguages.
+// System/platform tables: settings, analytics, adminFcmTokens, checkoutLanguages.
 
 import { sqliteTable, text, integer, unique, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -222,25 +221,6 @@ export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {
     index("admin_fcm_tokens_user_id_idx").on(table.userId),
 ]);
 
-export const shippingMethods = sqliteTable("shipping_methods", {
-    id: text("id").primaryKey(),
-    name: text("name").notNull().unique(),
-    /** Integer minor units of the store currency. */
-    feeMinor: integer("fee_minor").notNull().default(0),
-    description: text("description"),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    deletedAt: integer("deleted_at", { mode: "timestamp" }),
-}, (table) => [
-    index("shipping_methods_deleted_at_idx").on(table.deletedAt),
-]);
-
 export const checkoutLanguages = sqliteTable("checkout_languages", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
@@ -249,6 +229,8 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
     languageData: text("language_data").notNull(),
     fieldVisibility: text("field_visibility").notNull(),
+    /** Optimistic-concurrency revision of the merchant's checkout text and form fields. */
+    revision: integer("revision").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -269,5 +251,4 @@ export const checkoutLanguages = sqliteTable("checkout_languages", {
 export type Setting = InferSelectModel<typeof settings>;
 export type Analytics = InferSelectModel<typeof analytics>;
 export type AdminFcmToken = InferSelectModel<typeof adminFcmTokens>;
-export type ShippingMethod = InferSelectModel<typeof shippingMethods>;
 export type CheckoutLanguage = InferSelectModel<typeof checkoutLanguages>;

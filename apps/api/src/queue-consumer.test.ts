@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   releaseOrderInventory: vi.fn(),
   sendOrderNotificationEmail: vi.fn(),
   sendOrderNotification: vi.fn(),
+  sendStaffOrderEmails: vi.fn(),
   sendEmail: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
   sendWhatsAppTemplateMessage: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
 vi.mock("@scalius/core/modules/notifications/notifications.service", () => ({
   sendOrderNotificationEmail: mocks.sendOrderNotificationEmail,
   sendOrderNotification: mocks.sendOrderNotification,
+  sendStaffOrderEmails: mocks.sendStaffOrderEmails,
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
@@ -242,6 +244,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
     });
     mocks.markNotificationProviderBlocked.mockResolvedValue(undefined);
     mocks.getAdminNotificationChannels.mockResolvedValue({});
+    mocks.sendStaffOrderEmails.mockResolvedValue({ outcomes: [], hasRetryableFailure: false });
     mocks.enqueueOrderCreatedNotificationForOrder.mockResolvedValue({
       orderId: "order_1",
       outboxId: "outbox_order_1",

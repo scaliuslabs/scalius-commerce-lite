@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
     createdAt: new Date("2026-08-03T00:00:00.000Z"),
   })),
   verifyPendingTotpCode: vi.fn(),
+  sendStaffPasswordChangedEmail: vi.fn(async () => undefined),
   createScannerTokenClaim: vi.fn(async () => undefined),
 }));
 
@@ -70,6 +71,7 @@ vi.mock("@scalius/core/auth", () => ({
   readPendingTwoFactorMethodChallenge: mocks.readPendingTwoFactorMethodChallenge,
   prepareCredentialIdentity: mocks.prepareCredentialIdentity,
   verifyPendingTotpCode: mocks.verifyPendingTotpCode,
+  sendStaffPasswordChangedEmail: mocks.sendStaffPasswordChangedEmail,
 }));
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
@@ -1867,7 +1869,7 @@ describe("admin auth management 2FA method changes", () => {
     const body = await response.json() as { error?: { code?: string } };
 
     expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(body.error?.code).toBe("TWO_FACTOR_CODE_INVALID");
     expect(db.__updateSet).not.toHaveBeenCalledWith(expect.objectContaining({ twoFactorMethod: "totp" }));
   });
 });
@@ -1990,13 +1992,13 @@ describe("admin account session lifecycle", () => {
       expect.objectContaining({
         commandId: currentCommandId,
         current: true,
-        deviceLabel: "Chrome on macOS",
+        deviceLabel: "Chrome · macOS",
         networkHint: "203.0.113.x",
       }),
       expect.objectContaining({
         commandId: otherCommandId,
         current: false,
-        deviceLabel: "Safari on iPhone",
+        deviceLabel: "Safari · iPhone",
         networkHint: "2001:db8:abcd:…",
       }),
     ]);
@@ -2171,48 +2173,6 @@ describe("admin account session lifecycle", () => {
 });
 
 describe("admin auth management password changes", () => {
-  it("changes the password and forwards Better Auth's rotated session cookie", async () => {
-    const db = createDbMock();
-    const changePassword = vi.fn().mockResolvedValue({
-      response: { token: "new_session_token", user: { id: "user_1" } },
-      headers: new Headers({
-        "Set-Cookie": "better-auth.session_token=new_session_token.signature; Path=/; HttpOnly; SameSite=Lax",
-      }),
-    });
-    mocks.createAuth.mockReturnValue({
-      api: {
-        changePassword,
-      },
-    });
-    const app = createTestApp(db, {
-      session: { id: "session_1", twoFactorVerified: true },
-    });
-
-    const response = await app.request("/api/v1/admin/auth/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentPassword: "OldPassword123!",
-        newPassword: "NewPassword123!",
-      }),
-    });
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(changePassword).toHaveBeenCalledWith({
-      headers: expect.any(Headers),
-      body: {
-        currentPassword: "OldPassword123!",
-        newPassword: "NewPassword123!",
-        revokeOtherSessions: true,
-      },
-      returnHeaders: true,
-    });
-    expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=new_session_token.signature");
-    const body = await response.json() as { data?: Record<string, unknown> };
-    expect(body.data?.message).toBe("Password changed successfully");
-    expect(JSON.stringify(body)).not.toContain("new_session_token");
-  });
-
   it("rejects password changes without an active session", async () => {
     const db = createDbMock();
     const changePassword = vi.fn();

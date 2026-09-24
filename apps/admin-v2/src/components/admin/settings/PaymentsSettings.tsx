@@ -1,4 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Banknote } from "lucide-react";
 import {
   getApiV1AdminSettingsCheckoutFlow,
@@ -25,10 +26,9 @@ import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { readCheckoutFlowRevisionConflict } from "~/lib/admin-api-error";
 import { apiData, type ApiResult } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
-import { formatNumber, useMessages } from "~/i18n";
+import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { paymentsMessages } from "~/i18n/settings-payments";
 import {
@@ -52,7 +52,7 @@ import { currencyQuery, platformQuery } from "./StoreSettings";
 const MASKED = "••••••••••••";
 const METHODS: MethodKey[] = ["cod", "sslcommerz", "stripe"];
 
-type CheckoutFlow = ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>;
+type CheckoutFlow = Omit<ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>, "revision">;
 type PaymentMethods = Omit<ApiResult<typeof getApiV1AdminSettingsPaymentMethods>, "enabledMethods" | "defaultMethod" | "gatewayStatus"> & {
   enabledMethods: MethodKey[];
   defaultMethod: MethodKey;
@@ -69,50 +69,48 @@ export const paymentMethodsQuery = {
 };
 export const gatewayQuery = (gateway: "stripe" | "sslcommerz") => ({
   queryKey: queryKeys.settings.paymentGateway(gateway),
-  // One switch per gateway: saving its keys turns the provider on; showing
-  // it to buyers is the payment-method switch on the page.
-  queryFn: async (): Promise<Record<string, string | boolean>> => ({
-    ...(gateway === "stripe"
+  queryFn: async (): Promise<Record<string, string | boolean>> =>
+    gateway === "stripe"
       ? await apiData(getApiV1AdminSettingsStripe())
-      : await apiData(getApiV1AdminSettingsSslcommerz())),
-    enabled: true,
-  }),
+      : await apiData(getApiV1AdminSettingsSslcommerz()),
 });
+
+type GatewayKey = "secretKey" | "publishableKey" | "webhookSecret" | "storeId" | "storePassword";
+/** Every key a gateway needs before it can be turned on, and the field showing it. */
+const GATEWAY_KEYS: Record<"stripe" | "sslcommerz", Partial<Record<GatewayKey, string>>> = {
+  stripe: { secretKey: "stripe-secret", publishableKey: "stripe-publishable", webhookSecret: "stripe-webhook" },
+  sslcommerz: { storeId: "ssl-store-id", storePassword: "ssl-password" },
+};
+
+/** "publishable key and webhook secret", in the dashboard language. */
+function useKeyList() {
+  const t = useMessages(paymentsMessages);
+  return (keys: readonly string[]) =>
+    new Intl.ListFormat(getLocale() === "bn" ? "bn" : "en", { type: "conjunction" })
+      .format(keys.map((key) => t(`key_${key as GatewayKey}`)));
+}
 
 function useCanEditPayments() {
   return useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
 }
 
-/**
- * The checkout-flow document is revisioned. A stale revision is refused by
- * the server; the form then reloads the latest version and keeps the
- * merchant's edits, so saving again applies them on top (never silently).
- */
+/** The checkout flow (guest checkout, gateways, advance payment). */
 export function useCheckoutFlowForm(isValid: (draft: CheckoutFlow) => boolean, label?: string) {
-  const queryClient = useQueryClient();
-  const t = useMessages(paymentsMessages);
   const common = useMessages(settingsMessages);
   return useSettingsForm<CheckoutFlow, CheckoutFlow>({
     label,
     queryKey: checkoutFlowQuery.queryKey,
     fetchFn: checkoutFlowQuery.queryFn,
-    saveFn: async (draft) => {
-      try {
-        return await apiData(putApiV1AdminSettingsCheckoutFlow({
-          body: {
-            guestCheckoutEnabled: draft.guestCheckoutEnabled,
-            checkoutMode: draft.checkoutMode,
-            partialPaymentEnabled: draft.partialPaymentEnabled,
-            partialPaymentAmount: draft.partialPaymentAmount,
-            expectedRevision: draft.revision,
-          },
-        }));
-      } catch (error) {
-        if (!readCheckoutFlowRevisionConflict(error)) throw error;
-        await queryClient.invalidateQueries({ queryKey: checkoutFlowQuery.queryKey });
-        throw new Error(t("conflict"));
-      }
-    },
+    saveFn: (draft, expectedRevision) =>
+      apiData(putApiV1AdminSettingsCheckoutFlow({
+        body: {
+          guestCheckoutEnabled: draft.guestCheckoutEnabled,
+          checkoutMode: draft.checkoutMode,
+          partialPaymentEnabled: draft.partialPaymentEnabled,
+          partialPaymentAmount: draft.partialPaymentAmount,
+          expectedRevision,
+        },
+      })),
     resolveSavedValues: (saved) => saved,
     invalidateQueryKeys: [queryKeys.settings.checkoutReadiness(), paymentMethodsQuery.queryKey],
     defaultValues: {} as CheckoutFlow,
@@ -146,10 +144,22 @@ function MethodMark({ method }: { method: MethodKey }) {
   return <OfficialProviderMark provider={method} />;
 }
 
-function PasswordField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+function PasswordField({
+  id,
+  label,
+  value,
+  error,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  error?: string | null;
+  onChange: (value: string) => void;
+}) {
   const t = useMessages(paymentsMessages);
   return (
-    <SettingsField id={id} label={label} help={value === MASKED ? t("secretSaved") : undefined}>
+    <SettingsField id={id} label={label} help={value === MASKED ? t("secretSaved") : undefined} error={error}>
       <Input
         id={id}
         type="password"
@@ -163,25 +173,53 @@ function PasswordField({ id, label, value, onChange }: { id: string; label: stri
   );
 }
 
-function GatewayFields({ gateway }: { gateway: "stripe" | "sslcommerz" }) {
+/**
+ * A gateway's keys. They can be saved a few at a time; the gateway turns on
+ * once every key is there. `turnOn` (the merchant flipped its checkout
+ * switch) requires every key and marks the missing ones.
+ */
+function GatewayFields({
+  gateway,
+  turnOn = false,
+  onTurnedOn,
+}: {
+  gateway: "stripe" | "sslcommerz";
+  turnOn?: boolean;
+  onTurnedOn?: () => void;
+}) {
   const t = useMessages(paymentsMessages);
   const common = useMessages(settingsMessages);
+  const keyList = useKeyList();
   const query = gatewayQuery(gateway);
+  const saved = useQuery(query).data;
   const platform = useQuery(platformQuery);
+  // An empty secret keeps the saved one; an empty publishable key clears it.
+  const missingKeys = (draft: Record<string, string | boolean>) =>
+    (Object.keys(GATEWAY_KEYS[gateway]) as GatewayKey[]).filter((key) =>
+      !String(draft[key] ?? "").trim() && (key === "publishableKey" || !String(saved?.[key] ?? "").trim()));
   const { values, setValue } = useSettingsForm<Record<string, string | boolean>>({
     queryKey: query.queryKey,
     fetchFn: query.queryFn,
-    saveFn: (draft) =>
-      gateway === "stripe"
-        ? apiData(postApiV1AdminSettingsStripe({ body: draft }))
-        : apiData(postApiV1AdminSettingsSslcommerz({ body: draft })),
+    saveFn: async (draft, expectedRevision) => {
+      const body = { ...draft, enabled: turnOn || missingKeys(draft).length === 0, expectedRevision };
+      const result = gateway === "stripe"
+        ? await apiData(postApiV1AdminSettingsStripe({ body }))
+        : await apiData(postApiV1AdminSettingsSslcommerz({ body }));
+      if (turnOn) onTurnedOn?.();
+      return result;
+    },
     invalidateQueryKeys: [paymentMethodsQuery.queryKey, checkoutFlowQuery.queryKey, queryKeys.settings.checkoutReadiness()],
     defaultValues: {},
     errorMessage: common("saveFailed"),
     canEdit: useCanEditPayments(),
+    isValid: (draft) => !turnOn || missingKeys(draft).length === 0,
+    fields: GATEWAY_KEYS[gateway],
   });
   const text = (key: string) => String(values[key] ?? "");
   if (values.enabled === undefined) return null;
+  const missing = turnOn ? missingKeys(values) : [];
+  const turnOnError = (key: GatewayKey) =>
+    missing.includes(key) ? t("turnOnNeeds", { fields: keyList(missing), method: t(gateway) }) : null;
 
   if (gateway === "sslcommerz") {
     return (
@@ -193,10 +231,10 @@ function GatewayFields({ gateway }: { gateway: "stripe" | "sslcommerz" }) {
           </span>
           <Switch checked={Boolean(values.sandbox)} onCheckedChange={(sandbox) => setValue("sandbox", sandbox)} />
         </label>
-        <SettingsField id="ssl-store-id" label={t("storeId")}>
+        <SettingsField id="ssl-store-id" label={t("storeId")} error={turnOnError("storeId")}>
           <Input id="ssl-store-id" autoComplete="off" value={text("storeId")} onChange={(event) => setValue("storeId", event.target.value)} />
         </SettingsField>
-        <PasswordField id="ssl-password" label={t("storePassword")} value={text("storePassword")} onChange={(value) => setValue("storePassword", value)} />
+        <PasswordField id="ssl-password" label={t("storePassword")} value={text("storePassword")} error={turnOnError("storePassword")} onChange={(value) => setValue("storePassword", value)} />
       </>
     );
   }
@@ -207,10 +245,11 @@ function GatewayFields({ gateway }: { gateway: "stripe" | "sslcommerz" }) {
   });
   return (
     <>
-      <PasswordField id="stripe-secret" label={t("secretKey")} value={text("secretKey")} onChange={(value) => setValue("secretKey", value)} />
+      <PasswordField id="stripe-secret" label={t("secretKey")} value={text("secretKey")} error={turnOnError("secretKey")} onChange={(value) => setValue("secretKey", value)} />
       <SettingsField
         id="stripe-publishable"
         label={t("publishableKey")}
+        error={turnOnError("publishableKey")}
         help={environment === "live" ? t("liveWarning") : environment === "test" ? t("testMode") : environment === "mixed" ? t("keyMismatch") : undefined}
       >
         <Input
@@ -222,7 +261,7 @@ function GatewayFields({ gateway }: { gateway: "stripe" | "sslcommerz" }) {
           onChange={(event) => setValue("publishableKey", event.target.value)}
         />
       </SettingsField>
-      <PasswordField id="stripe-webhook" label={t("webhookSecret")} value={text("webhookSecret")} onChange={(value) => setValue("webhookSecret", value)} />
+      <PasswordField id="stripe-webhook" label={t("webhookSecret")} value={text("webhookSecret")} error={turnOnError("webhookSecret")} onChange={(value) => setValue("webhookSecret", value)} />
       {platform.data?.apiUrl ? (
         <p className="text-body text-muted-foreground">{t("webhookHelp", { url: `${platform.data.apiUrl}/api/v1/webhooks/stripe` })}</p>
       ) : null}
@@ -233,7 +272,12 @@ function GatewayFields({ gateway }: { gateway: "stripe" | "sslcommerz" }) {
 export function PaymentMethodsCard() {
   const t = useMessages(paymentsMessages);
   const common = useMessages(settingsMessages);
+  const keyList = useKeyList();
   const canEdit = useCanEditPayments();
+  // Flipping on a gateway that still needs keys opens its setup to finish it.
+  const [turningOn, setTurningOn] = useState<MethodKey | null>(null);
+  const pendingTurnOn = useRef<MethodKey | null>(null);
+  const setupButtons = useRef(new Map<MethodKey, HTMLButtonElement>());
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
   const flowAllowed = (method: MethodKey) =>
@@ -252,9 +296,9 @@ export function PaymentMethodsCard() {
     label: t("methodsTitle"),
     queryKey: paymentMethodsQuery.queryKey,
     fetchFn: paymentMethodsQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsPaymentMethods({
-        body: { enabledMethods: draft.enabledMethods, defaultMethod: draft.defaultMethod },
+        body: { enabledMethods: draft.enabledMethods, defaultMethod: draft.defaultMethod, expectedRevision },
       })),
     invalidateQueryKeys: [checkoutFlowQuery.queryKey, queryKeys.settings.checkoutReadiness()],
     defaultValues: {} as PaymentMethods,
@@ -303,12 +347,14 @@ export function PaymentMethodsCard() {
     });
     const environment = values.gatewayStatus[method]?.environment;
     const exclusion = flow.data && outcome.state === "hidden_by_flow" ? getPaymentMethodFlowExclusionReason(method, flow.data) : null;
+    const missingKeys = values.gatewayStatus[method]?.missingFields ?? [];
+    const needsKeys = outcome.state === "needs_setup" && missingKeys.length > 0;
     const detail = eligibilityIssue(method)
       ? t("sslNeedsBdt")
       : exclusion
         ? t(exclusion)
         : [
-            t(outcome.state),
+            needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
             method !== "cod" && environment === "test" ? t("testMode") : null,
             method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
           ].filter(Boolean).join(" · ");
@@ -337,13 +383,32 @@ export function PaymentMethodsCard() {
             {method !== "cod" ? (
               <SettingsDialog
                 title={t("credentialsTitle", { method: t(method) })}
+                description={turningOn === method && needsKeys ? t("turnOnNeeds", { fields: keyList(missingKeys), method: t(method) }) : undefined}
                 trigger={
-                  <Button type="button" variant="outline" size="sm" disabled={!canEdit}>
+                  <Button
+                    ref={(button) => {
+                      if (button) setupButtons.current.set(method, button);
+                      else setupButtons.current.delete(method);
+                    }}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEdit}
+                    onClick={() => {
+                      setTurningOn(pendingTurnOn.current);
+                      pendingTurnOn.current = null;
+                    }}
+                  >
                     {outcome.state === "needs_setup" || outcome.state === "provider_off" ? t("set_up") : t("manage")}
                   </Button>
                 }
               >
-                <GatewayFields gateway={method} />
+                <GatewayFields
+                  gateway={method}
+                  turnOn={turningOn === method}
+                  // Keys complete: show it at checkout, saved with the page like any switch.
+                  onTurnedOn={() => toggle(method, true)}
+                />
               </SettingsDialog>
             ) : null}
           </div>
@@ -352,9 +417,16 @@ export function PaymentMethodsCard() {
         <label className="-mx-1 -my-3 flex size-11 items-center justify-center">
           <Switch
             checked={selected}
-            disabled={!canEdit || (!selected && !outcome.canSelect)}
+            disabled={!canEdit || (!selected && !outcome.canSelect && outcome.state !== "needs_setup")}
             aria-label={t("showAtCheckout", { method: t(method) })}
-            onCheckedChange={(on) => toggle(method, on)}
+            onCheckedChange={(on) => {
+              if (on && outcome.state === "needs_setup") {
+                pendingTurnOn.current = method;
+                setupButtons.current.get(method)?.click();
+                return;
+              }
+              toggle(method, on);
+            }}
           />
         </label>
       </li>
@@ -414,9 +486,9 @@ export function PaymentOptionsCard() {
       activeOnlineMethodCount: online.length,
       sslCommerzEnabled: online.includes("sslcommerz"),
     });
-  const { values, setValue, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
+  const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
   if (isLoadError) return <SettingsLoadFailure title={t("loadFlow")} onRetry={refetch} />;
-  if (values.revision === undefined) return <SettingsCardLoading />;
+  if (!isLoaded) return <SettingsCardLoading />;
 
   const issues = issuesFor(values);
   const limits = { min: formatNumber(CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min), max: formatNumber(CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max) };

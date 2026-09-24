@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Download } from "lucide-react";
 import { postApiV1AdminAuth2FaMethod } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   PasswordInput,
   SignOutButton,
   describedBy,
+  downloadRecoveryCodes,
   linkClassName,
   useResendCooldown,
 } from "./auth-ui";
@@ -99,7 +100,7 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
       setStep("backup");
     } catch (error) {
       fail(error, (errorCode, status) =>
-        errorCode === "OTP_HAS_EXPIRED" ? "codeExpired" : status === 400 || status === 401 ? "codeInvalid" : null,
+        errorCode === "TWO_FACTOR_CODE_EXPIRED" ? "codeExpired" : status === 400 || status === 401 ? "codeInvalid" : null,
       );
       setCode("");
       document.getElementById("setup-code")?.focus();
@@ -143,10 +144,14 @@ export function TwoFactorSetup({ userEmail }: { userEmail: string }) {
               <li key={backupCode}>{backupCode}</li>
             ))}
           </ul>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button type="button" variant="outline" size="sm" onClick={() => void copyCodes()}>
               {copied === "yes" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
               {copied === "yes" ? t("copied") : t("copyCodes")}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => downloadRecoveryCodes(backupCodes, t("codesFileIntro", { email: userEmail }))}>
+              <Download aria-hidden="true" />
+              {t("downloadCodes")}
             </Button>
             {copied === "failed" ? (
               <p role="status" className="text-body text-destructive">

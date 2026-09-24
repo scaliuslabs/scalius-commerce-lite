@@ -3,9 +3,10 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
-  getPlatformSettings,
+  getPlatformSettingsDocument,
   savePlatformSettings,
 } from "@scalius/core/modules/settings/platform-settings.service";
+import type { PlatformConfig } from "@scalius/shared/platform-config";
 import {
   IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
   PLATFORM_CORS_ORIGINS_MAX_COUNT,
@@ -16,7 +17,7 @@ import {
 } from "@scalius/shared/platform-config";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { ok } from "../../../utils/api-response";
-import { successEnvelope, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -42,6 +43,7 @@ const platformSettingsSchema = z.object({
 });
 
 const platformSettingsResponseSchema = platformSettingsSchema.extend({
+  revision: z.number().int().nonnegative(),
   readiness: readinessSchema.extend({
     /** Typed extra: exactly which platform origins are still unset. */
     missing: z.array(z.enum(PLATFORM_URL_KEYS)),
@@ -59,15 +61,19 @@ const platformSettingsResponseSchema = platformSettingsSchema.extend({
 
 const updatePlatformSettingsSchema = platformSettingsSchema
   .partial()
-  .extend({ identityHandoff: identityHandoffSchema.partial().optional() });
+  .extend({
+    identityHandoff: identityHandoffSchema.partial().optional(),
+    expectedRevision: z.number().int().nonnegative(),
+  });
 
 function respond(
   c: Context<{ Bindings: Env }>,
-  stored: Awaited<ReturnType<typeof getPlatformSettings>>,
+  { value: stored, revision }: { value: PlatformConfig; revision: number },
 ) {
   const effective = c.env.PLATFORM_CONFIG;
   return ok(c, {
     ...stored,
+    revision,
     readiness: getPlatformConfigReadiness(stored),
     effective: {
       storefrontUrl: effective?.storefrontUrl ?? stored.storefrontUrl,
@@ -96,8 +102,7 @@ const getPlatformRoute = createRoute({
 
 app.openapi(getPlatformRoute, async (c) => {
   c.header("Cache-Control", "private, no-store");
-  const stored = await getPlatformSettings(c.get("db"));
-  return respond(c, stored);
+  return respond(c, await getPlatformSettingsDocument(c.get("db")));
 });
 
 const updatePlatformRoute = createRoute({
@@ -118,17 +123,17 @@ const updatePlatformRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(platformSettingsResponseSchema) } },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(updatePlatformRoute, async (c) => {
-  const db = c.get("db");
-  const patch = c.req.valid("json");
-  const stored = await savePlatformSettings(db, patch, c.env.CACHE);
+  const { expectedRevision, ...patch } = c.req.valid("json");
+  const saved = await savePlatformSettings(c.get("db"), patch, c.env.CACHE, { expectedRevision });
   await bumpCacheGeneration(c);
 
   c.header("Cache-Control", "private, no-store");
-  return respond(c, stored);
+  return respond(c, saved);
 });
 
 export { app as platformSettingsRoutes };

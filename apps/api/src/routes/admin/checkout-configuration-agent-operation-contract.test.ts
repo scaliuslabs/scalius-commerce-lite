@@ -43,12 +43,11 @@ const expectedOperations: ExpectedOperation[] = [
   ["get", "/api/v1/admin/settings/sslcommerz", "dashboard.payments.sslcommerz_get"],
   ["post", "/api/v1/admin/settings/sslcommerz", "dashboard.payments.sslcommerz_update"],
   ["get", "/api/v1/admin/settings/shipping-methods", "dashboard.shipping_methods.list"],
-  ["post", "/api/v1/admin/settings/shipping-methods", "dashboard.shipping_methods.create"],
-  ["get", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_methods.get"],
-  ["put", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_methods.update"],
-  ["delete", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_methods.trash"],
-  ["post", "/api/v1/admin/settings/shipping-methods/{id}/restore", "dashboard.shipping_methods.restore"],
-  ["delete", "/api/v1/admin/settings/shipping-methods/{id}/permanent-delete", "dashboard.shipping_methods.delete_permanently"],
+  ["post", "/api/v1/admin/settings/shipping-methods", "dashboard.shipping_zones.create"],
+  ["put", "/api/v1/admin/settings/shipping-methods/everywhere-else", "dashboard.shipping_zones.everywhere_else_update"],
+  ["put", "/api/v1/admin/settings/shipping-methods/template", "dashboard.shipping_zones.apply_template"],
+  ["put", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.update"],
+  ["delete", "/api/v1/admin/settings/shipping-methods/{id}", "dashboard.shipping_zones.delete"],
   ["get", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.list"],
   ["post", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.create"],
   ["delete", "/api/v1/admin/settings/delivery-locations", "dashboard.delivery_locations.bulk_delete"],
@@ -78,7 +77,6 @@ const expectedOperations: ExpectedOperation[] = [
   ["post", "/api/v1/admin/taxes/preview", "dashboard.taxes.preview"],
   ["get", "/api/v1/admin/settings/notification-channels", "dashboard.notifications.customer_rules_get"],
   ["put", "/api/v1/admin/settings/notification-channels", "dashboard.notifications.customer_rules_update"],
-  ["get", "/api/v1/admin/settings/notification-channels/admin-channels", "dashboard.notifications.admin_rules_get"],
   ["put", "/api/v1/admin/settings/notification-channels/admin-channels", "dashboard.notifications.admin_rules_update"],
   ["get", "/api/v1/admin/settings/firebase", "dashboard.notifications.firebase_get"],
   ["post", "/api/v1/admin/settings/firebase", "dashboard.notifications.firebase_update"],
@@ -89,8 +87,10 @@ const operationsWithJsonBodies = new Set([
   "dashboard.payments.methods_update",
   "dashboard.payments.stripe_update",
   "dashboard.payments.sslcommerz_update",
-  "dashboard.shipping_methods.create",
-  "dashboard.shipping_methods.update",
+  "dashboard.shipping_zones.create",
+  "dashboard.shipping_zones.update",
+  "dashboard.shipping_zones.everywhere_else_update",
+  "dashboard.shipping_zones.apply_template",
   "dashboard.delivery_locations.create",
   "dashboard.delivery_locations.bulk_delete",
   "dashboard.delivery_locations.delete_all",
@@ -122,14 +122,13 @@ const backendScenarios = {
     "dashboard.payments.sslcommerz_get",
     "dashboard.payments.sslcommerz_update",
   ],
-  shippingMethodLifecycle: [
+  deliveryZoneLifecycle: [
     "dashboard.shipping_methods.list",
-    "dashboard.shipping_methods.create",
-    "dashboard.shipping_methods.get",
-    "dashboard.shipping_methods.update",
-    "dashboard.shipping_methods.trash",
-    "dashboard.shipping_methods.restore",
-    "dashboard.shipping_methods.delete_permanently",
+    "dashboard.shipping_zones.create",
+    "dashboard.shipping_zones.update",
+    "dashboard.shipping_zones.delete",
+    "dashboard.shipping_zones.everywhere_else_update",
+    "dashboard.shipping_zones.apply_template",
   ],
   deliveryHierarchyAndPathaoImport: [
     "dashboard.delivery_locations.list",
@@ -167,7 +166,6 @@ const backendScenarios = {
   notificationRulesAndFcm: [
     "dashboard.notifications.customer_rules_get",
     "dashboard.notifications.customer_rules_update",
-    "dashboard.notifications.admin_rules_get",
     "dashboard.notifications.admin_rules_update",
     "dashboard.notifications.firebase_get",
     "dashboard.notifications.firebase_update",
@@ -192,7 +190,7 @@ describe("checkout configuration agent operation contract", () => {
       expect(ids.has(operationId), `duplicate ${operationId}`).toBe(false);
       ids.add(operationId);
     }
-    expect(ids.size).toBe(49);
+    expect(ids.size).toBe(47);
   });
 
   it("marks every declared JSON mutation body as required", () => {
@@ -201,7 +199,7 @@ describe("checkout configuration agent operation contract", () => {
       if (!operationsWithJsonBodies.has(operationId)) continue;
       expect(spec.paths?.[path]?.[method]?.requestBody?.required, operationId).toBe(true);
     }
-    expect(operationsWithJsonBodies.size).toBe(21);
+    expect(operationsWithJsonBodies.size).toBe(23);
   });
 
   it("maps every server outcome to one backend scenario and keeps local UI actions local", () => {

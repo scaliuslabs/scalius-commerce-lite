@@ -1,13 +1,11 @@
 import type { Database } from "@scalius/database/client";
-import { AppError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 
 import {
     getCheckoutFlowValidationIssues,
     type CheckoutMode,
 } from "./checkout-flow";
 import { checkoutDocument, type CheckoutFlowSettings } from "./documents";
-
-export const CHECKOUT_FLOW_REVISION_CONFLICT = "CHECKOUT_FLOW_REVISION_CONFLICT";
 
 export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {
     /** 0 until the first save. */
@@ -23,22 +21,10 @@ export interface SaveCheckoutFlowSettingsInput {
     availablePaymentMethods: readonly string[];
 }
 
-export class CheckoutFlowRevisionConflictError extends AppError {
-    constructor(expectedRevision: number, currentRevision: number | null) {
-        super(
-            409,
-            CHECKOUT_FLOW_REVISION_CONFLICT,
-            "Checkout settings changed in another session. Review the latest version before saving again.",
-            { expectedRevision, currentRevision },
-        );
-        this.name = "CheckoutFlowRevisionConflictError";
-    }
-}
-
 export async function getCheckoutFlowSettingsDocument(
     db: Database,
 ): Promise<CheckoutFlowSettingsDocument> {
-    const { value, revision } = await checkoutDocument.readDetailed(db);
+    const { value, revision } = await checkoutDocument.readDetailed(db, {}, { skipCache: true });
     return { ...value, revision };
 }
 
@@ -63,12 +49,6 @@ export async function saveCheckoutFlowSettingsDocument(
         checkoutMode: input.checkoutMode,
         partialPaymentEnabled: input.partialPaymentEnabled,
         partialPaymentAmount: input.partialPaymentAmount,
-    }, {}, {
-        expectedRevision: input.expectedRevision,
-        conflict: (currentRevision) => new CheckoutFlowRevisionConflictError(
-            input.expectedRevision,
-            currentRevision,
-        ),
-    });
+    }, {}, { expectedRevision: input.expectedRevision });
     return { ...value, revision };
 }

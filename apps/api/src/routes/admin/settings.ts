@@ -7,9 +7,11 @@ import { deliveryProvidersRoutes } from "./settings/delivery-providers";
 import { heroSlidersRoutes } from "./settings/hero-sliders";
 import { metaConversionsAdminRoutes } from "./settings/meta-conversions-admin";
 import { notificationChannelsRoutes } from "./settings/notification-channels";
+import { notificationTemplatesRoutes } from "./settings/notification-templates";
 import { smsSettingsRoutes } from "./settings/sms";
 import { businessSettingsRoutes } from "./settings/business";
 import { customerRequestPolicyRoutes } from "./settings/customer-requests";
+import { storePoliciesRoutes } from "./settings/policies";
 import { platformSettingsRoutes } from "./settings/platform";
 import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
 
@@ -27,8 +29,10 @@ app.route("/shipping-methods", shippingMethodsSettingsRoutes);
 app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/hero-sliders", heroSlidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);
+app.route("/notification-channels/templates", notificationTemplatesRoutes);
 app.route("/notification-channels", notificationChannelsRoutes);
 app.route("/", smsSettingsRoutes);
 app.route("/", customerRequestPolicyRoutes);
+app.route("/", storePoliciesRoutes);
 
 export { app as adminSettingsRoutes };

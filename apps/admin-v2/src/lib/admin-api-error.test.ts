@@ -5,7 +5,7 @@ import {
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
   readAdminOrderCreateRequestMismatch,
-  readCheckoutFlowRevisionConflict,
+  readSettingsRevisionConflict,
   readPromotionRevisionConflict,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
@@ -170,25 +170,25 @@ describe("admin API detail-loader errors", () => {
     ))).toBeNull();
   });
 
-  it("extracts only a typed checkout-flow revision conflict", () => {
-    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
-      "Checkout flow changed",
+  it("extracts only a typed settings revision conflict", () => {
+    expect(readSettingsRevisionConflict(new AdminApiResponseError(
+      "Settings changed",
       409,
-      "CHECKOUT_FLOW_REVISION_CONFLICT",
-      { expectedRevision: 2, currentRevision: 3 },
-    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
+      "SETTINGS_REVISION_CONFLICT",
+      { document: "checkout", expectedRevision: 0, currentRevision: 1 },
+    ))).toEqual({ document: "checkout", expectedRevision: 0, currentRevision: 1 });
 
-    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
+    expect(readSettingsRevisionConflict(new AdminApiResponseError(
       "Wrong conflict",
       409,
       "CONFLICT",
-      { expectedRevision: 2, currentRevision: 3 },
+      { document: "checkout", expectedRevision: 2, currentRevision: 3 },
     ))).toBeNull();
-    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
+    expect(readSettingsRevisionConflict(new AdminApiResponseError(
       "Bad revision",
       409,
-      "CHECKOUT_FLOW_REVISION_CONFLICT",
-      { expectedRevision: 0, currentRevision: "3" },
+      "SETTINGS_REVISION_CONFLICT",
+      { document: "checkout", expectedRevision: 0, currentRevision: "3" },
     ))).toBeNull();
   });
 

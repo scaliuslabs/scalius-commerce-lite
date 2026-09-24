@@ -66,11 +66,19 @@ async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?
     });
     app.route("/admin/settings", paymentSettingsRoutes);
 
+    // Like the dashboard, a save sends the revision it loaded unless a test sets one.
+    const loadedRevision = (path: string) => (sqlite.prepare(
+        "SELECT revision FROM settings WHERE key = 'document' AND category = ?",
+    ).get(path.slice(1).replace("-", "_")) as { revision: number } | undefined)?.revision ?? 0;
     const request = (path: string, body?: unknown, requestEnv: Env = env) => app.request(
         `/api/v1/admin/settings${path}`,
         body === undefined
             ? { method: "GET" }
-            : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+            : {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expectedRevision: loadedRevision(path), ...(body as object) }),
+            },
         requestEnv,
     );
     return { request, db, sqlite, failNextWrite: () => { failNextWrite = true; } };
@@ -319,6 +327,41 @@ describe("payment settings", () => {
             await expectValidationError(await request(path, body), message);
             expect(storedRows(sqlite, path.slice(1))).toEqual(before);
             expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+        });
+
+        it("saves a partial Stripe setup while it stays off, then names the missing keys when turning it on", async () => {
+            const { request, db } = await createTestApp();
+
+            expect((await request("/stripe", { secretKey: "sk_test_first", enabled: false })).status).toBe(200);
+            await expect(getStripeSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
+                secretKey: "sk_test_first",
+                enabled: false,
+            });
+
+            const turnOn = await request("/stripe", { secretKey: MASKED, enabled: true });
+            expect(turnOn.status).toBe(400);
+            const message = "Add the publishable key and webhook secret to turn on Stripe.";
+            await expect(turnOn.json()).resolves.toMatchObject({
+                error: {
+                    message,
+                    details: { issues: [{ path: ["publishableKey"], message }, { path: ["webhookSecret"], message }] },
+                },
+            });
+            await expect(getStripeSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({ enabled: false });
+        });
+
+        it("saves a partial SSLCommerz setup while it stays off", async () => {
+            const { request, db } = await createTestApp();
+
+            expect((await request("/sslcommerz", { storeId: "real_store_123", enabled: false })).status).toBe(200);
+            await expect(getSSLCommerzSettings(db, CREDENTIAL_ENCRYPTION_KEY)).resolves.toMatchObject({
+                storeId: "real_store_123",
+                enabled: false,
+            });
+            await expectValidationError(
+                await request("/sslcommerz", { enabled: true }),
+                "Add the store password to turn on SSLCommerz.",
+            );
         });
 
         it("keeps a compatible online gateway when partial payments require one", async () => {

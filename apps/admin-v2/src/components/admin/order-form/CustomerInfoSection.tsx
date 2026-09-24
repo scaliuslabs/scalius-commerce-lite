@@ -131,10 +131,9 @@ function LocationPicker({
 
 /** Side column: Customer, Delivery address and Notes cards. */
 export function CustomerInfoSection() {
-  const { form, isEdit, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
+  const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
     useOrderForm();
   const t = useMessages(orderFormMessages);
-  const initialPhone = React.useRef(isEdit ? form.getValues("customerPhone") : undefined);
   const [city, zone] = form.watch(["city", "zone"]);
   // A picked location is an edit: mark it dirty so Save turns on.
   const pick = { shouldDirty: true, shouldValidate: true };
@@ -177,7 +176,6 @@ export function CustomerInfoSection() {
                     ref={refs.customerPhoneRef}
                     value={field.value}
                     onChange={field.onChange}
-                    preserveExistingValue={initialPhone.current}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
                   />
                 </FormControl>

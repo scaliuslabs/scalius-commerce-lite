@@ -51,7 +51,6 @@ export const usersMessages = defineMessages({
 
     rolesTitle: "Roles",
     addRole: "Add role",
-    editRole: "Edit {name}",
     roleName: "Role name",
     builtIn: "Built-in",
     builtInHelp: "Built-in roles can't be changed.",
@@ -64,6 +63,25 @@ export const usersMessages = defineMessages({
     roleDeleted: "Role deleted",
     roleInUse: "Staff still have this role. Change their role first.",
     roleExists: "A role with this name already exists.",
+
+    nameRequired: "Enter a name.",
+    emailInvalid: "Enter an email like name@example.com.",
+    onlyYourAccess: "You can only give access you have.",
+    lockedSelf: "You can't change your own access.",
+    lockedOwner: "The store owner's access can't be changed.",
+    removeStaff: "Remove staff",
+    removeTitle: "Remove {name}?",
+    removeConfirm: "They lose access and can't sign in again. Orders and history keep their name. This can't be undone.",
+    removing: "Removing…",
+    staffRemoved: "Staff removed",
+    roleNameRequired: "Enter a role name.",
+    duplicateRole: "Duplicate as custom role",
+    copyOf: "{name} copy",
+    allIn: "All {group} permissions",
+    selectedCount: "{count} of {total}",
+    roleInUseOne: "1 staff member has this role. Change their role first.",
+    roleInUseMany: "{count} staff members have this role. Change their role first.",
+    notFound: "This person or role no longer exists.",
   },
   bn: {
     staffTitle: "স্টাফ",
@@ -114,7 +132,6 @@ export const usersMessages = defineMessages({
 
     rolesTitle: "রোল",
     addRole: "রোল যোগ করুন",
-    editRole: "{name} এডিট করুন",
     roleName: "রোলের নাম",
     builtIn: "বিল্ট-ইন",
     builtInHelp: "বিল্ট-ইন রোল বদলানো যায় না।",
@@ -127,6 +144,43 @@ export const usersMessages = defineMessages({
     roleDeleted: "রোল ডিলিট হয়েছে",
     roleInUse: "কিছু স্টাফের এই রোল আছে। আগে তাদের রোল বদলান।",
     roleExists: "এই নামে একটি রোল আগে থেকেই আছে।",
+
+    nameRequired: "নাম লিখুন।",
+    emailInvalid: "name@example.com এর মতো একটি ইমেইল দিন।",
+    onlyYourAccess: "আপনার নিজের যে অ্যাক্সেস আছে, শুধু সেটাই দিতে পারবেন।",
+    lockedSelf: "নিজের অ্যাক্সেস নিজে বদলানো যায় না।",
+    lockedOwner: "স্টোরের মালিকের অ্যাক্সেস বদলানো যায় না।",
+    removeStaff: "স্টাফ বাদ দিন",
+    removeTitle: "{name}-কে বাদ দেবেন?",
+    removeConfirm: "তিনি অ্যাক্সেস হারাবেন এবং আর সাইন ইন করতে পারবেন না। অর্ডার ও হিস্ট্রিতে তার নাম থেকে যাবে। এটি আর ফেরানো যাবে না।",
+    removing: "বাদ দেওয়া হচ্ছে…",
+    staffRemoved: "স্টাফ বাদ দেওয়া হয়েছে",
+    roleNameRequired: "রোলের নাম লিখুন।",
+    duplicateRole: "কাস্টম রোল হিসেবে কপি করুন",
+    copyOf: "{name} কপি",
+    allIn: "{group}-এর সব পারমিশন",
+    selectedCount: "{total}টির মধ্যে {count}টি",
+    roleInUseOne: "১ জন স্টাফের এই রোল আছে। আগে তার রোল বদলান।",
+    roleInUseMany: "{count} জন স্টাফের এই রোল আছে। আগে তাদের রোল বদলান।",
+    notFound: "এই ব্যক্তি বা রোল আর নেই।",
+  },
+});
+
+/** Built-in role names by stored key; custom role names stay as the merchant typed them. */
+export const builtInRoleMessages = defineMessages({
+  en: {
+    super_admin: "Super admin",
+    manager: "Manager",
+    sales_rep: "Sales representative",
+    content_editor: "Content editor",
+    product_specialist: "Product specialist",
+  },
+  bn: {
+    super_admin: "সুপার অ্যাডমিন",
+    manager: "ম্যানেজার",
+    sales_rep: "সেলস রিপ্রেজেন্টেটিভ",
+    content_editor: "কনটেন্ট এডিটর",
+    product_specialist: "প্রোডাক্ট স্পেশালিস্ট",
   },
 });
 
@@ -246,7 +300,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "agent_access.manage": "Manage AI assistant access",
 
     "team.view": "View staff",
-    "team.manage": "Add and suspend staff",
+    "team.manage": "Add, suspend and remove staff",
     "team.manage_roles": "Change roles and permissions",
   },
   bn: {
@@ -337,7 +391,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "agent_access.manage": "AI সহকারীর অ্যাক্সেস সামলানো",
 
     "team.view": "স্টাফ দেখা",
-    "team.manage": "স্টাফ যোগ ও সাসপেন্ড করা",
+    "team.manage": "স্টাফ যোগ, সাসপেন্ড ও বাদ দেওয়া",
     "team.manage_roles": "রোল ও পারমিশন বদলানো",
   },
 });

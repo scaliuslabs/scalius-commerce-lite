@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
   runSeoDiscoveryLiveProbe: vi.fn(),
+  readSettingsForEdit: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-generation", () => ({
@@ -69,6 +70,7 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   saveHomepagePresentationSettings: mocks.saveHomepagePresentationSettings,
   getAllowedCountries: mocks.getAllowedCountries,
   saveAllowedCountries: mocks.saveAllowedCountries,
+  readSettingsForEdit: mocks.readSettingsForEdit,
 }));
 
 vi.mock("@scalius/core/modules/products", () => ({
@@ -104,13 +106,24 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+  // Editors read a document with its revision; route each document to its reader mock.
+  mocks.readSettingsForEdit.mockImplementation(async (database: unknown, document: { key: string }) => {
+    const read = {
+      currency: mocks.getCurrencySettings,
+      media: mocks.getMediaOptimizationSettings,
+      seo: mocks.getSeoSettings,
+      platform: mocks.getStorefrontUrlSetting,
+      customer_countries: mocks.getAllowedCountries,
+    }[document.key]!;
+    return { value: await read(database), revision: 1 };
+  });
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
     currencySymbol: "Tk",
     usdExchangeRate: "1",
   });
   mocks.isCurrencyCodeLocked.mockResolvedValue(false);
-  mocks.saveCurrencySettings.mockResolvedValue(undefined);
+  mocks.saveCurrencySettings.mockResolvedValue({ value: {}, revision: 2 });
   mocks.getGeneralSettings.mockResolvedValue({
     headerConfig: {},
     footerConfig: {},
@@ -200,8 +213,8 @@ function createTestApp() {
   });
   mocks.isValidMediaHostInput.mockReturnValue(true);
   mocks.saveMediaOptimizationSettings.mockResolvedValue({
-    canonicalCdnUrl: "cdn.example.com",
-    canonicalHostAliases: [],
+    value: { canonicalCdnUrl: "cdn.example.com", canonicalHostAliases: [] },
+    revision: 2,
   });
   mocks.getSeoSettings.mockResolvedValue({
     homepageTitle: "Scalius",
@@ -261,14 +274,14 @@ function createTestApp() {
       },
     ],
   });
-  mocks.saveSeoSettings.mockResolvedValue(undefined);
+  mocks.saveSeoSettings.mockResolvedValue({ value: {}, revision: 2 });
   mocks.getStorefrontUrlSetting.mockResolvedValue({
     storefrontUrl: "https://storefront.example.com",
   });
-  mocks.saveStorefrontUrl.mockResolvedValue(undefined);
+  mocks.saveStorefrontUrl.mockResolvedValue({ value: {}, revision: 2 });
   mocks.saveAllowedCountries.mockResolvedValue({
-    allowedCountries: ["BD"],
-    allowedCountriesMode: "include",
+    value: { allowedCountries: ["BD"], allowedCountriesMode: "include" },
+    revision: 2,
   });
   mocks.runSeoDiscoveryLiveProbe.mockImplementation(async (deps) => {
     const [policy, storefront] = await Promise.all([
@@ -307,11 +320,16 @@ async function requestJson(
     {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      // Revisioned documents take the revision the editor loaded (1 here).
+      body: JSON.stringify(
+        REVISIONED_PATHS.has(path) ? { expectedRevision: 1, ...(body as object) } : body,
+      ),
     },
     env,
   );
 }
+
+const REVISIONED_PATHS = new Set(["/currency", "/media", "/seo", "/storefront-url", "/allowed-countries"]);
 
 describe("site settings cache invalidation", () => {
   afterEach(() => {
@@ -472,7 +490,7 @@ describe("site settings cache invalidation", () => {
       const response = await requestJson(app, env, "POST", "/seo", { socialImage });
 
       expect(response.status).toBe(200);
-      expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), { socialImage });
+      expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), { socialImage }, { expectedRevision: 1 });
       expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
     },
   );
@@ -756,7 +774,7 @@ describe("site settings cache invalidation", () => {
       discovery: {
         feeds: { variantStrategy: "products" },
       },
-    });
+    }, { expectedRevision: 1 });
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
     );
   });
@@ -787,7 +805,7 @@ describe("site settings cache invalidation", () => {
         returnMethod: "both",
         policyUrl: "/returns",
       },
-    });
+    }, { expectedRevision: 1 });
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });
@@ -1026,7 +1044,7 @@ describe("site settings cache invalidation", () => {
       ).toHaveBeenCalledWith(expect.objectContaining({ env }));
       if (path === "/storefront-url") {
         // The storefront origin lives in the platform document; its KV mirror is written through.
-        expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), kv);
+        expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), kv, { expectedRevision: 1 });
       }
     },
   );
@@ -1061,6 +1079,7 @@ describe("site settings cache invalidation", () => {
     expect(mocks.saveCurrencySettings).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ currencyCode: "USD" }),
+      { expectedRevision: 1 },
     );
   });
 
