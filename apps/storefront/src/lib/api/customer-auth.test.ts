@@ -216,7 +216,6 @@ describe("customer auth API helpers", () => {
           zoneName: "Mirpur",
           areaName: "Section 10",
           profileComplete: true,
-          needsProfileCompletion: false,
         },
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } })));
@@ -233,7 +232,6 @@ describe("customer auth API helpers", () => {
         zoneName: "Mirpur",
         areaName: "Section 10",
         profileComplete: true,
-        needsProfileCompletion: false,
       },
     });
   });
@@ -383,7 +381,7 @@ describe("customer auth API helpers", () => {
 
     await expect(getCustomerOrderDetail("order_1")).resolves.toMatchObject({
       success: false,
-      error: "Account request timed out. Please try again.",
+      error: "We couldn't reach the store. Check your connection and try again.",
       status: 0,
       unavailable: true,
     });

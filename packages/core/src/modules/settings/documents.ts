@@ -406,7 +406,7 @@ const ADMIN_NOTIFICATION_CHANNELS = ["push"] as const;
 export type NotificationChannelRules = Record<string, string[]>;
 
 export const DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS: NotificationChannelRules = Object.fromEntries(
-  ORDER_NOTIFICATION_TYPES.map((type) => [type, type === "support_request_submitted" ? [] : ["email"]]),
+  ORDER_NOTIFICATION_TYPES.map((type) => [type, ["email"]]),
 );
 
 export const DEFAULT_ADMIN_NOTIFICATION_CHANNELS: NotificationChannelRules = Object.fromEntries(

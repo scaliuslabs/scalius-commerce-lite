@@ -16,9 +16,8 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { createAuthOtpDeliveryKey, maskOtpIdentifier } from "../customers/otp-delivery-receipts";
 import type { OtpQueuePayload } from "../customers/otp-transport";
-import {
-    enforceCustomerAuthOtpIpRateLimit,
-} from "../customers/customer-auth-rate-limit";
+import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
+import { OTP_LOCKED_MESSAGE } from "../customers/customer-auth-otp-challenges";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 import {
     createOrderPaymentRecoveryLink,
@@ -31,7 +30,7 @@ import {
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
-const OTP_RESEND_COOLDOWN_SECONDS = 2 * 60;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 const GENERIC_RECOVERY_MESSAGE = "If this order can be recovered, a verification code was sent to the buyer contact.";
 
@@ -115,14 +114,15 @@ export async function sendOrderPaymentRecoveryOtp(
 
     const { channel, method, identifier } = await resolveRecoveryChannel(db, order, input.channel);
     const deliveryEncryptionKey = requireRecoveryDeliveryEncryptionKey(input.credentialEncryptionKey);
-    await assertRecoveryChannelReady(db, {
+    await assertOrderOtpChannelReady(db, {
         channel,
         emailEnv: input.emailEnv,
         credentialEncryptionKey: input.credentialEncryptionKey,
     });
 
-    await enforceCustomerAuthOtpIpRateLimit(db, {
+    await enforceOtpSendRateLimits(db, {
         ip: input.ip,
+        identifiers: [`order:${orderId}`],
         hashKey: input.encryptionKey,
     });
 
@@ -139,7 +139,7 @@ export async function sendOrderPaymentRecoveryOtp(
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    const challenge = await persistOrderPaymentRecoveryChallenge(db, {
+    const challenge = await persistOrderOtpChallenge(db, {
         challengeKey,
         orderId,
         method,
@@ -226,7 +226,7 @@ export async function verifyOrderPaymentRecoveryOtp(
         });
 
     if (!consumedRows[0]?.challengeKey) {
-        await recordWrongRecoveryOtpAttempt(db, {
+        await recordWrongOrderOtpAttempt(db, {
             challengeKey,
             orderId,
             method,
@@ -362,7 +362,7 @@ async function getRecoveryOtpPolicy(db: Database) {
     return (await customerAuthDocument.read(db)).policy;
 }
 
-async function assertRecoveryChannelReady(
+export async function assertOrderOtpChannelReady(
     db: Database,
     input: {
         channel: CustomerAuthOtpChannel;
@@ -396,7 +396,8 @@ async function assertRecoveryChannelReady(
     }
 }
 
-async function persistOrderPaymentRecoveryChallenge(
+/** One pending code per challenge key (payment recovery or order lookup). */
+export async function persistOrderOtpChallenge(
     db: Database,
     input: {
         orderId: string;
@@ -412,7 +413,7 @@ async function persistOrderPaymentRecoveryChallenge(
         deliveryEncryptionKey: string;
         nowSeconds: number;
     },
-): Promise<{ challengeKey: string; identifierMasked: string; expiresAt: number }> {
+): Promise<{ challengeKey: string; identifierMasked: string; expiresAt: number; resendAvailableAt: number }> {
     const challengeKey = input.challengeKey;
     const identifierHash = await hashRecoveryIdentifier(input.identifier, input.encryptionKey);
     const codeHash = await hashRecoveryOtpCode(input.code, challengeKey, input.encryptionKey);
@@ -481,16 +482,20 @@ async function persistOrderPaymentRecoveryChallenge(
         });
 
     if (!rows[0]?.challengeKey) {
+        const current = await db.select({ resendAvailableAt: orderPaymentRecoveryChallenges.resendAvailableAt })
+            .from(orderPaymentRecoveryChallenges)
+            .where(eq(orderPaymentRecoveryChallenges.challengeKey, challengeKey))
+            .get();
         throw new RateLimitError(
-            "A verification code was recently sent. Please wait a moment before requesting a new one.",
-            OTP_RESEND_COOLDOWN_SECONDS,
+            "A code was just sent. Please wait before asking for another.",
+            Math.max(1, (current?.resendAvailableAt ?? resendAvailableAt) - input.nowSeconds),
         );
     }
 
-    return { challengeKey, identifierMasked, expiresAt };
+    return { challengeKey, identifierMasked, expiresAt, resendAvailableAt };
 }
 
-async function recordWrongRecoveryOtpAttempt(
+export async function recordWrongOrderOtpAttempt(
     db: Database,
     input: {
         challengeKey: string;
@@ -527,12 +532,11 @@ async function recordWrongRecoveryOtpAttempt(
 
     const wrong = wrongRows[0];
     if (wrong) {
-        if (wrong.status === "locked" || wrong.attempts >= wrong.maxAttempts) {
-            throw new RateLimitError("Too many failed attempts. Please request a new code.");
+        const attemptsLeft = Math.max(0, wrong.maxAttempts - wrong.attempts);
+        if (wrong.status === "locked" || attemptsLeft === 0) {
+            throw new ValidationError(OTP_LOCKED_MESSAGE, { attemptsLeft: 0 });
         }
-        throw new ValidationError("Incorrect code. Please try again.", {
-            attemptsLeft: wrong.maxAttempts - wrong.attempts,
-        });
+        throw new ValidationError("That code isn't right. Check it and try again.", { attemptsLeft });
     }
 
     const existing = await db.select()
@@ -541,19 +545,19 @@ async function recordWrongRecoveryOtpAttempt(
         .get();
 
     if (!existing) {
-        throw new ValidationError("No verification code found. Please request a new one.");
-    }
-    if (existing.expiresAt <= input.nowSeconds) {
-        throw new ValidationError("Verification code has expired. Please request a new one.");
-    }
-    if (existing.status === "locked" || existing.attempts >= existing.maxAttempts) {
-        throw new RateLimitError("Too many failed attempts. Please request a new code.");
+        throw new ValidationError("There's no active code. Send a new code.", { attemptsLeft: 0 });
     }
     if (existing.status === "consumed") {
-        throw new ValidationError("Verification code has already been used. Please request a new code.");
+        throw new ValidationError("That code was already used. Send a new code.", { attemptsLeft: 0 });
+    }
+    if (existing.status === "locked" || existing.attempts >= existing.maxAttempts) {
+        throw new ValidationError(OTP_LOCKED_MESSAGE, { attemptsLeft: 0 });
+    }
+    if (existing.expiresAt <= input.nowSeconds) {
+        throw new ValidationError("That code has expired. Send a new code.", { attemptsLeft: 0 });
     }
 
-    throw new ValidationError("Verification code could not be verified. Please request a new code.");
+    throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
 }
 
 async function buildRecoveryChallengeKey(input: {
@@ -568,14 +572,14 @@ async function buildRecoveryChallengeKey(input: {
     )}`;
 }
 
-async function hashRecoveryIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
+export async function hashRecoveryIdentifier(identifier: string, encryptionKey: string | undefined): Promise<string> {
     return hmacSha256Hex(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-identifier:${identifier.trim().toLowerCase()}`,
     );
 }
 
-async function hashRecoveryOtpCode(
+export async function hashRecoveryOtpCode(
     code: string,
     challengeKey: string,
     encryptionKey: string | undefined,
@@ -586,7 +590,7 @@ async function hashRecoveryOtpCode(
     );
 }
 
-async function hmacSha256Hex(secret: string, value: string): Promise<string> {
+export async function hmacSha256Hex(secret: string, value: string): Promise<string> {
     const key = await crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(secret),
@@ -600,7 +604,7 @@ async function hmacSha256Hex(secret: string, value: string): Promise<string> {
         .join("");
 }
 
-function requireOtpHashKey(encryptionKey: string | undefined): string {
+export function requireOtpHashKey(encryptionKey: string | undefined): string {
     const key = encryptionKey?.trim();
     if (!key) {
         throw new ServiceUnavailableError("Order payment recovery signing key is not configured.");
@@ -608,7 +612,7 @@ function requireOtpHashKey(encryptionKey: string | undefined): string {
     return key;
 }
 
-function requireRecoveryDeliveryEncryptionKey(encryptionKey: string | undefined): string {
+export function requireRecoveryDeliveryEncryptionKey(encryptionKey: string | undefined): string {
     const key = encryptionKey?.trim();
     if (!key) {
         throw new ServiceUnavailableError("Payment recovery OTP delivery target encryption key is not configured.");
@@ -630,7 +634,7 @@ async function encryptRecoveryDeliveryValue(
     }
 }
 
-function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {
+export function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {
     if (channel === "whatsapp") return "whatsapp_otp";
     if (channel === "sms") return "sms_otp";
     return "email";

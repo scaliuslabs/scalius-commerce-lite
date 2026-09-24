@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   createStripePaymentSession: vi.fn(),
   createSSLCommerzPaymentSession: vi.fn(),
   claimGuestOrderToAccount: vi.fn(),
+  linkVerifiedContactOrders: vi.fn(),
   validateReceiptToken: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock("@scalius/core/modules/customers/customers.service", () => ({
 
 vi.mock("@scalius/core/modules/customers/order-account-claim", () => ({
   claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
+  linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 
 vi.mock("../utils/order-receipt-token", () => ({
@@ -94,12 +96,16 @@ describe("customer auth private cache policy", () => {
     });
     mocks.getCookieConfig.mockReturnValue({ sameSite: "Lax", domainAttr: "" });
     mocks.buildSetCookieHeader.mockReturnValue("cs_tok=session_1; Path=/; HttpOnly");
+    mocks.linkVerifiedContactOrders.mockResolvedValue(undefined);
     mocks.sendOtp.mockResolvedValue({
-      success: true,
-      message: "Verification code sent to your email",
+      message: "We sent you a code.",
+      resendAfterSeconds: 60,
+      otpStorageKey: "cust_otp:email:opaque_hash",
+      deliveryKey: "otp_delivery_1",
+      queuePayload: { type: "auth.send_otp", challengeKey: "cust_otp:email:opaque_hash", deliveryKey: "otp_delivery_1" },
     });
     mocks.verifyOtp.mockResolvedValue({
-      success: true,
+      status: "signed_in",
       customer: {
         email: "customer@example.com",
         name: "Customer",
@@ -122,7 +128,6 @@ describe("customer auth private cache policy", () => {
       zoneName: "Mirpur",
       areaName: "Section 10",
       profileComplete: true,
-      needsProfileCompletion: false,
     });
     mocks.updateCustomerProfile.mockResolvedValue({
       session: {
@@ -138,8 +143,7 @@ describe("customer auth private cache policy", () => {
         zoneName: "Mirpur",
         areaName: "Section 10",
         profileComplete: true,
-        needsProfileCompletion: false,
-      },
+        },
       customer: {
         email: "customer@example.com",
         name: "Customer",
@@ -153,8 +157,7 @@ describe("customer auth private cache policy", () => {
         zoneName: "Mirpur",
         areaName: "Section 10",
         profileComplete: true,
-        needsProfileCompletion: false,
-      },
+        },
     });
     mocks.getCustomerOrders.mockResolvedValue({
       orders: [
@@ -449,8 +452,7 @@ describe("customer auth private cache policy", () => {
           zoneName: "Mirpur",
           areaName: "Section 10",
           profileComplete: true,
-          needsProfileCompletion: false,
-        },
+            },
       },
     });
   });
@@ -498,13 +500,12 @@ describe("customer auth private cache policy", () => {
           zone: "zone_mirpur",
           area: "area_1",
           profileComplete: true,
-          needsProfileCompletion: false,
-        },
+            },
       },
     });
   });
 
-  it("passes customer auth intent, channel, and secondary contact fields to OTP service", async () => {
+  it("sends one code request shape for new and returning buyers and returns the resend wait", async () => {
     const app = createTestApp();
     const env = {
       CACHE: {},
@@ -516,14 +517,7 @@ describe("customer auth private cache policy", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          intent: "sign_up",
-          method: "email",
-          channel: "email",
-          identifier: "buyer@example.com",
-          phone: "+8801712345678",
-          email: "backup@example.com",
-        }),
+        body: JSON.stringify({ method: "email", channel: "email", identifier: "buyer@example.com" }),
       },
       env,
     );
@@ -531,15 +525,38 @@ describe("customer auth private cache policy", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.sendOtp).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        intent: "sign_up",
-        method: "email",
-        channel: "email",
-        identifier: "buyer@example.com",
-        phone: "+8801712345678",
-        email: "backup@example.com",
-      }),
+      expect.objectContaining({ method: "email", channel: "email", identifier: "buyer@example.com" }),
     );
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: { message: "We sent you a code.", resendAfterSeconds: 60 },
+    });
+  });
+
+  it("asks a new buyer for details without setting a session cookie, then signs them in", async () => {
+    const app = createTestApp();
+    mocks.verifyOtp.mockResolvedValueOnce({ status: "needs_account_details" });
+    const request = (body: object) => app.request(
+      "/api/v1/customer-auth/verify-otp",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      { CACHE: {} } as never,
+    );
+
+    const needsDetails = await request({ method: "email", identifier: "new@example.com", code: "123456" });
+    expect(needsDetails.headers.get("Set-Cookie")).toBeNull();
+    await expect(needsDetails.json()).resolves.toEqual({ success: true, data: { status: "needs_account_details" } });
+
+    const created = await request({
+      method: "email",
+      identifier: "new@example.com",
+      code: "123456",
+      account: { name: "New Buyer", phone: "01712345678" },
+    });
+    expect(mocks.verifyOtp).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
+      account: { name: "New Buyer", phone: "01712345678" },
+    }));
+    expect(created.headers.get("Set-Cookie")).toContain("cs_tok=");
+    await expect(created.json()).resolves.toMatchObject({ success: true, data: { status: "signed_in" } });
   });
 
   it("uses CF-Connecting-IP for customer OTP rate-limit identity over spoofed XFF", async () => {

@@ -5,6 +5,7 @@ import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
+import { RateLimitError } from "../utils/api-error";
 import {
   getRequestCorrelation,
   requestCorrelationMiddleware,
@@ -45,6 +46,9 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     });
 
     const { body, status } = errorResponseFromError(error);
+    if (error instanceof RateLimitError && error.retryAfterSeconds) {
+      c.header("Retry-After", String(Math.ceil(error.retryAfterSeconds)));
+    }
     return c.json(body, status);
   });
 

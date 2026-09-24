@@ -30,7 +30,6 @@ import { exchangeThemePreviewContinuation } from "@scalius/core/modules/settings
 import { authMiddleware } from "../middleware/auth";
 import {
   ForbiddenError,
-  RateLimitError,
   ServiceUnavailableError,
   ValidationError,
 } from "../utils/api-error";
@@ -77,11 +76,16 @@ const continuationErrors = {
 const customerAuthInputSchema = z.object({
   method: z.enum(["email", "phone"]),
   channel: channelSchema.optional(),
-  intent: z.enum(["sign_in", "sign_up"]).default("sign_in"),
   identifier: z.string().trim().min(3).max(254),
-  name: z.string().trim().min(1).max(100).optional(),
-  phone: z.string().trim().max(32).optional(),
-  email: z.email().optional(),
+}).strict();
+const customerAuthVerifySchema = customerAuthInputSchema.extend({
+  code: z.string().trim().min(4).max(12),
+  /** Only needed when the proven email/phone has no account yet. */
+  account: z.object({
+    name: z.string().trim().min(1).max(100),
+    phone: z.string().trim().max(32).optional(),
+    email: z.email().optional(),
+  }).strict().optional(),
 }).strict();
 
 function privateNoStore(c: { header(name: string, value: string, options?: { append?: boolean }): void }): void {
@@ -242,38 +246,24 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
   const continuation = await getHostedAgentStorefrontContinuation(c.get("db"), c.req.valid("param").continuationId);
   assertKind(continuation.kind, "customer_auth");
   const body = c.req.valid("json");
-  const identifier = body.identifier.trim().toLowerCase();
   const result = await sendOtp(c.get("db"), {
     method: body.method,
     channel: body.channel,
-    intent: body.intent,
-    identifier,
-    name: body.name?.trim() || "Customer",
-    phone: body.phone?.trim(),
-    email: body.email?.trim().toLowerCase(),
+    identifier: body.identifier,
     ip: getTrustedClientIp(c),
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
-  if (!result.success) {
-    if (result.httpStatus === 429) throw new RateLimitError(result.error || "Too many requests.");
-    if (result.httpStatus === 403) throw new ForbiddenError(result.error || "This verification method is disabled.");
-    throw new ValidationError(result.error || "Verification could not be started.");
-  }
-  if (result.queuePayload) {
-    try {
-      await c.env.JOBS_QUEUE.send(result.queuePayload);
-    } catch (error) {
-      if (result.otpStorageKey && result.deliveryKey) {
-        await deleteCustomerAuthOtpChallenge(c.get("db"), {
-          otpKey: result.otpStorageKey,
-          deliveryKey: result.deliveryKey,
-        }).catch(() => undefined);
-      }
-      console.error("[AgentContinuation] Customer OTP queue handoff failed:", error instanceof Error ? error.message : "unknown");
-      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
-    }
+  try {
+    await c.env.JOBS_QUEUE.send(result.queuePayload);
+  } catch (error) {
+    await deleteCustomerAuthOtpChallenge(c.get("db"), {
+      otpKey: result.otpStorageKey,
+      deliveryKey: result.deliveryKey,
+    }).catch(() => undefined);
+    console.error("[AgentContinuation] Customer OTP queue handoff failed:", error instanceof Error ? error.message : "unknown");
+    throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
   }
   return ok(c, { message: result.message || "Verification code sent." });
 });
@@ -287,11 +277,12 @@ const verifyCustomerOtpRoute = createRoute({
   security: [{ bearerAuth: [] }],
   request: {
     params: continuationPathSchema,
-    body: { required: true, content: { "application/json": { schema: customerAuthInputSchema.extend({ code: z.string().trim().min(4).max(12) }) } } },
+    body: { required: true, content: { "application/json": { schema: customerAuthVerifySchema } } },
   },
   responses: {
-    200: { description: "Customer authorized", content: { "application/json": { schema: successEnvelope(z.object({
-      authenticated: z.literal(true),
+    200: { description: "Customer authorized, or the code is right and a new account needs a name", content: { "application/json": { schema: successEnvelope(z.object({
+      authenticated: z.boolean(),
+      needsAccountDetails: z.boolean(),
       customer: z.object({}).passthrough().optional(),
       isNewUser: z.boolean(),
     })) } } },
@@ -308,21 +299,14 @@ app.openapi(verifyCustomerOtpRoute, async (c) => {
   const result = await verifyOtp(c.get("db"), {
     method: body.method,
     channel: body.channel,
-    intent: body.intent,
-    identifier: body.identifier.trim().toLowerCase(),
-    code: body.code.trim(),
-    name: body.name?.trim() || "Customer",
-    phone: body.phone?.trim(),
-    email: body.email?.trim().toLowerCase(),
+    identifier: body.identifier,
+    code: body.code,
+    account: body.account,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     sessionHashKey,
   });
-  if (!result.success || !result.session) {
-    if (result.httpStatus === 429) throw new RateLimitError(result.error || "Too many attempts.");
-    throw new ValidationError(result.error || "Verification code is invalid.", {
-      ...(result.attemptsLeft === undefined ? {} : { attemptsLeft: result.attemptsLeft }),
-    });
+  if (result.status === "needs_account_details") {
+    return ok(c, { authenticated: false, needsAccountDetails: true, isNewUser: true });
   }
   const sessionToken = result.session.token;
   try {
@@ -338,7 +322,7 @@ app.openapi(verifyCustomerOtpRoute, async (c) => {
   const { sameSite, domainAttr } = getCookieConfig(c.env.STOREFRONT_URL, c.env.CUSTOMER_AUTH_COOKIE_DOMAIN);
   c.header("Set-Cookie", buildSetCookieHeader(sessionToken, SESSION_TTL_SECONDS, domainAttr, sameSite));
   c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
-  return ok(c, { authenticated: true as const, customer: result.customer, isNewUser: Boolean(result.isNewUser) });
+  return ok(c, { authenticated: true, needsAccountDetails: false, customer: result.customer, isNewUser: result.isNewUser });
 });
 
 const startPaymentRoute = createRoute({

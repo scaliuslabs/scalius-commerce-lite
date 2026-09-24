@@ -1,11 +1,7 @@
 // src/integrations/email.ts
 // Re-exports from the email provider module for backward compatibility.
 
-export {
-  sendEmail,
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-} from "./email/index";
+export { sendEmail } from "./email/index";
 
 export type {
   SendEmailOptions,

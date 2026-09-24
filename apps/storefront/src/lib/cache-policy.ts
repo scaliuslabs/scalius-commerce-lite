@@ -1,7 +1,7 @@
 const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
 
 export const PRIVATE_STOREFRONT_PATHNAME_RE =
-  /^\/(?:account|buy|cart|checkout|order-success|payment-recovery|theme-preview)(?:\/|$)/;
+  /^\/(?:account|buy|cart|checkout|order-success|payment-recovery|theme-preview|track-order)(?:\/|$)/;
 
 export function isPrivateStorefrontPathname(pathname: string): boolean {
   return PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname);

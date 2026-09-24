@@ -7,6 +7,7 @@ import {
   formatCheckoutLanguageText,
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 
 export { formatOrderSuccessLabel, formatOrderSuccessPaymentMethod } from "./order-success-localization";
 
@@ -28,6 +29,8 @@ const CLOSED_ORDER_STATUSES = new Set([
   "partially_refunded",
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
+/** A (partly) refunded payment reads like a settled one: no retry, nothing due. */
+const REFUNDED_PAYMENT_STATUSES = new Set(["refunded", "partially_refunded"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
 export type OrderSuccessStateKind =
   | "order_placed"
@@ -84,10 +87,7 @@ export function getOrderSuccessStateKind(
   const orderStatus = normalize(order.status);
   const paymentStatus = normalize(order.paymentStatus);
 
-  if (
-    CLOSED_ORDER_STATUSES.has(orderStatus)
-    || paymentStatus === "refunded"
-  ) {
+  if (CLOSED_ORDER_STATUSES.has(orderStatus) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus)) {
     return "order_updated";
   }
 
@@ -117,7 +117,7 @@ export function getOrderSuccessVisibleBalanceDue(
 ): number {
   const orderStatus = normalize(order.status);
   const paymentStatus = normalize(order.paymentStatus);
-  if (CLOSED_ORDER_STATUSES.has(orderStatus) || paymentStatus === "refunded") return 0;
+  if (CLOSED_ORDER_STATUSES.has(orderStatus) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus)) return 0;
 
   const storedBalance = Number(order.balanceDue);
   if (Number.isFinite(storedBalance)) return Math.max(0, storedBalance);
@@ -157,7 +157,7 @@ export function getOrderPaymentPresentation(
 ) {
   const isCod = normalize(order.paymentMethod) === "cod";
   const paymentStatus = normalize(order.paymentStatus);
-  const isClosed = CLOSED_ORDER_STATUSES.has(normalize(order.status)) || paymentStatus === "refunded";
+  const isClosed = CLOSED_ORDER_STATUSES.has(normalize(order.status)) || REFUNDED_PAYMENT_STATUSES.has(paymentStatus);
   const codCollection = isCod && ["unpaid", "partial"].includes(paymentStatus);
   return {
     isCod,
@@ -186,12 +186,14 @@ export function getOrderSuccessViewState(
   const payment = getOrderPaymentPresentation(order, copy);
   void callbackResult;
   const kind = durableKind;
+  // Copy templates already carry the "#": "We received order #{orderId}."
+  const orderId = formatOrderNumber(order.orderNumber, order.id).slice(1);
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
       title: copy.orderReceiptPaymentIssueTitleText,
-      message: formatCheckoutLanguageText(copy.orderReceiptPaymentIssueMessageText, { orderId: order.id }),
+      message: formatCheckoutLanguageText(copy.orderReceiptPaymentIssueMessageText, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
@@ -204,7 +206,7 @@ export function getOrderSuccessViewState(
       kind,
       shouldFinalizeClientSide: false,
       title: copy.orderReceiptPaymentPendingTitleText,
-      message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId: order.id }),
+      message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: "bg-amber-100 text-amber-800",
@@ -252,11 +254,8 @@ export function getOrderSuccessViewState(
         message: copy.orderReceiptPartiallyRefundedMessageText,
       },
     };
-    const stateCopy = paymentStatus === "refunded" && !CLOSED_ORDER_STATUSES.has(orderStatus)
-      ? {
-          title: copy.orderReceiptRefundedTitleText,
-          message: copy.orderReceiptRefundedMessageText,
-        }
+    const stateCopy = REFUNDED_PAYMENT_STATUSES.has(paymentStatus) && !CLOSED_ORDER_STATUSES.has(orderStatus)
+      ? updatedCopy[paymentStatus]!
       : updatedCopy[orderStatus] ?? {
           title: copy.orderReceiptUpdatedTitleText,
           message: copy.orderReceiptUpdatedMessageText,
@@ -266,7 +265,7 @@ export function getOrderSuccessViewState(
       kind,
       shouldFinalizeClientSide: false,
       title: stateCopy.title,
-      message: formatCheckoutLanguageText(stateCopy.message, { orderId: order.id }),
+      message: formatCheckoutLanguageText(stateCopy.message, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
@@ -278,7 +277,7 @@ export function getOrderSuccessViewState(
     kind,
     shouldFinalizeClientSide: true,
     title: copy.orderReceiptPlacedTitleText,
-    message: formatCheckoutLanguageText(copy.orderReceiptPlacedMessageText, { orderId: order.id }),
+    message: formatCheckoutLanguageText(copy.orderReceiptPlacedMessageText, { orderId }),
     orderStatusLabel: formatOrderSuccessLabel(
       order.status === "incomplete" ? "processing" : order.status,
       copy,
@@ -287,6 +286,29 @@ export function getOrderSuccessViewState(
     orderBadgeClass: getOrderStatusBadgeClass(order.status),
     paymentBadgeClass: payment.badgeClass,
   };
+}
+
+// "2-3 days", "24 hours", "৩-৫ কার্যদিবস": only a duration the merchant wrote.
+const DELIVERY_ESTIMATE =
+  /[0-9০-৯]+(?:\s*[-–]\s*[0-9০-৯]+)?\s*(?:(?:business|working)\s+)?(?:days?|hours?|কার্যদিবস|দিন|ঘণ্টা)/i;
+
+/**
+ * Shopify's "what happens next" for a just-placed order. The delivery estimate
+ * comes only from the chosen delivery method's own description.
+ */
+export function getOrderSuccessNextSteps(
+  order: Pick<OrderReceipt, "paymentMethod" | "shippingMethodDescription">,
+  kind: OrderSuccessStateKind,
+  copy: CheckoutLanguageData,
+): string[] {
+  if (kind !== "order_placed") return [];
+  const estimate = DELIVERY_ESTIMATE.exec(order.shippingMethodDescription ?? "")?.[0];
+  return [
+    isOnlinePaymentMethod(order.paymentMethod)
+      ? copy.orderReceiptNextStepsPaidText
+      : copy.orderReceiptNextStepsCodText,
+    ...(estimate ? [formatCheckoutLanguageText(copy.orderReceiptDeliveryEstimateText, { estimate })] : []),
+  ];
 }
 
 export function shouldClearCheckoutCartForOrder(

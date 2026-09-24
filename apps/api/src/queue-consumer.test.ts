@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventFailed: vi.fn(),
   markWebhookEventManualReconciliation: vi.fn(),
   recordPaymentWebhookDlqEvidence: vi.fn(),
+  readStoreIdentity: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -76,6 +77,11 @@ vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
   markAuthOtpDeliveryReceiptSkipped: mocks.markAuthOtpDeliveryReceiptSkipped,
   markAuthOtpDeliveryReceiptSkippedByDeliveryKey: mocks.markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
   createAuthOtpProviderClientReference: mocks.createAuthOtpProviderClientReference,
+}));
+
+vi.mock("@scalius/core/modules/notifications/store-messages", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/notifications/store-messages")>(),
+  readStoreIdentity: mocks.readStoreIdentity,
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
@@ -133,6 +139,7 @@ import {
   type PaymentQueueMessage,
 } from "./queue-consumer";
 import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
+import { customerAuthOtpChallenges, orderPaymentRecoveryChallenges } from "@scalius/database/schema";
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 const otpDeliveryCredentialKey = Buffer.alloc(32, 6).toString("base64");
@@ -190,14 +197,19 @@ function createOtpChallengeDb(row: {
   channel: "email" | "sms" | "whatsapp";
   expiresAt: number;
 } | null) {
+  const tables: unknown[] = [];
   return {
     id: "db",
+    tables,
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => row),
-        })),
-      })),
+      from: vi.fn((table: unknown) => {
+        tables.push(table);
+        return {
+          where: vi.fn(() => ({
+            get: vi.fn(async () => row),
+          })),
+        };
+      }),
     })),
   };
 }
@@ -230,6 +242,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       rawResponse: JSON.stringify({ messageId: "wamid.otp.1", messageStatus: "accepted" }),
     });
     mocks.getActiveSmsProvider.mockResolvedValue(null);
+    mocks.readStoreIdentity.mockResolvedValue({ name: "River & Loom", logoUrl: null, language: "en" });
     mocks.getNotificationProviderBlock.mockResolvedValue(null);
     mocks.isNotificationProviderBreakerFailure.mockImplementation((value: string | null | undefined) => {
       const status = value?.trim() ?? "";
@@ -1407,8 +1420,10 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "buyer@example.com",
-        subject: "Your login code",
-        text: `Your login code is: ${expectedCode}\n\nExpires in 5 minutes.`,
+        subject: `${expectedCode} is your River & Loom code`,
+        fromName: "River & Loom",
+        text: expect.stringContaining(`Use this code to sign in or create your account at River & Loom.\n\n${expectedCode}\n\nThis code expires in 5 minutes.`),
+        html: expect.stringContaining('<html lang="en">'),
         idempotencyKey: deliveryKey,
       }),
       {
@@ -1482,8 +1497,8 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "recovery-buyer@example.com",
-        subject: "Your payment recovery code",
-        text: `Your payment recovery code: ${expectedCode}\n\nExpires in 5 minutes.`,
+        subject: `${expectedCode} is your River & Loom code`,
+        text: expect.stringContaining("Use this code to finish paying for your order at River & Loom."),
         idempotencyKey: deliveryKey,
       }),
       {
@@ -1492,6 +1507,83 @@ describe("handleQueueBatch payment confirmation retries", () => {
         encryptionKey: otpDeliveryCredentialKey,
       },
     );
+    expect(db.tables).toEqual([orderPaymentRecoveryChallenges]);
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves track-order codes from the order challenge table and names the store in Bangla without a buyer name", async () => {
+    const challengeKey = "order_lookup:challenge_hash_1";
+    const deliveryKey = "otp_delivery_lookup_1";
+    const db = createOtpChallengeDb({
+      deliveryTargetEncrypted: await encryptOtpDeliveryValue("lookup-buyer@example.com"),
+      deliveryNameEncrypted: null,
+      method: "email",
+      channel: "email",
+      expiresAt: 4_102_444_800,
+    });
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.getCredentialEncryptionKey.mockReturnValue(otpDeliveryCredentialKey);
+    mocks.readStoreIdentity.mockResolvedValue({ name: "River & Loom", logoUrl: null, language: "bn" });
+    const expectedCode = await deriveCustomerAuthOtpDeliveryCode({
+      otpKey: challengeKey,
+      deliveryKey,
+      encryptionKey: otpDeliveryCredentialKey,
+    });
+    const message = createMessage({
+      type: "auth.send_otp",
+      challengeKey,
+      deliveryKey,
+      purpose: "order_lookup",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      channel: "email",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), { CREDENTIAL_ENCRYPTION_KEY: otpDeliveryCredentialKey } as unknown as Env);
+
+    expect(db.tables).toEqual([orderPaymentRecoveryChallenges]);
+    expect(mocks.readStoreIdentity).toHaveBeenCalledTimes(1);
+    const email = mocks.sendEmail.mock.calls[0]![0];
+    expect(email).toMatchObject({
+      to: "lookup-buyer@example.com",
+      subject: `River & Loom-এর কোড ${expectedCode}`,
+      fromName: "River & Loom",
+    });
+    expect(email.html).toContain('<html lang="bn">');
+    expect(email.text).toContain("হ্যালো,\n\nRiver & Loom-এ আপনার অর্ডার দেখতে এই কোডটি ব্যবহার করুন।");
+    expect(`${email.html}${email.text}`).not.toContain("Customer");
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps sign-in codes on the customer challenge table and sends them unbranded when settings cannot load", async () => {
+    const db = createOtpChallengeDb({
+      deliveryTargetEncrypted: await encryptOtpDeliveryValue("buyer@example.com"),
+      deliveryNameEncrypted: null,
+      method: "email",
+      channel: "email",
+      expiresAt: 4_102_444_800,
+    });
+    mocks.getDb.mockReturnValueOnce(db);
+    mocks.getCredentialEncryptionKey.mockReturnValue(otpDeliveryCredentialKey);
+    mocks.readStoreIdentity.mockRejectedValue(new Error("settings unavailable"));
+    const message = createMessage({
+      type: "auth.send_otp",
+      challengeKey: "cust_otp:email:challenge_hash_2",
+      deliveryKey: "otp_delivery_2",
+      purpose: "customer_login",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+    } as const);
+
+    await handleQueueBatch(createBatch([message]), { CREDENTIAL_ENCRYPTION_KEY: otpDeliveryCredentialKey } as unknown as Env);
+
+    expect(db.tables).toEqual([customerAuthOtpChallenges]);
+    const email = mocks.sendEmail.mock.calls[0]![0];
+    expect(email.subject).toMatch(/^\d{6} is your verification code$/);
+    expect(email.fromName).toBeUndefined();
+    expect(email.text).toMatch(/^Hi,\n\nUse this code to sign in or create your account\./);
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
@@ -1721,7 +1813,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     expect(smsProvider.sendSms).toHaveBeenCalledWith({
       to: "+8801712345678",
-      message: "Your login code: 654321\n\nValid for 5 minutes. Do not share.",
+      message: "654321 is your River & Loom code. It expires in 5 minutes. Don't share it.",
       clientReference: "otpclientref1",
     });
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(

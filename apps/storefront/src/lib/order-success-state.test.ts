@@ -4,12 +4,14 @@ import {
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod,
+  getOrderSuccessNextSteps,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
+import { canRetryOrderSuccessPayment } from "./order-success-payment-retry";
 import {
   BANGLA_CHECKOUT_LANGUAGE_DATA,
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -19,6 +21,9 @@ function makeOrder(overrides: Partial<OrderReceipt> = {}): OrderReceipt {
   return {
     id: "order_1",
     customerName: "Receipt Customer",
+    customerPhone: "+8801712345678",
+    customerEmail: null,
+    accountLinked: false,
     shippingAddress: "House 1, Road 2",
     totalAmount: 1200,
     shippingCharge: 80,
@@ -320,5 +325,63 @@ describe("order success state", () => {
     });
     expect(JSON.stringify(payload)).not.toContain("Private Name");
     expect(JSON.stringify(payload)).not.toContain("Private Address");
+  });
+});
+
+describe("order success receipt details", () => {
+  it("names the order by its short number, falling back to the id", () => {
+    const numbered = makeOrder({ orderNumber: 1001 });
+    expect(getOrderSuccessViewState(numbered, ENGLISH_CHECKOUT_LANGUAGE_DATA).message)
+      .toBe("We received order #1001.");
+    expect(getOrderSuccessViewState(makeOrder(), ENGLISH_CHECKOUT_LANGUAGE_DATA).message)
+      .toBe("We received order #order_1.");
+  });
+
+  it("reads a partly refunded payment as settled: no retry and nothing due", () => {
+    const order = makeOrder({
+      status: "delivered",
+      paymentMethod: "sslcommerz",
+      paymentStatus: "partially_refunded",
+      paidAmount: 1200,
+      balanceDue: 300,
+    });
+    const view = getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
+
+    expect(view.kind).toBe("order_updated");
+    expect(view.title).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptPartiallyRefundedTitleText);
+    expect(view.paymentStatusLabel).toBe("Partially refunded");
+    expect(getOrderSuccessVisibleBalanceDue(order)).toBe(0);
+    expect(canRetryOrderSuccessPayment(order, view.kind, "failed")).toBe(false);
+  });
+
+  it("tells a COD buyer they'll get a call before the courier", () => {
+    const order = makeOrder({ paymentMethod: "cod" });
+    expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([
+      "We'll call you to confirm your order, then hand it to the courier.",
+    ]);
+  });
+
+  it("tells an online-paid buyer their payment is confirmed, with the method's own estimate", () => {
+    const order = makeOrder({
+      paymentMethod: "sslcommerz",
+      paymentStatus: "paid",
+      shippingMethodDescription: "Inside Dhaka, 2-3 days",
+    });
+    expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([
+      "Your payment is confirmed. We'll pack your order and hand it to the courier.",
+      "Delivery usually takes 2-3 days.",
+    ]);
+    expect(getOrderSuccessNextSteps(
+      makeOrder({ shippingMethodDescription: "ঢাকার ভেতরে ১-২ দিন" }),
+      "order_placed",
+      BANGLA_CHECKOUT_LANGUAGE_DATA,
+    )[1]).toBe("ডেলিভারিতে সাধারণত ১-২ দিন লাগে।");
+  });
+
+  it("never invents an estimate or next steps for orders the store has moved on", () => {
+    const order = makeOrder({ shippingMethodDescription: "Disposable local smoke shipping method" });
+    expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toHaveLength(1);
+    expect(getOrderSuccessNextSteps(order, "order_updated", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([]);
+    expect(getOrderSuccessNextSteps(order, "payment_pending", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([]);
   });
 });

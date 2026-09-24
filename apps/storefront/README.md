@@ -56,6 +56,7 @@ src/
     checkout.astro   # Checkout page
     order-success.astro
     payment-recovery.astro    # Receipt-token payment recovery
+    track-order.astro         # Guest order lookup: order number + phone + one-time code
     account.astro    # Customer account page
     account/orders/[id].astro # Private order detail, timeline, shipment/payment history, and owned payment recovery
   store/             # Global state (cart.ts, toast)
@@ -101,7 +102,7 @@ canonical request, so every anonymous visitor shares one entry per page.
 Astro prefetch remains enabled for anonymous public discovery, but
 `src/lib/prefetch-policy.ts` is the shared deny boundary for private/no-store
 routes and uncached product option URLs. Keep account, buy, cart, checkout,
-order-success, payment-recovery, theme-preview, and product `size`/`color`
+order-success, payment-recovery, track-order, theme-preview, and product `size`/`color`
 destinations opted out across configurable navigation and merchant-authored
 content. Any request metadata that bypasses the native public cache (including
 auth, receipt, and attribution cookies) suppresses speculative prefetch for the
