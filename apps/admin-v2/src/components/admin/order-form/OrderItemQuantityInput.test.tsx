@@ -159,6 +159,27 @@ describe("OrderItemQuantityInput", () => {
     await act(async () => setInputValue(input, "5"));
     expect(onQuantityChange).toHaveBeenLastCalledWith(5);
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
+
+    // Past 99, stock is still the tighter limit, so it is the one named.
+    await act(async () => setInputValue(input, "150"));
+    expect(host.textContent).toContain("Only 5 units are available for this order.");
+    expect(host.textContent).not.toContain("Quantity can't be more than 99");
+  });
+
+  it("names the 99 limit when stock allows more", async () => {
+    await act(async () => root.render(
+      <OrderItemQuantityInput
+        quantity={3}
+        itemName="Studio Lamp"
+        onQuantityChange={vi.fn()}
+        maxQuantity={500}
+        maximumExceededMessage="Only 500 available."
+      />,
+    ));
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, "150"));
+    expect(host.textContent).toContain("Quantity can't be more than 99");
   });
 
   it("keeps a typed 0 or 21 as typed with its reason instead of jumping to the maximum", async () => {

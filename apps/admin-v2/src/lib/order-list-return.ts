@@ -7,10 +7,12 @@ import { useSyncExternalStore } from "react";
  */
 const KEY = "admin.orders.returnHref";
 const DEFAULT_HREF = "/admin/orders";
+/** Only the list itself: never an order, an abandoned checkout sheet or any other page. */
+const LIST_PATHS = new Set(["/admin/orders", "/admin/orders/abandoned"]);
 const PRIVATE_PARAMS = new Set(["search", "q", "query", "term", "phone", "email"]);
 
 function isSafeListHref(href: string): boolean {
-  if (!/^\/admin\/orders(?:[/?#]|$)/.test(href)) return false;
+  if (!href.startsWith("/") || href.startsWith("//")) return false;
   let url: URL;
   try {
     url = new URL(href, "http://admin.invalid");
@@ -18,6 +20,7 @@ function isSafeListHref(href: string): boolean {
     return false;
   }
   if (url.origin !== "http://admin.invalid") return false;
+  if (!LIST_PATHS.has(url.pathname.replace(/\/+$/, ""))) return false;
   for (const [name, value] of url.searchParams) {
     if (PRIVATE_PARAMS.has(name.toLowerCase())) return false;
     // A phone number or email must never be kept, whatever the param is called.

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -68,10 +68,10 @@ export function InvoiceActions({
         {error ? <p role="alert" className="w-full text-body text-destructive">{error}</p> : null}
         {businessNameMissing ? (
           <Alert variant="warning">
-            <p>
+            <AlertDescription>
               {t("invoice.businessMissing")}{" "}
               <Link to="/admin/settings/store" className="text-link underline">{t("invoice.openSettings")}</Link>
-            </p>
+            </AlertDescription>
           </Alert>
         ) : null}
       </div>

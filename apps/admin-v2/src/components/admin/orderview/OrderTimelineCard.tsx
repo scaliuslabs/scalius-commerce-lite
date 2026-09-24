@@ -122,7 +122,8 @@ export function OrderTimelineCard({ order }: { order: Order }) {
                   {line.detail ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{line.detail}</p> : null}
                   <div className="flex flex-wrap items-center gap-x-2">
                     <p className="text-muted-foreground">
-                      {[event.actorName, formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
+                      {/* "Order created by Rina" already names who. */}
+                      {[event.kind === "placed" ? null : event.actorName, formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
                     </p>
                     {comment && event.own ? (
                       <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>

@@ -98,6 +98,16 @@ describe("order primary phone action", () => {
     expect(resolveOrderPrimaryAction(order({ status: "confirmed", shipmentRecovery: recovery }), all)).toBeNull();
   });
 
+  it("marks a shipped, fully sent order paid online delivered; a cash order collects instead", () => {
+    const sent = { ...item, quantity: 2, shippedQuantity: 2 };
+    const paidOnline = order({ status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1000, balanceDue: 0, items: [sent] });
+    expect(resolveOrderPrimaryAction(paidOnline, all)).toBe("markDelivered");
+    expect(resolveOrderPrimaryAction(paidOnline, { ...all, canChangeOrderStatus: false })).toBeNull();
+    expect(resolveOrderPrimaryAction(order({ status: "shipped", items: [sent] }), all)).toBe("collectCod");
+    const partly = order({ status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", balanceDue: 0, items: [{ ...sent, shippedQuantity: 1 }] });
+    expect(resolveOrderPrimaryAction(partly, all)).not.toBe("markDelivered");
+  });
+
   it("offers nothing for finished orders", () => {
     for (const status of ["completed", "cancelled", "refunded", "returned"]) {
       expect(resolveOrderPrimaryAction(order({ status }), all)).toBeNull();
