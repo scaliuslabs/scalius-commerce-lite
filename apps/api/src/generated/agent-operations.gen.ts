@@ -78609,6 +78609,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "pickup"
                     ]
                   },
+                  "everywhereElse": {
+                    "type": "boolean",
+                    "description": "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone."
+                  },
                   "pickupAddress": {
                     "type": "string",
                     "nullable": true,
@@ -78645,6 +78649,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "fee",
                   "freeOver",
                   "kind",
+                  "everywhereElse",
                   "pickupAddress",
                   "pickupHours",
                   "description",
