@@ -44,6 +44,10 @@ describe("column layout", () => {
     expect(resolveOrder(["name", "sku", "stock"], undefined)).toEqual(["name", "sku", "stock"]);
     expect(resolveOrder(["name", "sku", "stock"], ["stock", "name", "sku"])).toEqual(["stock", "name", "sku"]);
     expect(resolveOrder(["name", "sku", "barcode", "stock"], ["stock", "name", "sku", "gone"])).toEqual(["stock", "name", "sku", "barcode"]);
+    // The title column is pinned first, whatever the saved order (or a duplicate) says.
+    expect(resolveOrder(["name", "sku", "stock"], ["stock", "name", "sku"], "name")).toEqual(["name", "stock", "sku"]);
+    expect(resolveOrder(["name", "sku", "stock"], ["sku", "sku", "stock"], "name")).toEqual(["name", "sku", "stock"]);
+    expect(resolveOrder(["sku", "name", "stock"], undefined, "name")).toEqual(["name", "sku", "stock"]);
   });
 
   it("saves the choice per list and survives blocked or corrupt storage", () => {
