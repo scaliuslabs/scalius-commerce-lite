@@ -10,7 +10,10 @@ import { listOrderTimeline } from "./order-timeline";
 import { getInvoiceDocument, issueInvoice } from "./invoice.service";
 import { processRefund } from "../payments/refund-service";
 import { saveBusinessSettings } from "../settings/business-settings.service";
+import { updateOrderStatusFromShipment } from "../delivery/tracking";
 import {
+    bulkConfirmOrders,
+    bulkFulfillOrders,
     createFulfillmentShipment,
     markOrderDelivered,
     markParcelReturned,
@@ -72,6 +75,36 @@ describe("fulfilment status only follows real parcels", () => {
         await expect(updateOrderStatus(db, id, "returned")).rejects.toThrow("Mark returned");
         expect(one("SELECT status FROM orders WHERE id = ?", id)).toEqual({ status: "confirmed" });
         expect(stock()).toEqual(before);
+    });
+
+    it("reaches Shipped or Delivered only with a parcel on record, whichever way it is asked (ORD-01)", async () => {
+        const bare = await manualOrder();
+        const sent = await manualOrder(1);
+        const shippedWithoutParcel = () => one<{ n: number }>(`
+            SELECT count(*) AS n FROM orders o
+            WHERE o.status IN ('shipped', 'delivered', 'completed')
+              AND NOT EXISTS (SELECT 1 FROM delivery_shipments s WHERE s.order_id = o.id)
+        `).n;
+
+        // Every route that could name a fulfilment status without sending anything.
+        await expect(updateOrderStatus(db, bare, "shipped")).rejects.toThrow("Use Mark as sent");
+        await expect(updateOrderStatus(db, bare, "delivered")).rejects.toThrow("Mark delivered");
+        await expect(markOrderDelivered(db, bare)).rejects.toThrow("Send them first.");
+        await expect(processCodAction(db, bare, { action: "collected", collectedBy: "Rider", collectedAmount: 1680 }))
+            .rejects.toThrow("once the order is sent");
+        expect((await bulkConfirmOrders(db, [bare]))[0]).toMatchObject({ success: false });
+        // A courier update for a parcel that does not exist changes nothing.
+        await updateOrderStatusFromShipment(db, "shp_missing", "in_transit");
+        expect(one("SELECT status FROM orders WHERE id = ?", bare)).toEqual({ status: "confirmed" });
+
+        // Sending is what ships it, and the parcel is recorded with it.
+        await bulkFulfillOrders(db, [sent], { courierName: "Rider Kamal" });
+        expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", sent))
+            .toEqual({ status: "shipped", fulfillment_status: "complete" });
+        await processCodAction(db, sent, { action: "collected", collectedBy: "Rider Kamal", collectedAmount: 880 });
+        expect(one("SELECT status FROM orders WHERE id = ?", sent)).toEqual({ status: "delivered" });
+
+        expect(shippedWithoutParcel()).toBe(0);
     });
 
     it("lets an order marked Shipped with nothing sent be cancelled, putting its stock back", async () => {
