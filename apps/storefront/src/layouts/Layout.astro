@@ -3,6 +3,8 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
+import SidebarNav from "../components/header/SidebarNav.astro";
+import ThemeFonts from "../components/ThemeFonts.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { productGridFluidCss } from "@/lib/product-card-layout";
@@ -51,6 +53,12 @@ interface Props {
   description?: string;
   hideHeader?: boolean;
   hideFooter?: boolean;
+  /**
+   * Keeps the `sidebar` navigation style's column off focused transactional
+   * pages (order status, payment recovery). Pages without the header
+   * (cart, checkout) never show it.
+   */
+  hideNavigationSidebar?: boolean;
   /** Pre-fetched layout data for parallel loading optimization */
   layoutData?: LayoutData | null;
   // SEO props — per CAN-01, CAN-02, OG-01 through OG-05, SEO-05, SEO-06
@@ -73,6 +81,7 @@ const {
   description = "",
   hideHeader = false,
   hideFooter = false,
+  hideNavigationSidebar = false,
   layoutData: providedLayoutData,
   canonicalUrl,
   ogImage,
@@ -123,6 +132,14 @@ const tiktokPixelEnabled = analyticsScripts.some((script) => {
   );
 });
 const navigationData = layoutData?.navigation || [];
+// The menu's column beside the content (computers) and the bottom tab bar
+// (phones) both belong to the header, so pages without it show neither.
+const showNavigationSidebar =
+  !hideHeader &&
+  !hideNavigationSidebar &&
+  themeLayout.navigation === "sidebar" &&
+  navigationData.length > 0;
+const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
 
 // Provide sensible defaults if API fails to prevent blank header/footer
 const headerData = layoutData?.header ?? {
@@ -306,7 +323,11 @@ if (!window.$RefreshReg$) {
 ---
 
 <!doctype html>
-<html lang={documentLanguage} data-theme-preview={isThemePreview ? "true" : undefined}>
+<html
+  lang={documentLanguage}
+  data-theme-preview={isThemePreview ? "true" : undefined}
+  data-mobile-nav={showMobileTabs ? "tabs" : undefined}
+>
   <head>
     <meta charset="UTF-8" />
 
@@ -325,6 +346,11 @@ if (!window.$RefreshReg$) {
         overlap the rest of the streamed HTML. Keep metadata in the normal head
         slot below. */}
     <slot name="preload" />
+
+    {/* The Style's self-hosted fonts: the heading's Latin face preloads after
+        the page's LCP image hints; every face swaps over a metric-matched
+        fallback, so text never shifts. */}
+    <ThemeFonts pairing={storefrontTheme.tokens.typography} />
 
     {
       criticalCss && (
@@ -422,12 +448,19 @@ if (!window.$RefreshReg$) {
             storePhone={storePhone}
             social={storeSocial}
             variant={themeLayout.header}
+            navigationStyle={themeLayout.navigation}
+            mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
           />
         )
       }
-      <main id="main-content" tabindex="-1" class="w-full h-full mb-3 focus:outline-none">
-        <slot />
-      </main>
+      {/* With the sidebar, <main> is the content column: full-bleed sections
+          span the column, never the sidebar. */}
+      <div class="site-shell" data-site-shell={showNavigationSidebar ? "sidebar" : undefined}>
+        {showNavigationSidebar && <SidebarNav navigation={navigationData} />}
+        <main id="main-content" tabindex="-1" class="w-full h-full mb-3 focus:outline-none">
+          <slot />
+        </main>
+      </div>
     </div>
 
     {

@@ -1,7 +1,15 @@
 ---
+// A dropdown's contents: second-level links, with each one's own links
+// indented beneath it (no fly-outs, so every level is one pointer move and
+// a few tab stops away).
 import type { NavigationItem } from "@/lib/api";
-import { ChevronRight } from "lucide-react";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import {
+  ariaCurrent,
+  navigationChildren,
+  navigationCurrent,
+  navigationLinkAttributes,
+} from "./navigation-state";
 
 interface Props {
   items: NavigationItem[];
@@ -11,62 +19,82 @@ interface Props {
 const { items = [], depth = 0 } = Astro.props;
 ---
 
-<ul
-  class="recursive-nav-list min-w-60 py-2 bg-card rounded-2xl shadow-xl border border-border"
->
+<ul class:list={["nav-dropdown-list", depth > 0 && "nav-dropdown-sublist"]}>
   {
-    Array.isArray(items) &&
-      items.map((item) => (
-        <li class="recursive-nav-item relative">
+    items.map((item) => {
+      const children = navigationChildren(item);
+      const linkClass = ["nav-dropdown-link", children.length > 0 && "nav-dropdown-link--parent"];
+      return (
+        <li>
           {item.href ? (
-          <a
-            href={item.href}
-            data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
-            target={item.openInNewTab ? "_blank" : undefined}
-            rel={item.openInNewTab ? "noopener noreferrer" : undefined}
-            class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground transition-colors duration-200 outline-none hover:text-foreground hover:bg-muted focus-visible:bg-muted"
-          >
-            <span class="flex-1 block truncate pr-4">{item.title}</span>
-            {item.subMenu && item.subMenu.length > 0 && (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200" />
-            )}
-          </a>
+            <a
+              href={item.href}
+              class:list={linkClass}
+              aria-current={ariaCurrent(navigationCurrent(item, Astro.url))}
+              data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
+              {...navigationLinkAttributes(item)}
+            >
+              {item.title}
+            </a>
           ) : (
-          <span class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground">
-            <span class="flex-1 block truncate pr-4">{item.title}</span>
-            {item.subMenu && item.subMenu.length > 0 && (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200" />
-            )}
-          </span>
+            <span class:list={linkClass}>{item.title}</span>
           )}
-
-          {item.subMenu && item.subMenu.length > 0 && (
-            <div class="recursive-nav-flyout absolute left-full top-0 ml-0.5 opacity-0 invisible -translate-x-2 transition-all duration-200 ease-out z-50">
-              {/* Invisible Bridge to prevent closing on gap crossing */}
-              <div class="absolute -left-2 top-0 bottom-0 w-4 bg-transparent -z-10" />
-
-              <Astro.self items={item.subMenu} depth={depth + 1} />
-            </div>
-          )}
+          {children.length > 0 && <Astro.self items={children} depth={depth + 1} />}
         </li>
-      ))
+      );
+    })
   }
 </ul>
 
 <style>
-  /*
-    Strict Child Selectors for Recursive Logic
-    We use standard CSS to ensure only the direct child flies out,
-    preventing the "all levels open" bug caused by nested Tailwind groups.
-  */
-
-  .recursive-nav-item:hover > .recursive-nav-flyout {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0);
+  .nav-dropdown-sublist {
+    margin: 0.125rem 0 0.375rem 0.75rem;
+    padding-left: 0.5rem;
+    border-left: 1px solid var(--border);
   }
 
-  .recursive-nav-item:hover > a :global(svg) {
-    color: var(--foreground);
+  .nav-dropdown-link {
+    display: flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    line-height: 1.3;
+    color: inherit;
+  }
+
+  .nav-dropdown-sublist .nav-dropdown-link {
+    min-height: 2rem;
+    color: var(--muted-foreground);
+  }
+
+  .nav-dropdown-link--parent {
+    font-weight: 600;
+  }
+
+  a.nav-dropdown-link:hover,
+  a.nav-dropdown-link:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  a.nav-dropdown-link:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: -2px;
+  }
+
+  a.nav-dropdown-link[aria-current="page"] {
+    font-weight: 600;
+    color: var(--card-foreground);
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+
+  @media (pointer: coarse) {
+    .nav-dropdown-link,
+    .nav-dropdown-sublist .nav-dropdown-link {
+      min-height: 2.75rem;
+    }
   }
 </style>

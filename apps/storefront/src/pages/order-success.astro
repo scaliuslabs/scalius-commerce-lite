@@ -363,6 +363,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
 <Layout
   title={statusView ? statusTitle : orderSuccessView?.title ?? recoveryState?.title ?? copy.orderReceiptPageTitleText}
   layoutData={layoutData}
+  hideNavigationSidebar
   documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
