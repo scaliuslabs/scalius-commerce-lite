@@ -15,26 +15,29 @@ import {
   isolateRichTextFullscreenBackground,
   shouldExitRichTextFullscreen,
 } from "./tiptap-fullscreen";
+import { useMessages } from "~/i18n";
+import { richTextMessages } from "~/i18n/rich-text";
 
 interface TiptapEditorProps {
   content: string;
   onChange: (content: string) => void;
-  placeholder?: string;
+  placeholder: string;
   className?: string;
   compact?: boolean;
   autoFocus?: boolean;
-  ariaLabel?: string;
+  ariaLabel: string;
 }
 
 export function TiptapEditor({
   content,
   onChange,
-  placeholder = "Write something...",
+  placeholder,
   className,
   compact = false,
   autoFocus = false,
-  ariaLabel = "Rich text content",
+  ariaLabel,
 }: TiptapEditorProps) {
+  const t = useMessages(richTextMessages);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenTitleId = useId();
   const hasAutoFocusedRef = useRef(false);
@@ -81,7 +84,7 @@ export function TiptapEditor({
       restoreBackground();
       requestAnimationFrame(() => {
         editorRoot
-          .querySelector<HTMLButtonElement>('[aria-label="Fullscreen"]')
+          .querySelector<HTMLButtonElement>("[data-rich-text-fullscreen-toggle] button")
           ?.focus({ preventScroll: true });
       });
     };
@@ -212,20 +215,19 @@ export function TiptapEditor({
       {isFullscreen && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4">
           <span id={fullscreenTitleId} className="text-heading-sm">
-            Edit content
+            {t("editContent")}
           </span>
           <div className="flex items-center gap-3">
             <span className="hidden text-body text-muted-foreground sm:inline">
-              Press <kbd>Esc</kbd> to exit
+              {t("escToExit")}
             </span>
             <Button
               type="button"
               variant="outline"
-              aria-label="Exit fullscreen"
               onClick={() => setIsFullscreen(false)}
             >
               <Minimize2 />
-              Exit fullscreen
+              {t("exitFullscreen")}
             </Button>
           </div>
         </div>
@@ -245,7 +247,7 @@ export function TiptapEditor({
           }}
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
-          ariaLabel={`${ariaLabel} formatting`}
+          ariaLabel={t("toolbarFor", { name: ariaLabel })}
         />
       ) : (
         <TiptapToolbarSkeleton
