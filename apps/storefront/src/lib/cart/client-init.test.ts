@@ -7,7 +7,6 @@ import {
   cartStore,
   createCartItemKey,
   type CartStore,
-  type Discount,
 } from "../../store/cart";
 import type { CartValidationIssue } from "../api/orders";
 import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
@@ -21,7 +20,7 @@ import {
 
 const apiMocks = vi.hoisted(() => ({
   saveAbandonedCheckout: vi.fn(),
-  validateDiscount: vi.fn(),
+  previewCartDiscounts: vi.fn(),
 }));
 
 const taxQuoteMocks = vi.hoisted(() => ({
@@ -35,7 +34,7 @@ const analyticsMocks = vi.hoisted(() => ({
 
 vi.mock("./browser-api", () => ({
   saveAbandonedCheckoutFromBrowser: apiMocks.saveAbandonedCheckout,
-  validateDiscountFromBrowser: apiMocks.validateDiscount,
+  previewCartDiscounts: apiMocks.previewCartDiscounts,
 }));
 
 vi.mock("@/lib/analytics", () => ({
@@ -45,7 +44,10 @@ vi.mock("@/lib/analytics", () => ({
 
 vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
+  TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
 }));
+
+const NO_DISCOUNTS = { ok: true, totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
 
 const CART_ITEM = {
   id: "prod_1",
@@ -62,14 +64,16 @@ const cartState: CartStore = {
   },
   totalItems: 1,
   totalAmount: 100,
-  discount: null,
+  discountCodes: [],
 };
 
 function taxQuote(totalAmount: number, zone = "zone_banani"): CheckoutTaxQuote {
   return {
     valid: true,
     quoteFingerprint: `taxq_${zone.padEnd(22, "0")}`,
-    discountOffers: [],
+    discounts: [],
+    offers: [],
+    rejectedCodes: [],
     displayLabel: "VAT",
     pricesIncludeTax: false,
     shippingTaxed: true,
@@ -148,24 +152,23 @@ function renderCartDom() {
           <input id="checkoutIdInput" name="checkoutId" type="hidden" />
           <input id="expectedQuoteFingerprint" name="expectedQuoteFingerprint" type="hidden" />
           <input id="cartItemsInput" name="cartItems" type="hidden" />
-          <input id="discountCodeHidden" name="discountCode" type="hidden" />
+          <input id="discountCodesInput" name="discountCodes" type="hidden" />
           <button id="submitButton" type="submit" disabled>Place Order</button>
         </form>
       </div>
       <div id="cartSummary" class="hidden">
+        <span id="subtotal"></span>
+        <span id="shippingCost"></span>
+        <div id="discountLines"></div>
+        <div id="taxRow" class="hidden"><span id="taxLabel">Tax</span><span id="taxAmount">—</span></div>
+        <p id="taxStatus" class="hidden"></p>
         <form id="discountForm">
           <input id="discountCodeInput" />
           <button id="applyDiscountBtn" type="submit">Apply</button>
+          <p id="discountMessage" hidden></p>
         </form>
-        <button id="removeDiscountBtn" type="button"></button>
-        <div id="discountMessage"></div>
-        <div id="discountRow"><span id="discountAmount"></span></div>
-        <span class="hidden"><span id="appliedDiscountCode"></span></span>
-        <span id="subtotal"></span>
-        <span id="shippingCost"></span>
-        <span id="taxLabel">Tax</span>
-        <span id="taxAmount">—</span>
-        <p id="taxStatus" class="hidden"></p>
+        <ul id="appliedCodes" class="hidden"></ul>
+        <ul id="discountOffers" class="hidden"></ul>
         <span id="totalLabel" data-final-label="Total">Estimated total</span>
         <span id="total"></span>
       </div>
@@ -180,6 +183,8 @@ describe("initCartFunctionality", () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     taxQuoteMocks.fetchAuthoritativeTaxQuote.mockReset();
+    apiMocks.previewCartDiscounts.mockReset();
+    apiMocks.previewCartDiscounts.mockResolvedValue(NO_DISCOUNTS);
     installStorageMocks();
     localStorage.clear();
     sessionStorage.clear();
@@ -457,6 +462,9 @@ describe("initCartFunctionality", () => {
       taxAmount: 11.2,
       totalMinor: 17_120,
       totalAmount: 171.2,
+      discounts: [],
+      offers: [],
+      rejectedCodes: [],
       items: [],
     });
 
@@ -568,7 +576,7 @@ describe("initCartFunctionality", () => {
       .toBe("taxq_zone_akhaura0000000000");
   });
 
-  it("does not present a provisional amount as final when tax cannot be verified", async () => {
+  it("shows an estimate and a retry, never a final total, when the total cannot be verified", async () => {
     document.getElementById("checkoutForm")?.insertAdjacentHTML(
       "beforeend",
       `
@@ -582,19 +590,15 @@ describe("initCartFunctionality", () => {
 
     await initCartFunctionality();
     await vi.waitFor(() => {
-      expect(document.getElementById("taxAmount")?.textContent).toBe(
-        "Unavailable",
-      );
+      expect(document.getElementById("taxStatus")?.classList).not.toContain("hidden");
     });
 
-    expect(document.getElementById("totalLabel")?.textContent).toBe("Total");
-    expect(document.getElementById("total")?.textContent).toBe("—");
-    expect(document.getElementById("taxStatus")?.classList).not.toContain(
-      "hidden",
-    );
+    expect(document.getElementById("totalLabel")?.textContent).toBe("Estimated total");
+    expect(document.getElementById("total")?.textContent).toBe("৳160");
     expect(document.getElementById("taxStatus")?.textContent).toContain(
-      "Change the destination or try again",
+      "We couldn't update the total",
     );
+    expect(document.querySelector("#taxStatus button")?.textContent).toBe("Try again");
     expect((document.getElementById("expectedQuoteFingerprint") as HTMLInputElement).value)
       .toBe("");
   });
@@ -604,7 +608,7 @@ describe("initCartFunctionality", () => {
       items: {},
       totalItems: 0,
       totalAmount: 0,
-      discount: null,
+      discountCodes: [],
     };
     localStorage.setItem("cart", JSON.stringify(emptyCart));
     cartStore.set(emptyCart);
@@ -776,246 +780,161 @@ describe("initCartFunctionality", () => {
     expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).toBeNull();
   });
 
-  it("does not duplicate remove-discount listeners after repeated init", async () => {
-    await initCartFunctionality();
-    await initCartFunctionality();
-
-    const discount: Discount = {
-      id: "disc_1",
-      code: "WELCOME",
-      type: "percentage",
-      discountValue: 10,
-      discountAmount: 10,
-    };
-    const removedEvents = vi.fn();
-    document.addEventListener("discount-removed", removedEvents);
-    cartStore.setKey("discount", discount);
-
-    document.getElementById("removeDiscountBtn")?.click();
-
-    expect(cartStore.get().discount).toBeNull();
-    expect(removedEvents).toHaveBeenCalledTimes(1);
-  });
-
-  it("preserves an applied discount when the cart is restored or revisited", async () => {
-    const discount: Discount = {
-      id: "disc_1",
-      code: "WELCOME",
-      type: "percentage",
-      discountValue: 10,
-      discountAmount: 10,
-    };
-    await initCartFunctionality();
-    cartStore.setKey("discount", discount);
-    await initCartFunctionality();
-    await vi.advanceTimersByTimeAsync(0);
-    await Promise.resolve();
-
-    expect(cartStore.get().discount).toEqual(discount);
-    expect(
-      (document.getElementById("discountCodeInput") as HTMLInputElement).value,
-    ).toBe("WELCOME");
-  });
-
-  it("keeps an applied discount while a restored or changed delivery method is re-quoted", async () => {
-    const discount: Discount = {
-      id: "disc_1",
-      code: "WELCOME",
-      type: "percentage",
-      discountValue: 10,
-      discountAmount: 10,
-    };
-    await initCartFunctionality();
-    cartStore.setKey("discount", discount);
-
-    window.dispatchEvent(
-      new CustomEvent("shippingLocationChange", {
-        detail: { id: "shipping_2", fee: 80, name: "Express" },
-      }),
-    );
-    await Promise.resolve();
-
-    expect(cartStore.get().discount).toEqual(discount);
-    expect(window.lastShippingEventDetail).toMatchObject({
-      id: "shipping_2",
-      fee: 80,
-    });
-    window.lastShippingEventDetail = {
-      id: "shipping_1",
-      fee: 60,
-      name: "Standard",
-    };
-  });
-
-  it("validates unrestricted discount codes before the buyer enters a phone", async () => {
-    const phoneInput = document.getElementById(
-      "customerPhone",
-    ) as HTMLInputElement;
-    phoneInput.value = "";
-    apiMocks.validateDiscount.mockResolvedValue({
-      valid: true,
-      discount: {
-        id: "disc_open",
-        code: "OPEN10",
-        type: "amount_off_order",
-        discountValue: 10,
-      },
-      discountAmount: 10,
-    });
-
-    await initCartFunctionality();
-    const codeInput = document.getElementById(
-      "discountCodeInput",
-    ) as HTMLInputElement;
-    codeInput.value = "open10";
+  const submitCode = (code: string) => {
+    (document.getElementById("discountCodeInput") as HTMLInputElement).value = code;
     document
       .getElementById("discountForm")
       ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  };
+
+  it("keeps applied codes through a quantity change and re-checks them", async () => {
+    cartStore.setKey("discountCodes", ["WELCOME"]);
+    localStorage.setItem("cart", JSON.stringify(cartStore.get()));
+    await initCartFunctionality();
+    apiMocks.previewCartDiscounts.mockClear();
+
+    window.updateCartQuantity?.(CART_LINE_KEY, 2);
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(cartStore.get().discountCodes).toEqual(["WELCOME"]);
+    expect(apiMocks.previewCartDiscounts).toHaveBeenCalledWith(
+      ["WELCOME"],
+      [expect.objectContaining({ id: "prod_1", quantity: 2 })],
+      60,
+      expect.anything(),
+    );
+  });
+
+  it("lists one line per discount and says what a code still needs, with a one-tap add", async () => {
+    cartStore.setKey("discountCodes", ["SAVE10", "CAPGIFT"]);
+    localStorage.setItem("cart", JSON.stringify(cartStore.get()));
+    apiMocks.previewCartDiscounts.mockResolvedValue({
+      ok: true,
+      totalDiscount: 70,
+      discounts: [
+        { promotionId: "p_auto", title: "Free delivery", code: null, amount: 60 },
+        { promotionId: "p_code", title: "Eid 10%", code: "SAVE10", amount: 10 },
+      ],
+      offers: [],
+      rejectedCodes: [{
+        code: "CAPGIFT",
+        reason: "get_items",
+        message: "Add Cap to your cart to get it free.",
+        offer: {
+          promotionId: "p_gift", title: "Cap gift", code: "CAPGIFT", kind: "get",
+          percentOff: 100, quantity: 1, shortfallAmount: null,
+          products: [{ id: "prod_cap", slug: "cap", name: "Cap", variantId: "var_cap", price: 200 }],
+        },
+      }],
+    });
+
+    await initCartFunctionality();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
-      "OPEN10",
+    const lines = Array.from(document.querySelectorAll("#discountLines > div")).map((row) => row.textContent);
+    expect(lines).toEqual(["Free delivery-৳60", "Eid 10% · SAVE10-৳10"]);
+    expect(document.getElementById("total")?.textContent).toBe("৳90");
+    const applied = document.getElementById("appliedCodes")!;
+    expect(applied.textContent).toContain("Add Cap to get it free.");
+    expect((document.getElementById("discountCodesInput") as HTMLInputElement).value).toBe('["SAVE10"]');
+
+    Array.from(applied.querySelectorAll("button")).find((button) => button.textContent === "Add Cap")!.click();
+    expect(Object.values(cartStore.get().items).map(({ id }) => id)).toEqual(["prod_1", "prod_cap"]);
+    expect(cartStore.get().discountCodes).toEqual(["SAVE10", "CAPGIFT"]);
+  });
+
+  it("answers every Apply and keeps the message until the code is edited", async () => {
+    apiMocks.previewCartDiscounts.mockResolvedValue({
+      ...NO_DISCOUNTS,
+      rejectedCodes: [{ code: "ZZZ", reason: "not_found", message: "This discount code is not valid." }],
+    });
+    await initCartFunctionality();
+    const message = document.getElementById("discountMessage")!;
+
+    submitCode("zzz");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(message.textContent).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.invalidDiscountCodeText);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(message.hidden).toBe(false);
+
+    apiMocks.previewCartDiscounts.mockResolvedValue({
+      ...NO_DISCOUNTS,
+      rejectedCodes: [{ code: "ZZY", reason: "not_combinable", message: "x", conflictsWith: "SAVE10" }],
+    });
+    submitCode("ZZY");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(message.textContent).toBe("ZZY can't be combined with SAVE10.");
+    expect(cartStore.get().discountCodes).toEqual([]);
+
+    document.getElementById("discountCodeInput")!.dispatchEvent(new Event("input"));
+    expect(message.hidden).toBe(true);
+
+    submitCode("x".repeat(60));
+    expect(message.textContent).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.invalidDiscountCodeText);
+  });
+
+  it("keeps a code the buyer can still qualify for and asks for the phone a one-use code needs", async () => {
+    const phoneInput = document.getElementById("customerPhone-input") as HTMLInputElement;
+    apiMocks.previewCartDiscounts.mockResolvedValue({
+      ...NO_DISCOUNTS,
+      rejectedCodes: [{
+        code: "ONCE",
+        reason: "needs_phone",
+        message: "Enter your phone number to check this one-use discount.",
+        requiresCustomerPhone: true,
+      }],
+    });
+    await initCartFunctionality();
+
+    submitCode("once");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(apiMocks.previewCartDiscounts).toHaveBeenCalledWith(
+      ["ONCE"],
       [expect.objectContaining(CART_ITEM)],
       60,
-      undefined,
+      expect.anything(),
     );
-    expect(cartStore.get().discount?.code).toBe("OPEN10");
+    expect(cartStore.get().discountCodes).toEqual(["ONCE"]);
+    expect(document.activeElement).toBe(phoneInput);
+    expect(document.getElementById("appliedCodes")?.textContent).toContain(
+      "Enter your phone number to use ONCE.",
+    );
   });
 
-  it("keeps checkout pending while Apply is validating and ignores a changed code", async () => {
-    let resolveValidation!: (value: {
-      valid: boolean;
-      discountAmount?: number;
-      discount?: Discount;
-    }) => void;
-    apiMocks.validateDiscount.mockImplementation(
-      () => new Promise((resolve) => { resolveValidation = resolve; }),
+  it("does not start a second check while Apply is pending, and ignores it after a reset", async () => {
+    await initCartFunctionality();
+    let resolvePreview!: (value: typeof NO_DISCOUNTS) => void;
+    apiMocks.previewCartDiscounts.mockClear();
+    apiMocks.previewCartDiscounts.mockImplementation(
+      () => new Promise((resolve) => { resolvePreview = resolve; }),
     );
 
-    await initCartFunctionality();
-    const codeInput = document.getElementById(
-      "discountCodeInput",
-    ) as HTMLInputElement;
-    codeInput.value = "OPEN10";
-    document
-      .getElementById("discountForm")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    submitCode("OPEN10");
+    submitCode("OPEN10");
     await Promise.resolve();
-
+    expect(apiMocks.previewCartDiscounts).toHaveBeenCalledTimes(1);
     expect(isDiscountValidationPending()).toBe(true);
     expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
-    expect(apiMocks.validateDiscount).toHaveBeenCalledTimes(1);
 
-    codeInput.value = "OTHER10";
-    resolveValidation({
-      valid: true,
-      discountAmount: 10,
-      discount: {
-        id: "disc_open",
-        code: "OPEN10",
-        type: "amount_off_order",
-        discountValue: 10,
-        discountAmount: 10,
-      },
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(isDiscountValidationPending()).toBe(false);
-    expect(cartStore.get().discount).toBeNull();
-  });
-
-  it("does not start a second discount validation while Apply is pending", async () => {
-    let resolveValidation!: (value: null) => void;
-    apiMocks.validateDiscount.mockImplementation(
-      () => new Promise((resolve) => { resolveValidation = resolve; }),
-    );
-
-    await initCartFunctionality();
-    const codeInput = document.getElementById(
-      "discountCodeInput",
-    ) as HTMLInputElement;
-    codeInput.value = "OPEN10";
-    const form = document.getElementById("discountForm")!;
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await Promise.resolve();
-
-    expect(apiMocks.validateDiscount).toHaveBeenCalledTimes(1);
-    resolveValidation(null);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(isDiscountValidationPending()).toBe(false);
-  });
-
-  it("ignores a pending validation result after the cart runtime resets", async () => {
-    let resolveValidation!: (value: {
-      valid: boolean;
-      discountAmount: number;
-      discount: Discount;
-    }) => void;
-    apiMocks.validateDiscount.mockImplementation(
-      () => new Promise((resolve) => { resolveValidation = resolve; }),
-    );
-
-    await initCartFunctionality();
-    (document.getElementById("discountCodeInput") as HTMLInputElement).value = "OPEN10";
-    document
-      .getElementById("discountForm")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await Promise.resolve();
-    expect(isDiscountValidationPending()).toBe(true);
-
+    apiMocks.previewCartDiscounts.mockResolvedValue(NO_DISCOUNTS);
     await initCartFunctionality();
     expect(isDiscountValidationPending()).toBe(false);
-    resolveValidation({
-      valid: true,
-      discountAmount: 10,
-      discount: {
-        id: "disc_open",
-        code: "OPEN10",
-        type: "amount_off_order",
-        discountValue: 10,
-        discountAmount: 10,
-      },
-    });
+    resolvePreview(NO_DISCOUNTS);
     await Promise.resolve();
     await Promise.resolve();
-
-    expect(cartStore.get().discount).toBeNull();
+    expect(cartStore.get().discountCodes).toEqual([]);
   });
 
-  it("focuses the phone field only when a one-use code requires identity", async () => {
-    const phoneInput = document.getElementById(
-      "customerPhone",
-    ) as HTMLInputElement;
-    phoneInput.value = "";
-    apiMocks.validateDiscount.mockResolvedValue({
-      valid: false,
-      error: "Enter your phone number to check this one-use discount",
-      requiresCustomerPhone: true,
-    });
-
+  it("offers Undo after a line is removed", async () => {
+    document.getElementById("cartItems")!.insertAdjacentHTML("afterend", `<p id="cartUndo" hidden></p>`);
     await initCartFunctionality();
-    const codeInput = document.getElementById(
-      "discountCodeInput",
-    ) as HTMLInputElement;
-    codeInput.value = "ONCE";
-    document
-      .getElementById("discountForm")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    await vi.advanceTimersByTimeAsync(0);
 
-    expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
-      "ONCE",
-      [expect.objectContaining(CART_ITEM)],
-      60,
-      undefined,
-    );
-    expect(document.activeElement).toBe(phoneInput);
-    expect(document.getElementById("discountMessage")?.textContent).toBe(
-      "Enter your phone number to check this one-use discount",
-    );
-    expect(cartStore.get().discount).toBeNull();
+    window.removeFromCart?.(CART_LINE_KEY);
+    const undo = document.getElementById("cartUndo")!;
+    expect(undo.hidden).toBe(false);
+    expect(undo.textContent).toContain("Rice removed");
+    undo.querySelector("button")!.click();
+    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
   });
 });

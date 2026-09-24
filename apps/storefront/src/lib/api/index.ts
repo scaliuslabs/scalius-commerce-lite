@@ -21,7 +21,6 @@ export * from "./footer";
 export * from "./navigation";
 export * from "./pages";
 export * from "./orders";
-export * from "./discounts";
 export * from "./shipping";
 export * from "./settings";
 export * from "./attributes";

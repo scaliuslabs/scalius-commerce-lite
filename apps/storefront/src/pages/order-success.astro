@@ -34,6 +34,7 @@ import {
   readOrderReceiptCookie,
 } from "@/lib/order-receipt-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   resolveSavedOrderLineMoney,
@@ -582,7 +583,7 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
                   <div class="flex min-w-0 items-center gap-3">
                     {item.productImage && (
                       <img
-                        src={item.productImage}
+                        src={getProductImageUrl(item.productImage, 96)}
                         alt=""
                         width="48"
                         height="48"
@@ -678,61 +679,15 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
 
 <script>
   import { trackFbPurchase } from "@/lib/analytics";
-  import {
-    clearCheckoutAttemptSession,
-    clearCheckoutSession,
-    clearHostedPaymentRecoverySession,
-    hashCheckoutCartFingerprint,
-    matchesCheckoutRecoverySession,
-    readHostedPaymentRecoverySession,
-  } from "@/lib/checkout/session-state";
   import type { PurchaseTrackingPayload } from "@/lib/order-success-state";
   import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
-  import { cartStore, clearCart, syncCartFromStorage } from "@/store/cart";
-  import { resolveCheckoutReceiptCleanup } from "@/lib/checkout/receipt-finalization";
+  import { finalizeCheckoutReceipt } from "@/lib/checkout/receipt-finalization";
 
   document.addEventListener("DOMContentLoaded", async () => {
     const receiptElement = document.querySelector<HTMLElement>(
       "[data-order-success-state][data-order-id]",
     );
-    const receiptState = receiptElement?.dataset.orderSuccessState;
-    const receiptOrderId = receiptElement?.dataset.orderId;
-    if (receiptElement && receiptOrderId && (receiptState === "order_placed" || receiptState === "order_updated")) {
-      syncCartFromStorage();
-      const recovery = readHostedPaymentRecoverySession();
-      const recoveryMatchesOrder = recovery?.orderId === receiptOrderId;
-      const matchingHostedCheckout = Boolean(
-        recoveryMatchesOrder && matchesCheckoutRecoverySession(recovery, cartStore.get().items),
-      );
-      const directCheckoutId = receiptElement.dataset.checkoutFinalizeId;
-      const directCartHash = receiptElement.dataset.checkoutFinalizeCartHash;
-      let directCheckoutMatches = false;
-      if (directCheckoutId && directCartHash) {
-        const activeCheckoutId = (() => {
-          try {
-            return sessionStorage.getItem("checkoutId");
-          } catch {
-            return null;
-          }
-        })();
-        directCheckoutMatches = activeCheckoutId === directCheckoutId
-          && await hashCheckoutCartFingerprint(cartStore.get().items) === directCartHash;
-      }
-      const acceptedCheckout = receiptElement.dataset.checkoutCartFinalize === "true";
-      const cleanup = resolveCheckoutReceiptCleanup({
-        receiptState,
-        recoveryMatchesOrder,
-        recoveryMatchesCheckout: matchingHostedCheckout,
-        directCheckoutMatches,
-        acceptedCheckout,
-      });
-      if (cleanup.clearCart) clearCart();
-      if (cleanup.clearCheckoutSession) clearCheckoutSession();
-      if (cleanup.clearCheckoutAttemptPreservingDraft) {
-        clearCheckoutAttemptSession({ preserveFormDraft: true });
-      }
-      if (cleanup.clearRecoveryPointer) clearHostedPaymentRecoverySession();
-    }
+    if (receiptElement) await finalizeCheckoutReceipt(receiptElement);
 
     const mainElement = document.querySelector(
       "[data-order-finalize='true'][data-fb-order-details]"

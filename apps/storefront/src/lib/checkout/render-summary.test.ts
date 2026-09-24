@@ -84,7 +84,9 @@ function taxQuote(
   return {
     valid: true,
     quoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
-    discountOffers: [],
+    discounts: [],
+    offers: [],
+    rejectedCodes: [],
     displayLabel: "VAT",
     pricesIncludeTax: false,
     shippingTaxed: false,
@@ -298,9 +300,12 @@ describe("renderOrderSummaryDetails", () => {
     expect(details.textContent).toContain("Standard Delivery");
     expect(details.textContent).toContain("Arrives in 2–3 business days");
     expect(details.textContent).not.toContain("Stale transferred delivery name");
-    expect(details.textContent).toContain("Buyer Name · +8801700000000");
+    // Contact, ship-to and delivery each have a way back to change them.
+    expect(details.textContent).toContain("Buyer Name01700-000000");
     expect(details.textContent).toContain("11 Example Road");
     expect(details.textContent).toContain("Dhanmondi, Dhaka South, Dhaka");
+    const changeLinks = Array.from(details.querySelectorAll("a")).filter((link) => link.textContent === "Change");
+    expect(changeLinks.map((link) => link.getAttribute("href"))).toEqual(["/cart", "/cart", "/cart"]);
     expect(details.textContent).not.toContain("prod_1");
     expect(details.textContent).not.toContain("var_1");
   });
@@ -325,7 +330,7 @@ describe("renderOrderSummaryDetails", () => {
 
     expect(details.textContent).toContain("Express Delivery");
     expect(details.textContent).toContain(
-      "Normally ৳60.00; waived by an item in your cart.",
+      "Normally ৳60; waived by an item in your cart.",
     );
   });
 
@@ -355,8 +360,8 @@ describe("renderOrderSummaryDetails", () => {
     expect(details.querySelector("script")).toBeNull();
     expect(details.textContent).toContain('<img src=x onerror="window.__pwned=true">');
     expect(details.textContent).toContain("<script>window.__pwned=true</script>");
-    expect(details.textContent).toContain("Subtotal৳100.00");
-    expect(details.textContent).not.toContain("৳200.00");
+    expect(details.textContent).toContain("Subtotal৳100");
+    expect(details.textContent).not.toContain("৳200");
     expect(details.textContent).toContain("VAT (included)");
   });
 

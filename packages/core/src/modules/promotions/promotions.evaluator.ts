@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { percentOfMinor } from "@scalius/shared/money";
 
 export const PROMOTION_EVALUATOR_VERSION = 2;
 
@@ -397,12 +398,6 @@ function toSafeNumber(value: bigint, label: string): number {
     return Number(value);
 }
 
-/** Half-up rounding of `base × basisPoints / 10000`, never above the base. */
-function percentOf(baseMinor: number, basisPoints: number): number {
-    const value = toSafeNumber((BigInt(baseMinor) * BigInt(basisPoints) + 5_000n) / 10_000n, "Percentage discount");
-    return Math.min(baseMinor, value);
-}
-
 /**
  * Splits a fixed amount across weights by largest remainder (ties by id), so
  * the parts always sum to the amount and never exceed their weight.
@@ -498,7 +493,7 @@ function finish(eligible: Eligible, effect: PromotionEffect, amounts: Map<string
     return { eligible, effect, amounts, total };
 }
 
-function computeProduct(eligible: Eligible, lines: CartLine[]): Computed & { getMissing: boolean } {
+function computeProduct(eligible: Eligible, lines: CartLine[], currencyCode: string): Computed & { getMissing: boolean } {
     const { effect } = eligible;
     const amounts = new Map<string, number>();
     const scoped = lines.filter((line) => effect.kind !== "free" && lineInScope(line, effect.config));
@@ -518,29 +513,29 @@ function computeProduct(eligible: Eligible, lines: CartLine[]): Computed & { get
         const { got, buyMet } = buyGetUnits(lines, effect.config);
         getMissing = buyMet && got.size === 0;
         for (const [lineId, units] of got) {
-            amounts.set(lineId, percentOf(byId.get(lineId)!.unitPriceMinor * units, effect.config.basisPoints));
+            amounts.set(lineId, percentOfMinor(byId.get(lineId)!.unitPriceMinor * units, effect.config.basisPoints, currencyCode));
         }
     } else if (effect.kind === "percentage_off") {
-        for (const line of scoped) amounts.set(line.id, percentOf(base(line), effect.config.basisPoints));
+        for (const line of scoped) amounts.set(line.id, percentOfMinor(base(line), effect.config.basisPoints, currencyCode));
     }
     return { ...finish(eligible, effect, amounts), getMissing };
 }
 
-function computeOrder(eligible: Eligible, remaining: Map<string, number>): Computed {
+function computeOrder(eligible: Eligible, remaining: Map<string, number>, currencyCode: string): Computed {
     const { effect } = eligible;
     const weights = [...remaining].filter(([, baseMinor]) => baseMinor > 0).map(([id, baseMinor]) => ({ id, baseMinor }));
     const subtotal = weights.reduce((total, { baseMinor }) => total + baseMinor, 0);
     const amount = effect.kind === "percentage_off"
-        ? percentOf(subtotal, effect.config.basisPoints)
+        ? percentOfMinor(subtotal, effect.config.basisPoints, currencyCode)
         : effect.kind === "fixed_amount_off" ? Math.min(subtotal, effect.config.amountMinor) : 0;
     return finish(eligible, effect, splitAcross(amount, weights));
 }
 
-function computeShipping(eligible: Eligible, effect: PromotionEffect, shippingMinor: number): Computed {
+function computeShipping(eligible: Eligible, effect: PromotionEffect, shippingMinor: number, currencyCode: string): Computed {
     const amount = effect.kind === "free"
         ? shippingMinor
         : effect.kind === "percentage_off"
-            ? percentOf(shippingMinor, effect.config.basisPoints)
+            ? percentOfMinor(shippingMinor, effect.config.basisPoints, currencyCode)
             : Math.min(shippingMinor, effect.config.amountMinor);
     return finish(eligible, effect, amount > 0 ? new Map([[SHIPPING_KEY, amount]]) : new Map());
 }
@@ -749,7 +744,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
     }
 
     const productOptions = byClass.product.flatMap((eligible) => {
-        const computed = computeProduct(eligible, cart.lines);
+        const computed = computeProduct(eligible, cart.lines, cart.currencyCode);
         if (computed.total <= 0) {
             const buyGet = eligible.effect.kind === "percentage_off" && eligible.effect.config.buy;
             reject(eligible.candidate.id, computed.getMissing ? "get_items_missing" : buyGet ? "buy_requirement_not_met" : "no_savings");
@@ -762,7 +757,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
         return [computed];
     });
     const shippingOptions = byClass.shipping.flatMap((eligible) => {
-        const computed = computeShipping(eligible, eligible.effect, cart.shippingAmountMinor);
+        const computed = computeShipping(eligible, eligible.effect, cart.shippingAmountMinor, cart.currencyCode);
         if (computed.total <= 0) {
             reject(eligible.candidate.id, "no_savings");
             return [];
@@ -775,7 +770,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
     });
     const fullBases = new Map(cart.lines.map((line) => [line.id, line.unitPriceMinor * line.quantity]));
     const orderOptions = byClass.order.filter((eligible) => {
-        const computed = computeOrder(eligible, fullBases);
+        const computed = computeOrder(eligible, fullBases, cart.currencyCode);
         if (computed.total <= 0) reject(eligible.candidate.id, "no_savings");
         return computed.total > 0;
     });
@@ -802,7 +797,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
     const bundledPart = (primary: Computed | null, merchandiseAfterMinor: number): Computed | null => {
         const eligible = primary?.eligible;
         if (!eligible?.bundledShipping || merchandiseAfterMinor < eligible.shippingMinimumMinor) return null;
-        const part = computeShipping(eligible, eligible.bundledShipping, cart.shippingAmountMinor);
+        const part = computeShipping(eligible, eligible.bundledShipping, cart.shippingAmountMinor, cart.currencyCode);
         return part.total > 0 && withinBudget(eligible.candidate, primary!.total + part.total) ? part : null;
     };
     for (const product of [null, ...productOptions]) {
@@ -810,7 +805,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
         product?.amounts.forEach((amount, lineId) => remaining.set(lineId, (remaining.get(lineId) ?? 0) - amount));
         for (const orderEligible of [null, ...orderOptions]) {
             if (product && orderEligible && !combines(product.eligible, orderEligible)) continue;
-            const order = orderEligible ? computeOrder(orderEligible, remaining) : null;
+            const order = orderEligible ? computeOrder(orderEligible, remaining, cart.currencyCode) : null;
             if (order && (order.total <= 0 || !withinBudget(order.eligible.candidate, order.total))) continue;
             const merchandiseAfterMinor = merchandiseMinor - (product?.total ?? 0) - (order?.total ?? 0);
             const primaries = [product, order].filter((part): part is Computed => part !== null);
@@ -843,7 +838,7 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
     }
     for (const eligible of orderOptions) {
         if (!appliedIds.has(eligible.candidate.id)) {
-            reject(eligible.candidate.id, "lower_savings", computeOrder(eligible, fullBases).total);
+            reject(eligible.candidate.id, "lower_savings", computeOrder(eligible, fullBases, cart.currencyCode).total);
         }
     }
     rejected.sort((left, right) => left.promotionId.localeCompare(right.promotionId) || left.reason.localeCompare(right.reason));

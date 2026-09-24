@@ -172,7 +172,7 @@ describe("renderIssueAction", () => {
       },
       totalItems: 1,
       totalAmount: 150,
-      discount: null,
+      discountCodes: [],
     });
   });
 
@@ -329,7 +329,7 @@ describe("reconcileValidatedCartSnapshot", () => {
     document.body.innerHTML = `<div id="discountMessage"></div>`;
   });
 
-  it("updates stale free-delivery eligibility from true to false and clears shipping-sensitive discounts", () => {
+  it("updates stale free-delivery eligibility from true to false and keeps the applied codes for the next quote", () => {
     cartStore.set({
       items: {
         [validatedLineKey]: {
@@ -343,41 +343,19 @@ describe("reconcileValidatedCartSnapshot", () => {
       },
       totalItems: 2,
       totalAmount: 300,
-      discount: {
-        id: "disc_1",
-        code: "SAVE",
-        type: "percentage",
-        discountValue: 10,
-        discountAmount: 30,
-      },
+      discountCodes: ["SAVE"],
     });
 
-    const messages: string[] = [];
-    expect(reconcileValidatedCartSnapshot(validationResult(false), (message) => {
-      messages.push(message);
-      const messageElement = document.getElementById("discountMessage");
-      if (messageElement) messageElement.textContent = message;
-    })).toBe(true);
+    expect(reconcileValidatedCartSnapshot(validationResult(false))).toBe(true);
 
     const state = cartStore.get();
     expect(state.items[validatedLineKey]?.freeDelivery).toBe(false);
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
-    expect(state.discount).toBeNull();
-    expect(document.getElementById("discountMessage")?.textContent).toContain(
-      "delivery eligibility changed",
-    );
-    expect(messages).toEqual(["Discount removed - delivery eligibility changed."]);
+    expect(state.discountCodes).toEqual(["SAVE"]);
   });
 
   it("replaces an untrusted cart image with the authoritative resolved image snapshot", () => {
-    const discount = {
-      id: "disc_1",
-      code: "SAVE",
-      type: "percentage",
-      discountValue: 10,
-      discountAmount: 30,
-    };
     cartStore.set({
       items: {
         [validatedLineKey]: {
@@ -392,20 +370,18 @@ describe("reconcileValidatedCartSnapshot", () => {
       },
       totalItems: 2,
       totalAmount: 300,
-      discount,
+      discountCodes: ["SAVE"],
     });
 
-    const discountCleared = vi.fn();
     expect(reconcileValidatedCartSnapshot(validationResult(false, {
       productImageMediaId: "med_exact_image",
       productImage: "https://media.example.test/exact.webp",
-    }), discountCleared)).toBe(true);
+    }))).toBe(true);
     expect(cartStore.get().items[validatedLineKey]).toEqual(expect.objectContaining({
       imageMediaId: "med_exact_image",
       image: "https://media.example.test/exact.webp",
     }));
-    expect(cartStore.get().discount).toEqual(discount);
-    expect(discountCleared).not.toHaveBeenCalled();
+    expect(cartStore.get().discountCodes).toEqual(["SAVE"]);
   });
 
   it("updates stale free-delivery eligibility from false to true before checkout totals are transferred", () => {
@@ -422,7 +398,7 @@ describe("reconcileValidatedCartSnapshot", () => {
       },
       totalItems: 2,
       totalAmount: 300,
-      discount: null,
+      discountCodes: [],
     });
 
     expect(reconcileValidatedCartSnapshot(validationResult(true))).toBe(true);
@@ -431,7 +407,6 @@ describe("reconcileValidatedCartSnapshot", () => {
     expect(state.items[validatedLineKey]?.freeDelivery).toBe(true);
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
-    expect(state.discount).toBeNull();
   });
 
   it("does not reconcile a stale explicit cart key onto another row by index", () => {
@@ -448,7 +423,7 @@ describe("reconcileValidatedCartSnapshot", () => {
       },
       totalItems: 1,
       totalAmount: 150,
-      discount: null,
+      discountCodes: [],
     });
 
     expect(reconcileValidatedCartSnapshot({
@@ -535,7 +510,7 @@ describe("updateCheckoutButtonState", () => {
     expect(submitButton.title).toBe("Checkout setup is incomplete.");
   });
 
-  it("keeps COD submit disabled until an authoritative quote is current", () => {
+  it("keeps Place order enabled while the buyer is still filling the form", () => {
     const submitButton = document.getElementById(
       "submitButton",
     ) as HTMLButtonElement;
@@ -543,12 +518,10 @@ describe("updateCheckoutButtonState", () => {
       checkoutUnavailable: false,
       unavailableMessage: "",
       isEmpty: false,
-      quoteUnverified: true,
-      quoteUnverifiedMessage: "Confirming current total.",
     });
 
-    expect(submitButton.disabled).toBe(true);
-    expect(submitButton.title).toBe("Confirming current total.");
+    expect(submitButton.disabled).toBe(false);
+    expect(submitButton.title).toBe("");
   });
 
   it("keeps checkout disabled while a discount validation is pending", () => {

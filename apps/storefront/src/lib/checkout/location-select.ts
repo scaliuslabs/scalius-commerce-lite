@@ -110,10 +110,14 @@ export interface LocationSelectsController {
   prefill(detail: LocationPrefillDetail): Promise<void>;
 }
 
+/** Long zone lists (Dhaka has hundreds) get a type-to-filter box above them. */
+const FILTERABLE_ZONE_COUNT = 12;
+
 /**
  * Wires `select[name=city|zone|area]` inside `root`. Retry buttons are
  * `[data-location-retry="zone"|"area"]`; the placeholder option of each child
- * select shows `data-loading-text` from `root` while its level loads.
+ * select shows `data-loading-text` from `root` while its level loads. An area
+ * level with no areas stays hidden (`[data-location-area]`).
  */
 export function enhanceLocationSelects(
   root: ParentNode & { dataset?: DOMStringMap },
@@ -137,6 +141,9 @@ export function enhanceLocationSelects(
 
   const retryButton = (level: "zone" | "area") =>
     root.querySelector<HTMLElement>(`[data-location-retry="${level}"]`);
+  const areaWrapper = root.querySelector<HTMLElement>("[data-location-area]");
+  const zoneFilter = root.querySelector<HTMLInputElement>('input[data-location-filter="zone"]');
+  let allZones: LocationOption[] = [];
 
   const selection = (): LocationSelection => ({
     cityId: city.value,
@@ -158,6 +165,14 @@ export function enhanceLocationSelects(
 
   const reset = (select: HTMLSelectElement | null, placeholder?: string) => {
     if (!select) return;
+    if (select === zone) {
+      allZones = [];
+      if (zoneFilter) {
+        zoneFilter.value = "";
+        zoneFilter.hidden = true;
+      }
+    }
+    if (select === area && areaWrapper) areaWrapper.hidden = true;
     requests.set(select, (requests.get(select) ?? 0) + 1);
     select.replaceChildren(
       createOption(select, placeholder ?? placeholders.get(select) ?? "", ""),
@@ -191,15 +206,42 @@ export function enhanceLocationSelects(
       return [];
     }
     select.append(...result.map((item) => createOption(select, item.name, item.id)));
-    select.disabled = false;
+    select.disabled = result.length === 0;
+    if (select === zone) {
+      allZones = result;
+      if (zoneFilter) zoneFilter.hidden = result.length <= FILTERABLE_ZONE_COUNT;
+    }
+    if (select === area && areaWrapper) areaWrapper.hidden = result.length === 0;
     return result;
   };
 
+  // Rebuilds the zone options from the typed text; one match is chosen for the buyer.
+  const filterZones = () => {
+    if (!zoneFilter) return;
+    const query = normalizeName(zoneFilter.value);
+    const matches = query
+      ? allZones.filter((item) => normalizeName(item.name).includes(query))
+      : allZones;
+    const selected = zone.value;
+    zone.replaceChildren(
+      createOption(zone, placeholders.get(zone) ?? "", ""),
+      ...matches.map((item) => createOption(zone, item.name, item.id)),
+    );
+    if (matches.length === 1 && matches[0]!.id !== selected) {
+      zone.value = matches[0]!.id;
+      onZone();
+    } else if (matches.some((item) => item.id === selected)) {
+      zone.value = selected;
+    }
+  };
+
   const onCity = () => {
+    // The old zone and area belong to the old city: clear them before anyone
+    // (the tax quote) hears about the change.
+    reset(zone);
     reset(area);
     notify();
     if (city.value) void load(zone, "zones", city.value);
-    else reset(zone);
   };
   const onZone = () => {
     notify();
@@ -209,6 +251,7 @@ export function enhanceLocationSelects(
   };
 
   const listen = { signal: options.signal };
+  zoneFilter?.addEventListener("input", filterZones, listen);
   city.addEventListener("change", onCity, listen);
   zone.addEventListener("change", onZone, listen);
   area?.addEventListener("change", notify, listen);
@@ -229,6 +272,7 @@ export function enhanceLocationSelects(
       const cityOption = resolveLocationOption(optionsOf(city), detail.city, detail.cityName);
       if (!cityOption) return;
       city.value = cityOption.id;
+      reset(zone);
       reset(area);
       notify();
       const zones = await load(zone, "zones", cityOption.id);

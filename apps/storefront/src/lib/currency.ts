@@ -5,7 +5,6 @@ export {
   getCurrencyCode,
   getDecimalPlaces,
   formatPrice,
-  formatPriceShort,
   formatMoney,
   type CurrencyConfig,
   DEFAULT_CURRENCY,

@@ -62,18 +62,25 @@ function cleanOptionalText(value: unknown, maxLength: number): string | undefine
   return normalized ? normalized.slice(0, maxLength) : undefined;
 }
 
-function readDiscountCode(data: Record<string, unknown>): string | undefined {
-  const hidden = data.discountCodeHidden;
-  if (typeof hidden === "string" && hidden.trim()) {
+/**
+ * The applied discount codes: the cart and checkout transfer carry them as a
+ * JSON array string (`discountCodes`); the quote re-checks every one.
+ */
+export function readDiscountCodes(data: Record<string, unknown>): string[] {
+  let value = data.discountCodes;
+  if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(hidden) as { code?: unknown };
-      const parsedCode = cleanOptionalText(parsed.code, 100);
-      if (parsedCode) return parsedCode;
+      value = JSON.parse(value);
     } catch {
-      return cleanOptionalText(hidden, 100);
+      return [];
     }
   }
-  return cleanOptionalText(data.discountCode, 100);
+  return Array.isArray(value)
+    ? value.flatMap((code) => {
+        const clean = cleanOptionalText(code, 50);
+        return clean ? [clean.toUpperCase()] : [];
+      })
+    : [];
 }
 
 function variantLabel(item: CheckoutCartLine): string | undefined {
@@ -101,7 +108,7 @@ export function buildTaxQuoteRequest(
       zone: data.zone,
       area: data.area,
       shippingMethodId: data.shippingMethodId,
-      discountCode: readDiscountCode(data),
+      discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,
     });
   } catch {

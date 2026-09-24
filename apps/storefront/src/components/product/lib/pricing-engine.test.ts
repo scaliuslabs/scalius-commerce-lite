@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateVariantPrice,
-  formatPrice,
   getBuyerVariantPricePresentation,
 } from "./pricing-engine";
+import { formatMoney } from "@scalius/shared/currency";
 
 describe("buyer variant pricing", () => {
   it("preserves fractional buyer prices at configured currency precision", () => {
@@ -14,6 +14,7 @@ describe("buyer variant pricing", () => {
         discountPercentage: 10,
         discountAmount: 0,
         currencyDecimalPlaces: 3,
+        currencyCode: "KWD",
       },
       {
         price: 1.234,
@@ -39,6 +40,7 @@ describe("buyer variant pricing", () => {
         discountPercentage: 10,
         discountAmount: null,
         currencyDecimalPlaces: 2,
+        currencyCode: "USD",
       },
       null,
     );
@@ -60,7 +62,7 @@ describe("buyer variant pricing", () => {
       finalPrice: 0.91,
     });
     expect(defaultBdtPrecision.finalPrice).toBe(0.4);
-    expect(formatPrice(kwd.finalPrice, "د.ك", 3)).toBe("د.ك1.111");
+    expect(formatMoney(kwd.finalPrice, { symbol: "د.ك", code: "KWD" })).toBe("د.ك1.111");
   });
 
   it("presents a truthful lowest available SKU starting price", () => {
@@ -107,5 +109,36 @@ describe("buyer variant pricing", () => {
         variants.map((variant) => ({ ...variant, stock: 0 })),
       ).pricing.finalPrice,
     ).toBe(4_050);
+  });
+
+  it("rounds BDT percentage prices to whole taka and says From only when prices differ", () => {
+    const productPricing = {
+      basePrice: 8_990,
+      discountType: "percentage" as const,
+      discountPercentage: 8,
+      discountAmount: 0,
+      currencyCode: "BDT",
+    };
+    const sku = {
+      price: 8_990,
+      discountType: null,
+      discountPercentage: 0,
+      discountAmount: 0,
+      stock: 5,
+      trackInventory: true,
+    };
+
+    expect(calculateVariantPrice(productPricing, sku)).toMatchObject({
+      originalPrice: 8_990,
+      finalPrice: 8_271,
+      savingsAmount: 719,
+    });
+    expect(getBuyerVariantPricePresentation(productPricing, [sku, { ...sku }])).toMatchObject({
+      isStartingAt: false,
+      pricing: { finalPrice: 8_271, originalPrice: 8_990 },
+    });
+    expect(
+      getBuyerVariantPricePresentation(productPricing, [sku, { ...sku, price: 9_990 }]).isStartingAt,
+    ).toBe(true);
   });
 });

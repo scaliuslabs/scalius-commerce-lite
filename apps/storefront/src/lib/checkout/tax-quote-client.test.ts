@@ -41,7 +41,13 @@ function validQuote(
       baseAmountMinor: 5_000,
       feeWaived: false,
     },
-    discountOffers: ["Buy 2 panjabi, get a cap free"],
+    discounts: [{ promotionId: "promo_1", title: "Eid 10%", code: "SAVE20", amount: 20 }],
+    offers: [{
+      promotionId: "promo_gift", title: "Buy 2 panjabi, get a cap free", code: null, kind: "get",
+      percentOff: 100, quantity: 1, shortfallAmount: null,
+      products: [{ id: "prod_cap", slug: "cap", name: "Cap", variantId: "var_cap", price: 200 }],
+    }],
+    rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallAmount: 200 }],
     items: [{
       cartKey: "line:v2:prod_1:variant:var_1",
       productId: "prod_1",
@@ -77,7 +83,8 @@ function checkoutData(): Record<string, unknown> {
     zone: "zone_1",
     area: "area_1",
     shippingMethodId: "shipping_1",
-    discountCodeHidden: JSON.stringify({ code: "SAVE20", amount: 999_999 }),
+    discountCodes: JSON.stringify(["save20", "SHIP"]),
+    discountAmount: 999_999,
     customerPhone: "+8801700000000",
     subtotal: 999_999,
     taxClassId: "client_forged_tax_class",
@@ -102,7 +109,7 @@ describe("tax quote client contract", () => {
       zone: "zone_1",
       area: "area_1",
       shippingMethodId: "shipping_1",
-      discountCode: "SAVE20",
+      discountCodes: ["SAVE20", "SHIP"],
       customerPhone: "+8801700000000",
     });
     expect(JSON.stringify(request)).not.toContain("999999");

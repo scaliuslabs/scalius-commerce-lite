@@ -14,7 +14,7 @@ import {
   validateStorefrontDeliveryPreflight,
 } from "@scalius/core/modules/orders";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
-import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
@@ -600,8 +600,8 @@ async function quoteAgentStorefrontDiscount(
   customerPhone?: string | null,
 ) {
   const currency = await getCurrencySettings(db);
-  return quoteStorefrontDiscount(db, {
-    code,
+  const quote = await quoteStorefrontDiscount(db, {
+    codes: code ? [code] : [],
     customerId: await getLiveContextCustomerId(db, row),
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
     cart: {
@@ -616,6 +616,8 @@ async function quoteAgentStorefrontDiscount(
       shippingAmountMinor: projection.delivery?.shippingMinor ?? 0,
     },
   });
+  assertDiscountCodesApplied(quote);
+  return quote;
 }
 
 async function assertAgentStorefrontDiscountValid(

@@ -61,7 +61,7 @@ describe("abandoned checkout snapshot normalization", () => {
         const normalized = normalizeAbandonedCheckoutSnapshot({
             checkoutId: CHECKOUT_ID,
             checkoutData: {
-                customerPhone: "01700000000",
+                customerPhone: "01200000000",
                 cart: {
                     items: [
                         { id: "prod_1", name: "Rice", quantity: 3, price: 150 },

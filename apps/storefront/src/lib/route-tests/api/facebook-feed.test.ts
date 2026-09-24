@@ -1286,7 +1286,8 @@ describe("Facebook product feed route", () => {
       const body = await response.text();
       const item = feedItemById(body, "prod_rounding_boundary");
       expect(item).toContain("<g:price>1.01 BDT</g:price>");
-      expect(item).toContain("<g:sale_price>0.91 BDT</g:sale_price>");
+      // BDT percentage prices round to whole taka, exactly as checkout charges.
+      expect(item).toContain("<g:sale_price>1.00 BDT</g:sale_price>");
       expectFeedPriceInvariant(body);
     }
   });

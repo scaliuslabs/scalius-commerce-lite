@@ -26,7 +26,7 @@ const CHECKOUT_TRANSFER_SYNC_FIELDS = [
   "cartItems",
   "checkoutId",
   "checkoutRequestId",
-  "discountCodeHidden",
+  "discountCodes",
   "shippingMethodId",
   "shippingMethodName",
   "shippingCharge",
@@ -43,7 +43,16 @@ type StoredCheckoutFormDraft = {
   version: 1;
   updatedAt: number;
   values: CheckoutFormDraft;
+  /** "guest" or the signed-in customer the details belong to. */
+  owner?: string;
 };
+
+/** Who is filling the checkout now; set by the cart page once it knows. */
+let currentDraftOwner: string | null = null;
+
+export function setCheckoutFormDraftOwner(owner: string): void {
+  currentDraftOwner = owner;
+}
 
 export interface HostedPaymentRecoverySession {
   href: string;
@@ -86,10 +95,12 @@ export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
     if (typeof value === "string") safeValues[field] = value.slice(0, 5000);
   }
 
+  const owner = currentDraftOwner ?? readStoredDraft()?.owner;
   const stored: StoredCheckoutFormDraft = {
     version: 1,
     updatedAt: Date.now(),
     values: safeValues,
+    ...(owner ? { owner } : {}),
   };
   try {
     sessionStorage.setItem(CHECKOUT_FORM_DRAFT_KEY, JSON.stringify(stored));
@@ -99,7 +110,7 @@ export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
   }
 }
 
-export function readCheckoutFormDraft(): CheckoutFormDraft | null {
+function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(CHECKOUT_FORM_DRAFT_KEY);
@@ -122,7 +133,10 @@ export function readCheckoutFormDraft(): CheckoutFormDraft | null {
       const value = parsed.values[field];
       if (typeof value === "string") safeValues[field] = value.slice(0, 5000);
     }
-    return safeValues;
+    return {
+      values: safeValues,
+      ...(typeof parsed.owner === "string" ? { owner: parsed.owner } : {}),
+    };
   } catch {
     try {
       sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
@@ -131,6 +145,23 @@ export function readCheckoutFormDraft(): CheckoutFormDraft | null {
     }
     return null;
   }
+}
+
+export function readCheckoutFormDraft(): CheckoutFormDraft | null {
+  return readStoredDraft()?.values ?? null;
+}
+
+/**
+ * Drops a draft written by someone else (a guest before sign-in, another
+ * account, or an account that has since signed out), so a shared phone never
+ * shows the previous buyer's name, phone or address. Returns true when dropped.
+ */
+export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
+  setCheckoutFormDraftOwner(owner);
+  const stored = readStoredDraft();
+  if (!stored || (stored.owner ?? "guest") === owner) return false;
+  clearCheckoutFormDraft();
+  return true;
 }
 
 export function clearCheckoutFormDraft(): void {

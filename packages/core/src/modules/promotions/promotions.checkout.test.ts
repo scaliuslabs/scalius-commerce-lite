@@ -14,6 +14,8 @@ import {
 import { buildStorefrontCheckoutQuoteFingerprint } from "../orders/checkout-quote-fingerprint";
 import { calculateStorefrontTaxQuote } from "../tax";
 import {
+    assertDiscountCodesApplied,
+    listProductBuyGetOffers,
     quoteStorefrontDiscount,
     verifyPromotionCheckoutSnapshot,
     type StorefrontDiscountCart,
@@ -76,8 +78,15 @@ function perLine(quote: Awaited<ReturnType<typeof quoteStorefrontDiscount>>) {
 }
 
 describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provider) => {
-    const quote = (db: Database, code: string | null, overrides: Partial<Parameters<typeof quoteStorefrontDiscount>[1]> = {}) =>
-        quoteStorefrontDiscount(db, { code, cart, customerPhone: "+8801700000009", evaluatedAtEpochSeconds: NOW, ...overrides });
+    type Overrides = Partial<Parameters<typeof quoteStorefrontDiscount>[1]>;
+    const preview = (db: Database, codes: string[], overrides: Overrides = {}) =>
+        quoteStorefrontDiscount(db, { codes, cart, customerPhone: "+8801700000009", evaluatedAtEpochSeconds: NOW, ...overrides });
+    /** Commit semantics: every typed code must apply. */
+    const quote = async (db: Database, code: string | null, overrides: Overrides = {}) => {
+        const result = await preview(db, code ? [code] : [], overrides);
+        assertDiscountCodesApplied(result);
+        return result;
+    };
 
     it("scopes a code to chosen products, manual collections, and category-based collections", async () => {
         const db = openStore(provider);
@@ -101,7 +110,7 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const automatic = await quote(db, null);
         expect(automatic.applied?.discounts).toEqual([expect.objectContaining({ method: "automatic", totalDiscountMinor: 64_000 })]);
         expect(automatic.snapshot?.cart.submittedCodes).toEqual([]);
-        await expect(quote(db, "TEN")).rejects.toThrow("Your cart already gets a better discount.");
+        await expect(quote(db, "TEN")).rejects.toThrow("Your cart already gets an equal or better discount.");
     });
 
     it("stacks when one side allows it and keeps two exclusive discounts apart", async () => {
@@ -114,7 +123,7 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         expect(stacked.applied?.discounts.map(({ promotionName }) => promotionName)).toEqual(["Tee half", "Free delivery"]);
         expect(stacked.taxAllocation).toEqual({ lines: [{ lineId: "cart:0:var_tee", amountMinor: 50_000 }], shippingMinor: 6_000 });
         // Neither SOLO nor free delivery combines; alone SOLO saves less.
-        await expect(quote(db, "SOLO")).rejects.toThrow("better discount");
+        await expect(quote(db, "SOLO")).rejects.toThrow("SOLO can't be combined with Free delivery.");
     });
 
     it("offers automatic Buy X get Y when only the free item is missing", async () => {
@@ -129,7 +138,18 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
             }],
         });
         const teeOnly = await quote(db, null, { cart: { ...cart, lines: [cart.lines[0]!] } });
-        expect(teeOnly).toMatchObject({ applied: null, offers: ["Buy a tee, get a cap free"] });
+        expect(teeOnly).toMatchObject({
+            applied: null,
+            offers: [{
+                title: "Buy a tee, get a cap free",
+                code: null,
+                kind: "get",
+                basisPoints: 10_000,
+                quantity: 1,
+                // The cap has no saved SKU in this fixture, so it links to its page instead of one-tap add.
+                products: [],
+            }],
+        });
         expect((await quote(db, null)).offers).toEqual([]);
     });
 
@@ -216,5 +236,122 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const prints = [await fingerprint(null), await fingerprint("TEE10"), await fingerprint("ORDER5")];
         expect(new Set(prints).size).toBe(3);
         expect(await fingerprint("TEE10")).toBe(prints[1]);
+    });
+
+    it("combines codes of different classes, one line per discount, and dedupes a repeated code", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Tee half", codes: [{ code: "TEEHALF" }], combinesWith: { product: false, order: false, shipping: true }, effects: [percentOff(5_000, { productIds: ["prod_tee"] })] });
+        await live(db, { name: "Ship free", codes: [{ code: "SHIPFREE" }], effects: [freeShipping] });
+        await live(db, { name: "Order 5", codes: [{ code: "ORDER5" }], effects: [orderOff(500)] });
+
+        const both = await preview(db, ["teehalf", "SHIPFREE", " TEEHALF "]);
+        expect(both.rejectedCodes).toEqual([]);
+        expect(both.discounts).toEqual([
+            expect.objectContaining({ title: "Tee half", code: "TEEHALF", amountMinor: 50_000 }),
+            expect.objectContaining({ title: "Ship free", code: "SHIPFREE", amountMinor: 6_000 }),
+        ]);
+        expect(both.snapshot?.cart.submittedCodes).toEqual(["TEEHALF", "SHIPFREE"]);
+
+        // ORDER5 does not combine with the product code: it is listed with the reason, not silently dropped.
+        const three = await preview(db, ["TEEHALF", "SHIPFREE", "ORDER5"]);
+        expect(three.discounts.map(({ code }) => code)).toEqual(["TEEHALF", "SHIPFREE"]);
+        expect(three.rejectedCodes).toEqual([
+            expect.objectContaining({ code: "ORDER5", reason: "not_combinable", message: "ORDER5 can't be combined with TEEHALF." }),
+        ]);
+        expect(() => assertDiscountCodesApplied(three)).toThrow("ORDER5 can't be combined with TEEHALF.");
+        await expect(preview(db, ["A1", "B2", "C3", "D4", "E5", "F6"])).rejects.toThrow("Use up to 5 discount codes.");
+    });
+
+    it("says how far a code is from qualifying instead of failing the cart", async () => {
+        const db = openStore(provider);
+        await live(db, {
+            name: "Big order",
+            codes: [{ code: "BIG15" }],
+            conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 400_000, currencyCode: "BDT" } }],
+            effects: [orderOff(1_500)],
+        });
+        await live(db, {
+            name: "Three tees",
+            codes: [{ code: "TEES" }],
+            conditions: [{ kind: "minimum_item_quantity", config: { quantity: 3, productIds: ["prod_tee"] } }],
+            effects: [percentOff(1_000, { productIds: ["prod_tee"] })],
+        });
+        const result = await preview(db, ["BIG15", "TEES", "NOPE"]);
+        expect(result.applied).toBeNull();
+        expect(result.rejectedCodes).toEqual([
+            expect.objectContaining({ code: "BIG15", reason: "minimum_subtotal", shortfallMinor: 80_000, message: "Add ৳800 more to use BIG15." }),
+            expect.objectContaining({ code: "TEES", reason: "minimum_quantity", shortfallQuantity: 1, message: "Add 1 more item to use TEES." }),
+            expect.objectContaining({ code: "NOPE", reason: "not_found", message: "This discount code is not valid." }),
+        ]);
+    });
+
+    it("keeps a one-use code pending until the buyer's phone is known", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Once", codes: [{ code: "ONCE" }], maxRedemptionsPerCustomer: 1, effects: [orderOff(1_000)] });
+        const withoutPhone = await preview(db, ["ONCE"], { customerPhone: null });
+        expect(withoutPhone.rejectedCodes).toEqual([
+            expect.objectContaining({ code: "ONCE", reason: "needs_phone", requiresCustomerPhone: true }),
+        ]);
+        expect((await preview(db, ["ONCE"])).discounts).toEqual([expect.objectContaining({ code: "ONCE", amountMinor: 32_000 })]);
+    });
+
+    it("lists the automatic Buy X get Y a product counts toward, never code-only ones", async () => {
+        const db = openStore(provider);
+        const buyGet = (buy: Record<string, unknown>) => [{
+            kind: "percentage_off" as const,
+            target: "line" as const,
+            allocation: "across" as const,
+            config: { basisPoints: 10_000, productIds: ["prod_cap"], getQuantity: 1, buy: { quantity: 2, ...buy } },
+        }];
+        await live(db, { name: "Two tees, free cap", endsAtEpochSeconds: NOW + 86_400, effects: buyGet({ productIds: ["prod_tee"] }) });
+        await live(db, { name: "Shoes gift", effects: buyGet({ collectionIds: ["col_shoes"] }) });
+        await live(db, { name: "Secret", codes: [{ code: "SECRET" }], effects: buyGet({ productIds: ["prod_tee"] }) });
+
+        const tee = await listProductBuyGetOffers(db, "prod_tee", "BDT", NOW);
+        expect(tee).toEqual([expect.objectContaining({
+            title: "Two tees, free cap",
+            buyQuantity: 2,
+            getQuantity: 1,
+            basisPoints: 10_000,
+            endsAtEpochSeconds: NOW + 86_400,
+        })]);
+        expect((await listProductBuyGetOffers(db, "prod_boot", "BDT", NOW)).map(({ title }) => title)).toEqual(["Shoes gift"]);
+        expect(await listProductBuyGetOffers(db, "prod_cap", "BDT", NOW)).toEqual([]);
+    });
+
+    it("names the items a Buy X get Y code still needs, with a one-tap SKU for simple products", async () => {
+        const db = openStore(provider);
+        sqlite!.exec(`
+            INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES
+                ('var_cap', 'prod_cap', 'CAP-1', 20000, 1);
+        `);
+        await live(db, {
+            name: "Tee gets a cap",
+            codes: [{ code: "CAPGIFT" }],
+            effects: [{
+                kind: "percentage_off",
+                target: "line",
+                allocation: "across",
+                config: { basisPoints: 5_000, productIds: ["prod_cap"], getQuantity: 1, buy: { quantity: 2, productIds: ["prod_tee"] } },
+            }],
+        });
+        const teesOnly = await preview(db, ["CAPGIFT"], { cart: { ...cart, lines: [cart.lines[0]!] } });
+        expect(teesOnly.rejectedCodes).toEqual([expect.objectContaining({
+            code: "CAPGIFT",
+            reason: "get_items",
+            message: "Add Cap to your cart to get it 50% off.",
+            offer: expect.objectContaining({
+                kind: "get",
+                basisPoints: 5_000,
+                products: [{ id: "prod_cap", slug: "cap", name: "Cap", variantId: "var_cap", price: 200 }],
+            }),
+        })]);
+        const oneTee = await preview(db, ["CAPGIFT"], {
+            cart: { ...cart, lines: [{ ...cart.lines[0]!, quantity: 1 }] },
+        });
+        expect(oneTee.rejectedCodes).toEqual([expect.objectContaining({
+            reason: "buy_items",
+            offer: expect.objectContaining({ kind: "buy", quantity: 1 }),
+        })]);
     });
 });

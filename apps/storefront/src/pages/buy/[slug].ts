@@ -115,6 +115,7 @@ export const GET: APIRoute = async ({ params, url }) => {
         discountPercentage: product.discountPercentage,
         discountAmount: product.discountAmount,
         currencyDecimalPlaces: layoutData?.currency?.decimalPlaces,
+        currencyCode: layoutData?.currency?.code,
       },
       {
         price: itemToAdd.price,
