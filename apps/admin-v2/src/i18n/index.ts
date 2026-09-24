@@ -115,5 +115,7 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
 }
 
 export function formatDateTime(date: Date, options?: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(dateLocale(), { timeZone: "Asia/Dhaka", ...options }).format(date);
+  // Bangla has no localised AM/PM in Intl ("৫:৫২ AM"), so bn shows the 24-hour clock.
+  const clock: Intl.DateTimeFormatOptions = current === "bn" ? { hourCycle: "h23" } : {};
+  return new Intl.DateTimeFormat(dateLocale(), { timeZone: "Asia/Dhaka", ...clock, ...options }).format(date);
 }

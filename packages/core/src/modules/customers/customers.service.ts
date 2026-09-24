@@ -629,29 +629,27 @@ export async function updateCustomer(
         if (data.area !== undefined) areaName = data.area ? locMap.get(data.area) ?? null : null;
     }
 
-    const updateData = {
-        ...data,
+    const next = {
+        name: data.name ?? existing.name,
+        email: data.email !== undefined ? data.email : existing.email,
+        phone: data.phone ?? existing.phone,
+        address: data.address !== undefined ? data.address : existing.address,
+        city: data.city !== undefined ? data.city : existing.city,
+        zone: data.zone !== undefined ? data.zone : existing.zone,
+        area: data.area !== undefined ? data.area : existing.area,
         cityName,
         zoneName,
         areaName,
-        updatedAt: sql`unixepoch()`,
     };
+    // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
+    if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
     await db.batch([
-        db.update(customers).set(updateData).where(eq(customers.id, id)),
+        db.update(customers).set({ ...data, cityName, zoneName, areaName, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
-            name: data.name ?? existing.name,
-            email: data.email !== undefined ? data.email : existing.email,
-            phone: data.phone ?? existing.phone,
-            address: data.address !== undefined ? data.address : existing.address,
-            city: data.city !== undefined ? data.city : existing.city,
-            zone: data.zone !== undefined ? data.zone : existing.zone,
-            area: data.area !== undefined ? data.area : existing.area,
-            cityName,
-            zoneName,
-            areaName,
+            ...next,
             changeType: "updated",
             createdAt: sql`unixepoch()`,
         }),

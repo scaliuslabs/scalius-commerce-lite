@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
-import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminPages, putApiV1AdminPagesById } from "@scalius/api-client/sdk";
@@ -200,8 +199,8 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page" }
       form={form}
       onSave={submitEntity}
     >
-      {!canSave ? <ReadOnlyNotice /> : null}
-      <fieldset disabled={!canSave} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* FormContainer shows the read-only notice and disables the fields when saving isn't allowed. */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardContent className="space-y-4 pt-4">
@@ -457,7 +456,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page" }
             </CardContent>
           </Card>
         </div>
-      </fieldset>
+      </div>
     </FormContainer>
   );
 }

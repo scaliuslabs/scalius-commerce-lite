@@ -27,8 +27,8 @@ export function PageHeader({ title, backTo, badge, actions }: PageHeaderProps) {
           </Link>
         </Button>
       ) : null}
-      {/* Titles wrap, never truncate (only table cells truncate). */}
-      <div className="flex min-h-9 min-w-0 flex-1 basis-64 flex-wrap items-center gap-2">
+      {/* Titles wrap, never truncate (only table cells truncate); a list's one action stays beside its title on phones. */}
+      <div className="flex min-h-9 min-w-0 flex-1 basis-40 flex-wrap items-center gap-2">
         <h1 className="min-w-0 break-words text-heading-lg">{title}</h1>
         {badge}
       </div>

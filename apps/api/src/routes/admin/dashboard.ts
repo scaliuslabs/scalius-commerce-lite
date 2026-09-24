@@ -29,6 +29,7 @@ function projectRecentOrders(
 ) {
     return recentOrders.slice(0, DASHBOARD_RECENT_ORDER_LIMIT).map((order) => ({
         id: boundedText(order.id, DASHBOARD_ORDER_ID_MAX_LENGTH),
+        orderNumber: order.orderNumber,
         customerName: boundedText(
             order.customerName,
             DASHBOARD_CUSTOMER_NAME_MAX_LENGTH,
@@ -76,6 +77,7 @@ const dashboardStatsSchema = z.object({
 
 const recentOrderSchema = z.object({
     id: z.string().max(DASHBOARD_ORDER_ID_MAX_LENGTH),
+    orderNumber: z.number().int(),
     customerName: z.string().max(DASHBOARD_CUSTOMER_NAME_MAX_LENGTH),
     totalAmount: z.number(),
     status: z.string().max(DASHBOARD_ORDER_STATUS_MAX_LENGTH),

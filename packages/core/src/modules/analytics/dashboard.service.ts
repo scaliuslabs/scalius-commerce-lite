@@ -89,6 +89,7 @@ type DailyCustomerRow = {
 };
 type RecentOrderRow = {
     id: string;
+    orderNumber: number;
     customerName: string;
     totalAmountMinor: number;
     currencyDecimalPlaces: number;
@@ -176,6 +177,7 @@ function getRecentOrdersQuery(db: Database, limit: number) {
     return db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             customerName: orders.customerName,
             totalAmountMinor: orders.totalAmountMinor,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,

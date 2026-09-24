@@ -377,7 +377,15 @@ html:lang(bn) {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
+  }
+
+  /* WCAG 2.4.7/2.4.11: one clear 2px ring for anything focusable by keyboard
+     (components with their own ring opt out with outline-none). */
+  :focus-visible {
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 1px;
   }
 
   body {

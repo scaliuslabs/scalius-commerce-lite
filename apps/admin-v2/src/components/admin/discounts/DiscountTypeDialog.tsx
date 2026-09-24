@@ -1,36 +1,45 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Gift, Package, Receipt, Truck } from "lucide-react";
+import { ChevronRight, Gift, ShoppingBag, Tag, Truck } from "lucide-react";
+import { useRef } from "react";
 
 import { DISCOUNT_TYPES, type DiscountType } from "./discount-form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
 
-const ICON: Record<DiscountType, typeof Package> = {
-  products: Package,
+const ICON: Record<DiscountType, typeof Tag> = {
+  products: Tag,
   buy_get: Gift,
-  order: Receipt,
+  order: ShoppingBag,
   shipping: Truck,
 };
 
 /** "Create discount" → pick the type; code vs automatic is chosen in the editor. */
 export function DiscountTypeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(discountsMessages);
+  const first = useRef<HTMLAnchorElement>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          // Start on the first type, not the Close button.
+          event.preventDefault();
+          first.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("chooseType")}</DialogTitle>
         </DialogHeader>
         <ul className="divide-y rounded-md border">
-          {DISCOUNT_TYPES.map((type) => {
+          {DISCOUNT_TYPES.map((type, index) => {
             const Icon = ICON[type];
             return (
               <li key={type}>
                 <Link
+                  ref={index === 0 ? first : undefined}
                   to="/admin/discounts/new"
                   search={{ type }}
-                  className="flex min-h-14 items-start gap-3 px-4 py-3 text-body hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className="flex min-h-14 items-start gap-3 px-4 py-3 text-body hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <span className="flex h-lh shrink-0 items-center">
                     <Icon aria-hidden className="size-4 text-muted-foreground" />

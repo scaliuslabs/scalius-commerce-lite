@@ -31,6 +31,7 @@ const homeStats = {
 
 const recentOrder = {
     id: "ord_1",
+    orderNumber: 1001,
     customerName: "Ada Lovelace",
     totalAmount: 42,
     status: "processing",
@@ -77,6 +78,7 @@ describe("admin dashboard routes", () => {
         expect(body.data.recentOrders).toHaveLength(11);
         expect(body.data.recentOrders[0]).toEqual({
             id: expect.stringMatching(/^ord_0_/),
+            orderNumber: 1001,
             customerName: expect.stringMatching(/^Merchant customer 0 /),
             totalAmount: 42,
             status: expect.stringMatching(/^processing_/),

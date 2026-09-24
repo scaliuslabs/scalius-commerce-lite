@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import { createAdminQueryClient } from "./lib/admin-query-client";
 import { NotFoundState, RouteErrorComponent } from "./lib/route-error";
-import { getAdminScrollRestorationKey } from "./lib/admin-scroll-restoration";
 import { getDashboardBasePath } from "./lib/dashboard-base-path";
 
 // Not-found and error states render where the failure happened: inside the
@@ -29,8 +28,8 @@ export function getRouter() {
     // Runtime dashboard base path (Platform Dashboard URL), read from the
     // shell's meta tag; "" at a host root.
     basepath: getDashboardBasePath() || "/",
+    // Positions are kept per history entry: Back restores, a new visit starts at the top.
     scrollRestoration: true,
-    getScrollRestorationKey: getAdminScrollRestorationKey,
     scrollToTopSelectors: ["#admin-main-scroll"],
     scrollRestorationBehavior: "instant",
     defaultPreload: false,
