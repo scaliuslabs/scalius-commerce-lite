@@ -93,7 +93,7 @@ let canPersistToStorage = false;
 
 export const cartStore = map<CartStore>({ ...EMPTY_CART_STATE });
 
-type ShippingFeeCartItem = Pick<CartItem, "freeDelivery">;
+type ShippingFeeCartItem = Pick<CartItem, "freeDelivery"> & Partial<Pick<CartItem, "price" | "quantity">>;
 
 export function cartHasFreeDeliveryItem(
   items: Record<string, ShippingFeeCartItem>,
@@ -101,14 +101,31 @@ export function cartHasFreeDeliveryItem(
   return Object.values(items).some((item) => item.freeDelivery === true);
 }
 
+/** The items subtotal before discounts, which a rate's free-over threshold is measured against. */
+export function cartItemsSubtotal(items: Record<string, ShippingFeeCartItem>): number {
+  const total = Object.values(items).reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0,
+  );
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * What the buyer pays for the chosen rate: nothing when a cart item waives
+ * delivery or the items subtotal reaches the rate's free-over threshold
+ * (the checkout applies the same rule authoritatively).
+ */
 export function getEffectiveCartShippingFee(
   items: Record<string, ShippingFeeCartItem>,
   methodFee: number,
+  freeOver: number | null = null,
 ): number {
   const normalizedMethodFee = Number.isFinite(methodFee)
     ? Math.max(0, methodFee)
     : 0;
-  return cartHasFreeDeliveryItem(items) ? 0 : normalizedMethodFee;
+  if (cartHasFreeDeliveryItem(items)) return 0;
+  if (freeOver !== null && Number.isFinite(freeOver) && cartItemsSubtotal(items) >= freeOver) return 0;
+  return normalizedMethodFee;
 }
 
 if (typeof window !== "undefined") {

@@ -13,8 +13,9 @@ import {
   syncCheckoutTransferSession,
   writeCheckoutFormDraft,
 } from "../checkout/session-state";
-import { cartHasFreeDeliveryItem, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
+import { cartHasFreeDeliveryItem, cartItemsSubtotal, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
 import { enhanceShippingMethods } from "../checkout/shipping-methods";
+import { formatMoney } from "@scalius/shared/currency";
 import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
 import { initCheckoutPhoneField } from "../checkout/phone-field";
 import { storefrontSourcePath } from "../test-source-paths";
@@ -50,6 +51,9 @@ function startCart() {
     cartHasFreeDeliveryItem,
     cartStore,
     enhanceShippingMethods,
+    fetchDeliveryRates: vi.fn(async () => []),
+    cartItemsSubtotal,
+    formatMoney,
     enhanceLocationSelects,
     fetchLocationOptions,
     getEffectiveCartShippingFee,

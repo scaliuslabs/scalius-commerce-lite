@@ -119,6 +119,13 @@ export interface ResolvedDeliveryRate {
 }
 
 /**
+ * `details.reason` of the refusal when the chosen rate is gone or doesn't
+ * serve the address: checkout re-reads the address's rates instead of
+ * reporting a failure.
+ */
+export const DELIVERY_RATE_UNAVAILABLE_REASON = "delivery_rate_unavailable";
+
+/**
  * Verifies the chosen rate is live, active, well formed and offered for the
  * address's zone (local pickup is offered everywhere), then applies its
  * free-over threshold to the items subtotal.
@@ -130,12 +137,16 @@ export function resolveDeliveryRate(input: {
 }): ResolvedDeliveryRate {
     const { rate, addressZoneId, subtotalMinor } = input;
     if (!rate || !rate.isActive || rate.deletedAt != null) {
-        throw new ValidationError("A valid active shipping method is required for this order.");
+        throw new ValidationError(
+            "A valid active shipping method is required for this order.",
+            { reason: DELIVERY_RATE_UNAVAILABLE_REASON },
+        );
     }
     const kind = rate.kind ?? "delivery";
     if (kind === "delivery" && (rate.zoneId ?? null) !== addressZoneId) {
         throw new ValidationError(
             "This delivery option isn't available for the selected address. Choose another delivery option.",
+            { reason: DELIVERY_RATE_UNAVAILABLE_REASON },
         );
     }
     const name = typeof rate.name === "string" ? rate.name.trim() : "";

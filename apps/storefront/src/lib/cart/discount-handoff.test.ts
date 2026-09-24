@@ -7,12 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@scalius/shared/checkout-language";
 import {
   cartHasFreeDeliveryItem,
+  cartItemsSubtotal,
   cartStore,
   createCartItemKey,
   getEffectiveCartShippingFee,
   type CartStore,
 } from "../../store/cart";
-import { enhanceShippingMethods } from "../checkout/shipping-methods";
+import { enhanceShippingMethods, type DeliveryRate } from "../checkout/shipping-methods";
+import { formatMoney } from "@scalius/shared/currency";
 import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
 import {
   checkoutPhoneResult,
@@ -57,7 +59,15 @@ vi.mock("./browser-api", () => ({
 vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
+  TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
 }));
+
+/** The rates the API offers for the form's address (Dhaka / Banani). */
+const STANDARD: DeliveryRate = {
+  id: "standard", name: "Standard", fee: 60, description: null, freeOver: null,
+  kind: "delivery", pickupAddress: null, pickupHours: null,
+};
+const deliveryRates = vi.fn(async (): Promise<DeliveryRate[] | null> => [STANDARD]);
 
 const NO_DISCOUNTS = { ok: true, totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
 const SAVE10_LINE = { promotionId: "p_save", title: "Save 10", code: "SAVE10", amount: 10 };
@@ -122,7 +132,7 @@ function installStorageMocks(): void {
 function renderCartDom(): void {
   document.body.innerHTML = `
     <div id="checkout-meta" data-cod-only="false" data-checkout-unavailable="false"
-      data-guest-checkout-enabled="true" data-default-shipping-id="standard" data-default-shipping-fee="60"></div>
+      data-guest-checkout-enabled="true"></div>
     <div id="cartPageRoot" data-cart-ready="false" data-cart-has-items="false">
       <div id="checkoutPanel"><form id="checkoutForm">
         <input name="formIntent" value="checkout" />
@@ -140,8 +150,12 @@ function renderCartDom(): void {
         <input id="checkout-city" name="city" value="city_dhaka" />
         <input id="checkout-zone" name="zone" value="zone_banani" />
         <p id="shippingLocationError" class="hidden"></p>
-        <input type="hidden" name="shippingLocation" value="standard" />
-        <p id="shippingMethodError" class="hidden"></p>
+        <div data-shipping-methods data-free-text="Free" data-free-over-text="Free over {amount}"
+          data-no-delivery-text="${ENGLISH_CHECKOUT_LANGUAGE_DATA.noDeliveryToAddressText}">
+          <script type="application/json" data-shipping-rates>[]</script>
+          <fieldset id="shippingMethods"><p data-shipping-note></p><div data-shipping-options></div></fieldset>
+          <p id="shippingMethodError" class="hidden"></p>
+        </div>
         <input id="checkoutIdInput" name="checkoutId" type="hidden" />
         <input id="expectedQuoteFingerprint" name="expectedQuoteFingerprint" value="taxq_1234567890123456789012" />
         <input id="cartItemsInput" name="cartItems" type="hidden" />
@@ -213,6 +227,9 @@ async function startCartPage(): Promise<void> {
     cartHasFreeDeliveryItem,
     cartStore,
     enhanceShippingMethods,
+    fetchDeliveryRates: deliveryRates,
+    cartItemsSubtotal,
+    formatMoney,
     browserApiUrl: (path: string) => path,
     enhanceLocationSelects,
     fetchLocationOptions,
@@ -270,6 +287,7 @@ describe("cart discount checkout handoff", () => {
   afterEach(() => {
     pageController?.abort();
     pageController = undefined;
+    delete window.lastShippingEventDetail;
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -348,6 +366,39 @@ describe("cart discount checkout handoff", () => {
     await settleCheckout();
     expect(transferredSubmit.defaultPrevented).toBe(true);
     expect(JSON.parse(sessionStorage.getItem("scalius_checkout_data")!).discountCodes).toBe("");
+  });
+
+  it("sends the rate chosen for the address and quotes nothing before it", async () => {
+    await startCartPage();
+    await settleCheckout();
+    expect(deliveryRates).toHaveBeenCalledWith("", { cityId: "city_dhaka", zoneId: "zone_banani", areaId: "" });
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalled();
+    for (const [request] of taxQuoteMocks.fetchAuthoritativeTaxQuote.mock.calls) {
+      expect(request).toMatchObject({ shippingMethodId: "standard" });
+    }
+
+    const submit = submitCheckout();
+    await settleCheckout();
+    expect(submit.defaultPrevented).toBe(true);
+    const transferred = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+    expect(transferred).toMatchObject({ shippingMethodId: "standard", shippingCharge: "60" });
+  });
+
+  it("asks for a delivery option when none applies to the address", async () => {
+    deliveryRates.mockResolvedValueOnce([]);
+    await startCartPage();
+    await settleCheckout();
+
+    const submit = submitCheckout();
+    await settleCheckout();
+
+    expect(submit.defaultPrevented).toBe(true);
+    expect(document.getElementById("shippingMethodError")?.textContent)
+      .toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.deliveryRequiredText);
+    expect(document.querySelector("[data-shipping-note]")?.textContent)
+      .toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.noDeliveryToAddressText);
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
   });
 
   it("marks every missing field at once, under each field, and focuses the first", async () => {

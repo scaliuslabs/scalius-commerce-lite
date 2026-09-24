@@ -92,3 +92,15 @@ export function parseTaxQuoteCartIssues(payload: unknown): CartValidationIssue[]
     }];
   });
 }
+
+/** Mirrors core `DELIVERY_RATE_UNAVAILABLE_REASON`. */
+export const DELIVERY_RATE_UNAVAILABLE_REASON = "delivery_rate_unavailable";
+
+/**
+ * The checkout refused the chosen delivery rate (gone, or not offered for the
+ * address): the cart re-reads the address's rates rather than reporting an
+ * unavailable total.
+ */
+export function isDeliveryRateUnavailable(payload: unknown): boolean {
+  return issueDetails(payload)?.reason === DELIVERY_RATE_UNAVAILABLE_REASON;
+}

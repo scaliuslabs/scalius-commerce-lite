@@ -135,6 +135,15 @@ describe("cart store", () => {
     expect(getEffectiveCartShippingFee(ordinary, Number.NaN)).toBe(0);
   });
 
+  it("charges nothing once the items subtotal reaches the rate's free-over threshold", async () => {
+    const { getEffectiveCartShippingFee } = await importFreshCartModule();
+    const below = { a: { freeDelivery: false, price: 1250, quantity: 2 } };
+    const exactly = { a: { freeDelivery: false, price: 1500, quantity: 2 } };
+    expect(getEffectiveCartShippingFee(below, 150, 3000)).toBe(150);
+    expect(getEffectiveCartShippingFee(exactly, 150, 3000)).toBe(0);
+    expect(getEffectiveCartShippingFee(exactly, 150, null)).toBe(150);
+  });
+
   it("falls back to an empty cart when stored JSON is invalid", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     localStorage.setItem("cart", "{bad json");
