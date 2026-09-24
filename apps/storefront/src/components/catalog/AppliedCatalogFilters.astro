@@ -23,7 +23,7 @@ const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol
 const money = (amount: string) =>
   formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
 
-const navigationKeys = new Set(["page", "sortBy"]);
+const navigationKeys = new Set(["page", "sortBy", "limit"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
 const booleanLabels: Record<string, string> = {
   hasDiscount: "On sale",

@@ -1,0 +1,67 @@
+---
+// A listing view select (sort, or products per page). A change reloads the
+// listing on page one with the buyer's filters (lib/catalog-sort.ts).
+// `compact` fills its cell in the phone bar with a hidden label; `labelled`
+// sits in a toolbar with a visible label ("Sort by:").
+import {
+  PRODUCT_LIST_PAGE_SIZES,
+  type ProductListFilterState,
+  type ProductListSort,
+} from "@/lib/product-list-query";
+
+interface Props {
+  id: string;
+  name: "sortBy" | "limit";
+  variant: "compact" | "labelled";
+  /** The sort's options; the page size lists PRODUCT_LIST_PAGE_SIZES. */
+  options?: Array<{ value: string; label: string }>;
+  selected: string;
+  pathname: string;
+  defaultSort: ProductListSort;
+  currentFilters: ProductListFilterState;
+  /** A labelled select without its own row (it sits in the caller's). */
+  bare?: boolean;
+}
+
+const { id, name, variant, options: sortOptions, selected, pathname, defaultSort, currentFilters, bare = false } = Astro.props;
+const sort = name === "sortBy";
+const options = sort
+  ? sortOptions ?? []
+  : PRODUCT_LIST_PAGE_SIZES.map((size) => ({ value: String(size), label: String(size) }));
+const selectClass =
+  "rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary";
+const attributes = {
+  name,
+  "data-catalog-sort": true,
+  "data-list-pathname": pathname,
+  "data-default-sort": defaultSort,
+  "data-current-filters": JSON.stringify(currentFilters),
+};
+---
+
+{variant === "compact" ? (
+  <label class="relative block">
+    <span class="sr-only">{sort ? "Sort products" : "Products per page"}</span>
+    <select
+      id={id}
+      {...attributes}
+      class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+    >
+      {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
+    </select>
+  </label>
+) : bare ? (
+  <Fragment>
+    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? "Sort by:" : "Show:"}</label>
+    <select id={id} {...attributes} class:list={[selectClass, sort && "min-w-[160px]"]}>
+      {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
+    </select>
+  </Fragment>
+) : (
+  <div class="flex items-center gap-3">
+    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? "Sort by:" : "Show:"}</label>
+    <select id={id} {...attributes} class:list={[selectClass, sort && "min-w-[160px]"]}>
+      {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
+    </select>
+  </div>
+)}

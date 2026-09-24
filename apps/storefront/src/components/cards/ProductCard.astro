@@ -39,6 +39,11 @@ interface Props {
    * page keeps `max-w-7xl` at 80rem), so `sizes` caps where the grid does.
    */
   containerWidth?: string;
+  /**
+   * The photo's `sizes` when the card sits in a layout the grid model does
+   * not describe (listing list rows, shelves, the quick-add grid).
+   */
+  sizes?: string;
   headingLevel?: "h2" | "h3";
 }
 
@@ -51,6 +56,7 @@ const {
   context = "grid",
   phoneLayout = "grid",
   containerWidth: containerWidthOverride,
+  sizes: sizesOverride,
   headingLevel = "h3",
 } = Astro.props;
 
@@ -68,7 +74,7 @@ const loading = productCardImageLoading(
   productGridFirstRow(grid, containerWidth),
   { index, aboveFold },
 );
-const sizes = productCardImageSizes(grid, containerWidth, context, phoneLayout);
+const sizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout);
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,

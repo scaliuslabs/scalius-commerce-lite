@@ -11,17 +11,16 @@ import {
   type LayoutData,
   type Category,
 } from "@/lib/api";
-import RichContent from "@/components/RichContent.astro";
-import CatalogListing from "@/components/catalog/CatalogListing.astro";
-import CatalogDescription from "@/components/catalog/CatalogDescription.astro";
+import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
+import { catalogChildLinks } from "@/lib/catalog-listing";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
-import { mediaImageUrl } from "@/lib/media-url";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   countActiveProductListFilters,
@@ -33,11 +32,7 @@ import {
 } from "@/lib/product-list-query";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
-import {
-  hasRenderableHtmlContent,
-  htmlToPlainText,
-} from "@scalius/shared/html-sanitize";
-import { Tags } from "lucide-react";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 
 const { slug } = Astro.params;
 if (!slug) return new Response(null, { status: 404 });
@@ -223,90 +218,47 @@ const collectionJsonLd =
       )
     }
   </Fragment>
-  <div
-    class="min-h-screen bg-muted/30"
-    data-category-name={category?.name}
-    data-products-for-analytics={JSON.stringify(analyticsProductData)}
+  <CatalogListingPage
+    kind="category"
+    data={{
+      "data-category-name": category.name,
+      "data-products-for-analytics": JSON.stringify(analyticsProductData),
+    }}
+    hero={{
+      title: category.name,
+      description: pagination.page === 1 ? categoryDescription : null,
+      count: pagination.total,
+      banner: category.imageUrl
+        ? { src: mediaImageUrl(category.imageUrl, 1440), srcset: mediaImageSrcSet(category.imageUrl), alt: "" }
+        : null,
+    }}
+    listing={{
+      products,
+      pagination,
+      facets,
+      priceRange: productsResponse.priceRange,
+      queryState,
+      pathname: productListPathname,
+      resetPath: `/categories/${category.slug}`,
+      searchLabel: "Search this category",
+      countEndpoint: `/categories/${encodeURIComponent(slug)}/products`,
+      currencySymbol,
+      currencyCode,
+      listingName: category.name,
+      subListings: catalogChildLinks(category),
+    }}
+    content={!hasListingQuery && categoryContent ? { html: categoryContent, label: `${category.name} guide` } : null}
   >
-    <div class="border-b border-border bg-linear-to-b from-muted/30 to-background">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-        <nav class="text-sm mb-4">
-          <ol class="flex items-center space-x-2">
-            <li>
-              <a href="/" class="text-muted-foreground hover:text-foreground">Home</a>
-            </li>
-            <li class="text-muted-foreground/50" aria-hidden="true">/</li>
-            <li>
-              <span class="font-medium text-foreground">{category?.name}</span>
-            </li>
-          </ol>
-        </nav>
-        <div class="flex justify-between items-start gap-4 flex-wrap">
-          <div class="space-y-2 max-w-xl">
-            <h1 class="text-3xl font-bold text-foreground sm:text-4xl">
-              {category?.name}
-            </h1>
-            {
-              categoryDescription &&
-                hasRenderableHtmlContent(categoryDescription) &&
-                pagination.page === 1 && <CatalogDescription content={categoryDescription} />
-            }
-          </div>
-          <div
-            class="hidden items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-sm sm:flex"
-          >
-            <Tags className="h-4 w-4 text-muted-foreground" />
-            <span class="text-sm font-medium text-foreground">
-              {pagination.total} {pagination.total === 1 ? "product" : "products"}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-      <CatalogListing
-        products={products}
-        pagination={pagination}
-        facets={facets}
-        priceRange={productsResponse.priceRange}
-        queryState={queryState}
-        pathname={productListPathname}
-        resetPath={`/categories/${category?.slug}`}
-        searchLabel="Search this category"
-        countEndpoint={`/categories/${encodeURIComponent(slug)}/products`}
-        currencySymbol={currencySymbol}
-        currencyCode={currencyCode}
-      >
-        <CatalogEmptyState
-          slot="empty"
-          title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
-          description={activeFilterCount > 0
-            ? "Try fewer filters or a broader price range."
-            : "Explore the rest of the catalog."}
-          actionHref={activeFilterCount > 0 ? `/categories/${category?.slug}` : "/search"}
-          actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
-        />
-      </CatalogListing>
-
-      {
-        categoryContent &&
-          hasRenderableHtmlContent(categoryContent) &&
-          !hasListingQuery && (
-            <section
-              class="mx-auto mt-10 max-w-4xl border-t border-border pt-8 sm:mt-12 sm:pt-10"
-              aria-label={`${category.name} guide`}
-            >
-              <RichContent
-                content={categoryContent}
-                className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
-                processShortcodes={false}
-              />
-            </section>
-          )
-      }
-    </div>
-  </div>
+    <CatalogEmptyState
+      slot="empty"
+      title={activeFilterCount > 0 ? "No matching products" : "No products yet"}
+      description={activeFilterCount > 0
+        ? "Try fewer filters or a broader price range."
+        : "Explore the rest of the catalog."}
+      actionHref={activeFilterCount > 0 ? `/categories/${category.slug}` : "/search"}
+      actionLabel={activeFilterCount > 0 ? "Clear filters" : "Browse products"}
+    />
+  </CatalogListingPage>
 </Layout>
 
 <script>

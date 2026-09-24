@@ -23,6 +23,11 @@ function readCanonicalFilters(
   }
 }
 
+/**
+ * Listing view selects (the sort, and the page size when the select's name
+ * is `limit`): a change reloads the listing with that choice on page one,
+ * keeping the buyer's filters.
+ */
 export function setupCatalogSorts(): void {
   document
     .querySelectorAll<HTMLSelectElement>("[data-catalog-sort]")
@@ -43,7 +48,7 @@ export function setupCatalogSorts(): void {
           pathname: sortSelect.dataset.listPathname || window.location.pathname,
           currentFilters,
           overrides: {
-            sortBy: sortSelect.value,
+            [sortSelect.name === "limit" ? "limit" : "sortBy"]: sortSelect.value,
             page: 1,
           },
           defaultSort: sortSelect.dataset.defaultSort === "relevance" ? "relevance" : "newest",

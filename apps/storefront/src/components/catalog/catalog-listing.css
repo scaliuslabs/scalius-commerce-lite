@@ -1,0 +1,96 @@
+/* Listing templates (lib/catalog-listing.ts). Sizes, radius and colour come
+   from the theme tokens; this file only arranges the listing's parts. */
+
+/* The filter panel: a bottom sheet over a dimmed page on phones and
+   tablets (tapping the dim area closes it), and for the drawer layouts a
+   panel from the left on computers. */
+@media (max-width: 63.99rem) {
+  #filter-section:not(.hidden) {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+}
+
+@media (min-width: 64rem) {
+  #filter-section[data-catalog-dialog="drawer"]:not(.hidden) {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+}
+
+/* List results (the list layout, or the grid/list toggle): one product per
+   row, the photo beside the text (Amazon, eBay, Star Tech phones). Every
+   card variant keeps its own anatomy. */
+.product-grid-frame[data-catalog-results="list"] > .product-grid {
+  --listing-row-media: 7.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@container product-grid (min-width: 36rem) {
+  .product-grid-frame[data-catalog-results="list"] > .product-grid {
+    --listing-row-media: 11rem;
+    gap: 1rem;
+  }
+}
+
+@container product-grid (min-width: 60rem) {
+  .product-grid-frame[data-catalog-results="list"] > .product-grid {
+    --listing-row-media: 14rem;
+  }
+}
+
+.site-root .product-grid-frame[data-catalog-results="list"] [data-theme-component="product-card"] {
+  display: grid;
+  grid-template-columns: var(--listing-row-media) minmax(0, 1fr);
+  align-items: start;
+}
+
+.site-root .product-grid-frame[data-catalog-results="list"] .product-card-body {
+  min-height: 100%;
+  padding-inline: 0.75rem;
+}
+
+/* Shelves (Aarong): one horizontal row per sub-listing, CSS scroll-snap
+   only. 2.1 cards show on phones (the next card peeks), 3 on tablets and 4
+   on computers. */
+.catalog-shelf-track {
+  --shelf-gap: var(--theme-grid-gap-phone, 0.75rem);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 46%;
+  gap: var(--shelf-gap);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  padding-bottom: 0.5rem;
+}
+
+.catalog-shelf-track > * {
+  scroll-snap-align: start;
+}
+
+@media (min-width: 40rem) {
+  .catalog-shelf-track {
+    --shelf-gap: var(--theme-grid-gap-desktop, 1rem);
+    grid-auto-columns: calc((100% - 2 * var(--shelf-gap)) / 3);
+  }
+}
+
+@media (min-width: 64rem) {
+  .catalog-shelf-track {
+    grid-auto-columns: calc((100% - 3 * var(--shelf-gap)) / 4);
+  }
+}
+
+/* Chip rows scroll sideways on phones instead of wrapping into a wall. */
+.catalog-chip-row {
+  scrollbar-width: none;
+}
+
+.catalog-chip-row::-webkit-scrollbar {
+  display: none;
+}

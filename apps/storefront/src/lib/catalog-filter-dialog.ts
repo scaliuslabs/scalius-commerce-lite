@@ -60,7 +60,22 @@ export function setupCatalogFilterDialog({
   runtimeWindow.__scaliusCatalogFilterCleanup?.();
   dialog.dataset.dialogBound = "true";
 
-  const mobile = window.matchMedia("(max-width: 1023px)");
+  // Every button that opens it (the phone bar's and the desktop filter bar's)
+  // and the aspect chips, which open it at one facet.
+  const toggles = [
+    toggle,
+    ...document.querySelectorAll<HTMLButtonElement>(
+      `button[data-catalog-filter-toggle][aria-controls="${dialogId}"]`,
+    ),
+  ].filter((button, index, all) => all.indexOf(button) === index);
+  const aspectLinks = [
+    ...document.querySelectorAll<HTMLAnchorElement>("a[data-catalog-aspect]"),
+  ];
+  let opener: HTMLElement = toggle;
+  // A sidebar is a dialog on phones only; a filter drawer is one at every width.
+  const mobile = window.matchMedia(
+    dialog.dataset.catalogDialog === "drawer" ? "all" : "(max-width: 1023px)",
+  );
   let previousBodyOverflow = document.body.style.overflow;
   const backgroundInertStates = new Map<HTMLElement, boolean>();
 
@@ -103,20 +118,21 @@ export function setupCatalogFilterDialog({
       dialog.setAttribute("aria-hidden", String(!open));
       dialog.inert = !open;
       setBackgroundInert(open);
-      toggle.setAttribute("aria-expanded", String(open));
+      toggles.forEach((button) => button.setAttribute("aria-expanded", String(open)));
     } else {
       setBackgroundInert(false);
       dialog.inert = false;
       dialog.removeAttribute("role");
       dialog.removeAttribute("aria-modal");
       dialog.removeAttribute("aria-hidden");
-      toggle.setAttribute("aria-expanded", "false");
+      toggles.forEach((button) => button.setAttribute("aria-expanded", "false"));
       document.body.style.overflow = previousBodyOverflow;
     }
   };
 
-  const openDialog = () => {
+  const openDialog = (event?: Event) => {
     if (!mobile.matches) return;
+    if (event?.currentTarget instanceof HTMLElement) opener = event.currentTarget;
     dialog.classList.remove("hidden");
     previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -142,7 +158,7 @@ export function setupCatalogFilterDialog({
     dialog.classList.add("hidden");
     document.body.style.overflow = previousBodyOverflow;
     syncSemantics();
-    if (restoreFocus) toggle.focus();
+    if (restoreFocus) (opener.isConnected ? opener : toggle).focus();
     if (
       syncHistory &&
       historyState()[CATALOG_FILTER_HISTORY_KEY] === true
@@ -152,6 +168,17 @@ export function setupCatalogFilterDialog({
   };
 
   const handleClose = () => closeDialog();
+  /** An aspect chip: open the sheet with that facet's group open and in view. */
+  const handleAspect = (event: MouseEvent) => {
+    const link = event.currentTarget as HTMLAnchorElement;
+    const group = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+    if (!mobile.matches || !group || !dialog.contains(group)) return;
+    event.preventDefault();
+    openDialog(event);
+    if (group instanceof HTMLDetailsElement) group.open = true;
+    group.scrollIntoView({ block: "start" });
+    group.querySelector<HTMLElement>("summary")?.focus();
+  };
   const handleDialogClick = (event: MouseEvent) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -200,7 +227,8 @@ export function setupCatalogFilterDialog({
     syncSemantics();
   };
 
-  toggle.addEventListener("click", openDialog);
+  toggles.forEach((button) => button.addEventListener("click", openDialog));
+  aspectLinks.forEach((link) => link.addEventListener("click", handleAspect));
   close.addEventListener("click", handleClose);
   dialog.addEventListener("click", handleDialogClick);
   dialog.addEventListener("keydown", handleDialogKeydown);
@@ -209,7 +237,8 @@ export function setupCatalogFilterDialog({
   syncSemantics();
 
   runtimeWindow.__scaliusCatalogFilterCleanup = () => {
-    toggle.removeEventListener("click", openDialog);
+    toggles.forEach((button) => button.removeEventListener("click", openDialog));
+    aspectLinks.forEach((link) => link.removeEventListener("click", handleAspect));
     close.removeEventListener("click", handleClose);
     dialog.removeEventListener("click", handleDialogClick);
     dialog.removeEventListener("keydown", handleDialogKeydown);

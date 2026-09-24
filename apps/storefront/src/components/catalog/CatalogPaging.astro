@@ -1,0 +1,60 @@
+---
+// Paging under a listing (the theme's `listing.paging`):
+// - numbered: page links (Star Tech, Daraz, Dawn);
+// - load-more: a "Load more" link to the next page's URL, with progress
+//   (Daraz's endless grid, with crawlable `?page=n` URLs);
+// - infinite: numbered links in the HTML, turned into automatic loading by
+//   JavaScript (Fabrilife), which hands back to the button after a few pages.
+// lib/catalog-paging.ts appends the next page's cards in place.
+import CatalogPagination from "./CatalogPagination.astro";
+import { catalogProgressLabel } from "@/lib/catalog-paging";
+
+interface Props {
+  mode: "numbered" | "load-more" | "infinite";
+  page: number;
+  totalPages: number;
+  total: number;
+  /** Products on this page. */
+  shown: number;
+  limit: number;
+  getPageUrl: (page: number) => string;
+}
+
+const { mode, page, totalPages, total, shown, limit, getPageUrl } = Astro.props;
+const from = (page - 1) * limit + 1;
+const to = from + shown - 1;
+const next = page < totalPages ? getPageUrl(page + 1) : null;
+---
+
+{mode === "numbered" ? (
+  <CatalogPagination page={page} totalPages={totalPages} getPageUrl={getPageUrl} />
+) : (
+  <div data-catalog-paging={mode}>
+    {mode === "infinite" && <CatalogPagination page={page} totalPages={totalPages} getPageUrl={getPageUrl} />}
+    <div
+      data-catalog-load-more-block
+      hidden={mode === "infinite" ? true : undefined}
+      class="mb-20 mt-8 flex flex-col items-center gap-3 lg:mb-8"
+    >
+      <p
+        data-catalog-progress
+        data-from={from}
+        data-to={to}
+        data-total={total}
+        aria-live="polite"
+        class="text-sm text-muted-foreground"
+      >
+        {catalogProgressLabel(from, to, total)}
+      </p>
+      {next && (
+        <a
+          href={next}
+          data-catalog-load-more
+          class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-6 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+        >
+          Load more
+        </a>
+      )}
+    </div>
+  </div>
+)}

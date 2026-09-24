@@ -14,8 +14,13 @@ import { Window } from "happy-dom";
 import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
+  storefrontTemplateTheme,
+  type StoreShape,
+  type StorefrontThemeBlocks,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
+import { LIST_ROW_IMAGE_SIZES } from "@/lib/catalog-listing";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
 
@@ -81,17 +86,30 @@ const STORE_SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
+/** The store once the category tree and typed specs exist (Phases 1a and 1b). */
+const TREE_STORE_SHAPE = storeShapeFromFacts({
+  productCount: 120,
+  skuCount: 300,
+  topCategoryCount: 8,
+  categoryDepth: 2,
+  menu: [],
+  hasCollections: true,
+  hasDeliveryMethods: true,
+  hasKeySpecs: true,
+});
+
 async function render(
   path: string,
   theme: StorefrontThemeDocument,
   props: object,
   slots?: Record<string, string>,
+  shape: StoreShape = STORE_SHAPE,
 ): Promise<string> {
   const component = (await server.ssrLoadModule(path)).default;
   return container.renderToString(component, {
     props,
     slots,
-    locals: { storefrontTheme: Promise.resolve(requestThemeFor(theme, STORE_SHAPE)) },
+    locals: { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape)) },
     request: new Request("https://shop.test/categories/sarees"),
   });
 }
@@ -134,7 +152,7 @@ function normalize(html: string): string {
       walk(element.tagName === "TEMPLATE" ? (element as HTMLTemplateElement).content : element, depth + 1);
     }
   };
-  walk(body, 0);
+  walk(body as unknown as Node, 0);
   return `${lines.join("\n")}\n`;
 }
 
@@ -233,5 +251,316 @@ describe("default listing (sidebar-grid)", () => {
       writeFileSync(file, html);
     }
     expect(html).toBe(readFileSync(file, "utf8"));
+  });
+});
+
+// ─── Listing templates ──────────────────────────────────────────────────
+
+const LISTING = "/src/components/catalog/CatalogListing.astro";
+const PAGE = "/src/components/catalog/CatalogListingPage.astro";
+
+function parse(html: string): Document {
+  return new new Window().DOMParser().parseFromString(html, "text/html") as unknown as Document;
+}
+
+function duplicateIds(document: Document): string[] {
+  const seen = new Set<string>();
+  return Array.from(document.querySelectorAll("[id]"))
+    .map((element) => element.id)
+    .filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+}
+
+/** The default theme with another listing block (and card). */
+function themeWith(
+  listing: Partial<StorefrontThemeBlocks["listing"]> & { variant?: string; settings?: Record<string, unknown> },
+  card?: StorefrontThemeBlocks["card"],
+): StorefrontThemeDocument {
+  const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+  const { variant, settings, ...rest } = listing;
+  if (variant) theme.blocks.listing.layout = { variant, settings: settings ?? {} } as never;
+  Object.assign(theme.blocks.listing, rest);
+  if (card) theme.blocks.card = card;
+  return theme;
+}
+
+async function renderListing(
+  theme: StorefrontThemeDocument,
+  props: Record<string, unknown>,
+  shape?: StoreShape,
+): Promise<Document> {
+  const document = parse(await render(LISTING, theme, props, EMPTY_SLOT, shape));
+  expect(duplicateIds(document)).toEqual([]);
+  return document;
+}
+
+const plain = () => listingProps("https://shop.test/categories/sarees");
+const gridSizes = (context: "grid" | "beside-filters") => {
+  const layout = requestThemeFor(DEFAULT_STOREFRONT_THEME, STORE_SHAPE).layout;
+  return productCardImageSizes(productGridSpec(layout.grid, "square"), "90rem", context);
+};
+
+describe("listing layouts", () => {
+  it("bar-drawer puts the facets in a drawer behind a filter bar, over a full-width grid", async () => {
+    const document = await renderListing(themeWith({ variant: "bar-drawer", toolbar: ["result-count", "sort", "per-page"] }), plain());
+    const drawer = document.querySelector("#filter-section")!;
+    expect(drawer.getAttribute("data-catalog-dialog")).toBe("drawer");
+    expect(drawer.className).not.toContain("lg:static");
+    const bar = document.querySelector("[data-catalog-filter-bar]")!;
+    expect(bar.querySelector("button[data-catalog-filter-toggle][aria-controls='filter-section']")).not.toBeNull();
+    expect(bar.textContent).toContain("Showing 20 of 50 products");
+    expect(bar.querySelector("select[name='sortBy']")).not.toBeNull();
+    expect(bar.querySelector("select[name='limit']")).not.toBeNull();
+    // The shopping switches are one-tap chips in the bar (plain links).
+    expect(Array.from(bar.querySelectorAll("nav[aria-label='Quick filters'] a")).map((link) => link.getAttribute("href")))
+      .toEqual(["/categories/sarees?hasDiscount=true", "/categories/sarees?freeDelivery=true"]);
+    // The drawer's form waits for its apply button; the bar stays inside the drawer.
+    const form = document.querySelector("form[data-catalog-filters]")!;
+    expect(form.getAttribute("data-catalog-apply")).toBe("sheet");
+    expect(form.lastElementChild!.className).toContain("sticky");
+    // No sidebar beside the grid, so cards size for the full width.
+    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(gridSizes("grid"));
+  });
+
+  it("list shows one product per row beside the sidebar", async () => {
+    const document = await renderListing(themeWith({ variant: "list" }), plain());
+    expect(document.querySelector("#filter-section")!.className).toContain("lg:static");
+    expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("list");
+    expect(document.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(LIST_ROW_IMAGE_SIZES);
+  });
+
+  it("quick-grid needs the quick-add card and packs its own denser grid", async () => {
+    const quickAdd = { variant: "quick-add", settings: {} } as StorefrontThemeBlocks["card"];
+    const document = await renderListing(themeWith({ variant: "quick-grid" }, quickAdd), plain());
+    const frame = document.querySelector(".product-grid-frame")!;
+    expect(frame.getAttribute("data-catalog-results")).toBe("quick");
+    expect(frame.getAttribute("style")).toContain("--theme-card-min-phone:6.5rem");
+    expect(document.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
+    // Without the quick-add card it falls back to the sidebar grid.
+    const fallback = await renderListing(themeWith({ variant: "quick-grid" }), plain());
+    expect(fallback.querySelector(".product-grid-frame")!.hasAttribute("data-catalog-results")).toBe(false);
+    expect(fallback.querySelector("#filter-section")!.className).toContain("lg:static");
+  });
+
+  it("shelves group the first page by sub-listing, with View all links, and fall back to the grid", async () => {
+    const theme = themeWith({ variant: "shelves", settings: { maxShelves: 8 } });
+    const products = PRODUCTS.map((item, index) => ({ ...item, categoryId: index % 3 === 0 ? "c-cotton" : index % 3 === 1 ? "c-silk" : null }));
+    const subListings = [
+      { id: "c-cotton", label: "Cotton", href: "/categories/cotton" },
+      { id: "c-silk", label: "Silk", href: "/categories/silk" },
+    ];
+    const document = await renderListing(theme, { ...plain(), products, subListings, listingName: "Sarees" });
+    const shelves = Array.from(document.querySelectorAll("[data-catalog-shelves] section"));
+    expect(shelves.map((shelf) => shelf.querySelector("h2")!.textContent!.trim())).toEqual(["Cotton", "Silk", "More from Sarees"]);
+    expect(shelves.map((shelf) => shelf.querySelector("a[href^='/categories/']:not(.product-card-link)")?.getAttribute("href") ?? null))
+      .toEqual(["/categories/cotton", "/categories/silk", null]);
+    expect(shelves[0]!.querySelectorAll("[data-theme-component='product-card']")).toHaveLength(7);
+    expect(document.querySelector(".product-grid")).toBeNull();
+    // Page links stay for the rest of the listing.
+    expect(document.querySelector("nav[aria-label='Pagination'] a[href='/categories/sarees?page=2']")).not.toBeNull();
+
+    // A filtered view, or a listing without sub-listings, lists products in the grid.
+    const filtered = await renderListing(theme, { ...listingProps("https://shop.test/categories/sarees?size=M"), products, subListings });
+    expect(filtered.querySelector("[data-catalog-shelves]")).toBeNull();
+    expect(filtered.querySelector(".product-grid")).not.toBeNull();
+    const flat = await renderListing(theme, { ...plain(), products });
+    expect(flat.querySelector("[data-catalog-shelves]")).toBeNull();
+    expect(flat.querySelector("#filter-section")!.getAttribute("data-catalog-dialog")).toBe("drawer");
+  });
+
+  it("uses list rows on phones when the theme asks for them", async () => {
+    const document = await renderListing(themeWith({ phoneLayout: "list-row" }), plain());
+    expect(document.querySelector(".product-grid")!.getAttribute("data-phone-layout")).toBe("list-row");
+  });
+});
+
+describe("listing controls", () => {
+  it("keeps a tiny listing free of filters it cannot use", async () => {
+    const few = (count: number, facets = FACETS) => ({
+      ...plain(),
+      products: PRODUCTS.slice(0, count),
+      facets,
+      pagination: { page: 1, totalPages: 1, total: count },
+    });
+    // Two products: sort only; no filter sidebar or sheet.
+    const two = await renderListing(DEFAULT_STOREFRONT_THEME, few(2));
+    expect(two.querySelector("#filter-section")).toBeNull();
+    expect(two.querySelector("#mobile-filter-toggle")).toBeNull();
+    expect(two.querySelector("select#sortByMobile")).not.toBeNull();
+    expect(two.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(gridSizes("grid"));
+    // Four products with nothing that differs between them: still no filters.
+    const same = await renderListing(DEFAULT_STOREFRONT_THEME, { ...few(4, []), priceRange: { min: 900, max: 900 } });
+    expect(same.querySelector("#filter-section")).toBeNull();
+    // Four products with a facet: filters.
+    expect((await renderListing(DEFAULT_STOREFRONT_THEME, few(4))).querySelector("#filter-section")).not.toBeNull();
+    // One product: nothing to sort either.
+    const one = await renderListing(DEFAULT_STOREFRONT_THEME, few(1));
+    expect(one.querySelector("select[data-catalog-sort]")).toBeNull();
+  });
+
+  it("offers a page size when there is more than one page, and keeps the chosen size", async () => {
+    const theme = themeWith({ toolbar: ["result-count", "sort", "per-page"] });
+    const document = await renderListing(theme, plain());
+    const select = document.querySelector<HTMLSelectElement>("select#pageSizeDesktop")!;
+    expect(select.getAttribute("name")).toBe("limit");
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(["20", "40", "60"]);
+    const forty = await renderListing(theme, listingProps("https://shop.test/categories/sarees?limit=40"));
+    expect(forty.querySelector<HTMLSelectElement>("select#pageSizeDesktop")!.value).toBe("40");
+    // The filter form and the page links keep the size.
+    expect(forty.querySelector("form input[type='hidden'][name='limit']")!.getAttribute("value")).toBe("40");
+    expect(forty.querySelector("nav[aria-label='Pagination'] a[href='/categories/sarees?limit=40&page=2']")).not.toBeNull();
+    // One page of products: no page size.
+    const small = await renderListing(theme, { ...plain(), pagination: { page: 1, totalPages: 1, total: 20 } });
+    expect(small.querySelector("select[name='limit']")).toBeNull();
+  });
+
+  it("hides the pieces a template leaves out", async () => {
+    const document = await renderListing(themeWith({ toolbar: [] }), plain());
+    expect(document.body.textContent).not.toContain("Showing 20 of 50");
+    expect(document.querySelector("select[name='sortBy']")).toBeNull();
+    // Filters still work; applied filters can always be undone.
+    expect(document.querySelector("#filter-section")).not.toBeNull();
+  });
+
+  it("restores the buyer's grid or list view before the grid paints", async () => {
+    const html = await render(LISTING, themeWith({ toolbar: ["sort", "grid-list-toggle"] }), plain(), EMPTY_SLOT);
+    const document = parse(html);
+    const toggle = document.querySelector("[data-catalog-view-toggle]")!;
+    expect(toggle.hasAttribute("hidden")).toBe(true);
+    expect(toggle.querySelector("button[data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+    // The restore script sits right before the grid it marks.
+    expect(html).toMatch(/localStorage\.getItem\("scalius:listing-view"\)[^<]*<\/script>\s*<div class="[^"]*product-grid-frame/);
+  });
+
+  it("shows phone aspect chips that open the filter sheet at each facet", async () => {
+    const document = await renderListing(themeWith({ toolbar: ["sort", "aspect-chips"] }), plain());
+    const chips = Array.from(document.querySelectorAll("a[data-catalog-aspect]"));
+    // Origin has one value, so it is no filter and no chip.
+    expect(chips.map((chip) => [chip.textContent!.trim(), chip.getAttribute("href")])).toEqual([
+      ["Size", "#catalog-facet-size"],
+      ["Fabric", "#catalog-facet-fabric"],
+      ["Price", "#catalog-facet-price"],
+    ]);
+    for (const chip of chips) expect(document.querySelector(chip.getAttribute("href")!)!.tagName).toBe("DETAILS");
+    // A chip shows how many values of its facet are ticked.
+    const selected = await renderListing(themeWith({ toolbar: ["aspect-chips"] }), listingProps("https://shop.test/categories/sarees?size=M&size=S"));
+    expect(selected.querySelector("a[href='#catalog-facet-size']")!.textContent).toContain("(2)");
+    // Without the piece, facet groups carry no ids (the default markup).
+    expect((await renderListing(DEFAULT_STOREFRONT_THEME, plain())).querySelector("#catalog-facet-size")).toBeNull();
+  });
+
+  it("links sub-categories and popular filters once the tree and typed specs exist", async () => {
+    const theme = themeWith({ toolbar: ["subcategory-pills", "popular-filter-chips", "sort"] });
+    const subListings = [
+      { id: "c1", label: "Cotton", href: "/categories/cotton" },
+      { id: "c2", label: "Silk", href: "/categories/silk" },
+    ];
+    const document = await renderListing(theme, { ...plain(), subListings }, TREE_STORE_SHAPE);
+    expect(Array.from(document.querySelectorAll("nav[aria-label='Sub-categories'] a")).map((link) => link.getAttribute("href")))
+      .toEqual(["/categories/cotton", "/categories/silk"]);
+    const popular = Array.from(document.querySelectorAll("nav[aria-label='Popular filters'] a"));
+    // The values matching most products without matching all of them.
+    expect(popular.map((link) => [link.textContent!.trim(), link.getAttribute("href")]).slice(0, 3)).toEqual([
+      ["M", "/categories/sarees?size=M"],
+      ["S", "/categories/sarees?size=S"],
+      ["Fabric 11", "/categories/sarees?fabric=Fabric+11"],
+    ]);
+    // Today (flat categories, untyped specs) neither renders.
+    const today = await renderListing(theme, { ...plain(), subListings });
+    expect(today.querySelector("nav[aria-label='Sub-categories']")).toBeNull();
+    expect(today.querySelector("nav[aria-label='Popular filters']")).toBeNull();
+  });
+});
+
+describe("facet display types", () => {
+  it("paints colour facets as swatches and gives long lists a search field", async () => {
+    const colours = { id: "attr-colour", name: "Colour", slug: "colour", values: ["Black", "Navy", "Off-white"].map((value, index) => ({ value, count: index + 1 })) };
+    const brands = { id: "attr-brand", name: "Brand", slug: "brand", values: Array.from({ length: 14 }, (_, index) => ({ value: `Brand ${index + 1}`, count: 1 })) };
+    const mixed = { id: "attr-shade", name: "Shade", slug: "shade", values: [{ value: "Black", count: 1 }, { value: "Rose Gold", count: 1 }] };
+    const facets = [colours, brands, mixed];
+    const document = await renderListing(DEFAULT_STOREFRONT_THEME, { ...plain(), facets });
+    const swatches = document.querySelector("fieldset[data-catalog-facet-display='swatch']")!;
+    expect(Array.from(swatches.querySelectorAll("input[data-catalog-facet]")).map((input) => input.getAttribute("value")))
+      .toEqual(["Black", "Navy", "Off-white"]);
+    expect(swatches.querySelector("span[style]")!.getAttribute("style")).toBe("background:#111111");
+    // Each swatch keeps its count, which the live count updates.
+    expect(swatches.querySelectorAll("[data-catalog-facet-count]")).toHaveLength(3);
+    // Fourteen brands: a search field, hidden until its script runs.
+    const search = document.querySelector("[data-catalog-facet-search]")!;
+    expect(search.hasAttribute("hidden")).toBe(true);
+    expect(search.querySelector("input")!.hasAttribute("name")).toBe(false);
+    expect(search.closest("details")!.querySelector("summary")!.textContent).toContain("Brand");
+    // One unknown colour keeps the checkbox list.
+    expect(document.querySelectorAll("fieldset[data-catalog-facet-display='swatch']")).toHaveLength(1);
+  });
+});
+
+describe("paging", () => {
+  it("load more links the next page and reports progress; later pages link back", async () => {
+    const theme = themeWith({ paging: "load-more" });
+    const document = await renderListing(theme, plain());
+    const paging = document.querySelector("[data-catalog-paging='load-more']")!;
+    expect(paging.querySelector("a[data-catalog-load-more]")!.getAttribute("href")).toBe("/categories/sarees?page=2");
+    expect(paging.querySelector("[data-catalog-progress]")!.textContent!.trim()).toBe("Showing 1–20 of 50 products");
+    expect(document.querySelector("nav[aria-label='Pagination']")).toBeNull();
+    expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
+
+    const last = await renderListing(theme, { ...listingProps("https://shop.test/categories/sarees?page=3"), products: PRODUCTS.slice(0, 10) });
+    expect(last.querySelector("a[data-catalog-load-more]")).toBeNull();
+    expect(last.querySelector("[data-catalog-progress]")!.textContent!.trim()).toBe("Showing 41–50 of 50 products");
+    expect(last.querySelector("a[href='/categories/sarees?page=2']")!.textContent).toContain("Show previous products");
+  });
+
+  it("infinite scroll is numbered pagination until its script takes over", async () => {
+    const document = await renderListing(themeWith({ paging: "infinite" }), plain());
+    const paging = document.querySelector("[data-catalog-paging='infinite']")!;
+    expect(paging.querySelector("nav[aria-label='Pagination'] a[href='/categories/sarees?page=2']")).not.toBeNull();
+    const loader = paging.querySelector("[data-catalog-load-more-block]")!;
+    expect(loader.hasAttribute("hidden")).toBe(true);
+    expect(loader.querySelector("a[data-catalog-load-more]")!.getAttribute("href")).toBe("/categories/sarees?page=2");
+  });
+});
+
+describe("listing page", () => {
+  const categoryPage = (theme: StorefrontThemeDocument) =>
+    render(PAGE, theme, {
+      kind: "category",
+      hero: { title: "Sarees", description: "<p>Handwoven.</p>", count: 50, banner: { src: "https://cdn.shop.test/c.jpg", alt: "" } },
+      listing: plain(),
+      content: { html: "<h2>Buying guide</h2><p>Cotton breathes.</p>", label: "Sarees guide" },
+      data: { "data-category-name": "Sarees" },
+    }, EMPTY_SLOT).then(parse);
+
+  it("renders the category header, listing and guide in one body", async () => {
+    const document = await categoryPage(DEFAULT_STOREFRONT_THEME);
+    expect(duplicateIds(document)).toEqual([]);
+    expect(document.querySelector("[data-category-name='Sarees']")).not.toBeNull();
+    expect(document.querySelector("h1")!.textContent!.trim()).toBe("Sarees");
+    const breadcrumb = document.querySelector("nav:has(ol)")!;
+    expect(breadcrumb.className).not.toContain("sr-only");
+    expect(document.body.textContent).toContain("50 products");
+    expect(document.querySelector("section[aria-label='Sarees guide'] h2")!.textContent).toBe("Buying guide");
+    expect(document.querySelector("#filter-section")).not.toBeNull();
+    // The default template has no category banner.
+    expect(document.querySelector("img[data-catalog-banner]")).toBeNull();
+  });
+
+  it("shows the banner and hides the breadcrumb visually when the template says so", async () => {
+    const document = await categoryPage(themeWith({ toolbar: ["category-banner", "sort"] }));
+    const banner = document.querySelector("img[data-catalog-banner]")!;
+    expect(banner.getAttribute("fetchpriority")).toBe("high");
+    expect([banner.getAttribute("width"), banner.getAttribute("height")]).toEqual(["1344", "296"]);
+    const breadcrumb = document.querySelector("nav:has(ol)")!;
+    // Still read by assistive technology (it matches the BreadcrumbList JSON-LD).
+    expect(breadcrumb.className).toContain("sr-only");
+    expect(breadcrumb.getAttribute("aria-label")).toBe("Breadcrumb");
+  });
+
+  it("renders every template's listing without duplicate ids", async () => {
+    for (const id of ["boutique", "heritage-editorial", "fashion-value", "spec-catalogue", "rounded-tech", "marketplace", "mass-retail", "department-mall", "daily-essentials", "showcase-landing"] as const) {
+      const document = parse(await render(PAGE, storefrontTemplateTheme(id), { kind: "search", listing: plain() }, EMPTY_SLOT, TREE_STORE_SHAPE));
+      expect(duplicateIds(document), id).toEqual([]);
+      expect(document.querySelectorAll("[data-theme-component='product-card']").length, id).toBeGreaterThan(0);
+    }
   });
 });
