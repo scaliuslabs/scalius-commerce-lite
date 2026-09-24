@@ -60,8 +60,17 @@ if (!validSlugPattern.test(slug)) {
   return new Response(null, { status: 404 });
 }
 
-// 5. A dashboard served below a path prefix on this host reserves its first
-// segment. Send the visitor to the dashboard instead of rendering a page.
+// === NOW SAFE TO MAKE API CALL ===
+// Parallel fetch: layout + page render data
+const [layoutData, pageRenderData] = await Promise.all([
+  getLayoutData(),
+  getPageRenderData(slug),
+]);
+setRuntimeImageCdnPolicy(layoutData?.media);
+
+// A dashboard served below a path prefix on this host reserves its first
+// segment; the layout read above applied the platform origins. Send the
+// visitor to the dashboard instead of rendering a page.
 if (slug === dashboardReservedSegment(getRuntimeDashboardUrl(), getRuntimeStorefrontUrl())) {
   return new Response(null, {
     status: 302,
@@ -71,14 +80,6 @@ if (slug === dashboardReservedSegment(getRuntimeDashboardUrl(), getRuntimeStoref
     },
   });
 }
-
-// === NOW SAFE TO MAKE API CALL ===
-// Parallel fetch: layout + page render data
-const [layoutData, pageRenderData] = await Promise.all([
-  getLayoutData(),
-  getPageRenderData(slug),
-]);
-setRuntimeImageCdnPolicy(layoutData?.media);
 
 const page = pageRenderData?.page ?? null;
 if (!page) {

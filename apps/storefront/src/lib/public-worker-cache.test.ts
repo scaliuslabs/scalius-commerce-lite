@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyPublicStorefrontPreconnectHint,
   getPublicStorefrontCachePolicy,
+  isLayoutBatchedPagePath,
   publicStorefrontCacheKey,
   servePublicStorefrontRequest,
   type PublicStorefrontCacheContext,
@@ -238,5 +239,16 @@ describe("servePublicStorefrontRequest", () => {
     const { context } = createContext({ render: async () => response });
     await servePublicStorefrontRequest(new Request("https://shop.example/"), context);
     expect(context.cache.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("pages that batch their layout read", () => {
+  it("covers the storefront pages and none of the discovery or proxy routes", () => {
+    for (const path of ["/", "/products/linen", "/categories/bags/", "/collections/c1", "/search", "/cart", "/checkout", "/blog", "/blog/post", "/about-us"]) {
+      expect(isLayoutBatchedPagePath(path), path).toBe(true);
+    }
+    for (const path of ["/sitemap.xml", "/robots.txt", "/blog/feed.xml", "/api/product-feed.xml", "/api/cart/validate", "/account", "/order-success", "/llms.txt", "/.well-known/ucp", "/theme-preview"]) {
+      expect(isLayoutBatchedPagePath(path), path).toBe(false);
+    }
   });
 });
