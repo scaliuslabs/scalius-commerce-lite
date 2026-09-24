@@ -19,11 +19,11 @@ export function validatePageSearch(search: SearchValidatorInput) {
   };
 }
 
-export function pageListQueryParams(deps: ReturnType<typeof validatePageSearch>) {
+export function pageListQueryParams(deps: ReturnType<typeof validatePageSearch>, term: string) {
   return {
     page: deps.page,
     limit: deps.limit,
-    search: deps.search || undefined,
+    search: term || undefined,
     sort: deps.sort,
     order: deps.order,
     trashed: deps.trashed ? ("true" as const) : undefined,

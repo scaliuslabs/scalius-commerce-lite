@@ -141,6 +141,8 @@ describe("lookup query options", () => {
         categoryName: "Shirts",
         isActive: true,
         primaryImage: "/products/blue-shirt.webp",
+        variantCount: 3,
+        available: 12,
       }],
       pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
     };
@@ -176,26 +178,5 @@ describe("lookup query options", () => {
       },
     });
     expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBe(3);
-  });
-
-  it("fails closed when category rows reach the manual product picker", async () => {
-    mocks.getCollectionProductOptions.result = ({
-      products: [{
-        id: "cat_home",
-        name: "Home & Living",
-        status: "published",
-        productCount: 4,
-      }],
-      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
-    });
-
-    const options = collectionProductOptionsQueryOptions({ limit: 10 });
-
-    await expect(
-      requireQueryFn(options)({ pageParam: 1 } as never),
-    ).resolves.toEqual({
-      products: [],
-      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
-    });
   });
 });

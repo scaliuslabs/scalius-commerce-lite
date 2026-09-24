@@ -16,6 +16,7 @@ import {
 } from "~/components/admin/inventory/inventory-search";
 import type { InventoryWorkspaceSection } from "~/components/admin/inventory-workspace";
 import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
@@ -26,9 +27,10 @@ export const Route = createFileRoute("/admin/inventory/")({
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => {
     if (typeof window === "undefined") return;
-    const query = deps.section === "variants"
-      ? variantsQuery(deps)
-      : deps.section === "alerts" ? alertsQuery(deps) : movementsQuery(deps);
+    const filters = { ...deps, q: readListSearch("inventory") };
+    const query = filters.section === "variants"
+      ? variantsQuery(filters)
+      : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
     void queryClient.prefetchQuery(inventoryQueryOptions(query));
   },
   head: () => ({ meta: [{ title: "Inventory | Scalius Admin" }] }),
@@ -39,26 +41,30 @@ export const Route = createFileRoute("/admin/inventory/")({
 function InventoryPage() {
   const t = useMessages(inventoryMessages);
   const search = Route.useSearch();
+  const [term, setTerm] = useListSearch("inventory");
+  const filters = { ...search, q: term };
   const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const printIds = search.section === "variants" ? selectedIds : [];
 
-  // Switching tabs starts that tab with its default filters.
+  // Switching tabs keeps the search term and starts that tab with its default filters.
   const openTab = useCallback(
-    (section: InventoryWorkspaceSection, q = "") => {
-      void navigate({ to: "/admin/inventory", resetScroll: false, search: { ...INVENTORY_SEARCH_DEFAULTS, section, q } });
+    (section: InventoryWorkspaceSection) => {
+      void navigate({ to: "/admin/inventory", resetScroll: false, search: { ...INVENTORY_SEARCH_DEFAULTS, section } });
     },
     [navigate],
   );
   const updateFilters = useCallback<InventoryFiltersChange>(
-    (patch) => {
+    ({ q, ...patch }) => {
+      if (q !== undefined) setTerm(q);
+      if (Object.keys(patch).length === 0) return;
       void navigate({
         to: "/admin/inventory",
         resetScroll: false,
         search: ((previous: Record<string, unknown>) => ({ ...previous, ...patch })) as never,
       });
     },
-    [navigate],
+    [navigate, setTerm],
   );
 
   return (
@@ -88,11 +94,19 @@ function InventoryPage() {
           ]}
         />
         {search.section === "variants" ? (
-          <VariantsTab filters={search} onFiltersChange={updateFilters} onSelectionChange={setSelectedIds} />
+          <VariantsTab filters={filters} onFiltersChange={updateFilters} onSelectionChange={setSelectedIds} />
         ) : search.section === "alerts" ? (
-          <AlertsTab filters={search} onFiltersChange={updateFilters} onReview={(sku) => openTab("variants", sku)} />
+          <AlertsTab
+            filters={filters}
+            onFiltersChange={updateFilters}
+            onReview={(sku) => {
+              setTerm(sku);
+              openTab("variants");
+            }}
+            onSetAlertLevels={() => openTab("variants")}
+          />
         ) : (
-          <HistoryTab filters={search} onFiltersChange={updateFilters} />
+          <HistoryTab filters={filters} onFiltersChange={updateFilters} />
         )}
       </div>
     </div>

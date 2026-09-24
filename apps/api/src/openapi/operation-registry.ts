@@ -363,6 +363,7 @@ export const OPERATIONS = {
   "dashboard.collections.restore": {},
   "dashboard.collections.trash": { risk: "destructive" },
   "dashboard.collections.update": { revision: "required" },
+  "dashboard.collections.update_products": { revision: "required" },
 
   "dashboard.content.bulk_delete": {
     risk: "destructive",
@@ -566,6 +567,7 @@ export const OPERATIONS = {
     },
   },
   "dashboard.inventory.set_stock": { idempotency: "required" },
+  "dashboard.inventory.set_alert_level": {},
 
   "dashboard.media_folders.create": {},
   "dashboard.media_folders.delete": {
@@ -896,7 +898,9 @@ export const OPERATIONS = {
     risk: "destructive",
     revision: "required",
   },
+  "dashboard.products.bulk_update": { revision: "required" },
   "dashboard.products.create": { limits: { response: 16_384 } },
+  "dashboard.products.duplicate": {},
   "dashboard.products.delete_permanently": {
     risk: "destructive",
     revision: "required",

@@ -8,7 +8,8 @@ import {
   PRODUCT_CONDITION_VALUES,
   type ProductCondition,
 } from "@scalius/shared/product-condition";
-import { translate } from "~/i18n";
+import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
+import { formatNumber, translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 
 /** Validation messages are read when validation runs, in the current language. */
@@ -39,12 +40,16 @@ export const productFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(3, msg("titleMin")).max(100, msg("titleMax")),
   description: z.string().min(10, msg("descriptionMin")).nullable(),
-  price: z.number().min(0, msg("priceNegative")).max(1000000000000, msg("priceTooHigh")),
+  /** Empty until the merchant types one; a draft may be saved without it. */
+  price: z.number(msg("issueNotANumber"))
+    .min(0, msg("priceNegative"))
+    .max(MAX_PRODUCT_PRICE, { error: () => translate(productMessages, "issueTooLarge", { max: formatNumber(MAX_PRODUCT_PRICE) }) })
+    .nullable(),
   categoryId: z.string().min(1, msg("chooseCategoryError")),
   isActive: z.boolean(),
   discountType: z.enum(["percentage", "flat"]),
-  discountPercentage: z.number().min(0, msg("discountNegative")).nullish(),
-  discountAmount: z.number().min(0, msg("discountNegative")).nullish(),
+  discountPercentage: z.number(msg("issueNotANumber")).min(0, msg("discountNegative")).nullish(),
+  discountAmount: z.number(msg("issueNotANumber")).min(0, msg("discountNegative")).nullish(),
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
@@ -96,7 +101,13 @@ export const productFormSchema = z.object({
     .optional(),
   slugEdited: z.boolean().optional(),
 }).superRefine((data, ctx) => {
-  // Only percentage discounts have a ceiling; flat amounts can be any value.
+  // Customers can't buy a product without a price, and feeds reject it.
+  if (data.isActive && (data.price ?? 0) <= 0) {
+    ctx.addIssue({ code: "custom", message: translate(productMessages, "priceRequired"), path: ["price"] });
+  }
+  if (data.discountType === "flat" && (data.discountAmount ?? 0) > (data.price ?? 0)) {
+    ctx.addIssue({ code: "custom", message: translate(productMessages, "issueDiscountOverPrice"), path: ["discountAmount"] });
+  }
   if (data.discountType === "percentage" && (data.discountPercentage ?? 0) > 100) {
     ctx.addIssue({
       code: "custom",

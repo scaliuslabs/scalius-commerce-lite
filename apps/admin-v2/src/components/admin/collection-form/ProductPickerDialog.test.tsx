@@ -12,6 +12,10 @@ vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminCollectionsProductOptions: getCollectionProductOptions,
 }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (value: number) => `৳${value}` }) }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
 
 import { ProductPickerDialog } from "./ProductPickerDialog";
 import type { Product } from "./types";
@@ -27,6 +31,8 @@ function product(id: number) {
     categoryName: "Test category",
     isActive: id % 2 === 1,
     primaryImage: id === 2 ? "/products/product-2.webp" : null,
+    variantCount: id === 1 ? 3 : 0,
+    available: id === 3 ? null : 10 + id,
   };
 }
 
@@ -122,6 +128,36 @@ describe("ProductPickerDialog", () => {
     return onAddProducts;
   }
 
+  it("opens on the newest products with price and stock or variants", async () => {
+    await renderPicker();
+
+    expect(getCollectionProductOptions).toHaveBeenCalledWith({
+      query: { page: 1, limit: 20, search: undefined, categoryIds: undefined, selectedProductIds: undefined },
+    });
+    const rows = Array.from(document.body.querySelectorAll('[role="dialog"] li')).map((row) => row.textContent);
+    expect(rows[0]).toContain("৳101 · 3 variants · 11 in stock");
+    expect(rows[1]).toContain("৳102 · 12 in stock");
+    expect(rows[2]).toContain("৳103 · Stock not tracked");
+  });
+
+  it("says the store has no products and links to adding one", async () => {
+    getCollectionProductOptions.mockResolvedValue({
+      products: [],
+      pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    });
+    await act(async () => root.render(
+      <QueryClientProvider client={queryClient}>
+        <ProductPickerDialog selectedProductIds={[]} onAddProducts={vi.fn()} />
+      </QueryClientProvider>,
+    ));
+    await act(async () => buttonWithText("Add products").click());
+
+    await waitForUi(() => {
+      expect(document.body.textContent).toContain("Your store has no products yet.");
+    });
+    expect(document.body.querySelector('a[href="/admin/products/new"]')?.textContent).toBe("Add product");
+  });
+
   it("stages multiple products across pages and adds them once", async () => {
     const onAddProducts = await renderPicker({ selectedProductIds: ["prod_1"] });
 
@@ -195,12 +231,12 @@ describe("ProductPickerDialog", () => {
         ?.set?.call(search, "missing");
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(document.body.textContent).toContain("Searching…");
+    expect(document.body.textContent).toContain("Loading products…");
     await act(async () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 350));
     });
     await waitForUi(
-      () => expect(document.body.textContent).toContain("No products found"),
+      () => expect(document.body.textContent).toContain("No products match “missing”"),
     );
     expect(getCollectionProductOptions).toHaveBeenLastCalledWith({
       query: {

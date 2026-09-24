@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
@@ -7,7 +7,7 @@ import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/product-form/types";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
-import type { ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+import type { OptionMatrixEditorHandle, ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
 import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 
@@ -20,7 +20,7 @@ const OptionMatrixEditor = lazy(() =>
 const defaultValues = {
   name: "",
   description: null,
-  price: 0,
+  price: null,
   categoryId: "",
   isActive: false,
   discountType: "percentage" as "percentage" | "flat",
@@ -57,6 +57,7 @@ function NewProductPage() {
   const [optionMatrixIssue, setOptionMatrixIssue] = useState<string | null>(null);
   const [optionMatrixDirty, setOptionMatrixDirty] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const matrixRef = useRef<OptionMatrixEditorHandle>(null);
 
   return (
     <ProductForm
@@ -64,6 +65,7 @@ function NewProductPage() {
       categories={allCategories}
       defaultValues={defaultValues}
       isEdit={false}
+      matrixRef={matrixRef}
       createComposition={createComposition}
       optionMatrixIssue={optionMatrixIssue}
       optionMatrixDirty={optionMatrixDirty}
@@ -73,9 +75,11 @@ function NewProductPage() {
         setOptionMatrixIssue(null);
         setOptionMatrixDirty(false);
       }}
-      optionManager={({ skuImages, productName, productPrice }) => (
+      optionManager={({ skuImages, productName, productPrice, isActive }) => (
         <Suspense fallback={<LoadingFallback height="h-48" />}>
           <OptionMatrixEditor
+            ref={matrixRef}
+            requirePositivePrice={isActive}
             productName={productName}
             productPrice={productPrice}
             images={skuImages}

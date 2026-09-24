@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { postApiV1AdminAttributes, putApiV1AdminAttributesById } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -8,13 +10,17 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { apiData } from "~/lib/api";
+import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
-import { useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import type { AttributeDto } from "~/lib/api-query-options/attributes";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 
-const toHandle = (name: string) => name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** "Fabric & care" → "fabric-care"; Bangla names have no Latin letters, so the handle stays empty. */
+const handleFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
+const typedHandle = (text: string) => text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
 interface AttributeDialogProps {
   open: boolean;
@@ -23,32 +29,63 @@ interface AttributeDialogProps {
   onClose: () => void;
 }
 
-/** Create or edit an attribute: name, handle, filter switch and preset values. */
+/**
+ * Create or edit an attribute: name, handle, filter switch and preset values.
+ * Fields are checked when the merchant leaves them or presses Save, never while typing.
+ */
 export function AttributeDialog({ open, attribute, onClose }: AttributeDialogProps) {
   const t = useMessages(catalogMessages);
+  const queryClient = useQueryClient();
   const [name, setName] = useState(attribute?.name ?? "");
   const [slug, setSlug] = useState(attribute?.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(Boolean(attribute));
   const [filterable, setFilterable] = useState(attribute?.filterable ?? true);
   const [options, setOptions] = useState<string[]>(attribute?.options ?? []);
   const [draftValue, setDraftValue] = useState("");
-  const save = useResourceMutation(
-    () => {
+  const [duplicate, setDuplicate] = useState<string | null>(null);
+  const [checked, setChecked] = useState({ name: false, slug: false });
+  const [serverError, setServerError] = useState<{ field: "slug" | "form"; message: string } | null>(null);
+
+  const errors = {
+    name: checked.name && name.trim().length < 2 ? t("nameTooShort") : null,
+    slug: serverError?.field === "slug"
+      ? serverError.message
+      : checked.slug && (slug.length < 2 || !HANDLE.test(slug)) ? t("handleInvalid") : null,
+  };
+
+  const save = useMutation({
+    mutationFn: () => {
       // Presets are also edited in the values editor: resend them only when changed here.
       const optionsChanged = options.join("\u0000") !== (attribute?.options ?? []).join("\u0000");
-      const body = { name: name.trim(), slug: slug.trim(), filterable, ...(optionsChanged ? { options } : {}) };
+      const body = { name: name.trim(), slug, filterable, ...(optionsChanged ? { options } : {}) };
       return attribute
         ? apiData(putApiV1AdminAttributesById({ path: { id: attribute.id }, body }))
         : apiData(postApiV1AdminAttributes({ body }));
     },
-    [queryKeys.attributes.all],
-  );
+    onSuccess: () => {
+      toast.success(t("saved"));
+      onClose();
+    },
+    onError: (error) => {
+      if (!isAdminApiConflictError(error)) {
+        setServerError({ field: "form", message: t("saveFailed") });
+      } else {
+        const inTrash = error instanceof Error && /deleted attribute/i.test(error.message);
+        setServerError({ field: "slug", message: t(inTrash ? "attributeInTrash" : "attributeTaken") });
+      }
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }),
+  });
 
   const addValue = () => {
     const value = draftValue.trim();
-    if (value && !options.some((option) => option.toLowerCase() === value.toLowerCase())) {
-      setOptions([...options, value]);
+    if (!value) return;
+    const existing = options.find((option) => option.toLowerCase() === value.toLowerCase());
+    if (existing) {
+      setDuplicate(existing);
+      return;
     }
+    setOptions([...options, value]);
     setDraftValue("");
   };
 
@@ -65,35 +102,55 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            save.mutate({ variables: undefined, success: t(attribute ? "saved" : "created") }, { onSuccess: onClose });
+            setChecked({ name: true, slug: true });
+            setServerError(null);
+            if (name.trim().length < 2 || slug.length < 2 || !HANDLE.test(slug) || save.isPending) return;
+            save.mutate();
           }}
         >
+          {serverError?.field === "form" ? (
+            <p role="alert" className="text-body text-destructive">{serverError.message}</p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="attribute-name">{t("name")}</Label>
               <Input
                 id="attribute-name"
-                required
                 autoFocus
+                maxLength={100}
                 placeholder={t("namePlaceholder")}
                 value={name}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? "attribute-name-error" : undefined}
+                onBlur={() => setChecked((current) => ({ ...current, name: true }))}
                 onChange={(event) => {
                   setName(event.target.value);
-                  if (!slugEdited) setSlug(toHandle(event.target.value));
+                  if (!slugEdited) setSlug(handleFromName(event.target.value));
                 }}
               />
+              {errors.name ? <p id="attribute-name-error" className="text-body text-destructive">{errors.name}</p> : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="attribute-handle">{t("handle")}</Label>
               <Input
                 id="attribute-handle"
-                required
+                maxLength={100}
+                inputMode="url"
+                autoCapitalize="none"
+                placeholder={t("handlePlaceholder")}
                 value={slug}
+                aria-invalid={Boolean(errors.slug)}
+                aria-describedby="attribute-handle-help"
+                onBlur={() => setChecked((current) => ({ ...current, slug: true }))}
                 onChange={(event) => {
                   setSlugEdited(true);
-                  setSlug(toHandle(event.target.value));
+                  setServerError(null);
+                  setSlug(typedHandle(event.target.value));
                 }}
               />
+              <p id="attribute-handle-help" className={errors.slug ? "text-body text-destructive" : "text-body text-muted-foreground"}>
+                {errors.slug ?? t("handleHelp")}
+              </p>
             </div>
           </div>
           <div className="space-y-2">
@@ -101,8 +158,13 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
             <div className="flex gap-2">
               <Input
                 id="attribute-value"
+                maxLength={100}
                 value={draftValue}
-                onChange={(event) => setDraftValue(event.target.value)}
+                aria-describedby="attribute-value-help"
+                onChange={(event) => {
+                  setDraftValue(event.target.value);
+                  setDuplicate(null);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -114,7 +176,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 {t("addValue")}
               </Button>
             </div>
-            <p className="text-body text-muted-foreground">{t("presetValuesHint")}</p>
+            <p id="attribute-value-help" className="text-body text-muted-foreground">
+              {duplicate ? t("valueAlreadyAdded", { value: duplicate }) : t("presetValuesHint")}
+            </p>
             {options.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {options.map((option) => (
@@ -126,7 +190,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                       aria-label={t("removeValue", { value: option })}
                       className="ml-1 rounded-full"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="size-3" />
                     </button>
                   </Badge>
                 ))}
@@ -145,7 +209,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
           <Button variant="outline" onClick={onClose} disabled={save.isPending}>
             {t("cancel")}
           </Button>
-          <Button type="submit" form="attribute-form" disabled={save.isPending || !name.trim() || !slug.trim()}>
+          <Button type="submit" form="attribute-form" loading={save.isPending}>
             {attribute ? t("save") : t("create")}
           </Button>
         </DialogFooter>

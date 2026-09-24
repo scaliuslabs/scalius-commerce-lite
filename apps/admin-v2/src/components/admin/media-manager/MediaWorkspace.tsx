@@ -113,7 +113,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         onMove={(folderId) => void mm.moveSelected(folderId)}
         onLifecycle={bulkLifecycle}
       />
-      <MediaUploadQueue queue={mm.queue} onPause={mm.pause} onResume={mm.resume} onCancel={mm.cancel} onClearFinished={mm.clearFinished} />
+      <MediaUploadQueue queue={mm.queue} onRetry={mm.retry} onDismiss={mm.dismiss} />
       <div className={picker ? "min-h-0 flex-1 overflow-y-auto" : undefined}>
         <MediaGallery
           files={mm.files}

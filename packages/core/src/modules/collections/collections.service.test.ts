@@ -211,7 +211,7 @@ describe("listCollectionProductOptions", () => {
         });
 
         expect(result).toEqual({
-            products: rows.map(({ priceMinor, ...row }) => ({ ...row, price: priceMinor / 100, primaryImage: null })),
+            products: rows.map(({ priceMinor, ...row }) => ({ ...row, variantCount: 0, available: null, price: priceMinor / 100, primaryImage: null })),
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
         });
         expect(db.batch).toHaveBeenCalledTimes(1);

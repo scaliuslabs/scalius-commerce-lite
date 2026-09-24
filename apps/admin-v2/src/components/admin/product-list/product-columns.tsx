@@ -1,11 +1,12 @@
-import { Link } from "@tanstack/react-router";
-import { Copy, Image as ImageIcon } from "lucide-react";
+import { Copy, CopyPlus, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
-import { createActionsColumn, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
+import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
+import { sortHeader } from "~/components/admin/resource/columns";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductListItemDto } from "~/lib/api-query-options/products";
@@ -27,6 +28,10 @@ export function productShortcodeAction(slug: string): ExtraAction {
         .catch(() => toast.error(t("shortcodeCopyFailed")));
     },
   };
+}
+
+export function duplicateProductAction(onDuplicate: () => void): ExtraAction {
+  return { label: t("duplicate"), icon: CopyPlus, onClick: onDuplicate };
 }
 
 export function ProductThumb({ src }: { src: string | null }) {
@@ -55,92 +60,89 @@ export function ProductStatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
-export function ProductTitleLink({ product }: { product: ProductListItem }) {
+/** "15 in stock", "62 in stock for 6 variants", or "Not tracked". */
+function InventoryText({ product }: { product: ProductListItem }) {
+  if (product.onHand === null) return <span className="text-muted-foreground">{t("notTracked")}</span>;
+  const text = product.variantCount > 1
+    ? t("inStockVariants", { count: product.onHand, variants: product.variantCount })
+    : t("inStock", { count: product.onHand });
+  return <span className={cn("tabular-nums", product.onHand === 0 ? "text-destructive" : "text-muted-foreground")}>{text}</span>;
+}
+
+/** Price customers pay, with the regular price struck through while a product discount runs. */
+function PriceText({ product, fmt, salePrice }: {
+  product: ProductListItem;
+  fmt: (price: number) => string;
+  salePrice: (price: number, discount: ProductListItem) => number | null;
+}) {
+  const sale = salePrice(product.price, product);
   return (
-    <Link
-      to="/admin/products/$productId/edit"
-      params={{ productId: product.id }}
-      className="truncate text-body font-medium text-foreground hover:underline"
-    >
-      {product.name || t("untitled")}
-    </Link>
+    <div className="tabular-nums md:text-right">
+      {sale === null ? fmt(product.price) : (
+        <>
+          {fmt(sale)} <s className="text-muted-foreground">{fmt(product.price)}</s>
+        </>
+      )}
+      {product.hasVariantDiscount ? <div className="text-muted-foreground">{t("saleOnSome")}</div> : null}
+    </div>
   );
 }
 
-interface ProductColumnOptions {
-  showTrashed: boolean;
+export function getProductColumns(opts: {
+  trashed: boolean;
   fmt: (price: number) => string;
-  canSelect: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-  canRestore: boolean;
-  canPermanentDelete: boolean;
-  onOpen: (product: ProductListItem) => void;
-  onDelete: (product: ProductListItem) => void;
-  onRestore: (product: ProductListItem) => void;
-  onPermanentDelete: (product: ProductListItem) => void;
-}
-
-export function getProductColumns(opts: ProductColumnOptions): ColumnDef<ProductListItem, unknown>[] {
+  salePrice: (price: number, discount: ProductListItem) => number | null;
+  rowTo: (product: ProductListItem) => string | undefined;
+}): ColumnDef<ProductListItem, unknown>[] {
   return [
-    ...(opts.canSelect
-      ? [createSelectColumn<ProductListItem>({ getLabel: (row) => (row as ProductListItem).name })]
-      : []),
     {
-      id: "product",
-      header: () => t("columnProduct"),
+      accessorKey: "name",
+      header: sortHeader(t("columnProduct")),
+      meta: { mobile: "primary" },
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
           <ProductThumb src={row.original.primaryImage} />
-          <ProductTitleLink product={row.original} />
+          <div className="min-w-0">
+            <ResourceRowLink to={opts.trashed ? undefined : opts.rowTo(row.original)}>
+              {row.original.name || t("untitled")}
+            </ResourceRowLink>
+            {/* Trash explains why "Delete permanently" isn't offered for this one. */}
+            {opts.trashed && row.original.hasStockHistory ? (
+              <span className="block text-muted-foreground">{t("keptForHistory")}</span>
+            ) : null}
+          </div>
         </div>
       ),
-      enableSorting: false,
     },
     {
       id: "status",
-      header: () => t("columnStatus"),
+      header: t("columnStatus"),
+      meta: { mobile: "status" },
       cell: ({ row }) => <ProductStatusBadge isActive={row.original.isActive} />,
       enableSorting: false,
-      size: 100,
     },
     {
-      id: "variants",
-      header: () => t("columnVariants"),
-      cell: ({ row }) => (
-        <span className="text-body text-muted-foreground">
-          {row.original.variantCount > 1 ? t("variantCount", { count: row.original.variantCount }) : "—"}
-        </span>
-      ),
+      id: "inventory",
+      header: t("columnInventory"),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => <InventoryText product={row.original} />,
       enableSorting: false,
-      size: 110,
     },
     {
       id: "category",
-      header: () => t("columnCategory"),
+      accessorFn: (row) => row.category.name,
+      header: sortHeader(t("columnCategory")),
+      meta: { mobile: "secondary" },
+      // Category names wrap instead of truncating (phones show them in full).
       cell: ({ row }) => (
-        <span className="text-body text-muted-foreground">
-          {row.original.category.name || t("uncategorized")}
-        </span>
+        <span className="break-words text-muted-foreground">{row.original.category.name || t("uncategorized")}</span>
       ),
-      enableSorting: false,
-      size: 160,
     },
     {
-      id: "price",
-      header: () => <div className="text-right">{t("columnPrice")}</div>,
-      cell: ({ row }) => <div className="text-right text-body tabular-nums">{opts.fmt(row.original.price)}</div>,
-      enableSorting: false,
-      size: 120,
+      accessorKey: "price",
+      header: sortHeader(t("columnPrice")),
+      meta: { mobile: "secondary" },
+      cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} salePrice={opts.salePrice} />,
     },
-    createActionsColumn<ProductListItem>({
-      showTrashed: opts.showTrashed,
-      onView: opts.canEdit ? undefined : opts.onOpen,
-      onEdit: opts.canEdit ? opts.onOpen : undefined,
-      onDelete: opts.canDelete ? opts.onDelete : undefined,
-      onRestore: opts.canRestore ? opts.onRestore : undefined,
-      onPermanentDelete: opts.canPermanentDelete ? opts.onPermanentDelete : undefined,
-      getExtraActions: (product) => (opts.showTrashed ? undefined : [productShortcodeAction(product.slug)]),
-    }),
   ];
 }

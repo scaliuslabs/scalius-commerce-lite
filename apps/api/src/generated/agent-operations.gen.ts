@@ -5376,6 +5376,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "size",
                     "createdAt"
                   ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "published",
+                    "internal"
+                  ],
+                  "default": "draft"
                 }
               },
               "required": [
@@ -5414,7 +5423,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "status": {
               "type": "string",
               "enum": [
-                "draft"
+                "draft",
+                "published",
+                "internal"
               ]
             }
           },
@@ -9489,6 +9500,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "primaryImage": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "variantCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "available": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -9498,7 +9518,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "categoryId",
                   "categoryName",
                   "isActive",
-                  "primaryImage"
+                  "primaryImage",
+                  "variantCount",
+                  "available"
                 ]
               }
             },
@@ -9891,6 +9913,119 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "maxLength": 240
                     }
                   }
+                }
+              },
+              "required": [
+                "expectedVersion"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.collections.update_products",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/collections/{id}/products",
+    "summary": "Add or remove products in a manual collection",
+    "tags": [
+      "Admin - Collections"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "collections.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "add": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "maxItems": 90,
+                  "default": []
+                },
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "maxItems": 90,
+                  "default": []
                 }
               },
               "required": [
@@ -21054,6 +21189,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ],
                   "default": "job"
                 },
+                "locale": {
+                  "type": "string",
+                  "enum": [
+                    "en",
+                    "bn"
+                  ],
+                  "default": "en",
+                  "description": "Dashboard language, so printed prices match the preview"
+                },
                 "variantIds": {
                   "type": "array",
                   "items": {
@@ -22033,6 +22177,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "optionLabel": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "productName": {
                     "type": "string",
                     "nullable": true
@@ -22073,6 +22221,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "preorderStockDelta",
                   "createdAt",
                   "variantSku",
+                  "optionLabel",
                   "productName",
                   "actorName",
                   "actorType"
@@ -22527,6 +22676,102 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       }
     },
     "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.inventory.set_alert_level",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/inventory/{variantId}/alert-level",
+    "summary": "Set a SKU's low-stock alert level",
+    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    "tags": [
+      "Admin - Inventory"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "variantId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "lowStockThreshold": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "lowStockThreshold"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "variantId": {
+              "type": "string"
+            },
+            "lowStockThreshold": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          "required": [
+            "variantId",
+            "lowStockThreshold"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "dashboard.inventory.set_stock",
@@ -31271,6 +31516,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "variantCount": {
                     "type": "number"
                   },
+                  "onHand": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Tracked on-hand units across live SKUs; null when no SKU tracks quantity."
+                  },
+                  "hasVariantDiscount": {
+                    "type": "boolean",
+                    "description": "Some SKUs carry their own discount."
+                  },
+                  "hasStockHistory": {
+                    "type": "boolean",
+                    "description": "Trash lists only: stock history blocks permanent delete."
+                  },
                   "mediaCount": {
                     "type": "number"
                   },
@@ -31303,6 +31561,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "updatedAt",
                   "category",
                   "variantCount",
+                  "onHand",
+                  "hasVariantDiscount",
+                  "hasStockHistory",
                   "mediaCount",
                   "primaryImage",
                   "availableStock"
@@ -43158,11 +43419,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "price": {
                         "type": "number",
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 99999999
                       },
                       "stock": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 1000000,
                         "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
                       },
                       "expectedStockVersion": {
@@ -43177,6 +43439,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number",
                         "nullable": true,
                         "minimum": 0,
+                        "maximum": 1000000,
                         "description": "Weight in grams."
                       },
                       "barcode": {
@@ -43214,7 +43477,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number",
                         "nullable": true,
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 99999999
                       }
                     },
                     "required": [
@@ -43345,20 +43608,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true,
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
-                  "minLength": 3
+                  "minLength": 3,
+                  "maxLength": 100
                 },
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "stock": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 1000000
                 },
                 "trackInventory": {
                   "type": "boolean"
@@ -43397,7 +43663,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "expectedAggregateRevision": {
                   "type": "integer",
@@ -44008,20 +44275,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true,
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
-                  "minLength": 3
+                  "minLength": 3,
+                  "maxLength": 100
                 },
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "stock": {
                   "type": "integer",
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "New on-hand quantity. Omit to keep the current quantity."
                 },
                 "trackInventory": {
@@ -44061,7 +44331,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "expectedStockVersion": {
                   "type": "integer",
@@ -44435,6 +44706,126 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.products.bulk_update",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/products/bulk-update",
+    "summary": "Set status and/or category on several products",
+    "description": "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    "tags": [
+      "Admin - Products"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.bulk_operations"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "expectedAggregateRevision"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                },
+                "isActive": {
+                  "type": "boolean"
+                },
+                "categoryId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 180
+                }
+              },
+              "required": [
+                "products"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "products": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "aggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "id",
+                  "aggregateRevision"
+                ]
+              }
+            }
+          },
+          "required": [
+            "products"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.products.create",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/products",
@@ -44485,7 +44876,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "categoryId": {
                   "type": "string",
@@ -44510,7 +44901,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "freeDelivery": {
                   "type": "boolean"
@@ -44731,11 +45123,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "price": {
                             "type": "number",
                             "minimum": 0,
-                            "maximum": 1000000000000
+                            "maximum": 99999999
                           },
                           "stock": {
                             "type": "integer",
                             "minimum": 0,
+                            "maximum": 1000000,
                             "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
                           },
                           "expectedStockVersion": {
@@ -44750,6 +45143,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
+                            "maximum": 1000000,
                             "description": "Weight in grams."
                           },
                           "barcode": {
@@ -44787,7 +45181,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 1000000000000
+                            "maximum": 99999999
                           }
                         },
                         "required": [
@@ -44821,7 +45215,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "string",
                       "minLength": 3,
                       "maxLength": 100,
-                      "description": "Omit to use the generated SIMPLE-<productId> SKU."
+                      "description": "Omit to generate a readable SKU from the product title."
                     },
                     "trackInventory": {
                       "type": "boolean"
@@ -44829,7 +45223,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "stock": {
                       "type": "integer",
                       "minimum": 0,
+                      "maximum": 1000000,
                       "description": "Initial on-hand quantity; must be 0 when inventory is not tracked."
+                    },
+                    "barcode": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50,
+                      "description": "Scanned or printed barcode. Omit or null to generate an internal Code 128 barcode."
+                    },
+                    "barcodeType": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "ean13",
+                        "upc",
+                        "isbn",
+                        "gtin",
+                        "code128",
+                        "custom",
+                        null
+                      ]
+                    },
+                    "weight": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 1000000,
+                      "description": "Weight in grams."
                     }
                   },
                   "required": [
@@ -44942,6 +45363,102 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       ]
     },
     "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.products.duplicate",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/products/{id}/duplicate",
+    "summary": "Copy a product as a new draft",
+    "description": "Copies text, pricing, media, attributes, sections, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+    "tags": [
+      "Admin - Products"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.create"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 100,
+                  "description": "Title of the copy"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "aggregateRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "id",
+            "aggregateRevision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "dashboard.products.get",
@@ -46744,7 +47261,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "categoryId": {
                   "type": "string",
@@ -46770,7 +47287,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "freeDelivery": {
                   "type": "boolean"
@@ -47052,7 +47570,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "price": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 1000000000000
+                          "maximum": 99999999
                         },
                         "categoryId": {
                           "type": "string",
@@ -47079,7 +47597,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 1000000000000
+                          "maximum": 99999999
                         },
                         "freeDelivery": {
                           "type": "boolean"
@@ -83169,6 +83687,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.collections.update_products",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.update_products"
+        ]
+      },
+      {
         "operationId": "dashboard.content.bulk_delete",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -83746,6 +84272,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.inventory.movements_export"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.set_alert_level",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.set_alert_level"
         ]
       },
       {
@@ -84668,6 +85202,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.products.bulk_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.bulk_update"
+        ]
+      },
+      {
         "operationId": "dashboard.products.create",
         "surface": "dashboard",
         "mode": "curated",
@@ -84682,6 +85224,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.products.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.duplicate",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.duplicate"
         ]
       },
       {

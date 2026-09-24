@@ -10,7 +10,7 @@ import {
 import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
-import { MAX_PRODUCT_PRICE } from "./products.types";
+import { catalogMoneySchema, skuStockSchema, skuWeightSchema } from "./products.types";
 import { createProductOptionMatrixSchema } from "./products.option-matrix";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./products.media";
 
@@ -109,12 +109,12 @@ const productAdditionalInfoSchema = z.array(
 const productBaseSchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().min(10).nullable(),
-    price: z.number().min(0).max(MAX_PRODUCT_PRICE),
+    price: catalogMoneySchema,
     categoryId: z.string().min(1).nullable(),
     isActive: z.boolean(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullish(),
-    discountAmount: z.number().min(0).nullish(),
+    discountAmount: catalogMoneySchema.nullish(),
     freeDelivery: z.boolean(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable().refine(
@@ -149,12 +149,32 @@ function requireCanonicalProductHandle(
     }
 }
 
+/**
+ * A product on sale needs a price customers can pay (feeds and checkout
+ * reject non-positive prices), and a fixed discount can't exceed the price.
+ */
+function requireSellablePrice(
+    value: { isActive: boolean; price: number; discountType?: "percentage" | "flat"; discountAmount?: number | null },
+    context: z.RefinementCtx,
+): void {
+    if (value.isActive && value.price <= 0) {
+        context.addIssue({ code: "custom", path: ["price"], message: "Enter a price above 0 to make this product active." });
+    }
+    if (value.discountType === "flat" && (value.discountAmount ?? 0) > value.price) {
+        context.addIssue({ code: "custom", path: ["discountAmount"], message: "A discount can't be more than the price." });
+    }
+}
+
 /** Inventory facts for the hidden SKU of a product created without options. */
 const defaultSkuInputSchema = z.object({
     sku: z.string().trim().min(3).max(100).optional()
-        .describe("Omit to use the generated SIMPLE-<productId> SKU."),
+        .describe("Omit to generate a readable SKU from the product title."),
     trackInventory: z.boolean(),
-    stock: z.number().int().min(0).describe("Initial on-hand quantity; must be 0 when inventory is not tracked."),
+    stock: skuStockSchema.describe("Initial on-hand quantity; must be 0 when inventory is not tracked."),
+    barcode: z.string().trim().max(50).nullable().optional()
+        .describe("Scanned or printed barcode. Omit or null to generate an internal Code 128 barcode."),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable().optional(),
+    weight: skuWeightSchema.nullable().optional(),
 }).refine((value) => value.trackInventory || value.stock === 0, {
     message: "Turn on quantity tracking before setting a quantity.",
     path: ["stock"],
@@ -170,6 +190,19 @@ export const createProductSchema = productBaseSchema
             .describe("Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."),
     })
     .superRefine(requireCanonicalProductHandle)
+    .superRefine(requireSellablePrice)
+    .superRefine((value, context) => {
+        if (!value.isActive) return;
+        value.optionMatrix?.variants.forEach((variant, index) => {
+            if (variant.price <= 0) {
+                context.addIssue({
+                    code: "custom",
+                    path: ["optionMatrix", "variants", index, "price"],
+                    message: "Enter a price above 0 for every variant of an active product.",
+                });
+            }
+        });
+    })
     .refine((value) => !(value.optionMatrix && value.defaultSku), {
         message: "Send either optionMatrix or defaultSku, not both.",
         path: ["defaultSku"],
@@ -187,7 +220,8 @@ export const updateProductSchema = productBaseSchema
             })
             .optional(),
     })
-    .superRefine(requireCanonicalProductHandle);
+    .superRefine(requireCanonicalProductHandle)
+    .superRefine(requireSellablePrice);
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

@@ -8,6 +8,7 @@ import {
   postApiV1AdminAttributesBulkRestore,
 } from "@scalius/api-client/sdk";
 import { createListSearchValidator } from "~/lib/list-helpers";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -22,7 +23,7 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { AttributeDialog } from "~/components/admin/attributes-manager/components/AttributeDialog";
 import { AttributeValueEditor } from "~/components/admin/attributes-manager/components/AttributeValueEditor";
 import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
-import { translate, useMessages } from "~/i18n";
+import { formatNumber, translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 
 const validateAttributeSearch = createListSearchValidator(
@@ -30,11 +31,11 @@ const validateAttributeSearch = createListSearchValidator(
   { sort: "name", order: "asc" },
 );
 
-function listQuery(search: ReturnType<typeof validateAttributeSearch>) {
+function listQuery(search: ReturnType<typeof validateAttributeSearch>, term: string) {
   return attributesQueryOptions({
     page: search.page,
     limit: search.limit,
-    search: search.search || undefined,
+    search: term || undefined,
     sort: search.sort,
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
@@ -44,7 +45,7 @@ function listQuery(search: ReturnType<typeof validateAttributeSearch>) {
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("attributes"))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
@@ -54,6 +55,7 @@ const INVALIDATE = [queryKeys.attributes.all];
 
 function AttributesPage() {
   const search = Route.useSearch();
+  const [term] = useListSearch("attributes");
   const t = useMessages(catalogMessages);
   const { attributes: can } = useCatalogActionPermissions();
   const [editing, setEditingState] = useState<AttributeDto | "new" | null>(null);
@@ -90,18 +92,17 @@ function AttributesPage() {
     {
       id: "values",
       header: t("values"),
-      meta: { mobile: "secondary" },
       cell: ({ row }) => (
         <button
           type="button"
-          className="text-muted-foreground hover:underline disabled:no-underline"
+          className="tabular-nums text-muted-foreground hover:underline disabled:no-underline"
           disabled={search.trashed}
           onClick={(event) => {
             valuesOpener.current = event.currentTarget;
             setValues(row.original);
           }}
         >
-          {t("values")}: {row.original.valueCount}
+          {formatNumber(row.original.valueCount)}
         </button>
       ),
     },
@@ -119,8 +120,9 @@ function AttributesPage() {
         title={t("attributes")}
         actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
         search={search}
-        query={listQuery(search)}
-        pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
+        list="attributes"
+        query={listQuery(search, term)}
+        pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
         dataKey="attributes"
         columns={columns}
         invalidate={INVALIDATE}

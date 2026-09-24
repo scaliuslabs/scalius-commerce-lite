@@ -11,6 +11,8 @@ import {
     getCollectionsByIds,
     createCollection,
     updateCollection,
+    updateCollectionProducts,
+    updateCollectionProductsSchema,
     deleteCollection,
     bulkDeleteCollections,
     bulkActivateCollections,
@@ -60,6 +62,10 @@ const collectionProductOptionSchema = z.object({
     categoryName: z.string().nullable(),
     isActive: z.boolean(),
     primaryImage: z.string().nullable(),
+    /** Optioned SKUs; 0 for a simple product. */
+    variantCount: z.number().int().nonnegative(),
+    /** Sellable units across tracked SKUs; null when no SKU tracks stock. */
+    available: z.number().int().nonnegative().nullable(),
 });
 
 function parseLookupIds(ids: string | undefined): string[] {
@@ -606,6 +612,36 @@ app.openapi(updateCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const result = await updateCollection(db, id, c.req.valid("json"));
+    await bumpCacheGeneration(c);
+    return ok(c, toCollectionMutationResult(result));
+});
+
+// ── Add / remove products (manual collections) ──
+
+const updateCollectionProductsRoute = createRoute({
+    method: "post",
+    path: "/{id}/products",
+    operationId: "dashboard.collections.update_products",
+    tags: ["Admin - Collections"],
+    summary: "Add or remove products in a manual collection",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: updateCollectionProductsSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Collection products updated",
+            content: { "application/json": { schema: successEnvelope(collectionMutationResultSchema) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(updateCollectionProductsRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const result = await updateCollectionProducts(db, id, c.req.valid("json"));
     await bumpCacheGeneration(c);
     return ok(c, toCollectionMutationResult(result));
 });

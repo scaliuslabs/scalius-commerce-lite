@@ -179,8 +179,8 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, [
       variant("one", ["white"]),
       variant("two", ["white"]),
-    ], [], false)).toBe(issue("issueDuplicateVariant"));
-    expect(getOptionMatrixIssue(options, [variant("one", ["white"])], [], false))
+    ], [], false)?.message).toBe(issue("issueDuplicateVariant"));
+    expect(getOptionMatrixIssue(options, [variant("one", ["white"])], [], false)?.message)
       .toBe(issue("issueUnusedValue"));
   });
 
@@ -189,46 +189,72 @@ describe("option matrix editor model", () => {
       option("one", "Finish", [["matte", "Matte"]], "material"),
       option("two", " finish ", [["gloss", "Gloss"]], "material"),
     ];
-    expect(getOptionMatrixIssue(options, [], [], true)).toBe(issue("issueOptionNamesUnique"));
+    expect(getOptionMatrixIssue(options, [], [], true)?.message).toBe(issue("issueOptionNamesUnique"));
   });
 
   it("blocks duplicate SKUs, barcodes, invalid images, and excessive flat discounts", () => {
     const options = [option("format", "Format", [["print", "Print"], ["digital", "Digital"]])];
     const rows = [variant("one", ["print"]), variant("two", ["digital"])];
     rows[1]!.sku = rows[0]!.sku.toLowerCase();
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueSkuUnique"));
+    expect(getOptionMatrixIssue(options, rows, [], false)?.message).toBe(issue("issueSkuUnique"));
 
     rows[1]!.sku = "SKU-two";
     rows[0]!.barcode = "123";
     rows[0]!.barcodeType = "custom";
     rows[1]!.barcode = "123";
     rows[1]!.barcodeType = "custom";
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueBarcodeUnique"));
+    expect(getOptionMatrixIssue(options, rows, [], false)?.message).toBe(issue("issueBarcodeUnique"));
 
     rows[1]!.barcode = "456";
     rows[0]!.imageId = "missing";
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issuePhotoRemoved"));
-    expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 0, 0, true)).toBeNull();
+    expect(getOptionMatrixIssue(options, rows, [], false)?.message).toBe(issue("issuePhotoRemoved"));
+    expect(getOptionMatrixIssue(options, rows, [], false, { allowSavedImageRemovalConfirmation: true })).toBeNull();
 
     rows[0]!.imageId = null;
     rows[0]!.discountType = "flat";
     rows[0]!.discountAmount = 101;
-    expect(getOptionMatrixIssue(options, rows, [], false)).toBe(issue("issueDiscountOverPrice"));
+    expect(getOptionMatrixIssue(options, rows, [], false)).toEqual({
+      message: issue("issueDiscountOverPrice"),
+      variantId: "one",
+      field: "discount",
+    });
+  });
+
+  it("puts number problems on the variant's own field", () => {
+    const options = [option("format", "Format", [["print", "Print"], ["digital", "Digital"]])];
+    const rows = [variant("one", ["print"]), variant("two", ["digital"])];
+    rows[1]!.price = Number.NaN;
+    expect(getOptionMatrixIssue(options, rows, [], false)).toEqual({ message: issue("issueNotANumber"), variantId: "two", field: "price" });
+    rows[1]!.price = 100_000_000;
+    expect(getOptionMatrixIssue(options, rows, [], false)).toMatchObject({ variantId: "two", field: "price" });
+    rows[1]!.price = 0;
+    expect(getOptionMatrixIssue(options, rows, [], false)).toBeNull();
+    expect(getOptionMatrixIssue(options, rows, [], false, { requirePositivePrice: true }))
+      .toEqual({ message: issue("issueVariantNeedsPrice"), variantId: "two", field: "price" });
+    rows[1]!.price = 100;
+    rows[0]!.stock = 2.5;
+    expect(getOptionMatrixIssue(options, rows, [], false)).toEqual({ message: issue("issueQuantityWhole"), variantId: "one", field: "stock" });
   });
 
   it("requires exact simple-stock allocation and protects committed units", () => {
     const options = [option("format", "Format", [["print", "Print"]])];
     const rows = [variant("one", ["print"], 4)];
-    expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 7, 0)).toBe(issue("issueAllocateStock", { required: 7, allocated: 4 }));
-    expect(getOptionMatrixIssue(options, rows, [], false, new Map([["one", 5]]), 0, 0)).toBe(issue("issueBelowCommitted"));
+    expect(getOptionMatrixIssue(options, rows, [], false, { requiredStockAllocation: 7 })?.message).toBe(issue("issueAllocateStock", { required: 7, allocated: 4 }));
+    expect(getOptionMatrixIssue(options, rows, [], false, { committedByVariantId: new Map([["one", 5]]) })?.message).toBe(issue("issueBelowCommitted"));
   });
 
   it("validates simple product inventory", () => {
-    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, false)).toBeNull();
-    expect(getSimpleSkuIssue({ sku: "", trackInventory: true, stock: 4 }, 0, true)).toBe(issue("issueSkuShort"));
-    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: true, stock: 1 }, 2, true)).toBe(issue("issueBelowCommitted"));
-    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 2, true)).toBe(issue("issueUntrackCommitted"));
-    expect(getSimpleSkuIssue({ sku: "MUG", trackInventory: false, stock: 0 }, 0, true)).toBeNull();
+    const simple = (draft: { sku: string; trackInventory: boolean; stock: number; barcode?: string | null }) =>
+      ({ barcode: null, barcodeType: null, weight: null, ...draft });
+    expect(getSimpleSkuIssue(simple({ sku: "", trackInventory: true, stock: 4 }), 0, false)).toBeNull();
+    expect(getSimpleSkuIssue(simple({ sku: "", trackInventory: true, stock: 4 }), 0, true)?.message).toBe(issue("issueSkuShort"));
+    expect(getSimpleSkuIssue(simple({ sku: "MUG", trackInventory: true, stock: 1 }), 2, true)?.message).toBe(issue("issueBelowCommitted"));
+    expect(getSimpleSkuIssue(simple({ sku: "MUG", trackInventory: false, stock: 0 }), 2, true)?.message).toBe(issue("issueUntrackCommitted"));
+    expect(getSimpleSkuIssue(simple({ sku: "MUG", trackInventory: false, stock: 0 }), 0, true)).toBeNull();
+    expect(getSimpleSkuIssue(simple({ sku: "MUG", trackInventory: true, stock: Number.NaN }), 0, true))
+      .toEqual({ message: issue("issueNotANumber"), field: "stock" });
+    expect(getSimpleSkuIssue({ ...simple({ sku: "MUG", trackInventory: true, stock: 1 }), barcode: "4006381333932", barcodeType: "upc" }, 0, true))
+      .toEqual({ message: issue("issueBarcodeInvalid"), field: "barcode" });
   });
 
   it("picks the option type from a known name unless the merchant chose one", () => {

@@ -9,9 +9,5 @@ export const Route = createFileRoute("/admin/categories/new")({
 });
 
 function NewCategoryPage() {
-  return (
-    <div className="container max-w-7xl py-4 pb-8">
-      <CategoryForm />
-    </div>
-  );
+  return <CategoryForm />;
 }

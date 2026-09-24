@@ -5,8 +5,8 @@ import {
   ArrowRight,
   ImageIcon,
   ImagePlus,
+  PenLine,
   Play,
-  Settings2,
   Star,
   Trash2,
   Video,
@@ -15,11 +15,14 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { MediaManager, type MediaFile } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { translate, useMessages } from "~/i18n";
+import { productMediaMessages } from "~/i18n/media";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues, ProductMediaItem } from "./types";
 
@@ -149,6 +152,8 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                 {editingId ? (
                   <MediaDetailsEditor
                     item={field.value.find((candidate) => candidate.id === editingId) ?? null}
+                    index={field.value.findIndex((candidate) => candidate.id === editingId)}
+                    count={field.value.length}
                     onClose={() => setEditingId(null)}
                     onAltTextChange={(altText) => field.onChange(field.value.map((candidate) =>
                       candidate.id === editingId ? { ...candidate, altText } : candidate,
@@ -195,6 +200,10 @@ function ProductMediaTile({
   onRemove: () => void;
 }) {
   const t = useMessages(productMessages);
+  const m = useMessages(productMediaMessages);
+  const isVideo = item.kind === "video";
+  const position = positionLabel(m, item, index, count);
+  const named = m("named", { item: position, name: item.effectiveAltText });
   const previewUrl = item.kind === "image" ? item.url : item.posterUrl;
   const duration = durationLabel(item.durationMs);
   const note = item.status === "trashed"
@@ -203,7 +212,7 @@ function ProductMediaTile({
       ? t("videoNoCover")
       : null;
   return (
-    <article className="grid grid-cols-3 gap-2 sm:block sm:space-y-1">
+    <article aria-label={named} className="grid grid-cols-3 gap-2 sm:block sm:space-y-1">
       <div className={cn("relative aspect-square overflow-hidden rounded-md border bg-muted", item.status === "trashed" && "border-destructive")}>
         {previewUrl ? (
           <img
@@ -240,23 +249,28 @@ function ProductMediaTile({
         {note ? <span className="block truncate text-body text-destructive">{note}</span> : null}
         <div className="flex flex-wrap items-center justify-between gap-1">
           <div className="flex items-center">
-            <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => onMove(-1)} aria-label={t("moveEarlier")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" disabled={index === count - 1} onClick={() => onMove(1)} aria-label={t("moveLater")}>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            <TileAction tip={m("moveEarlier")} label={m("moveEarlierItem", { item: position })} disabled={index === 0} onClick={() => onMove(-1)}>
+              <ArrowLeft />
+            </TileAction>
+            <TileAction tip={m("moveLater")} label={m("moveLaterItem", { item: position })} disabled={index === count - 1} onClick={() => onMove(1)}>
+              <ArrowRight />
+            </TileAction>
           </div>
           <div className="flex items-center">
-            <Button type="button" variant="ghost" size="icon" onClick={onEdit} aria-label={t("editMediaDetails")}>
-              <Settings2 className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" disabled={item.isPrimary} onClick={onSetFeatured} aria-label={t("setAsMain")}>
-              <Star className={cn("h-4 w-4", item.isPrimary && "fill-current")} />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label={t("removeMedia")}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <TileAction tip={m("editDescription")} label={m("editDescriptionItem", { item: position })} onClick={onEdit}>
+              <PenLine />
+            </TileAction>
+            <TileAction
+              tip={m(isVideo ? "makeMainVideo" : "makeMainPhoto")}
+              label={m(isVideo ? "makeMainVideoItem" : "makeMainPhotoItem", { item: position })}
+              disabled={item.isPrimary}
+              onClick={onSetFeatured}
+            >
+              <Star className={cn(item.isPrimary && "fill-current")} />
+            </TileAction>
+            <TileAction tip={m("remove")} label={m("removeItem", { item: named })} onClick={onRemove}>
+              <Trash2 />
+            </TileAction>
           </div>
         </div>
       </div>
@@ -264,27 +278,58 @@ function ProductMediaTile({
   );
 }
 
-function MediaDetailsEditor({ item, onAltTextChange, onClose }: {
+/** Icon button whose accessible name names the item; the tooltip shows the short verb. */
+function TileAction({ tip, label, disabled, onClick, children }: {
+  tip: string;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" disabled={disabled} onClick={onClick} aria-label={label}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** "Photo 2 of 3" / "Video 2 of 3". */
+type MediaText = (key: keyof typeof productMediaMessages.en, vars?: Record<string, string | number>) => string;
+function positionLabel(m: MediaText, item: ProductMediaItem, index: number, count: number) {
+  return m(item.kind === "video" ? "videoAt" : "photoAt", { position: index + 1, count });
+}
+
+function MediaDetailsEditor({ item, index, count, onAltTextChange, onClose }: {
   item: ProductMediaItem | null;
+  index: number;
+  count: number;
   onAltTextChange: (value: string) => void;
   onClose: () => void;
 }) {
   const t = useMessages(productMessages);
+  const m = useMessages(productMediaMessages);
+  const id = React.useId();
   if (!item) return null;
   return (
     <div className="space-y-2 border-t pt-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-body font-medium">{t("altText")}</p>
+        <Label htmlFor={id}>{m("descriptionFor", { item: positionLabel(m, item, index, count) })}</Label>
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>{t("done")}</Button>
       </div>
       <Input
+        id={id}
+        autoFocus
         value={item.altText}
         onChange={(event) => onAltTextChange(event.target.value)}
         maxLength={500}
-        aria-label={t("altText")}
         placeholder={item.effectiveAltText}
       />
-      <p className="text-body text-muted-foreground">{t("altTextHint")}</p>
+      <p className="text-body text-muted-foreground">{m("descriptionHint")}</p>
     </div>
   );
 }

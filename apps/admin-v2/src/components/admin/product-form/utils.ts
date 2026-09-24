@@ -8,7 +8,7 @@ export function formatFormValuesForSubmission(
   return {
     name: values.name,
     description: values.description,
-    price: values.price,
+    price: values.price ?? 0,
     categoryId: values.categoryId,
     isActive: values.isActive,
     discountType: values.discountType,

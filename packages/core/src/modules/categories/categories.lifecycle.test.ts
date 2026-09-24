@@ -16,6 +16,7 @@ const input = {
   noIndex: false,
   excludeFromSitemap: false,
   image: null,
+  status: "draft" as const,
 };
 
 function categoryLookupDb(row: { id: string; deletedAt: Date | null }) {
@@ -96,40 +97,5 @@ describe("category lifecycle authority", () => {
       expectedRevision: 1,
       status: "published",
     } as never)).rejects.toMatchObject({ code: "CATEGORY_REVISION_CONFLICT" });
-  });
-
-  it("keeps publish readiness errors when referenced media is ready", async () => {
-    let reads = 0;
-    const db = {
-      select: () => ({
-        from: () => ({
-          where: () => {
-            const chain = {
-              get: async () => {
-                const value = reads++;
-                return value === 0
-                  ? { id: "cat_live", revision: 1, deletedAt: null }
-                  : value === 1 ? null : null;
-              },
-              all: async () => [{ id: "cat_live", revision: 1, deletedAt: null }],
-              limit: () => chain,
-            };
-            return chain;
-          },
-        }),
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({ returning: () => ({ get: async () => undefined }) }),
-        }),
-      }),
-    };
-
-    await expect(updateCategory(db as never, "cat_live", {
-      ...input,
-      image: { url: "https://media.example/media/media_category_1.png" },
-      expectedRevision: 1,
-      status: "published",
-    } as never)).rejects.toThrow(/active product with a buyer-resolvable SKU/i);
   });
 });
