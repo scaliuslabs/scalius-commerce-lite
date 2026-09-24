@@ -1,0 +1,35 @@
+---
+// A row of link chips above a listing: sub-category pills (Star Tech),
+// popular filters (Target) or the filter bar's quick switches. Plain links,
+// so each is one tap without JavaScript; the row scrolls sideways on
+// phones and wraps on computers.
+interface Props {
+  label: string;
+  links: Array<{ label: string; href: string; active?: boolean }>;
+  class?: string;
+}
+
+const { label, links, class: className } = Astro.props;
+---
+
+{links.length > 0 && (
+  <nav aria-label={label} class:list={["catalog-chip-row flex items-center gap-2 overflow-x-auto lg:flex-wrap", className]}>
+    {links.map((link) => (
+      <a
+        href={link.href}
+        aria-current={link.active ? "true" : undefined}
+        class:list={[
+          "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors lg:min-h-9",
+          link.active
+            ? "border-foreground bg-foreground text-background hover:opacity-90"
+            : "border-border bg-background text-foreground hover:border-foreground/40 hover:bg-muted",
+        ]}
+      >
+        {link.active && (
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+        )}
+        <span class="max-w-[16rem] truncate">{link.label}</span>
+      </a>
+    ))}
+  </nav>
+)}

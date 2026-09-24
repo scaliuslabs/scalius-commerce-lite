@@ -266,6 +266,37 @@ describe("product list query canonicalization", () => {
     expect(countActiveProductListFilters({ page: "2", sortBy: "discount", q: "bag", color: ["Red", "Blue"] })).toBe(3);
   });
 
+  it("keeps the page size out of URLs by default and treats other sizes as noindex views", () => {
+    const plain = resolveProductListQueryState({ url: new URL("https://store.test/categories/shoes") });
+    expect(plain.limit).toBe(20);
+    expect(plain.options.limit).toBe(20);
+
+    const forty = resolveProductListQueryState({ url: new URL("https://store.test/categories/shoes?limit=40&page=2") });
+    expect(forty).toMatchObject({ limit: 40, redirectPath: null, currentFilters: { limit: "40", page: "2" } });
+    expect(forty.options).toMatchObject({ limit: 40, page: 2 });
+    // A page size is a view, not a filter: it never unlocks the filter UI or a chip...
+    expect(countActiveProductListFilters(forty.currentFilters)).toBe(0);
+    // ...but it is not an indexable view, and the canonical stays the default-size page.
+    expect(isIndexableProductListView(forty.currentFilters)).toBe(false);
+    expect(productListCanonicalUrl("https://store.test/categories/shoes", forty.page))
+      .toBe("https://store.test/categories/shoes?page=2");
+    // Changing sort or page keeps the size; the default size is never written.
+    expect(buildProductListHref({ pathname: "/categories/shoes", currentFilters: forty.currentFilters, overrides: { page: 3 } }))
+      .toBe("/categories/shoes?limit=40&page=3");
+    expect(buildProductListHref({ pathname: "/categories/shoes", currentFilters: forty.currentFilters, overrides: { limit: 20 } }))
+      .toBe("/categories/shoes?page=2");
+
+    for (const [search, redirect] of [
+      ["?limit=20", "/categories/shoes"],
+      ["?limit=25&size=M", "/categories/shoes?size=M"],
+      ["?limit=abc", "/categories/shoes"],
+      ["?limit=40&limit=60", "/categories/shoes?limit=60"],
+    ]) {
+      const state = resolveProductListQueryState({ url: new URL(`https://store.test/categories/shoes${search}`), facets });
+      expect(state.redirectPath, search).toBe(redirect);
+    }
+  });
+
   it("describes an undescribed listing by its own products within 155 characters", () => {
     const names = ["Press Glass Storage Set", "Loop Silicone Utensil Set", "Echo Mini Bluetooth Speaker", "Linen Throw"];
 

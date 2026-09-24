@@ -1,0 +1,52 @@
+---
+// Shelves (Aarong): one horizontal row per sub-listing with "View all" to
+// its own indexable page. CSS scroll-snap only (catalog-listing.css); the
+// first shelf's opening cards load eagerly.
+import type { Product } from "@/lib/api";
+import type { CatalogShelf } from "@/lib/catalog-listing";
+import ProductCard from "@/components/cards/ProductCard.astro";
+
+interface Props {
+  shelves: CatalogShelf<Product>[];
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const { shelves, currencySymbol, currencyCode } = Astro.props;
+// Card widths: 46% of the page on phones, a third on tablets, a quarter
+// from 1024px, capped by the 80rem page.
+const SHELF_IMAGE_SIZES = "(max-width: 639px) 46vw, (max-width: 1023px) 32vw, (max-width: 1279px) 24vw, 300px";
+---
+
+<div class="mb-8 space-y-8 sm:space-y-10" data-catalog-shelves>
+  {shelves.map((shelf, shelfIndex) => (
+    <section aria-labelledby={`catalog-shelf-${shelfIndex}`}>
+      <div class="mb-3 flex items-baseline justify-between gap-4">
+        <h2
+          id={`catalog-shelf-${shelfIndex}`}
+          class="min-w-0 text-lg font-semibold text-foreground [text-transform:var(--theme-heading-transform,none)] sm:text-xl"
+        >
+          {shelf.title}
+        </h2>
+        {shelf.href && (
+          <a href={shelf.href} class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary hover:underline">
+            View all<span class="sr-only">: {shelf.title}</span>
+          </a>
+        )}
+      </div>
+      <div class="catalog-shelf-track">
+        {shelf.items.map((product, index) => (
+          <ProductCard
+            product={product}
+            currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+            index={index}
+            aboveFold={shelfIndex === 0}
+            sizes={SHELF_IMAGE_SIZES}
+            headingLevel="h3"
+          />
+        ))}
+      </div>
+    </section>
+  ))}
+</div>
