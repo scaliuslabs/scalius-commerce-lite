@@ -170,7 +170,9 @@ export interface CatalogAspectChip {
 
 /** The id of a facet's group in the filter form, for aspect chips to open. */
 export function catalogFacetAnchor(slug: string): string {
-  return `catalog-facet-${slug.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
+  // Letters of any script stay (Bangla option axes); anything else becomes
+  // `_` plus its code point, so two slugs never share an id.
+  return `catalog-facet-${slug.replace(/[^\p{L}\p{M}\p{N}-]/gu, (character) => `_${character.codePointAt(0)!.toString(16)}`)}`;
 }
 
 /**
