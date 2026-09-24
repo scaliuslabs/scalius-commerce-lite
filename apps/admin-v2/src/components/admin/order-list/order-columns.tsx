@@ -170,8 +170,7 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
     <div className="flex flex-wrap items-center gap-1">
       <OrderStatusSelector
         status={order.status}
-        paymentStatus={order.paymentStatus}
-        paidAmount={order.paidAmount}
+        facts={order}
         isLoading={handlers.updatingStatusIds.has(order.id)}
         lockedReason={lockedReason}
         onStatusUpdate={(status) => handlers.onStatusUpdate(order, status)}
