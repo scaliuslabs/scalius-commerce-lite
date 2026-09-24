@@ -7,7 +7,7 @@
 import { z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
-import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/orders.types";
+import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/types";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,

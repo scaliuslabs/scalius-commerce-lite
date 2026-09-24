@@ -32,8 +32,8 @@ import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/cu
 import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
 import { buyerOrderTrackingSchema } from "../schemas/order-tracking";
 import { issueAccountOwnerReceipt } from "@scalius/core/modules/customers/order-account-claim";
-import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/order-lookup";
-import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
+import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/lookup";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/money";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
@@ -42,11 +42,15 @@ import { getCurrencySettings } from "@scalius/core/modules/settings/site-setting
 import {
   deleteOrderPaymentRecoveryChallenge,
   createReceiptOrderSupportRequest,
-  assertStorefrontCheckoutQuoteFingerprint,
-  buildStorefrontCheckoutQuoteFingerprint,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
   getReceiptOrderSupportRequestStateForOrder,
+  sendOrderPaymentRecoveryOtp,
+  verifyOrderPaymentRecoveryOtp,
+} from "@scalius/core/modules/orders";
+import {
+  assertStorefrontCheckoutQuoteFingerprint,
+  buildStorefrontCheckoutQuoteFingerprint,
   buildCheckoutAttemptIdentity,
   commitStorefrontOrderPayload,
   createAtomicCheckoutAttempt,
@@ -55,17 +59,15 @@ import {
   getCheckoutAttemptRequestKeyFromStatusToken,
   resolveExistingCheckoutAttempt,
   runStorefrontOrderPostCommitSideEffects,
-  sendOrderPaymentRecoveryOtp,
   assertStorefrontCheckoutPolicy,
   loadStorefrontCheckoutReads,
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
-  verifyOrderPaymentRecoveryOtp,
   type StorefrontCheckoutAuthoritySnapshot,
   type StorefrontCheckoutSettingsSnapshot,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/checkout";
 import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,

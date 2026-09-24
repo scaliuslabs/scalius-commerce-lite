@@ -1,8 +1,8 @@
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
-import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/orders/abandoned-checkout-cleanup";
+import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout/abandoned/cleanup";
 import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
-import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete-orders";
+import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {

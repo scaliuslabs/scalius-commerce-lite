@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
+import { recordOrderEvent } from "@scalius/core/modules/orders/timeline";
 import {
     approveOrderReturn,
     approveOrderReturnSchema,

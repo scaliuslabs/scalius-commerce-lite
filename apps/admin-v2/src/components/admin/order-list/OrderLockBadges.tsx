@@ -1,4 +1,4 @@
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
+import type { OrderListItem } from "@scalius/core/modules/orders/types";
 import { Badge } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";

@@ -19,7 +19,7 @@ import {
   type TaxJurisdictionType,
 } from "@scalius/core/modules/tax";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
-import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/orders/delivery-location-validation";
+import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/delivery/location-validation";
 import { created, ok } from "../../utils/api-response";
 import {
   conflictResponse,

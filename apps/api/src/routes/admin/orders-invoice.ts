@@ -1,10 +1,10 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
+import { recordOrderEvent } from "@scalius/core/modules/orders/timeline";
 import {
   getInvoiceDocument,
   issueInvoice,
-} from "@scalius/core/modules/orders/invoice.service";
-import { renderPrintableInvoice } from "@scalius/core/modules/orders/invoice-printable-artifact";
+} from "@scalius/core/modules/orders/invoices/service";
+import { renderPrintableInvoice } from "@scalius/core/modules/orders/invoices/printable-artifact";
 import { NotFoundError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import {

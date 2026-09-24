@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orders } from "@scalius/database/schema";
 
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
-import { buildCheckoutStatusTokenFromRequestKey } from "@scalius/core/modules/orders";
+import { buildCheckoutStatusTokenFromRequestKey } from "@scalius/core/modules/checkout";
 import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
 import {
@@ -45,10 +45,19 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   return {
     ...actual,
     CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES: ["cancel_pre_shipment", "return", "refund"],
+    createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
+    getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
+    getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
+  };
+});
+
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/checkout")>();
+  return {
+    ...actual,
     buildCheckoutAttemptIdentity: mocks.buildCheckoutAttemptIdentity,
     resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
     createAtomicCheckoutAttempt: mocks.createAtomicCheckoutAttempt,
-    createReceiptOrderSupportRequest: mocks.createReceiptOrderSupportRequest,
     createStorefrontOrder: mocks.createStorefrontOrder,
     buildStorefrontCheckoutQuoteFingerprint: mocks.buildStorefrontCheckoutQuoteFingerprint,
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
@@ -73,8 +82,6 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
         },
       };
     },
-    getOrderSupportRequestStatusLabel: mocks.getOrderSupportRequestStatusLabel,
-    getReceiptOrderSupportRequestState: mocks.getReceiptOrderSupportRequestState,
     commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
     runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
     validateStorefrontCartItems: mocks.validateStorefrontCartItems,

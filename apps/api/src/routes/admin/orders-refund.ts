@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
+import { recordOrderEvent } from "@scalius/core/modules/orders/timeline";
 import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,

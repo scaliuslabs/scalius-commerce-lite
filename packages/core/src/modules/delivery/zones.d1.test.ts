@@ -4,7 +4,7 @@ import {
     createMigratedSqlite,
     createSqliteD1Database,
 } from "@scalius/database/testing/sqlite-d1";
-import { validateStorefrontDeliveryPreflight } from "../orders/orders.storefront";
+import { validateStorefrontDeliveryPreflight } from "../checkout/prepare";
 import {
     applyDeliveryZoneTemplate,
     createDeliveryZone,

@@ -2,7 +2,7 @@ import type {
   DeliveryProviderRecord,
 } from "~/lib/api-query-options/delivery";
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
-import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/orders.types";
+import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/types";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
