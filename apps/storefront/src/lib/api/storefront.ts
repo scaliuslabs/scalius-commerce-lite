@@ -17,7 +17,7 @@ import type {
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
-import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
+import type { HeroSlide } from "@scalius/shared/hero-slider";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -32,13 +32,8 @@ import { apiFetch } from "./transport";
 // HOMEPAGE DATA TYPES
 // =============================================
 
-export interface HeroSliderImage {
-  url: string;
-  title?: string;
-  link: string;
-  id?: string;
-  focalPoint: HeroSlideFocalPoint;
-}
+/** One banner: `title` is the image's alt text; `heading`/`buttonLabel` are optional overlay copy. */
+export type HeroSliderImage = HeroSlide;
 
 export interface HeroSlider {
   id: string;

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowUpDown, TicketPercent } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
@@ -26,7 +26,8 @@ import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { discountsMessages, type DiscountMessageKey } from "~/i18n/discounts";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { useDeleteDiscount, useSetDiscountActive } from "~/lib/api-mutations/discounts";
+import { useListSearch } from "~/lib/list-search";
+import { discountFailureText, useDeleteDiscount, useSetDiscountActive } from "~/lib/api-mutations/discounts";
 import type { DiscountRecord } from "~/lib/api-query-options/discounts";
 
 export const DISCOUNT_TABS = ["all", "active", "scheduled", "expired"] as const;
@@ -37,9 +38,6 @@ const TAB_LABEL = { all: "tabAll", active: "tabActive", scheduled: "tabScheduled
 export const DISCOUNT_SORTS = ["updated", "titleAsc", "titleDesc", "used"] as const;
 export type DiscountSort = (typeof DISCOUNT_SORTS)[number];
 const SORT_LABEL = { updated: "sortUpdated", titleAsc: "sortTitleAsc", titleDesc: "sortTitleDesc", used: "sortUsed" } as const;
-
-/** Discount codes never go into the URL; the search survives only this tab's session. */
-const SEARCH_KEY = "admin.listSearch.discounts";
 
 const titleOf = (discount: DiscountRecord) => discount.codes[0]?.code ?? discount.name;
 
@@ -78,11 +76,15 @@ type BulkAction = "activate" | "deactivate" | "delete";
 export function DiscountList({
   discounts,
   tab,
+  sort,
   onTabChange,
+  onSortChange,
 }: {
   discounts: DiscountRecord[];
   tab: DiscountTab;
+  sort: DiscountSort;
   onTabChange: (tab: DiscountTab) => void;
+  onSortChange: (sort: DiscountSort) => void;
 }) {
   const t = useMessages(discountsMessages);
   const navigate = useNavigate();
@@ -90,8 +92,8 @@ export function DiscountList({
   const { code: currencyCode, fmt } = useCurrency();
   const scopeLabel = useScopeLabel();
   const [chooserOpen, setChooserOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<DiscountSort>("updated");
+  // Codes never go into the URL: the search lives in this tab's session.
+  const [query, search] = useListSearch("discounts");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [confirmRows, setConfirmRows] = useState<DiscountRecord[] | null>(null);
   const [bulkBusy, setBulkBusy] = useState<BulkAction | null>(null);
@@ -101,22 +103,6 @@ export function DiscountList({
   const canToggle = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS);
   const canDelete = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_DELETE);
 
-  useEffect(() => {
-    try {
-      setQuery(sessionStorage.getItem(SEARCH_KEY) ?? "");
-    } catch {
-      // Storage blocked: the search just isn't remembered.
-    }
-  }, []);
-  function search(value: string) {
-    setQuery(value);
-    try {
-      if (value) sessionStorage.setItem(SEARCH_KEY, value);
-      else sessionStorage.removeItem(SEARCH_KEY);
-    } catch {
-      // Storage blocked: the search just isn't remembered.
-    }
-  }
 
   const visible = filterDiscounts(discounts, tab, query, sort);
   const chosen = visible.filter((discount) => selected.has(discount.id));
@@ -145,9 +131,10 @@ export function DiscountList({
     });
 
   /** One request per discount, each with its own revision; failures toast their reason. */
+  /** One request per discount (each with its revision), then one summary that names what failed and why. */
   async function runBulk(action: BulkAction, rows: DiscountRecord[]) {
     setBulkBusy(action);
-    let done = 0;
+    const failed: string[] = [];
     for (const discount of rows) {
       try {
         if (action === "delete") {
@@ -155,19 +142,22 @@ export function DiscountList({
         } else {
           await activeMutation.mutateAsync({ id: discount.id, expectedRevision: discount.revision, active: action === "activate" });
         }
-        done += 1;
-      } catch {
-        // The mutation already said why; carry on with the rest.
+      } catch (error) {
+        failed.push(`${titleOf(discount)}: ${discountFailureText(error)}`);
       }
     }
     setBulkBusy(null);
     setConfirmRows(null);
     setSelected(new Set());
-    if (done === 1) {
-      toast.success(t(action === "delete" ? "toastDeleted" : action === "activate" ? "toastActivated" : "toastDeactivated"));
-    } else if (done > 1) {
-      const key = action === "delete" ? "bulkDeleted" : action === "activate" ? "bulkActivated" : "bulkDeactivated";
-      toast.success(t(key, { count: formatNumber(done) }));
+    const done = rows.length - failed.length;
+    const verb = action === "delete" ? "Deleted" : action === "activate" ? "Activated" : "Deactivated";
+    if (failed.length === 0) {
+      toast.success(done === 1 ? t(`toast${verb}`) : t(`bulk${verb}`, { count: formatNumber(done) }));
+    } else {
+      toast.error(t(`bulkPartly${verb}`, { done: formatNumber(done), count: formatNumber(rows.length) }), {
+        description: <ul>{failed.map((line) => <li key={line}>{line}</li>)}</ul>,
+        duration: 10_000,
+      });
     }
   }
 
@@ -226,7 +216,7 @@ export function DiscountList({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuRadioGroup value={sort} onValueChange={(value) => setSort(value as DiscountSort)}>
+                  <DropdownMenuRadioGroup value={sort} onValueChange={(value) => onSortChange(value as DiscountSort)}>
                     {DISCOUNT_SORTS.map((item) => (
                       <DropdownMenuRadioItem key={item} value={item}>{t(SORT_LABEL[item])}</DropdownMenuRadioItem>
                     ))}
@@ -257,8 +247,8 @@ export function DiscountList({
           ) : null}
           {visible.length === 0 ? (
             <div className="flex flex-col items-center gap-1 px-6 py-10 text-center">
-              <h2 className="text-heading-md">{t("noMatches")}</h2>
-              <p className="text-body text-muted-foreground">{t("noMatchesHint")}</p>
+              <h2 className="text-heading-md">{query ? t("noMatches") : t(`emptyTab_${tab}`)}</h2>
+              {query ? <p className="text-body text-muted-foreground">{t("noMatchesHint")}</p> : null}
               {query ? (
                 <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => search("")}>
                   {t("clearSearch")}

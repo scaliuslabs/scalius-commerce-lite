@@ -32,11 +32,27 @@ describe("hero slider document", () => {
           id: "img_1",
           url: "https://cdn.example.com/hero%20image.jpg",
           title: "New arrivals",
+          heading: "",
+          buttonLabel: "",
           link: "/collections/new",
           focalPoint: HERO_SLIDE_DEFAULT_FOCAL_POINT,
         },
       ],
     });
+  });
+
+  it("keeps alt text apart from the optional heading and button drawn over the banner", () => {
+    const result = validateAndNormalizeHeroSlides([{
+      ...baseSlide,
+      title: "Eid offer: 20% off panjabi",
+      heading: "  ঈদ অফার  ",
+      buttonLabel: " Shop now ",
+    }]);
+    expect(result).toMatchObject({
+      ok: true,
+      slides: [{ title: "Eid offer: 20% off panjabi", heading: "ঈদ অফার", buttonLabel: "Shop now" }],
+    });
+    expect(validateAndNormalizeHeroSlides([{ ...baseSlide, buttonLabel: "x".repeat(41) }])).toMatchObject({ ok: false });
   });
 
   it("normalizes a merchant focal point and projects it to CSS object-position", () => {

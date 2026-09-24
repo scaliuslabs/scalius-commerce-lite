@@ -42,6 +42,28 @@ export function OnlineStorePage({
   );
 }
 
+/**
+ * A web address as merchants type it: "example.com/blog" gets https://, and a
+ * doubled scheme ("https://https://…") is written once.
+ */
+export function normalizeWebAddress(value: string): string {
+  const trimmed = value.trim();
+  const rest = trimmed.replace(/^(?:https?(?::\/*|\/+))+/i, "");
+  if (!rest) return "";
+  const insecure = /^http:\/\/(?!https?:)/i.test(trimmed);
+  return `${insecure ? "http" : "https"}://${rest}`;
+}
+
+/** A full http(s) address with a real host name. */
+export function isWebAddress(value: string): boolean {
+  try {
+    const url = new URL(normalizeWebAddress(value));
+    return url.hostname.includes(".") && !/^https?$/i.test(url.hostname.split(".")[0] ?? "");
+  } catch {
+    return false;
+  }
+}
+
 function sameValue(left: unknown, right: unknown): boolean {
   return left === right || JSON.stringify(left) === JSON.stringify(right);
 }
@@ -61,7 +83,10 @@ export function rebaseDraft<T>(draft: T, previous: T, saved: T): T {
   if (!isPlainObject(draft) || !isPlainObject(previous) || !isPlainObject(saved)) return draft;
   const next: Record<string, unknown> = { ...saved };
   for (const key of Object.keys({ ...previous, ...draft })) {
-    if (!sameValue(draft[key], previous[key])) next[key] = rebaseDraft(draft[key], previous[key], saved[key]);
+    if (sameValue(draft[key], previous[key])) continue;
+    // A field the merchant removed (a preset without custom colours) stays removed.
+    if (!(key in draft)) delete next[key];
+    else next[key] = rebaseDraft(draft[key], previous[key], saved[key]);
   }
   return next as T;
 }

@@ -84,6 +84,7 @@ function DropZones({ item, active }: { item: NavigationMenuItemRow; active: bool
 
 function MenuRow({
   item,
+  targetTitle,
   childCount,
   depth,
   expanded,
@@ -95,6 +96,8 @@ function MenuRow({
   handlers,
 }: {
   item: NavigationMenuItemRow;
+  /** The linked page, product, category or collection's name. */
+  targetTitle: string | null;
   childCount: number;
   depth: number;
   expanded: boolean;
@@ -114,7 +117,7 @@ function MenuRow({
     ? t(`system_${item.targetValue ?? "home"}` as "system_home")
     : item.targetType === "internal_path" || item.targetType === "external_url"
       ? item.targetValue ?? ""
-      : t(`link_${item.targetType}` as "link_label");
+      : targetTitle ?? t(`link_${item.targetType}` as "link_label");
 
   return (
     <div className="relative">
@@ -261,12 +264,13 @@ function MenuLevel({
 
   return (
     <>
-      {rows.map(({ item, childCount }, index) => {
+      {rows.map(({ item, targetTitle, childCount }, index) => {
         const expanded = !collapsed.has(item.id);
         return (
           <div key={item.id}>
             <MenuRow
               item={item}
+              targetTitle={targetTitle}
               childCount={childCount}
               depth={depth}
               expanded={expanded}
