@@ -21,7 +21,7 @@ function line(id: string, unitPriceMinor: number, quantity: number, extra: Parti
 
 function cart(overrides: Partial<PromotionEvaluationCart> = {}): PromotionEvaluationCart {
     return {
-        currencyCode: "BDT",
+        currencyCode: "USD",
         lines: [line("a", 500, 2), line("b", 500, 1)],
         shippingAmountMinor: 100,
         submittedCodes: [],
@@ -98,6 +98,27 @@ describe("discount evaluator", () => {
         });
     });
 
+    it("rounds BDT percentage savings to whole taka so cash on delivery totals stay whole", () => {
+        const bdt = (config: Record<string, unknown>) => ({ ...config, currencyCode: "BDT" });
+        // 15% of ৳2,050 is ৳307.50: half-up to ৳308. 5% of ৳250 is ৳12.50: ৳13.
+        const order = evaluatePromotionCandidates({
+            cart: cart({ currencyCode: "BDT", lines: [line("a", 205_000, 1)], shippingAmountMinor: 0 }),
+            candidates: [candidate("o15", orderEffect({ basisPoints: 1_500 }))],
+        });
+        expect(order.applied?.totalDiscountMinor).toBe(30_800);
+        const product = evaluatePromotionCandidates({
+            cart: cart({ currencyCode: "BDT", lines: [line("a", 25_000, 1)], shippingAmountMinor: 0 }),
+            candidates: [candidate("p5", lineEffect({ basisPoints: 500 }))],
+        });
+        expect(product.applied?.totalDiscountMinor).toBe(1_300);
+        // Fixed amounts keep the merchant's exact value.
+        const fixed = evaluatePromotionCandidates({
+            cart: cart({ currencyCode: "BDT", lines: [line("a", 25_000, 1)], shippingAmountMinor: 0 }),
+            candidates: [candidate("f", lineEffect(bdt({ amountMinor: 1_050 }), "fixed_amount_off"))],
+        });
+        expect(fixed.applied?.totalDiscountMinor).toBe(1_050);
+    });
+
     it("limits product discounts to chosen products and collections", () => {
         const lines = [
             line("a", 1_000, 1),
@@ -123,23 +144,23 @@ describe("discount evaluator", () => {
         const lines = [line("a", 500, 3), line("b", 500, 1)];
         expect(lineDiscounts(evaluate({ lines }, [scoped]))).toEqual({ a: 150 });
         const subtotal = candidate("t", orderEffect({ basisPoints: 1_000 }), {
-            conditions: [{ id: "c2", kind: "minimum_merchandise_subtotal", config: { amountMinor: 1_600, currencyCode: "BDT" } }],
+            conditions: [{ id: "c2", kind: "minimum_merchandise_subtotal", config: { amountMinor: 1_600, currencyCode: "USD" } }],
         });
         expect(evaluate({}, [subtotal]).rejected).toEqual([{ promotionId: "t", reason: "minimum_subtotal_not_met" }]);
     });
 
     it("applies a fixed product amount once per order or to each item, never above the price", () => {
         const lines = [line("a", 300, 2), line("b", 50, 1)];
-        const once = evaluate({ lines }, [candidate("once", lineEffect({ amountMinor: 100, currencyCode: "BDT" }, "fixed_amount_off"))]);
+        const once = evaluate({ lines }, [candidate("once", lineEffect({ amountMinor: 100, currencyCode: "USD" }, "fixed_amount_off"))]);
         expect(once.applied?.totalDiscountMinor).toBe(100);
         expect(lineDiscounts(once)).toEqual({ a: 92, b: 8 });
-        const each = evaluate({ lines }, [candidate("each", lineEffect({ amountMinor: 100, currencyCode: "BDT", eachItem: true }, "fixed_amount_off"))]);
+        const each = evaluate({ lines }, [candidate("each", lineEffect({ amountMinor: 100, currencyCode: "USD", eachItem: true }, "fixed_amount_off"))]);
         expect(lineDiscounts(each)).toEqual({ a: 200, b: 50 });
     });
 
     it("combines discounts of different classes when either one allows it", () => {
         const product = candidate("prod", lineEffect({ basisPoints: 1_000 }), { combinesWith: { product: false, order: true, shipping: false } });
-        const order = candidate("order", orderEffect({ amountMinor: 135, currencyCode: "BDT" }, "fixed_amount_off"));
+        const order = candidate("order", orderEffect({ amountMinor: 135, currencyCode: "USD" }, "fixed_amount_off"));
         const shipping = candidate("ship", freeShipping);
         const result = evaluate({}, [product, order, shipping]);
         // The product discount's own checkbox is enough to stack with the order discount.
@@ -161,7 +182,7 @@ describe("discount evaluator", () => {
     it("bundles free shipping with a product discount, checking its minimum after the discount", () => {
         const bundle = (minimumMinor: number) => candidate("bundle", lineEffect({ basisPoints: 2_000 }), {
             effects: [lineEffect({ basisPoints: 2_000 }), freeShipping],
-            conditions: [{ id: "c_ship", kind: "minimum_merchandise_subtotal", config: { amountMinor: minimumMinor, currencyCode: "BDT", shippingOnly: true } }],
+            conditions: [{ id: "c_ship", kind: "minimum_merchandise_subtotal", config: { amountMinor: minimumMinor, currencyCode: "USD", shippingOnly: true } }],
         });
         // 1500 subtotal − 20% = 1200 after the discount.
         const met = evaluate({}, [bundle(1_200)]);
@@ -172,7 +193,7 @@ describe("discount evaluator", () => {
         // A standalone free-shipping minimum also counts what is left after other savings.
         const product = candidate("prod", lineEffect({ basisPoints: 2_000 }), { combinesWith: ALL });
         const shipping = (amountMinor: number) => candidate("ship", freeShipping, {
-            conditions: [{ id: "c", kind: "minimum_merchandise_subtotal", config: { amountMinor, currencyCode: "BDT" } }],
+            conditions: [{ id: "c", kind: "minimum_merchandise_subtotal", config: { amountMinor, currencyCode: "USD" } }],
         });
         expect(lineDiscounts(evaluate({}, [product, shipping(1_200)])).shipping).toBe(100);
         const blocked = evaluate({}, [product, shipping(1_300)]);
@@ -240,7 +261,7 @@ describe("discount evaluator", () => {
                 basisPoints: 10_000,
                 productIds: ["prod_case"],
                 getQuantity: 1,
-                buy: { amountMinor: 15_000, currencyCode: "BDT", productIds: ["prod_phone"] },
+                buy: { amountMinor: 15_000, currencyCode: "USD", productIds: ["prod_phone"] },
             }));
             expect(lineDiscounts(evaluate({ lines }, [rule]))).toEqual({ case: 1_500 });
         });
@@ -304,8 +325,8 @@ describe("discount evaluator", () => {
             const combos = () => ({ product: random(2) === 0, order: random(2) === 0, shipping: random(2) === 0 });
             const candidates = [
                 candidate("pct", lineEffect({ basisPoints: 1 + random(10_000), collectionIds: ["c1"] }), { combinesWith: combos() }),
-                candidate("fixed", lineEffect({ amountMinor: 1 + random(3_000), currencyCode: "BDT", eachItem: random(2) === 0 }, "fixed_amount_off"), { combinesWith: combos() }),
-                candidate("order", orderEffect({ amountMinor: 1 + random(20_000), currencyCode: "BDT" }, "fixed_amount_off"), { combinesWith: combos() }),
+                candidate("fixed", lineEffect({ amountMinor: 1 + random(3_000), currencyCode: "USD", eachItem: random(2) === 0 }, "fixed_amount_off"), { combinesWith: combos() }),
+                candidate("order", orderEffect({ amountMinor: 1 + random(20_000), currencyCode: "USD" }, "fixed_amount_off"), { combinesWith: combos() }),
                 candidate("orderpct", orderEffect({ basisPoints: 1 + random(10_000) }), { combinesWith: combos(), priority: random(3) }),
                 candidate("ship", freeShipping, { combinesWith: combos() }),
                 candidate("bxgy", lineEffect({ basisPoints: 1 + random(10_000), collectionIds: ["c2"], getQuantity: 1 + random(2), buy: { quantity: 1 + random(3), collectionIds: ["c1"] } }), { combinesWith: combos() }),

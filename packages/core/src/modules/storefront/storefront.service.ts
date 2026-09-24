@@ -21,6 +21,8 @@ import {
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { nanoid } from "nanoid";
+import { formatMoney, getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
 import {
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
@@ -107,7 +109,7 @@ export async function getHomepageData(db: Database) {
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await db.batch([
     // 0. SEO + homepage presentation documents
-    selectSettingsDocuments(db, [seoDocument, homepageDocument]),
+    selectSettingsDocuments(db, [seoDocument, homepageDocument, currencyDocument]),
 
     // 1. Hero sliders (desktop and mobile)
     db
@@ -161,12 +163,13 @@ export async function getHomepageData(db: Database) {
         )`,
       )),
 
-    // 4. One active method is enough to prove delivery is offered.
+    // 4. Active delivery methods, for the homepage delivery facts.
     db
-      .select({ id: shippingMethods.id })
+      .select({ name: shippingMethods.name, feeMinor: shippingMethods.feeMinor })
       .from(shippingMethods)
-      .where(eq(shippingMethods.isActive, true))
-      .limit(1),
+      .where(and(eq(shippingMethods.isActive, true), isNull(shippingMethods.deletedAt)))
+      .orderBy(shippingMethods.sortOrder, shippingMethods.feeMinor)
+      .limit(4),
   ]);
 
   const [
@@ -179,9 +182,10 @@ export async function getHomepageData(db: Database) {
     batchResults;
 
   const rows = documentRows as SettingsDocumentRow[];
-  const [seo, homepage] = await Promise.all([
+  const [seo, homepage, currency] = await Promise.all([
     seoDocument.fromRows(rows),
     homepageDocument.fromRows(rows),
+    currencyDocument.fromRows(rows),
   ]);
   const seoSettings = seo.stored ? {
     homepageTitle: seo.value.homepageTitle,
@@ -270,11 +274,17 @@ export async function getHomepageData(db: Database) {
     detail: string;
     href?: string;
   }> = [];
-  if ((shippingMethodResults as Array<{ id: string }>).length > 0) {
+  const deliveryMethods = shippingMethodResults as Array<{ name: string; feeMinor: number }>;
+  if (deliveryMethods.length > 0) {
+    const currencyCode = currency.value.currencyCode;
+    const money = (minor: number) => minor === 0
+      ? "free"
+      : formatMoney(fromMinor(minor, getDecimalPlaces(currencyCode)), { code: currencyCode });
+    const lowestFeeMinor = Math.min(...deliveryMethods.map(({ feeMinor }) => feeMinor));
     trustItems.push({
       kind: "delivery",
-      title: "Delivery options",
-      detail: "Choose an available method at checkout.",
+      title: lowestFeeMinor === 0 ? "Free delivery available" : `Delivery from ${money(lowestFeeMinor)}`,
+      detail: deliveryMethods.slice(0, 3).map(({ name, feeMinor }) => `${name} ${money(feeMinor)}`).join(" · "),
     });
   }
   const returnPolicy = seo.value.returnPolicy;
@@ -607,7 +617,14 @@ function resolveStorefrontCopy(
     languageCode: checkoutLanguageBaseCode(code),
     addToCartText: copy.addToCartText,
     buyNowText: copy.buyNowText,
-    selectOptionsText: copy.selectOptionsText,
     unavailableText: copy.unavailableText,
+    chooseOptionText: copy.chooseOptionText,
+    fromPriceText: copy.fromPriceText,
+    quantityLabelText: copy.quantityLabelText,
+    quantityLimitText: copy.quantityLimitText,
+    saleOfferText: copy.saleOfferText,
+    saleOfferSpendText: copy.saleOfferSpendText,
+    freeBenefitText: copy.freeBenefitText,
+    percentBenefitText: copy.percentBenefitText,
   };
 }

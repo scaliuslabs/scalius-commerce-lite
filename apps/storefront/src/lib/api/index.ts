@@ -22,7 +22,6 @@ export * from "./navigation";
 export * from "./pages";
 export * from "./search";
 export * from "./orders";
-export * from "./discounts";
 export * from "./shipping";
 export * from "./settings";
 export * from "./attributes";

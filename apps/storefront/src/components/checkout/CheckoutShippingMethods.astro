@@ -1,9 +1,10 @@
 ---
 // Server-rendered delivery options. The cart page script keeps the selected
-// method in `window.lastShippingEventDetail` and swaps fee labels to "free"
-// when a cart item waives delivery (`enhanceShippingMethods`).
+// method in `window.lastShippingEventDetail` and, when a cart item waives
+// delivery, shows "Free" with the waived fee (`enhanceShippingMethods`).
 import type { ShippingMethod } from "@/lib/api";
-import { formatPriceShort } from "@/lib/currency";
+import { formatMoney } from "@/lib/currency";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 
 interface Props {
   shippingMethods: ShippingMethod[];
@@ -11,6 +12,7 @@ interface Props {
   freeText: string;
   noShippingMethodsText: string;
   waivedShippingFeeText: string;
+  pickupFromText: string;
 }
 
 const {
@@ -19,24 +21,30 @@ const {
   freeText,
   noShippingMethodsText,
   waivedShippingFeeText,
+  pickupFromText,
 } = Astro.props;
 
 const methods = shippingMethods.map((method) => ({
   ...method,
-  feeLabel: method.fee === 0 ? freeText : formatPriceShort(method.fee),
+  feeLabel: method.fee === 0 ? freeText : formatMoney(method.fee),
+  pickup: method.kind === "pickup" && method.pickupAddress
+    ? [formatCheckoutLanguageText(pickupFromText, { address: method.pickupAddress }), method.pickupHours]
+        .filter(Boolean).join(" · ")
+    : null,
 }));
 const single = methods.length === 1 ? methods[0] : null;
+const waivedText = (feeLabel: string) =>
+  formatCheckoutLanguageText(waivedShippingFeeText, { fee: feeLabel });
 ---
 
 <div
   data-shipping-methods
   data-free-text={freeText}
-  data-waived-text={waivedShippingFeeText}
 >
   {
     methods.length === 0 ? (
       <>
-        <p class="mb-0.5 block text-xs font-medium sm:text-sm">{shippingMethodLabel}</p>
+        <p class="mb-1 block text-sm font-medium text-foreground">{shippingMethodLabel}</p>
         <p class="text-sm text-muted-foreground">{noShippingMethodsText}</p>
       </>
     ) : single ? (
@@ -49,46 +57,49 @@ const single = methods.length === 1 ? methods[0] : null;
           data-fee={single.fee}
           data-name={single.name}
         />
-        <div class="flex min-h-11 items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
-          <span class="text-sm font-medium text-foreground">{single.name}</span>
-          <span
-            class="ml-3 whitespace-nowrap text-sm font-semibold text-foreground"
-            data-fee-label={single.feeLabel}
-          >
-            {single.feeLabel}
-          </span>
+        <div class="rounded-lg border border-border bg-background px-3 py-2.5">
+          <div class="flex items-start justify-between gap-3">
+            <span class="text-sm font-medium text-foreground">{single.name}</span>
+            <span class="whitespace-nowrap text-sm font-semibold text-foreground" data-fee-label={single.feeLabel}>
+              {single.feeLabel}
+            </span>
+          </div>
+          {single.description && <p class="mt-0.5 text-sm text-muted-foreground">{single.description}</p>}
+          {single.pickup && <p class="mt-0.5 text-sm text-foreground">{single.pickup}</p>}
+          <p class="mt-0.5 hidden text-sm text-muted-foreground" data-waived-note>{waivedText(single.feeLabel)}</p>
         </div>
       </>
     ) : (
-      <fieldset class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <fieldset id="shippingMethods" aria-describedby="shippingMethodError" class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <legend class="mb-2 block text-sm font-medium text-foreground">
           {shippingMethodLabel}
         </legend>
         {methods.map((method, index) => (
-          <label class="flex min-h-11 cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-white p-3 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 has-[:checked]:border-black has-[:checked]:ring-1 has-[:checked]:ring-black has-[:checked]:shadow-sm">
-            <span class="flex items-center gap-3">
-              <input
-                type="radio"
-                name="shippingLocation"
-                value={method.id}
-                checked={index === 0}
-                data-fee={method.fee}
-                data-name={method.name}
-                class="h-4 w-4 shrink-0 accent-black"
-              />
-              <span class="text-xs font-medium leading-tight text-gray-900 sm:text-sm">
-                {method.name}
+          <label class="flex min-h-11 cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+            <input
+              type="radio"
+              name="shippingLocation"
+              value={method.id}
+              checked={index === 0}
+              data-fee={method.fee}
+              data-name={method.name}
+              class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="flex items-start justify-between gap-2">
+                <span class="text-sm font-medium leading-snug text-foreground">{method.name}</span>
+                <span class="whitespace-nowrap text-sm font-semibold text-foreground" data-fee-label={method.feeLabel}>
+                  {method.feeLabel}
+                </span>
               </span>
-            </span>
-            <span
-              class="ml-2 whitespace-nowrap text-xs font-bold text-gray-900 sm:text-sm"
-              data-fee-label={method.feeLabel}
-            >
-              {method.feeLabel}
+              {method.description && <span class="mt-0.5 block text-sm text-muted-foreground">{method.description}</span>}
+              {method.pickup && <span class="mt-0.5 block text-sm text-foreground">{method.pickup}</span>}
+              <span class="mt-0.5 hidden text-sm text-muted-foreground" data-waived-note>{waivedText(method.feeLabel)}</span>
             </span>
           </label>
         ))}
       </fieldset>
     )
   }
+  <p id="shippingMethodError" class="mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
 </div>

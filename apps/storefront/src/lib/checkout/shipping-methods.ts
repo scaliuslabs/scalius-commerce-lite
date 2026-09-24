@@ -40,17 +40,16 @@ export function enhanceShippingMethods(
     window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail }));
   };
 
+  // A free-delivery item waives every method's fee: say so next to each one.
   const refreshFees = () => {
     const waived = options.isFeeWaived();
     const freeText = container.dataset.freeText || "";
-    const waivedText = container.dataset.waivedText || "";
     for (const label of container.querySelectorAll<HTMLElement>("[data-fee-label]")) {
-      const control = label.closest("label")?.querySelector("input") ?? controls[0];
-      const baseLabel = label.dataset.feeLabel || "";
+      const option = label.closest("label") ?? container;
+      const control = option.querySelector("input") ?? controls[0];
       const waivesFee = waived && Number(control?.dataset.fee) > 0;
-      label.textContent = waivesFee ? freeText : baseLabel;
-      if (waivesFee) label.title = waivedText.replace("{fee}", baseLabel);
-      else label.removeAttribute("title");
+      label.textContent = waivesFee ? freeText : label.dataset.feeLabel || "";
+      option.querySelector("[data-waived-note]")?.classList.toggle("hidden", !waivesFee);
     }
   };
 

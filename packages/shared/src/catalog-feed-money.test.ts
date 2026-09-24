@@ -48,9 +48,11 @@ describe("catalog feed money", () => {
         "percentage",
         10,
         null,
-        "BDT",
+        "USD",
       ),
     ).toBe(0.91);
+    // BDT feed prices follow checkout's whole-taka cash rounding.
+    expect(calculateCatalogFeedDiscountedAmount(8990, "percentage", 8, null, "BDT")).toBe(8271);
   });
 
   it("rejects exponent-form legacy amounts instead of emitting invalid XML money", () => {

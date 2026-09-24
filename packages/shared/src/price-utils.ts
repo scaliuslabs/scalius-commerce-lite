@@ -29,17 +29,17 @@ export function roundPriceToPrecision(
 
 /**
  * The discounted unit price of a decimal HTTP price, using the exact integer
- * rule checkout applies (`discountedPriceMinor`), so displayed and charged
- * prices always agree.
+ * rule checkout applies (`discountedPriceMinor`, including BDT cash
+ * rounding), so displayed and charged prices always agree.
  */
-export function calculateDiscountedPriceAtPrecision(
+export function calculateDiscountedPrice(
   price: number,
   discountType: unknown,
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
-  precision: number,
+  currencyCode: string,
 ): number {
-  const places = Number.isInteger(precision) && precision >= 0 && precision <= 3 ? precision : 2;
+  const places = getDecimalPlaces(currencyCode);
   // Amounts too large for integer minor units are not prices: the result is
   // 0, which every caller already treats as "not sellable at a price".
   const amount = (value: number | null | undefined): number | null => {
@@ -54,7 +54,7 @@ export function calculateDiscountedPriceAtPrecision(
   const discountMinor = amount(discountAmount);
   if (priceMinor === null || discountMinor === null) return 0;
   return fromMinor(
-    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor),
+    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor, currencyCode),
     places,
   );
 }

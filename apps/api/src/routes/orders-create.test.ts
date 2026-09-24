@@ -186,7 +186,9 @@ beforeEach(() => {
     usdExchangeRate: "1",
   });
   mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
-  mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, snapshot: null, taxAllocation: undefined, offers: [] });
+  mocks.quoteStorefrontDiscount.mockResolvedValue({
+    applied: null, snapshot: null, taxAllocation: undefined, discounts: [], offers: [], rejectedCodes: [],
+  });
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
   mocks.createStorefrontOrder.mockResolvedValue({
     checkoutToken: "chk_order_1",
@@ -252,7 +254,6 @@ const validOrderBody = {
       variantLabel: null,
     },
   ],
-  discountAmount: null,
   shippingCharge: 0,
   paymentMethod: "cod",
   inventoryPool: "regular",
@@ -923,7 +924,19 @@ describe("authoritative tax quote", () => {
       hasFreeDeliveryProduct: false,
     });
     const taxAllocation = { lines: [{ lineId: "cart:0:variant_1", amountMinor: 5_000 }], shippingMinor: 0 };
-    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: {}, snapshot: {}, taxAllocation, offers: ["Buy a tee, get a cap free"] });
+    const offer = {
+      promotionId: "promo_gift", title: "Buy a tee, get a cap free", code: null, kind: "get",
+      basisPoints: 10_000, quantity: 1, shortfallMinor: null,
+      products: [{ id: "prod_cap", slug: "cap", name: "Cap", variantId: "var_cap", price: 200 }],
+    };
+    mocks.quoteStorefrontDiscount.mockResolvedValue({
+      applied: {},
+      snapshot: {},
+      taxAllocation,
+      discounts: [{ promotionId: "promo_50", title: "Half off", code: "PRODUCT50", amountMinor: 5_000 }],
+      offers: [offer],
+      rejectedCodes: [{ code: "EXTRA", reason: "minimum_quantity", message: "Add 1 more item to use EXTRA.", shortfallQuantity: 1 }],
+    });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -939,7 +952,7 @@ describe("authoritative tax quote", () => {
           city: "city_1",
           zone: "zone_1",
           shippingMethodId: "shipping_1",
-          discountCode: "PRODUCT50",
+          discountCodes: ["PRODUCT50", "EXTRA"],
           customerPhone: "+8801712345678",
         }),
       },
@@ -947,13 +960,20 @@ describe("authoritative tax quote", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ data: { discountOffers: ["Buy a tee, get a cap free"] } });
+    await expect(response.json()).resolves.toMatchObject({ data: {
+      discounts: [{ promotionId: "promo_50", title: "Half off", code: "PRODUCT50", amount: 50 }],
+      offers: [{
+        title: "Buy a tee, get a cap free", kind: "get", percentOff: 100, quantity: 1, shortfallAmount: null,
+        products: [{ id: "prod_cap", slug: "cap", name: "Cap", variantId: "var_cap", price: 200 }],
+      }],
+      rejectedCodes: [{ code: "EXTRA", reason: "minimum_quantity", message: "Add 1 more item to use EXTRA.", shortfallQuantity: 1 }],
+    } });
     expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ promotionDiscountAllocation: taxAllocation }),
     );
     expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      code: "PRODUCT50",
+      codes: ["PRODUCT50", "EXTRA"],
       customerId: "customer_quote_owner",
       customerPhone: "+8801712345678",
       cart: expect.objectContaining({
@@ -2713,7 +2733,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
-  it("rejects multiple discount codes at the checkout schema boundary", async () => {
+  it("rejects more discount codes than a buyer may combine at the checkout schema boundary", async () => {
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -2723,7 +2743,7 @@ describe("create order commit/KV ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...validOrderBody,
-          discountCode: ["SAVE10", "DELIVERY"],
+          discountCodes: ["A1A", "B2B", "C3C", "D4D", "E5E", "F6F"],
         }),
       },
       { CACHE: kv } as never,

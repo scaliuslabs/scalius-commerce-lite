@@ -25,6 +25,9 @@ const discountMocks = vi.hoisted(() => ({
     applied: null,
     snapshot: null,
     taxAllocation: undefined,
+    discounts: [],
+    offers: [],
+    rejectedCodes: [],
   })),
 }));
 
@@ -235,8 +238,7 @@ function createOrderInput(overrides: Partial<CreateStorefrontOrderInput> = {}): 
         variantLabel: null,
       },
     ],
-    discountAmount: null,
-    discountCode: null,
+    discountCodes: [],
     shippingCharge: 0,
     shippingMethodId: "ship_standard",
     paymentMethod: PaymentMethod.COD,
@@ -385,13 +387,16 @@ describe("createStorefrontOrder tax discount parity", () => {
       applied,
       snapshot: { cart: {}, applied },
       taxAllocation,
+      discounts: [],
+      offers: [],
+      rejectedCodes: [],
     });
     const result = await placeOrder({
-      inputOverrides: { discountCode: "SAVE15", discountAmount: 9_999 },
+      inputOverrides: { discountCodes: ["SAVE15"] },
       customerIdentity: { customerId: "customer_session_owner", source: "authenticated" },
     });
     expect(discountMocks.quoteStorefrontDiscount).toHaveBeenLastCalledWith(expect.anything(), {
-      code: "SAVE15",
+      codes: ["SAVE15"],
       customerId: "customer_session_owner",
       customerPhone: "+8801700000000",
       cart: {
@@ -415,11 +420,16 @@ describe("createStorefrontOrder tax discount parity", () => {
   });
 
   it("fails closed with the buyer-facing reason when the code does not apply", async () => {
-    discountMocks.quoteStorefrontDiscount.mockRejectedValueOnce(
-      new ValidationError("Your cart does not meet this discount's minimum subtotal."),
-    );
-    await expect(placeOrder({ inputOverrides: { discountCode: "SAVE20" } }))
-      .rejects.toThrow("minimum subtotal");
+    discountMocks.quoteStorefrontDiscount.mockResolvedValueOnce({
+      applied: null,
+      snapshot: null,
+      taxAllocation: undefined,
+      discounts: [],
+      offers: [],
+      rejectedCodes: [{ code: "SAVE20", reason: "minimum_subtotal", message: "Add ৳200 more to use SAVE20." }],
+    });
+    await expect(placeOrder({ inputOverrides: { discountCodes: ["SAVE20"] } }))
+      .rejects.toThrow("Add ৳200 more to use SAVE20.");
   });
 
   it("snapshots the actual resolved image asset in the checkout commit payload", async () => {

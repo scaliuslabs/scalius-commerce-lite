@@ -9,46 +9,45 @@ export interface ProductActionsPresentation {
   buyNow: ProductActionPresentation;
 }
 
-/** Button copy from the active checkout language (layout `storefrontCopy`). */
+/** Product page copy from the active checkout language (layout `storefrontCopy`). */
 export interface ProductActionCopy {
   addToCartText: string;
   buyNowText: string;
-  selectOptionsText: string;
   unavailableText: string;
+  chooseOptionText: string;
+  fromPriceText: string;
+  quantityLabelText: string;
+  quantityLimitText: string;
+  saleOfferText: string;
+  saleOfferSpendText: string;
+  freeBenefitText: string;
+  percentBenefitText: string;
 }
 
-export const DEFAULT_PRODUCT_ACTION_COPY: ProductActionCopy = {
-  addToCartText: "Add to Cart",
-  buyNowText: "Buy Now",
-  selectOptionsText: "Select Options",
-  unavailableText: "Unavailable",
-};
-
+/**
+ * Both purchase buttons stay enabled while the buyer is still choosing
+ * options (a tap says which option is missing); they are disabled only when
+ * nothing, or the exact chosen combination, can be bought.
+ */
 export function getProductActionsPresentation(input: {
   productName: string;
-  exactVariantAvailable: boolean;
   anyVariantAvailable: boolean;
-  copy?: ProductActionCopy;
+  /** The exact chosen (or linked) combination is sold out. */
+  chosenVariantSoldOut?: boolean;
+  copy: Pick<ProductActionCopy, "addToCartText" | "buyNowText" | "unavailableText">;
 }): ProductActionsPresentation {
   const productName = input.productName.trim() || "Product";
-  const copy = input.copy ?? DEFAULT_PRODUCT_ACTION_COPY;
+  const copy = input.copy;
   const action = (label: string, disabled: boolean) => ({
     disabled,
     label,
     ariaLabel: `${label} — ${productName}`,
   });
 
-  if (!input.anyVariantAvailable) {
+  if (!input.anyVariantAvailable || input.chosenVariantSoldOut) {
     return {
       addToCart: action(copy.unavailableText, true),
       buyNow: action(copy.unavailableText, true),
-    };
-  }
-
-  if (!input.exactVariantAvailable) {
-    return {
-      addToCart: action(copy.selectOptionsText, true),
-      buyNow: action(copy.buyNowText, true),
     };
   }
 

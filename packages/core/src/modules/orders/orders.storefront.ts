@@ -9,7 +9,7 @@ import {
     calculateStorefrontTaxQuote,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
-import { quoteStorefrontDiscount } from "../promotions";
+import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
 import {
     shippingMethods,
     PaymentMethod,
@@ -338,10 +338,10 @@ export async function createStorefrontOrder(
     });
 
     // ------------------------------------------------------------------
-    // DISCOUNT: the typed code (fails closed) against active automatic ones
+    // DISCOUNT: the typed codes (each fails closed) against active automatic ones
     // ------------------------------------------------------------------
     const discount = await quoteStorefrontDiscount(storefrontDb, {
-        code: data.discountCode,
+        codes: data.discountCodes,
         customerId: accountOwnerCustomer?.id,
         customerPhone: data.customerPhone,
         cart: {
@@ -356,6 +356,7 @@ export async function createStorefrontOrder(
             shippingAmountMinor: verifiedShippingMinor,
         },
     });
+    assertDiscountCodesApplied(discount);
     const taxQuoteInput = {
         destination: {
             city: data.city,

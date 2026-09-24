@@ -10,6 +10,7 @@
 // `customerPhone` input (also exposed as `data-e164-value`); it stays empty
 // until the visible number validates.
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { compactPhone } from "@scalius/shared/phone-input";
 import {
   readCheckoutFormDraft,
   syncCheckoutTransferSession,
@@ -33,10 +34,6 @@ const BD_MOBILE = /^(?:\+?880|0)?(1[3-9]\d{8})$/;
 // loads the international validator.
 const BD_MOBILE_PREFIX =
   /^(?:\+(?:8(?:8(?:0(?:1(?:[3-9]\d{0,8})?)?)?)?)?|8(?:8(?:0(?:1(?:[3-9]\d{0,8})?)?)?)?|0(?:1(?:[3-9]\d{0,8})?)?|1(?:[3-9]\d{0,8})?)$/;
-
-function compactPhone(raw: string): string {
-  return raw.replace(/[\s().-]/g, "");
-}
 
 export function normalizePhonePolicy(
   policy: PhoneCountryPolicy | undefined,
@@ -156,13 +153,8 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
       errorEl.classList.toggle("hidden", !message);
     }
     root.querySelector("[data-phone-box]")?.classList.toggle("border-destructive", Boolean(message));
-    if (message) {
-      input.setAttribute("aria-invalid", "true");
-      input.setAttribute("aria-describedby", "customerPhone-error");
-    } else {
-      input.removeAttribute("aria-invalid");
-      input.removeAttribute("aria-describedby");
-    }
+    if (message) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
   };
 
   const syncCanonical = () => {
@@ -206,8 +198,17 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
       syncWhenIntlLoads(validate);
       return;
     }
+    // An empty, untouched field stays quiet until the buyer submits.
+    if (!input.value.trim() && current.message === "required") {
+      setError("");
+      return;
+    }
     setError(current.ok ? "" : messages[current.message ?? "invalid"]);
-    if (current.ok) persist(current.value);
+    if (current.ok) {
+      // Bangla digits, spaces and +880 become the familiar 01XXXXXXXXX.
+      input.value = displayPhone(current.value, country);
+      persist(current.value);
+    }
   };
 
   const draft = readCheckoutFormDraft();
@@ -252,10 +253,10 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
   window.addEventListener(
     "phone-validation-error",
     (event) => {
-      const detail = (event as CustomEvent<{ name?: string; message?: string }>).detail;
+      const detail = (event as CustomEvent<{ name?: string; message?: string; focus?: boolean }>).detail;
       if (detail?.name !== "customerPhone") return;
       setError(detail.message || messages.invalid);
-      requestAnimationFrame(() => input.focus());
+      if (detail.focus !== false) requestAnimationFrame(() => input.focus());
     },
     { signal },
   );

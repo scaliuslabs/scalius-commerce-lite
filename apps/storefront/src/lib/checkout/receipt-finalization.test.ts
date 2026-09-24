@@ -1,6 +1,24 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { resolveCheckoutReceiptCleanup } from "./receipt-finalization";
+import {
+  addToCart,
+  cartStore,
+  clearCart,
+  createCartItemKey,
+  hydrateCartFromStorage,
+} from "@/store/cart";
+import {
+  finalizeCheckoutReceipt,
+  readLastPlacedOrderId,
+  rememberSubmittedCart,
+  resolveCheckoutReceiptCleanup,
+} from "./receipt-finalization";
+import {
+  hashCheckoutCartFingerprint,
+  readCheckoutFormDraft,
+  writeCheckoutFormDraft,
+} from "./session-state";
 
 describe("checkout receipt cleanup", () => {
   it("clears only the exact accepted checkout", () => {
@@ -92,5 +110,47 @@ describe("checkout receipt cleanup", () => {
       clearCheckoutAttemptPreservingDraft: false,
       clearRecoveryPointer: false,
     });
+  });
+});
+
+describe("finalizeCheckoutReceipt", () => {
+  function receipt(orderId: string, checkoutId: string, cartHash: string): HTMLElement {
+    const element = document.createElement("div");
+    element.dataset.orderSuccessState = "order_placed";
+    element.dataset.orderId = orderId;
+    element.dataset.checkoutCartFinalize = "true";
+    element.dataset.checkoutFinalizeId = checkoutId;
+    element.dataset.checkoutFinalizeCartHash = cartHash;
+    return element;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    hydrateCartFromStorage();
+    clearCart();
+  });
+
+  it("takes only the ordered lines out when another tab added items meanwhile", async () => {
+    addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    const submitted = JSON.stringify(cartStore.get().items);
+    rememberSubmittedCart(submitted);
+    sessionStorage.setItem("checkoutId", "chk_session_a");
+    writeCheckoutFormDraft({ customerName: "Buyer", notes: "Call first" });
+    // The second tab adds a cap after this tab submitted the tee.
+    addToCart({ id: "cap", variantId: "cap_1", name: "Cap", price: 200 });
+
+    await finalizeCheckoutReceipt(receipt("ORDER1", "chk_session_a", (await hashCheckoutCartFingerprint(submitted))!));
+
+    expect(Object.keys(cartStore.get().items)).toEqual([createCartItemKey({ id: "cap", variantId: "cap_1" })]);
+    expect(readCheckoutFormDraft()).toBeNull();
+    expect(readLastPlacedOrderId()).toBe("ORDER1");
+  });
+
+  it("leaves the cart alone when this tab did not submit the order", async () => {
+    addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    await finalizeCheckoutReceipt(receipt("ORDER2", "chk_session_other", "cartfp_x"));
+    expect(cartStore.get().totalItems).toBe(1);
+    expect(readLastPlacedOrderId()).toBeNull();
   });
 });

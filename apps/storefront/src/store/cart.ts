@@ -22,25 +22,16 @@ export type CartItem = {
 
 export type VariantCartItem = CartItem & { variantId: string };
 
-export type Discount = {
-  id: string;
-  code: string;
-  type: string;
-  discountValue: number;
-  discountAmount: number;
-};
-
 export type CartStore = {
   items: Record<string, VariantCartItem>;
   totalItems: number;
   totalAmount: number;
-  discount: Discount | null;
+  /**
+   * Discount codes the buyer applied. Only codes live here: every amount comes
+   * from the server quote, so codes survive cart edits and are re-checked.
+   */
+  discountCodes: string[];
 };
-
-export type CartStateSnapshot = Pick<
-  CartStore,
-  "items" | "totalItems" | "totalAmount" | "discount"
->;
 
 type CartAbsoluteQuantityPatch = {
   lineKey: string;
@@ -82,6 +73,9 @@ export type CartLineItemUpdate = {
 };
 
 export const MAX_CART_QUANTITY = 99;
+/** Mirrors the API's `MAX_SUBMITTED_DISCOUNT_CODES`. */
+export const MAX_DISCOUNT_CODES = 5;
+const DISCOUNT_CODE_PATTERN = /^[A-Z0-9_-]{1,50}$/;
 const MAX_CART_LINE_PATCHES = 100;
 
 const MAX_CART_ID_LENGTH = 160;
@@ -91,7 +85,7 @@ const EMPTY_CART_STATE: CartStore = {
   items: {},
   totalItems: 0,
   totalAmount: 0,
-  discount: null,
+  discountCodes: [],
 };
 
 let hasHydratedFromStorage = false;
@@ -121,10 +115,16 @@ if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
     if (!canPersistToStorage) return;
     try {
-      localStorage.setItem("cart", JSON.stringify(state));
+      const json = JSON.stringify(state);
+      if (localStorage.getItem("cart") !== json) localStorage.setItem("cart", json);
     } catch (error) {
       console.warn("Could not persist cart state.", error);
     }
+  });
+  // Another tab changed the cart (an order, an add, a removal): follow it, so
+  // this tab never writes its older copy back over the newer one.
+  window.addEventListener?.("storage", (event) => {
+    if (event.key === "cart" && hasHydratedFromStorage) readCartFromStorage(true);
   });
 }
 
@@ -176,23 +176,14 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
   };
 }
 
-function normalizeStoredDiscount(value: unknown): Discount | null {
-  if (!isRecord(value)) return null;
-  if (
-    typeof value.id !== "string" ||
-    typeof value.code !== "string" ||
-    typeof value.type !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    id: value.id,
-    code: value.code,
-    type: value.type,
-    discountValue: toNumber(value.discountValue),
-    discountAmount: toNumber(value.discountAmount),
-  };
+/** Upper-cased, de-duplicated, well-formed codes, at most `MAX_DISCOUNT_CODES`. */
+export function normalizeDiscountCodes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const codes = value
+    .filter((code): code is string => typeof code === "string")
+    .map((code) => code.trim().toUpperCase())
+    .filter((code) => DISCOUNT_CODE_PATTERN.test(code));
+  return [...new Set(codes)].slice(0, MAX_DISCOUNT_CODES);
 }
 
 function normalizeCartTotals(state: CartStore): CartStore {
@@ -205,7 +196,7 @@ function normalizeCartTotals(state: CartStore): CartStore {
       (total, item) => total + item.price * item.quantity,
       0,
     ),
-    discount: totalItems === 0 ? null : state.discount,
+    discountCodes: totalItems === 0 ? [] : state.discountCodes,
   };
 }
 
@@ -235,7 +226,7 @@ export function normalizeStoredCart(value: unknown): CartStore {
     items,
     totalItems: 0,
     totalAmount: 0,
-    discount: normalizeStoredDiscount(value.discount),
+    discountCodes: normalizeDiscountCodes(value.discountCodes),
   });
 }
 
@@ -277,7 +268,7 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
     const storedCart = localStorage.getItem("cart");
     if (storedCart) {
       const normalized = normalizeStoredCart(JSON.parse(storedCart));
-      cartStore.set(normalized);
+      if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
       const normalizedJson = JSON.stringify(normalized);
       if (normalizedJson !== storedCart) {
         try {
@@ -286,7 +277,7 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
           console.warn("Could not persist migrated cart state.", error);
         }
       }
-    } else if (resetWhenMissing) {
+    } else if (resetWhenMissing && Object.keys(cartStore.get().items).length > 0) {
       cartStore.set({ ...EMPTY_CART_STATE });
     }
   } catch (error) {
@@ -343,13 +334,8 @@ function applyLocalLinePatch(
     string,
     Omit<CartItem, "quantity">
   >,
-  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
-  return applyLinePatchesToLiveStore(
-    patches,
-    trustedExistingItemReplacements,
-    options,
-  );
+  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements);
 }
 
 export function addToCart(
@@ -438,7 +424,6 @@ export function updateCartItemsByKeyAtomically(
 
   const patches: CartAbsoluteQuantityPatch[] = [];
   const replacements = new Map<string, Omit<CartItem, "quantity">>();
-  let hasCommercialChange = false;
   for (const { lineKey, updates } of updatesByLine) {
     const existingItem = current.items[lineKey];
     if (
@@ -457,11 +442,6 @@ export function updateCartItemsByKeyAtomically(
       return false;
     }
     const quantity = updates.quantity ?? existingItem.quantity;
-    hasCommercialChange ||=
-      (updates.price !== undefined && updates.price !== existingItem.price) ||
-      (updates.quantity !== undefined && updates.quantity !== existingItem.quantity) ||
-      (updates.freeDelivery !== undefined &&
-        updates.freeDelivery !== existingItem.freeDelivery);
     const refreshed = { ...existingItem, ...updates, quantity };
     const refreshedItem: Omit<CartItem, "quantity"> = {
       id: refreshed.id,
@@ -484,33 +464,61 @@ export function updateCartItemsByKeyAtomically(
     });
     replacements.set(lineKey, refreshedItem);
   }
-  return applyLocalLinePatch(patches, replacements, {
-    preserveDiscount: !hasCommercialChange,
-  }).ok;
+  return applyLocalLinePatch(patches, replacements).ok;
 }
 
-export function applyDiscount(discount: Discount): void {
-  ensureCartHydrated();
-  commitNonLineCartState({ ...cartStore.get(), discount });
-  if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent("discount-applied"));
-  }
-}
-
-export function removeDiscount(): void {
+/** Keeps a code the buyer applied; the server quote decides what it is worth. */
+export function addDiscountCode(code: string): boolean {
   ensureCartHydrated();
   const current = cartStore.get();
-  if (!current.discount) return;
-  commitNonLineCartState({ ...current, discount: null });
-  if (typeof document !== "undefined") {
-    document.dispatchEvent(new CustomEvent("discount-removed"));
+  const next = normalizeDiscountCodes([...current.discountCodes, code]);
+  if (next.length === current.discountCodes.length) return false;
+  commitNonLineCartState({ ...current, discountCodes: next });
+  return true;
+}
+
+export function removeDiscountCode(code: string): void {
+  ensureCartHydrated();
+  const current = cartStore.get();
+  const next = current.discountCodes.filter((applied) => applied !== code);
+  if (next.length === current.discountCodes.length) return;
+  commitNonLineCartState({ ...current, discountCodes: next });
+}
+
+/** Puts back a cart the buyer just emptied or trimmed (undo). */
+export function restoreCart(snapshot: CartStore): void {
+  ensureCartHydrated();
+  commitNonLineCartState(normalizeStoredCart(snapshot));
+}
+
+/**
+ * Removes the lines of a placed order: each ordered quantity comes off its
+ * line, and lines added meanwhile (for example in another tab) stay.
+ */
+export function removeOrderedLines(
+  ordered: Record<string, { id?: unknown; variantId?: unknown; quantity?: unknown }>,
+): void {
+  ensureCartHydrated();
+  const current = cartStore.get();
+  const patches: CartAbsoluteQuantityPatch[] = [];
+  for (const [lineKey, line] of Object.entries(ordered)) {
+    const existing = current.items[lineKey];
+    const quantity = typeof line.quantity === "number" ? Math.floor(line.quantity) : 0;
+    if (!existing || existing.variantId !== line.variantId || quantity < 1) continue;
+    patches.push({
+      lineKey,
+      productId: existing.id,
+      variantId: existing.variantId,
+      quantity: Math.max(0, existing.quantity - quantity),
+    });
   }
+  if (patches.length > 0) applyLocalLinePatch(patches);
 }
 
 export function clearCart(): void {
   ensureCartHydrated();
   const current = cartStore.get();
-  if (Object.keys(current.items).length === 0 && !current.discount) return;
+  if (Object.keys(current.items).length === 0 && current.discountCodes.length === 0) return;
   const entries = Object.entries(current.items);
   if (
     entries.some(
@@ -529,7 +537,7 @@ export function clearCart(): void {
   if (patches.length > 0) {
     applyLocalLinePatch(patches);
   } else {
-    commitNonLineCartState({ ...current, discount: null });
+    commitNonLineCartState({ ...current, discountCodes: [] });
   }
 }
 
@@ -622,7 +630,6 @@ function planLinePatches(
     string,
     Omit<CartItem, "quantity">
   >,
-  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
   const state = normalizeCartTotals(sourceState);
 
@@ -710,11 +717,7 @@ function planLinePatches(
     }
   }
 
-  const nextState = normalizeCartTotals({
-    ...state,
-    items,
-    discount: options.preserveDiscount ? state.discount : null,
-  });
+  const nextState = normalizeCartTotals({ ...state, items });
   return {
     ok: true,
     state: nextState,
@@ -727,14 +730,12 @@ function applyLinePatchesToLiveStore(
     string,
     Omit<CartItem, "quantity">
   >,
-  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
   ensureCartHydrated();
   const result = planLinePatches(
     cartStore.get(),
     patches,
     trustedExistingItemReplacements,
-    options,
   );
   if (!result.ok) return result;
   cartStore.set(result.state);

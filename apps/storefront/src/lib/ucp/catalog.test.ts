@@ -330,8 +330,9 @@ describe("UCP catalog mapping", () => {
     const result = await searchCatalog({ query: "khaki" }, context);
 
     expect(result.status).toBe(200);
+    // 1.01 at 10% off is 0.909; BDT percentage prices are whole taka, like checkout.
     expect(result.body.products[0].variants[0]).toMatchObject({
-      price: { amount: 91, currency: "BDT" },
+      price: { amount: 100, currency: "BDT" },
       list_price: { amount: 101, currency: "BDT" },
     });
   });

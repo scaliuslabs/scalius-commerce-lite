@@ -160,6 +160,7 @@ function displayVariantLabel(item: StorefrontCartValidationItem, variant?: Store
 function calculateUnitPriceMinor(
     product: StorefrontCartProductRow,
     variant: StorefrontCartVariantRow,
+    currencyCode: string,
 ): number {
     const variantHasDiscount =
         (variant.discountType === "percentage" && variant.discountBps > 0) ||
@@ -170,6 +171,7 @@ function calculateUnitPriceMinor(
         discount.discountType,
         discount.discountBps,
         discount.discountAmountMinor,
+        currencyCode,
     );
 }
 
@@ -291,9 +293,8 @@ export function resolveStorefrontCartValidationFromRows(
 ): StorefrontCartValidationResult {
     // API callers pass the normalized merchant setting. Direct Core callers
     // intentionally retain the historical BDT checkout authority fallback.
-    const decimalPlaces = getDecimalPlaces(
-        normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code,
-    );
+    const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
+    const decimalPlaces = getDecimalPlaces(currencyCode);
 
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
@@ -432,7 +433,7 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
-        const unitPriceMinor = calculateUnitPriceMinor(product, variant);
+        const unitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);
         const submittedPriceMinor = typeof item.price === "number"
             ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;

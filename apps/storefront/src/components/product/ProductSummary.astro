@@ -1,5 +1,5 @@
 ---
-import { Check, Circle, Minus, Plus, ShoppingCart, Truck } from "lucide-react";
+import { Circle, Minus, Plus, ShoppingCart, Tag, Truck } from "lucide-react";
 import ProductDetails from "./ProductDetails.astro";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
@@ -9,7 +9,9 @@ import {
   type ProductPricing,
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import {
   createInitialSelection,
@@ -21,10 +23,10 @@ import {
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
 import {
-  DEFAULT_PRODUCT_ACTION_COPY,
   getProductActionsPresentation,
   type ProductActionCopy,
 } from "./lib/product-actions";
+import { describeBuyGetOffer } from "./lib/product-offers";
 
 interface Props {
   product: Product;
@@ -33,10 +35,11 @@ interface Props {
   options: ProductOptionDefinition[];
   currencySymbol?: string;
   currencyDecimalPlaces?: number;
+  currencyCode?: string;
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
-  actionCopy?: ProductActionCopy;
+  actionCopy?: Partial<ProductActionCopy>;
 }
 
 const {
@@ -45,35 +48,32 @@ const {
   options,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyDecimalPlaces = DEFAULT_CURRENCY.decimalPlaces,
+  currencyCode = DEFAULT_CURRENCY.code,
   initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
-  actionCopy = DEFAULT_PRODUCT_ACTION_COPY,
+  actionCopy: providedCopy = {},
 } = Astro.props;
 
-const formatPrice = (price: number) => `${currencySymbol}${price.toLocaleString("en-US", {
-  minimumFractionDigits: currencyDecimalPlaces,
-  maximumFractionDigits: currencyDecimalPlaces,
-})}`;
+const actionCopy: ProductActionCopy = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
+const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
+// A link to a sold-out combination still shows that combination, marked sold out.
 const initialSelection = initialUnavailableVariant
-  ? {}
+  ? selectedValueMap(initialUnavailableVariant)
   : initialVariant
     ? selectedValueMap(initialVariant)
     : createInitialSelection(options, variants);
 const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
 const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
-const addToCartAvailable = Boolean(initialSelectedVariant && !initialUnavailableVariant && getBuyerStockSummary([initialSelectedVariant]).canPurchaseAny);
 const actionPresentation = getProductActionsPresentation({
   productName: product.name,
-  exactVariantAvailable: addToCartAvailable,
-  anyVariantAvailable: buyerStockSummary.canPurchaseAny,
+  anyVariantAvailable: getBuyerStockSummary(variants).canPurchaseAny,
+  chosenVariantSoldOut: Boolean(stockVariant && !buyerStockSummary.canPurchaseAny),
   copy: actionCopy,
 });
-const stockStatus = buyerStockSummary.tone === "available"
-  ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
-  : { text: buyerStockSummary.text, color: "text-destructive", bg: "bg-destructive/10" };
+const stockAvailable = buyerStockSummary.tone === "available";
 
 const productPricing: ProductPricing = {
   basePrice: product.price,
@@ -81,22 +81,21 @@ const productPricing: ProductPricing = {
   discountPercentage: product.discountPercentage,
   discountAmount: product.discountAmount,
   currencyDecimalPlaces,
+  currencyCode,
 };
-const pricingVariants = initialSelectedVariant
-  ? [initialSelectedVariant]
+const pricingVariants = stockVariant
+  ? [stockVariant]
   : Object.keys(initialSelection).length
     ? filterVariantsBySelection(variants, initialSelection)
     : variants;
 const pricePresentation = getBuyerVariantPricePresentation(productPricing, pricingVariants);
-const showsStartingPrice = shouldShowStartingVariantPrice(options.length > 0, initialSelectedVariant);
-const exactPricing = showsStartingPrice ? null : pricePresentation.pricing;
-const discountBadge = exactPricing ? formatDiscountBadge(
-  exactPricing.discountType,
-  exactPricing.discountPercentage,
-  exactPricing.discountAmount,
-  currencySymbol,
-  currencyDecimalPlaces,
-) : null;
+// "From" only when the buyer's choices really are priced differently.
+const showsStartingPrice =
+  shouldShowStartingVariantPrice(options.length > 0, stockVariant) && pricePresentation.isStartingAt;
+const pricing = pricePresentation.pricing;
+const discountBadge = pricing.hasDiscount
+  ? formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount, currencySymbol)
+  : null;
 
 const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
   const variantPrice = variant.price ?? product.price;
@@ -110,6 +109,7 @@ const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
     product.discountPercentage,
     product.discountAmount,
     currencyDecimalPlaces,
+    currencyCode,
   );
   return {
     ...variant,
@@ -125,15 +125,17 @@ const optionsJson = serializeJsonForInlineScript(options);
 const unavailableLabel = initialUnavailableVariant?.selectedOptions
   .map((option) => `${option.name} ${option.value}`)
   .join(" / ");
+const offers = (product.offers ?? []).map((offer) => ({
+  ...offer,
+  text: describeBuyGetOffer(offer, actionCopy, formatPrice),
+}));
 
 function optionAriaLabel(
   option: ProductOptionDefinition,
   value: string,
   availability: VariantOptionAvailability,
-  selected: boolean,
 ) {
   if (availability === "sold_out") return `${option.name}: ${value}. Out of stock.`;
-  if (selected) return `${option.name}: ${value}. Selected; activate again to clear.`;
   if (availability === "incompatible") return `${option.name}: ${value}. Not available with the current selection.`;
   return `${option.name}: ${value}`;
 }
@@ -141,31 +143,40 @@ function optionAriaLabel(
 
 <div class="lg:col-span-5 xl:col-span-6">
   <div class="flex h-full flex-col">
-    <div class="mb-1.5 border-b border-border pb-1.5 lg:mb-2 lg:pb-2">
-      <h1 class="mb-1 text-[17px] font-bold leading-tight text-foreground sm:text-lg lg:mb-2 lg:text-3xl">{product.name}</h1>
-      {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
-      <div class="flex flex-nowrap items-center gap-x-1.5 overflow-x-auto lg:gap-x-2">
-        <p class="product-price whitespace-nowrap text-lg font-bold text-primary lg:text-3xl" aria-live="polite">
-          {showsStartingPrice ? "From " : ""}{formatPrice(pricePresentation.pricing.finalPrice)}
+    <div class="mb-2 border-b border-border pb-2">
+      <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
+      {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p class="product-price whitespace-nowrap text-xl font-semibold text-foreground lg:text-3xl" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
+          {showsStartingPrice
+            ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
+            : formatPrice(pricing.finalPrice)}
         </p>
-        <p class:list={["product-original-price whitespace-nowrap text-[10px] text-muted-foreground line-through sm:text-xs", { hidden: !exactPricing?.hasDiscount }]}>
-          {exactPricing ? formatPrice(exactPricing.originalPrice) : ""}
-        </p>
-        <span class:list={["discount-badge whitespace-nowrap text-[10px] font-semibold text-primary sm:text-xs", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
-        <div id="product-stock-badge" class={`flex shrink-0 items-center whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] shadow-sm lg:px-2 lg:text-xs ${stockStatus.color} ${stockStatus.bg}`} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-          <Circle className="mr-0.5 h-2 w-2 fill-current lg:mr-1" /><span id="product-stock-text" class="font-medium">{stockStatus.text}</span>
-        </div>
-        {product.freeDelivery ? <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm lg:px-2 lg:text-xs"><Truck className="mr-0.5 h-2.5 w-2.5 lg:mr-1 lg:h-3 lg:w-3" />Free Delivery</span> : null}
+        <s class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
+          {formatPrice(pricing.originalPrice)}
+        </s>
+        <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
       </div>
-      <div class="mt-1.5 flex items-center gap-2 lg:mt-2">
-        <h2 class="text-xs font-medium text-foreground lg:text-sm">Qty:</h2>
-        <div class="flex items-center">
-          <label for="quantity" class="sr-only">Product quantity</label>
-          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Decrease quantity"><Minus className="h-3.5 w-3.5 lg:h-3 lg:w-3" /></button>
-          <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" aria-label="Product quantity" class="h-11 w-12 border-y border-input text-center text-sm font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 lg:h-8 lg:text-sm" />
-          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Increase quantity"><Plus className="h-3.5 w-3.5 lg:h-3 lg:w-3" /></button>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+          <Circle className="mr-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{buyerStockSummary.text}</span>
         </div>
+        {product.freeDelivery ? <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm font-medium text-primary"><Truck className="mr-1 h-3 w-3" aria-hidden="true" />Free Delivery</span> : null}
       </div>
+      {offers.length > 0 && (
+        <ul class="mt-2 space-y-1" data-product-offers>
+          {offers.map((offer) => (
+            <li class="flex items-start gap-1.5 text-sm text-foreground" data-offer-ends={offer.endsAtEpochSeconds ?? ""}>
+              <Tag className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <span>
+                <span class="font-medium">{offer.title}:</span> {offer.text.before}{offer.products.length === 1 && offer.products[0]!.slug !== product.slug
+                  ? <a href={`/products/${encodeURIComponent(offer.products[0]!.slug)}`} class="font-medium text-primary underline underline-offset-2">{offer.text.item}</a>
+                  : offer.text.item}{offer.text.after}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
 
     <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
@@ -173,22 +184,23 @@ function optionAriaLabel(
 
     <div
       id="product-actions"
-      class="space-y-1.5 pt-0.5 lg:space-y-3 lg:pt-2"
+      class="space-y-3 pt-1 lg:pt-2"
       data-add-to-cart-text={actionCopy.addToCartText}
       data-buy-now-text={actionCopy.buyNowText}
-      data-select-options-text={actionCopy.selectOptionsText}
       data-unavailable-text={actionCopy.unavailableText}
+      data-choose-option-text={actionCopy.chooseOptionText}
+      data-quantity-limit-text={actionCopy.quantityLimitText}
     >
-      <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
-        {initialUnavailableVariant ? `The requested ${unavailableLabel} combination is out of stock. Choose another available option.` : ""}
+      <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
+        {initialUnavailableVariant ? `${unavailableLabel}: ${buyerStockSummary.text}` : ""}
       </div>
 
       {options.map((option) => {
         const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
         return (
-          <div class="variant-option-selector" data-option-definition-id={option.id}>
-            <h2 id={`product-option-${option.id}`} class="mb-0.5 text-sm font-medium text-foreground lg:mb-1"><span class="text-destructive">*</span> {option.name}</h2>
-            <div class="flex flex-wrap gap-1.5" role="group" aria-labelledby={`product-option-${option.id}`}>
+          <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
+            <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
+            <div class="flex flex-wrap gap-1.5">
               {option.values.map((value) => {
                 const selected = initialSelection[option.id] === value.id;
                 const status = availability.get(value.id) ?? "sold_out";
@@ -196,12 +208,13 @@ function optionAriaLabel(
                   <button
                     type="button"
                     class:list={[
-                      "variant-option-btn flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium shadow-sm transition-all duration-200 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none lg:h-9 lg:min-w-9 lg:px-2 lg:text-xs",
+                      "variant-option-btn flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:h-10",
                       {
-                        "border-black bg-black text-white": selected && status !== "sold_out",
+                        "border-primary bg-primary text-primary-foreground": selected && status !== "sold_out",
                         "border-input bg-background text-foreground": !selected && status === "available",
                         "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
-                        "cursor-not-allowed border-input bg-background text-foreground opacity-50 line-through": status === "sold_out",
+                        "cursor-not-allowed border-input bg-background text-muted-foreground line-through": status === "sold_out",
+                        "ring-2 ring-destructive": selected && status === "sold_out",
                       },
                     ]}
                     data-option-definition-id={option.id}
@@ -209,26 +222,38 @@ function optionAriaLabel(
                     data-option-value={value.value}
                     data-option-availability={status}
                     aria-pressed={selected ? "true" : "false"}
-                    aria-label={optionAriaLabel(option, value.value, status, selected)}
-                    disabled={status === "sold_out"}
+                    aria-label={optionAriaLabel(option, value.value, status)}
+                    aria-disabled={status === "sold_out" ? "true" : undefined}
                   >{value.value}</button>
                 );
               })}
             </div>
-          </div>
+            <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
+          </fieldset>
         );
       })}
 
+      <div>
+        <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
+        <div class="flex items-center">
+          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Minus className="h-4 w-4" aria-hidden="true" /></button>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
+          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Plus className="h-4 w-4" aria-hidden="true" /></button>
+        </div>
+        <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
+      </div>
+
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
-      <div class="grid grid-cols-2 gap-2 pt-1 lg:pt-3">
-        <button type="button" data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 items-center justify-center rounded-lg border border-primary bg-primary/5 px-2 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:min-h-10 lg:py-2.5" aria-label={actionPresentation.addToCart.ariaLabel}>
-          <ShoppingCart className="mr-1.5 h-4 w-4" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+      <div class="flex gap-2 pt-1">
+        <button type="button" data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+          <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type="button" data-action="buy-now" disabled={actionPresentation.buyNow.disabled} class="flex min-h-11 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:min-h-10 lg:py-2.5" aria-label={actionPresentation.buyNow.ariaLabel}>
-          <Check className="mr-1.5 h-4 w-4" /><span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
+        <button type="button" data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+          <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>
     </div>
+    <slot name="after-actions" />
     <ProductDetails product={product} />
   </div>
 </div>
