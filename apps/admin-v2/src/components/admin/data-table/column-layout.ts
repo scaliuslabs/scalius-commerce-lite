@@ -52,10 +52,16 @@ export function writeSavedLayout(key: string, layout: SavedLayout | null): void 
   }
 }
 
-/** The saved order for the columns that still exist; new columns keep their default place. */
-export function resolveOrder(defaults: readonly string[], saved: readonly string[] | undefined): string[] {
-  if (!saved?.length) return [...defaults];
-  const known = saved.filter((id) => defaults.includes(id));
+/**
+ * The saved order for the columns that still exist; new columns keep their
+ * default place. `pinned` (the title column) always comes first, whatever a
+ * saved order says.
+ */
+export function resolveOrder(defaults: readonly string[], saved: readonly string[] | undefined, pinned?: string): string[] {
+  const pin = (order: string[]) =>
+    pinned && order.includes(pinned) ? [pinned, ...order.filter((id) => id !== pinned)] : order;
+  if (!saved?.length) return pin([...defaults]);
+  const known = [...new Set(saved)].filter((id) => defaults.includes(id));
   const result = [...known];
   defaults.forEach((id, index) => {
     if (result.includes(id)) return;
@@ -63,7 +69,7 @@ export function resolveOrder(defaults: readonly string[], saved: readonly string
     const before = defaults.slice(0, index).reverse().find((candidate) => result.includes(candidate));
     result.splice(before ? result.indexOf(before) + 1 : 0, 0, id);
   });
-  return result;
+  return pin(result);
 }
 
 /**
@@ -140,7 +146,7 @@ export interface ColumnLayout<TData extends TableRowData> {
   /** Whether another column could still step aside to stop sideways scrolling. */
   canHideMore: boolean;
   toggle: (id: string) => void;
-  /** Move a configurable column to `index` among the configurable columns. */
+  /** Move a configurable column to `index` among the configurable columns; the title column stays first. */
   move: (id: string, index: number) => void;
   reset: () => void;
   customized: boolean;
@@ -168,7 +174,8 @@ export function useColumnLayout<TData extends TableRowData>(
   const all = table.getAllLeafColumns().filter((column) => column.getIsVisible());
   const configurable = all.filter(isConfigurable);
   const byId = new Map(all.map((column) => [column.id, column]));
-  const order = resolveOrder(configurable.map((column) => column.id), saved?.order);
+  const primaryId = configurable.find(isPrimaryColumn)?.id;
+  const order = resolveOrder(configurable.map((column) => column.id), saved?.order, primaryId);
   const hiddenByChoice = new Set(
     (saved?.hidden ?? []).filter((id) => byId.has(id) && !isPrimaryColumn(byId.get(id)!)),
   );
@@ -210,8 +217,11 @@ export function useColumnLayout<TData extends TableRowData>(
       save({ order, hidden: [...hidden] });
     },
     move: (id, index) => {
+      // The title column stays first: it cannot move, and nothing moves above it.
+      if (!order.includes(id) || id === primaryId) return;
       const next = order.filter((candidate) => candidate !== id);
-      next.splice(Math.max(0, Math.min(index, next.length)), 0, id);
+      const first = primaryId ? 1 : 0;
+      next.splice(Math.max(first, Math.min(index, next.length)), 0, id);
       save({ order: next, hidden: [...hiddenByChoice] });
     },
     reset: () => save(null),
