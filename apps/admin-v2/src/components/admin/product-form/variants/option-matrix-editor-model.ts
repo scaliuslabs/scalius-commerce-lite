@@ -6,6 +6,7 @@ import {
   MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
+import { toHandle } from "@scalius/shared/handle";
 import type {
   CreateProductInput,
   ProductOptionMatrixInput,
@@ -109,8 +110,47 @@ export function draftId(prefix: string) {
   return `draft_${prefix}_${crypto.randomUUID()}`;
 }
 
+/** A name or value written the SKU way: Latin (Bangla read aloud), upper case, dashes. */
 function slugPart(value: string) {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
+  return toHandle(value).toUpperCase().slice(0, 24).replace(/-$/, "");
+}
+
+/** The default SKU pattern: the product, then each option in braces ("PANJABI-{Size}-{Color}"). */
+export function defaultSkuPattern(productName: string, options: readonly DraftOption[]): string {
+  return [slugPart(productName) || "SKU", ...options.map((option) => `{${option.name.trim()}}`)].join("-");
+}
+
+/**
+ * A variant's SKU from a pattern: `{Option name}` becomes that option's value
+ * for the variant (written the SKU way); the rest is kept, upper-cased.
+ */
+export function skuFromPattern(pattern: string, options: readonly DraftOption[], variant: Pick<DraftVariant, "selectedOptionValueIds">): string {
+  const valueOf = new Map(options.map((option, index) => {
+    const valueId = variant.selectedOptionValueIds[index];
+    return [normalized(option.name), option.values.find((value) => value.id === valueId)?.value ?? ""] as const;
+  }));
+  return pattern
+    .replace(/\{([^{}]*)\}/g, (_, name: string) => slugPart(valueOf.get(normalized(name)) ?? ""))
+    .toUpperCase()
+    .replace(/\s+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 100);
+}
+
+/** Variants under one value of the grouping option, in option-value order. */
+export type VariantGroup = { valueId: string; label: string; variants: DraftVariant[] };
+
+export function groupVariants(options: readonly DraftOption[], variants: readonly DraftVariant[], axis: number): VariantGroup[] {
+  const option = options[axis];
+  if (!option) return [];
+  return option.values
+    .map((value) => ({
+      valueId: value.id,
+      label: value.value,
+      variants: variants.filter((variant) => variant.selectedOptionValueIds[axis] === value.id),
+    }))
+    .filter((group) => group.variants.length > 0);
 }
 
 /** SKU for a new variant: TITLE-VALUE-VALUE, or SKU-n while that is too short. */

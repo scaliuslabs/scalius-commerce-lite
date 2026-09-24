@@ -11,6 +11,7 @@ import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "./option-matrix-editor-model";
 
 const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
   putApiV1AdminProductsByIdVariantsByVariantId: vi.fn(async (_input: unknown) => ({ aggregateRevision: 4 })),
   putApiV1AdminProductsByIdOptionsMatrix: vi.fn(async (_input: unknown) => ({ aggregateRevision: 4 })),
 }));
@@ -19,6 +20,7 @@ vi.mock("@scalius/api-client/sdk", () => mocks);
 vi.mock("@/lib/api", () => ({ apiData: (result: unknown) => result }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
+  useNavigate: () => mocks.navigate,
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
