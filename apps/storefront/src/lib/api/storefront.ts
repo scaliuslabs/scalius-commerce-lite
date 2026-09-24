@@ -125,8 +125,15 @@ export interface LayoutData {
     languageCode: string;
     addToCartText: string;
     buyNowText: string;
-    selectOptionsText: string;
     unavailableText: string;
+    chooseOptionText: string;
+    fromPriceText: string;
+    quantityLabelText: string;
+    quantityLimitText: string;
+    saleOfferText: string;
+    saleOfferSpendText: string;
+    freeBenefitText: string;
+    percentBenefitText: string;
   };
 }
 

@@ -8,6 +8,7 @@ import {
   type PhoneCountryPolicy,
 } from "@scalius/shared/customer-utils";
 import { validateStorefrontPhone } from "@/lib/phone-country-policy";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 import type { CheckoutPhoneResult } from "./phone-field";
 
 type CountryCode = Parameters<typeof getCountryCallingCode>[0];
@@ -18,7 +19,7 @@ export function validateInternationalPhone(
   policy: PhoneCountryPolicy,
   country: string,
 ): CheckoutPhoneResult {
-  const trimmed = raw.trim();
+  const trimmed = toLatinDigits(raw).trim();
   const international = trimmed.startsWith("+")
     ? trimmed
     : (parsePhoneNumberFromString(trimmed, country as CountryCode)?.number ?? trimmed);

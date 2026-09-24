@@ -13,6 +13,8 @@ import {
   removeCartItemByKey,
   clearCart,
   addToCart,
+  restoreCart,
+  type CartStore,
 } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@nanostores/react";
@@ -28,8 +30,12 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
-import { formatPriceShort } from "@/lib/currency";
+import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl } from "@/lib/product-media";
+import { previewCartDiscounts } from "@/lib/cart/browser-api";
+import type { CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
+import type { CartValidationIssue } from "@/lib/api/orders";
+import { cartItemVariantLabel } from "@/lib/cart/item-options";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -51,9 +57,74 @@ export function setCartOpen(value: boolean) {
   }
 }
 
+/**
+ * Live facts for the open drawer: automatic savings and offers from the
+ * server, and per-line stock problems, so a buyer hears about them before
+ * reaching checkout.
+ */
+function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
+  const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
+  const [issues, setIssues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const items = Object.entries(cart.items);
+    if (!isOpen || items.length === 0) return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      void previewCartDiscounts(cart.discountCodes, items.map(([, item]) => item)).then((preview) => {
+        if (current) setDiscounts(preview.ok ? preview : null);
+      });
+      void fetch("/api/checkout/validate-cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map(([cartKey, item]) => ({
+            cartKey,
+            productId: item.id,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.name,
+            variantLabel: cartItemVariantLabel(item.options),
+          })),
+        }),
+      })
+        .then((response) => response.json())
+        .then((json: { data?: { issues?: CartValidationIssue[] }; details?: { itemIssues?: CartValidationIssue[] } }) => {
+          if (!current) return;
+          const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
+          setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue.message]] : [])));
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [cart.items, cart.discountCodes, isOpen]);
+  return { discounts: Object.keys(cart.items).length > 0 ? discounts : null, issues };
+}
+
 export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
+  const { discounts, issues } = useDrawerCartFacts(cart, isOpen);
+  // Shopify's drawer: discounts listed above, the total already net of them.
+  const discountTotal = discounts?.totalDiscount ?? 0;
+  const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
+  const [undo, setUndo] = useState<{ message: string; snapshot: CartStore } | null>(null);
+  const undoTimer = useRef<number | null>(null);
+  /** Removals are undoable for 10 seconds instead of silent. */
+  const removeWithUndo = (message: string, remove: () => void) => {
+    const snapshot = cartStore.get();
+    remove();
+    if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    setUndo({ message, snapshot });
+    undoTimer.current = window.setTimeout(() => setUndo(null), 10_000);
+  };
+  const undoRemoval = () => {
+    if (undo) restoreCart(undo.snapshot);
+    setUndo(null);
+  };
   const autoCloseTimer = useRef<NodeJS.Timeout | null>(null);
   const cartTriggerRef = useRef<HTMLElement | null>(null);
   const isAutoCloseEnabled = useRef(false);
@@ -322,24 +393,22 @@ export default function CartFlyout({ onReady }: Props) {
                           </h3>
 
                           {item.options && item.options.length > 0 && (
-                            <div className="flex items-center text-[10px] sm:text-[11px] font-medium text-muted-foreground leading-none">
-                              {item.options.map((option, index) => (
-                                <span key={`${option.name}:${option.label}`} className="contents">
-                                  {index > 0 && (
-                                    <span className="mx-1.5 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
-                                  )}
-                                  <span className="truncate">
-                                    {option.name}: {option.label}
-                                  </span>
+                            <div className="text-xs text-muted-foreground">
+                              {item.options.map((option) => (
+                                <span key={`${option.name}:${option.label}`} className="block">
+                                  {option.name}: {option.label}
                                 </span>
                               ))}
                             </div>
+                          )}
+                          {issues[key] && (
+                            <p className="text-xs font-medium text-destructive" role="alert">{issues[key]}</p>
                           )}
                         </div>
 
                         {/* Price */}
                         <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-right shrink-0">
-                          {formatPriceShort(item.price * item.quantity)}
+                          {formatMoney(item.price * item.quantity)}
                         </div>
                       </div>
 
@@ -352,7 +421,7 @@ export default function CartFlyout({ onReady }: Props) {
                               disableAutoClose();
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
-                                removeCartItemByKey(key);
+                                removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
                               else
                                 updateCartItemByKey(key, { quantity: newQ });
                             }}
@@ -381,7 +450,7 @@ export default function CartFlyout({ onReady }: Props) {
                           aria-label={`Remove ${item.name} from cart`}
                           onClick={() => {
                             disableAutoClose();
-                            removeCartItemByKey(key);
+                            removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >
@@ -408,17 +477,70 @@ export default function CartFlyout({ onReady }: Props) {
           </div>
         </div>
 
+        {undo && (
+          <p className="shrink-0 border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground" role="status">
+            {undo.message} ·{" "}
+            <button type="button" onClick={undoRemoval} className="font-medium text-foreground underline underline-offset-2 cursor-pointer">
+              Undo
+            </button>
+          </p>
+        )}
+
+        {/* Savings and offers the cart already qualifies for */}
+        {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
+          <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
+            {discounts.discounts.map((line) => (
+              <div key={line.promotionId} className="flex justify-between gap-3 text-primary">
+                <span className="min-w-0">{line.code && line.code !== line.title ? `${line.title} · ${line.code}` : line.title}</span>
+                <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
+              </div>
+            ))}
+            {discounts.offers.map((offer) => (
+              <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
+                <span className="min-w-0">
+                  <span className="font-medium">{offer.title}:</span>{" "}
+                  {offer.products.map(({ name }) => name).join(" / ")} {offer.percentOff >= 100 ? "free" : `${offer.percentOff}% off`}
+                </span>
+                {offer.products[0]?.variantId && offer.products[0].price !== null ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md border border-border px-2 py-1 text-sm font-medium hover:bg-muted cursor-pointer"
+                    onClick={() => {
+                      const product = offer.products[0]!;
+                      disableAutoClose();
+                      addToCart({
+                        id: product.id,
+                        slug: product.slug,
+                        name: product.name,
+                        price: product.price!,
+                        variantId: product.variantId!,
+                        quantity: Math.max(1, offer.quantity),
+                      });
+                    }}
+                  >
+                    Add
+                  </button>
+                ) : offer.products[0] ? (
+                  <a href={`/products/${encodeURIComponent(offer.products[0].slug)}`} className="shrink-0 text-sm font-medium underline underline-offset-2">
+                    View
+                  </a>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 3. FOOTER */}
         {cart.totalItems > 0 && (
           <div className="border-t border-border bg-card p-2 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
             {/* Desktop Footer */}
             <div className="hidden sm:block space-y-4">
               <div className="flex justify-between items-end">
-                <div className="text-xs text-muted-foreground font-medium">
-                  Subtotal (excl. shipping)
+                <div className="text-sm text-muted-foreground">
+                  {discountTotal > 0 ? "Estimated total (excl. shipping)" : "Subtotal (excl. shipping)"}
                 </div>
-                <div className="text-xl font-bold text-foreground tabular-nums tracking-tight">
-                  {formatPriceShort(cart.totalAmount)}
+                <div className="text-xl font-semibold text-foreground tabular-nums">
+                  {formatMoney(estimatedTotal)}
                 </div>
               </div>
               <Button
@@ -434,19 +556,18 @@ export default function CartFlyout({ onReady }: Props) {
               <div className="flex justify-between items-center px-1">
                 <button
                   onClick={() => setCartOpen(false)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer"
+                  className="min-h-9 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer"
                 >
-                  Continue Shopping
+                  Continue shopping
                 </button>
                 <button
                   onClick={() => {
                     disableAutoClose();
-                    clearCart();
-                    setCartOpen(false);
+                    removeWithUndo("Cart cleared", clearCart);
                   }}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                  className="min-h-9 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
-                  Clear Cart
+                  Clear cart
                 </button>
               </div>
             </div>
@@ -456,21 +577,20 @@ export default function CartFlyout({ onReady }: Props) {
               {/* Left: Total */}
               <div className="flex min-w-0 items-center gap-1">
                 <div className="flex flex-col justify-center">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Total
+                  <span className="text-xs text-muted-foreground">
+                    {discountTotal > 0 ? "Estimated total" : "Subtotal"}
                   </span>
-                  <div className="text-lg font-extrabold leading-none text-foreground tabular-nums">
-                    {formatPriceShort(cart.totalAmount)}
+                  <div className="text-lg font-semibold leading-none text-foreground tabular-nums">
+                    {formatMoney(estimatedTotal)}
                   </div>
                 </div>
                 <button
                   aria-label="Clear cart"
                   onClick={() => {
                     disableAutoClose();
-                    clearCart();
-                    setCartOpen(false);
+                    removeWithUndo("Cart cleared", clearCart);
                   }}
-                  className="flex min-h-11 items-center rounded-md px-2 text-[11px] font-medium text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-destructive cursor-pointer"
+                  className="flex min-h-11 items-center rounded-md px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground cursor-pointer"
                 >
                   Clear
                 </button>

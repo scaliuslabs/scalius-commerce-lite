@@ -67,6 +67,7 @@ import {
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../products/products.money";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
@@ -1226,6 +1227,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             productDiscountType: products.discountType,
             productDiscountBps: products.discountBps,
             productDiscountAmountMinor: products.discountAmountMinor,
+            storeCurrencyCode: storeCurrencyCodeSql(),
             variantPriceMinor: productVariants.priceMinor,
             variantDiscountType: productVariants.discountType,
             variantDiscountBps: productVariants.discountBps,
@@ -1301,12 +1303,14 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 sku.variantDiscountType,
                 sku.variantDiscountBps,
                 sku.variantDiscountAmountMinor,
+                storeCurrencyFromCode(sku.storeCurrencyCode),
             )
             : discountedPriceMinor(
                 sku.variantPriceMinor,
                 sku.productDiscountType,
                 sku.productDiscountBps,
                 sku.productDiscountAmountMinor,
+                storeCurrencyFromCode(sku.storeCurrencyCode),
             );
 
         resolvedItems.push({

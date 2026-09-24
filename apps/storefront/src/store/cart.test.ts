@@ -62,7 +62,7 @@ const persistedCart = {
   },
   totalItems: 2,
   totalAmount: 240,
-  discount: null,
+  discountCodes: [],
 };
 
 async function importFreshCartModule(): Promise<CartModule> {
@@ -85,7 +85,7 @@ describe("cart store", () => {
       items: {},
       totalItems: 0,
       totalAmount: 0,
-      discount: null,
+      discountCodes: [],
     });
 
     const hydrated = hydrateCartFromStorage();
@@ -109,7 +109,7 @@ describe("cart store", () => {
       items: {},
       totalItems: 0,
       totalAmount: 0,
-      discount: null,
+      discountCodes: [],
     });
     expect(cartStore.get().items).toEqual({});
   });
@@ -144,7 +144,7 @@ describe("cart store", () => {
       items: {},
       totalItems: 0,
       totalAmount: 0,
-      discount: null,
+      discountCodes: [],
     });
     expect(warn).toHaveBeenCalled();
   });
@@ -182,46 +182,69 @@ describe("cart store", () => {
       items: {},
       totalItems: 0,
       totalAmount: 0,
-      discount: null,
+      discountCodes: [],
     });
   });
 
-  it("preserves discounts for presentation-only repairs but clears them for commercial changes", async () => {
+  it("keeps applied codes through every cart edit until the cart is empty", async () => {
     const {
+      addDiscountCode,
       addToCart,
-      applyDiscount,
       cartStore,
       createCartItemKey,
       hydrateCartFromStorage,
+      removeCartItemByKey,
+      removeDiscountCode,
       updateCartItemByKey,
     } = await importFreshCartModule();
     hydrateCartFromStorage();
 
-    const item = {
-      id: "lamp",
-      variantId: "variant_matte",
-      name: "Matte Lamp",
-      price: 2500,
-      image: "https://media.example.test/stale.webp",
-    };
+    const item = { id: "lamp", variantId: "variant_matte", name: "Matte Lamp", price: 2500 };
     const lineKey = createCartItemKey(item);
     expect(addToCart(item)).toBe(true);
-    applyDiscount({
-      id: "disc_1",
-      code: "SAVE10",
-      type: "percentage",
-      discountValue: 10,
-      discountAmount: 250,
-    });
+    expect(addDiscountCode(" save10 ")).toBe(true);
+    expect(addDiscountCode("SAVE10")).toBe(false);
+    expect(addDiscountCode("SHIPFREE")).toBe(true);
+    expect(cartStore.get().discountCodes).toEqual(["SAVE10", "SHIPFREE"]);
 
-    expect(updateCartItemByKey(lineKey, {
-      image: "https://media.example.test/matte.webp",
-      imageMediaId: "med_matte",
-    })).toBe(true);
-    expect(cartStore.get().discount?.code).toBe("SAVE10");
-
+    // Quantity and price changes re-check the codes; they never drop them.
+    expect(updateCartItemByKey(lineKey, { quantity: 3 })).toBe(true);
     expect(updateCartItemByKey(lineKey, { price: 2400 })).toBe(true);
-    expect(cartStore.get().discount).toBeNull();
+    expect(cartStore.get().discountCodes).toEqual(["SAVE10", "SHIPFREE"]);
+    removeDiscountCode("SHIPFREE");
+    expect(JSON.parse(localStorage.getItem("cart")!).discountCodes).toEqual(["SAVE10"]);
+
+    expect(removeCartItemByKey(lineKey)).toBe(true);
+    expect(cartStore.get().discountCodes).toEqual([]);
+  });
+
+  it("takes only the ordered lines out after an order and restores an undone removal", async () => {
+    const {
+      addToCart,
+      cartStore,
+      clearCart,
+      createCartItemKey,
+      hydrateCartFromStorage,
+      removeOrderedLines,
+      restoreCart,
+    } = await importFreshCartModule();
+    hydrateCartFromStorage();
+    const tee = { id: "tee", variantId: "tee_m", name: "Tee", price: 500 };
+    const cap = { id: "cap", variantId: "cap_1", name: "Cap", price: 200 };
+    addToCart({ ...tee, quantity: 2 });
+    addToCart(cap);
+    const teeKey = createCartItemKey(tee);
+
+    // Another tab added the cap after this order (one tee) was submitted.
+    removeOrderedLines({ [teeKey]: { ...tee, quantity: 1 } });
+    expect(Object.values(cartStore.get().items).map(({ id, quantity }) => [id, quantity]))
+      .toEqual([["tee", 1], ["cap", 1]]);
+
+    const before = cartStore.get();
+    clearCart();
+    expect(cartStore.get().totalItems).toBe(0);
+    restoreCart(before);
+    expect(cartStore.get().totalItems).toBe(2);
   });
 
   it("canonicalizes saved line keys and merchant-defined option labels", async () => {
@@ -249,7 +272,7 @@ describe("cart store", () => {
             quantity: 2,
           },
         },
-        discount: null,
+        discountCodes: [],
       }),
     );
     const { createCartItemKey, hydrateCartFromStorage } =

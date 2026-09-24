@@ -12,11 +12,11 @@ afterEach(() => {
 describe("enhanceShippingMethods", () => {
   function render() {
     document.body.innerHTML = `
-      <div data-shipping-methods data-free-text="Free" data-waived-text="Normally {fee}; waived.">
+      <div data-shipping-methods data-free-text="Free">
         <label><input type="radio" name="shippingLocation" value="inside" data-fee="60" data-name="Inside Dhaka" checked />
-          <span data-fee-label="৳60">৳60</span></label>
+          <span data-fee-label="৳60">৳60</span><span class="hidden" data-waived-note>Normally ৳60; waived.</span></label>
         <label><input type="radio" name="shippingLocation" value="outside" data-fee="120" data-name="Outside Dhaka" />
-          <span data-fee-label="৳120">৳120</span></label>
+          <span data-fee-label="৳120">৳120</span><span class="hidden" data-waived-note>Normally ৳120; waived.</span></label>
       </div>`;
   }
 
@@ -61,6 +61,11 @@ describe("enhanceShippingMethods", () => {
     waived = true;
     methods.refreshFees();
     expect(labels().map((label) => label.textContent)).toEqual(["Free", "Free"]);
-    expect(labels()[0].title).toBe("Normally ৳60; waived.");
+    // The waiver is said in words next to each method, not hidden in a tooltip.
+    const notes = () => Array.from(document.querySelectorAll<HTMLElement>("[data-waived-note]"));
+    expect(notes().every((note) => !note.classList.contains("hidden"))).toBe(true);
+    waived = false;
+    methods.refreshFees();
+    expect(notes().every((note) => note.classList.contains("hidden"))).toBe(true);
   });
 });

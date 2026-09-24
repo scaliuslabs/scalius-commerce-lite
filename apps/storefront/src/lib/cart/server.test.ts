@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   getAreas: vi.fn(),
   getProductBySlug: vi.fn(),
   getShippingMethods: vi.fn(),
-  validateDiscount: vi.fn(),
   deleteAbandonedCheckout: vi.fn(),
   validateCartItems: vi.fn(),
 }));
@@ -19,7 +18,6 @@ vi.mock("@/lib/api", () => ({
   getAreas: mocks.getAreas,
   getProductBySlug: mocks.getProductBySlug,
   getShippingMethods: mocks.getShippingMethods,
-  validateDiscount: mocks.validateDiscount,
   deleteAbandonedCheckout: mocks.deleteAbandonedCheckout,
 }));
 
@@ -243,9 +241,9 @@ describe("cart server order processing", () => {
     expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
-  it("validates discounts against the server-validated cart snapshot", async () => {
+  it("hands the applied codes to the authoritative order commit without touching the notes", async () => {
     const formData = buildCodFormData();
-    formData.set("discountCodeHidden", JSON.stringify({ code: "SAVE10" }));
+    formData.set("discountCodes", JSON.stringify(["save10", "SHIPFREE"]));
     mocks.validateCartItems.mockResolvedValueOnce({
       success: true,
       data: {
@@ -275,33 +273,13 @@ describe("cart server order processing", () => {
         },
       },
     });
-    mocks.validateDiscount.mockResolvedValueOnce({
-      valid: true,
-      discountAmount: 9,
-      discount: { code: "SAVE10" },
-    });
-
     const result = await processOrder(formData);
 
     expect(result).toMatchObject({ success: true, orderId: "order_1" });
-    expect(mocks.validateDiscount).toHaveBeenCalledWith(
-      "SAVE10",
-      [
-        expect.objectContaining({
-          id: "product-1",
-          variantId: "variant_1",
-          price: 90,
-          quantity: 1,
-          freeDelivery: true,
-        }),
-      ],
-      0,
-      "+8801712345678",
-    );
     expect(mocks.createOrder).toHaveBeenCalledWith(
       expect.objectContaining({
-        discountAmount: 9,
-        discountCode: "SAVE10",
+        discountCodes: ["SAVE10", "SHIPFREE"],
+        notes: null,
         items: [expect.objectContaining({ price: 90 })],
         shippingCharge: 0,
       }),

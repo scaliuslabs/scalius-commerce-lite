@@ -4,7 +4,7 @@ import type { Product } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
-import { DEFAULT_CURRENCY, formatPriceShort } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatMoney as formatStoreMoney } from "@scalius/shared/currency";
 
 interface Props {
   product: Product;
@@ -23,7 +23,7 @@ const {
 } = Astro.props;
 const TitleTag = headingLevel;
 const formatMoney = (price: number) =>
-  formatPriceShort(price, {
+  formatStoreMoney(price, {
     symbol: currencySymbol,
     code: currencyCode,
   });

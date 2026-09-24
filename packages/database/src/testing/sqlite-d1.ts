@@ -122,12 +122,22 @@ export interface SqliteD1Hooks {
   beforeBatch?: (sqlite: DatabaseSync, statements: readonly SqliteD1Statement[]) => void | Promise<void>;
 }
 
+/** Cloudflare D1 rejects a statement with more than 100 bound parameters. */
+export const D1_MAX_BOUND_PARAMETERS = 100;
+
+function assertD1ParameterLimit(values: readonly SQLInputValue[]): void {
+  if (values.length > D1_MAX_BOUND_PARAMETERS) {
+    throw new Error(`D1_ERROR: too many SQL variables (${values.length} bound; D1 allows ${D1_MAX_BOUND_PARAMETERS})`);
+  }
+}
+
 function execute(
   sqlite: DatabaseSync,
   query: string,
   values: readonly SQLInputValue[],
   hooks: SqliteD1Hooks,
 ): SqliteD1Result {
+  assertD1ParameterLimit(values);
   hooks.onQuery?.(query, values);
   const statement = sqlite.prepare(query);
   if (statement.columns().length === 0) {
@@ -155,6 +165,7 @@ function statement(
     all: async () => execute(sqlite, query, values, hooks),
     run: async () => execute(sqlite, query, values, hooks),
     raw: async () => {
+      assertD1ParameterLimit(values);
       hooks.onQuery?.(query, values);
       const prepared = sqlite.prepare(query);
       prepared.setReturnArrays(true);

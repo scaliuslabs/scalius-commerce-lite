@@ -254,6 +254,9 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const sideEffectSettings = sideEffectRows[0];
             const orderCreatedChannels = notificationsRead.value.orderChannels.order_created ?? [];
             const adminOrderCreatedChannels = notificationsRead.value.adminChannels.order_created ?? [];
+            // Staff order emails go to the notification settings' recipient list.
+            const staffEmailRecipients = (notificationsRead.value as { staffEmailRecipients?: unknown[] })
+                .staffEmailRecipients ?? [];
             const allowedCountries = countriesRead.value;
             let activePaymentMethods: PaymentMethodsConfig;
             try {
@@ -343,7 +346,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                             channel === "sms" || channel === "whatsapp"
                                         ))
                                     || (Number(sideEffectSettings?.hasActiveAdminPushTarget) === 1
-                                        && adminOrderCreatedChannels.includes("push")),
+                                        && adminOrderCreatedChannels.includes("push"))
+                                    || staffEmailRecipients.length > 0,
                                 ),
                                 metaPurchase: metaPurchaseEnabled,
                             },

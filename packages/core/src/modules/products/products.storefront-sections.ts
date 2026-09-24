@@ -18,6 +18,7 @@ import {
     presentBuyerPricing,
     presentCatalogPrice,
     storeCurrencyCodeSql,
+    storeCurrencyFromCode,
     storeDecimalPlacesFromCode,
 } from "./products.money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
@@ -452,7 +453,7 @@ async function readSummary(
             discountType: identity.discountType || "percentage",
             discountPercentage: price.discountPercentage,
             discountAmount: price.discountAmount,
-            discountedPrice: catalogDiscountedPrice(identity, decimalPlaces),
+            discountedPrice: catalogDiscountedPrice(identity, storeCurrencyFromCode(identity.storeCurrencyCode)),
             freeDelivery: identity.freeDelivery || false,
             hasVariants: Number(counts?.variants ?? 0) > 1,
             imageUrl: primaryImage?.url ?? null,

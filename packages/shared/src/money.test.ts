@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   bpsToPercent,
+  cashRoundingMinor,
   discountedPriceMinor,
+  percentOfMinor,
   fromMinor,
   percentToBps,
   toMinor,
@@ -41,10 +43,23 @@ describe("percentage discounts", () => {
   });
 
   it("prices each unit at round-half-up of price × (1 − rate)", () => {
-    expect(discountedPriceMinor(1_005, "percentage", 5_000, 0)).toBe(503);
-    expect(discountedPriceMinor(999, "percentage", 3_333, 0)).toBe(666);
-    expect(discountedPriceMinor(180_000, "percentage", 1_500, 0)).toBe(153_000);
-    expect(discountedPriceMinor(10_000, "flat", 0, 12_000)).toBe(0);
-    expect(discountedPriceMinor(10_000, null, 5_000, 0)).toBe(10_000);
+    expect(discountedPriceMinor(1_005, "percentage", 5_000, 0, "USD")).toBe(503);
+    expect(discountedPriceMinor(999, "percentage", 3_333, 0, "USD")).toBe(666);
+    expect(discountedPriceMinor(180_000, "percentage", 1_500, 0, "USD")).toBe(153_000);
+    expect(discountedPriceMinor(10_000, "flat", 0, 12_000, "USD")).toBe(0);
+    expect(discountedPriceMinor(10_000, null, 5_000, 0, "USD")).toBe(10_000);
+  });
+
+  it("rounds BDT percentage prices half-up to whole taka, so COD totals are whole", () => {
+    // ৳8,990 at 8% off is ৳8,270.80 exactly; buyers pay ৳8,271.
+    expect(discountedPriceMinor(899_000, "percentage", 800, 0, "BDT")).toBe(827_100);
+    // ৳250 at 5% off is ৳237.50: half-up to ৳238.
+    expect(discountedPriceMinor(25_000, "percentage", 500, 0, "BDT")).toBe(23_800);
+    // Flat discounts keep the merchant's exact amount.
+    expect(discountedPriceMinor(25_050, "flat", 0, 50, "BDT")).toBe(25_000);
+    expect(percentOfMinor(205_000, 1_500, "BDT")).toBe(30_800);
+    expect(percentOfMinor(205_000, 1_500, "USD")).toBe(30_750);
+    expect(percentOfMinor(40, 10_000, "BDT")).toBe(40);
+    expect(cashRoundingMinor(" bdt ")).toBe(100);
   });
 });

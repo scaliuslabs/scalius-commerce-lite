@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
+import { normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
 // the checkout phone country picker) without its own libphonenumber dependency.
@@ -82,7 +83,7 @@ export function validateAndFormatPhone(
   input: string,
   allowedCountries?: PhoneCountryPolicyInput,
 ): string {
-  const trimmed = input.trim();
+  const trimmed = normalizeBdMobile(input) ?? toLatinDigits(input).trim();
   if (!trimmed) throw new Error("Phone number is required");
 
   if (!isValidPhoneNumber(trimmed)) {

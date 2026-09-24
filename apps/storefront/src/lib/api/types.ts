@@ -171,6 +171,20 @@ export interface Product {
   hasVariants: boolean;
   availableForSale?: boolean;
   variants?: ProductVariant[];
+  /** Automatic Buy X get Y discounts this product counts toward (product page only). */
+  offers?: ProductBuyGetOffer[];
+}
+
+export interface ProductBuyGetOffer {
+  promotionId: string;
+  title: string;
+  buyQuantity: number | null;
+  buyAmount: number | null;
+  getQuantity: number;
+  /** 100 means the items to get are free. */
+  percentOff: number;
+  endsAtEpochSeconds: number | null;
+  products: Array<{ id: string; slug: string; name: string; variantId: string | null; price: number | null }>;
 }
 
 export interface ProductVariant {
@@ -521,25 +535,14 @@ export interface ShippingMethod {
   name: string;
   fee: number;
   description: string | null;
+  /** Pickup rates name the place the buyer collects from. */
+  kind?: "delivery" | "pickup";
+  pickupAddress?: string | null;
+  pickupHours?: string | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string | null;
   updatedAt: string | null;
-}
-
-export interface Discount {
-  id: string;
-  code: string;
-  type: string;
-  discountValue: number;
-}
-
-export interface DiscountValidationResponse {
-  valid: boolean;
-  error?: string;
-  discount?: Discount;
-  discountAmount?: number;
-  requiresCustomerPhone?: boolean;
 }
 
 export interface AnalyticsConfig {
