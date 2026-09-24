@@ -4,6 +4,7 @@ import { Minus, Plus } from "lucide-react";
 import {
   postApiV1AdminInventoryByVariantIdAdjust,
   postApiV1AdminInventoryStockSet,
+  putApiV1AdminInventoryByVariantIdAlertLevel,
 } from "@scalius/api-client/sdk";
 import {
   Dialog,
@@ -16,6 +17,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { NumberInput } from "~/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -24,16 +26,27 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { apiData } from "~/lib/api";
-import { cn } from "@scalius/shared/utils";
+import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
 import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 
 type AdjustmentMode = "relative" | "stocktake";
+type Field = "quantity" | "reason" | "alertLevel";
 
-const INCREASE_REASONS = ["received", "return", "correction", "other"] as const;
-const DECREASE_REASONS = ["damage", "theft", "correction", "other"] as const;
+const INCREASE_REASONS: readonly InventoryAdjustmentReason[] = ["received", "return", "correction", "other"];
+const DECREASE_REASONS: readonly InventoryAdjustmentReason[] = ["damage", "theft", "correction", "other"];
+const ALERT_LEVEL_MAX = 1_000_000;
+// API body paths → the field that shows the problem.
+const FIELD_BY_PATH: Record<string, Field> = {
+  delta: "quantity",
+  newStock: "quantity",
+  reason: "reason",
+  lowStockThreshold: "alertLevel",
+};
+
+const isWhole = (value: number | null): value is number => value !== null && Number.isSafeInteger(value);
 
 interface AdjustStockDialogProps {
   variant: InventoryVariant | null;
@@ -43,43 +56,58 @@ interface AdjustStockDialogProps {
 }
 
 /**
- * Ledger-backed stock change: explicit apply, one operation key per intent.
- * Always mounted; the parent re-keys it per opening so every opening starts clean.
+ * Ledger-backed stock change plus the SKU's alert level: explicit apply, one
+ * operation key per stock intent. Always mounted; the parent re-keys it per
+ * opening so every opening starts clean.
  */
 export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustStockDialogProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const [mode, setMode] = useState<AdjustmentMode>("relative");
-  const [deltaInput, setDeltaInput] = useState("0");
-  const [countInput, setCountInput] = useState("0");
-  const [reason, setReason] = useState<InventoryAdjustmentReason>("received");
+  const [delta, setDelta] = useState<number | null>(0);
+  const [counted, setCounted] = useState<number | null>(variant?.stock ?? 0);
+  const [reasonChoice, setReasonChoice] = useState<InventoryAdjustmentReason>("received");
+  const [alertLevel, setAlertLevel] = useState<number | null>(variant?.lowStockThreshold ?? null);
   const [notes, setNotes] = useState("");
-  // Validation appears once the merchant has typed a quantity, not on open.
+  // Validation appears once the merchant has typed, not on open.
   const [touched, setTouched] = useState(false);
+  const [serverErrors, setServerErrors] = useState<Partial<Record<Field, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const fieldRefs = {
+    quantity: useRef<HTMLInputElement>(null),
+    reason: useRef<HTMLButtonElement>(null),
+    alertLevel: useRef<HTMLInputElement>(null),
+  };
 
-  const delta = Number(deltaInput);
-  const countedStock = Number(countInput);
-  const relativeInputValid = deltaInput.trim() !== "" && Number.isSafeInteger(delta) && delta !== 0;
-  const stocktakeInputValid = countInput.trim() !== "" && Number.isSafeInteger(countedStock) && countedStock >= 0;
-  const targetStock = variant
-    ? mode === "stocktake" ? countedStock : variant.stock + delta
-    : 0;
-  const targetIsValid = mode === "stocktake"
-    ? stocktakeInputValid
-    : relativeInputValid && Number.isSafeInteger(targetStock) && targetStock >= 0;
-  const effectiveDelta = variant ? targetStock - variant.stock : 0;
+  const stock = variant?.stock ?? 0;
+  const entered = mode === "stocktake" ? counted : delta;
+  const targetStock = isWhole(entered) ? (mode === "stocktake" ? entered : stock + entered) : null;
+  const effectiveDelta = targetStock === null ? 0 : targetStock - stock;
+  const newAvailable = (targetStock ?? stock) - (variant?.reservedStock ?? 0);
+  // The reason always fits the direction: flipping the sign picks that direction's first reason.
+  const reasonOptions = effectiveDelta < 0 ? DECREASE_REASONS : INCREASE_REASONS;
+  const reason = reasonOptions.includes(reasonChoice) ? reasonChoice : reasonOptions[0]!;
+  const alertLevelValid = alertLevel === null || (isWhole(alertLevel) && alertLevel >= 0 && alertLevel <= ALERT_LEVEL_MAX);
+  const alertLevelChanged = alertLevel !== (variant?.lowStockThreshold ?? null);
+
+  const localErrors: Partial<Record<Field, string>> = {
+    ...(touched && !isWhole(entered) ? { quantity: t("wholeNumber") } : {}),
+    ...(targetStock !== null && targetStock < 0 ? { quantity: t("belowZero") } : {}),
+    ...(!alertLevelValid ? { alertLevel: t("alertLevelInvalid") } : {}),
+  };
+  const errors = { ...serverErrors, ...localErrors };
   const canSubmit = Boolean(
     variant &&
     !submitting &&
-    targetIsValid &&
-    effectiveDelta !== 0 &&
-    (mode === "relative" ? relativeInputValid : stocktakeInputValid),
+    isWhole(entered) &&
+    targetStock !== null && targetStock >= 0 &&
+    alertLevelValid &&
+    (effectiveDelta !== 0 || alertLevelChanged),
   );
-  const newAvailable = variant ? targetStock - variant.reservedStock : 0;
-  const showInvalid = touched && !targetIsValid;
-  const reasonOptions: readonly InventoryAdjustmentReason[] = delta < 0 ? DECREASE_REASONS : INCREASE_REASONS;
+
+  const clearServerError = (field: Field) =>
+    setServerErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
 
   const operationKeyForIntent = (fingerprint: string) => {
     if (operationIntentRef.current?.fingerprint === fingerprint) {
@@ -90,65 +118,72 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
     return key;
   };
 
-  const updateRelativeDelta = (nextValue: string) => {
+  const updateDelta = (next: number | null) => {
     setTouched(true);
-    setDeltaInput(nextValue);
-    const nextDelta = Number(nextValue);
-    if (nextDelta < 0 && (reason === "received" || reason === "return")) {
-      setReason("damage");
-    } else if (nextDelta > 0 && (reason === "damage" || reason === "theft")) {
-      setReason("received");
+    clearServerError("quantity");
+    setDelta(next);
+  };
+
+  const saveStock = async (current: InventoryVariant) => {
+    const trimmedNotes = notes.trim();
+    if (mode === "stocktake") {
+      const stocktakeReason = trimmedNotes || "Manual stocktake";
+      const body = { variantId: current.id, newStock: targetStock!, reason: stocktakeReason };
+      await apiData(postApiV1AdminInventoryStockSet({
+        body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, ...body })) },
+      }));
+      return;
     }
+    const body = { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}) };
+    await apiData(postApiV1AdminInventoryByVariantIdAdjust({
+      path: { variantId: current.id },
+      body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, variantId: current.id, ...body })) },
+    }));
   };
 
   const handleSubmit = async () => {
     if (!variant || !canSubmit) return;
     setSubmitting(true);
+    setServerErrors({});
+    const saved = { alertLevel: false, stock: false };
     try {
-      if (mode === "stocktake") {
-        const stocktakeReason = notes.trim() || "Manual stocktake";
-        const operationKey = operationKeyForIntent(JSON.stringify({
-          mode,
-          variantId: variant.id,
-          newStock: countedStock,
-          reason: stocktakeReason,
-        }));
-        await apiData(postApiV1AdminInventoryStockSet({
-          body: {
-            operationKey,
-            variantId: variant.id,
-            newStock: countedStock,
-            reason: stocktakeReason,
-          },
-        }));
-      } else {
-        const trimmedNotes = notes.trim();
-        const operationKey = operationKeyForIntent(JSON.stringify({
-          mode,
-          variantId: variant.id,
-          delta,
-          reason,
-          notes: trimmedNotes || null,
-        }));
-        await apiData(postApiV1AdminInventoryByVariantIdAdjust({
+      if (alertLevelChanged) {
+        await apiData(putApiV1AdminInventoryByVariantIdAlertLevel({
           path: { variantId: variant.id },
-          body: {
-            operationKey,
-            delta,
-            reason,
-            ...(trimmedNotes ? { notes: trimmedNotes } : {}),
-          },
+          body: { lowStockThreshold: alertLevel },
         }));
+        saved.alertLevel = true;
       }
-      toast.success(t("stockUpdated"));
+      if (effectiveDelta !== 0) {
+        await saveStock(variant);
+        saved.stock = true;
+      }
+      toast.success(t(saved.stock && saved.alertLevel ? "stockAndAlertSaved" : saved.stock ? "stockUpdated" : "alertLevelSaved"));
       onSaved();
       onClose();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("adjustFailed"));
+      if (saved.alertLevel) onSaved();
+      // Never show server text: name the field the merchant can fix, else say nothing changed.
+      const fields = (readApiFieldIssues(error) ?? []).flatMap((issue) => {
+        const field = FIELD_BY_PATH[issue.path];
+        return field ? [field] : [];
+      });
+      if (fields.length > 0) {
+        const messages = { quantity: t("wholeNumber"), reason: t("chooseReason"), alertLevel: t("alertLevelInvalid") };
+        setServerErrors(Object.fromEntries(fields.map((field) => [field, messages[field]])));
+        const first = (["quantity", "reason", "alertLevel"] as const).find((field) => fields.includes(field))!;
+        fieldRefs[first].current?.focus();
+      } else {
+        toast.error(t(saved.alertLevel ? "stockNotUpdated" : alertLevelChanged ? "alertLevelFailed" : "adjustFailed"));
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  const fieldError = (field: Field, id: string) => errors[field]
+    ? <p id={id} className="text-body text-destructive">{errors[field]}</p>
+    : null;
 
   return (
     <Dialog open={open && variant !== null} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -164,6 +199,7 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
           <form
             id="inventory-adjustment-form"
             method="post"
+            noValidate
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
@@ -189,7 +225,9 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
                 value={mode}
                 onValueChange={(value: AdjustmentMode) => {
                   setMode(value);
-                  if (value === "stocktake") setCountInput(String(variant.stock));
+                  setCounted(variant.stock);
+                  setDelta(0);
+                  setTouched(false);
                 }}
               >
                 <SelectTrigger id="inventory-adjustment-mode" className="w-full">
@@ -209,67 +247,66 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
               <Label htmlFor="inventory-adjustment-amount">
                 {t(mode === "stocktake" ? "counted" : "quantity")}
               </Label>
-              {mode === "stocktake" ? (
-                <Input
-                  id="inventory-adjustment-amount"
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
-                  value={countInput}
-                  onChange={(event) => {
-                    setTouched(true);
-                    setCountInput(event.target.value);
-                  }}
-                />
-              ) : (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {mode === "relative" ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="shrink-0"
                     aria-label={t("decrease")}
-                    onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) - 1))}
+                    onClick={() => updateDelta((isWhole(delta) ? delta : 0) - 1)}
                   >
                     <Minus />
                   </Button>
-                  <Input
-                    id="inventory-adjustment-amount"
-                    type="number"
-                    step={1}
-                    inputMode="numeric"
-                    value={deltaInput}
-                    onChange={(event) => updateRelativeDelta(event.target.value)}
-                  />
+                ) : null}
+                <NumberInput
+                  // Each mode is its own field, so its typed text never carries over.
+                  key={mode}
+                  ref={fieldRefs.quantity}
+                  id="inventory-adjustment-amount"
+                  integer
+                  value={entered}
+                  aria-invalid={errors.quantity ? true : undefined}
+                  aria-describedby={errors.quantity ? "inventory-adjustment-amount-error" : undefined}
+                  onValueChange={mode === "stocktake"
+                    ? (next) => {
+                        setTouched(true);
+                        clearServerError("quantity");
+                        setCounted(next);
+                      }
+                    : updateDelta}
+                />
+                {mode === "relative" ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="shrink-0"
                     aria-label={t("increase")}
-                    onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) + 1))}
+                    onClick={() => updateDelta((isWhole(delta) ? delta : 0) + 1)}
                   >
                     <Plus />
                   </Button>
-                </div>
-              )}
+                ) : null}
+              </div>
               {/* One reserved line, so the dialog never changes height while typing. */}
-              <p
-                role={showInvalid ? "alert" : undefined}
-                className={cn("min-h-5 text-body", showInvalid ? "text-destructive" : "text-muted-foreground")}
-              >
-                {showInvalid
-                  ? t("invalidQuantity")
-                  : effectiveDelta !== 0
+              {errors.quantity ? (
+                <p id="inventory-adjustment-amount-error" role="alert" className="min-h-5 text-body text-destructive">
+                  {errors.quantity}
+                </p>
+              ) : (
+                <p className="min-h-5 text-body text-muted-foreground">
+                  {effectiveDelta !== 0
                     ? t("newStockPreview", {
                         change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                        stock: targetStock,
+                        stock: targetStock!,
                         available: newAvailable,
                       })
                     : null}
-              </p>
-              {targetIsValid && newAvailable < 0 ? (
+                </p>
+              )}
+              {!errors.quantity && newAvailable < 0 ? (
                 <p className="text-body text-destructive">{t("shortForOrders", { count: Math.abs(newAvailable) })}</p>
               ) : null}
             </div>
@@ -277,8 +314,22 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
             {mode === "relative" ? (
               <div className="space-y-2">
                 <Label htmlFor="inventory-adjustment-reason">{t("reason")}</Label>
-                <Select value={reason} onValueChange={(value) => setReason(value as InventoryAdjustmentReason)}>
-                  <SelectTrigger id="inventory-adjustment-reason" className="w-full">
+                <Select
+                  value={reason}
+                  onValueChange={(value) => {
+                    // Ignore the empty value a select can report while its options change.
+                    if (!reasonOptions.includes(value as InventoryAdjustmentReason)) return;
+                    clearServerError("reason");
+                    setReasonChoice(value as InventoryAdjustmentReason);
+                  }}
+                >
+                  <SelectTrigger
+                    ref={fieldRefs.reason}
+                    id="inventory-adjustment-reason"
+                    className="w-full"
+                    aria-invalid={errors.reason ? true : undefined}
+                    aria-describedby={errors.reason ? "inventory-adjustment-reason-error" : undefined}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,6 +338,7 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
                     ))}
                   </SelectContent>
                 </Select>
+                {fieldError("reason", "inventory-adjustment-reason-error")}
               </div>
             ) : null}
 
@@ -299,12 +351,36 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
                 onChange={(event) => setNotes(event.target.value)}
               />
             </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="inventory-alert-level">{t("alertLevel")}</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="shrink-0 text-body">{t("alertWhen")}</span>
+                <NumberInput
+                  ref={fieldRefs.alertLevel}
+                  id="inventory-alert-level"
+                  integer
+                  className="w-24"
+                  value={alertLevel}
+                  aria-invalid={errors.alertLevel ? true : undefined}
+                  aria-describedby={errors.alertLevel ? "inventory-alert-level-error" : "inventory-alert-level-help"}
+                  onValueChange={(next) => {
+                    clearServerError("alertLevel");
+                    setAlertLevel(next);
+                  }}
+                />
+                <span className="text-body">{t("alertOrFewer")}</span>
+              </div>
+              {fieldError("alertLevel", "inventory-alert-level-error") ?? (
+                <p id="inventory-alert-level-help" className="text-body text-muted-foreground">{t("alertLevelHelp")}</p>
+              )}
+            </div>
           </form>
         ) : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>{r("cancel")}</Button>
-          <Button type="submit" form="inventory-adjustment-form" disabled={!canSubmit} aria-busy={submitting}>
+          <Button type="submit" form="inventory-adjustment-form" disabled={!canSubmit} loading={submitting}>
             {t("apply")}
           </Button>
         </DialogFooter>

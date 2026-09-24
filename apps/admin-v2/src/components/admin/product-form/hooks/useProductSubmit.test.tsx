@@ -6,6 +6,9 @@ import type { UseFormReturn } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
+import { translate } from "~/i18n";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { saveBarMessages } from "~/i18n/save-bar";
 
 const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
@@ -17,25 +20,19 @@ const mocks = vi.hoisted(() => ({
   formSetError: vi.fn(),
   onAggregateRevisionChange: vi.fn(),
   onRevisionConflict: vi.fn(),
-  onOpenRevisionConflict: vi.fn(),
+  onVariantIssue: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useMutation: (options: {
     mutationFn: (values: unknown) => Promise<unknown>;
     onSuccess?: (result: unknown, values: unknown) => void | Promise<void>;
-    onError?: (error: unknown, values: unknown) => void;
   }) => ({
     isPending: false,
     mutateAsync: async (values: unknown) => {
-      try {
-        const result = await options.mutationFn(values);
-        await options.onSuccess?.(result, values);
-        return result;
-      } catch (error) {
-        options.onError?.(error, values);
-        throw error;
-      }
+      const result = await options.mutationFn(values);
+      await options.onSuccess?.(result, values);
+      return result;
     },
   }),
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
@@ -55,11 +52,6 @@ vi.mock("@scalius/api-client/sdk", () => ({
   putApiV1AdminProductsById: (input: unknown) => mocks.serverMutation(input),
 }));
 
-vi.mock("~/lib/api-helpers", () => ({
-  getServerFnError: (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback,
-}));
-
 vi.mock("sonner", () => ({
   toast: {
     error: mocks.toastError,
@@ -69,10 +61,10 @@ vi.mock("sonner", () => ({
 
 import { useProductSubmit } from "./useProductSubmit";
 import type { ProductFormValues } from "../types";
-import type { ProductRevisionConflict } from "~/lib/admin-api-error";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const t = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 describe("useProductSubmit", () => {
   let host: HTMLDivElement;
@@ -93,53 +85,18 @@ describe("useProductSubmit", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not report success until the server mutation settles", async () => {
+  it("resolves only after the server and the product fan-out settle, then opens the new product", async () => {
     renderHarness();
-    let resolveMutation: ((value: { id: string; aggregateRevision: number }) => void) | undefined;
-    mocks.serverMutation.mockImplementationOnce(
-      () =>
-        new Promise<{ id: string; aggregateRevision: number }>((resolve) => {
-          resolveMutation = resolve;
-        }),
-    );
-    let settled = false;
-
-    const submission = requireResult(result)
-      .handleSubmit(productValues())
-      .then((saved) => {
-        settled = true;
-        return saved;
-      });
-
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    resolveMutation?.({ id: "prod_one", aggregateRevision: 1 });
-    await expect(submission).resolves.toBe(true);
-  });
-
-  it("awaits the canonical product dependency fan-out", async () => {
-    renderHarness();
-    mocks.serverMutation.mockResolvedValueOnce({
-      id: "prod_one",
-      aggregateRevision: 1,
-    });
-    let resolveFirstInvalidation: (() => void) | undefined;
+    mocks.serverMutation.mockResolvedValueOnce({ id: "prod_new", aggregateRevision: 1 });
+    let releaseFirst: (() => void) | undefined;
     mocks.invalidateQueries
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveFirstInvalidation = resolve;
-          }),
-      )
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { releaseFirst = resolve; }))
       .mockResolvedValue(undefined);
     let settled = false;
-
-    const submission = requireResult(result)
-      .handleSubmit(productValues())
-      .then((saved) => {
-        settled = true;
-        return saved;
-      });
+    const submission = requireResult(result).submit(productValues()).then((revision) => {
+      settled = true;
+      return revision;
+    });
 
     await vi.waitFor(() => {
       expect(mocks.invalidateQueries.mock.calls.map(([options]) => options.queryKey)).toEqual([
@@ -149,178 +106,126 @@ describe("useProductSubmit", () => {
         queryKeys.products.stats(),
         queryKeys.dashboard.all,
         queryKeys.inventory.list(),
-        queryKeys.products.detail("prod_one"),
-        queryKeys.products.variants("prod_one"),
+        queryKeys.products.detail("prod_new"),
+        queryKeys.products.variants("prod_new"),
       ]);
     });
     expect(settled).toBe(false);
-
-    resolveFirstInvalidation?.();
-    await expect(submission).resolves.toBe(true);
-    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1);
+    releaseFirst?.();
+    await expect(submission).resolves.toBe(1);
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products/$productId/edit", params: { productId: "prod_new" } });
   });
 
-  it("sends and advances the shared aggregate revision without remounting", async () => {
+  it("sends and advances the shared aggregate revision", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
 
-    await expect(
-      requireResult(result).handleSubmit(productValues()),
-    ).resolves.toBe(true);
-
+    await expect(requireResult(result).submit(productValues())).resolves.toBe(5);
     expect(mocks.serverMutation).toHaveBeenCalledWith({
       path: { id: "prod_one" },
-      body: expect.objectContaining({
-        id: "prod_one",
-        expectedAggregateRevision: 4,
-      }),
+      body: expect.objectContaining({ id: "prod_one", expectedAggregateRevision: 4 }),
     });
     expect(mocks.formReset).toHaveBeenCalledTimes(1);
     expect(mocks.onAggregateRevisionChange).toHaveBeenCalledWith(5);
-
-    renderHarness({ isEdit: true, aggregateRevision: 5 });
-    mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 6 });
-    await expect(
-      requireResult(result).handleSubmit(productValues()),
-    ).resolves.toBe(true);
-    expect(mocks.serverMutation).toHaveBeenLastCalledWith({
-      path: { id: "prod_one" },
-      body: expect.objectContaining({ expectedAggregateRevision: 5 }),
-    });
-    expect(mocks.onAggregateRevisionChange).toHaveBeenLastCalledWith(6);
   });
 
-  it("preserves the draft on typed conflict and blocks stale retries", async () => {
+  it("keeps the draft on a revision conflict and explains it for the save banner", async () => {
     const conflict = { expectedRevision: 6, currentRevision: 7 };
     renderHarness({ isEdit: true, aggregateRevision: 6 });
     mocks.serverMutation.mockRejectedValueOnce(
-      new AdminApiResponseError(
-        "This product changed while you were editing.",
-        409,
-        "PRODUCT_REVISION_CONFLICT",
-        conflict,
-      ),
+      new AdminApiResponseError("This product changed.", 409, "PRODUCT_REVISION_CONFLICT", conflict),
     );
 
-    await expect(
-      requireResult(result).handleSubmit(productValues()),
-    ).resolves.toBe(false);
+    await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({
+      name: "SaveNotCompleted",
+      message: t("changedElsewhere"),
+    });
     expect(mocks.onRevisionConflict).toHaveBeenCalledWith(conflict);
     expect(mocks.formReset).not.toHaveBeenCalled();
-    expect(mocks.toastError).not.toHaveBeenCalled();
-
-    renderHarness({
-      isEdit: true,
-      aggregateRevision: 6,
-      revisionConflict: conflict,
-    });
-    await expect(
-      requireResult(result).handleSubmit(productValues()),
-    ).resolves.toBe(false);
-    expect(mocks.serverMutation).toHaveBeenCalledTimes(1);
-    expect(mocks.onOpenRevisionConflict).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps generic failures out of the revision-conflict workflow", async () => {
+  it("puts server rejections on their field: product fields in the form, SKUs in the variant editor", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 2 });
-    mocks.serverMutation.mockRejectedValueOnce(new Error("API unavailable"));
+    mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
+      JSON.stringify([{ code: "custom", path: ["price"], message: "Enter a price above 0 to make this product active." }]),
+      400,
+    ));
+    await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({
+      lines: [`${t("price")}: Enter a price above 0 to make this product active.`],
+    });
+    expect(mocks.formSetError).toHaveBeenCalledWith("price", {
+      type: "server",
+      message: "Enter a price above 0 to make this product active.",
+    });
 
-    await expect(
-      requireResult(result).handleSubmit(productValues()),
-    ).resolves.toBe(false);
+    mocks.onVariantIssue.mockReturnValueOnce("M / White: taken");
+    mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
+      "SKU TEE-M is already used by Cotton tee.",
+      409,
+      "SKU_TAKEN",
+      { field: "optionMatrix.variants.1.sku", sku: "TEE-M", productId: "prod_x", productName: "Cotton tee" },
+    ));
+    await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({ lines: ["M / White: taken"] });
+    expect(mocks.onVariantIssue).toHaveBeenCalledWith(
+      "optionMatrix.variants.1.sku",
+      t("skuTaken", { sku: "TEE-M", product: "Cotton tee" }),
+    );
+  });
+
+  it("never shows raw server faults", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 2 });
+    mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError("Internal Server Error", 500));
+
+    await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({
+      name: "SaveNotCompleted",
+      message: translate(saveBarMessages, "serverError"),
+    });
     expect(mocks.onRevisionConflict).not.toHaveBeenCalled();
-    expect(mocks.toastError).toHaveBeenCalledWith("API unavailable");
   });
 
   it("requires explicit SKU fallback acknowledgement before removing assigned media", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockRejectedValueOnce(
-      new AdminApiResponseError(
-        "Removed images are assigned to SKUs.",
-        409,
-        "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT",
-        {
-          affectedCount: 2,
-          affectedAssociationIds: ["pmed_assigned_1"],
-          affectedSkus: [
-            { id: "var_white", sku: "TEA-WHITE", imageId: "pmed_assigned_1" },
-          ],
-        },
-      ),
+      new AdminApiResponseError("Removed images are assigned to SKUs.", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", {
+        affectedCount: 2,
+        affectedAssociationIds: ["pmed_assigned_1"],
+        affectedSkus: [{ id: "var_white", sku: "TEA-WHITE", imageId: "pmed_assigned_1" }],
+      }),
     );
 
     await act(async () => {
-      await expect(requireResult(result).handleSubmit(productValues())).resolves.toBe(false);
+      await expect(requireResult(result).submit(productValues())).rejects.toMatchObject({ name: "SaveNotCompleted" });
     });
     expect(requireResult(result).mediaRemovalConflict).toMatchObject({ affectedCount: 2 });
     expect(mocks.formReset).not.toHaveBeenCalled();
-    expect(mocks.toastError).not.toHaveBeenCalled();
 
     mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
     await act(async () => {
-      await expect(requireResult(result).confirmMediaRemoval()).resolves.toBe(true);
+      await requireResult(result).confirmMediaRemoval();
     });
-
     expect(mocks.serverMutation).toHaveBeenLastCalledWith({
       path: { id: "prod_one" },
       body: expect.objectContaining({
-        id: "prod_one",
         expectedAggregateRevision: 4,
         acknowledgedSkuImageRemovalIds: ["pmed_assigned_1"],
       }),
     });
-    expect(mocks.formReset).toHaveBeenCalledTimes(1);
     expect(mocks.onAggregateRevisionChange).toHaveBeenCalledWith(5);
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(t("productSaved"));
   });
 
-  it("blocks product creation while an option draft needs attention", async () => {
-    renderHarness({ optionMatrixIssue: "Update combinations before saving." });
-
-    await act(async () => {
-      await expect(requireResult(result).handleSubmit(productValues())).resolves.toBe(false);
-    });
-
-    expect(mocks.serverMutation).not.toHaveBeenCalled();
-    expect(requireResult(result).showAlert).toBe(true);
-    expect(requireResult(result).alertMessage).toBe("Update combinations before saving.");
-  });
-
-  function renderHarness({
-    isEdit = false,
-    aggregateRevision,
-    revisionConflict = null,
-    optionMatrixIssue = null,
-  }: {
-    isEdit?: boolean;
-    aggregateRevision?: number;
-    revisionConflict?: ProductRevisionConflict | null;
-    optionMatrixIssue?: string | null;
-  } = {}) {
+  function renderHarness({ isEdit = false, aggregateRevision }: { isEdit?: boolean; aggregateRevision?: number } = {}) {
     act(() => {
       root.render(
-        <HookHarness
-          isEdit={isEdit}
-          aggregateRevision={aggregateRevision}
-          revisionConflict={revisionConflict}
-          optionMatrixIssue={optionMatrixIssue}
-          onResult={(nextResult) => (result = nextResult)}
-        />,
+        <HookHarness isEdit={isEdit} aggregateRevision={aggregateRevision} onResult={(next) => (result = next)} />,
       );
     });
   }
 });
 
-function HookHarness({
-  isEdit,
-  aggregateRevision,
-  revisionConflict,
-  optionMatrixIssue,
-  onResult,
-}: {
+function HookHarness({ isEdit, aggregateRevision, onResult }: {
   isEdit: boolean;
   aggregateRevision?: number;
-  revisionConflict: ProductRevisionConflict | null;
-  optionMatrixIssue: string | null;
   onResult: (result: ReturnType<typeof useProductSubmit>) => void;
 }) {
   const form = {
@@ -328,24 +233,19 @@ function HookHarness({
     reset: mocks.formReset,
     setError: mocks.formSetError,
   } as unknown as UseFormReturn<ProductFormValues>;
-  const hookResult = useProductSubmit({
+  onResult(useProductSubmit({
     isEdit,
     productId: isEdit ? "prod_one" : undefined,
     aggregateRevision,
-    revisionConflict,
-    optionMatrixIssue,
     onAggregateRevisionChange: mocks.onAggregateRevisionChange,
     onRevisionConflict: mocks.onRevisionConflict,
-    onOpenRevisionConflict: mocks.onOpenRevisionConflict,
+    onVariantIssue: mocks.onVariantIssue,
     form,
-  });
-  onResult(hookResult);
+  }));
   return null;
 }
 
-function requireResult(
-  result: ReturnType<typeof useProductSubmit> | null,
-): ReturnType<typeof useProductSubmit> {
+function requireResult(result: ReturnType<typeof useProductSubmit> | null): ReturnType<typeof useProductSubmit> {
   if (!result) throw new Error("Hook result is unavailable");
   return result;
 }

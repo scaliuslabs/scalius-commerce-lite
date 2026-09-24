@@ -19,11 +19,12 @@ export const searchListingMessages = defineMessages({
     hiddenNote: "Hidden from search engines.",
     excludeFromFeed: "Leave out of Facebook and Google product ads",
     excludeFromFeedHelp: "It stays on your store.",
+    addressOnSave: "The web address is set when you save",
   },
   bn: {
     title: "সার্চ ইঞ্জিন লিস্টিং",
     edit: "সার্চ ইঞ্জিন লিস্টিং এডিট করুন",
-    empty_product: "সার্চ ইঞ্জিনে এই প্রোডাক্ট কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
+    empty_product: "সার্চ ইঞ্জিনে এই পণ্য কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
     empty_collection: "সার্চ ইঞ্জিনে এই কালেকশন কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
     empty_category: "সার্চ ইঞ্জিনে এই ক্যাটাগরি কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
     empty_page: "সার্চ ইঞ্জিনে এই পেজ কেমন দেখাবে তা দেখতে একটি টাইটেল ও বর্ণনা দিন।",
@@ -35,7 +36,8 @@ export const searchListingMessages = defineMessages({
     hide: "সার্চ ইঞ্জিন থেকে লুকান",
     hideHelp: "যাদের কাছে লিংক আছে তারা এখনও দেখতে পারবেন।",
     hiddenNote: "সার্চ ইঞ্জিন থেকে লুকানো।",
-    excludeFromFeed: "Facebook ও Google প্রোডাক্ট বিজ্ঞাপনে রাখবেন না",
+    excludeFromFeed: "Facebook ও Google পণ্য বিজ্ঞাপনে রাখবেন না",
     excludeFromFeedHelp: "আপনার স্টোরে থাকবে।",
+    addressOnSave: "সেভ করার পর ওয়েব ঠিকানা ঠিক হবে",
   },
 });

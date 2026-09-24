@@ -32,6 +32,7 @@ vi.mock("~/hooks/use-storefront-url", () => ({
   useStorefrontUrl: () => ({ storefrontUrl: "https://shop.test" }),
 }));
 vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (value: number) => `৳${value}` }) }));
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
@@ -200,7 +201,7 @@ describe("CollectionForm", () => {
       config: { source: "manual", productIds: [], categoryIds: [] },
     });
     expect(api.updateCollection).not.toHaveBeenCalled();
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Changes saved"));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Collection saved"));
     expect(navigate).toHaveBeenCalledWith(expect.objectContaining({
       to: "/admin/collections/$collectionId/edit",
       params: { collectionId: "col_new" },
@@ -232,7 +233,7 @@ describe("CollectionForm", () => {
         showOnHomepage: true,
       },
     });
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Changes saved"));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Collection saved"));
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
       queryKeys.collections.list(),
       queryKeys.collections.byIds(),
@@ -315,12 +316,12 @@ describe("CollectionForm", () => {
 
     await choose("Status", "Active");
     await click(button("Save"));
-    await waitFor(() => expect(host.textContent).toContain("Add a product, or make the collection inactive."));
+    await waitFor(() => expect(host.textContent).toContain("Add a product, or keep the collection as a draft."));
 
     await click(host.querySelector<HTMLButtonElement>('button[role="radio"][value="dynamic"]')!);
     await waitFor(() => {
-      expect(host.textContent).not.toContain("Add a product, or make the collection inactive.");
-      expect(host.textContent).toContain("Choose a category, or make the collection inactive.");
+      expect(host.textContent).not.toContain("Add a product, or keep the collection as a draft.");
+      expect(host.textContent).toContain("Choose a category, or keep the collection as a draft.");
     });
     expect(api.createCollection).not.toHaveBeenCalled();
   });
@@ -334,17 +335,54 @@ describe("CollectionForm", () => {
       },
     });
     expect(host.textContent).toContain("Winter drafts");
-    expect(host.textContent).toContain("Publish these categories before you make the collection active.");
+    expect(host.textContent).toContain("Make these categories active before you make the collection active.");
 
     await type(field("Title"), "Winter coats");
     await click(button("Save"));
     await waitFor(() =>
       expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-        "Publish these categories before you make the collection active.",
+        "Make these categories active before you make the collection active.",
       ),
     );
     expect(api.createCollection).not.toHaveBeenCalled();
     expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it("explains that automatic collections need an active category", async () => {
+    await render({ categories: [{ id: "cat_draft", name: "Winter drafts", status: "draft" }], defaultValues: { name: "Winter" } });
+
+    await click(host.querySelector<HTMLButtonElement>('button[role="radio"][value="dynamic"]')!);
+
+    await waitFor(() => expect(host.textContent).toContain("Only active categories can be used. Make a category active first."));
+    expect(host.querySelector('a[href="/admin/categories"]')?.textContent).toBe("Go to categories");
+    expect(host.querySelector('button[aria-label="Add a category"]')).toBeNull();
+  });
+
+  it("previews the products an automatic collection will contain", async () => {
+    api.getCollectionProductOptions.mockResolvedValue({
+      products: [
+        { id: "prod_panjabi", name: "Cotton panjabi", price: 2500, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: null, variantCount: 2, available: 7 },
+        { id: "prod_tupi", name: "Tupi", price: 250, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null, variantCount: 0, available: 0 },
+      ],
+      pagination: { page: 1, limit: 10, total: 2, totalPages: 1 },
+    });
+    await render({
+      defaultValues: {
+        name: "Curated",
+        config: { ...savedCollection.config!, source: "dynamic", categoryIds: ["cat_curated", "cat_draft"], productIds: [] },
+      },
+    });
+
+    await waitFor(() => expect(host.textContent).toContain("Cotton panjabi"));
+    const preview = host.querySelector('section[aria-label="Products in this collection"]');
+    expect(text(preview?.textContent)).toContain("Products in this collection2 products");
+    expect(text(preview?.textContent)).toContain("৳2500 · 2 variants · 7 in stock");
+    expect(text(preview?.textContent)).toContain("Tupi৳250 · Out of stockDraft");
+    // Only the active category counts: a draft category adds nothing on the store.
+    expect(api.getCollectionProductOptions).toHaveBeenCalledWith({
+      query: expect.objectContaining({ categoryIds: "cat_curated", limit: 10 }),
+    });
+    expect(host.textContent).toContain("2 of max 90 categories");
   });
 
   it("shows homepage options once the collection is on the homepage", async () => {

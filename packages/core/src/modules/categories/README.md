@@ -8,7 +8,7 @@ Product category CRUD with explicit publication authority, revision-guarded writ
 |------|---------|
 | `index.ts` | Barrel exports (re-exports service, storefront, validation) |
 | `categories.validation.ts` | Zod schemas for create/update/status and revision claims |
-| `categories.publication.ts` | Public predicate, publish readiness, and transactional publish guard |
+| `categories.publication.ts` | Public predicate and publish readiness (informational: an empty published category is allowed) |
 | `categories.revision.ts` | Single/bulk revision guards and typed conflicts |
 | `categories.service.ts` | Admin DB queries and mutations (9 exported functions) |
 | `categories.storefront.ts` | Public/storefront queries (4 exported functions) |
@@ -44,9 +44,9 @@ Shared content fields:
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `createCategory` | `(db, data)` | Creates draft revision 1 and returns `{ id, revision, status }` |
-| `updateCategory` | `(db, id, data)` | CAS edit/status write; publish readiness guard; advances revision and affected product revisions |
-| `updateCategoryStatus` | `(db, id, { expectedRevision, status })` | CAS status workflow with the same publish guard |
+| `createCategory` | `(db, data)` | Creates revision 1 with the chosen status (default draft) and returns `{ id, revision, status }` |
+| `updateCategory` | `(db, id, data)` | CAS edit/status write; unpublish guard for active automatic collections; advances revision and affected product revisions |
+| `updateCategoryStatus` | `(db, id, { expectedRevision, status })` | CAS status workflow with the same unpublish guard |
 | `deleteCategory` | `(db, id, expectedRevision)` | CAS soft-delete, forces draft, rejects assigned products |
 | `bulkDeleteCategories` | `(db, claims, permanent?)` | Up to 90 `{id, expectedRevision}` claims; soft trash is one all-or-none guarded `UPDATE … RETURNING`, while hard delete preserves transactional collection cleanup |
 | `restoreCategories` | `(db, claims)` | CAS restore to draft; advances category and affected product revisions |

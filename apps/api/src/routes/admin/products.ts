@@ -555,6 +555,91 @@ app.openapi(bulkDeleteRoute, async (c) => {
     });
 });
 
+// ── Bulk Update Products ──
+
+const bulkUpdateRoute = createRoute({
+    method: "post",
+    path: "/bulk-update",
+    operationId: "dashboard.products.bulk_update",
+    tags: ["Admin - Products"],
+    summary: "Set status and/or category on several products",
+    description: "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        products: bulkDeleteSchema.shape.products,
+                        isActive: z.boolean().optional(),
+                        categoryId: z.string().min(1).max(180).optional(),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Products updated",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                products: z.array(z.object({ id: z.string(), aggregateRevision: z.number().int().min(1) })),
+            })) } },
+        },
+        ...conflictMutationErrorResponses,
+    },
+});
+
+app.openapi(bulkUpdateRoute, async (c) => {
+    const db = c.get("db");
+    const { products, ...changes } = c.req.valid("json");
+    const revisions = await ProductsAdmin.bulkUpdateProducts(db, products, changes);
+    await bumpCacheGeneration(c);
+    return ok(c, {
+        products: revisions.map((revision, index) => ({
+            id: products[index]!.id,
+            aggregateRevision: revision.aggregateRevision,
+        })),
+    });
+});
+
+// ── Duplicate Product ──
+
+const duplicateProductRoute = createRoute({
+    method: "post",
+    path: "/{id}/duplicate",
+    operationId: "dashboard.products.duplicate",
+    tags: ["Admin - Products"],
+    summary: "Copy a product as a new draft",
+    description: "Copies text, pricing, media, attributes, sections, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ name: z.string().trim().min(3).max(100).openapi({ description: "Title of the copy" }) }),
+                },
+            },
+        },
+    },
+    responses: {
+        201: {
+            description: "Product copied",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                id: z.string(),
+                aggregateRevision: z.number().int().min(1),
+            })) } },
+        },
+        ...conflictMutationErrorResponses,
+    },
+});
+
+app.openapi(duplicateProductRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const { name } = c.req.valid("json");
+    // A draft is not buyer-visible, so no cache generation bump.
+    return created(c, await ProductsAdmin.duplicateProduct(db, id, name));
+});
+
 // ── Bounded Product Sections ──
 
 const getProductSectionRoute = createRoute({

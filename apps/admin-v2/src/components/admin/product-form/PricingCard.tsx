@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,34 +16,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
 
-function numberField(onChange: (value: number) => void) {
-  return (event: ChangeEvent<HTMLInputElement>) =>
-    onChange(event.target.value === "" ? 0 : Number(event.target.value));
-}
-
 export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }) {
   const t = useMessages(productMessages);
-  const { symbol, fmt } = useCurrency();
+  const { symbol, fmt, salePrice } = useCurrency();
   const [discountShown, setDiscountShown] = useState(false);
-  const [rawPrice, discountType, rawPercentage, rawAmount] = useWatch({
+  const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
     name: ["price", "discountType", "discountPercentage", "discountAmount"],
   });
-  const price = Number(rawPrice ?? 0);
-  const discountPercentage = Number(rawPercentage ?? 0);
-  const discountAmount = Number(rawAmount ?? 0);
   const { errors } = form.formState;
   const discountOpen = discountShown || Boolean(errors.discountPercentage || errors.discountAmount);
-
-  const rawDiscount = discountType === "flat" ? discountAmount : price * (discountPercentage / 100);
-  const appliedDiscount = Math.min(Math.max(rawDiscount, 0), Math.max(price, 0));
-  const hasDiscount = appliedDiscount > 0;
+  const validPrice = Number.isFinite(price) ? price ?? 0 : 0;
+  const sale = salePrice(validPrice, { discountType, discountPercentage, discountAmount });
+  const hasDiscount = sale !== null;
 
   return (
     <Card>
@@ -58,21 +49,17 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
             <FormItem>
               <FormLabel>{t("priceLabel", { symbol })}</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
+                <NumberInput
+                  ref={field.ref}
+                  name={field.name}
                   placeholder="0.00"
-                  {...field}
-                  value={field.value || ""}
-                  onChange={numberField(field.onChange)}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  onBlur={field.onBlur}
                 />
               </FormControl>
               {hasDiscount ? (
-                <p className="text-body text-muted-foreground">
-                  {t("customerPays", { amount: fmt(Math.max(price - appliedDiscount, 0)) })}
-                </p>
+                <p className="text-body text-muted-foreground">{t("customerPays", { amount: fmt(sale) })}</p>
               ) : null}
               <FormMessage />
             </FormItem>
@@ -121,16 +108,13 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
                     {discountType === "flat" ? t("discountAmountLabel", { symbol }) : t("discountPercentLabel")}
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      max={discountType === "flat" ? undefined : "100"}
-                      step="0.01"
+                    <NumberInput
+                      ref={field.ref}
+                      name={field.name}
                       placeholder="0"
-                      {...field}
-                      value={field.value || ""}
-                      onChange={numberField(field.onChange)}
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      onBlur={field.onBlur}
                     />
                   </FormControl>
                   <FormMessage />
@@ -143,8 +127,8 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
             {!hasDiscount
               ? t("addDiscount")
               : discountType === "flat"
-                ? t("amountOff", { amount: fmt(discountAmount) })
-                : t("percentOff", { percent: discountPercentage })}
+                ? t("amountOff", { amount: fmt(discountAmount ?? 0) })
+                : t("percentOff", { percent: discountPercentage ?? 0 })}
           </Button>
         )}
       </CardContent>

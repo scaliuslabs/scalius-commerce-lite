@@ -59,6 +59,7 @@ describe("ResourceListPage", () => {
       component: () => (
         <ResourceListPage<Row>
           title="Things"
+          list="things"
           search={{ ...search, trashed }}
           query={query}
           dataKey="things"

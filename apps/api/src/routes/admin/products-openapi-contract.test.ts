@@ -86,7 +86,7 @@ describe("admin product mutation OpenAPI responses", () => {
 
         expect(create).toContain('"media"');
         expect(create).toContain('"mediaId"');
-        expect(create).toContain('"weight":{"type":"number","nullable":true,"minimum":0,"description":"Weight in grams."}');
+        expect(create).toContain('"weight":{"type":"number","nullable":true,"minimum":0,"maximum":1000000,"description":"Weight in grams."}');
         expect(create).not.toContain('"images"');
         expect(detail).toContain('"media"');
         expect(detail).toContain('"posterUrl"');

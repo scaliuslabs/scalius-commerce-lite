@@ -11,6 +11,7 @@ import {
   normalizeOptionalEnumSearchParam,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -21,7 +22,7 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
-import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { Badge } from "~/components/ui/badge";
 import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
 import { translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
@@ -33,11 +34,11 @@ function validateCategorySearch(search: SearchValidatorInput) {
   return { ...validateBase(search), status: normalizeOptionalEnumSearchParam(search.status, STATUSES) };
 }
 
-function listQuery(search: ReturnType<typeof validateCategorySearch>) {
+function listQuery(search: ReturnType<typeof validateCategorySearch>, term: string) {
   return categoriesQueryOptions({
     page: search.page,
     limit: search.limit,
-    search: search.search || undefined,
+    search: term || undefined,
     sort: search.sort,
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
@@ -48,7 +49,7 @@ function listQuery(search: ReturnType<typeof validateCategorySearch>) {
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("categories"))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "categories") }] }),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
@@ -58,6 +59,7 @@ const claims = (rows: CategoryListItem[]) => rows.map((row) => ({ id: row.id, ex
 
 function CategoriesPage() {
   const search = Route.useSearch();
+  const [term] = useListSearch("categories");
   const t = useMessages(catalogMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: can } = useCatalogActionPermissions();
@@ -82,9 +84,9 @@ function CategoriesPage() {
       cell: ({ row }) => {
         const status = row.original.status;
         return (
-          <StatusBadge tone={status === "published" ? "success" : "neutral"}>
-            {t(status === "published" ? "published" : status === "internal" ? "hidden" : "draft")}
-          </StatusBadge>
+          <Badge variant={status === "published" ? "success" : status === "draft" ? "attention" : "secondary"}>
+            {t(status === "published" ? "active" : status === "internal" ? "hidden" : "draft")}
+          </Badge>
         );
       },
     },
@@ -113,14 +115,15 @@ function CategoriesPage() {
       title={t("categories")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
       search={search}
-      query={listQuery(search)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
+      list="categories"
+      query={listQuery(search, term)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="categories"
       columns={columns}
       invalidate={[queryKeys.categories.all, queryKeys.collections.categoryOptions(), queryKeys.products.stats()]}
       empty={{ icon: FolderTree, title: t("categoriesEmptyTitle"), description: t("categoriesEmptyBody") }}
       views={{ param: "status", tabs: [
-        { value: "published", label: t("published") },
+        { value: "published", label: t("active") },
         { value: "draft", label: t("draft") },
         { value: "internal", label: t("hidden") },
       ] }}

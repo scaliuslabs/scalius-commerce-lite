@@ -53,3 +53,13 @@ export const adjustInventoryRequestSchema = z.object({
     operationKey: inventoryOperationKeySchema.optional(),
     ...adjustInventoryFields,
 }).superRefine(validateAdjustmentReason);
+
+export const LOW_STOCK_THRESHOLD_MAX = 1_000_000;
+
+/** A SKU's alert level: alert when available stock falls to this or below. `null` turns it off. */
+export const lowStockThresholdSchema = z
+    .number()
+    .int("Enter a whole number.")
+    .min(0, "Enter 0 or more.")
+    .max(LOW_STOCK_THRESHOLD_MAX, `Enter ${LOW_STOCK_THRESHOLD_MAX} or less.`)
+    .nullable();

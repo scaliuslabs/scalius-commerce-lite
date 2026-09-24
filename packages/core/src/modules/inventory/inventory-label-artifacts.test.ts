@@ -15,8 +15,11 @@ const variant: InventoryLabelArtifactVariant = {
   barcodeType: "code128",
 };
 
+const BDT = { code: "BDT", symbol: "৳" };
+
 const job: InventoryLabelArtifactJob = {
   format: "csv",
+  locale: "en",
   mode: "job",
   quantities: { var_1: 2 },
   order: "selected",
@@ -38,7 +41,7 @@ const job: InventoryLabelArtifactJob = {
 
 describe("inventory label server artifacts", () => {
   it("creates formula-safe CSV from authoritative SKU projection", () => {
-    const artifact = buildInventoryLabelArtifact([variant], job, "BDT");
+    const artifact = buildInventoryLabelArtifact([variant], job, BDT);
     expect(artifact.contentType).toBe("text/csv; charset=utf-8");
     expect(artifact.copyCount).toBe(2);
     expect(String(artifact.body)).toContain("'=FORMULA");
@@ -46,18 +49,27 @@ describe("inventory label server artifacts", () => {
   });
 
   it("creates self-contained escaped printable HTML with vector barcodes", () => {
-    const artifact = buildInventoryLabelArtifact([variant], { ...job, format: "html" }, "BDT");
+    const artifact = buildInventoryLabelArtifact([variant], { ...job, format: "html" }, BDT);
     expect(String(artifact.body)).toContain("<!doctype html>");
     expect(String(artifact.body)).toContain("Tea &amp; &lt;Coffee&gt;");
     expect(String(artifact.body)).toContain("<svg");
     expect(String(artifact.body)).not.toContain("https://");
   });
 
+  it("prints prices in the dashboard's money format", () => {
+    const lakh = { ...variant, effectivePrice: 125000 };
+    const english = String(buildInventoryLabelArtifact([lakh], { ...job, format: "html" }, BDT).body);
+    const bangla = String(buildInventoryLabelArtifact([lakh], { ...job, format: "html", locale: "bn" }, BDT).body);
+    expect(english).toContain("৳1,25,000.00");
+    expect(english).not.toContain("BDT");
+    expect(bangla).toContain("৳১,২৫,০০০.০০");
+  });
+
   it("creates a deterministic vector PDF without browser rendering", () => {
-    const artifact = buildInventoryLabelArtifact([variant], { ...job, format: "pdf" }, "BDT");
+    const artifact = buildInventoryLabelArtifact([variant], { ...job, format: "pdf" }, BDT);
     const pdf = new TextDecoder().decode(artifact.body as Uint8Array);
     expect(pdf.slice(0, 8)).toBe("%PDF-1.4");
-    expect(pdf).not.toContain("BDT?");
+    expect(pdf).toContain("BDT 125.00");
     expect(artifact.pageCount).toBe(1);
   });
 
@@ -68,7 +80,7 @@ describe("inventory label server artifacts", () => {
       ...job,
       format: "html",
       quantities: { upc: 1, isbn: 1 },
-    }, "BDT");
+    }, BDT);
     const html = String(artifact.body);
     expect(html).toContain('<div class="code">036000291452</div>');
     expect(html).not.toContain('<div class="code">0036000291452</div>');
@@ -79,11 +91,11 @@ describe("inventory label server artifacts", () => {
     expect(() => buildInventoryLabelArtifact([variant], {
       ...job,
       quantities: { var_1: 0 },
-    }, "BDT")).toThrow("at least one");
+    }, BDT)).toThrow("at least one");
     expect(() => buildInventoryLabelArtifact([variant], {
       ...job,
       quantities: { var_1: 1_001 },
-    }, "BDT")).toThrow("at most 1000");
+    }, BDT)).toThrow("at most 1000");
   });
 
   it("fails closed when bounded copy inputs would still produce an oversized download", () => {
@@ -93,11 +105,11 @@ describe("inventory label server artifacts", () => {
     }], {
       ...job,
       quantities: { var_1: 1_000 },
-    }, "BDT")).toThrow("exceeds 16777216 bytes");
+    }, BDT)).toThrow("exceeds 16777216 bytes");
   });
 
   it("rejects non-printable custom Code 128 data", () => {
-    expect(() => buildInventoryLabelArtifact([{ ...variant, barcode: "বাংলা", barcodeType: "custom" }], job, "BDT"))
+    expect(() => buildInventoryLabelArtifact([{ ...variant, barcode: "বাংলা", barcodeType: "custom" }], job, BDT))
       .toThrow("printable ASCII");
   });
 });

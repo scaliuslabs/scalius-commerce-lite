@@ -91,6 +91,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
     DELETE: { permission: PERMISSIONS.PRODUCTS_DELETE },
   },
+  "/api/v1/admin/products/bulk-update": {
+    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
+  },
+  "/api/v1/admin/products/*/duplicate": {
+    POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
+  },
   "/api/v1/admin/products/*/restore": {
     POST: { permission: PERMISSIONS.PRODUCTS_RESTORE },
   },
@@ -214,6 +220,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/collections/*/sections/*": {
     GET: { permission: PERMISSIONS.COLLECTIONS_VIEW },
+  },
+  "/api/v1/admin/collections/*/products": {
+    POST: { permission: PERMISSIONS.COLLECTIONS_EDIT },
   },
   "/api/v1/admin/collections/*/restore": {
     POST: { permission: PERMISSIONS.COLLECTIONS_RESTORE },
@@ -1119,6 +1128,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/inventory/stock-set": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/*/alert-level": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/inventory/*/adjust": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },

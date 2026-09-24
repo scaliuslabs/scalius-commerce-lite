@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   setStock: vi.fn(),
   lookupByBarcodeOrSku: vi.fn(),
   acknowledgeLowStockAlert: vi.fn(),
+  setLowStockThreshold: vi.fn(),
   findStockMutationAvailabilityTransitions: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
@@ -32,6 +33,7 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     setStock: mocks.setStock,
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
     inventoryOperationKeySchema: z.string().min(16).max(128),
+    lowStockThresholdSchema: z.number().int().min(0).max(1_000_000).nullable(),
     INVENTORY_LABEL_VARIANT_LIMIT: 150,
     INVENTORY_LABEL_ARTIFACT_MAX_COPIES: 1_000,
     INVENTORY_LABEL_ARTIFACT_MAX_BYTES: 16 * 1024 * 1024,
@@ -56,6 +58,7 @@ vi.mock("@scalius/core/modules/inventory", async () => {
 
 vi.mock("@scalius/core/modules/inventory/alerts", () => ({
   acknowledgeLowStockAlert: mocks.acknowledgeLowStockAlert,
+  setLowStockThreshold: mocks.setLowStockThreshold,
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -109,7 +112,8 @@ function createTestApp() {
     variants: [],
     missingVariantIds: [],
   });
-  mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
+  mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳" });
+  mocks.setLowStockThreshold.mockImplementation(async (_db, variantId, lowStockThreshold) => ({ variantId, lowStockThreshold }));
   mocks.buildInventoryLabelArtifact.mockReturnValue({
     body: "artifact-body",
     contentType: "text/csv; charset=utf-8",
@@ -161,6 +165,34 @@ async function postJson(
 describe("admin inventory cache invalidation", () => {
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it.each([5, null])("saves alert level %s and bumps the public cache generation", async (lowStockThreshold) => {
+    const { app, db, env } = createTestApp();
+    const response = await app.request("/api/v1/admin/inventory/var_1/alert-level", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lowStockThreshold }),
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: { variantId: "var_1", lowStockThreshold } });
+    expect(mocks.setLowStockThreshold).toHaveBeenCalledWith(db, "var_1", lowStockThreshold);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+  });
+
+  it.each([-1, 2.5, 1_000_001, "5"])("rejects alert level %s with a field error before writing", async (lowStockThreshold) => {
+    const { app, env } = createTestApp();
+    const response = await app.request("/api/v1/admin/inventory/var_1/alert-level", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lowStockThreshold }),
+    }, env);
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain("lowStockThreshold");
+    expect(mocks.setLowStockThreshold).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it("returns a read-only exact-SKU label projection without cache invalidation", async () => {
@@ -256,7 +288,7 @@ describe("admin inventory cache invalidation", () => {
     expect(mocks.getInventoryLabelVariants).toHaveBeenCalledWith(db, ["var_1"]);
     expect(mocks.buildInventoryLabelArtifact).toHaveBeenCalledWith([variant], expect.objectContaining({
       quantities: { var_1: 1 },
-    }), "BDT");
+    }), { code: "BDT", symbol: "৳" });
   });
 
   it.each([

@@ -530,7 +530,7 @@ export async function getCategoryById(db: Database, id: string) {
 export async function createCategory(
     db: Database,
     data: CreateCategoryInput,
-): Promise<{ id: string; revision: number; status: "draft" }> {
+): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
     const existing = await db
         .select({ id: categories.id, deletedAt: categories.deletedAt })
         .from(categories)
@@ -562,7 +562,7 @@ export async function createCategory(
                 canonicalPath: data.canonicalPath ?? null,
                 noIndex: data.noIndex ?? false,
                 excludeFromSitemap: data.excludeFromSitemap ?? false,
-                status: "draft",
+                status: data.status,
                 revision: 1,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
@@ -590,7 +590,23 @@ export async function createCategory(
         throw error;
     }
 
-    return { id: categoryId, revision: 1, status: "draft" };
+    return { id: categoryId, revision: 1, status: data.status };
+}
+
+/**
+ * Publishing needs no products (an empty category page is valid, as in
+ * Shopify). Leaving "published" is refused while an active automatic
+ * collection uses the category: checked up front for the message, and again
+ * inside the write for concurrent collection edits.
+ */
+async function unpublishLifecycleCondition(
+    db: Database,
+    status: UpdateCategoryInput["status"],
+    claims: readonly CategoryRevisionClaim[],
+): Promise<SQL | undefined> {
+    if (status === "published") return undefined;
+    await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+    return categoriesHaveNoActiveDynamicCollectionReferencesCondition(claims);
 }
 
 /**
@@ -635,15 +651,7 @@ export async function updateCategory(
     }
 
     const claims = [{ id, expectedRevision: data.expectedRevision }];
-    if (data.status !== "published") {
-        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-    }
-    const lifecycleCondition = data.status === "published"
-        ? buyerResolvableCategoryProductExists(id)
-        : sql`NOT EXISTS (
-            SELECT 1 FROM ${collections}
-            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
-        )`;
+    const lifecycleCondition = await unpublishLifecycleCondition(db, data.status, claims);
     const updateMediaGuard = noDeletingMediaReferences(`${data.content}\u0000${data.image?.url || ""}`);
 
     try {
@@ -681,11 +689,6 @@ export async function updateCategory(
             )) {
                 throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
             }
-            if (data.status === "published") {
-                throw new ValidationError(
-                    "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
-                );
-            }
             await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
             throw new ConflictError("Category could not be updated. Reload and try again.");
         }
@@ -718,15 +721,7 @@ export async function updateCategoryStatus(
     if (!category) throw new NotFoundError("Category not found");
     if (category.deletedAt) throw new ConflictError("Restore this category before changing its status.");
     const claims = [{ id, expectedRevision: data.expectedRevision }];
-    if (data.status !== "published") {
-        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-    }
-    const lifecycleCondition = data.status === "published"
-        ? buyerResolvableCategoryProductExists(id)
-        : sql`NOT EXISTS (
-            SELECT 1 FROM ${collections}
-            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
-        )`;
+    const lifecycleCondition = await unpublishLifecycleCondition(db, data.status, claims);
 
     const updated = await db.update(categories)
         .set({
@@ -744,11 +739,6 @@ export async function updateCategoryStatus(
         .get();
     if (!updated) {
         await assertCategoryClaimsCurrent(db, claims, "active");
-        if (data.status === "published") {
-            throw new ValidationError(
-                "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
-            );
-        }
         await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
         throw new ConflictError("Category status could not be updated. Reload and try again.");
     }
