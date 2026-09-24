@@ -14,6 +14,12 @@ import {
 vi.mock("../products/products.media", () => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
     resolveProductImageRepresentation: vi.fn(() => null),
+    resolveProductCardImages: vi.fn(() => ({
+        imageUrl: null,
+        imageMediaId: null,
+        imageAlt: null,
+        secondaryImageUrl: null,
+    })),
 }));
 
 type QueryChain = {

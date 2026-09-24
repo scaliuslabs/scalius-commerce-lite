@@ -340,7 +340,7 @@ describe("UCP storefront routes", () => {
       category: null,
       media: [],
       variants: [],
-      relatedProducts: [],
+      recommendations: { reason: "similar", products: [] },
     });
 
     const response = await lookupCatalog({

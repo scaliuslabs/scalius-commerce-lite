@@ -5,6 +5,7 @@ import HeaderLayout from "./HeaderLayout.astro";
 import DesktopNav from "./DesktopNav.astro";
 import MobileMenu from "./MobileMenu.astro";
 import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
+import type { StorefrontHeaderStyle } from "@scalius/shared/storefront-theme";
 
 interface Props {
   headerData: HeaderData;
@@ -13,6 +14,7 @@ interface Props {
   storeName: string | null;
   storePhone: string | null;
   social: SocialLink[];
+  variant: StorefrontHeaderStyle;
 }
 
 const {
@@ -21,6 +23,7 @@ const {
   storeName,
   storePhone,
   social,
+  variant,
 } = Astro.props;
 
 const headerData: HeaderData = {
@@ -45,7 +48,7 @@ const headerData: HeaderData = {
 ---
 
 <header id="site-header" class="contents">
-  <HeaderLayout headerData={headerData} hasNavigation={navigationItems.length > 0}>
+  <HeaderLayout headerData={headerData} hasNavigation={navigationItems.length > 0} variant={variant}>
     <DesktopNav
       slot="desktop-nav-full"
       navigation={navigationItems}

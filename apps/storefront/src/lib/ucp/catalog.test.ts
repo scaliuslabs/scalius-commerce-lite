@@ -549,7 +549,7 @@ describe("UCP catalog mapping", () => {
       category: product.category,
       media: [],
       variants: product.variants,
-      relatedProducts: [],
+      recommendations: { reason: "similar", products: [] },
     });
 
     const result = await lookupCatalog({ ids: ["khaki-shoes"] }, context);
@@ -701,7 +701,7 @@ describe("UCP catalog mapping", () => {
       category: product.category,
       media: [],
       variants: product.variants,
-      relatedProducts: [],
+      recommendations: { reason: "similar", products: [] },
     });
 
     const result = await getCatalogProduct({ id: "khaki-shoes" }, context);

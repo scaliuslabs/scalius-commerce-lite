@@ -949,6 +949,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -967,6 +968,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -2637,6 +2639,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageUrl: string | null;
                     imageMediaId: string | null;
                     imageAlt: string | null;
+                    secondaryImageUrl: string | null;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -2655,6 +2658,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageUrl: string | null;
                     imageMediaId: string | null;
                     imageAlt: string | null;
+                    secondaryImageUrl: string | null;
                 } | null;
             }>;
             presentation: {
@@ -2911,6 +2915,25 @@ export type GetApiV1StorefrontLayoutResponses = {
                     buttons: 'solid' | 'soft' | 'outline';
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
+                };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: number;
+                        mobile: number;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                 };
             };
             media: {
@@ -9898,6 +9921,10 @@ export type GetApiV1ProductsResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                /**
+                 * The next photo in gallery order, for a card's hover swap. Never a video.
+                 */
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -10266,6 +10293,86 @@ export type GetApiV1ProductsSitemapResponses = {
 
 export type GetApiV1ProductsSitemapResponse = GetApiV1ProductsSitemapResponses[keyof GetApiV1ProductsSitemapResponses];
 
+export type GetApiV1ProductsRecommendationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated product IDs, such as the cart's products. At most 20 are used.
+         */
+        productIds?: string;
+        /**
+         * Products to return
+         */
+        limit?: number;
+    };
+    url: '/api/v1/products/recommendations';
+};
+
+export type GetApiV1ProductsRecommendationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsRecommendationsError = GetApiV1ProductsRecommendationsErrors[keyof GetApiV1ProductsRecommendationsErrors];
+
+export type GetApiV1ProductsRecommendationsResponses = {
+    /**
+     * Recommended products and what kind of list it is
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products.
+             */
+            reason: 'also_bought' | 'similar' | 'popular' | 'new_arrivals';
+            products: Array<{
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                createdAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ProductsRecommendationsResponse = GetApiV1ProductsRecommendationsResponses[keyof GetApiV1ProductsRecommendationsResponses];
+
 export type GetApiV1ProductsBySlugSectionsBySectionData = {
     body?: never;
     path: {
@@ -10494,9 +10601,12 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 availableForSale: boolean;
                 priceVaries: boolean;
                 freeDelivery: boolean;
+                categoryId: string | null;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                createdAt: string | null;
             }>;
             total: number;
             offset: number;
@@ -10687,23 +10797,32 @@ export type GetApiV1ProductsBySlugResponses = {
                 updatedAt: string | null;
                 deletedAt: string | null;
             }>;
-            relatedProducts: Array<{
-                id: string;
-                name: string;
-                price: number;
-                slug: string;
-                discountType: string | null;
-                discountPercentage: number | null;
-                discountAmount: number | null;
-                discountedPrice: number;
-                hasVariants: boolean;
-                availableForSale: boolean;
-                priceVaries: boolean;
-                freeDelivery: boolean;
-                imageUrl: string | null;
-                imageMediaId: string | null;
-                imageAlt: string | null;
-            }>;
+            recommendations: {
+                /**
+                 * What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products.
+                 */
+                reason: 'also_bought' | 'similar' | 'popular' | 'new_arrivals';
+                products: Array<{
+                    id: string;
+                    name: string;
+                    price: number;
+                    slug: string;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    discountedPrice: number;
+                    hasVariants: boolean;
+                    availableForSale: boolean;
+                    priceVaries: boolean;
+                    freeDelivery: boolean;
+                    categoryId: string | null;
+                    imageUrl: string | null;
+                    imageMediaId: string | null;
+                    imageAlt: string | null;
+                    secondaryImageUrl: string | null;
+                    createdAt: string | null;
+                }>;
+            };
         };
     };
 };
@@ -11074,6 +11193,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -11212,6 +11332,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -29368,6 +29489,25 @@ export type GetApiV1AdminSettingsThemeResponses = {
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
                 };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                };
             };
             revision: number;
             [key: string]: unknown;
@@ -29396,6 +29536,25 @@ export type PostApiV1AdminSettingsThemeData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
     };
@@ -29498,6 +29657,25 @@ export type PostApiV1AdminSettingsThemeResponses = {
                     buttons: 'solid' | 'soft' | 'outline';
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
+                };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                 };
             };
             revision: number;
@@ -29611,6 +29789,25 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -29631,6 +29828,25 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -29661,6 +29877,25 @@ export type PostApiV1AdminSettingsThemeDraftData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
         expectedDraftRevision: number;
@@ -29766,6 +30001,25 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
                 };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                };
             };
             revision: number;
             basePublishedRevision: number;
@@ -29794,6 +30048,25 @@ export type PostApiV1AdminSettingsThemeDraftRebaseData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
         expectedDraftRevision: number;
@@ -29898,6 +30171,25 @@ export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
                     buttons: 'solid' | 'soft' | 'outline';
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
+                };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                 };
             };
             revision: number;
@@ -30015,6 +30307,25 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -30035,6 +30346,25 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -30152,6 +30482,25 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -30273,6 +30622,25 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -30293,6 +30661,25 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
