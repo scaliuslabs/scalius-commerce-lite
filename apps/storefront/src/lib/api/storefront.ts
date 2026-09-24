@@ -85,10 +85,12 @@ export interface LayoutData {
   footer: FooterData;
   currency?: CurrencyData;
   /**
-   * The published theme document (v2). Untrusted until
+   * The published theme document (v4). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;
+  /** The store's shape for the theme fit rules; validated by `readStoreShape`. */
+  storeShape?: unknown;
   media?: {
     canonicalCdnUrl?: string;
     canonicalHostAliases?: string[];

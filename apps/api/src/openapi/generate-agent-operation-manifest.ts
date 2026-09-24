@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  buildAgentComponentSchemas,
   buildAgentOperationManifest,
   renderAgentOperationManifestModule,
   type AgentOperationManifestEntry,
@@ -66,14 +67,16 @@ export function generateAgentOperationManifestSource(
 ): string {
   const manifest = buildAgentOperationManifest(document);
   assertNoGenericPendingAgentOperations(manifest);
+  const componentSchemas = buildAgentComponentSchemas(document, manifest);
   const workflowCatalog = buildAgentWorkflowCatalog(manifest, {
     requireCuratedCards: true,
+    componentSchemas,
   });
   assertAgentWorkflowExtension(
     document["x-scalius-workflows"],
     workflowCatalog,
   );
-  return renderAgentOperationManifestModule(manifest, workflowCatalog);
+  return renderAgentOperationManifestModule(manifest, workflowCatalog, componentSchemas);
 }
 
 export function writeAgentOperationManifest(

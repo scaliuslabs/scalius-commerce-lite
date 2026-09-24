@@ -72,7 +72,8 @@ import {
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
-import { storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
+import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
+import { readStoreShape } from "@scalius/core/modules/storefront";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -527,6 +528,8 @@ const getThemeRoute = createRoute({
               .object({
                 theme: storefrontThemeDocumentApiSchema,
                 revision: z.number().int().nonnegative(),
+                /** What the theme's fit rules read, as the storefront reads it. */
+                storeShape: storeShapeApiSchema,
               })
               .passthrough(),
           ),
@@ -539,8 +542,8 @@ const getThemeRoute = createRoute({
 
 app.openapi(getThemeRoute, async (c) => {
   const db = c.get("db");
-  const result = await getThemeSettings(db);
-  return ok(c, result);
+  const [result, storeShape] = await Promise.all([getThemeSettings(db), readStoreShape(db)]);
+  return ok(c, { ...result, storeShape });
 });
 
 const saveThemeSchema = z.object({

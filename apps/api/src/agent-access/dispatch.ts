@@ -1,4 +1,6 @@
+import { AGENT_COMPONENT_SCHEMAS } from "../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import { resolveComponentSchemaRef } from "../openapi/component-schema-refs";
 import { loadAgentAccessBackend } from "./backend";
 import {
   AGENT_MAX_REQUEST_BODY_BYTES,
@@ -207,7 +209,7 @@ function declaredJsonBodyProperties(operation: AgentOperationManifestEntry): Set
   if (!content || typeof content !== "object" || Array.isArray(content)) return undefined;
   const json = (content as Record<string, unknown>)["application/json"];
   if (!json || typeof json !== "object" || Array.isArray(json)) return undefined;
-  const schema = (json as Record<string, unknown>).schema;
+  const schema = resolveComponentSchemaRef((json as Record<string, unknown>).schema, AGENT_COMPONENT_SCHEMAS);
   if (!schema || typeof schema !== "object" || Array.isArray(schema)) return undefined;
   const root = schema as Record<string, unknown>;
   if (root.additionalProperties !== undefined && root.additionalProperties !== false) return undefined;
@@ -215,7 +217,8 @@ function declaredJsonBodyProperties(operation: AgentOperationManifestEntry): Set
   for (const key of ["oneOf", "anyOf", "allOf"] as const) {
     const alternatives = root[key];
     if (Array.isArray(alternatives)) {
-      for (const candidate of alternatives) {
+      for (const alternative of alternatives) {
+        const candidate = resolveComponentSchemaRef(alternative, AGENT_COMPONENT_SCHEMAS);
         if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
           candidates.push(candidate as Record<string, unknown>);
         }

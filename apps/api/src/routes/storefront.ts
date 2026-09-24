@@ -35,7 +35,7 @@ import { readCacheGeneration } from "../utils/cache-generation";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { pageSchema } from "../schemas/entities";
-import { storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
+import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const storefrontProductCardSchema = z.object({
@@ -193,6 +193,7 @@ const layoutDataSchema = z.object({
     usdExchangeRate: z.number().positive(),
   }),
   theme: storefrontThemeDocumentApiSchema,
+  storeShape: storeShapeApiSchema,
   media: z.object({
     canonicalCdnUrl: z.string(),
     canonicalHostAliases: z.array(z.string()),

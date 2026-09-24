@@ -60,6 +60,7 @@ import {
 } from "@scalius/shared/brand-presentation";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
+import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 import { publicCategoryConditions } from "../categories/categories.publication";
 
@@ -364,7 +365,7 @@ const LAYOUT_DOCUMENTS = [
 
 /**
  * Fetch and shape all layout data in a single batched D1 round-trip.
- * Returns the final { analytics, header, navigation, footer, currency, theme, ..., cspAllowedDomains } object.
+ * Returns the final { analytics, header, navigation, footer, currency, theme, storeShape, ..., cspAllowedDomains } object.
  */
 export async function getLayoutData(
   db: Database,
@@ -406,6 +407,9 @@ export async function getLayoutData(
         ),
       )
       .limit(2),
+
+    // 4. Store shape counts for the theme fit rules (bounded, one statement)
+    selectStoreShapeCounts(db),
   ]);
 
   const [
@@ -413,6 +417,7 @@ export async function getLayoutData(
     documentRows,
     themeResults,
     checkoutLanguageResults,
+    storeShapeResults,
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
@@ -584,6 +589,10 @@ export async function getLayoutData(
     console.warn("[Storefront] Published theme is unreadable; rendering the default theme.");
   }
   const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
+  const storeShape = storeShapeFromCounts(
+    (storeShapeResults as StoreShapeCountsRow[])[0],
+    navigationData,
+  );
   const metaCapi = {
     browserEventsEnabled: Boolean(
       metaCapiSettings.value.isEnabled &&
@@ -612,6 +621,7 @@ export async function getLayoutData(
     footer: footerData,
     currency: currencyData,
     theme: storefrontTheme,
+    storeShape,
     media: media.value,
     metaCapi,
     business: publicBusiness,

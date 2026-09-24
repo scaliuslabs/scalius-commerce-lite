@@ -7,9 +7,10 @@ import {
   securityDocument,
   seoDocument,
 } from "../settings/documents";
-import { DEFAULT_STOREFRONT_THEME, storefrontStylePresetTheme } from "@scalius/shared/storefront-theme";
+import { DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, STORE_SHAPE_COUNT_CAP, storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
 import { saveHomepagePresentationSettings } from "../settings/site-settings.service";
 import { getHomepageData, getLayoutData } from "./storefront.service";
+import { readStoreShape } from "./store-shape";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER_KEY = Buffer.alloc(32, 9).toString("base64");
@@ -46,7 +47,7 @@ describe("storefront layout data", () => {
     const { sqlite, db } = createSqliteD1Database();
     expect((await getLayoutData(db)).theme).toEqual(DEFAULT_STOREFRONT_THEME);
 
-    const boutique = storefrontStylePresetTheme("boutique");
+    const boutique = storefrontTemplateTheme("boutique");
     sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
       VALUES ('default', ?, 1, 1, 1)`).run(JSON.stringify(boutique));
     expect((await getLayoutData(db)).theme).toEqual(boutique);
@@ -58,6 +59,42 @@ describe("storefront layout data", () => {
     expect((await getLayoutData(db)).theme).toEqual(DEFAULT_STOREFRONT_THEME);
     expect(themeWarnings()).toHaveLength(1);
     warn.mockRestore();
+  });
+
+  it("serves the store shape from the same batch, with counts capped and the same facts the dashboard reads", async () => {
+    let batches = 0;
+    const { sqlite, db } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
+    expect((await getLayoutData(db)).storeShape).toEqual(EMPTY_STORE_SHAPE);
+    expect(batches).toBe(1);
+
+    sqlite.exec(`
+      INSERT INTO categories (id, name, slug, status) VALUES
+        ('c_1', 'Sarees', 'sarees', 'published'), ('c_2', 'Panjabi', 'panjabi', 'published'), ('c_3', 'Draft', 'draft', 'draft');
+      INSERT INTO products (id, name, price_minor, slug, is_active) VALUES
+        ('p_1', 'One', 1000, 'one', 1), ('p_2', 'Two', 1000, 'two', 1), ('p_3', 'Three', 1000, 'three', 1),
+        ('p_off', 'Off', 1000, 'off', 0);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+        ('v_1', 'p_1', 'ONE', 1000, 1, 0, 1, 1), ('v_2', 'p_2', 'TWO', 1000, 1, 0, 1, 1),
+        ('v_off', 'p_off', 'OFF', 1000, 1, 0, 1, 1);
+      INSERT INTO collections (id, name, presentation, config) VALUES ('col_1', 'Best', 'grid', '{}');
+    `);
+    const shape = (await getLayoutData(db)).storeShape;
+    expect(shape).toMatchObject({
+      productCount: 3,
+      skuCount: 2,
+      topCategoryCount: 2,
+      categoryDepth: 1,
+      hasCollections: true,
+      hasDeliveryMethods: false,
+    });
+    await expect(readStoreShape(db)).resolves.toEqual(shape);
+
+    // A big catalogue costs no more than the cap.
+    sqlite.exec(`
+      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${STORE_SHAPE_COUNT_CAP + 5})
+      INSERT INTO products (id, name, price_minor, slug) SELECT 'bulk_' || i, 'Bulk', 100, 'bulk-' || i FROM n;
+    `);
+    expect((await getLayoutData(db)).storeShape.productCount).toBe(STORE_SHAPE_COUNT_CAP);
   });
 });
 

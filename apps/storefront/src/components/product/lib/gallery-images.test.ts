@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MEDIA_VARIANT_WIDTHS } from "@scalius/shared/media-variants";
-import { STOREFRONT_PRODUCT_PAGE_SPECS } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_GALLERY_VARIANTS } from "@scalius/shared/storefront-theme";
 
 import {
   GALLERY_IMAGE_WIDTHS,
@@ -70,9 +70,11 @@ function renderedMainWidth(
   return span - (railBeside ? (xl ? 100 : 80) + 20 : 0);
 }
 
-const layouts = Object.entries(STOREFRONT_PRODUCT_PAGE_SPECS) as Array<
-  [string, ProductGalleryLayout]
->;
+/** What each gallery variant renders with today's gallery (classic, thumbnails below, stacked). */
+const GALLERY = Object.fromEntries(
+  Object.entries(STOREFRONT_GALLERY_VARIANTS).map(([id, spec]) => [id, spec.renders({} as never) as ProductGalleryLayout]),
+) as Record<keyof typeof STOREFRONT_GALLERY_VARIANTS, ProductGalleryLayout>;
+const layouts = Object.entries(GALLERY);
 
 describe("product gallery image slots", () => {
   it("maps every slot onto a pre-generated rendition width", () => {
@@ -97,7 +99,7 @@ describe("product gallery image slots", () => {
   }
 
   it("serves a DPR 2 phone its full density, a DPR 3 phone about 2x, and a laptop no more than it shows", () => {
-    const { sizes } = productGalleryMainSlot(STOREFRONT_PRODUCT_PAGE_SPECS.gallery, true);
+    const { sizes } = productGalleryMainSlot(GALLERY.classic, true);
     // 390px phone: the full 366px row (thumbnails in a strip below).
     expect(evaluateSizes(sizes, 390, 2)).toBe(366);
     // DPR 3 asks for ~2x pixels (~730 device px: the 960w rendition, not 1600w).
@@ -109,8 +111,8 @@ describe("product gallery image slots", () => {
   });
 
   it("sizes thumbnails to their rail and caps their srcset at 320w", () => {
-    const beside = STOREFRONT_PRODUCT_PAGE_SPECS.gallery;
-    const below = STOREFRONT_PRODUCT_PAGE_SPECS.filmstrip;
+    const beside = GALLERY.classic;
+    const below = GALLERY["thumbs-below"];
     // Phones and tablets: a strip of 68px thumbnails in every layout.
     const mobile = productGalleryThumbnailSlot(beside, "mobile");
     expect(evaluateSizes(mobile.sizes, 390)).toBe(68);

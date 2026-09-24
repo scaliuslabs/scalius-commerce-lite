@@ -3,17 +3,17 @@
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { storefrontStylePresetTheme, type StorefrontSection } from "@scalius/shared/storefront-theme";
+import { DEFAULT_STOREFRONT_THEME, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import { HomepageOrder } from "./ThemeChoices";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const CLASSIC = storefrontStylePresetTheme("classic").sections;
+const CLASSIC = DEFAULT_STOREFRONT_THEME.pages.home;
 const STORY: StorefrontSection = {
   id: "story",
-  type: "rich_text",
+  type: "editorial",
   version: 1,
-  settings: { heading: "Our story", body: "Handmade in Dhaka." },
+  settings: { layout: "rich-text", heading: "Our story", body: "Handmade in Dhaka." },
 };
 
 function render(initial: StorefrontSection[] = CLASSIC) {
@@ -36,13 +36,13 @@ function render(initial: StorefrontSection[] = CLASSIC) {
 describe("homepage section order", () => {
   it("moves a section with its buttons; the ends cannot move further", () => {
     const view = render();
-    expect(view.names()).toEqual(["Banners", "Collections", "Featured categories", "Delivery and returns"]);
+    expect(view.names()).toEqual(["Banners", "Collections", "Featured categories", "Delivery and trust strip"]);
     expect(view.button("Move Banners up").disabled).toBe(true);
-    expect(view.button("Move Delivery and returns down").disabled).toBe(true);
+    expect(view.button("Move Delivery and trust strip down").disabled).toBe(true);
 
     act(() => view.button("Move Featured categories up").click());
     expect(view.ids()).toEqual(["hero", "categories", "collections", "delivery"]);
-    expect(view.names()).toEqual(["Banners", "Featured categories", "Collections", "Delivery and returns"]);
+    expect(view.names()).toEqual(["Banners", "Featured categories", "Collections", "Delivery and trust strip"]);
     view.unmount();
   });
 
@@ -60,24 +60,24 @@ describe("homepage section order", () => {
     view.unmount();
   });
 
-  it("lists a builder section as a custom section that moves but is never edited or removed here", () => {
+  it("moves a text section like any other and never edits it here", () => {
     const view = render([CLASSIC[0]!, STORY, ...CLASSIC.slice(1)]);
     expect(view.names()).toEqual([
       "Banners",
-      "Custom section (edit in builder)",
+      "Text and images",
       "Collections",
       "Featured categories",
-      "Delivery and returns",
+      "Delivery and trust strip",
     ]);
     const row = [...document.querySelectorAll("li")][1]!;
     // Only Move up and Move down: no edit or remove.
     expect([...row.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Move Custom section (edit in builder) up",
-      "Move Custom section (edit in builder) down",
+      "Move Text and images up",
+      "Move Text and images down",
     ]);
 
-    act(() => view.button("Move Custom section (edit in builder) down").click());
-    act(() => view.button("Move Custom section (edit in builder) down").click());
+    act(() => view.button("Move Text and images down").click());
+    act(() => view.button("Move Text and images down").click());
     expect(view.ids()).toEqual(["hero", "collections", "categories", "story", "delivery"]);
     // The section itself is untouched.
     expect(view.seen.sections[3]).toEqual(STORY);

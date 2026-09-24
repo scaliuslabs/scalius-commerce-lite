@@ -57,6 +57,7 @@ describe("agent workflow catalog", () => {
   const manifest = buildAgentOperationManifest(document);
   const catalog = buildAgentWorkflowCatalog(manifest, {
     requireCuratedCards: true,
+    componentSchemas: document.components?.schemas as Record<string, unknown> | undefined,
   });
 
   it("attaches a stable, bounded, generation-checked root extension", () => {
@@ -129,7 +130,7 @@ describe("agent workflow catalog", () => {
       .toBeLessThanOrEqual(8 * 1024);
     const generatedSource = generateAgentOperationManifestSource(document);
     expect(generatedSource).toContain("export const AGENT_WORKFLOW_CATALOG");
-    expect(generatedSource).toContain(JSON.stringify(catalog, null, 2));
+    expect(generatedSource).toContain(JSON.stringify(catalog));
 
     const missing = structuredClone(document);
     delete missing["x-scalius-workflows"];

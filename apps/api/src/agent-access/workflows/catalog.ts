@@ -1,4 +1,5 @@
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
+import { inlineComponentSchemaRefs, type ComponentSchemas } from "../../openapi/component-schema-refs";
 import { CURATED_AGENT_WORKFLOW_CARDS } from "./cards";
 import { AGENT_WORKFLOW_CONTROLS } from "./controls";
 import { DASHBOARD_AGENT_WORKFLOW_ROUTES } from "./routes-dashboard";
@@ -77,6 +78,12 @@ export type BuildAgentWorkflowCatalogOptions = {
   routes?: readonly AgentWorkflowIntentRoute[];
   controls?: readonly AgentWorkflowControl[];
   requireCuratedCards?: boolean;
+  /**
+   * The component schemas the manifest's `$ref`s point to. Workflow checks
+   * that walk operation schemas (projections, input pointers) read them
+   * resolved; without it, references stay opaque nodes.
+   */
+  componentSchemas?: ComponentSchemas;
 };
 
 function assertLocalId(value: string, label: string): void {
@@ -1472,10 +1479,24 @@ function availableWorkflowControls(
   );
 }
 
-export function buildAgentWorkflowCatalog(
+/** Manifest entries with their schemas' component references resolved inline. */
+function withInlineSchemas(
   manifest: readonly AgentOperationManifestEntry[],
+  componentSchemas: ComponentSchemas | undefined,
+): readonly AgentOperationManifestEntry[] {
+  if (!componentSchemas) return manifest;
+  return manifest.map((operation) => ({
+    ...operation,
+    inputSchema: inlineComponentSchemaRefs(operation.inputSchema, componentSchemas),
+    outputSchema: inlineComponentSchemaRefs(operation.outputSchema, componentSchemas),
+  }));
+}
+
+export function buildAgentWorkflowCatalog(
+  referencedManifest: readonly AgentOperationManifestEntry[],
   options: BuildAgentWorkflowCatalogOptions = {},
 ): AgentWorkflowCatalog {
+  const manifest = withInlineSchemas(referencedManifest, options.componentSchemas);
   const cards = [...(
     options.cards ??
     (options.requireCuratedCards

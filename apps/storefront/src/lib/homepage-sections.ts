@@ -1,4 +1,8 @@
-import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import {
+  storefrontSectionRenderer,
+  type StorefrontSection,
+  type StorefrontSectionRenderer,
+} from "@scalius/shared/storefront-theme";
 import type { CollectionWithProducts } from "@/lib/api";
 
 /** Whether a homepage collection renders (collection1/collection2 skip empty ones). */
@@ -9,13 +13,8 @@ export function collectionShowsProducts(collection: CollectionWithProducts): boo
   return false;
 }
 
-/** Whether each theme block has anything to show for this store. */
-export interface HomepageBlockContent {
-  hero: boolean;
-  collections: boolean;
-  categories: boolean;
-  delivery: boolean;
-}
+/** Whether each existing homepage renderer has anything to show for this store. */
+export type HomepageBlockContent = Record<Exclude<StorefrontSectionRenderer, "rich_text">, boolean>;
 
 /** A rich text body as paragraphs: blank lines separate them. */
 export function richTextParagraphs(body: string): string[] {
@@ -25,15 +24,21 @@ export function richTextParagraphs(body: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Whether a section renders. Sections whose own renderer has not landed yet
+ * (Phase 4 of the templates plan) render nothing, like a section without data.
+ */
 export function homepageSectionRenders(section: StorefrontSection, content: HomepageBlockContent): boolean {
-  if (section.type === "rich_text") {
+  const renderer = storefrontSectionRenderer(section);
+  if (renderer === null) return false;
+  if (renderer === "rich_text" && section.type === "editorial" && section.settings.layout === "rich-text") {
     return Boolean(section.settings.heading.trim()) || richTextParagraphs(section.settings.body).length > 0;
   }
-  return content[section.type];
+  return renderer !== "rich_text" && content[renderer];
 }
 
-/** Sections whose photos can be the page's largest paint (LCP). */
-const IMAGE_LEAD_TYPES = new Set<StorefrontSection["type"]>(["hero", "collections"]);
+/** Renderers whose photos can be the page's largest paint (LCP). */
+const IMAGE_LEAD_RENDERERS = new Set<StorefrontSectionRenderer | null>(["hero", "collections"]);
 
 /**
  * The section holding the first large photo buyers see. Short text strips
@@ -48,6 +53,6 @@ export function homepageLeadSection(
   content: HomepageBlockContent,
 ): StorefrontSection | null {
   return sections.find(
-    (section) => IMAGE_LEAD_TYPES.has(section.type) && homepageSectionRenders(section, content),
+    (section) => IMAGE_LEAD_RENDERERS.has(storefrontSectionRenderer(section)) && homepageSectionRenders(section, content),
   ) ?? null;
 }

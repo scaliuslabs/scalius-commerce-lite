@@ -506,6 +506,7 @@ export function finalizeOpenApiContract<T extends { components?: unknown; paths?
   normalizeUnconstrainedOpenApiSchemas(document);
   document["x-scalius-workflows"] = buildAgentWorkflowCatalog(
     buildAgentOperationManifest(document),
+    { componentSchemas: document.components?.schemas as Record<string, unknown> | undefined },
   );
   return spec;
 }
