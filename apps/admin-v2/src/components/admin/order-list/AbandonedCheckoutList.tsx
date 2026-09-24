@@ -174,105 +174,112 @@ function CheckoutSheet({
     void navigate({ to: "/admin/orders/new" });
   };
 
+  const showOrder = Boolean(display?.orderId);
+  const showCreate = Boolean(canCreateOrder && display?.kind === "cart" && display.items.length > 0);
+
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="flex flex-col gap-4 overflow-y-auto p-6">
-        <div className="flex items-start gap-2">
-          <SheetHeader className="min-w-0 flex-1">
-            <SheetTitle className="break-words">{name}</SheetTitle>
-            <SheetDescription>
-              {checkout ? (
-                <>
-                  <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
-                </>
+      <SheetContent className="flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6">
+          <div className="flex items-start gap-2">
+            <SheetHeader className="min-w-0 flex-1">
+              <SheetTitle className="break-words">{name}</SheetTitle>
+              <SheetDescription>
+                {checkout ? (
+                  <>
+                    <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
+                  </>
+                ) : null}
+              </SheetDescription>
+            </SheetHeader>
+            <SheetClose asChild>
+              <Button variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={tr("close")}>
+                <X className="size-4" />
+              </Button>
+            </SheetClose>
+          </div>
+          {checkout && display ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <StageBadge checkout={checkout} />
+              </div>
+              {display.kind === "stale_hosted_payment_order" ? (
+                <p className="text-body text-muted-foreground">{t("paymentNotFinishedHelp")}</p>
               ) : null}
-            </SheetDescription>
-          </SheetHeader>
-          <SheetClose asChild>
-            <Button variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={tr("close")}>
-              <X className="size-4" />
-            </Button>
-          </SheetClose>
-        </div>
-        {checkout && display ? (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <StageBadge checkout={checkout} />
-            </div>
-            {display.kind === "stale_hosted_payment_order" ? (
-              <p className="text-body text-muted-foreground">{t("paymentNotFinishedHelp")}</p>
-            ) : null}
-            <section className="space-y-1 text-body">
-              <p className={info.phone ? "font-mono" : "text-muted-foreground"}>
-                {info.phone ? formatPhoneForDisplay(info.phone) : t("noPhone")}
-              </p>
-              {info.email ? <p className="break-all text-muted-foreground">{info.email}</p> : null}
-              {contact ? (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={contact.call} aria-label={td("contact.callName", { name })}>{td("contact.call")}</a>
-                  </Button>
-                  {contact.whatsapp ? (
+              <section className="space-y-1 text-body">
+                <p className={info.phone ? "font-mono" : "text-muted-foreground"}>
+                  {info.phone ? formatPhoneForDisplay(info.phone) : t("noPhone")}
+                </p>
+                {info.email ? <p className="break-all text-muted-foreground">{info.email}</p> : null}
+                {contact ? (
+                  <div className="flex flex-wrap gap-2 pt-2">
                     <Button variant="outline" size="sm" asChild>
-                      <a href={contact.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={td("contact.whatsappName", { name })}>
-                        {td("contact.whatsapp")}
-                      </a>
+                      <a href={contact.call} aria-label={td("contact.callName", { name })}>{td("contact.call")}</a>
                     </Button>
-                  ) : null}
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={contact.sms} aria-label={td("contact.smsName", { name })}>{td("contact.sms")}</a>
-                  </Button>
-                </div>
-              ) : null}
-            </section>
-            <section className="space-y-1 border-t pt-4 text-body">
-              <h3 className="text-heading-sm">{t("field.address")}</h3>
-              <p className="break-words text-muted-foreground">{address || t("noAddress")}</p>
-              {info.notes ? <p className="break-words text-muted-foreground">{info.notes}</p> : null}
-            </section>
-            {display.items.length > 0 ? (
-              <ul className="divide-y border-y text-body">
-                {display.items.map((item, index) => (
-                  <li key={`${item.id}:${item.variantId ?? index}`} className="flex justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-muted-foreground">
-                        {[
-                          ...(item.options ?? []).map((option) => `${option.name}: ${option.value}`),
-                          t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
-                        ].join(" · ")}
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-medium tabular-nums">{fmt(item.price * item.quantity)}</p>
+                    {contact.whatsapp ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={contact.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={td("contact.whatsappName", { name })}>
+                          {td("contact.whatsapp")}
+                        </a>
+                      </Button>
+                    ) : null}
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={contact.sms} aria-label={td("contact.smsName", { name })}>{td("contact.sms")}</a>
+                    </Button>
+                  </div>
+                ) : null}
+              </section>
+              <section className="space-y-1 border-t pt-4 text-body">
+                <h3 className="text-heading-sm">{t("field.address")}</h3>
+                <p className="break-words text-muted-foreground">{address || t("noAddress")}</p>
+                {info.notes ? <p className="break-words text-muted-foreground">{info.notes}</p> : null}
+              </section>
+              {display.items.length > 0 ? (
+                <ul className="divide-y border-y text-body">
+                  {display.items.map((item, index) => (
+                    <li key={`${item.id}:${item.variantId ?? index}`} className="flex justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-muted-foreground">
+                          {[
+                            ...(item.options ?? []).map((option) => `${option.name}: ${option.value}`),
+                            t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
+                          ].join(" · ")}
+                        </p>
+                      </div>
+                      <p className="shrink-0 font-medium tabular-nums">{fmt(item.price * item.quantity)}</p>
+                    </li>
+                  ))}
+                  <li className="flex justify-between py-3 font-medium">
+                    <span>{t("cartTotal")}</span>
+                    <span className="tabular-nums">{fmt(display.total)}</span>
                   </li>
-                ))}
-                <li className="flex justify-between py-3 font-medium">
-                  <span>{t("cartTotal")}</span>
+                </ul>
+              ) : display.kind === "cart" ? (
+                <p className="text-body text-muted-foreground">{t("emptyCart")}</p>
+              ) : (
+                <p className="flex justify-between text-body font-medium">
+                  <span>{t("total")}</span>
                   <span className="tabular-nums">{fmt(display.total)}</span>
-                </li>
-              </ul>
-            ) : display.kind === "cart" ? (
-              <p className="text-body text-muted-foreground">{t("emptyCart")}</p>
-            ) : (
-              <p className="flex justify-between text-body font-medium">
-                <span>{t("total")}</span>
-                <span className="tabular-nums">{fmt(display.total)}</span>
-              </p>
-            )}
-          </>
+                </p>
+              )}
+            </>
+          ) : null}
+        </div>
+        {showOrder || showCreate ? (
+          <SheetFooter>
+            {display?.orderId ? (
+              <Button variant="outline" asChild>
+                <Link to="/admin/orders/$orderId" params={{ orderId: display.orderId }}>
+                  {t("viewOrder")}
+                </Link>
+              </Button>
+            ) : null}
+            {showCreate ? (
+              <Button onClick={createOrder}>{t("createOrder")}</Button>
+            ) : null}
+          </SheetFooter>
         ) : null}
-        <SheetFooter className="mt-auto">
-          {display?.orderId ? (
-            <Button variant="outline" asChild>
-              <Link to="/admin/orders/$orderId" params={{ orderId: display.orderId }}>
-                {t("viewOrder")}
-              </Link>
-            </Button>
-          ) : null}
-          {canCreateOrder && display?.kind === "cart" && display.items.length > 0 ? (
-            <Button onClick={createOrder}>{t("createOrder")}</Button>
-          ) : null}
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
