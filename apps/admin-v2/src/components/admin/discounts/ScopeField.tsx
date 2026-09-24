@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
 import { formatNumber, useMessages } from "~/i18n";
@@ -128,19 +128,15 @@ export function ScopeField({
 
   return (
     <div className="space-y-3">
-      <Select
+      <NativeSelect
         value={scope.kind}
         disabled={disabled}
         onValueChange={(kind) => onChange({ kind: kind as ScopeKind, ids: [] })}
+        aria-label={t("appliesTo")}
       >
-        <SelectTrigger aria-label={t("appliesTo")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="collections">{t("specificCollections")}</SelectItem>
-          <SelectItem value="products">{t("specificProducts")}</SelectItem>
-        </SelectContent>
-      </Select>
+        <option value="collections">{t("specificCollections")}</option>
+        <option value="products">{t("specificProducts")}</option>
+      </NativeSelect>
       <div className="flex gap-2">
         <div className="flex-1">
           <Input

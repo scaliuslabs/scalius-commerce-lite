@@ -18,13 +18,7 @@ import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -530,20 +524,17 @@ export function PaymentMethodsCard() {
           <div className="border-t border-border px-4 py-4">
             {eligibleDefaults.length > 0 ? (
               <SettingsField id="default-payment-method" label={t("defaultMethod")}>
-                <Select
+                <NativeSelect
+                  id="default-payment-method"
+                  className="max-w-xs"
                   value={values.defaultMethod}
                   disabled={!canEdit}
                   onValueChange={(value) => setValues((draft) => ({ ...draft, defaultMethod: value as MethodKey }))}
                 >
-                  <SelectTrigger id="default-payment-method" className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligibleDefaults.map((method) => (
-                      <SelectItem key={method} value={method}>{t(method)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {eligibleDefaults.map((method) => (
+                    <option key={method} value={method}>{t(method)}</option>
+                  ))}
+                </NativeSelect>
               </SettingsField>
             ) : (
               <p role="alert" className="text-body text-destructive">{t("needOneMethod")}</p>

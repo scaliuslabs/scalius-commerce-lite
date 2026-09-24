@@ -33,7 +33,28 @@ const designRules = [
     selector: "JSXElement[openingElement.name.name='Card'] JSXElement[openingElement.name.name='Card']",
     message: "Never stack a Card inside a Card; use sections, dividers or a Table inside one card.",
   },
+  {
+    selector: "JSXOpeningElement[name.name='select']",
+    message: "Use NativeSelect for a short fixed choice, or SearchableSelect for options from data (DESIGN.md).",
+  },
 ];
+
+// The Radix Select is gone for good: short fixed choices use NativeSelect,
+// anything from data or longer than about ten options uses SearchableSelect.
+const noRadixSelect = {
+  "no-restricted-imports": [
+    "error",
+    {
+      paths: [{ name: "@radix-ui/react-select", message: "Use NativeSelect (fixed choices) or SearchableSelect (data) from components/ui." }],
+      patterns: [
+        {
+          group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select"],
+          message: "The Radix Select was removed: use NativeSelect (fixed choices) or SearchableSelect (data).",
+        },
+      ],
+    },
+  ],
+};
 
 const designSystem = (level) => ({
   "shadcn/no-restyle": [
@@ -82,5 +103,9 @@ export default [
     files: ["src/components/ui/**/*.tsx"],
     ignores: ["src/**/*.test.tsx"],
     rules: designSystem("error"),
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: noRadixSelect,
   },
 ];

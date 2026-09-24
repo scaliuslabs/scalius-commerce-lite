@@ -53,10 +53,6 @@ function Harness() {
         form={form}
         products={[]}
         isEdit={false}
-        locations={{ cities: [], zones: [], areas: [] }}
-        isLoading={{ zones: false, areas: false }}
-        loadZones={async () => undefined}
-        loadAreas={async () => undefined}
         localTotals={{ subtotal: 0, shipping: 0, discount: 0, total: 0 }}
         manualQuote={{ data: null, isCurrent: false, isLoading: false, discountLimit: null, errorMessage: null, canRetry: false, retry: vi.fn() }}
       >

@@ -8,13 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
@@ -161,20 +155,17 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
         searchPlaceholder={t("searchProducts")}
         filters={(
           <>
-            <Select
+            <NativeSelect
+              className="w-auto min-w-40"
+              aria-label={t("changeType")}
               value={type}
               onValueChange={(value) => onFiltersChange({ type: value as MovementFilter })}
             >
-              <SelectTrigger className="w-auto min-w-40" aria-label={t("changeType")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("typeAll")}</SelectItem>
-                {MOVEMENT_TYPES.map((value) => (
-                  <SelectItem key={value} value={value}>{t(`type_${value}`)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="all">{t("typeAll")}</option>
+              {MOVEMENT_TYPES.map((value) => (
+                <option key={value} value={value}>{t(`type_${value}`)}</option>
+              ))}
+            </NativeSelect>
             <Input
               type="date"
               className="w-40"

@@ -14,8 +14,9 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "../button";
-import { fieldClassName, Input } from "../input";
+import { Input } from "../input";
 import { Label } from "../label";
+import { NativeSelect } from "../native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import {
   clampRichTextImageWidth,
@@ -298,13 +299,13 @@ export function ResizableImageView({
                 </Button>
               </div>
             ) : (
-              <select
+              <NativeSelect
                 aria-label="Image size"
-                className={cn(fieldClassName, "h-11 w-auto min-w-28 sm:h-8")}
+                className="w-auto min-w-28"
                 value={sizeValue}
                 onFocus={() => setSizeFocused(true)}
                 onBlur={() => setSizeFocused(false)}
-                onChange={(event) => changeSize(event.target.value)}
+                onValueChange={changeSize}
               >
                 <option value="auto">Natural</option>
                 <option value="25%">25%</option>
@@ -317,7 +318,7 @@ export function ResizableImageView({
                   </option>
                 ) : null}
                 <option value="custom">Custom…</option>
-              </select>
+              </NativeSelect>
             )}
             <Popover
               open={detailsOpen}

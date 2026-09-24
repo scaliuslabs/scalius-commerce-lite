@@ -10,13 +10,7 @@ import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import {
   Dialog,
   DialogContent,
@@ -627,14 +621,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="failReason">{t("cod.failureReason")}</Label>
-              <Select value={failReason} onValueChange={(value) => setFailReason(value as CodFailureReason)}>
-                <SelectTrigger id="failReason"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {COD_FAILURE_REASONS.map((reason) => (
-                    <SelectItem key={reason} value={reason}>{orderDetailLabel(t, "cod.reason.", reason)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect id="failReason" value={failReason} onValueChange={(value) => setFailReason(value as CodFailureReason)}>
+                {COD_FAILURE_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>{orderDetailLabel(t, "cod.reason.", reason)}</option>
+                ))}
+              </NativeSelect>
             </div>
             <div className="space-y-2">
               <Label htmlFor="failNotes">{t("cod.notes")}</Label>
@@ -701,14 +692,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             </div>
             <div className="space-y-2">
               <Label htmlFor="refundReason">{t("refund.reason")}</Label>
-              <Select value={refundReason} onValueChange={setRefundReason}>
-                <SelectTrigger id="refundReason"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {REFUND_REASONS.map((reason) => (
-                    <SelectItem key={reason} value={reason}>{orderDetailLabel(t, "refund.reason.", reason)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <NativeSelect id="refundReason" value={refundReason} onValueChange={setRefundReason}>
+                {REFUND_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>{orderDetailLabel(t, "refund.reason.", reason)}</option>
+                ))}
+              </NativeSelect>
             </div>
             {requiresManualSettlementConfirmation ? (
               <div className="flex items-start gap-3">

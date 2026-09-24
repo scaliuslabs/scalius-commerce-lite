@@ -15,13 +15,8 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
@@ -187,12 +182,9 @@ function CourierCheckDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="courier-outcome">{t("courier.outcome")}</Label>
-            <Select value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
-              <SelectTrigger id="courier-outcome" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {OUTCOMES.map((value) => <SelectItem key={value} value={value}>{t(`courier.outcome.${value}`)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <NativeSelect id="courier-outcome" disabled={mutation.isPending} value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
+              {OUTCOMES.map((value) => <option key={value} value={value}>{t(`courier.outcome.${value}`)}</option>)}
+            </NativeSelect>
           </div>
           {outcome === "confirmed_existing" ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -208,12 +200,9 @@ function CourierCheckDialog({
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="courier-source">{t("courier.source")}</Label>
-            <Select value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
-              <SelectTrigger id="courier-source" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EVIDENCE_SOURCES.map((value) => <SelectItem key={value} value={value}>{t(`courier.source.${value}`)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <NativeSelect id="courier-source" disabled={mutation.isPending} value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
+              {EVIDENCE_SOURCES.map((value) => <option key={value} value={value}>{t(`courier.source.${value}`)}</option>)}
+            </NativeSelect>
           </div>
           <div className="space-y-2">
             <Label htmlFor="courier-evidence">{t("courier.details")}</Label>
@@ -434,25 +423,24 @@ function BookCourier({ order, focusRequest, guard }: {
       {notice}
       <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Select
+        <SearchableSelect
+          id="book-courier"
+          triggerRef={triggerRef}
           value={providerId}
           onValueChange={(value) => { setProviderId(value); mutation.reset(); }}
           disabled={read.status !== "ready" || mutation.isPending || locked}
-        >
-          <SelectTrigger id="book-courier" ref={triggerRef}>
-            <SelectValue placeholder={t("shipments.chooseCourier")} />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => {
-              const providerReadiness = resolveProviderReadiness(provider);
-              return (
-                <SelectItem key={provider.id} value={provider.id} disabled={!providerReadiness.canCreateShipment}>
-                  {provider.name} · {getProviderReadinessLabel(providerReadiness)}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          placeholder={t("shipments.chooseCourier")}
+          triggerClassName="w-full"
+          options={providers.map((provider) => {
+            const providerReadiness = resolveProviderReadiness(provider);
+            return {
+              value: provider.id,
+              label: provider.name,
+              description: getProviderReadinessLabel(providerReadiness),
+              disabled: !providerReadiness.canCreateShipment,
+            };
+          })}
+        />
         <Button
           className="shrink-0"
           loading={mutation.isPending}

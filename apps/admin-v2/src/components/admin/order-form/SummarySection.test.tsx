@@ -93,12 +93,8 @@ vi.mock("react-hook-form", () => ({ useWatch: () => ["", "", null, null] }));
 vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: () => false }),
 }));
-vi.mock("~/components/ui/select", () => ({
-  Select: () => null,
-  SelectContent: () => null,
-  SelectItem: () => null,
-  SelectTrigger: () => null,
-  SelectValue: () => null,
+vi.mock("~/components/ui/searchable-select", () => ({
+  SearchableSelect: () => null,
 }));
 
 vi.mock("./OrderFormContext", () => ({

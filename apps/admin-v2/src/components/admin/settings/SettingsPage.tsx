@@ -263,24 +263,22 @@ export function SettingsDialog({
                 <SaveErrorBanner />
                 <CloseDialogContext.Provider value={() => close(state)}>{children}</CloseDialogContext.Provider>
               </div>
-              {/* Long forms scroll; the actions stay in reach, separated by a border. */}
-              <div className="sticky -bottom-5 -mx-5 -mb-5 border-t border-border bg-card px-5 py-4">
-                <DialogFooter>
-                  <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
-                    {t("cancel")}
-                  </Button>
-                  <Button
-                    type="button"
-                    loading={state.busy}
-                    disabled={!state.dirty}
-                    onClick={async () => {
-                      if (await state.saveAll()) setOpen(false);
-                    }}
-                  >
-                    {t("save")}
-                  </Button>
-                </DialogFooter>
-              </div>
+              {/* Long forms scroll; the footer is a pinned, bordered bar (DialogFooter). */}
+              <DialogFooter>
+                <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
+                  {t("cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  loading={state.busy}
+                  disabled={!state.dirty}
+                  onClick={async () => {
+                    if (await state.saveAll()) setOpen(false);
+                  }}
+                >
+                  {t("save")}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
           <ConfirmDialog

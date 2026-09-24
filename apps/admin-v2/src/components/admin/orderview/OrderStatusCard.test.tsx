@@ -48,29 +48,20 @@ describe("OrderStatusCard", () => {
     document.body.innerHTML = "";
   });
 
-  /** Opens the status menu and returns the option whose first line is `label`. */
+  const statusSelect = () => host.querySelector<HTMLSelectElement>(`select[aria-label="${t["status.title"]}"]`);
+
+  /** Returns the status option whose text starts with `label`. */
   async function openOption(label: string) {
-    const trigger = host.querySelector<HTMLButtonElement>(`[aria-label="${t["status.title"]}"]`);
-    await act(async () => {
-      trigger?.focus();
-      trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-    return [...document.querySelectorAll<HTMLElement>('[role="option"]')]
-      .find((element) => element.textContent?.startsWith(label));
+    return [...(statusSelect()?.options ?? [])].find((element) => element.textContent?.startsWith(label));
   }
 
   async function chooseStatus(label: string) {
-    const trigger = host.querySelector<HTMLButtonElement>(`[aria-label="${t["status.title"]}"]`);
-    await act(async () => {
-      trigger?.focus();
-      trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
-      .find((element) => element.textContent === label);
+    const select = statusSelect();
+    const option = [...(select?.options ?? [])].find((element) => element.textContent === label);
     expect(option).toBeDefined();
     await act(async () => {
-      option?.focus();
-      option?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      select!.value = option!.value;
+      select!.dispatchEvent(new Event("change", { bubbles: true }));
     });
   }
 
@@ -117,10 +108,9 @@ describe("OrderStatusCard", () => {
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={partlySent} />));
     const cancelled = await openOption(o["status.cancelled"]);
-    expect(cancelled?.getAttribute("aria-disabled")).toBe("true");
-    // The reason sits right under the greyed-out choice, in the API's words.
-    expect(cancelled?.textContent).toBe(`${o["status.cancelled"]}${t["cancel.shippedMany"].replace("{count}", "3")}`);
-    await act(async () => cancelled?.click());
+    expect(cancelled?.disabled).toBe(true);
+    // The reason follows the greyed-out choice, in the API's words.
+    expect(cancelled?.textContent).toBe(`${o["status.cancelled"]} — ${t["cancel.shippedMany"].replace("{count}", "3")}`);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
@@ -136,7 +126,7 @@ describe("OrderStatusCard", () => {
     const paid = { ...order, status: "confirmed", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1800, balanceDue: 0 } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={paid} />));
     const cancelled = await openOption(o["status.cancelled"]);
-    expect(cancelled?.getAttribute("aria-disabled")).toBe("true");
+    expect(cancelled?.disabled).toBe(true);
     expect(cancelled?.textContent).toContain(t["status.refundToCancel"]);
   });
 
@@ -147,9 +137,8 @@ describe("OrderStatusCard", () => {
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={shipped} />));
     const delivered = await openOption(o["status.delivered"]);
-    expect(delivered?.getAttribute("aria-disabled")).toBe("true");
+    expect(delivered?.disabled).toBe(true);
     expect(delivered?.textContent).toContain(t["statusBlock.cashFirst"]);
-    await act(async () => delivered?.click());
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
@@ -159,7 +148,7 @@ describe("OrderStatusCard", () => {
       items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
     } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={shipped} />));
-    expect((await openOption(o["status.delivered"]))?.getAttribute("aria-disabled")).not.toBe("true");
+    expect((await openOption(o["status.delivered"]))?.disabled).toBe(false);
   });
 
   it("asks before confirming an order the customer asked to cancel", async () => {

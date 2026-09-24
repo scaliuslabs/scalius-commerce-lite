@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -698,21 +698,17 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
         </label>
         <label className="flex w-full flex-col gap-1 text-body text-muted-foreground sm:w-40">
           {t("optionFilterAs")}
-          <Select
+          <NativeSelect
             value={option.standardMapping}
             onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
+            aria-label={t("optionType", { name: optionLabel })}
           >
-            <SelectTrigger aria-label={t("optionType", { name: optionLabel })}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("optionTypeOther")}</SelectItem>
-              <SelectItem value="size">{t("optionTypeSize")}</SelectItem>
-              <SelectItem value="color">{t("optionTypeColor")}</SelectItem>
-              <SelectItem value="material">{t("optionTypeMaterial")}</SelectItem>
-              <SelectItem value="pattern">{t("optionTypePattern")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="none">{t("optionTypeOther")}</option>
+            <option value="size">{t("optionTypeSize")}</option>
+            <option value="color">{t("optionTypeColor")}</option>
+            <option value="material">{t("optionTypeMaterial")}</option>
+            <option value="pattern">{t("optionTypePattern")}</option>
+          </NativeSelect>
         </label>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
@@ -1271,7 +1267,7 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   );
   return (
     <div className="flex min-w-0 gap-1">
-      <Select
+      <NativeSelect
         value={mode}
         onValueChange={(next) => {
           setMode(next as "none" | "percentage" | "flat");
@@ -1283,16 +1279,13 @@ function DiscountInput({ variant, name, invalid, onChange }: {
             onChange({ discountType: "flat", discountAmount: 0, discountPercentage: null });
           }
         }}
+        aria-label={t("discountTypeFor", { name })}
+        className="min-w-24 flex-1"
       >
-        <SelectTrigger aria-label={t("discountTypeFor", { name })} className="min-w-24 flex-1">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">{t("noDiscount")}</SelectItem>
-          <SelectItem value="percentage">{t("discountPercentage")}</SelectItem>
-          <SelectItem value="flat">{t("discountFixed")}</SelectItem>
-        </SelectContent>
-      </Select>
+        <option value="none">{t("noDiscount")}</option>
+        <option value="percentage">{t("discountPercentage")}</option>
+        <option value="flat">{t("discountFixed")}</option>
+      </NativeSelect>
       {mode !== "none" ? (
         <NumberInput
           value={amount}
@@ -1341,23 +1334,20 @@ function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
       </Field>
       <Field label={t("barcodeType")}>
         {() => (
-          <Select
+          <NativeSelect
             value={variant.barcodeType ?? "none"}
             onValueChange={(value) => onChange(value === "none"
               ? { barcodeType: null, barcode: null }
               : { barcodeType: value as DraftVariant["barcodeType"] })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</SelectItem>
-              <SelectItem value="ean13">EAN-13</SelectItem>
-              <SelectItem value="upc">UPC</SelectItem>
-              <SelectItem value="isbn">ISBN</SelectItem>
-              <SelectItem value="gtin">GTIN</SelectItem>
-              <SelectItem value="code128">Code 128</SelectItem>
-              <SelectItem value="custom">{t("barcodeCustom")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</option>
+            <option value="ean13">EAN-13</option>
+            <option value="upc">UPC</option>
+            <option value="isbn">ISBN</option>
+            <option value="gtin">GTIN</option>
+            <option value="code128">Code 128</option>
+            <option value="custom">{t("barcodeCustom")}</option>
+          </NativeSelect>
         )}
       </Field>
       <Field label={t("weightGrams")} error={errorOf("weight")}>

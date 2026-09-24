@@ -39,13 +39,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { SaveBarProvider, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
@@ -209,16 +203,11 @@ function ChoiceField<Value extends string>({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Select value={value} onValueChange={(next) => onChange(next as Value)}>
-        <SelectTrigger id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {values.map((option) => (
-            <SelectItem key={option} value={option}>{labelFor(option)}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <NativeSelect id={id} value={value} onValueChange={(next) => onChange(next as Value)}>
+        {values.map((option) => (
+          <option key={option} value={option}>{labelFor(option)}</option>
+        ))}
+      </NativeSelect>
     </div>
   );
 }

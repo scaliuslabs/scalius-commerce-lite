@@ -13611,6 +13611,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "displayName": {
                   "type": "string"
                 },
+                "parentPath": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
                 "descendants": {
                   "type": "object",
                   "properties": {
@@ -13822,6 +13828,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "displayName": {
               "type": "string"
             },
+            "parentPath": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "descendants": {
               "type": "object",
               "properties": {
@@ -13919,11 +13931,37 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         {
           "schema": {
             "type": "string",
-            "maxLength": 120,
-            "description": "Search term"
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "One location by ID (to label a saved choice)"
           },
           "required": false,
-          "description": "Search term",
+          "description": "One location by ID (to label a saved choice)",
+          "name": "id",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Only active (true) or inactive (false) locations"
+          },
+          "required": false,
+          "description": "Only active (true) or inactive (false) locations",
+          "name": "isActive",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "Search term: part of the name, any script; names starting with it come first"
+          },
+          "required": false,
+          "description": "Search term: part of the name, any script; names starting with it come first",
           "name": "search",
           "in": "query"
         },
@@ -14007,6 +14045,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "parentPath": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "descendants": {
                     "type": "object",
@@ -14605,6 +14649,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "parentPath": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "descendants": {
               "type": "object",
@@ -34661,6 +34711,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "cityName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "zoneName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "areaName": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "notes": {
                   "type": "string",
                   "nullable": true
@@ -34707,6 +34769,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "city",
                 "zone",
                 "area",
+                "cityName",
+                "zoneName",
+                "areaName",
                 "notes",
                 "discountAmount",
                 "shippingCharge",
@@ -35040,6 +35105,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "cityName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "zoneName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "areaName": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "notes": {
                   "type": "string",
                   "nullable": true
@@ -35117,6 +35194,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "city",
                 "zone",
                 "area",
+                "cityName",
+                "zoneName",
+                "areaName",
                 "notes",
                 "discountAmount",
                 "shippingCharge",

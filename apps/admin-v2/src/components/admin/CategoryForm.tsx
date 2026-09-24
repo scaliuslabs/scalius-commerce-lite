@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { RichContent } from "../ui/rich-content";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
@@ -308,18 +308,13 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={!canSave}>
-                      <FormControl>
-                        <SelectTrigger aria-label={t("status")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="published">{t("active")}</SelectItem>
-                        <SelectItem value="draft">{t("draft")}</SelectItem>
-                        <SelectItem value="internal">{t("hidden")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect value={field.value} onValueChange={field.onChange} disabled={!canSave} aria-label={t("status")}>
+                        <option value="published">{t("active")}</option>
+                        <option value="draft">{t("draft")}</option>
+                        <option value="internal">{t("hidden")}</option>
+                      </NativeSelect>
+                    </FormControl>
                     <FormDescription>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
                     </FormDescription>

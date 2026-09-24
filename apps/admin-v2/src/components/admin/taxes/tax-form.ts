@@ -1,7 +1,6 @@
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import type {
   TaxConfigurationPayload,
-  TaxJurisdictionOption,
   TaxJurisdictionType,
   TaxRateRecord,
   TaxSettingsRecord,
@@ -71,20 +70,17 @@ export function taxSettingsIssue(
   return null;
 }
 
+/**
+ * The place a rate applies to: nowhere in particular for "all", otherwise the
+ * picked place (the server checks it and stores its own name for it).
+ */
 export function resolveJurisdictionSelection(
   type: TaxJurisdictionType,
-  optionId: string,
-  options: readonly TaxJurisdictionOption[],
+  placeId: string,
+  placeLabel: string,
 ): { jurisdictionId: string | null; jurisdictionLabel: string | null } | null {
-  if (type === "all") {
-    return { jurisdictionId: null, jurisdictionLabel: null };
-  }
-  const option = options.find(
-    (candidate) => candidate.type === type && candidate.id === optionId,
-  );
-  return option
-    ? { jurisdictionId: option.id, jurisdictionLabel: option.name }
-    : null;
+  if (type === "all") return { jurisdictionId: null, jurisdictionLabel: null };
+  return placeId ? { jurisdictionId: placeId, jurisdictionLabel: placeLabel || null } : null;
 }
 
 export type RequiredTaxRateRole = "products" | "delivery";

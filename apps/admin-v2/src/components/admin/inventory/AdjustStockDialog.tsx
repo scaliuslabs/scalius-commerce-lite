@@ -18,13 +18,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { apiData } from "~/lib/api";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
@@ -78,7 +72,7 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const fieldRefs = {
     quantity: useRef<HTMLInputElement>(null),
-    reason: useRef<HTMLButtonElement>(null),
+    reason: useRef<HTMLSelectElement>(null),
     alertLevel: useRef<HTMLInputElement>(null),
   };
 
@@ -223,23 +217,19 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
 
             <div className="space-y-2">
               <Label htmlFor="inventory-adjustment-mode">{t("adjustment")}</Label>
-              <Select
+              <NativeSelect
+                id="inventory-adjustment-mode"
                 value={mode}
-                onValueChange={(value: AdjustmentMode) => {
-                  setMode(value);
+                onValueChange={(value) => {
+                  setMode(value as AdjustmentMode);
                   setCounted(variant.stock);
                   setDelta(0);
                   setTouched(false);
                 }}
               >
-                <SelectTrigger id="inventory-adjustment-mode" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="relative">{t("modeRelative")}</SelectItem>
-                  <SelectItem value="stocktake">{t("modeStocktake")}</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="relative">{t("modeRelative")}</option>
+                <option value="stocktake">{t("modeStocktake")}</option>
+              </NativeSelect>
               <p className="text-body text-muted-foreground">
                 {t(mode === "stocktake" ? "modeStocktakeHelp" : "modeRelativeHelp")}
               </p>
@@ -316,7 +306,11 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
             {mode === "relative" ? (
               <div className="space-y-2">
                 <Label htmlFor="inventory-adjustment-reason">{t("reason")}</Label>
-                <Select
+                <NativeSelect
+                  ref={fieldRefs.reason}
+                  id="inventory-adjustment-reason"
+                  aria-invalid={errors.reason ? true : undefined}
+                  aria-describedby={errors.reason ? "inventory-adjustment-reason-error" : undefined}
                   value={reason}
                   onValueChange={(value) => {
                     // Ignore the empty value a select can report while its options change.
@@ -325,21 +319,10 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                     setReasonChoice(value as InventoryAdjustmentReason);
                   }}
                 >
-                  <SelectTrigger
-                    ref={fieldRefs.reason}
-                    id="inventory-adjustment-reason"
-                    className="w-full"
-                    aria-invalid={errors.reason ? true : undefined}
-                    aria-describedby={errors.reason ? "inventory-adjustment-reason-error" : undefined}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {reasonOptions.map((value) => (
-                      <SelectItem key={value} value={value}>{t(`reason_${value}`)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {reasonOptions.map((value) => (
+                    <option key={value} value={value}>{t(`reason_${value}`)}</option>
+                  ))}
+                </NativeSelect>
                 {fieldError("reason", "inventory-adjustment-reason-error")}
               </div>
             ) : null}

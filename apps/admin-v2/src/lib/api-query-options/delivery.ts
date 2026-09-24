@@ -6,6 +6,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult, type WithTimestamps } from "../api";
 import { queryKeys } from "../query-keys";
+import type { SearchableSelectLoader, SearchableSelectOption } from "~/components/ui/searchable-select";
 
 const CONFIG_STALE_TIME_MS = 1000 * 60 * 30;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
@@ -36,8 +37,53 @@ async function getAllDeliveryProviders(): Promise<DeliveryProviderRecord[]> {
   throw new Error("Delivery provider list exceeded the supported page limit");
 }
 
-export const getDeliveryLocations = (query: DeliveryLocationsQuery) =>
-  apiData(getApiV1AdminSettingsDeliveryLocations({ query }));
+export const getDeliveryLocations = (query: DeliveryLocationsQuery, signal?: AbortSignal) =>
+  apiData(getApiV1AdminSettingsDeliveryLocations({ query, signal }));
+
+/** Places a picker offers per page. */
+export const LOCATION_PAGE_SIZE = 50;
+
+/** A place as a combobox option: its parents ("Mirpur · Dhaka") as the secondary text. */
+export function locationOption(location: Pick<DeliveryLocation, "id" | "name" | "parentPath">): SearchableSelectOption {
+  const path = location.parentPath?.join(" · ");
+  return { value: location.id, label: location.name, ...(path ? { description: path } : {}) };
+}
+
+/**
+ * Server-searched, paged places for a picker: one type, optionally under one
+ * parent, active only unless asked. The search goes in the API request, never
+ * in the page URL.
+ */
+export function deliveryLocationLoader(filter: {
+  type?: DeliveryLocationsQuery["type"];
+  parentId?: string;
+  includeInactive?: boolean;
+  /** Turns each place into an option (defaults to `locationOption`). */
+  toOption?: (location: DeliveryLocation) => SearchableSelectOption;
+}): SearchableSelectLoader {
+  return async ({ search, page, signal }) => {
+    const result = await getDeliveryLocations({
+      ...(filter.type ? { type: filter.type } : {}),
+      ...(filter.parentId ? { parentId: filter.parentId } : {}),
+      ...(filter.includeInactive ? {} : { isActive: "true" as const }),
+      ...(search ? { search } : {}),
+      page,
+      limit: LOCATION_PAGE_SIZE,
+    }, signal);
+    return {
+      options: result.locations.map(filter.toOption ?? locationOption),
+      hasMore: page < result.pagination.totalPages,
+    };
+  };
+}
+
+/** One place by ID, to label a saved choice whose name was not stored. */
+export const deliveryLocationByIdQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.settings.deliveryLocations(), "by-id", id],
+    queryFn: async () => (await getDeliveryLocations({ id, limit: 1 })).locations[0] ?? null,
+    staleTime: LOOKUP_STALE_TIME_MS,
+  });
 
 async function getAllDeliveryLocations(type?: DeliveryLocationsQuery["type"]) {
   const firstPage = await getDeliveryLocations({ type, limit: 500, page: 1 });

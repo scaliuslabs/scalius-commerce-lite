@@ -10,7 +10,7 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { RichContent } from "../ui/rich-content";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
@@ -339,22 +339,18 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 name="publicationMode"
                 render={({ field }) => (
                   <FormItem>
-                    <Select
-                      value={field.value}
-                      disabled={!canPublish}
-                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
-                    >
-                      <FormControl>
-                        <SelectTrigger aria-label={t("visibility")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">{t("draft")}</SelectItem>
-                        <SelectItem value="published">{t("visible")}</SelectItem>
-                        <SelectItem value="scheduled">{t("scheduled")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect
+                        value={field.value}
+                        disabled={!canPublish}
+                        onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                        aria-label={t("visibility")}
+                      >
+                        <option value="draft">{t("draft")}</option>
+                        <option value="published">{t("visible")}</option>
+                        <option value="scheduled">{t("scheduled")}</option>
+                      </NativeSelect>
+                    </FormControl>
                     <FormDescription>
                       {!canPublish
                         ? t("publishPermission")

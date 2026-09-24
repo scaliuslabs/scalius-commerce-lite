@@ -3,7 +3,7 @@ import { FolderInput, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
@@ -95,33 +95,30 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           onFolderDelete={props.onFolderDelete}
         />
         {props.capability === "both" ? (
-          <Select value={props.filters.kind ?? "all"} onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : (value as "image" | "video") })}>
-            <SelectTrigger aria-label={t("fileType")} className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("allTypes")}</SelectItem>
-              <SelectItem value="image">{t("images")}</SelectItem>
-              <SelectItem value="video">{t("videos")}</SelectItem>
-            </SelectContent>
-          </Select>
+          <NativeSelect
+            aria-label={t("fileType")}
+            className="w-32"
+            value={props.filters.kind ?? "all"}
+            onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : (value as "image" | "video") })}
+          >
+            <option value="all">{t("allTypes")}</option>
+            <option value="image">{t("images")}</option>
+            <option value="video">{t("videos")}</option>
+          </NativeSelect>
         ) : null}
-        <Select
+        <NativeSelect
+          aria-label={t("sortBy")}
+          className="w-32"
           value={sortValue}
           onValueChange={(value) => {
             const [sortBy, sortOrder] = MEDIA_SORTS[value as MediaSortKey];
             props.onFiltersChange({ sortBy, sortOrder });
           }}
         >
-          <SelectTrigger aria-label={t("sortBy")} className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(SORT_LABELS) as MediaSortKey[]).map((key) => (
-              <SelectItem key={key} value={key}>{t(SORT_LABELS[key])}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {(Object.keys(SORT_LABELS) as MediaSortKey[]).map((key) => (
+            <option key={key} value={key}>{t(SORT_LABELS[key])}</option>
+          ))}
+        </NativeSelect>
         {props.allowSelection !== false && !props.selectionMode ? (
           <Button ref={selectTriggerRef} type="button" variant="outline" onClick={props.onBeginSelection}>
             {t("select")}

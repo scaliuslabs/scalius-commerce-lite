@@ -21,13 +21,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
@@ -250,6 +244,10 @@ function LocationsCard() {
     },
   });
   const choices = menus.items.filter((menu) => menu.publishedRevision != null);
+  const menuOptions = [
+    { value: "none", label: t("noMenu") },
+    ...choices.map((menu) => ({ value: menu.id, label: menu.name })),
+  ];
 
   return (
     <SectionCard title={t("menuLocations")} description={t("menuLocationsHelp")}>
@@ -259,23 +257,16 @@ function LocationsCard() {
           return (
             <div key={key} className="space-y-1.5">
               <Label htmlFor={`menu-location-${key}`}>{slotLabel(slot)}</Label>
-              <Select
+              <SearchableSelect
+                id={`menu-location-${key}`}
                 value={draft[key] || "none"}
                 onValueChange={(menuId) => setDraft((current) => ({
                   ...current,
                   [key]: menuId === "none" ? "" : menuId,
                 }))}
-              >
-                <SelectTrigger id={`menu-location-${key}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t("noMenu")}</SelectItem>
-                  {choices.map((menu) => (
-                    <SelectItem key={menu.id} value={menu.id}>{menu.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={menuOptions}
+                triggerClassName="w-full"
+              />
             </div>
           );
         })}
