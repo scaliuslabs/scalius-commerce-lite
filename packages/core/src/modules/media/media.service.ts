@@ -993,7 +993,9 @@ export interface MediaVariantsInput {
 /**
  * Stores pre-generated WebP renditions beside the original object and records
  * the largest one on the media row, which switches every published URL of
- * this media to the renditions. Re-running replaces the same keys.
+ * this media to the renditions. Re-running replaces the same keys. Renditions
+ * are derived storage, not a merchant edit, so `version` stays put and an
+ * editor open on this media keeps saving without a conflict.
  */
 export async function saveMediaVariants(
     db: Database,
@@ -1033,14 +1035,18 @@ export async function saveMediaVariants(
         width: input.width,
         height: input.height,
         variantWidth: widths.at(-1)!,
-        version: sql`${media.version} + 1`,
         updatedAt: sql`(unixepoch())`,
     }).where(and(
         eq(media.id, id),
         eq(media.objectKey, current.objectKey),
         inArray(media.status, ["ready", "trashed"]),
     )).returning({ id: media.id }).get();
-    if (!updated) throw new ConflictError("Media changed while its renditions were saved. Reload and try again.");
+    if (!updated) {
+        // A permanent delete claimed the row meanwhile and only removes the
+        // renditions it had recorded, so drop the ones written just now.
+        await deleteMediaVariants(current.objectKey, widths.at(-1)!, bucket).catch(() => undefined);
+        throw new ConflictError("Media changed while its renditions were saved. Reload and try again.");
+    }
     const presented = await readPresentedMedia(db, id);
     if (!presented) throw new ConflictError("Media changed while it was being read. Reload and try again.");
     return presented;
@@ -1085,6 +1091,53 @@ export async function generateMediaVariants(
         files.set(width, await output.response().arrayBuffer());
     }
     return saveMediaVariants(db, id, { width: info.width, height: info.height, files }, bucket);
+}
+
+/**
+ * Media touched within this window is left alone: the dashboard's browser
+ * pipeline saves renditions seconds after an upload, and a failed attempt
+ * waits this long before it is tried again.
+ */
+const VARIANT_BACKFILL_QUIET_MS = 60 * 60 * 1_000;
+
+/**
+ * Scheduled rendition backfill for still images that publish only their
+ * original (uploaded before renditions existed, or whose upload-time render
+ * failed). Least recently touched first. A failure only touches `updated_at`,
+ * never `version`, so it sends that image behind every other candidate and
+ * out of the next hour's runs: a broken image cannot block the queue and costs
+ * at most one attempt an hour. Idempotent: done rows leave the candidate set.
+ */
+export async function backfillMissingMediaVariants(
+    db: Database,
+    bucket: R2Bucket,
+    images: ImagesBinding,
+    { limit }: { limit: number },
+) {
+    const rows = await db.select({ id: media.id }).from(media).where(and(
+        eq(media.kind, "image"),
+        inArray(media.status, ["ready", "trashed"]),
+        isNull(media.variantWidth),
+        inArray(media.mimeType, [...VARIANT_SOURCE_MIME_TYPES]),
+        lt(media.updatedAt, new Date(Date.now() - VARIANT_BACKFILL_QUIET_MS)),
+    )).orderBy(asc(media.updatedAt), asc(media.id)).limit(limit);
+    let generated = 0;
+    for (const { id } of rows) {
+        try {
+            await generateMediaVariants(db, id, bucket, images);
+            generated += 1;
+        } catch (error) {
+            console.warn("[media] rendition backfill failed", {
+                mediaId: id,
+                error: error instanceof Error ? error.name : "unknown",
+            });
+            // Best effort: if even this write fails the image is simply first again next run.
+            await db.update(media).set({ updatedAt: sql`(unixepoch())` })
+                .where(and(eq(media.id, id), isNull(media.variantWidth)))
+                .catch(() => undefined);
+        }
+    }
+    return { scanned: rows.length, generated, failed: rows.length - generated };
 }
 
 export async function moveMediaFiles(

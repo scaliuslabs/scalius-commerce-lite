@@ -15,24 +15,32 @@ import {
   applyStorefrontPrefetchPolicyToHtml,
   getStorefrontPrefetchAttribute,
 } from "@/lib/prefetch-policy";
+import { telHref } from "@/lib/store-identity";
 
 interface Props {
   footerData: FooterData;
+  /** Business settings identity and the store's single social set. */
+  storeName: string | null;
+  storePhone: string | null;
+  social: SocialLink[];
+  /** Policy pages from Settings -> Policies. */
+  policies: Array<{ title: string; path: string }>;
 }
 
-const { footerData } = Astro.props;
+const { footerData, storeName, storePhone, social: storeSocial, policies } = Astro.props;
 
-const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
+const logo = footerData?.logo || { src: "", alt: "" };
+const brandName = storeName || logo.alt || footerData?.copyrightText || "";
+const phoneHref = telHref(storePhone);
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
 const optimizedDescription = applyStorefrontPrefetchPolicyToHtml(
   optimizeRichContentImages(sanitizeHtml(description)),
   Astro.url,
 );
-const copyrightText = footerData?.copyrightText || "";
+const copyrightName = storeName || footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
-const socialRaw: SocialLink[] = footerData?.social || [];
-const social = socialRaw.map((item) => ({
+const social = storeSocial.map((item) => ({
   ...item,
   optimizedIconUrl: item.iconUrl ? mediaImageUrl(item.iconUrl, 160) : null,
 }));
@@ -89,6 +97,15 @@ const menus: Array<FooterMenu & { links: FooterMenuLink[] }> = rawMenus.map(
   })
 );
 
+// Policy pages are always one tap away (payment gateways require visible
+// privacy, terms and refund policies), unless a footer menu already links them.
+const linkedHrefs = new Set(
+  menus.flatMap((menu) => menu.links.map((link) => (link.href ?? "").replace(/\/+$/, ""))),
+);
+const policyLinks = policies
+  .map((policy) => ({ title: policy.title, href: policy.path }))
+  .filter((link) => !linkedHrefs.has(link.href));
+
 const menuCount = menus.length;
 let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
 if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
@@ -109,7 +126,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
             logo.src ? (
               <img
                 src={mediaImageUrl(logo.src, 480)}
-                alt={logo.alt}
+                alt={logo.alt || brandName}
                 width={344}
                 height={256}
                 loading="lazy"
@@ -117,9 +134,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                 class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
               />
             ) : (
-              <div class="h-12 sm:h-14 w-auto flex items-center justify-center px-4 rounded border border-current">
-                <span class="text-sm">{logo.alt}</span>
-              </div>
+              brandName && <span class="text-lg font-bold">{brandName}</span>
             )
           }
         </a>
@@ -127,6 +142,17 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           tagline && (
             <p class="mt-3 text-base font-medium leading-relaxed max-w-md">
               {tagline}
+            </p>
+          )
+        }
+
+        {
+          phoneHref && (
+            <p class="mt-3 text-base">
+              Call us:{" "}
+              <a href={phoneHref} class="font-semibold underline underline-offset-4">
+                {storePhone}
+              </a>
             </p>
           )
         }
@@ -158,69 +184,40 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         </div>
       </div>
 
-      {/* Mobile Social Links - Positioned below menus */}
-      {
-        social.length > 0 && (
-          <div class="lg:col-span-12 lg:hidden flex justify-center mt-8 w-full">
-            <div class="flex items-center gap-4 flex-wrap">
-              {social.map((item) => {
-                if (!item.url) return null;
-                const displayTitle = item.label || item.platform || "Social";
-                const href = item.url.startsWith("http")
-                  ? item.url
-                  : `https://${item.url}`;
-
-                return (
-                  <a
-                    href={href}
-                    data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
-                    class="group transition-all duration-300"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={displayTitle}
-                    title={displayTitle}
-                  >
-                    <div class="relative p-2.5 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
-                      {item.optimizedIconUrl ? (
-                        <img
-                          src={item.optimizedIconUrl}
-                          alt=""
-                          aria-hidden="true"
-                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span aria-hidden="true" class="w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-bold text-sm uppercase">
-                          {displayTitle.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        )
-      }
     </div>
 
     <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-primary-foreground/20">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
-        <span
-          class="text-sm font-normal text-center sm:text-left"
-        >
-          © {new Date().getFullYear()} <span class="font-semibold">{copyrightText || "Store"}</span>. All rights reserved.
-        </span>
+        <div class="flex flex-col items-center gap-2 text-sm sm:items-start">
+          {
+            policyLinks.length > 0 && (
+              <nav aria-label="Store policies">
+                <ul class="flex flex-wrap justify-center gap-x-4 gap-y-1 sm:justify-start">
+                  {policyLinks.map((link) => (
+                    <li>
+                      <a href={link.href} class="inline-flex min-h-11 items-center underline-offset-4 hover:underline sm:min-h-0">
+                        {link.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )
+          }
+          <span class="text-center sm:text-left">
+            © {new Date().getFullYear()}{copyrightName && <> <span class="font-semibold">{copyrightName}</span></>}. All rights reserved.
+          </span>
+          <a href="/track-order" class="inline-flex min-h-11 items-center underline underline-offset-4 sm:min-h-0">
+            Track your order
+          </a>
+        </div>
 
         {
           social.length > 0 && (
-            <div class="hidden lg:flex items-center gap-5 flex-wrap">
+            <div class="flex items-center justify-center gap-4 flex-wrap">
               {social.map((item) => {
-                if (!item.url) return null;
                 const displayTitle = item.label || item.platform || "Social";
-                const href = item.url.startsWith("http")
-                  ? item.url
-                  : `https://${item.url}`;
+                const href = item.url;
 
                 return (
                   <a
@@ -274,7 +271,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
     left: 0;
     right: 0;
     height: 100vh;
-    background-color: oklch(0.53 0.14 150);
+    background-color: var(--primary);
     z-index: -20;
   }
 </style>

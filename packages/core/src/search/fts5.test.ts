@@ -7,6 +7,7 @@ import {
   isFts5SearchEnabled,
   sanitizeFtsQuery,
 } from "./fts5";
+import { productSearchRelevanceOrder } from "./relevance";
 
 const dialect = new SQLiteSyncDialect();
 
@@ -59,6 +60,21 @@ describe("provider-aware text search", () => {
     expect(tursoQuery.sql).toContain("categories.name");
     expect(tursoQuery.sql).not.toContain("categories.description");
     expect(tursoQuery.params).toEqual(["men", "clothing"]);
+  });
+
+  it("ranks by title/category tiers without FTS5 tables on Turso and PostgreSQL", () => {
+    const turso = getDb({
+      TURSO_DATABASE_URL: "https://merchant.turso.io",
+      TURSO_AUTH_TOKEN: "token",
+    });
+    const order = productSearchRelevanceOrder(turso, "bag")
+      .map((term) => dialect.sqlToQuery(term).sql)
+      .join(" ");
+
+    expect(order).not.toContain("_fts");
+    expect(order).not.toContain("bm25");
+    expect(order).toContain("instr(lower(coalesce(products.name");
+    expect(order).toContain("instr(lower(coalesce(categories.name");
   });
 
   it("caps user search terms below SQLite's bind limit", () => {

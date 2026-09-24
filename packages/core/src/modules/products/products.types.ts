@@ -119,12 +119,14 @@ export interface StorefrontProductFilterInput {
     search?: string;
     page?: number;
     limit?: number;
-    sort?: "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount";
+    /** Defaults to "relevance" when `search` is set, otherwise "newest". */
+    sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount";
     minPrice?: number;
     maxPrice?: number;
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     ids?: string;
+    /** Filterable attributes by slug, and product option axes as `option.<axis>` (e.g. `option.size`). */
     attributeFilters?: Array<{
         id: string;
         name: string;

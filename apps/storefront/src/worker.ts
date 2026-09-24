@@ -3,6 +3,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 
 import { readCacheGenerationHint } from "@scalius/shared/cache-generation";
 import { servePublicStorefrontRequest } from "./lib/public-worker-cache";
+import { httpsRedirectResponse } from "./lib/storefront-origin";
 import { BUILD_ID } from "./config/build-id";
 import {
   RUNTIME_SECRET_PURPOSES,
@@ -35,6 +36,8 @@ async function resolveFrontProxy(request: Request, env: Env): Promise<Request> {
 export default class StorefrontGateway extends WorkerEntrypoint<Env> {
   async fetch(incoming: Request): Promise<Response> {
     const request = await resolveFrontProxy(incoming, this.env);
+    const httpsRedirect = httpsRedirectResponse(request);
+    if (httpsRedirect) return httpsRedirect;
     return servePublicStorefrontRequest(request, {
       cache: caches.default,
       readGeneration: () => readCacheGenerationHint(this.env.CACHE),

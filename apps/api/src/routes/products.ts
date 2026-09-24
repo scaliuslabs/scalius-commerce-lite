@@ -52,10 +52,9 @@ const productFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
   sort: z
-    .enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
+    .enum(["relevance", "newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
     .optional()
-    .default("newest")
-    .openapi({ description: "Sort order" }),
+    .openapi({ description: "Sort order. Defaults to relevance when `search` is set, otherwise newest." }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
@@ -119,7 +118,9 @@ const buyerPriceRangeSchema = z.object({
 const productFacetSchema = z.object({
   id: z.string(),
   name: z.string(),
-  slug: z.string(),
+  slug: z.string().openapi({
+    description: "Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size.",
+  }),
   values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
 });
 
@@ -481,6 +482,9 @@ const listProductsRoute = createRoute({
         pagination: paginationSchema,
         priceRange: buyerPriceRangeSchema,
         facets: z.array(productFacetSchema),
+        correctedQuery: z.string().nullable().openapi({
+          description: "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).",
+        }),
       })) } },
     },
     400: errorResponses[400],

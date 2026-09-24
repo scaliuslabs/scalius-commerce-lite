@@ -12,7 +12,6 @@ import {
   settings,
   themeSettings,
   categories,
-  shippingMethods,
   checkoutLanguages,
 } from "@scalius/database/schema";
 import { eq, isNull, and, or, sql } from "drizzle-orm";
@@ -160,13 +159,6 @@ export async function getHomepageData(db: Database) {
             AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
         )`,
       )),
-
-    // 4. One active method is enough to prove delivery is offered.
-    db
-      .select({ id: shippingMethods.id })
-      .from(shippingMethods)
-      .where(eq(shippingMethods.isActive, true))
-      .limit(1),
   ]);
 
   const [
@@ -174,7 +166,6 @@ export async function getHomepageData(db: Database) {
     heroResults,
     collectionResults,
     categoryResults,
-    shippingMethodResults,
   ] =
     batchResults;
 
@@ -183,12 +174,11 @@ export async function getHomepageData(db: Database) {
     seoDocument.fromRows(rows),
     homepageDocument.fromRows(rows),
   ]);
-  const seoSettings = seo.stored ? {
-    homepageTitle: seo.value.homepageTitle,
-    homepageMetaDescription: seo.value.homepageMetaDescription,
-  } : {
-    homepageTitle: "Welcome to Scalius Commerce",
-    homepageMetaDescription: "Your one-stop shop for everything amazing.",
+  // Unset copy stays null: the storefront titles the homepage with the
+  // store name instead of inventing a platform-branded headline.
+  const seoSettings = {
+    homepageTitle: seo.value.homepageTitle.trim() || null,
+    homepageMetaDescription: seo.value.homepageMetaDescription.trim() || null,
   };
   const homepageConfig = homepage.value;
 
@@ -264,39 +254,6 @@ export async function getHomepageData(db: Database) {
     .map((id) => categoryById.get(id))
     .filter((category): category is NonNullable<typeof category> => Boolean(category));
 
-  const trustItems: Array<{
-    kind: "delivery" | "returns";
-    title: string;
-    detail: string;
-    href?: string;
-  }> = [];
-  if ((shippingMethodResults as Array<{ id: string }>).length > 0) {
-    trustItems.push({
-      kind: "delivery",
-      title: "Delivery options",
-      detail: "Choose an available method at checkout.",
-    });
-  }
-  const returnPolicy = seo.value.returnPolicy;
-  if (returnPolicy.enabled) {
-    const returnTitle = returnPolicy.category === "finite"
-      ? `${returnPolicy.returnWindowDays}-day returns`
-      : returnPolicy.category === "unlimited"
-        ? "Open-ended returns"
-        : "Final sale policy";
-    const returnDetail = returnPolicy.category === "no_returns"
-      ? "Review the policy before ordering."
-      : returnPolicy.returnFees === "free"
-        ? "Return shipping is covered."
-        : "Return shipping may apply.";
-    trustItems.push({
-      kind: "returns",
-      title: returnTitle,
-      detail: returnDetail,
-      ...(returnPolicy.policyUrl ? { href: returnPolicy.policyUrl } : {}),
-    });
-  }
-
   return {
     seo: seoSettings,
     hero,
@@ -307,9 +264,11 @@ export async function getHomepageData(db: Database) {
         title: homepageConfig.categoryRail.title,
         categories: homepageCategories,
       },
+      // The storefront states delivery, cash-on-delivery and return facts
+      // from the live shipping, checkout and return-policy data it already
+      // reads for product pages (apps/storefront/src/lib/delivery-facts.ts).
       trustStrip: {
-        enabled: homepageConfig.trustStrip.enabled && trustItems.length > 0,
-        items: trustItems,
+        enabled: homepageConfig.trustStrip.enabled,
       },
     },
   };

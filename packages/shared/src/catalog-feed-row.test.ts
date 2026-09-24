@@ -248,6 +248,29 @@ describe("catalog feed row projector", () => {
     });
   });
 
+  it("uses a simple product's default SKU as the feed id, matching its Product JSON-LD sku", () => {
+    const [row] = project([{
+      id: "prod_hub",
+      name: "USB-C Hub",
+      slug: "usb-c-hub",
+      price: 2500,
+      hasVariants: false,
+      imageUrl: "https://cdn.example.test/hub.jpg",
+      variants: [{
+        id: "var_hub_default",
+        sku: " HUB-7-IN-1 ",
+        isDefault: true,
+        optionCombinationKey: null,
+        selectedOptions: [],
+        price: 2500,
+        stock: 3,
+        deletedAt: null,
+      }],
+    }]).rows;
+
+    expect(row).toMatchObject({ kind: "product", productId: "prod_hub", id: "HUB-7-IN-1", itemGroupId: null });
+  });
+
   it("reports bounded, row-specific omission reasons without fabricating rows", () => {
     const result = project([
       {

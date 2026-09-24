@@ -69,12 +69,6 @@ export interface HomepageData {
     };
     trustStrip: {
       enabled: boolean;
-      items: Array<{
-        kind: "delivery" | "returns";
-        title: string;
-        detail: string;
-        href?: string;
-      }>;
     };
   };
 }
@@ -120,6 +114,12 @@ export interface LayoutData {
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;
+  /** Published policy pages linked in Settings -> Policies, in kind order. */
+  policies?: Array<{
+    kind: "refund" | "privacy" | "terms" | "shipping" | "contact";
+    title: string;
+    path: string;
+  }>;
   /** Product call-to-action copy from the active checkout language. */
   storefrontCopy?: {
     languageCode: string;

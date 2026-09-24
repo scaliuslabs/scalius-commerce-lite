@@ -23,7 +23,7 @@ type SearchResults = Awaited<ReturnType<typeof search>>;
 function limitPublicSearchResults(
   results: SearchResults,
   limit: number,
-): SearchResults {
+): Omit<SearchResults, "correctedQuery"> {
   const products: SearchResults["products"] = [];
   const categories: SearchResults["categories"] = [];
   const pages: SearchResults["pages"] = [];
@@ -116,6 +116,9 @@ const searchRoute = createRoute({
         pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() })),
         categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
         query: z.string(),
+        correctedQuery: z.string().nullable().openapi({
+          description: "Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction).",
+        }),
         timestamp: z.string().optional(),
       })) } },
     },
@@ -144,7 +147,8 @@ app.openapi(searchRoute, async (c) => {
       products: [],
       pages: [],
       categories: [],
-      query: ""
+      query: "",
+      correctedQuery: null,
     });
   }
 
@@ -163,7 +167,8 @@ app.openapi(searchRoute, async (c) => {
     maxPrice,
     limit,
     searchPages,
-    searchCategories
+    searchCategories,
+    correctTypos: true,
   });
 
   // Set timeout for the search operation
@@ -188,6 +193,7 @@ app.openapi(searchRoute, async (c) => {
     pages: limitedResults.pages,
     categories: limitedResults.categories,
     query,
+    correctedQuery: results.correctedQuery,
     timestamp: new Date().toISOString()
   });
 });

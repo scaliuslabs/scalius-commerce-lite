@@ -3,19 +3,25 @@ import type { ProductFacet } from "@/lib/api";
 import {
   buildProductListHref,
   type ProductListFilterState,
+  type ProductListSort,
 } from "@/lib/product-list-query";
+import { formatMoney } from "@/lib/currency";
 import { X } from "lucide-react";
 
 interface Props {
   facets: ProductFacet[];
   currentFilters: ProductListFilterState;
   pathname: string;
-  resetPath?: string;
+  resetPath: string;
+  defaultSort: ProductListSort;
   currencySymbol: string;
+  currencyCode: string;
 }
 
-const { facets, currentFilters, pathname, resetPath, currencySymbol } =
+const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol, currencyCode } =
   Astro.props;
+const money = (amount: string) =>
+  formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
 
 const navigationKeys = new Set(["page", "sortBy"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
@@ -47,7 +53,7 @@ function withoutFilterValue(key: string, value?: string): string {
     else delete nextFilters[key];
   }
 
-  return buildProductListHref({ pathname, currentFilters: nextFilters });
+  return buildProductListHref({ pathname, currentFilters: nextFilters, defaultSort });
 }
 
 const appliedFilters: AppliedFilter[] = [];
@@ -83,10 +89,10 @@ const maxPrice = Array.isArray(currentFilters.maxPrice)
 if (minPrice || maxPrice) {
   const priceLabel =
     minPrice && maxPrice
-      ? `${currencySymbol}${minPrice}–${currencySymbol}${maxPrice}`
+      ? `${money(minPrice)}–${money(maxPrice)}`
       : minPrice
-        ? `From ${currencySymbol}${minPrice}`
-        : `Up to ${currencySymbol}${maxPrice}`;
+        ? `From ${money(minPrice)}`
+        : `Up to ${money(maxPrice!)}`;
   const nextFilters = { ...currentFilters };
   delete nextFilters.page;
   delete nextFilters.minPrice;
@@ -94,21 +100,9 @@ if (minPrice || maxPrice) {
   appliedFilters.unshift({
     key: "price",
     label: `Price: ${priceLabel}`,
-    href: buildProductListHref({ pathname, currentFilters: nextFilters }),
+    href: buildProductListHref({ pathname, currentFilters: nextFilters, defaultSort }),
   });
 }
-
-const clearState: ProductListFilterState = {};
-for (const key of ["sortBy"] as const) {
-  const value = currentFilters[key];
-  if (value) clearState[key] = value;
-}
-const clearHref =
-  resetPath ??
-  buildProductListHref({
-    pathname,
-    currentFilters: clearState,
-  });
 ---
 
 {
@@ -127,12 +121,14 @@ const clearHref =
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </a>
       ))}
-      <a
-        href={clearHref}
-        class="inline-flex min-h-9 shrink-0 items-center px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      >
-        Clear all
-      </a>
+      {appliedFilters.length > 1 && (
+        <a
+          href={resetPath}
+          class="inline-flex min-h-9 shrink-0 items-center px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Clear all
+        </a>
+      )}
     </nav>
   )
 }
