@@ -13,12 +13,19 @@ export const OrderStatus = {
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
+/**
+ * Only changes without side effects. Shipped, delivered and returned come
+ * from what actually left and came back (Mark as sent, Book courier, cash
+ * collected, Mark delivered, Mark returned), which move stock and tell the
+ * buyer together; the server refuses them here (R3-ORD-01). A Shipped order
+ * with nothing actually sent can still be cancelled, which puts its stock back.
+ */
 const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly OrderStatus[]>>> = {
   incomplete: ["pending", "cancelled"],
-  pending: ["processing", "confirmed", "cancelled"],
+  pending: ["confirmed", "cancelled"],
   processing: ["confirmed", "cancelled"],
-  confirmed: ["shipped", "cancelled"],
-  shipped: ["delivered"],
+  confirmed: ["cancelled"],
+  shipped: ["cancelled"],
   delivered: ["completed"],
   completed: [],
   cancelled: [],
@@ -95,7 +102,7 @@ export function getAdminOrderStatusBlock(
     if ((units ?? 0) > 0 || partlySent) return { code: "with_courier", units: units && units > 0 ? units : null };
     if (getAdminOrderCancellationBlockedReason(status, facts)) return { code: "cancel_needs_refund" };
   }
-  if (next === "delivered" || next === "completed") {
+  if (next === "completed") {
     const settled = ["paid", "partially_refunded"].includes(facts.paymentStatus ?? "") && !((facts.balanceDue ?? 0) > 0);
     if (!settled) return { code: facts.paymentMethod === "cod" ? "cash_not_collected" : "money_due" };
   }

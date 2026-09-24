@@ -35,6 +35,7 @@ vi.mock("~/contexts/PermissionContext", () => ({ usePermissions: () => ({ hasPer
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (n: number) => `৳${n}` }) }));
 
 import { Form } from "~/components/ui/form";
+import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormProvider } from "./OrderFormContext";
 import { SummarySection } from "./SummarySection";
 import type { OrderFormInput, OrderFormValues } from "./types";
@@ -43,16 +44,27 @@ import type { OrderFormInput, OrderFormValues } from "./types";
 
 let form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
 
-function Harness() {
+type Edit = { city: string; shippingMethodId: string; shippingCharge: number; saved: { id: string; name: string } };
+
+function Harness({ edit }: { edit?: Edit }) {
   form = useForm<OrderFormInput, unknown, OrderFormValues>({
-    defaultValues: { city: "", zone: "", area: null, items: [], shippingCharge: 0, shippingMethodId: null, discountAmount: null },
+    defaultValues: {
+      city: edit?.city ?? "",
+      zone: "",
+      area: null,
+      items: [],
+      shippingCharge: edit?.shippingCharge ?? 0,
+      shippingMethodId: edit?.shippingMethodId ?? null,
+      discountAmount: null,
+    },
   });
   return (
     <Form {...form}>
       <OrderFormProvider
         form={form}
         products={[]}
-        isEdit={false}
+        isEdit={Boolean(edit)}
+        savedShippingMethod={edit?.saved ?? null}
         localTotals={{ subtotal: 0, shipping: 0, discount: 0, total: 0 }}
         manualQuote={{ data: null, isCurrent: false, isLoading: false, discountLimit: null, errorMessage: null, canRetry: false, retry: vi.fn() }}
       >
@@ -116,5 +128,48 @@ describe("create order delivery method", () => {
     await act(async () => form.setValue("zone", "zone_savar_loc"));
     await flush();
     expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual([null, 50]);
+  });
+});
+
+describe("edit order delivery method", () => {
+  let root: Root;
+
+  async function render(edit: Edit) {
+    root = createRoot(document.body.appendChild(document.createElement("div")));
+    await act(async () => root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Harness edit={edit} />
+      </QueryClientProvider>,
+    ));
+    await flush();
+    return document.body.querySelector<HTMLElement>("#order-delivery-method")!;
+  }
+
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.innerHTML = "";
+  });
+
+  it("shows the method the order was placed with, not Custom charge", async () => {
+    const picker = await render({
+      city: "city_dhaka",
+      shippingMethodId: "rate_inside",
+      shippingCharge: 80,
+      saved: { id: "rate_inside", name: "Standard delivery" },
+    });
+    expect(picker.textContent).toContain("Inside Dhaka · Standard delivery · ৳80");
+    expect(picker.textContent).not.toContain(orderFormMessages.en.customCharge);
+    expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual(["rate_inside", 80]);
+  });
+
+  it("keeps naming a saved method the address no longer offers", async () => {
+    const picker = await render({
+      city: "city_dhaka",
+      shippingMethodId: "rate_ops006",
+      shippingCharge: 70,
+      saved: { id: "rate_ops006", name: "OPS006 Standard Delivery" },
+    });
+    expect(picker.textContent).toContain("OPS006 Standard Delivery");
+    expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual(["rate_ops006", 70]);
   });
 });

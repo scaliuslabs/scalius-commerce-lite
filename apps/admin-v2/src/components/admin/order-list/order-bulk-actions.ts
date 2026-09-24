@@ -1,14 +1,16 @@
 import { isOrderArchiveStatusEligible } from "@scalius/core/modules/orders/order-archive-policy";
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 
 /** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
 export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
 export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery";
 
-type PlannableOrder = Pick<
-  OrderListItem,
-  "status" | "activeRefundOperation" | "paymentRecovery" | "shipmentRecovery"
->;
+/** A list row or the order page's order: the work-in-progress facts may be missing. */
+interface PlannableOrder {
+  status: string;
+  activeRefundOperation?: { active: boolean } | null;
+  paymentRecovery?: { state: string; activeProcessing?: boolean } | null;
+  shipmentRecovery?: { activeLock?: boolean } | null;
+}
 
 const IS_BLOCKED: Record<OrderBlockReason, (order: PlannableOrder) => boolean> = {
   refund: (order) => order.activeRefundOperation?.active === true,

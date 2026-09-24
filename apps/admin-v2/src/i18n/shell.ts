@@ -3,6 +3,7 @@ import { defineMessages } from "./index";
 /** App shell: sidebar, header, account menu and the My account page. */
 export const shellMessages = defineMessages({
   en: {
+    loadingNextPage: "Loading next page",
     home: "Home",
     orders: "Orders",
     products: "Products",
@@ -67,6 +68,7 @@ export const shellMessages = defineMessages({
     turnOn: "Turn on",
   },
   bn: {
+    loadingNextPage: "পরের পেজ লোড হচ্ছে",
     home: "হোম",
     orders: "অর্ডার",
     products: "পণ্য",
@@ -147,7 +149,7 @@ export const navKeywordMessages = defineMessages({
     pages: "about contact policy",
     blogPosts: "blog articles news",
     files: "media images photos videos upload",
-    theme: "design colours colors fonts logo appearance",
+    theme: "style styles styling design colours colors fonts logo appearance",
     navigation: "menus header footer links",
     homepageBanners: "banners slider hero carousel",
     preferences: "store title description seo search engine feed facebook google social image",
@@ -165,7 +167,7 @@ export const navKeywordMessages = defineMessages({
     pages: "আমাদের সম্পর্কে যোগাযোগ নীতি",
     blogPosts: "ব্লগ আর্টিকেল খবর",
     files: "মিডিয়া ছবি ভিডিও আপলোড",
-    theme: "ডিজাইন রং ফন্ট লোগো",
+    theme: "স্টাইল ডিজাইন রং ফন্ট লোগো",
     navigation: "মেনু হেডার ফুটার লিংক",
     homepageBanners: "ব্যানার স্লাইডার",
     preferences: "স্টোরের নাম বিবরণ এসইও ফিড ফেসবুক গুগল",

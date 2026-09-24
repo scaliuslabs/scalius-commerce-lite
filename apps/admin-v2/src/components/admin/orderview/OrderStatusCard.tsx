@@ -1,18 +1,8 @@
 import { useState } from "react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
+import { CancelOrderDialog } from "~/components/admin/order-list/CancelOrderDialog";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -72,6 +62,18 @@ export function statusBlockText(
   }
 }
 
+/**
+ * The action that settles the parcel still with the courier, so the order
+ * can be cancelled: its card and button name (R3-ORD-04).
+ */
+export function courierNextStep(order: Pick<Order, "status" | "paymentMethod">): { href: string; label: OrderDetailMessageKey } {
+  const status = order.status.toLowerCase();
+  if (status !== "shipped") return { href: "#order-shipments", label: "shipments.cameBack" };
+  return order.paymentMethod === "cod"
+    ? { href: "#order-payment", label: "cod.markReturned" }
+    : { href: "#order-shipments", label: "primary.markDelivered" };
+}
+
 export function OrderStatusCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
@@ -80,27 +82,26 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const statusMutation = useUpdateOrderStatus();
   const cancelRequest = useCancelRequestGuard(order);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [reason, setReason] = useState<CancelReason | "">("");
   const status = order.status.toLowerCase();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  // Every next status is listed; one that can't be chosen says why, right in the menu.
+  // Only changes without side effects are offered; one that can't be chosen says why, right in the menu.
   const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
   const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
+  const cancelBlock = blocked.get("cancelled");
   const placedAt = formatOrderTimestamp(order.createdAt);
-  const restock = restockedUnits(order);
   const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && options.length > 0;
+  const nextStep = changeable && cancelBlock?.code === "with_courier" ? courierNextStep(order) : null;
 
   const change = (next: string) => {
     if (!isAdminOrderStatus(next) || blocked.has(next)) return;
     clearOrderNotice(order.id);
     if (next === "cancelled") {
-      setReason("");
       setConfirmCancel(true);
       return;
     }
     const run = () => statusMutation.mutate({ orderId: order.id, status: next });
-    if (next === "confirmed" || next === "shipped") cancelRequest.guard(next === "confirmed" ? "confirm" : "send", run);
+    if (next === "confirmed") cancelRequest.guard("confirm", run);
     else run();
   };
 
@@ -142,49 +143,23 @@ export function OrderStatusCard({ order }: { order: Order }) {
           <p className="font-medium">{orderStatusLabel(o, status)}</p>
         )}
         {help ? <p className="text-muted-foreground">{help}</p> : null}
+        {nextStep && cancelBlock ? (
+          <p className="text-muted-foreground">
+            {statusBlockText(cancelBlock, order, t)}{" "}
+            <a href={nextStep.href} className="text-link hover:underline">{t(nextStep.label)}</a>
+          </p>
+        ) : null}
         {placedAt ? <p className="text-muted-foreground">{t("status.placedAt", { date: placedAt })}</p> : null}
       </CardContent>
-      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("cancel.title", { name: formatOrderNumber(order.orderNumber, order.id) })}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {[
-                t("cancel.body"),
-                restock > 0 ? t("cancel.restock", { count: restock }) : null,
-                order.customerEmail ? t("cancel.notify") : null,
-              ].filter(Boolean).join(" ")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="cancel-reason">{t("cancel.reason")}</Label>
-            <NativeSelect
-              id="cancel-reason"
-              value={reason}
-              onValueChange={(value) => setReason(value as CancelReason)}
-              placeholder={t("cancel.reasonPlaceholder")}
-            >
-              {CANCEL_REASONS.map((value) => (
-                <option key={value} value={value}>{t(`cancel.reason.${value}`)}</option>
-              ))}
-            </NativeSelect>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel.keep")}</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={statusMutation.isPending}
-              onClick={() => statusMutation.mutate({
-                orderId: order.id,
-                status: "cancelled",
-                ...(reason ? { reason } : {}),
-              })}
-            >
-              {t("cancel.confirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CancelOrderDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        orderName={formatOrderNumber(order.orderNumber, order.id)}
+        restock={restockedUnits(order)}
+        notify={Boolean(order.customerEmail)}
+        pending={statusMutation.isPending}
+        onConfirm={(reason) => statusMutation.mutate({ orderId: order.id, status: "cancelled", ...(reason ? { reason } : {}) })}
+      />
       {cancelRequest.dialog}
     </Card>
   );

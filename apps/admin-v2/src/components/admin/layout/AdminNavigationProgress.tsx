@@ -1,68 +1,67 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { useMessages } from "~/i18n";
+import { shellMessages } from "~/i18n/shell";
 
+/** A navigation faster than this shows no bar at all. */
 export const ADMIN_NAVIGATION_PROGRESS_DELAY_MS = 180;
-export const ADMIN_NAVIGATION_PROGRESS_MIN_VISIBLE_MS = 160;
+/** The finish: the bar runs to the end, then fades (global.css). */
+export const ADMIN_NAVIGATION_PROGRESS_FINISH_MS = 400;
 
-function useDelayedNavigationProgress(active: boolean) {
-  const [visible, setVisible] = useState(false);
-  const visibleSinceRef = useRef(0);
+type ProgressState = "hidden" | "loading" | "done";
+
+function useNavigationProgressState(active: boolean): ProgressState {
+  const [state, setState] = useState<ProgressState>("hidden");
 
   useEffect(() => {
     if (active) {
-      if (visible) return;
-
-      const showTimer = window.setTimeout(() => {
-        visibleSinceRef.current = Date.now();
-        setVisible(true);
-      }, ADMIN_NAVIGATION_PROGRESS_DELAY_MS);
-
-      return () => window.clearTimeout(showTimer);
+      if (state === "loading") return;
+      // A new navigation during the finish starts the bar again at once.
+      const timer = window.setTimeout(() => setState("loading"), state === "done" ? 0 : ADMIN_NAVIGATION_PROGRESS_DELAY_MS);
+      return () => window.clearTimeout(timer);
     }
+    if (state === "loading") {
+      setState("done");
+      return;
+    }
+    if (state === "done") {
+      const timer = window.setTimeout(() => setState("hidden"), ADMIN_NAVIGATION_PROGRESS_FINISH_MS);
+      return () => window.clearTimeout(timer);
+    }
+  }, [active, state]);
 
-    if (!visible) return;
-
-    const visibleFor = Date.now() - visibleSinceRef.current;
-    const remainingVisibleTime = Math.max(
-      0,
-      ADMIN_NAVIGATION_PROGRESS_MIN_VISIBLE_MS - visibleFor,
-    );
-    const hideTimer = window.setTimeout(
-      () => setVisible(false),
-      remainingVisibleTime,
-    );
-
-    return () => window.clearTimeout(hideTimer);
-  }, [active, visible]);
-
-  return visible;
+  return state;
 }
 
+/**
+ * Shopify's page-loading bar: 3px across the top of the black top bar in the
+ * accent colour, a quick start that slows as it nears the end, and a smooth
+ * run to 100% and fade once the page is ready. Fast navigations show nothing.
+ */
 export function AdminNavigationProgressView({ active }: { active: boolean }) {
-  const visible = useDelayedNavigationProgress(active);
+  const t = useMessages(shellMessages);
+  const state = useNavigationProgressState(active);
 
   return (
     <>
-      {visible ? (
+      {state === "hidden" ? null : (
         <div
           data-admin-navigation-progress=""
+          data-state={state}
           aria-hidden="true"
-          className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden bg-primary/15"
+          className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px]"
         >
-          <div className="h-full w-full animate-pulse bg-gradient-to-r from-primary/35 via-primary to-primary/35 motion-reduce:animate-none" />
+          <div className="h-full w-full bg-topbar-progress" />
         </div>
-      ) : null}
+      )}
       <span className="sr-only" role="status" aria-live="polite">
-        {visible ? "Loading next page" : ""}
+        {state === "loading" ? t("loadingNextPage") : ""}
       </span>
     </>
   );
 }
 
 export function AdminNavigationProgress() {
-  const isNavigating = useRouterState({
-    select: (state) => state.isLoading,
-  });
-
+  const isNavigating = useRouterState({ select: (state) => state.isLoading });
   return <AdminNavigationProgressView active={isNavigating} />;
 }

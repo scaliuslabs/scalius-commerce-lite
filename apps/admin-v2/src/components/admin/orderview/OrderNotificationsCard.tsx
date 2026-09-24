@@ -17,8 +17,11 @@ import {
   canSendNotificationAgain,
   notificationChannelLines,
   notificationOutboxIssue,
+  notificationTurnedOff,
   summarizeNotificationDelivery,
 } from "~/lib/order-notification-display";
+import { Link } from "@tanstack/react-router";
+import { isOrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
 import { formatOrderTimestamp } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order } from "./types";
@@ -42,6 +45,7 @@ function MessageRow({ orderId, message, canRetry }: {
   const repeatsBadge = lines.length === 1 && !lines[0]!.issue
     && orderDetailLabel(t, "messages.status.", lines[0]!.status) === statusLabel;
   const sendable = canSendNotificationAgain(message);
+  const turnedOff = notificationTurnedOff(message);
   const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
   const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
   const sentAt = formatOrderTimestamp(message.sentAt ?? message.queuedAt ?? message.createdAt);
@@ -57,6 +61,15 @@ function MessageRow({ orderId, message, canRetry }: {
         {canRetry && sendable && RETRYABLE.has(message.status) ? (
           <Button type="button" size="sm" variant="outline" loading={retrying} onClick={() => retryMutation.mutate({ orderId, outboxId: message.id })}>
             {r("retry")}
+          </Button>
+        ) : null}
+        {turnedOff ? (
+          <Button asChild size="sm" variant="link">
+            {isOrderNotificationType(message.notificationType) ? (
+              <Link to="/admin/settings/notifications/$event" params={{ event: message.notificationType }}>{t("messages.turnOn")}</Link>
+            ) : (
+              <Link to="/admin/settings/notifications">{t("messages.turnOn")}</Link>
+            )}
           </Button>
         ) : null}
         {canRetry && sendable && message.status === "sent" ? (

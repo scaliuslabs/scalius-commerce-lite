@@ -63,7 +63,7 @@ describe("order list mutations", () => {
     });
     expect(sdk.postApiV1AdminOrdersArchive).toHaveBeenCalledTimes(2);
     const [message, options] = toast.success.mock.calls[0] as [string, { duration: number; action: { onClick: () => void } }];
-    expect(message).toBe("91 orders archived");
+    expect(message).toBe("91 orders archived · 1 skipped (still open)");
     expect(options.duration).toBe(10_000);
 
     await act(async () => {

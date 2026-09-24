@@ -33936,7 +33936,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cod_returned",
                 "refund_recorded",
                 "return_created",
+                "return_approved",
                 "return_received",
+                "parcel_returned",
                 "request_submitted",
                 "request_resolved",
                 "archived",
@@ -37179,6 +37181,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0,
               "exclusiveMinimum": true
+            },
+            "refundedSinceIssue": {
+              "type": "number"
             }
           },
           "required": [
@@ -37708,6 +37713,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0,
               "exclusiveMinimum": true
+            },
+            "refundedSinceIssue": {
+              "type": "number"
             }
           },
           "required": [
@@ -38678,6 +38686,76 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.orders.mark_delivered",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/mark-delivered",
+    "summary": "Mark a paid order your own rider delivered in full as delivered",
+    "description": "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.orders.notification_resend",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/orders/{id}/notifications/{outboxId}/resend",
@@ -39196,6 +39274,95 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "notifications"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.parcel_returned",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned",
+    "summary": "An own-courier parcel of a part-sent order came back: its items go back on the unsent list",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "shipmentId",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "orderId": {
+              "type": "string"
+            },
+            "shipmentId": {
+              "type": "string"
+            },
+            "quantity": {
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "orderId",
+            "shipmentId",
+            "quantity",
+            "replayed"
           ]
         }
       },
@@ -44513,7 +44680,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "cod_returned",
                       "refund_recorded",
                       "return_created",
+                      "return_approved",
                       "return_received",
+                      "parcel_returned",
                       "request_submitted",
                       "request_resolved",
                       "archived",
@@ -90594,6 +90763,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.orders.mark_delivered",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.mark_delivered"
+        ]
+      },
+      {
         "operationId": "dashboard.orders.notification_resend",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -90615,6 +90792,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.notifications"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.parcel_returned",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.parcel_returned"
         ]
       },
       {

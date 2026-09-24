@@ -4,7 +4,7 @@ import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canSendWithOwnCourier, remainingToSend } from "./ManualFulfillmentDialog";
 import type { Order, OrderSupportRequest } from "./types";
 
-export type OrderPrimaryAction = "confirm" | "bookCourier" | "sendOwnCourier" | "collectCod" | "reviewCancellation";
+export type OrderPrimaryAction = "confirm" | "bookCourier" | "sendOwnCourier" | "collectCod" | "markDelivered" | "reviewCancellation";
 /** The next step asked of a card; a new `id` repeats the request. */
 export type OrderActionRequest = { action: OrderPrimaryAction | "refund"; id: number };
 
@@ -21,10 +21,34 @@ export function unitsLeftToSend(order: Pick<Order, "items">): number {
   return order.items.reduce((sum, item) => sum + remainingToSend(item), 0);
 }
 
+/** Part of the order is with the courier and the rest isn't sent yet. */
+export function isPartSent(order: Pick<Order, "status" | "items">): boolean {
+  return order.status.toLowerCase() === "confirmed" && unitsLeftToSend(order) > 0;
+}
+
+/**
+ * A shipped, fully sent order that is already paid online can be marked
+ * delivered; a cash order is delivered by recording the cash instead.
+ */
+export function canMarkDelivered(
+  order: Pick<Order, "status" | "items" | "paymentMethod" | "paymentStatus" | "balanceDue" | "archivedAt" | "activeRefundOperation" | "shipmentRecovery">,
+): boolean {
+  return order.status.toLowerCase() === "shipped"
+    && order.paymentMethod !== "cod"
+    && ["paid", "partially_refunded"].includes(order.paymentStatus ?? "")
+    && !(Number(order.balanceDue ?? 0) > 0)
+    && order.items.length > 0
+    && order.items.every((item) => (item.shippedQuantity ?? 0) >= item.quantity)
+    && !order.archivedAt
+    && !order.activeRefundOperation?.active
+    && order.shipmentRecovery?.activeLock !== true;
+}
+
 /**
  * The one next step of an order (header on desktop, bottom bar on phones):
  * confirm → send (book a courier, or your own rider when none is connected;
- * then the rest of a partly sent order) → collect the cash. An open
+ * then the rest of a partly sent order) → collect the cash, or mark a paid
+ * order delivered. An open
  * cancellation request comes first. Every card still applies its own guards;
  * this only picks which card flow to start.
  */
@@ -71,6 +95,8 @@ export function resolveOrderPrimaryAction(
   ) {
     return "collectCod";
   }
+
+  if (actions.canChangeOrderStatus && canMarkDelivered(order)) return "markDelivered";
 
   return null;
 }

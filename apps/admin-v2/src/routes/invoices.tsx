@@ -2,7 +2,7 @@
    print) that must not follow the dashboard theme, so they carry their own print stylesheet. */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   INVOICE_CSS,
@@ -74,10 +74,10 @@ function InvoicesPage() {
           </div>
           {businessNameMissing ? (
             <Alert variant="warning">
-              <p>
+              <AlertDescription>
                 {t("invoice.businessMissing")}{" "}
                 <Link to="/admin/settings/store" className="text-link underline">{t("invoice.openSettings")}</Link>
-              </p>
+              </AlertDescription>
             </Alert>
           ) : null}
         </div>
