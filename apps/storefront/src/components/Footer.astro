@@ -147,7 +147,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
 
 ---
 
-<footer class="relative bg-primary text-primary-foreground overflow-hidden">
+<footer class="relative border-t border-border bg-secondary text-secondary-foreground overflow-hidden">
   <div class="relative mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 lg:py-6">
     {variant === "compact" ? (
       <div class="flex flex-col items-center gap-4 text-center lg:flex-row lg:justify-between lg:text-left">
@@ -216,12 +216,12 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
               {(phoneHref || chatHref) && (
               <div class="flex flex-wrap gap-2">
                 {phoneHref && (
-                  <a href={phoneHref} class="inline-flex min-h-11 items-center rounded-lg bg-primary-foreground px-4 text-sm font-semibold text-primary">
+                  <a href={phoneHref} class="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">
                     Call {storePhone}
                   </a>
                 )}
                 {chatHref && (
-                  <a href={chatHref} target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center rounded-lg border border-primary-foreground/60 px-4 text-sm font-semibold">
+                  <a href={chatHref} target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center rounded-lg border border-secondary-foreground/40 px-4 text-sm font-semibold">
                     Chat on WhatsApp
                   </a>
                 )}
@@ -277,7 +277,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
     </div>
     )}
 
-    <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-primary-foreground/20">
+    <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
         <div class="flex flex-col items-center gap-2 text-sm sm:items-start">
           {
@@ -322,7 +322,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                     aria-label={displayTitle}
                     title={displayTitle}
                   >
-                    <div class="relative p-3 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                    <div class="relative p-3 rounded-full bg-secondary-foreground/10 group-hover:bg-secondary-foreground/15 transition-colors duration-200">
                       {item.optimizedIconUrl ? (
                         <img
                           src={item.optimizedIconUrl}
@@ -364,7 +364,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
     left: 0;
     right: 0;
     height: 100vh;
-    background-color: var(--primary);
+    background-color: var(--secondary);
     z-index: -20;
   }
 </style>

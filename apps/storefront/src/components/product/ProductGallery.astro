@@ -550,30 +550,43 @@ const initialImageAlt =
     border-color: var(--foreground) !important;
   }
 
-  /* Thumbnails below the main photo: one horizontal strip on every screen. */
-  [data-thumbnails="below"] .gallery-stage-row {
-    flex-direction: column;
+  /* Phones and tablets: the photo spans the row and the thumbnails sit in
+     one full-width strip under it (Dawn), whatever the desktop layout. */
+  @media (max-width: 1023px) {
+    .gallery-stage-row {
+      flex-direction: column;
+    }
+    .gallery-mobile-rail {
+      width: 100%;
+      max-width: none;
+      height: 4.5rem;
+    }
+    [data-thumbnail-rail="mobile"] {
+      overflow-x: auto;
+      overflow-y: hidden;
+      touch-action: pan-x;
+      scroll-snap-type: x mandatory;
+    }
+    [data-thumbnail-rail="mobile"] > div {
+      flex-direction: row;
+      height: 100%;
+    }
+    .gallery-mobile-rail .thumbnail-btn {
+      width: 4.25rem;
+      height: 4.25rem;
+    }
+    .gallery-mobile-rail [data-scroll-control] {
+      display: none;
+    }
   }
-  [data-thumbnails="below"] .gallery-mobile-rail {
-    width: 100%;
-    max-width: none;
-    height: 4.5rem;
-  }
-  [data-thumbnails="below"] [data-thumbnail-rail] {
+  /* Computers, thumbnails below the photo: one horizontal strip. */
+  [data-thumbnails="below"] [data-thumbnail-rail="desktop"] {
     overflow-x: auto;
     overflow-y: hidden;
     touch-action: pan-x;
     scroll-snap-type: x mandatory;
   }
-  [data-thumbnails="below"] [data-thumbnail-rail="mobile"] > div {
-    flex-direction: row;
-    height: 100%;
-  }
-  [data-thumbnails="below"] .gallery-mobile-rail .thumbnail-btn {
-    width: 4.25rem;
-    height: 4.25rem;
-  }
-  [data-thumbnails="below"] [data-scroll-control] {
+  [data-thumbnails="below"] .gallery-desktop-rail [data-scroll-control] {
     display: none;
   }
   @media (min-width: 64rem) {

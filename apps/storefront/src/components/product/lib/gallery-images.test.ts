@@ -31,7 +31,8 @@ function evaluateSizes(sizes: string, viewport: number): number {
 /**
  * The rendered width of a square photo in the gallery's main slot, straight
  * from the CSS: section gutters, 12-column grid, thumbnail column, and the
- * mobile stage's 24rem height cap.
+ * mobile stage's 24rem height cap. Below 1024px the thumbnails always sit in
+ * a strip under the photo, so the photo spans the row.
  */
 function renderedMainWidth(
   layout: ProductGalleryLayout,
@@ -41,8 +42,7 @@ function renderedMainWidth(
   const railBeside = hasThumbnails && layout.thumbnails === "beside";
   if (viewport < 1024) {
     const content = viewport - 2 * (viewport < 640 ? 12 : 24);
-    const rail = railBeside ? Math.min(0.18 * viewport, 80) + 8 : 0;
-    return Math.min(content - rail, 384);
+    return Math.min(content, 384);
   }
   const content = Math.min(viewport, 1280) - 64;
   const column = (content - 11 * 40) / 12;
@@ -84,8 +84,9 @@ describe("product gallery image slots", () => {
 
   it("serves a DPR 3 phone a sharp photo and a laptop no more than it shows", () => {
     const { sizes } = productGalleryMainSlot(STOREFRONT_PRODUCT_PAGE_SPECS.gallery, true);
-    // 390px phone: ~278 CSS px, i.e. ~834 device px at DPR 3.
-    expect(evaluateSizes(sizes, 390) * 3).toBeGreaterThan(800);
+    // 390px phone: the full 366px row (thumbnails in a strip below), ~1100 device px at DPR 3.
+    expect(evaluateSizes(sizes, 390)).toBe(366);
+    expect(evaluateSizes(sizes, 390) * 3).toBeGreaterThan(1000);
     // 1440px desktop: the 468px column, not the viewport.
     expect(evaluateSizes(sizes, 1440)).toBe(468);
   });
@@ -93,9 +94,10 @@ describe("product gallery image slots", () => {
   it("sizes thumbnails to their rail and caps their srcset at 320w", () => {
     const beside = STOREFRONT_PRODUCT_PAGE_SPECS.gallery;
     const below = STOREFRONT_PRODUCT_PAGE_SPECS.filmstrip;
+    // Phones and tablets: a strip of 68px thumbnails in every layout.
     const mobile = productGalleryThumbnailSlot(beside, "mobile");
-    expect(evaluateSizes(mobile.sizes, 390)).toBeCloseTo(70.2);
-    expect(evaluateSizes(mobile.sizes, 800)).toBe(80);
+    expect(evaluateSizes(mobile.sizes, 390)).toBe(68);
+    expect(evaluateSizes(mobile.sizes, 800)).toBe(68);
     const desktop = productGalleryThumbnailSlot(beside, "desktop");
     expect(evaluateSizes(desktop.sizes, 1100)).toBe(76);
     expect(evaluateSizes(desktop.sizes, 1440)).toBe(96);
