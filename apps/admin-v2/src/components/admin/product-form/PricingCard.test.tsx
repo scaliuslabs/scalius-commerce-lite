@@ -9,7 +9,7 @@ import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 
 vi.mock("@/hooks/use-currency", () => ({
-  useCurrency: () => ({ symbol: "৳", fmt: (price: number) => `৳${price}`, salePrice: () => null }),
+  useCurrency: () => ({ symbol: "৳", code: "BDT", fmt: (price: number) => `৳${price}`, salePrice: () => null }),
 }));
 
 import { PricingCard } from "./PricingCard";
