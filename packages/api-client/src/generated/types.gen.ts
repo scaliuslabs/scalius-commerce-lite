@@ -9628,6 +9628,10 @@ export type GetApiV1ShippingMethodsResponses = {
                 fee: number;
                 freeOver: number | null;
                 kind: 'delivery' | 'pickup';
+                /**
+                 * True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone.
+                 */
+                everywhereElse: boolean;
                 pickupAddress: string | null;
                 pickupHours: string | null;
                 description: string | null;
