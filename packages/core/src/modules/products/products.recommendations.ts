@@ -113,31 +113,71 @@ function collectionIdList(configColumn: string, key: "productIds" | "categoryIds
     return sql.raw(`json_each(CASE WHEN json_valid(${configColumn}) THEN CASE WHEN json_type(${configColumn}, '$.${key}') = 'array' THEN ${configColumn} ELSE '{"${key}":[]}' END ELSE '{"${key}":[]}' END, '$.${key}')`);
 }
 
-/** Every (collection, product) membership of active collections, manual or dynamic. */
-function collectionMembersSql(prefix: string): SQL {
+function activeCollectionSql(collection: string, dynamic: boolean): string {
+    const source = `COALESCE(CASE WHEN json_valid(${collection}.config) THEN json_extract(${collection}.config, '$.source') END, 'manual')`;
+    return `${collection}.is_active = 1 AND ${collection}.deleted_at IS NULL AND ${source} ${dynamic ? "=" : "<>"} 'dynamic'`;
+}
+
+/**
+ * Every (collection, product) membership of the given active collections,
+ * manual or dynamic. The CROSS JOINs fix the join order (SQLite never
+ * reorders across them): collection, then its rules, then the rule's
+ * category, then that category's products. Left to the planner, it started
+ * from every published category and every product in the store and parsed
+ * each collection's rules once per product (1.3 s at 30k products).
+ */
+function collectionMembersSql(prefix: string, collectionIds: SQL): SQL {
     const collection = `${prefix}_collection`;
     const manual = `${prefix}_manual`;
     const categoryRule = `${prefix}_rule`;
     const product = `${prefix}_product`;
     const category = `${prefix}_category`;
-    const active = `${collection}.is_active = 1 AND ${collection}.deleted_at IS NULL`;
-    const source = `COALESCE(CASE WHEN json_valid(${collection}.config) THEN json_extract(${collection}.config, '$.source') END, 'manual')`;
     return sql.raw(`
         SELECT ${collection}.id AS collection_id, CAST(${manual}.value AS TEXT) AS product_id
         FROM collections AS ${collection}
         CROSS JOIN `).append(collectionIdList(`${collection}.config`, "productIds")).append(sql.raw(` AS ${manual}
-        WHERE ${active} AND ${source} <> 'dynamic'
+        WHERE ${activeCollectionSql(collection, false)} AND ${collection}.id IN `)).append(collectionIds).append(sql.raw(`
         UNION ALL
         SELECT ${collection}.id AS collection_id, ${product}.id AS product_id
         FROM collections AS ${collection}
         CROSS JOIN `)).append(collectionIdList(`${collection}.config`, "categoryIds")).append(sql.raw(` AS ${categoryRule}
-        INNER JOIN products AS ${product} ON ${product}.category_id = CAST(${categoryRule}.value AS TEXT)
-        INNER JOIN categories AS ${category}
-            ON ${category}.id = ${product}.category_id
-           AND ${category}.status = 'published'
-           AND ${category}.deleted_at IS NULL
-        WHERE ${active} AND ${source} = 'dynamic'
+        CROSS JOIN categories AS ${category}
+        CROSS JOIN products AS ${product}
+        WHERE ${activeCollectionSql(collection, true)} AND ${collection}.id IN `)).append(collectionIds).append(sql.raw(`
+          AND ${category}.id = CAST(${categoryRule}.value AS TEXT)
+          AND ${category}.status = 'published'
+          AND ${category}.deleted_at IS NULL
+          AND ${product}.category_id = ${category}.id
     `));
+}
+
+/**
+ * The active collections that contain any source product, found without
+ * expanding any collection: manual lists name the product, dynamic rules
+ * name its published category.
+ */
+function sourceCollectionIdsSql(sourceSet: SQL): SQL {
+    return sql`(
+        SELECT rec_source_collection.id
+        FROM collections AS rec_source_collection
+        CROSS JOIN ${collectionIdList("rec_source_collection.config", "productIds")} AS rec_source_manual
+        WHERE ${sql.raw(activeCollectionSql("rec_source_collection", false))}
+          AND CAST(rec_source_manual.value AS TEXT) IN ${sourceSet}
+        UNION
+        SELECT rec_source_collection.id
+        FROM collections AS rec_source_collection
+        CROSS JOIN ${collectionIdList("rec_source_collection.config", "categoryIds")} AS rec_source_rule
+        WHERE ${sql.raw(activeCollectionSql("rec_source_collection", true))}
+          AND CAST(rec_source_rule.value AS TEXT) IN (
+              SELECT rec_source_product.category_id
+              FROM products AS rec_source_product
+              CROSS JOIN categories AS rec_source_category
+              WHERE rec_source_product.id IN ${sourceSet}
+                AND rec_source_category.id = rec_source_product.category_id
+                AND rec_source_category.status = 'published'
+                AND rec_source_category.deleted_at IS NULL
+          )
+    )`;
 }
 
 type RankedRecommendationRow = {
@@ -185,9 +225,11 @@ export async function rankProductRecommendations(
         SELECT rec_peer_line.product_id AS product_id,
                COUNT(DISTINCT rec_co_order.customer_phone) AS buyers
         FROM order_items AS rec_source_line
-        INNER JOIN orders AS rec_co_order ON rec_co_order.id = rec_source_line.order_id
-        INNER JOIN order_items AS rec_peer_line ON rec_peer_line.order_id = rec_source_line.order_id
+        CROSS JOIN orders AS rec_co_order
+        CROSS JOIN order_items AS rec_peer_line
         WHERE rec_source_line.product_id IN ${sourceSet}
+          AND rec_co_order.id = rec_source_line.order_id
+          AND rec_peer_line.order_id = rec_source_line.order_id
           AND rec_peer_line.product_id NOT IN ${sourceSet}
           AND ${realOrder("rec_co_order")}
           AND rec_co_order.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
@@ -196,12 +238,7 @@ export async function rankProductRecommendations(
 
     const collectionPeers = sql`(
         SELECT rec_member.product_id AS product_id, COUNT(DISTINCT rec_member.collection_id) AS shared
-        FROM (${collectionMembersSql("rec_peer")}) AS rec_member
-        WHERE rec_member.collection_id IN (
-            SELECT rec_source_member.collection_id
-            FROM (${collectionMembersSql("rec_source")}) AS rec_source_member
-            WHERE rec_source_member.product_id IN ${sourceSet}
-        )
+        FROM (${collectionMembersSql("rec_peer", sourceCollectionIdsSql(sourceSet))}) AS rec_member
         GROUP BY rec_member.product_id
     ) AS rec_collection_peer`;
 
@@ -249,14 +286,16 @@ export async function rankProductRecommendations(
           AND ${operationalSkuRowPredicate("rec_band_sku")}
     ) AS rec_source_band`;
 
+    // CROSS JOIN keeps the source products as the driver; the planner
+    // otherwise walked every product of every published category.
     const sameCategory = sql`CASE WHEN ${products.categoryId} IN (
         SELECT rec_source_product.category_id
         FROM products AS rec_source_product
-        INNER JOIN categories AS rec_source_category
-            ON rec_source_category.id = rec_source_product.category_id
-           AND rec_source_category.status = 'published'
-           AND rec_source_category.deleted_at IS NULL
+        CROSS JOIN categories AS rec_source_category
         WHERE rec_source_product.id IN ${sourceSet}
+          AND rec_source_category.id = rec_source_product.category_id
+          AND rec_source_category.status = 'published'
+          AND rec_source_category.deleted_at IS NULL
     ) THEN 1 ELSE 0 END`;
     const alsoBoughtBuyers = sql<number>`COALESCE(rec_co_purchase.buyers, 0)`;
     const collectionShared = sql`COALESCE(rec_collection_peer.shared, 0)`;

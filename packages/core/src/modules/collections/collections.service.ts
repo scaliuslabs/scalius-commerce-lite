@@ -398,13 +398,11 @@ export async function listCollectionProductOptions(
         .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(whereClause);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const optionsQuery = db
         .select({
             id: products.id,
             name: products.name,
             priceMinor: products.priceMinor,
-            ...buyerPriceRangeColumns(buyerPricing),
             categoryId: products.categoryId,
             categoryName: sql<string | null>`${categories.name}`.as(
                 "collection_product_category_name",
@@ -428,7 +426,6 @@ export async function listCollectionProductOptions(
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
-        .leftJoin(buyerPricing, eq(buyerPricing.productId, products.id))
         .where(whereClause)
         .orderBy(
             ...(selectedProductIds.length > 0
@@ -453,9 +450,6 @@ export async function listCollectionProductOptions(
             id: string;
             name: string;
             priceMinor: number;
-            buyerFromMinor: number | null;
-            buyerToMinor: number | null;
-            buyerBaseMinor: number | null;
             categoryId: string | null;
             categoryName: string | null;
             isActive: boolean;
@@ -466,17 +460,30 @@ export async function listCollectionProductOptions(
     ]>);
     const total = Number(countRows[0]?.count ?? 0);
     const decimalPlaces = storeDecimalPlacesFromCode(countRows[0]?.storeCurrencyCode);
-    const mediaMap = productOptions.length > 0
-        ? await loadProductMediaProjections(db, productOptions.map((product) => product.id))
-        : new Map();
+    const pageIds = productOptions.map((product) => product.id);
+    // Buyer pricing for the page only; joined into the page query it ranked
+    // every SKU in the store to price ten picker rows.
+    const pagePricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(pageIds)}))`,
+    });
+    const [mediaMap, pricingRows] = pageIds.length > 0
+        ? await Promise.all([
+            loadProductMediaProjections(db, pageIds),
+            db.select({ productId: pagePricing.productId, ...buyerPriceRangeColumns(pagePricing) }).from(pagePricing).all(),
+        ])
+        : [new Map(), []];
+    const pricingByProduct = new Map(pricingRows.map((row) => [row.productId, row]));
 
     return {
-        products: productOptions.map(({ priceMinor, buyerFromMinor, buyerToMinor, buyerBaseMinor, variantCount, available, ...product }) => ({
+        products: productOptions.map(({ priceMinor, variantCount, available, ...product }) => ({
             ...product,
             variantCount: Number(variantCount ?? 0),
             available: available == null ? null : Number(available),
             price: fromMinor(priceMinor, decimalPlaces),
-            priceRange: presentBuyerPriceRange({ buyerFromMinor, buyerToMinor, buyerBaseMinor }, decimalPlaces),
+            priceRange: presentBuyerPriceRange(
+                pricingByProduct.get(product.id) ?? { buyerFromMinor: null, buyerToMinor: null, buyerBaseMinor: null },
+                decimalPlaces,
+            ),
             primaryImage:
                 resolveProductImageRepresentation(mediaMap.get(product.id) ?? [])?.url ?? null,
         })),
@@ -876,7 +883,9 @@ export async function getPublicCollectionCatalog(
 
     const config = normalizeCollectionConfig(collection.config);
     const membership = collectionMembershipForConfig(config);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: eq(products.id, config.featuredProductId ?? ""),
+    });
     const categoryIdsJson = JSON.stringify(membership.categoryIds);
     const categoryPromise: Promise<Array<{ id: string; name: string; slug: string }>> =
         membership.categoryIds.length > 0
@@ -1046,29 +1055,36 @@ export async function resolveCollectionProductsBatch(
     );
     const categoryIdsArr = categoryProductLimits.map(({ categoryId }) => categoryId);
     const featuredIdsArr = Array.from(allFeaturedIds);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    // One pricing projection per statement, scoped to that statement's
+    // products: an unscoped one ranked every SKU in the store once per
+    // homepage category (30 statements, 9 s of D1 time at 30k products).
+    const pricingFor = (productScope: SQL) => buildBuyerCatalogPricingProjection(db, { productScope });
+    const idSetCondition = (ids: string[]) => sql`${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})
+                )`;
+    const pinnedPricing = pricingFor(idSetCondition(productIdsArr));
+    const featuredPricing = pricingFor(idSetCondition(featuredIdsArr));
 
     const noopQuery = db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`);
 
     const batchResults = await safeBatch(db, [
         productIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect(buyerPricing)).from(products)
-                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                .where(and(...publicCollectionProductConditions(sql`${products.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIdsArr)})
-                )`)))
+            ? db.select(buildCollectionProductSelect(pinnedPricing)).from(products)
+                .innerJoin(pinnedPricing, eq(products.id, pinnedPricing.productId))
+                .where(and(...publicCollectionProductConditions(idSetCondition(productIdsArr))))
             : noopQuery,
-        ...categoryProductLimits.map(({ categoryId, maxProducts }) =>
-            db.select(buildCollectionProductSelect(buyerPricing))
+        ...categoryProductLimits.map(({ categoryId, maxProducts }) => {
+            const categoryPricing = pricingFor(eq(products.categoryId, categoryId));
+            return db.select(buildCollectionProductSelect(categoryPricing))
                 .from(products)
-                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+                .innerJoin(categoryPricing, eq(products.id, categoryPricing.productId))
                 .where(and(
                     ...publicCollectionProductConditions(eq(products.categoryId, categoryId)),
                     publishedCategoryIdExists(products.categoryId),
                 ))
                 .orderBy(desc(products.createdAt), asc(products.id))
-                .limit(maxProducts),
-        ),
+                .limit(maxProducts);
+        }),
         categoryIdsArr.length > 0
             ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(
                 sql`${categories.id} IN (
@@ -1078,11 +1094,9 @@ export async function resolveCollectionProductsBatch(
             ))
             : noopQuery,
         featuredIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect(buyerPricing)).from(products)
-                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                .where(and(...publicCollectionProductConditions(sql`${products.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(featuredIdsArr)})
-                )`)))
+            ? db.select(buildCollectionProductSelect(featuredPricing)).from(products)
+                .innerJoin(featuredPricing, eq(products.id, featuredPricing.productId))
+                .where(and(...publicCollectionProductConditions(idSetCondition(featuredIdsArr))))
             : noopQuery,
     ]);
     const categoryProductsStartIndex = 1;
