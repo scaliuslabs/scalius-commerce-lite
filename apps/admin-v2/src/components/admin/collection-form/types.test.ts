@@ -27,15 +27,6 @@ describe("collection form schema", () => {
     expect(result.success && result.data.canonicalPath).toBe("/collections/col_1");
   });
 
-  it("rejects category IDs in manual product membership", () => {
-    const result = collectionFormSchema.safeParse({
-      ...collectionValues,
-      config: { ...collectionValues.config, productIds: ["cat_footwear"] },
-    });
-
-    expect(result.success).toBe(false);
-  });
-
   it("needs a product or a category before the collection is active", () => {
     const manual = collectionFormSchema.safeParse({ ...collectionValues, isActive: true });
     const automatic = collectionFormSchema.safeParse({

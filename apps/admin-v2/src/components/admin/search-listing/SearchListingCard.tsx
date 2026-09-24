@@ -45,8 +45,8 @@ export interface SearchListingCardProps {
   fallbackTitle: string;
   /** Plain text shown when the search description is empty. */
   fallbackDescription?: string;
-  /** Storefront path when the resource has no handle, e.g. `/collections/<id>`. */
-  path?: string;
+  /** Storefront path when the resource has no handle, e.g. `/collections/<id>`; null until it is saved. */
+  path?: string | null;
   /** Inline field errors from the form (already translated). */
   errors?: Partial<Record<"title" | "description" | "handle", string>>;
   disabled?: boolean;
@@ -93,7 +93,7 @@ export function SearchListingCard({
   const { storefrontUrl } = useStorefrontUrl();
   const origin = (storefrontUrl ?? "").replace(/\/+$/, "");
   const prefix = PATH_PREFIX[resource];
-  const shownPath = path ?? `${prefix}${value.handle ?? ""}`;
+  const shownUrl = path === null ? t("addressOnSave") : `${origin}${path ?? `${prefix}${value.handle ?? ""}`}`;
   const title = value.title.trim() || fallbackTitle.trim();
   const description = (value.description.trim() || fallbackDescription.trim()).slice(0, 320);
   const open = editing || Object.values(errors).some(Boolean);
@@ -116,7 +116,7 @@ export function SearchListingCard({
       </div>
       <div className="space-y-4 px-4 pb-4">
         {title ? (
-          <SearchListingPreview url={`${origin}${shownPath}`} title={title} description={description} />
+          <SearchListingPreview url={shownUrl} title={title} description={description} />
         ) : (
           <p className="text-body text-muted-foreground">{t(`empty_${resource}`)}</p>
         )}

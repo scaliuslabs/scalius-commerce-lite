@@ -9,6 +9,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { attributeValueMessages } from "~/i18n/attributes";
 import { AttributeValueEditor } from "./AttributeValueEditor";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 
 const l = (key: keyof typeof attributeValueMessages.en, vars?: Record<string, string>) => translate(attributeValueMessages, key, vars);
 
@@ -153,6 +154,17 @@ describe("attribute value commands", () => {
       expect(field.isConnected).toBe(false);
     });
   }
+
+  it("names a duplicate value in plain words instead of the server's text", async () => {
+    api.add.mockRejectedValueOnce(new AdminApiResponseError('Value "Submitted" already exists for this attribute', 409));
+    const { save } = await begin("add");
+    await click(save);
+    expect(api.error).toHaveBeenCalledWith("“Submitted” already exists. Use another name.");
+
+    api.add.mockRejectedValueOnce(new AdminApiResponseError("D1_ERROR: internal", 500));
+    await click(save);
+    expect(api.error).toHaveBeenLastCalledWith(l("addFailed"));
+  });
 
   it("keeps deletion confirmation busy, prevents duplicate commands, and allows retry after failure", async () => {
     const pending = deferred<object>(); api.remove.mockReturnValueOnce(pending.promise);

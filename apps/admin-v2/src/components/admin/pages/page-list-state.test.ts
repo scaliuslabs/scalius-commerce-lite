@@ -15,7 +15,6 @@ describe("page list route state", () => {
     } as never)).toEqual({
       page: 2,
       limit: 100,
-      search: "",
       sort: "updatedAt",
       order: "desc",
       trashed: false,
@@ -30,7 +29,7 @@ describe("page list route state", () => {
       trashed: "true",
       status: "published",
     } as never);
-    expect(pageListQueryParams(trashSearch)).toMatchObject({
+    expect(pageListQueryParams(trashSearch, "")).toMatchObject({
       trashed: "true",
       status: undefined,
     });

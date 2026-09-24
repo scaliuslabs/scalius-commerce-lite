@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ImageIcon, Loader2 } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
 import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
-import { isCollectionProductOptionDto } from "~/lib/collection-product-options";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -18,6 +19,105 @@ import type { Product } from "./types";
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * One page-by-page product lookup for the collection pickers and the
+ * automatic-collection preview: newest products first, A-Z while searching.
+ */
+export function useProductOptions({
+  open,
+  search = "",
+  categoryIds = [],
+  selectedProductIds = [],
+  limit = PAGE_SIZE,
+}: {
+  open: boolean;
+  search?: string;
+  categoryIds?: readonly string[];
+  selectedProductIds?: readonly string[];
+  limit?: number;
+}) {
+  const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
+  const query = useInfiniteQuery({
+    ...collectionProductOptionsQueryOptions({
+      search: debouncedSearch,
+      limit,
+      categoryIds: [...categoryIds],
+      selectedProductIds: [...selectedProductIds],
+    }),
+    enabled: open,
+  });
+  const products = useMemo(() => {
+    const byId = new Map<string, Product>();
+    for (const page of query.data?.pages ?? []) {
+      for (const product of page.products) byId.set(product.id, product);
+    }
+    return Array.from(byId.values());
+  }, [query.data]);
+  const total = query.data?.pages[0]?.pagination.total ?? 0;
+  const isLoading = search.trim() !== debouncedSearch || query.isPending || (query.isFetching && products.length === 0);
+  return { query, products, total, isLoading, searched: debouncedSearch };
+}
+
+/** "৳1,200 · 3 variants · 12 in stock", the resource picker's second line. */
+export function ProductOptionMeta({ product }: { product: Product }) {
+  const t = useMessages(collectionFormMessages);
+  const { fmt } = useCurrency();
+  const parts = [
+    product.price === undefined ? null : fmt(product.price),
+    product.variantCount ? (product.variantCount === 1 ? t("variantOne") : t("variantCount", { count: product.variantCount })) : null,
+    product.available === undefined ? null : product.available === null ? t("stockNotTracked") : product.available === 0 ? t("outOfStock") : t("inStock", { count: product.available }),
+  ].filter(Boolean);
+  return <span className="block truncate tabular-nums text-muted-foreground">{parts.join(" · ")}</span>;
+}
+
+export function ProductThumbnail({ image }: { image?: string | null }) {
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+      {image ? (
+        <img src={mediaImageUrl(image, 160)} alt="" className="size-full object-contain" loading="lazy" decoding="async" />
+      ) : (
+        <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+      )}
+    </span>
+  );
+}
+
+/** Loading, failed, nothing in the store, or nothing matching the search. */
+export function ProductOptionsStatus({ options }: { options: ReturnType<typeof useProductOptions> }) {
+  const t = useMessages(collectionFormMessages);
+  const tr = useMessages(resourceMessages);
+  const { query, products, isLoading, searched } = options;
+  if (isLoading) {
+    return (
+      <p role="status" className="flex items-center justify-center gap-2 px-5 py-10 text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t("searching")}
+      </p>
+    );
+  }
+  if (query.isError && products.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 px-5 py-10">
+        <p className="text-muted-foreground">{t("productsLoadFailed")}</p>
+        <Button type="button" variant="outline" onClick={() => void query.refetch()}>
+          {tr("retry")}
+        </Button>
+      </div>
+    );
+  }
+  if (products.length > 0) return null;
+  return searched ? (
+    <p className="px-5 py-10 text-center text-muted-foreground">{t("noProductsMatch", { term: searched })}</p>
+  ) : (
+    <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
+      <p className="text-muted-foreground">{t("noProductsYet")}</p>
+      <Button type="button" variant="outline" asChild>
+        <Link to="/admin/products/new">{t("addProduct")}</Link>
+      </Button>
+    </div>
+  );
+}
+
 interface ProductPickerDialogProps {
   selectedProductIds: readonly string[];
   onAddProducts: (products: Product[]) => void;
@@ -26,9 +126,9 @@ interface ProductPickerDialogProps {
 }
 
 /**
- * Polaris resource picker: opens on a search field, rows with thumbnails,
- * "N selected" with [Cancel] [Add]. Products already in the collection come
- * back checked and locked.
+ * Polaris resource picker: opens on the newest products with a search field,
+ * rows with thumbnail, price and stock, "N selected" with [Cancel] [Add].
+ * Products already in the collection come back checked and locked.
  */
 export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProducts = 90 }: ProductPickerDialogProps) {
   const t = useMessages(collectionFormMessages);
@@ -36,29 +136,11 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [staged, setStaged] = useState<Map<string, Product>>(() => new Map());
-  const debouncedSearch = useDebounce(searchTerm.trim(), SEARCH_DEBOUNCE_MS);
   const existingIds = useMemo(() => new Set(selectedProductIds), [selectedProductIds]);
   const remainingSlots = Math.max(0, maxProducts - existingIds.size);
   const selectionFull = staged.size >= remainingSlots;
-
-  const productQuery = useInfiniteQuery({
-    ...collectionProductOptionsQueryOptions({
-      search: debouncedSearch,
-      limit: PAGE_SIZE,
-      selectedProductIds: Array.from(selectedProductIds),
-    }),
-    enabled: open,
-  });
-
-  const products = useMemo(() => {
-    const byId = new Map<string, Product>();
-    for (const page of productQuery.data?.pages ?? []) {
-      for (const product of page.products) byId.set(product.id, product);
-    }
-    return Array.from(byId.values());
-  }, [productQuery.data]);
-  const isLoading = searchTerm.trim() !== debouncedSearch || productQuery.isPending ||
-    (productQuery.isFetching && products.length === 0);
+  const options = useProductOptions({ open, search: searchTerm, selectedProductIds });
+  const { query, products } = options;
 
   function changeOpen(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -69,7 +151,7 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
   }
 
   function toggle(product: Product) {
-    if (!isCollectionProductOptionDto(product) || existingIds.has(product.id)) return;
+    if (existingIds.has(product.id)) return;
     setStaged((current) => {
       const next = new Map(current);
       if (next.has(product.id)) next.delete(product.id);
@@ -106,21 +188,8 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
         </div>
 
         <div className="max-h-[min(52dvh,30rem)] min-h-40 overflow-y-auto overscroll-contain border-t">
-          {isLoading ? (
-            <p role="status" className="flex items-center justify-center gap-2 px-5 py-10 text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              {t("searching")}
-            </p>
-          ) : productQuery.isError && products.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 px-5 py-10">
-              <p className="text-muted-foreground">{t("productsLoadFailed")}</p>
-              <Button type="button" variant="outline" onClick={() => void productQuery.refetch()}>
-                {tr("retry")}
-              </Button>
-            </div>
-          ) : products.length === 0 ? (
-            <p className="px-5 py-10 text-center text-muted-foreground">{t("noProductsFound")}</p>
-          ) : (
+          <ProductOptionsStatus options={options} />
+          {options.isLoading || products.length === 0 ? null : (
             <ul className="divide-y">
               {products.map((product) => {
                 const added = existingIds.has(product.id);
@@ -134,16 +203,10 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
                         onCheckedChange={() => toggle(product)}
                         aria-label={product.name}
                       />
-                      <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-                        {product.primaryImage ? (
-                          <img src={mediaImageUrl(product.primaryImage, 160)} alt="" className="size-full object-contain" loading="lazy" decoding="async" />
-                        ) : (
-                          <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                        )}
-                      </span>
+                      <ProductThumbnail image={product.primaryImage} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{product.name}</span>
-                        <span className="block truncate text-muted-foreground">{product.categoryName || t("noCategory")}</span>
+                        <ProductOptionMeta product={product} />
                       </span>
                       {added ? (
                         <Badge variant="secondary">{t("added")}</Badge>
@@ -154,16 +217,16 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
                   </li>
                 );
               })}
-              {productQuery.hasNextPage ? (
+              {query.hasNextPage ? (
                 <li className="p-3">
                   <Button
                     type="button"
                     variant="ghost"
                     className="w-full"
-                    loading={productQuery.isFetchingNextPage}
-                    onClick={() => void productQuery.fetchNextPage()}
+                    loading={query.isFetchingNextPage}
+                    onClick={() => void query.fetchNextPage()}
                   >
-                    {productQuery.isFetchNextPageError ? tr("retry") : t("loadMore")}
+                    {query.isFetchNextPageError ? tr("retry") : t("loadMore")}
                   </Button>
                 </li>
               ) : null}

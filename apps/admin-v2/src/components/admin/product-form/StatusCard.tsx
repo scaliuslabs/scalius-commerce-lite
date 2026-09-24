@@ -2,7 +2,7 @@ import { memo } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -54,6 +54,7 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
                   <SelectItem value="draft">{t("statusDraft")}</SelectItem>
                 </SelectContent>
               </Select>
+              <FormDescription>{t(field.value ? "statusActiveHelp" : "statusDraftHelp")}</FormDescription>
             </FormItem>
           )}
         />

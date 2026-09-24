@@ -181,6 +181,7 @@ export async function listInventoryMovements(db: Database, params: {
             preorderStockDelta: inventoryMovements.preorderStockDelta,
             createdAt: inventoryMovements.createdAt,
             variantSku: productVariants.sku,
+            optionLabel: variantOptionLabelSql(productVariants.id),
             productName: products.name,
         })
         .from(inventoryMovements)

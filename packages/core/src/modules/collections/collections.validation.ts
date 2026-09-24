@@ -36,14 +36,8 @@ const canonicalPathUpdateSchema = z
         },
     );
 
-const productIdSchema = z
-    .string()
-    .trim()
-    .min(1)
-    .max(180)
-    .refine((id) => id.startsWith("prod_"), {
-        message: "Product references must use product IDs.",
-    });
+// Ids are opaque; an active collection's products must exist (collections.service).
+const productIdSchema = z.string().trim().min(1).max(180);
 
 const collectionConfigSchema = z.object({
     source: z.enum(["manual", "dynamic"]),
@@ -116,5 +110,15 @@ export const updateCollectionSchema = z.object({
     config: collectionConfigUpdateSchema.optional(),
 });
 
+const productIdListSchema = z.array(productIdSchema).max(COLLECTION_CONFIG_ID_LIMIT);
+
+/** Add or remove products in a manual collection without resending the whole collection. */
+export const updateCollectionProductsSchema = z.object({
+    expectedVersion: z.number().int().min(1),
+    add: productIdListSchema.optional().default([]),
+    remove: productIdListSchema.optional().default([]),
+});
+
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;
+export type UpdateCollectionProductsInput = z.infer<typeof updateCollectionProductsSchema>;
 export type UpdateCollectionInput = z.infer<typeof updateCollectionSchema>;

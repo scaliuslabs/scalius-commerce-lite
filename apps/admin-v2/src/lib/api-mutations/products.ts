@@ -1,12 +1,11 @@
-import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminProductsById,
-  deleteApiV1AdminProductsByIdPermanent,
-  postApiV1AdminProductsBulkDelete,
-  postApiV1AdminProductsByIdRestore,
+  postApiV1AdminProductsByIdDuplicate,
 } from "@scalius/api-client/sdk";
-import { apiData, type ApiBody } from "../api";
+import { apiData } from "../api";
 import type { ProductAggregateRevisionClaim } from "../api-query-options/products";
 import {
   getServerFnError,
@@ -18,108 +17,55 @@ import {
 import { readProductRevisionConflict } from "../admin-api-error";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
-import { resourceMessages } from "~/i18n/resource";
 
 const t = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
   translate(productMessages, key, vars);
 
-function handleProductListMutationError(queryClient: QueryClient, error: unknown) {
+function toastProductError(error: unknown) {
   if (readProductRevisionConflict(error)) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
     toast.error(t("listChangedTitle"), { description: t("listChangedBody") });
     return;
   }
-  toast.error(getServerFnError(error, translate(resourceMessages, "actionFailed")));
+  toast.error(getServerFnError(error, t("saveFailed")));
 }
 
-export function useDeleteProduct() {
+/** Moves one product to trash from its page, then returns to the list. */
+export function useTrashProduct() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
     mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
       apiData(deleteApiV1AdminProductsById({ path: { id }, query: { expectedAggregateRevision } })),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.products.detail(variables.id) });
       toast.success(t("movedToTrash"));
+      // The product is gone from this page; unsaved edits to it can't be kept.
+      void navigate({ to: "/admin/products", ignoreBlocker: true });
     },
-    onError: (err) => handleProductListMutationError(queryClient, err),
+    onError: toastProductError,
   });
 }
 
-export function usePermanentDeleteProduct() {
+/** Copies a product as a draft ("Copy of …") and opens the copy. */
+export function useDuplicateProduct() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
-    mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
-      apiData(deleteApiV1AdminProductsByIdPermanent({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      apiData(postApiV1AdminProductsByIdDuplicate({
         path: { id },
-        query: { expectedAggregateRevision },
+        body: { name: t("copyOf", { name }).slice(0, 100) },
       })),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      invalidateProductLookupQueries(queryClient);
+    onSuccess: (copy) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductStatsQueries(queryClient);
-      invalidateDashboardQueries(queryClient);
-      queryClient.removeQueries({ queryKey: queryKeys.products.detail(variables.id) });
-      toast.success(t("deleted"));
+      toast.success(t("duplicated"));
+      void navigate({ to: "/admin/products/$productId/edit", params: { productId: copy.id } });
     },
-    onError: (err) => handleProductListMutationError(queryClient, err),
-  });
-}
-
-export function useRestoreProduct() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, expectedAggregateRevision }: ProductAggregateRevisionClaim) =>
-      apiData(postApiV1AdminProductsByIdRestore({ path: { id }, query: { expectedAggregateRevision } })),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      invalidateProductLookupQueries(queryClient);
-      invalidateProductStatsQueries(queryClient);
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.id),
-      });
-      toast.success(t("restored"));
-    },
-    onError: (err) => handleProductListMutationError(queryClient, err),
-  });
-}
-
-export function useBulkDeleteProducts() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ApiBody<typeof postApiV1AdminProductsBulkDelete>) =>
-      apiData(postApiV1AdminProductsBulkDelete({ body })),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      invalidateProductLookupQueries(queryClient);
-      invalidateProductStatsQueries(queryClient);
-      invalidateDashboardQueries(queryClient);
-      if (!variables.permanent) {
-        toast.success(t("bulkMovedToTrash", { count: variables.products.length }));
-        return;
-      }
-
-      const blocked = data.outcomes.filter(
-        (outcome) => outcome.status === "blocked" || outcome.status === "failed",
-      );
-      if (blocked.length === 0) {
-        toast.success(t("bulkDeleted", { count: data.deletedIds.length }));
-        return;
-      }
-
-      // The server explains why (e.g. a variant has stock history); show it as sent.
-      const firstMessage = blocked.find((outcome) => outcome.message)?.message;
-      const summary = t("bulkDeletePartial", { deleted: data.deletedIds.length, kept: blocked.length });
-      if (data.deletedIds.length === 0) {
-        toast.error(t("bulkDeleteNone"), { description: firstMessage ?? summary });
-      } else {
-        toast.warning(summary, { description: firstMessage });
-      }
-    },
-    onError: (err) => handleProductListMutationError(queryClient, err),
+    onError: toastProductError,
   });
 }

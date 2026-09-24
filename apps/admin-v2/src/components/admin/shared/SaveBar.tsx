@@ -15,12 +15,24 @@ import { createPortal } from "react-dom";
 import { AlertCircle, CircleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { getServerFnError } from "~/lib/api-helpers";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { translate, useMessages } from "~/i18n";
-import { fieldErrorMessages, saveBarMessages } from "~/i18n/save-bar";
+import { saveBarMessages } from "~/i18n/save-bar";
+import { resourceMessages } from "~/i18n/resource";
+
+/**
+ * A save that failed after the editor already showed the merchant why.
+ * `lines` lists every problem for the save banner (one per field).
+ */
+export class SaveNotCompleted extends Error {
+  constructor(message = translate(resourceMessages, "saveFailed"), readonly lines: string[] = [message]) {
+    super(message);
+    this.name = "SaveNotCompleted";
+  }
+}
 
 /** One editable card (or dialog form) registered with a save scope. */
 export interface SaveBarEntry {
@@ -83,25 +95,6 @@ const SaveErrorsContext = createContext<SaveFailure & { clearField: (id: string)
   clearField: () => {},
 });
 
-/** What went wrong, in words a merchant can act on. */
-function describeSaveError(error: unknown): string {
-  if (error instanceof AdminApiResponseError) {
-    // A request-validation rejection nobody mapped carries a JSON issue list as its message.
-    if (error.status < 500 && error.message.startsWith("[")) return translate(fieldErrorMessages, "invalid");
-    return error.status < 500 && error.message && !error.message.startsWith("API error")
-      ? error.message
-      : translate(saveBarMessages, "serverError");
-  }
-  if (error instanceof Error) {
-    if (["TypeError", "AbortError", "TimeoutError"].includes(error.name)) {
-      return translate(saveBarMessages, "offline");
-    }
-    return error.message || translate(saveBarMessages, "serverError");
-  }
-  return translate(saveBarMessages, "serverError");
-}
-
-/** Banner lines for one failed entry; marks the fields it can place. */
 /** The on-screen control (and its label) that shows an API body path. */
 function findField(entry: SaveBarEntry, path: string): { id: string; label: string } | null {
   if (!entry.fields || typeof document === "undefined") return null;
@@ -119,8 +112,9 @@ function findField(entry: SaveBarEntry, path: string): { id: string; label: stri
 /** Banner lines for one failed entry; marks the fields it can place. */
 function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<string, string>): string[] {
   const prefix = entry.label ? `${entry.label}: ` : "";
+  if (error instanceof SaveNotCompleted) return error.lines.map((line) => prefix + line);
   const issues = readApiFieldIssues(error);
-  if (!issues) return [prefix + describeSaveError(error)];
+  if (!issues) return [prefix + getServerFnError(error)];
   return issues.map((issue) => {
     const field = findField(entry, issue.path);
     if (!field) return prefix + issue.message;
@@ -136,9 +130,12 @@ function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<st
 export function SaveScope({
   children,
   render,
+  savedMessage,
 }: {
   children: ReactNode;
   render: (state: SaveScopeState) => ReactNode;
+  /** Success toast, e.g. "Category saved"; "Changes saved" by default. */
+  savedMessage?: string;
 }) {
   const t = useMessages(saveBarMessages);
   const entries = useRef(new Map<string, SaveBarEntry>());
@@ -203,7 +200,7 @@ export function SaveScope({
         setSaving(false);
       }
       setFailure((previous) => ({ errors, fieldErrors, attempt: previous.attempt + 1, reveal: errors.length ? previous.reveal : 0 }));
-      if (errors.length === 0) toast.success(t("saved"));
+      if (errors.length === 0) toast.success(savedMessage ?? t("saved"));
       return errors.length === 0;
     },
     discardAll() {
@@ -283,10 +280,23 @@ export function SaveErrorBanner() {
 /**
  * Shopify's contextual save bar for a whole page: a dark pill over the centre
  * of the top bar on desktop, a full-width strip over it on phones. Discard and
- * leaving the page with unsaved changes both ask first.
+ * leaving the page with unsaved changes both ask first. A new record names
+ * itself in the bar ("Unsaved product") and in the success toast.
  */
-export function SaveBarProvider({ children }: { children: ReactNode }) {
-  return <SaveScope render={(state) => <SaveBar state={state} />}>{children}</SaveScope>;
+export function SaveBarProvider({
+  children,
+  unsavedLabel,
+  savedMessage,
+}: {
+  children: ReactNode;
+  unsavedLabel?: string;
+  savedMessage?: string;
+}) {
+  return (
+    <SaveScope savedMessage={savedMessage} render={(state) => <SaveBar state={state} unsavedLabel={unsavedLabel} />}>
+      {children}
+    </SaveScope>
+  );
 }
 
 /** The bar sits on the near-black top bar, so its two buttons use the frame's tokens. */
@@ -295,7 +305,7 @@ const DISCARD_BUTTON =
 const SAVE_BUTTON =
   "relative inline-flex h-11 items-center rounded-lg bg-topbar-foreground px-4 text-body font-medium text-topbar hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-8 sm:px-3";
 
-function SaveBar({ state }: { state: SaveScopeState }) {
+function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
   const { dirty, busy, invalid, errors, revealed } = state;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -325,7 +335,7 @@ function SaveBar({ state }: { state: SaveScopeState }) {
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : t("unsavedChanges")}
+                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges")}
                 </span>
               </p>
               <div className="flex shrink-0 gap-1.5">

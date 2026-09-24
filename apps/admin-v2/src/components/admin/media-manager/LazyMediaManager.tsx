@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogTrigger } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
-import type { MediaManagerProps } from "./types";
+import { chooseKey, type MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
   open: boolean;
@@ -62,7 +62,7 @@ function MediaManagerTriggerShell({
   return (
     <Button type="button" variant="outline" className="w-full" loading={isLoading} onClick={onOpen}>
       <Upload aria-hidden="true" />
-      {triggerLabel ?? t(capability === "image" ? "chooseImage" : capability === "video" ? "chooseVideo" : "chooseFile")}
+      {triggerLabel ?? t(chooseKey(capability))}
     </Button>
   );
 }

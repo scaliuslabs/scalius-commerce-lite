@@ -77,7 +77,9 @@ export const categoryRevisionClaimSchema = z.object({
     expectedRevision: expectedRevisionSchema,
 });
 
-export const createCategorySchema = categorySchema.superRefine(requireCanonicalCategoryHandle);
+export const createCategorySchema = categorySchema.extend({
+    status: categoryStatusSchema.optional().default("draft"),
+}).superRefine(requireCanonicalCategoryHandle);
 export const updateCategorySchema = categorySchema.extend({
     expectedRevision: expectedRevisionSchema,
     status: categoryStatusSchema,

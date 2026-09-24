@@ -165,7 +165,7 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `preorder_stock`   | integer   | 0       | Pre-order allocation pool                          |
 | `stock_version`    | integer   | 1       | CAS counter for stock operations only              |
 | `version`          | integer   | 1       | General optimistic locking (non-stock changes)     |
-| `low_stock_threshold` | integer | null   | Alert trigger threshold (null = no alerts)         |
+| `low_stock_threshold` | integer | null   | Alert level, set by `setLowStockThreshold()` (null = off; sold out still alerts) |
 | `allow_preorder`   | boolean   | false   | Whether pre-order pool is enabled                  |
 | `preorder_date`    | text      | null    | Expected availability date                         |
 | `allow_backorder`  | boolean   | false   | Whether backorder pool is enabled                  |
@@ -226,14 +226,17 @@ Indexes: `product_id`, `alert_status`
 ## Low Stock Alert Lifecycle
 
 ```
-[stock drops below threshold]
+[stock drops to the alert level, or sells out (level 0 when none is set)]
      │
      ├── No existing alert ──> CREATE alert (status: active)
      ├── Existing alert resolved ──> REACTIVATE (status: active, clear ack/resolved dates)
-     └── Existing alert active/acknowledged ──> UPDATE currentQty only
+     └── Existing alert active/acknowledged ──> UPDATE currentQty and threshold
 
 [stock rises above threshold]
      └── Existing non-resolved alert ──> RESOLVE (status: resolved, set resolvedAt)
+
+[admin sets the alert level: setLowStockThreshold(), no stock movement]
+     └── Re-check at once; the API bumps the public cache generation
 
 [admin acknowledges]
      └── Active alert ──> status: acknowledged

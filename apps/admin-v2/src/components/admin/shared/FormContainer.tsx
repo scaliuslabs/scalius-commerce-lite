@@ -6,6 +6,7 @@ import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
 import { useMessages } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
+import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SaveBarProvider, SaveErrorBanner, useSaveScope } from "./SaveBar";
 import { useFormSaveBar } from "./use-form-save-bar";
 
@@ -30,6 +31,10 @@ interface FormContainerProps<
   onSave: (values: TTransformedValues) => Promise<unknown>;
   children: React.ReactNode;
   formClassName?: string;
+  /** Save bar text while creating, e.g. "Unsaved category" (Shopify names the new record). */
+  unsavedLabel?: string;
+  /** Success toast, e.g. "Category saved". */
+  savedMessage?: string;
 }
 
 function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends FieldValues>({
@@ -67,7 +72,11 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
       {/* A flex gap, so the banner's hidden placeholder adds no space. */}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
-        <div>{children}</div>
+        {canSave ? null : <ReadOnlyNotice />}
+        {/* Without the save permission the record opens read-only. */}
+        <fieldset disabled={!canSave} className="min-w-0">
+          {children}
+        </fieldset>
         {canSave ? (
           // Shopify repeats Save at the end of the page, under a divider.
           <div className="flex justify-end border-t pt-4">
@@ -99,10 +108,12 @@ export function FormContainer<
   onSave,
   children,
   formClassName = "pb-6",
+  unsavedLabel,
+  savedMessage,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
   return (
     <ErrorBoundary>
-      <SaveBarProvider>
+      <SaveBarProvider unsavedLabel={unsavedLabel} savedMessage={savedMessage}>
         <Form {...form}>
           <EditorForm
             form={form}

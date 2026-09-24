@@ -3,6 +3,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -24,6 +26,12 @@ export const modalClassName =
 const paletteClassName =
   "fixed inset-x-0 top-0 z-50 grid max-h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-b-2xl bg-card text-card-foreground shadow-modal data-[state=closed]:pointer-events-none data-[state=closed]:invisible sm:inset-x-auto sm:left-1/2 sm:top-2.5 sm:max-w-160 sm:-translate-x-1/2 sm:rounded-xl";
 
+/** The close button's name in the dashboard language. */
+function CloseLabel() {
+  const t = useMessages(resourceMessages);
+  return <span className="sr-only">{t("close")}</span>;
+}
+
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   showCloseButton?: boolean;
   /** "palette" is the top-anchored command palette shape (no close button). */
@@ -39,7 +47,7 @@ const DialogContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive
         {showCloseButton && variant === "modal" ? (
           <DialogPrimitive.Close className="absolute right-2 top-2 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-3 sm:top-3 sm:size-8">
             <X className="size-4" />
-            <span className="sr-only">Close</span>
+            <CloseLabel />
           </DialogPrimitive.Close>
         ) : null}
       </DialogPrimitive.Content>

@@ -1,10 +1,10 @@
 // src/modules/collections/collections.service.ts
 // All DB queries and business logic for the collections domain.
 
-import { collections, products, categories } from "@scalius/database/schema";
+import { collections, products, categories, productVariants } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
+import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
@@ -16,6 +16,7 @@ import {
     type BuyerCatalogPricingProjection,
 } from "../products/products.buyer-projection";
 import {
+    COLLECTION_CONFIG_ID_LIMIT,
     collectionMembershipForConfig,
     normalizeCollectionConfig,
     stringifyCollectionConfig,
@@ -398,6 +399,21 @@ export async function listCollectionProductOptions(
                 "collection_product_category_name",
             ),
             isActive: products.isActive,
+            // Optioned SKUs only: a simple product's one hidden SKU is not a variant.
+            variantCount: sql<number>`(
+                SELECT count(*) FROM ${productVariants}
+                WHERE ${productVariants.productId} = ${products.id}
+                  AND ${productVariants.deletedAt} IS NULL
+                  AND ${productVariants.isDefault} = 0
+            )`.as("collection_product_variant_count"),
+            // Sellable now across tracked SKUs; null when no SKU tracks stock.
+            available: sql<number | null>`(
+                SELECT sum(max(${productVariants.stock} - ${productVariants.reservedStock}, 0))
+                FROM ${productVariants}
+                WHERE ${productVariants.productId} = ${products.id}
+                  AND ${productVariants.deletedAt} IS NULL
+                  AND ${productVariants.trackInventory} = 1
+            )`.as("collection_product_available"),
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
@@ -408,7 +424,8 @@ export async function listCollectionProductOptions(
                     SELECT CAST(value AS TEXT) FROM json_each(${selectedProductIdSet})
                 ) THEN 1 ELSE 0 END`)]
                 : []),
-            asc(products.name),
+            // Searches read A-Z; an open picker starts with the newest products.
+            ...(search ? [asc(products.name)] : [desc(products.createdAt)]),
             asc(products.id),
         )
         .limit(limit)
@@ -426,6 +443,8 @@ export async function listCollectionProductOptions(
             categoryId: string | null;
             categoryName: string | null;
             isActive: boolean;
+            variantCount: number;
+            available: number | null;
         }>,
     ]>);
     const total = Number(countRows[0]?.count ?? 0);
@@ -435,8 +454,10 @@ export async function listCollectionProductOptions(
         : new Map();
 
     return {
-        products: productOptions.map(({ priceMinor, ...product }) => ({
+        products: productOptions.map(({ priceMinor, variantCount, available, ...product }) => ({
             ...product,
+            variantCount: Number(variantCount ?? 0),
+            available: available == null ? null : Number(available),
             price: fromMinor(priceMinor, decimalPlaces),
             primaryImage:
                 resolveProductImageRepresentation(mediaMap.get(product.id) ?? [])?.url ?? null,
@@ -555,6 +576,77 @@ export async function updateCollection(
             isNull(collections.deletedAt),
         ))
         .returning()
+        .get();
+    if (!updated) {
+        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+    }
+    return updated;
+}
+
+/**
+ * Adds and removes products in a manual collection (the products list's
+ * "Add to collection"). New products go to the end in the order given;
+ * unknown or trashed ids are skipped. Version CAS like `updateCollection`.
+ */
+export async function updateCollectionProducts(
+    db: Database,
+    id: string,
+    data: UpdateCollectionProductsInput,
+) {
+    const existing = await db
+        .select({ isActive: collections.isActive, version: collections.version, config: collections.config })
+        .from(collections)
+        .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
+        .get();
+    if (!existing) throw new NotFoundError("Collection not found");
+    if (existing.version !== data.expectedVersion) {
+        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+    }
+    const config = normalizeCollectionConfig(existing.config);
+    if (config.source !== "manual") {
+        throw new ValidationError(
+            "This collection picks products automatically. Change its rule instead.",
+            { field: "products" },
+        );
+    }
+
+    const removed = new Set(data.remove.map((productId) => productId.trim()));
+    const kept = config.productIds.filter((productId) => !removed.has(productId));
+    const candidates = Array.from(new Set(data.add.map((productId) => productId.trim())))
+        .filter((productId) => !removed.has(productId) && !kept.includes(productId));
+    const found = candidates.length > 0
+        ? new Set((await db.select({ id: products.id }).from(products).where(and(
+            sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(candidates)}))`,
+            isNull(products.deletedAt),
+        )).all()).map((row) => row.id))
+        : new Set<string>();
+    const productIds = [...kept, ...candidates.filter((productId) => found.has(productId))];
+    if (productIds.length > COLLECTION_CONFIG_ID_LIMIT) {
+        throw new ValidationError(
+            `This collection can hold ${COLLECTION_CONFIG_ID_LIMIT} products. Remove some first.`,
+            { field: "products" },
+        );
+    }
+    if (existing.isActive && productIds.length === 0) {
+        throw new ValidationError(
+            "An active collection needs at least one product. Set it as draft first.",
+            { field: "products" },
+        );
+    }
+
+    const updated = await db
+        .update(collections)
+        .set({
+            config: stringifyCollectionConfig({ ...config, productIds }),
+            version: sql`${collections.version} + 1`,
+            updatedAt: sql`(unixepoch())`,
+        })
+        .where(and(
+            eq(collections.id, id),
+            eq(collections.version, data.expectedVersion),
+            isNull(collections.deletedAt),
+        ))
+        .returning({ id: collections.id, version: collections.version })
         .get();
     if (!updated) {
         throw new ConflictError("Collection changed while you were editing it. Reload and try again.");

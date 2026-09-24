@@ -31,7 +31,7 @@ import { apiData } from "~/lib/api";
 import { fetchInventory, type InventoryLabelVariant } from "~/lib/api-query-options/inventory";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { cn } from "@scalius/shared/utils";
-import { formatNumber, useMessages } from "~/i18n";
+import { formatNumber, useLocale, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import {
@@ -135,6 +135,7 @@ export function BarcodeLabelWorkspace({
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();
+  const locale = useLocale();
   const [preferences, setPreferences] = useState(readPreferences);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -254,6 +255,8 @@ export function BarcodeLabelWorkspace({
         body: JSON.stringify({
           format: "html",
           mode: "job",
+          // Printed prices use the same format as the preview.
+          locale,
           variantIds,
           quantities: Object.fromEntries(variantIds.map((id) => [id, quantities[id] ?? 0])),
           order: "selected",
@@ -263,13 +266,13 @@ export function BarcodeLabelWorkspace({
           content,
         }),
       });
-      if (!response.ok) throw new Error(t("printFailed"));
+      if (!response.ok) throw new Error("print failed");
       const url = URL.createObjectURL(await response.blob());
       printWindow.location.href = url;
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (error: unknown) {
+    } catch {
       printWindow.close();
-      setPrintError(error instanceof Error ? error.message : t("printFailed"));
+      setPrintError(t("printFailed"));
     } finally {
       setPrinting(false);
     }
@@ -279,7 +282,7 @@ export function BarcodeLabelWorkspace({
     <div className="space-y-4">
       <PageHeader title={t("labelsTitle")} backTo="/admin/inventory" />
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
@@ -332,8 +335,8 @@ export function BarcodeLabelWorkspace({
                     <li key={variant.id} className="flex flex-wrap items-center gap-3 py-3">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-body font-medium">{name}</p>
-                        <p className="truncate text-body text-muted-foreground">
-                          <span className="font-mono">{variant.sku}</span>
+                        <p className="text-body text-muted-foreground">
+                          <span className="break-all font-mono">{variant.sku}</span>
                           {" · "}
                           {variant.barcode ? <span className="font-mono">{variant.barcode}</span> : t("noBarcode")}
                           {" · "}
@@ -456,9 +459,10 @@ export function BarcodeLabelWorkspace({
             </CardHeader>
             <CardContent>
               {firstCopy ? (
+                // No overflow clipping: the box keeps its label shape and grows rather than cut the price.
                 <div
                   className={cn(
-                    "flex flex-col justify-center gap-1 overflow-hidden rounded-md bg-muted p-3 text-center",
+                    "flex flex-col justify-center gap-1 rounded-md bg-muted p-3 text-center",
                     preset.id === "a4" ? "aspect-2/1" : "aspect-3/2",
                   )}
                 >
@@ -469,11 +473,10 @@ export function BarcodeLabelWorkspace({
                     <p className="truncate text-body">{firstCopy.variant.optionLabel}</p>
                   ) : null}
                   {content.showSku || content.showPrice ? (
-                    <p className="truncate text-body">
-                      {[
-                        content.showSku ? firstCopy.variant.sku : null,
-                        content.showPrice ? fmt(firstCopy.variant.effectivePrice) : null,
-                      ].filter(Boolean).join(" · ")}
+                    <p className="text-body">
+                      {content.showSku ? <span className="break-all">{firstCopy.variant.sku}</span> : null}
+                      {content.showSku && content.showPrice ? " · " : null}
+                      {content.showPrice ? <span className="whitespace-nowrap">{fmt(firstCopy.variant.effectivePrice)}</span> : null}
                     </p>
                   ) : null}
                 </div>
@@ -511,7 +514,8 @@ export function BarcodeLabelWorkspace({
               <ul className="divide-y">
                 {pickerVariants.map((variant) => {
                   const selected = selectedVariantIds.includes(variant.id);
-                  const name = `${variant.productName ?? t("unknownProduct")} · ${variant.optionLabel || t("defaultVariant")}`;
+                  // A simple product's hidden default SKU is just the product.
+                  const name = variantName({ productName: variant.productName ?? t("unknownProduct"), optionLabel: variant.optionLabel });
                   return (
                     <li key={variant.id}>
                       <label className="flex cursor-pointer items-center gap-3 py-3">

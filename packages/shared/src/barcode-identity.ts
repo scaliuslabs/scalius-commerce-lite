@@ -101,6 +101,20 @@ function isCode128BText(value: string): boolean {
 }
 
 /**
+ * The symbology a typed or scanned code most likely is, so merchants can scan
+ * without choosing a type first: valid retail numbers are recognised by
+ * length and checksum, other printable text is Code 128, anything else custom.
+ */
+export function detectBarcodeType(value: string): BarcodeType {
+  const barcode = normalizeBarcodeValue(value) ?? "";
+  if (hasValidIsbn13Checksum(barcode)) return "isbn";
+  if (/^\d{13}$/.test(barcode) && hasValidGtinChecksum(barcode)) return "ean13";
+  if (/^\d{12}$/.test(barcode) && hasValidGtinChecksum(barcode)) return "upc";
+  if (/^(\d{8}|\d{14})$/.test(barcode) && hasValidGtinChecksum(barcode)) return "gtin";
+  return barcode.length <= 50 && isCode128BText(barcode) ? "code128" : "custom";
+}
+
+/**
  * Validates the supported product-variant barcode contract. The value is
  * normalized before validation, so surrounding whitespace is discarded while
  * significant characters such as leading zeroes are preserved.

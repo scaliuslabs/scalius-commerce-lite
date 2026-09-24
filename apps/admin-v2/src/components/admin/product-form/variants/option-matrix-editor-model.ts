@@ -1,7 +1,11 @@
 import {
   MAX_PRODUCT_OPTION_AXES,
   MAX_PRODUCT_OPTION_COMBINATIONS,
+  MAX_PRODUCT_PRICE,
+  MAX_SKU_STOCK,
+  MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
+import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 import type {
   CreateProductInput,
   ProductOptionMatrixInput,
@@ -12,12 +16,12 @@ import type {
   ProductOptionStandardMapping,
   ProductVariant,
 } from "../../../../lib/api-query-options/products";
-import { translate } from "../../../../i18n";
+import { formatNumber, translate } from "../../../../i18n";
 import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
 
-/** Merchant-facing reason the draft can't be saved yet. */
+/** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
 const issue = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
-  translate(productMessages, key, vars);
+  translate(productMessages, key, vars?.max === undefined ? vars : { ...vars, max: formatNumber(Number(vars.max)) });
 
 export type DraftOption = {
   id: string;
@@ -32,22 +36,68 @@ export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "s
 /** What a new product's composition adds to the create request. */
 export type ProductCreateComposition = Pick<CreateProductInput, "optionMatrix" | "defaultSku">;
 
-/** Inventory of the hidden SKU that a product without options sells. */
-export type SimpleSkuDraft = { sku: string; trackInventory: boolean; stock: number };
+/** Inventory and scan facts of the hidden SKU that a product without options sells. */
+export type SimpleSkuDraft = Pick<DraftVariant, "sku" | "trackInventory" | "stock" | "barcode" | "barcodeType" | "weight">;
 
-export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean): string | null {
-  const sku = draft.sku.trim();
-  if ((skuRequired || sku) && sku.length < 3) return issue("issueSkuShort");
-  if (!draft.trackInventory) {
-    return committed > 0 ? issue("issueUntrackCommitted") : null;
+/** A field the editor marks when a draft can't be saved. */
+export type DraftIssueField = "sku" | "price" | "stock" | "barcode" | "discount" | "photo" | "weight";
+
+/**
+ * Why a draft can't be saved, placed on the field that needs the change:
+ * `variantId` names the row (absent for option-level and simple-SKU problems).
+ */
+export interface DraftIssue {
+  message: string;
+  variantId?: string;
+  field?: DraftIssueField;
+}
+
+/** Fields shown only after a row is expanded ("More fields"). */
+export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight"]);
+
+function checkNumber(value: number | null, max: number, integer: boolean): ProductMessageKey | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value)) return "issueNotANumber";
+  if (value < 0 || (integer && !Number.isInteger(value))) return integer ? "issueQuantityWhole" : "issuePriceNegative";
+  return value > max ? "issueTooLarge" : null;
+}
+
+/** Problems with one SKU's own numbers and barcode, in the order its fields appear. */
+function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePositivePrice: boolean): DraftIssue | null {
+  if (sku.price !== undefined) {
+    const priceProblem = checkNumber(sku.price, MAX_PRODUCT_PRICE, false);
+    if (priceProblem) return { message: issue(priceProblem, { max: MAX_PRODUCT_PRICE }), field: "price" };
+    if (requirePositivePrice && sku.price <= 0) return { message: issue("issueVariantNeedsPrice"), field: "price" };
   }
-  if (!Number.isInteger(draft.stock) || draft.stock < 0) return issue("issueQuantityWhole");
-  if (draft.stock < committed) return issue("issueBelowCommitted");
+  const stockProblem = checkNumber(sku.stock, MAX_SKU_STOCK, true);
+  if (stockProblem) return { message: issue(stockProblem, { max: MAX_SKU_STOCK }), field: "stock" };
+  if (sku.sku.trim().length < 3) return { message: issue("issueSkuShort"), field: "sku" };
+  const weightProblem = checkNumber(sku.weight, MAX_SKU_WEIGHT_GRAMS, false);
+  if (weightProblem) return { message: issue(weightProblem, { max: MAX_SKU_WEIGHT_GRAMS }), field: "weight" };
+  const barcodeProblem = sku.barcode ? getBarcodeValidationError(sku.barcode, sku.barcodeType) : null;
+  if (barcodeProblem) return { message: issue("issueBarcodeInvalid"), field: "barcode" };
+  return null;
+}
+
+export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuRequired: boolean): DraftIssue | null {
+  const sku = draft.sku.trim();
+  // A new product may leave the SKU empty: one is made from the title.
+  const own = skuFieldIssue(skuRequired || sku ? draft : { ...draft, sku: "AUTO" }, false);
+  if (own) return own;
+  if (!draft.trackInventory) {
+    return committed > 0 ? { message: issue("issueUntrackCommitted"), field: "stock" } : null;
+  }
+  if (draft.stock < committed) return { message: issue("issueBelowCommitted"), field: "stock" };
   return null;
 }
 
 export interface OptionMatrixEditorHandle {
-  save: (expectedAggregateRevision?: number) => void;
+  /** Saves the variant draft; rejects (after marking the field) when it can't. */
+  save: (expectedAggregateRevision?: number) => Promise<void>;
+  /** Shows the draft's problem at its field (row expanded, page turned) for a Save that was refused. */
+  reveal: () => void;
+  /** Marks a field the server rejected, by request path (`variants.2.sku`, `defaultSku.sku`, `sku`); returns its banner line. */
+  showServerIssue: (path: string, message: string) => string | null;
 }
 
 export function draftId(prefix: string) {
@@ -291,31 +341,38 @@ export function optionTopologySignature(options: readonly DraftOption[]): string
   return JSON.stringify(options.map((option) => [option.id, option.values.map((value) => value.id)]));
 }
 
+export interface MatrixIssueContext {
+  committedByVariantId?: ReadonlyMap<string, number>;
+  /** Simple stock that must be shared out when options are first added. */
+  requiredStockAllocation?: number;
+  blockedCommittedStock?: number;
+  allowSavedImageRemovalConfirmation?: boolean;
+  /** Active products need every variant priced above 0. */
+  requirePositivePrice?: boolean;
+}
+
 export function getOptionMatrixIssue(
   options: DraftOption[],
   variants: DraftVariant[],
   images: ProductSkuImageChoice[],
   combinationsPending: boolean,
-  committedByVariantId: ReadonlyMap<string, number> = new Map(),
-  requiredStockAllocation = 0,
-  blockedCommittedStock = 0,
-  allowSavedImageRemovalConfirmation = false,
-): string | null {
+  context: MatrixIssueContext = {},
+): DraftIssue | null {
+  const at = (key: ProductMessageKey, vars?: Record<string, string | number>, variantId?: string, field?: DraftIssueField): DraftIssue =>
+    ({ message: issue(key, vars), ...(variantId ? { variantId } : {}), ...(field ? { field } : {}) });
   if (options.length === 0) {
-    return variants.length > 0 || combinationsPending
-      ? issue("issueKeepOneOption")
-      : null;
+    return variants.length > 0 || combinationsPending ? at("issueKeepOneOption") : null;
   }
-  if (options.length > MAX_PRODUCT_OPTION_AXES) return issue("issueTooManyOptions", { max: MAX_PRODUCT_OPTION_AXES });
-  if (options.some((option) => !option.name.trim())) return issue("issueNameOptions");
-  if (options.some((option) => option.values.length === 0)) return issue("addOptionValues");
-  if (new Set(options.map((option) => normalized(option.name))).size !== options.length) return issue("issueOptionNamesUnique");
+  if (options.length > MAX_PRODUCT_OPTION_AXES) return at("issueTooManyOptions", { max: MAX_PRODUCT_OPTION_AXES });
+  if (options.some((option) => !option.name.trim())) return at("issueNameOptions");
+  if (options.some((option) => option.values.length === 0)) return at("addOptionValues");
+  if (new Set(options.map((option) => normalized(option.name))).size !== options.length) return at("issueOptionNamesUnique");
   const mapped = options.map((option) => option.standardMapping).filter((mapping) => mapping !== "none");
-  if (new Set(mapped).size !== mapped.length) return issue("issueOptionTypeUnique");
+  if (new Set(mapped).size !== mapped.length) return at("issueOptionTypeUnique");
   const combinationCount = options.reduce((total, option) => total * option.values.length, 1);
-  if (combinationCount > MAX_PRODUCT_OPTION_COMBINATIONS) return issue("issueTooManyVariants", { max: MAX_PRODUCT_OPTION_COMBINATIONS });
-  if (combinationsPending) return issue("issueUpdatePending");
-  if (variants.length === 0) return issue("keepOneVariant");
+  if (combinationCount > MAX_PRODUCT_OPTION_COMBINATIONS) return at("issueTooManyVariants", { max: MAX_PRODUCT_OPTION_COMBINATIONS });
+  if (combinationsPending) return at("issueUpdatePending");
+  if (variants.length === 0) return at("keepOneVariant");
   const validValueIdsByOption = options.map((option) => new Set(option.values.map((value) => value.id)));
   const combinationKeys = new Set<string>();
   const usedValueIds = new Set<string>();
@@ -323,36 +380,45 @@ export function getOptionMatrixIssue(
     if (
       variant.selectedOptionValueIds.length !== options.length
       || validValueIdsByOption.some((ids, index) => !ids.has(variant.selectedOptionValueIds[index]!))
-    ) return issue("issueVariantValues");
+    ) return at("issueVariantValues");
     const key = combinationKey(variant.selectedOptionValueIds);
-    if (combinationKeys.has(key)) return issue("issueDuplicateVariant");
+    if (combinationKeys.has(key)) return at("issueDuplicateVariant", undefined, variant.id);
     combinationKeys.add(key);
     variant.selectedOptionValueIds.forEach((id) => usedValueIds.add(id));
   }
   if (options.some((option) => option.values.some((value) => !usedValueIds.has(value.id)))) {
-    return issue("issueUnusedValue");
+    return at("issueUnusedValue");
   }
-  const skuKeys = variants.map((variant) => normalized(variant.sku));
-  if (skuKeys.some((sku) => sku.length < 3)) return issue("issueSkuShort");
-  if (new Set(skuKeys).size !== skuKeys.length) return issue("issueSkuUnique");
+  const committedByVariantId = context.committedByVariantId ?? new Map<string, number>();
   const imageIds = new Set(images.map((image) => image.id));
-  const barcodeKeys = variants.map((variant) => normalized(variant.barcode ?? "")).filter(Boolean);
-  if (new Set(barcodeKeys).size !== barcodeKeys.length) return issue("issueBarcodeUnique");
+  const seenSkus = new Set<string>();
+  const seenBarcodes = new Set<string>();
   for (const variant of variants) {
-    if (!Number.isFinite(variant.price) || variant.price < 0) return issue("issuePriceNegative");
-    if (!Number.isInteger(variant.stock) || variant.stock < 0) return issue("issueQuantityWhole");
-    if (variant.stock < (committedByVariantId.get(variant.id) ?? 0)) return issue("issueBelowCommitted");
-    if ((variant.barcode === null) !== (variant.barcodeType === null)) return issue("issueBarcodePair");
-    if (variant.imageId && !imageIds.has(variant.imageId) && !allowSavedImageRemovalConfirmation) {
-      return issue("issuePhotoRemoved");
+    const own = skuFieldIssue(variant, Boolean(context.requirePositivePrice));
+    if (own) return { ...own, variantId: variant.id };
+    const skuKey = normalized(variant.sku);
+    if (seenSkus.has(skuKey)) return at("issueSkuUnique", undefined, variant.id, "sku");
+    seenSkus.add(skuKey);
+    const barcodeKey = normalized(variant.barcode ?? "");
+    if (barcodeKey && seenBarcodes.has(barcodeKey)) return at("issueBarcodeUnique", undefined, variant.id, "barcode");
+    if (barcodeKey) seenBarcodes.add(barcodeKey);
+    if (variant.stock < (committedByVariantId.get(variant.id) ?? 0)) return at("issueBelowCommitted", undefined, variant.id, "stock");
+    if ((variant.barcode === null) !== (variant.barcodeType === null)) return at("issueBarcodePair", undefined, variant.id, "barcode");
+    if (variant.imageId && !imageIds.has(variant.imageId) && !context.allowSavedImageRemovalConfirmation) {
+      return at("issuePhotoRemoved", undefined, variant.id, "photo");
     }
-    if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) return issue("issuePercentRange");
-    if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) return issue("issueDiscountOverPrice");
+    if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) {
+      return at("issuePercentRange", undefined, variant.id, "discount");
+    }
+    if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) {
+      return at("issueDiscountOverPrice", undefined, variant.id, "discount");
+    }
   }
-  if (blockedCommittedStock > 0) return issue("issueOptionsCommitted");
-  if (requiredStockAllocation > 0) {
+  if ((context.blockedCommittedStock ?? 0) > 0) return at("issueOptionsCommitted");
+  const required = context.requiredStockAllocation ?? 0;
+  if (required > 0) {
     const allocated = variants.reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
-    if (allocated !== requiredStockAllocation) return issue("issueAllocateStock", { required: requiredStockAllocation, allocated });
+    if (allocated !== required) return at("issueAllocateStock", { required, allocated });
   }
   return null;
 }

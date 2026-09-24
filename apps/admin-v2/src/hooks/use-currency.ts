@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { formatNumber, useLocale } from "~/i18n";
 
 const DEFAULT_SYMBOL = "৳";
@@ -35,5 +36,26 @@ export function useCurrency() {
     [symbol, code, locale],
   );
 
-  return { symbol, code, fmt, formatPrice: fmt };
+  /** What customers pay after a catalog discount, or null when nothing is off. */
+  const salePrice = useCallback(
+    (price: number, discount: { discountType?: string | null; discountPercentage?: number | null; discountAmount?: number | null }) => {
+      const digits = getDecimalPlaces(code);
+      try {
+        const priceMinor = toMinor(price, digits);
+        const sale = discountedPriceMinor(
+          priceMinor,
+          discount.discountType ?? "percentage",
+          percentToBps(discount.discountPercentage ?? 0),
+          toMinor(discount.discountAmount ?? 0, digits),
+        );
+        return sale < priceMinor ? fromMinor(sale, digits) : null;
+      } catch {
+        // A draft number outside the money range (being typed) has no sale price yet.
+        return null;
+      }
+    },
+    [code],
+  );
+
+  return { symbol, code, fmt, formatPrice: fmt, salePrice };
 }
