@@ -1171,6 +1171,23 @@ describe("site settings cache invalidation", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("keeps theme writes strict: unknown layout values and keys are rejected", async () => {
+    const { app, env } = createTestApp();
+
+    for (const layout of [
+      { ...DEFAULT_STOREFRONT_THEME_SETTINGS.layout, header: "floating" },
+      { ...DEFAULT_STOREFRONT_THEME_SETTINGS.layout, sidebar: "left" },
+    ]) {
+      const response = await requestJson(app, env, "POST", "/theme", {
+        expectedRevision: 1,
+        theme: { ...DEFAULT_STOREFRONT_THEME_SETTINGS, layout },
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+  });
+
   it("does not invalidate storefront caches after a stale theme publish", async () => {
     const { app, env } = createTestApp();
     mocks.saveThemeSettings.mockRejectedValueOnce(
