@@ -1,4 +1,15 @@
 const PHONE_DIGIT_MIN_LENGTH = 4;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Bangla digits (০–৯) typed by the merchant read as Latin digits (R2-ORD-14). */
+export function toLatinDigits(input: string): string {
+    return input.replace(/[০-৯]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6));
+}
+
+/** A whole email address: matched exactly, never as a prefix of a longer one. */
+export function isEmailSearch(input: string): boolean {
+    return EMAIL_PATTERN.test(input.trim());
+}
 
 export function isLikelyPhoneSearch(input: string): boolean {
     const compact = input.replace(/\s/g, "");
@@ -33,5 +44,5 @@ export function buildPhoneSearchTerms(input: string): string[] {
 }
 
 function digitsOnly(input: string): string {
-    return input.replace(/\D/g, "");
+    return toLatinDigits(input).replace(/\D/g, "");
 }

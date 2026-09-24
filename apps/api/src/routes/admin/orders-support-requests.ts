@@ -93,6 +93,9 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
     const user = c.get("user") as { id?: string } | undefined;
     let linkedReturnId: string | null = null;
     let targetStatus = body.status;
+    // Accepting a cancellation sends the buyer one "Order cancelled" message,
+    // not that plus a request update (R2-ORD-08).
+    let cancelledForRequest = false;
     if (body.status === "approved") {
         const supportRequest = (await listOrderSupportRequests(db, orderId)).find(
             (request) => request.id === requestId,
@@ -106,6 +109,7 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
             // was paid, or it already shipped) the request stays open (ORD-08).
             await cancelOrderForRequest(c, orderId, user?.id ?? null);
             targetStatus = "completed";
+            cancelledForRequest = true;
         }
         if (supportRequest.type === "return") {
             linkedReturnId = supportRequest.returnId
@@ -145,6 +149,8 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
             body: body.note?.trim() || null,
             data: { type: result.request.type, status: result.newStatus },
         });
+    }
+    if (result.statusChanged && !cancelledForRequest) {
         await enqueueOrderSupportRequestNotificationForOrder({
             db,
             queue: c.env.JOBS_QUEUE,

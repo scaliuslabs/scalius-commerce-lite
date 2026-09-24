@@ -23,6 +23,8 @@ export interface InvoiceOrderItemSnapshot {
   discountAmountMinor: number | null;
   taxableAmountMinor: number | null;
   taxAmountMinor: number | null;
+  /** Units the customer sent back and the store received. */
+  returnedQuantity?: number;
 }
 
 export interface InvoiceOrderSnapshot {
@@ -195,6 +197,7 @@ export function snapshotInvoiceOrder(
       discountAmountMinor: item.discountAmountMinor ?? null,
       taxableAmountMinor: item.taxableAmountMinor ?? null,
       taxAmountMinor: item.taxAmountMinor ?? null,
+      returnedQuantity: item.returnedQuantity ?? 0,
     })),
   };
 }

@@ -19,6 +19,7 @@ import {
 } from "~/i18n/orders";
 import { useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { clearOrderNotice, useOrderNotice } from "~/lib/order-notice";
+import { useOrderListReturnHref } from "~/lib/order-list-return";
 import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-state";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
@@ -31,7 +32,8 @@ import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
 import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
 import { PaymentCard } from "./orderview/PaymentCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
-import { resolveOrderPrimaryAction, type OrderActionRequest } from "./orderview/primary-action";
+import { useCancelRequestGuard } from "./orderview/CancelRequestGuard";
+import { resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } from "./orderview/primary-action";
 import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-badges";
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
@@ -56,7 +58,11 @@ export function OrderView({ order }: { order: Order }) {
   const restoreMutation = useRestoreOrder();
   const notice = useOrderNotice(order.id);
   const [request, setRequest] = useState<OrderActionRequest | null>(null);
+  const cancelRequest = useCancelRequestGuard(order);
+  const backTo = useOrderListReturnHref();
   const primary = resolveOrderPrimaryAction(order, actions);
+  const leftToSend = primary === "sendOwnCourier" ? unitsLeftToSend(order) : 0;
+  const primaryLabel = leftToSend > 0 ? t("primary.sendOwnCourierLeft", { count: leftToSend }) : primary ? t(`primary.${primary}`) : "";
   const status = order.status.toLowerCase();
   const badges = orderBadgeVisibility(order);
   const neighbours = useOrderNeighbours(order.id);
@@ -79,13 +85,18 @@ export function OrderView({ order }: { order: Order }) {
   const runPrimary = () => {
     if (!primary) return;
     clearOrderNotice(order.id);
-    if (primary === "confirm") statusMutation.mutate({ orderId: order.id, status: "confirmed" });
-    else setRequest({ action: primary, id: Date.now() });
+    if (primary === "confirm") {
+      cancelRequest.guard("confirm", () => statusMutation.mutate({ orderId: order.id, status: "confirmed" }));
+    } else if (primary === "bookCourier" || primary === "sendOwnCourier") {
+      cancelRequest.guard("send", () => setRequest({ action: primary, id: Date.now() }));
+    } else {
+      setRequest({ action: primary, id: Date.now() });
+    }
   };
 
   const primaryButton = primary ? (
     <Button onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
-      {t(`primary.${primary}`)}
+      {primaryLabel}
     </Button>
   ) : null;
 
@@ -101,7 +112,7 @@ export function OrderView({ order }: { order: Order }) {
       <TooltipProvider>
         <div className="space-y-4 pb-24 lg:pb-0">
           <PageHeader
-            backTo="/admin/orders"
+            backTo={backTo}
             title={o("order", { number: name })}
             badge={
               <div className="flex flex-wrap gap-1">
@@ -175,7 +186,7 @@ export function OrderView({ order }: { order: Order }) {
           <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
             <div className="contents lg:col-span-2 lg:block lg:space-y-4">
               {(order.supportRequests?.length ?? 0) > 0 ? (
-                <div className="order-2 lg:order-none"><OrderSupportRequestsCard order={order} /></div>
+                <div className="order-2 lg:order-none"><OrderSupportRequestsCard order={order} request={request} /></div>
               ) : null}
               <div className="order-3 lg:order-none"><OrderItemsCard order={order} /></div>
               <div className="order-4 lg:order-none"><ShipmentCard order={order} request={request} /></div>
@@ -209,10 +220,11 @@ export function OrderView({ order }: { order: Order }) {
           ) : null}
           {primary ? (
             <Button className="flex-1" size="lg" onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
-              {t(`primary.${primary}`)}
+              {primaryLabel}
             </Button>
           ) : null}
         </PhoneActionBar>
+        {cancelRequest.dialog}
       </TooltipProvider>
     </ErrorBoundary>
   );

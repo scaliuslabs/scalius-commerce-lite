@@ -10,7 +10,7 @@ import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
 import { resourceMessages } from "~/i18n/resource";
-import { FulfillmentBadge, OrderAttentionBadges, orderName, PaymentBadge } from "./order-columns";
+import { FulfillmentBadge, OrderAttentionBadges, orderName, PaymentBadge, useDeliveryOverride } from "./order-columns";
 import { ListDate } from "./ListDate";
 
 /** Cash the courier still has to collect for an open cash-on-delivery order, or 0. */
@@ -40,6 +40,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const to = useMessages(orderMessages);
   const closed = !orderBadgeVisibility(order).payment;
   const collect = codToCollect(order);
+  const deliveryOverride = useDeliveryOverride(order);
   return (
     <div className="flex items-start gap-1 py-1 pr-3">
       {selectable ? (
@@ -76,6 +77,8 @@ export const OrderMobileCard = memo(function OrderMobileCard({
           <OrderAttentionBadges order={order} />
           <PaymentBadge order={order} />
           <FulfillmentBadge order={order} />
+          {/* A closed order's status badge already says "Returned". */}
+          {deliveryOverride && !closed ? <Badge variant="destructive">{deliveryOverride}</Badge> : null}
         </div>
       </Link>
     </div>

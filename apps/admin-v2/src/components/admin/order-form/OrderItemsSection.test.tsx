@@ -78,7 +78,7 @@ describe("adding a product to a manual order", () => {
   it("adds a single-variant product at quantity 1 in one click", async () => {
     await act(async () => state.picked!(product([variant("sku_1")])));
     expect(state.setValue).toHaveBeenCalledWith("items", [
-      { productId: "prod_1", variantId: "sku_1", quantity: 1, price: 180, name: "Lamp", variantLabel: "sku_1" },
+      { productId: "prod_1", variantId: "sku_1", quantity: 1, price: 180, name: "Lamp", variantLabel: "sku_1", available: 5 },
     ], { shouldDirty: true, shouldValidate: true });
     expect(host.querySelector('[data-testid="variant-choice"]')).toBeNull();
   });

@@ -49,6 +49,7 @@ vi.mock("~/hooks/use-currency", () => ({
 
 import { OrderItemsTable } from "./OrderItemsTable";
 import { exceededStockMessage } from "./manual-order-stock";
+import { orderFormSchema } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -123,7 +124,7 @@ describe("OrderItemsTable", () => {
     });
   });
 
-  it("does not let a staged line exceed the tracked SKU snapshot", async () => {
+  it("keeps an over-stock quantity as typed and says how many are available until it is fixed", async () => {
     await act(async () => root.render(
       <OrderItemsTable
         resolvedVariantsById={{
@@ -149,8 +150,41 @@ describe("OrderItemsTable", () => {
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "8"));
-
-    expect(testState.setValue).not.toHaveBeenCalled();
+    expect(testState.setValue).toHaveBeenLastCalledWith(
+      "items",
+      [expect.objectContaining({ variantId: "var_1", quantity: 8 })],
+      { shouldDirty: true, shouldValidate: true },
+    );
     expect(host.textContent).toContain(exceededStockMessage(7));
+
+    // Leaving the field neither clamps nor reverts: the message stays with the number.
+    await act(async () => input.blur());
+    expect(input.value).toBe("8");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(host.textContent).toContain("Only 7 available.");
+  });
+
+  it("refuses to save lines of one SKU that together exceed its stock", () => {
+    const order = {
+      customerName: "Karim Ahmed",
+      customerPhone: "01712345678",
+      customerEmail: null,
+      shippingAddress: "Road 2, Mirpur 10, Dhaka",
+      city: "c1",
+      zone: "z1",
+      area: null,
+      notes: null,
+      discountAmount: null,
+      shippingCharge: 80,
+    };
+    const line = { productId: "prod_1", variantId: "var_1", price: 100, available: 7 };
+    const over = orderFormSchema.safeParse({ ...order, items: [{ ...line, quantity: 5 }, { ...line, quantity: 3 }] });
+    expect(over.success).toBe(false);
+    expect(over.error?.issues).toContainEqual(expect.objectContaining({
+      path: ["items", 0, "quantity"],
+      message: "Only 4 available.",
+    }));
+    expect(orderFormSchema.safeParse({ ...order, items: [{ ...line, quantity: 4 }, { ...line, quantity: 3 }] }).success)
+      .toBe(true);
   });
 });

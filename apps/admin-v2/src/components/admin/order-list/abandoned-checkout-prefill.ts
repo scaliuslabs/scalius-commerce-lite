@@ -11,6 +11,9 @@ export interface OrderPrefill {
   city: string;
   zone: string;
   area: string | null;
+  /** The delivery method and charge the buyer saw at checkout. */
+  shippingMethodId: string | null;
+  shippingCharge: number | null;
   items: Array<{
     productId: string;
     variantId: string | null;
@@ -41,6 +44,9 @@ export function buildOrderPrefill(
     // Unreadable checkout: only what the display could recover.
   }
   const { customerInfo } = display;
+  // The storefront saves the chosen rate as `shipping: { id, fee }`, the fee after any free-delivery threshold.
+  const shipping = data.shipping && typeof data.shipping === "object" ? data.shipping as Record<string, unknown> : {};
+  const fee = typeof shipping.fee === "number" && Number.isFinite(shipping.fee) && shipping.fee >= 0 ? shipping.fee : null;
   return {
     customerName: customerInfo.name?.trim() ?? "",
     customerPhone: customerInfo.phone ?? "",
@@ -49,6 +55,8 @@ export function buildOrderPrefill(
     city: text(data, "city"),
     zone: text(data, "zone"),
     area: text(data, "area") || null,
+    shippingMethodId: fee === null ? null : text(shipping, "id") || null,
+    shippingCharge: fee,
     items: display.items.map((item) => ({
       productId: item.id,
       variantId: item.variantId ?? null,

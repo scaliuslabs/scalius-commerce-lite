@@ -1,10 +1,12 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
 import {
   orderDiscountAllocations,
   orderItems,
   orderPayments,
+  orderReturnLines,
+  orderReturns,
   orders,
   PaymentRecordStatus,
 } from "@scalius/database/schema";
@@ -89,6 +91,21 @@ export async function readInvoiceOrderSource(
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
 
+  // Units received back on open or finished returns, per line.
+  const returnedRows = await db
+    .select({
+      orderItemId: orderReturnLines.orderItemId,
+      quantity: sql<number>`SUM(${orderReturnLines.receivedQuantity})`,
+    })
+    .from(orderReturnLines)
+    .innerJoin(orderReturns, eq(orderReturns.id, orderReturnLines.returnId))
+    .where(and(
+      eq(orderReturnLines.orderId, orderId),
+      notInArray(orderReturns.status, ["cancelled", "rejected"]),
+    ))
+    .groupBy(orderReturnLines.orderItemId);
+  const returnedByItem = new Map(returnedRows.map((row) => [row.orderItemId, Number(row.quantity) || 0]));
+
   const discountRows = await db
     .select({
       name: orderDiscountAllocations.promotionName,
@@ -121,6 +138,7 @@ export async function readInvoiceOrderSource(
     })),
     items: items.map((item) => ({
       ...item,
+      returnedQuantity: returnedByItem.get(item.id) ?? 0,
       price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
     })),
   };

@@ -17,6 +17,7 @@ import {
 } from "~/lib/api-query-options/orders";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
 import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
+import { useOrderListReturnHref } from "~/lib/order-list-return";
 import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,
@@ -159,6 +160,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
   const router = useRouter();
+  const backTo = useOrderListReturnHref();
   const notFound = isAdminApiNotFoundError(error);
   const status = (error as { status?: unknown }).status;
   const unreachable = !notFound && (typeof status !== "number" || status >= 500);
@@ -177,7 +179,7 @@ function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () =
           <Button type="button" onClick={() => { reset(); void router.invalidate(); }}>{r("retry")}</Button>
         )}
         <Button asChild variant={notFound ? "default" : "outline"}>
-          <Link to="/admin/orders">{t("backToOrders")}</Link>
+          <Link to={backTo}>{t("backToOrders")}</Link>
         </Button>
       </div>
     </section>
