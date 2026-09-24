@@ -113,6 +113,12 @@
   outline: none;
 }
 
+/* A name without spaces (a long SKU) breaks inside the card instead of
+   being cut at its edge; names with spaces wrap as before. */
+.site-root .product-card-link {
+  overflow-wrap: anywhere;
+}
+
 .site-root [data-theme-component="product-card"]:has(.product-card-link:focus-visible) {
   outline: 3px solid var(--ring);
   outline-offset: -3px;

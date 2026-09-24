@@ -62,6 +62,9 @@ describe("fluid product grid", () => {
     expect(cardCss).toContain("--card-title-size: 0.875rem;");
     expect(cardCss).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
     expect(cardCss).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
+    // Every card's name link, the standard card's included (found in Chrome:
+    // a name without spaces was cut at the card edge).
+    expect(cardCss).toMatch(/\.site-root \.product-card-link \{\s*overflow-wrap: anywhere;/);
   });
 
   it.each(DENSITIES)("%s: reaches each density step value at its container width", (_density, grid) => {
