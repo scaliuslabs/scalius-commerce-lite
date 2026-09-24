@@ -551,6 +551,8 @@ const receiptSupportRequestActionSchema = z.object({
 
 const orderReceiptSchema = z.object({
   id: z.string(),
+  /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
+  orderNumber: z.number().int().nullable(),
   customerName: z.string(),
   /** The phone the courier calls. The receipt is proof-gated, so the buyer sees their own contact. */
   customerPhone: z.string(),
@@ -904,6 +906,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   const order = await db
     .select({
       id: orders.id,
+      orderNumber: orders.orderNumber,
       customerId: orders.customerId,
       customerName: orders.customerName,
       customerPhone: orders.customerPhone,
@@ -969,6 +972,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   return ok(c, {
     order: {
       id: order.id,
+      orderNumber: order.orderNumber ?? null,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       customerEmail: order.customerEmail,

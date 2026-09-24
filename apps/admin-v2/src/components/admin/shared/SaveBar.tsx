@@ -342,7 +342,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
             <div
               role="region"
               data-save-bar=""
-              aria-label={unsavedMessage ?? t("unsavedChanges")}
+              aria-label={unsavedLabel ?? t("unsavedChanges")}
               className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between gap-2 border-b border-topbar-hover bg-topbar px-3 text-topbar-foreground sm:inset-x-auto sm:left-1/2 sm:top-1.5 sm:h-11 sm:min-w-lg sm:-translate-x-1/2 sm:gap-6 sm:rounded-full sm:border sm:pl-4 sm:pr-1"
             >
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">

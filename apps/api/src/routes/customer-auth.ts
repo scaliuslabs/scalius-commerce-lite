@@ -431,6 +431,7 @@ const getCustomerOrdersRoute = createRoute({
           schema: successEnvelope(z.object({
             orders: z.array(z.object({
               id: z.string(),
+              orderNumber: z.number().int().nullable(),
               invoiceNumber: z.number().nullable().optional(),
               status: z.string(),
               statusLabel: z.string(),
@@ -708,6 +709,7 @@ const customerOrderSupportRequestActionSchema = z.object({
 const customerOrderDetailSchema = z.object({
   order: z.object({
     id: z.string(),
+    orderNumber: z.number().int().nullable(),
     invoiceNumber: z.number().nullable(),
     status: z.string(),
     totalAmount: z.number(),

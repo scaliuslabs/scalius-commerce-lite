@@ -89,7 +89,7 @@ type DailyCustomerRow = {
 };
 type RecentOrderRow = {
     id: string;
-    orderNumber: number;
+    orderNumber: number | null;
     customerName: string;
     totalAmountMinor: number;
     currencyDecimalPlaces: number;
