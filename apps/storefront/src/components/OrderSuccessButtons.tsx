@@ -25,6 +25,8 @@ type OrderSuccessButtonsProps = {
   accountPrefill?: AuthModalPrefill;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
+  /** Opened by tracking or later: no "Continue shopping" and no sign-in-to-track upsell. */
+  statusView?: boolean;
   copy: CheckoutLanguageData;
 };
 
@@ -74,6 +76,7 @@ export default function OrderSuccessButtons({
   accountPrefill,
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
+  statusView = false,
   copy,
 }: OrderSuccessButtonsProps) {
   const [accountCard, setAccountCard] = useState<AccountCardState>("checking");
@@ -258,7 +261,7 @@ export default function OrderSuccessButtons({
   return (
     <div className="no-print flex flex-col items-center space-y-6">
       <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
-        <a
+        {!statusView && <a
           href="/"
           data-astro-prefetch="false"
           className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
@@ -278,7 +281,7 @@ export default function OrderSuccessButtons({
             />
           </svg>
           {copy.continueShoppingText}
-        </a>
+        </a>}
         <Button
           variant="outline"
           className="flex-1 rounded-xl border-border px-6 py-3 font-medium transition-colors hover:bg-muted"
@@ -302,7 +305,7 @@ export default function OrderSuccessButtons({
         </Button>
       </div>
 
-      {accountCard !== "checking" && accountCard !== "hidden" && (
+      {accountCard !== "checking" && accountCard !== "hidden" && !(statusView && accountCard === "sign_in") && (
         <div className="flex w-full max-w-xl flex-col gap-3 rounded-xl border border-border p-4 text-left sm:flex-row sm:items-center sm:justify-between">
           {accountCard === "saved" ? (
             <p className="text-sm text-foreground">
@@ -344,14 +347,20 @@ export default function OrderSuccessButtons({
         </div>
       )}
 
-      {(latestSupportRequest || supportRequestActions.length > 0) && (
-        <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
+      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">{copy.orderReceiptHelpText}</p>
+            <a
+              href="/track-order"
+              data-astro-prefetch="false"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {copy.trackOrderText}
+            </a>
           </div>
         </div>
 
@@ -441,7 +450,7 @@ export default function OrderSuccessButtons({
               </div>
             )}
           </div>
-        ) : !latestSupportRequest ? (
+        ) : !latestSupportRequest && supportRequestActions.length > 0 ? (
           <p className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
             {copy.orderReceiptSupportUnavailableText}
           </p>
@@ -453,8 +462,7 @@ export default function OrderSuccessButtons({
             {supportSubmitState.message}
           </p>
         )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

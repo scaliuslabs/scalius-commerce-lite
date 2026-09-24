@@ -7632,6 +7632,10 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
             name: string;
             phone?: string;
             email?: string;
+            /**
+             * Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`).
+             */
+            saveOrderAddress?: boolean;
         };
     };
     path?: never;
@@ -7744,6 +7748,18 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 profileComplete: boolean;
             };
             isNewUser?: boolean;
+            /**
+             * With needs_account_details: what the latest order placed with the proven contact says, to pre-fill.
+             */
+            suggestion?: {
+                name: string | null;
+                phone: string | null;
+                email: string | null;
+                address: {
+                    orderNumber: number | null;
+                    text: string;
+                } | null;
+            } | null;
         };
     };
 };
@@ -8629,6 +8645,23 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 label: string;
                 happenedAt: NullableTimestamp;
                 details?: string | null;
+            }>;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
+                amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
+                /**
+                 * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                 */
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
             paymentRecovery: {
                 eligible: boolean;
@@ -11901,6 +11934,38 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 }>;
                 notes: string | null;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;

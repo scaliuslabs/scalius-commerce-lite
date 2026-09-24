@@ -157,7 +157,7 @@ describe("order lookup verify proxy", () => {
     expect(apiPath).toBe("/orders/lookup/verify-otp");
     expect(JSON.parse(String(init.body))).toEqual({ reference: "1001", phone: "+8801712345678", code: "123456" });
     expect(policy).toEqual({ retries: 0, timeout: 8000, auth: true });
-    expect(body).toEqual({ success: true, redirectUrl: "/order-success?orderId=JJEHCFQ3C1JJ35GX" });
+    expect(body).toEqual({ success: true, redirectUrl: "/order-success?orderId=JJEHCFQ3C1JJ35GX&view=status" });
     expect(JSON.stringify(body)).not.toContain("chk_");
     expect(cookie).toContain(`${getOrderReceiptCookieName("JJEHCFQ3C1JJ35GX")}=chk_private_lookup`);
     expect(cookie).toContain("HttpOnly");

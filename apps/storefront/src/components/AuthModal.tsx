@@ -12,6 +12,8 @@ import {
   verifyCustomerOtp,
   type AuthState,
   type CustomerInfo,
+  type NewCustomerAccountDetails,
+  type NewCustomerSuggestion,
 } from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/transport";
@@ -22,6 +24,7 @@ import {
   type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
 import { formatBdMobile } from "@scalius/shared/phone-input";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
   checkContact,
@@ -108,6 +111,9 @@ export default function AuthModal() {
   const [code, setCode] = useState("");
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [details, setDetails] = useState({ name: "", phone: "", email: "" });
+  /** The latest order's address a new buyer can save; the server copies it. */
+  const [orderAddress, setOrderAddress] = useState<NewCustomerSuggestion["address"]>(null);
+  const [saveOrderAddress, setSaveOrderAddress] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
   const [error, setError] = useState("");
   /** The server's rate-limit sentence, shown with the wait while it runs. */
@@ -153,6 +159,7 @@ export default function AuthModal() {
     setError("");
     setLimit("");
     setFieldErrors({});
+    setOrderAddress(null);
     const phone = prefill.phone ? formatBdMobile(prefill.phone) : "";
     setContact(methodRef.current === "email" ? prefill.email ?? "" : phone);
     setDetails({ name: prefill.name ?? "", phone, email: prefill.email ?? "" });
@@ -284,7 +291,7 @@ export default function AuthModal() {
     window.setTimeout(() => setIsOpen(false), 1500);
   };
 
-  const verifyCode = (account?: { name: string; phone?: string; email?: string }) => run(async () => {
+  const verifyCode = (account?: NewCustomerAccountDetails) => run(async () => {
     if (!/^\d{6}$/.test(code)) {
       setFieldErrors({ code: "Enter the 6-digit code." });
       return;
@@ -310,6 +317,17 @@ export default function AuthModal() {
       return;
     }
     if (result.status === "needs_account_details") {
+      // What the store already knows from this contact's latest order; typed values win.
+      const suggestion = result.suggestion;
+      if (suggestion) {
+        setDetails((value) => ({
+          name: value.name.trim() ? value.name : suggestion.name ?? "",
+          phone: value.phone.trim() ? value.phone : suggestion.phone ? formatBdMobile(suggestion.phone) : "",
+          email: value.email.trim() ? value.email : suggestion.email ?? "",
+        }));
+      }
+      setOrderAddress(suggestion?.address ?? null);
+      setSaveOrderAddress(true);
       setStep("details");
       return;
     }
@@ -323,7 +341,7 @@ export default function AuthModal() {
       dialogRef.current?.querySelector<HTMLInputElement>(`#auth-${checked.errors[0]!.field}`)?.focus();
       return;
     }
-    void verifyCode(checked.account);
+    void verifyCode({ ...checked.account, saveOrderAddress: Boolean(orderAddress) && saveOrderAddress });
   };
 
   const signOut = () => run(async () => {
@@ -557,6 +575,26 @@ export default function AuthModal() {
                     />
                     {errorFor("email") && <p id="auth-email-error" className="text-sm text-destructive">{errorFor("email")}</p>}
                   </div>
+                )}
+                {orderAddress && (
+                  <label htmlFor="auth-save-address" className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border p-3 text-sm">
+                    <input
+                      id="auth-save-address"
+                      type="checkbox"
+                      disabled={loading}
+                      checked={saveOrderAddress}
+                      onChange={(event) => setSaveOrderAddress(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        {orderAddress.orderNumber != null
+                          ? `Save the delivery address from order ${formatOrderNumber(orderAddress.orderNumber, "")}`
+                          : "Save the delivery address from your last order"}
+                      </span>
+                      <span className="block break-words text-muted-foreground">{orderAddress.text}</span>
+                    </span>
+                  </label>
                 )}
               </>
             )}

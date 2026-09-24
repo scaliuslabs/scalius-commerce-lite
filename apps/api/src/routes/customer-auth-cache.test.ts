@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getCustomerOrderDetail: vi.fn(),
   getCustomerOwnedOrderForDetail: vi.fn(),
   getCustomerOrderDetailForOrder: vi.fn(),
+  listOrderDiscountLines: vi.fn(),
   getCustomerPaymentSessionOrderForDetail: vi.fn(),
   resolveCustomerPaymentSessionRecovery: vi.fn(),
   getSessionCookie: vi.fn(),
@@ -48,6 +49,11 @@ vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOwnedOrderForDetail: mocks.getCustomerOwnedOrderForDetail,
   getCustomerOrderDetailForOrder: mocks.getCustomerOrderDetailForOrder,
   getCustomerPaymentSessionOrderForDetail: mocks.getCustomerPaymentSessionOrderForDetail,
+}));
+
+vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/promotions")>()),
+  listOrderDiscountLines: mocks.listOrderDiscountLines,
 }));
 
 vi.mock("@scalius/core/modules/customers/order-account-claim", () => ({
@@ -220,6 +226,7 @@ describe("customer auth private cache policy", () => {
     const ownedOrder = {
       id: "order_1",
       invoiceNumber: 12,
+      currencyDecimalPlaces: 2,
       status: "shipped",
       totalAmount: 100,
       paidAmount: 100,
@@ -369,6 +376,10 @@ describe("customer auth private cache policy", () => {
     };
     mocks.getCustomerOrderDetail.mockResolvedValue(orderDetail);
     mocks.getCustomerOrderDetailForOrder.mockResolvedValue(orderDetail);
+    mocks.listOrderDiscountLines.mockResolvedValue([{
+      promotionId: "promo_1", title: "Eid", code: "EID10", method: "code", kind: "order",
+      amountMinor: 10_000, shippingAmountMinor: 8_000,
+    }]);
     mocks.resolveCustomerPaymentSessionRecovery.mockResolvedValue({
       eligible: true,
       gateway: "sslcommerz",
@@ -799,6 +810,10 @@ describe("customer auth private cache policy", () => {
       expect.anything(),
       expect.objectContaining({ id: "order_1", paymentMethod: "sslcommerz" }),
     );
+    // Discounts by name, like the receipt: items part and delivery part, in major units.
+    await expect(response.clone().json()).resolves.toMatchObject({
+      data: { discounts: [{ title: "Eid", code: "EID10", kind: "order", amount: 100, shippingAmount: 80 }] },
+    });
     expect(mocks.getCustomerPaymentSessionOrderForDetail).toHaveBeenCalledWith(
       expect.objectContaining({ id: "order_1", paymentMethod: "sslcommerz" }),
     );

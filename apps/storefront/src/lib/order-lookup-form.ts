@@ -20,8 +20,8 @@ export interface OrderCodeFormText {
   verifyCode: string;
   codeSent: string;
   unavailable: string;
-  /** Page-specific checks before any request; returns the error to show. */
-  validate?: (fields: Record<string, string>) => string | null;
+  /** Page-specific checks before any request: each bad field's message. */
+  validate?: (fields: Record<string, string>) => Record<string, string>;
 }
 
 const RECEIPT_REDIRECT = /^\/order-success\?/;
@@ -42,12 +42,49 @@ export function enhanceOrderCodeForm(
 
   let codeSent = form.dataset.codeSent === "true";
   const timers = new Map<HTMLElement, number>();
+  // Our own inline messages replace the browser's tooltip.
+  form.noValidate = true;
 
   const setMessage = (value: string, tone: "neutral" | "danger" = "neutral") => {
     message.textContent = value;
     message.classList.toggle("text-destructive", tone === "danger");
     message.classList.toggle("text-muted-foreground", tone !== "danger");
   };
+
+  /** One field's message under it (`[data-field-error=name]`), like checkout. */
+  const setFieldError = (input: HTMLInputElement, error: string) => {
+    const slot = form.querySelector<HTMLElement>(`[data-field-error="${input.name}"]`);
+    if (error) input.setAttribute("aria-invalid", "true");
+    else input.removeAttribute("aria-invalid");
+    if (!slot) return;
+    slot.textContent = error;
+    slot.hidden = !error;
+    const describedBy = new Set((input.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean));
+    if (error) describedBy.add(slot.id);
+    else describedBy.delete(slot.id);
+    if (describedBy.size > 0) input.setAttribute("aria-describedby", [...describedBy].join(" "));
+    else input.removeAttribute("aria-describedby");
+  };
+
+  /** Shows every field's message and focuses the first bad field; returns a message with no place of its own. */
+  const showFieldErrors = (errors: Record<string, string>): string => {
+    let unplaced = "";
+    let first: HTMLInputElement | null = null;
+    for (const input of form.querySelectorAll<HTMLInputElement>("input[name]")) {
+      const error = errors[input.name] ?? "";
+      setFieldError(input, error);
+      if (!error) continue;
+      first ??= input;
+      if (!unplaced && !form.querySelector(`[data-field-error="${input.name}"]`)) unplaced = error;
+    }
+    first?.focus();
+    return unplaced;
+  };
+
+  form.addEventListener("input", (event) => {
+    const input = event.target;
+    if (input instanceof HTMLInputElement && input.getAttribute("aria-invalid") === "true") setFieldError(input, "");
+  });
 
   /** Ticks `render` once a second, then calls `done`; one timer per element. */
   const countdown = (key: HTMLElement, seconds: number, render: (left: number) => void, done: () => void) => {
@@ -104,9 +141,13 @@ export function enhanceOrderCodeForm(
     const fields = Object.fromEntries(
       [...new FormData(form)].flatMap(([key, value]) => (typeof value === "string" && key !== "intent" ? [[key, value.trim()]] : [])),
     ) as Record<string, string>;
-    const invalid = text.validate?.(fields) ?? (intent === "verify" && !fields.code ? copy.paymentRecoveryEnterCodeText : null);
-    if (invalid) {
-      setMessage(invalid, "danger");
+    const errors = {
+      ...text.validate?.(fields),
+      ...(intent === "verify" && !fields.code ? { code: copy.paymentRecoveryEnterCodeText } : {}),
+    };
+    const unplaced = showFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setMessage(unplaced, "danger");
       return;
     }
 

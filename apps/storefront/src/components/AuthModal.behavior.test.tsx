@@ -87,7 +87,7 @@ describe("sign-in dialog", () => {
   it("asks a new buyer for their name and phone after the code, prefilled from the order", async () => {
     mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
     mocks.verifyCustomerOtp
-      .mockResolvedValueOnce({ success: true, status: "needs_account_details" })
+      .mockResolvedValueOnce({ success: true, status: "needs_account_details", suggestion: null })
       .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
     await open({ prefill: { name: "Rahim Uddin", email: "rahim@example.test", phone: "+8801712345678" } });
 
@@ -112,9 +112,67 @@ describe("sign-in dialog", () => {
     await submit();
     expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
       code: "123456",
-      account: { name: "Rahim Uddin", phone: "+8801712345678" },
+      account: { name: "Rahim Uddin", phone: "+8801712345678", saveOrderAddress: false },
     }));
     expect(title()).toBe("You're signed in");
+  });
+
+  it("fills a new buyer's details from their latest order and offers to save its address", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp
+      .mockResolvedValueOnce({
+        success: true,
+        status: "needs_account_details",
+        suggestion: {
+          name: "R2-SJ Test", phone: "+8801712345678", email: "r2-sj@example.test",
+          address: { orderNumber: 1057, text: "House 1, Road 2, Mirpur, Dhaka" },
+        },
+      })
+      .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
+    await open();
+    await type("#auth-contact", "r2-sj@example.test");
+    await submit();
+    await type("#customer-otp", "123456");
+    await submit();
+
+    expect(title()).toBe("Create your account");
+    expect(host.querySelector<HTMLInputElement>("#auth-name")?.value).toBe("R2-SJ Test");
+    expect(host.querySelector<HTMLInputElement>("#auth-phone")?.value).toBe("01712-345678");
+    const save = host.querySelector<HTMLInputElement>("#auth-save-address")!;
+    expect(save.checked).toBe(true);
+    expect(save.closest("label")?.textContent).toBe("Save the delivery address from order #1057House 1, Road 2, Mirpur, Dhaka");
+
+    await act(async () => save.click());
+    expect(save.checked).toBe(false);
+    await submit();
+    expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
+      account: { name: "R2-SJ Test", phone: "+8801712345678", saveOrderAddress: false },
+    }));
+    expect(JSON.stringify(mocks.verifyCustomerOtp.mock.lastCall)).not.toContain("Road 2");
+  });
+
+  it("keeps what the buyer already typed and says 'your last order' without an order number", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp
+      .mockResolvedValueOnce({
+        success: true,
+        status: "needs_account_details",
+        suggestion: { name: "Old Name", phone: "+8801799999999", email: null, address: { orderNumber: null, text: "House 9, Uttara, Dhaka" } },
+      })
+      .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
+    await open({ prefill: { name: "Rahim Uddin", email: "rahim@example.test", phone: "+8801712345678" } });
+    await submit();
+    await type("#customer-otp", "123456");
+    await submit();
+
+    expect(host.querySelector<HTMLInputElement>("#auth-name")?.value).toBe("Rahim Uddin");
+    expect(host.querySelector<HTMLInputElement>("#auth-phone")?.value).toBe("01712-345678");
+    expect(host.querySelector("#auth-save-address")?.closest("label")?.textContent)
+      .toBe("Save the delivery address from your last orderHouse 9, Uttara, Dhaka");
+    await submit();
+    expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
+      account: { name: "Rahim Uddin", phone: "+8801712345678", saveOrderAddress: true },
+    }));
   });
 
   it("shows attempts left, and after a lockout disables Continue and offers a new code at once", async () => {
@@ -164,7 +222,7 @@ describe("sign-in dialog", () => {
   it("reopens on the new-account step with the accepted code instead of asking for a new one", async () => {
     mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
     mocks.verifyCustomerOtp
-      .mockResolvedValueOnce({ success: true, status: "needs_account_details" })
+      .mockResolvedValueOnce({ success: true, status: "needs_account_details", suggestion: null })
       .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
     await open();
     await type("#auth-contact", "rahim@example.test");
@@ -181,7 +239,7 @@ describe("sign-in dialog", () => {
     await submit();
     expect(mocks.sendCustomerOtp).toHaveBeenCalledTimes(1);
     expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
-      identifier: "rahim@example.test", code: "123456", account: { name: "Rahim", phone: "+8801712345678" },
+      identifier: "rahim@example.test", code: "123456", account: { name: "Rahim", phone: "+8801712345678", saveOrderAddress: false },
     }));
     expect(title()).toBe("You're signed in");
   });

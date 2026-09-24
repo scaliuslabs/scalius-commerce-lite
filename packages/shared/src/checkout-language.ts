@@ -431,6 +431,11 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   saleOfferSpendText: "Spend {amount}, get {item} {benefit}",
   freeBenefitText: "free",
   percentBenefitText: "{percent}% off",
+  orderStatusTitleText: "Order {orderNumber}",
+  orderTrackingUpdatesText: "Updates",
+  orderTrackingStepDoneText: "done",
+  orderTrackingIdText: "Tracking ID",
+  orderTrackWithCourierText: "Track with courier",
 } as const;
 
 export type CheckoutLanguageData = {
@@ -869,6 +874,11 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   saleOfferSpendText: "{amount} কেনাকাটায় {item} {benefit}",
   freeBenefitText: "ফ্রি",
   percentBenefitText: "{percent}% ছাড়ে",
+  orderStatusTitleText: "অর্ডার {orderNumber}",
+  orderTrackingUpdatesText: "আপডেট",
+  orderTrackingStepDoneText: "সম্পন্ন",
+  orderTrackingIdText: "ট্র্যাকিং আইডি",
+  orderTrackWithCourierText: "কুরিয়ারের সাইটে ট্র্যাক করুন",
 };
 
 export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(

@@ -94,7 +94,7 @@ beforeEach(() => {
       <div id="orderProgress"></div><p id="orderExpectedDelivery" class="hidden"></p><ol id="orderTimeline"></ol>
       <button id="orderBuyAgain">Buy again</button><p id="orderBuyAgainMessage"></p>
       <ul id="orderItems"></ul><dl id="orderSummary"></dl>
-      <div id="orderAddress"></div><div id="orderShipments"></div>
+      <div id="orderAddress"></div><div id="orderNote" class="hidden"></div><div id="orderShipments"></div>
       <div id="orderPayment"></div>
       <div id="orderPaymentRecovery" class="hidden"><h3 id="orderPaymentRecoveryTitle"></h3><p id="orderPaymentRecoveryDescription"></p>
         <div id="orderPaymentRecoveryMethods"></div><div id="accountStripeSection" class="hidden"><p id="accountStripeError"></p></div>
@@ -126,6 +126,42 @@ describe("account order detail", () => {
     expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 ৳1,000");
     const page = document.body.textContent ?? "";
     expect(page).not.toMatch(/BDT|Standard|notification|Accepted|Current status|Discount|VAT/);
+  });
+
+  it("lists each discount like the receipt, free delivery on the delivery line, and the buyer's note", () => {
+    renderOrderDetail(detail(
+      { discountAmount: 510, discountAmountMinor: 51_000, totalAmount: 570, totalAmountMinor: 57_000, notes: "দয়া করে ফোন করুন 🙏" },
+      { discounts: [
+        { promotionId: "p1", title: "R2SJPROD", code: "R2SJPROD", kind: "product", amount: 200, shippingAmount: 0 },
+        { promotionId: "p2", title: "Eid sale", code: "R2SJORD10", kind: "order", amount: 230, shippingAmount: 0 },
+        { promotionId: "p3", title: "Free delivery", code: "R2SJSHIP", kind: "shipping", amount: 0, shippingAmount: 80 },
+      ] },
+    ), null);
+    expect(text("orderSummary")).toBe(
+      "Subtotal ৳1,000 Delivery (Inside Dhaka) ৳80 Free (R2SJSHIP) Discount · R2SJPROD −৳200 Discount · Eid sale (R2SJORD10) −৳230 Total ৳570",
+    );
+    expect(document.querySelector("#orderSummary s")?.textContent).toBe("৳80");
+    expect(text("orderNote")).toBe("Your note দয়া করে ফোন করুন 🙏");
+    expect(document.getElementById("orderNote")?.classList.contains("hidden")).toBe(false);
+  });
+
+  it("shows a discount without allocations as one plain line, and no note block without a note", () => {
+    renderOrderDetail(detail({ discountAmount: 150, discountAmountMinor: 15_000, totalAmountMinor: 93_000 }), null);
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery (Inside Dhaka) ৳80 Discount −৳150 Total ৳930");
+    expect(document.getElementById("orderNote")?.classList.contains("hidden")).toBe(true);
+  });
+
+  it("shows each shipment's courier and a safe tracking link", () => {
+    const shipment = {
+      id: "s1", providerType: "manual", providerName: null, status: "in_transit", rawStatus: null, trackingId: "TRK-9",
+      trackingUrl: "javascript:alert(1)", courierName: "Pathao", statusLabel: "On its way", lastChecked: null,
+      updatedAt: "2026-09-24T03:00:00.000Z", createdAt: null, note: null, shipmentAmount: null, isFinalShipment: true,
+    };
+    renderOrderDetail(detail({}, { shipments: [shipment, { ...shipment, id: "s2", trackingUrl: "https://courier.example/t/TRK-9" }] }), null);
+    const cards = document.querySelectorAll("#orderShipments article");
+    expect(cards[0]?.textContent?.replace(/\s+/g, " ").trim()).toBe("On its way · Pathao Tracking ID TRK-9 Updated 24 Sep 2026, 9:00 AM");
+    expect(cards[0]?.querySelector("a")).toBeNull();
+    expect(cards[1]?.querySelector("a")?.getAttribute("href")).toBe("https://courier.example/t/TRK-9");
   });
 
   it("shows the recipient and one payment summary for cash on delivery", () => {

@@ -287,7 +287,7 @@ describe("account delivery details", () => {
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
     save();
     expect(element("fieldAddressError").textContent).toBe("Enter a complete delivery address (at least 10 characters).");
-    expect(element("fieldZoneError").textContent).toBe("Choose a zone.");
+    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
     expect(updateCustomerProfile).not.toHaveBeenCalled();
   });
 
@@ -392,7 +392,7 @@ describe("account delivery details", () => {
     nextZones.resolve([{ id: "zone_sadar", name: "Bagerhat Sadar" }]);
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
     save();
-    expect(element("fieldZoneError").textContent).toBe("Choose a zone.");
+    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
     const nextAreas = deferred<typeof areas>();
     getAreas.mockReturnValueOnce(nextAreas.promise);
     change("fieldZone", "zone_sadar");
@@ -503,12 +503,12 @@ describe("account delivery details", () => {
     }));
   });
 
-  it("explains an empty zone list", async () => {
+  it("explains an empty thana list", async () => {
     await initializeAccountPage();
     getZones.mockResolvedValueOnce([]);
     change("fieldCity");
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    expect(element("profileSaveStatus").textContent).toContain("No zones are available");
+    expect(element("profileSaveStatus").textContent).toContain("No thanas are available");
     field("fieldAddress").value = "";
     change("fieldCity", "");
     expect(saveButton().disabled).toBe(false);
