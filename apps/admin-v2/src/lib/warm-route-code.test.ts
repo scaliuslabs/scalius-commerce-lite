@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { EVERYDAY_ROUTES, warmEverydayRouteCode } from "./warm-route-code";
+import { EVERYDAY_ROUTES, shouldSkipRouteCodeWarming, warmEverydayRouteCode } from "./warm-route-code";
 
 describe("everyday route code warming", () => {
   it("names only routes that exist", () => {
@@ -20,5 +20,10 @@ describe("everyday route code warming", () => {
       "/admin/orders/_list/",
       "/admin/orders/$orderId/",
     ]);
+  });
+
+  it("skips warming under Data Saver and on 2G", () => {
+    expect([{ saveData: true }, { effectiveType: "2g" }, { effectiveType: "slow-2g" }, { effectiveType: "4g" }, undefined]
+      .map(shouldSkipRouteCodeWarming)).toEqual([true, true, true, false, false]);
   });
 });
