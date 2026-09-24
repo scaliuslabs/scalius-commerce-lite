@@ -150,7 +150,7 @@ interface Window {
   };
 
   // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
-  lastShippingEventDetail?: { id: string; fee: number; name?: string };
+  lastShippingEventDetail?: import("./lib/checkout/shipping-methods").ShippingMethodDetail;
   handleAbandonedCheckout?: () => void;
   validateCartSnapshot?: () => Promise<boolean>;
   hasCartValidationIssues?: () => boolean;

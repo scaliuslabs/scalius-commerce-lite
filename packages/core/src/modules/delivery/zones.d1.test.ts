@@ -85,7 +85,11 @@ describe("delivery zone resolution", () => {
             city: "dhaka",
             zone: "mirpur",
             shippingMethodId: await rateIdByName(db, "Outside Dhaka"),
-        }, cart(10_000))).rejects.toThrow("isn't available for the selected address");
+        }, cart(10_000))).rejects.toMatchObject({
+            message: expect.stringContaining("isn't available for the selected address"),
+            // Checkout re-reads the address's rates on this reason instead of reporting a failure.
+            details: { reason: "delivery_rate_unavailable" },
+        });
     });
 
     it("makes delivery free from the threshold itself, not one paisa below", async () => {

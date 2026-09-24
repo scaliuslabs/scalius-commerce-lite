@@ -7,7 +7,7 @@ import {
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import type { CartValidationIssue } from "../api/orders";
-import { parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
+import { isDeliveryRateUnavailable, parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
 const TAX_QUOTE_TIMEOUT_MS = 10_000;
@@ -37,6 +37,14 @@ export class TaxQuoteCartChangedError extends Error {
         : `${issues.length} cart items changed before payment.`,
     );
     this.name = "TaxQuoteCartChangedError";
+  }
+}
+
+/** The chosen delivery rate no longer serves the address: re-read the rates. */
+export class TaxQuoteDeliveryRateError extends Error {
+  constructor() {
+    super("The chosen delivery option isn't available for this address.");
+    this.name = "TaxQuoteDeliveryRateError";
   }
 }
 
@@ -138,6 +146,7 @@ export async function fetchAuthoritativeTaxQuote(
       const payload = await response.json().catch(() => null);
       const issues = parseTaxQuoteCartIssues(payload);
       if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
+      if (isDeliveryRateUnavailable(payload)) throw new TaxQuoteDeliveryRateError();
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
@@ -164,6 +173,7 @@ export async function fetchAuthoritativeTaxQuote(
     return quote;
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) throw error;
+    if (error instanceof TaxQuoteDeliveryRateError) throw error;
     if (error instanceof TaxQuoteUnavailableError) throw error;
     if (error instanceof TaxQuoteContractError) throw new TaxQuoteUnavailableError();
     throw new TaxQuoteUnavailableError();
