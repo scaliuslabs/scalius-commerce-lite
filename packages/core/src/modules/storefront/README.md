@@ -119,7 +119,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 - `@scalius/database` -- `categories`, `collections`, `heroSliders`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
-- `@scalius/core/modules/collections/collections.service` -- `resolveCollectionProductsBatch()`
+- `../collections/collections.service` -- `resolveCollectionProductsBatch()`
 - `nanoid` -- fallback ID generation for footer social links/menus
 
 ## Known Gaps

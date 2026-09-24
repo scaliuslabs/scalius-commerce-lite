@@ -131,4 +131,4 @@ This runs in the browser. The actual CAPI call happens server-side in the API wo
 
 - Web Crypto API (`crypto.subtle`) -- SHA-256 hashing
 - `@scalius/database` -- `settings` (`meta_conversions` document), `metaConversionsLogs`, `metaCapiPurchaseOutbox`, `orders`, and `orderItems` tables
-- `@scalius/core/modules/analytics/meta.service` -- `getCapiSettings()` and `logCapiEvent()` functions
+- `modules/analytics/meta.service.ts` (analytics domain) -- `getCapiSettings()` and `logCapiEvent()` functions
