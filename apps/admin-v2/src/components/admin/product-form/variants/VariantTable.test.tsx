@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import type { DraftOption, DraftVariant } from "./option-matrix-editor-model";
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn(), removed: vi.fn() }));
@@ -33,7 +34,11 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
 const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 let latest: DraftVariant[] = [];
-function Harness({ initial, missing = [] }: { initial: DraftVariant[]; missing?: string[][] }) {
+function Harness({ initial, missing = [], reveal = null }: {
+  initial: DraftVariant[];
+  missing?: string[][];
+  reveal?: { variantId: string; nonce: number } | null;
+}) {
   const [variants, setVariants] = React.useState(initial);
   latest = variants;
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -46,7 +51,7 @@ function Harness({ initial, missing = [] }: { initial: DraftVariant[]; missing?:
       productName="Panjabi"
       nameOf={(row) => row.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}
       issue={null}
-      reveal={null}
+      reveal={reveal}
       expandedId={expandedId}
       onExpandedChange={setExpandedId}
       onChangeMany={(ids, patch) => setVariants((current) => current.map((row) => ids.has(row.id)
@@ -198,4 +203,34 @@ describe("VariantTable", () => {
     await act(async () => button(label("showAllVariants", { count: 3 })).click());
     expect(host.querySelector('[data-variant-row="sw"]')).not.toBeNull();
   });
+
+  it("opens a large product with its groups closed, and still selects every variant", async () => {
+    const many = Array.from({ length: 32 }, (_, index) =>
+      variant(`v${index}`, index % 2 ? "m" : "s", index % 4 < 2 ? "w" : "b", 2000 + index));
+    await render(many);
+    expect(host.querySelector("[data-variant-row]")).toBeNull();
+    expect(input(label("priceForGroup", { name: "S" }))).not.toBeNull();
+
+    const toggle = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.startsWith("S"))!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => toggle.click());
+    expect(host.querySelectorAll("[data-variant-row]")).toHaveLength(16);
+
+    const selectAll = host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;
+    await act(async () => selectAll.click());
+    // Selection covers the closed groups too.
+    expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 32 }));
+  });
+
+  it("opens the closed group of a problem it reveals", async () => {
+    const many = Array.from({ length: 32 }, (_, index) =>
+      variant(`v${index}`, index % 2 ? "m" : "s", index % 4 < 2 ? "w" : "b", 2000 + index));
+    await render(many);
+    expect(host.querySelector('[data-variant-row="v3"]')).toBeNull();
+    await act(async () => root.render(<Harness initial={many} reveal={{ variantId: "v3", nonce: 1 }} />));
+    // v3 is an M variant: M opens, S stays closed.
+    expect(host.querySelector('[data-variant-row="v3"]')).not.toBeNull();
+    expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
+  });
 });
+
