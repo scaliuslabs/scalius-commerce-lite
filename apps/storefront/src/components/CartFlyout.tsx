@@ -36,6 +36,7 @@ import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import type { CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
 import type { CartValidationIssue } from "@/lib/api/orders";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -64,7 +65,7 @@ export function setCartOpen(value: boolean) {
  */
 function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   const [discounts, setDiscounts] = useState<CheckoutDiscountFacts & { totalDiscount: number } | null>(null);
-  const [issues, setIssues] = useState<Record<string, string>>({});
+  const [issues, setIssues] = useState<Record<string, CartValidationIssue>>({});
   useEffect(() => {
     const items = Object.entries(cart.items);
     if (!isOpen || items.length === 0) return;
@@ -92,7 +93,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
         .then((json: { data?: { issues?: CartValidationIssue[] }; details?: { itemIssues?: CartValidationIssue[] } }) => {
           if (!current) return;
           const found = json?.data?.issues ?? json?.details?.itemIssues ?? [];
-          setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue.message]] : [])));
+          setIssues(Object.fromEntries(found.flatMap((issue) => issue.cartKey ? [[issue.cartKey, issue]] : [])));
         })
         .catch(() => undefined);
     }, 300);
@@ -108,6 +109,9 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, issues } = useDrawerCartFacts(cart, isOpen);
+  // A line that can't be bought as is blocks Checkout here, like on the cart page.
+  const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
+  const checkoutBlocked = lineIssues.length > 0;
   // Shopify's drawer: discounts listed above, the total already net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
@@ -402,7 +406,32 @@ export default function CartFlyout({ onReady }: Props) {
                             </div>
                           )}
                           {issues[key] && (
-                            <p className="text-xs font-medium text-destructive" role="alert">{issues[key]}</p>
+                            <div className="space-y-1" role="alert">
+                              <p className="text-xs font-medium text-destructive">{issues[key].message}</p>
+                              {issues[key].action === "reduce_quantity" && (issues[key].availableQuantity ?? 0) >= 1 ? (
+                                <button
+                                  type="button"
+                                  className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  onClick={() => {
+                                    disableAutoClose();
+                                    updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
+                                  }}
+                                >
+                                  Update quantity to {Math.floor(issues[key].availableQuantity!)}
+                                </button>
+                              ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
+                                <button
+                                  type="button"
+                                  className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  onClick={() => {
+                                    disableAutoClose();
+                                    removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              ) : null}
+                            </div>
                           )}
                         </div>
 
@@ -489,9 +518,9 @@ export default function CartFlyout({ onReady }: Props) {
         {/* Savings and offers the cart already qualifies for */}
         {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
           <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
-            {discounts.discounts.map((line) => (
+            {discounts.discounts.filter((line) => line.amount > 0).map((line) => (
               <div key={line.promotionId} className="flex justify-between gap-3 text-primary">
-                <span className="min-w-0">{line.code && line.code !== line.title ? `${line.title} · ${line.code}` : line.title}</span>
+                <span className="min-w-0">{formatDiscountLineLabel("Discount", line)}</span>
                 <span className="shrink-0 tabular-nums">-{formatMoney(line.amount)}</span>
               </div>
             ))}
@@ -543,7 +572,11 @@ export default function CartFlyout({ onReady }: Props) {
                   {formatMoney(estimatedTotal)}
                 </div>
               </div>
+              {checkoutBlocked && (
+                <p className="text-sm text-destructive" role="status">Fix the highlighted items to check out.</p>
+              )}
               <Button
+                disabled={checkoutBlocked}
                 onClick={() => {
                   disableAutoClose();
                   handleCheckout();
@@ -573,6 +606,9 @@ export default function CartFlyout({ onReady }: Props) {
             </div>
 
             {/* Mobile Footer */}
+            {checkoutBlocked && (
+              <p id="drawerCheckoutBlocked" className="px-1 pb-1 text-xs text-destructive sm:hidden" role="status">Fix the highlighted items to check out.</p>
+            )}
             <div className="flex sm:hidden items-center gap-3 px-1 pb-1">
               {/* Left: Total */}
               <div className="flex min-w-0 items-center gap-1">
@@ -598,6 +634,8 @@ export default function CartFlyout({ onReady }: Props) {
 
               {/* Right: Action */}
               <Button
+                disabled={checkoutBlocked}
+                aria-describedby={checkoutBlocked ? "drawerCheckoutBlocked" : undefined}
                 onClick={() => {
                   disableAutoClose();
                   handleCheckout();

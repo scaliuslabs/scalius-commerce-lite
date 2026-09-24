@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
-import { normalizeBdMobile, toLatinDigits } from "./phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, isBangladeshNumber, normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
 // the checkout phone country picker) without its own libphonenumber dependency.
@@ -83,8 +83,11 @@ export function validateAndFormatPhone(
   input: string,
   allowedCountries?: PhoneCountryPolicyInput,
 ): string {
-  const trimmed = normalizeBdMobile(input) ?? toLatinDigits(input).trim();
+  const mobile = normalizeBdMobile(input);
+  const trimmed = mobile ?? toLatinDigits(input).trim();
   if (!trimmed) throw new Error("Phone number is required");
+  // Bangladesh numbers must be mobile numbers: couriers call and codes are sent by SMS.
+  if (!mobile && isBangladeshNumber(trimmed)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
 
   if (!isValidPhoneNumber(trimmed)) {
     throw new Error("Invalid phone number format");
@@ -92,6 +95,7 @@ export function validateAndFormatPhone(
 
   const parsed = parsePhoneNumber(trimmed);
   if (!parsed) throw new Error("Could not parse phone number");
+  if (parsed.country === "BD" && !normalizeBdMobile(parsed.number)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
 
   assertParsedPhoneCountryAllowed(parsed, allowedCountries);
 

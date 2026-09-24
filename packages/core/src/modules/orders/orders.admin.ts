@@ -51,6 +51,7 @@ import {
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
+import { listOrderDiscountLines } from "../promotions/order-discount-lines";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, notInArray, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -2033,23 +2034,7 @@ async function getOrderDetailsOnce(
             .limit(1),
         listOrderRefundAttempts(db, id, { audience: "admin" }),
         listOrderSupportRequests(db, id),
-        db
-            .select({
-                promotionId: orderDiscountAllocations.promotionId,
-                method: orderDiscountAllocations.method,
-                name: orderDiscountAllocations.promotionName,
-                code: orderDiscountAllocations.promotionCode,
-                amountMinor: sql<number>`SUM(${orderDiscountAllocations.discountAmountMinor})`,
-            })
-            .from(orderDiscountAllocations)
-            .where(eq(orderDiscountAllocations.orderId, id))
-            .groupBy(
-                orderDiscountAllocations.promotionId,
-                orderDiscountAllocations.method,
-                orderDiscountAllocations.promotionName,
-                orderDiscountAllocations.promotionCode,
-            )
-            .orderBy(orderDiscountAllocations.promotionName),
+        listOrderDiscountLines(db, id),
         listOrderPaymentSessionAttempts(db, id),
     ]);
 
@@ -2111,10 +2096,12 @@ async function getOrderDetailsOnce(
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
         discounts: promotionRows.map((row) => ({
             promotionId: row.promotionId,
-            name: row.name,
+            name: row.title,
             code: row.code,
             method: row.method,
-            amount: fromMinor(Number(row.amountMinor) || 0, order.currencyDecimalPlaces),
+            kind: row.kind,
+            amount: fromMinor(row.amountMinor + row.shippingAmountMinor, order.currencyDecimalPlaces),
+            shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
         })),
         items: formattedItems,
         itemCount: formattedItems.length,

@@ -20,6 +20,8 @@ export interface ProductActionCopy {
   quantityLimitText: string;
   saleOfferText: string;
   saleOfferSpendText: string;
+  saleOfferGetText: string;
+  saleOfferGetSpendText: string;
   freeBenefitText: string;
   percentBenefitText: string;
 }

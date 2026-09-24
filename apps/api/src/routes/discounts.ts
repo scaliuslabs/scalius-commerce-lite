@@ -30,7 +30,9 @@ const cartItemSchema = z.object({
 const validateDiscountSchema = z.object({
   codes: discountCodesSchema,
   items: z.array(cartItemSchema).max(99).optional().openapi({ description: "Cart items" }),
-  shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().default(0).openapi({ description: "Delivery charge" }),
+  shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({
+    description: "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.",
+  }),
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
 });
 
@@ -73,6 +75,7 @@ app.openapi(validateDiscountRoute, async (c) => {
   const quote = await quoteStorefrontDiscount(db, {
     codes,
     customerPhone,
+    shippingKnown: shippingCost !== undefined,
     cart: {
       currencyCode: currency.code,
       lines: lines.map(({ item, index, variantId }) => ({
@@ -82,7 +85,7 @@ app.openapi(validateDiscountRoute, async (c) => {
         unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
         quantity: item.quantity,
       })),
-      shippingAmountMinor: toMinor(shippingCost, currency.decimalPlaces),
+      shippingAmountMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
     },
   });
   return ok(c, {

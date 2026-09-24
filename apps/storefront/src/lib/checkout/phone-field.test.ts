@@ -16,7 +16,7 @@ let controller: AbortController;
 
 function render(attributes = 'data-default-country="BD"') {
   document.body.innerHTML = `<form id="checkoutForm">
-    <div id="customerPhone-field" ${attributes} data-invalid-message="Invalid" data-required-message="Required" data-country-message="Not accepted">
+    <div id="customerPhone-field" ${attributes} data-invalid-message="Invalid" data-mobile-message="Not a mobile" data-required-message="Required" data-country-message="Not accepted">
       <input type="hidden" name="customerPhone" value="" data-e164-value="" />
       <div data-phone-box><input id="customerPhone-input" /></div>
       <p id="customerPhone-error" class="hidden"></p>
@@ -79,10 +79,14 @@ describe("Bangladesh mobile fast path", () => {
     }
   });
 
-  it("defers everything else to the international validator", () => {
-    for (const spelling of ["0171234567", "01212345678", "0212345678", "+447911123456"]) {
-      expect(quickValidatePhone(spelling, ANY_COUNTRY, "BD")).toBeNull();
+  it("refuses Bangladesh numbers that are not mobile numbers, with one reason", () => {
+    for (const spelling of ["0171234567", "01212345678", "0212345678", "+880 2 9123456"]) {
+      expect(quickValidatePhone(spelling, ANY_COUNTRY, "BD")).toEqual({ ok: false, value: "", message: "mobile" });
     }
+  });
+
+  it("defers other countries' numbers to the international validator", () => {
+    expect(quickValidatePhone("+447911123456", ANY_COUNTRY, "BD")).toBeNull();
     expect(quickValidatePhone("01712345678", ANY_COUNTRY, "IN")).toBeNull();
     expect(quickValidatePhone("  ", ANY_COUNTRY, "BD")).toEqual({
       ok: false,
@@ -201,7 +205,7 @@ describe("checkout phone field", () => {
     input.dispatchEvent(new FocusEvent("blur"));
     await loadCheckoutPhoneValidator();
     await Promise.resolve();
-    expect(error.textContent).toBe("Invalid");
+    expect(error.textContent).toBe("Not a mobile");
     expect(input.getAttribute("aria-invalid")).toBe("true");
 
     type(input, "01712345678");

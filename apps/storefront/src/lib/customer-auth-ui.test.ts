@@ -30,7 +30,10 @@ describe("customer sign-in UI model", () => {
 
   it("accepts Bangla digits and any spacing for phones, and explains bad input", () => {
     expect(checkContact("phone", "০১৭১২ ৩৪৫-৬৭৮")).toEqual({ ok: true, value: "+8801712345678" });
-    expect(checkContact("phone", "0171")).toMatchObject({ ok: false, message: "Enter a valid mobile number, like 01712345678." });
+    expect(checkContact("phone", "0171")).toMatchObject({ ok: false, message: "Enter a Bangladeshi mobile number (01XXXXXXXXX)." });
+    // 012… and landlines are not mobile numbers.
+    expect(checkContact("phone", "01212345678")).toMatchObject({ ok: false, message: "Enter a Bangladeshi mobile number (01XXXXXXXXX)." });
+    expect(checkContact("phone", "02123456789")).toMatchObject({ ok: false });
     expect(checkContact("email", " Buyer@Example.com ")).toEqual({ ok: true, value: "buyer@example.com" });
     expect(checkContact("email", "buyer@")).toMatchObject({ ok: false });
   });

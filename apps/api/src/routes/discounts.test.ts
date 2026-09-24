@@ -51,8 +51,8 @@ describe("public discount validation", () => {
     mocks.quoteStorefrontDiscount.mockResolvedValue({
       applied: { totalDiscountMinor: 36_000, discounts: [], allocations: [] },
       discounts: [
-        { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amountMinor: 30_000 },
-        { promotionId: "promo_auto", title: "Free delivery", code: null, amountMinor: 6_000 },
+        { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amountMinor: 30_000, shippingAmountMinor: 0 },
+        { promotionId: "promo_auto", title: "Free delivery", code: null, amountMinor: 0, shippingAmountMinor: 6_000 },
       ],
       offers: [],
       rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallMinor: 20_000 }],
@@ -71,8 +71,8 @@ describe("public discount validation", () => {
       data: {
         totalDiscount: 360,
         discounts: [
-          { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amount: 300 },
-          { promotionId: "promo_auto", title: "Free delivery", code: null, amount: 60 },
+          { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amount: 300, shippingAmount: 0 },
+          { promotionId: "promo_auto", title: "Free delivery", code: null, amount: 0, shippingAmount: 60 },
         ],
         offers: [],
         rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallAmount: 200 }],
@@ -81,12 +81,27 @@ describe("public discount validation", () => {
     expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(db, {
       codes: ["save10", "SHIP"],
       customerPhone: "+8801712345678",
+      shippingKnown: true,
       cart: {
         currencyCode: "BDT",
         lines: [{ id: "cart:0:var_1", productId: "prod_1", variantId: "var_1", unitPriceMinor: 150_000, quantity: 2 }],
         shippingAmountMinor: 6_000,
       },
     });
+  });
+
+  it("keeps delivery discounts waiting while the buyer has no delivery option", async () => {
+    const { app, db } = createTestApp();
+    mocks.quoteStorefrontDiscount.mockResolvedValue({ applied: null, discounts: [], offers: [], rejectedCodes: [] });
+    const response = await post(app, {
+      codes: ["SHIP"],
+      items: [{ id: "prod_1", variantId: "var_1", price: 1500, quantity: 1 }],
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(db, expect.objectContaining({
+      shippingKnown: false,
+      cart: expect.objectContaining({ shippingAmountMinor: 0 }),
+    }));
   });
 
   it("rejects more codes than a buyer may combine", async () => {

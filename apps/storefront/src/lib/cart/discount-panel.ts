@@ -5,7 +5,7 @@
  * the server's discount facts; amounts always come from the server.
  */
 import { formatMoney } from "@scalius/shared/currency";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { formatCheckoutLanguageText, formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import type {
   CheckoutDiscountFacts,
@@ -44,7 +44,10 @@ export function describeRejectedCode(
         : rejection.message;
     case "minimum_quantity":
       return rejection.shortfallQuantity !== undefined
-        ? text(copy.discountMinimumQuantityText, { code, count: rejection.shortfallQuantity })
+        ? text(
+            rejection.shortfallQuantity === 1 ? copy.discountMinimumQuantityOneText : copy.discountMinimumQuantityText,
+            { code, count: rejection.shortfallQuantity },
+          )
         : rejection.message;
     case "get_items":
       if (!offer || !item) return rejection.message;
@@ -62,6 +65,12 @@ export function describeRejectedCode(
         : rejection.message;
     case "lower_savings":
       return copy.discountLowerSavingsText;
+    case "needs_delivery":
+      return text(copy.discountNeedsDeliveryText, { code });
+    case "delivery_discount_applied":
+      return rejection.conflictsWith
+        ? text(copy.discountOneDeliveryText, { other: rejection.conflictsWith })
+        : copy.discountLowerSavingsText;
     default:
       return rejection.message;
   }
@@ -70,6 +79,7 @@ export function describeRejectedCode(
 /** Reasons the buyer can fix by changing the cart: the code stays applied and is re-checked. */
 export function isPendingCodeReason(reason: CheckoutRejectedCode["reason"]): boolean {
   return reason === "needs_phone"
+    || reason === "needs_delivery"
     || reason === "minimum_subtotal"
     || reason === "minimum_quantity"
     || reason === "get_items"
@@ -124,39 +134,46 @@ export function renderDiscountPanel(
   const offers = root.querySelector<HTMLElement>("#discountOffers");
   const facts = state.facts;
 
-  lines?.replaceChildren(...(facts?.discounts ?? []).map((line) => {
+  // Delivery savings show on the delivery line, so only savings on the items are listed here.
+  lines?.replaceChildren(...(facts?.discounts ?? []).filter((line) => line.amount > 0).map((line) => {
     const row = element("div", "flex justify-between gap-3 text-sm text-primary");
-    const label = line.code && line.code !== line.title ? `${line.title} · ${line.code}` : line.title;
-    row.append(element("span", "min-w-0", label), element("span", "shrink-0 font-medium tabular-nums", `-${formatMoney(line.amount)}`));
+    row.append(element("span", "min-w-0", formatDiscountLineLabel(copy.discountText, line)), element("span", "shrink-0 font-medium tabular-nums", `-${formatMoney(line.amount)}`));
     return row;
   }));
 
-  applied?.replaceChildren(...state.codes.map((code) => {
+  // Compact code chips in one wrapping row; a code that doesn't apply says why underneath.
+  const chips = state.codes.map((code) => {
     const rejection = facts?.rejectedCodes.find((candidate) => candidate.code === code);
-    const item = element("li", "rounded-lg border border-border bg-background px-3 py-2");
-    const head = element("div", "flex items-center justify-between gap-2");
-    head.append(element("span", rejection ? "font-mono text-sm text-muted-foreground" : "font-mono text-sm font-medium text-foreground", code));
-    const remove = element("button", "inline-flex h-9 min-w-9 items-center justify-center rounded-md text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring");
+    const chip = element(
+      "li",
+      `inline-flex min-h-9 items-center gap-1 rounded-full border pl-3 text-sm ${rejection ? "border-dashed border-border text-muted-foreground" : "border-primary/40 bg-primary/5 font-medium text-foreground"}`,
+    );
+    chip.append(element("span", "font-mono", code));
+    const remove = element("button", "inline-flex h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring");
     remove.type = "button";
     remove.setAttribute("aria-label", formatCheckoutLanguageText(copy.removeDiscountCodeText, { code }));
     remove.textContent = "×";
     remove.addEventListener("click", () => actions.removeCode(code));
-    head.append(remove);
-    item.append(head);
-    if (rejection) {
-      item.append(element("p", "mt-1 text-sm text-muted-foreground", describeRejectedCode(rejection, copy)));
-      if (rejection.reason === "needs_phone") {
-        const button = element("button", `${ACTION_CLASS} mt-1`, copy.customerPhoneLabel);
-        button.type = "button";
-        button.addEventListener("click", () => actions.focusPhone());
-        item.append(button);
-      } else if (rejection.offer && rejection.reason === "get_items") {
-        const row = offerActions(rejection.offer, copy, actions);
-        if (row) item.append(row);
-      }
+    chip.append(remove);
+    return chip;
+  });
+  const notes = state.codes.flatMap((code) => {
+    const rejection = facts?.rejectedCodes.find((candidate) => candidate.code === code);
+    if (!rejection) return [];
+    const item = element("li", "basis-full text-sm text-muted-foreground");
+    item.append(element("p", "", `${code}: ${describeRejectedCode(rejection, copy)}`));
+    if (rejection.reason === "needs_phone") {
+      const button = element("button", `${ACTION_CLASS} mt-1`, copy.customerPhoneLabel);
+      button.type = "button";
+      button.addEventListener("click", () => actions.focusPhone());
+      item.append(button);
+    } else if (rejection.offer && rejection.reason === "get_items") {
+      const row = offerActions(rejection.offer, copy, actions);
+      if (row) item.append(row);
     }
-    return item;
-  }));
+    return [item];
+  });
+  applied?.replaceChildren(...chips, ...notes);
   applied?.classList.toggle("hidden", state.codes.length === 0);
 
   offers?.replaceChildren(...(facts?.offers ?? []).map((offer) => {

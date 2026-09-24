@@ -5,3 +5,4 @@ export * from "./promotions.validation";
 export * from "./promotions.checkout";
 export * from "./promotions.lifecycle";
 export * from "./promotions.refunds";
+export * from "./order-discount-lines";

@@ -2277,7 +2277,7 @@ export type PostApiV1DiscountsValidateData = {
             variantId?: string;
         }>;
         /**
-         * Delivery charge
+         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
          */
         shippingCost?: number;
         /**
@@ -2329,7 +2329,14 @@ export type PostApiV1DiscountsValidateResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             offers: Array<{
                 promotionId: string;
@@ -2355,7 +2362,7 @@ export type PostApiV1DiscountsValidateResponses = {
             }>;
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -2970,6 +2977,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 quantityLimitText: string;
                 saleOfferText: string;
                 saleOfferSpendText: string;
+                saleOfferGetText: string;
+                saleOfferGetSpendText: string;
                 freeBenefitText: string;
                 percentBenefitText: string;
             };
@@ -10557,11 +10566,15 @@ export type GetApiV1ProductsBySlugResponses = {
                     content: string;
                 }>;
                 /**
-                 * Active automatic Buy X get Y discounts this product counts toward.
+                 * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
                 offers: Array<{
                     promotionId: string;
                     title: string;
+                    /**
+                     * "buy": this product counts toward the offer and `products` are what the buyer gets; "get": this product is what the buyer gets and `products` are what to buy.
+                     */
+                    role: 'buy' | 'get';
                     buyQuantity: number | null;
                     buyAmount: number | null;
                     getQuantity: number;
@@ -11855,6 +11868,24 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 shippingMethodBaseAmountMinor: number | null;
                 shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
+                discounts: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                     */
+                    kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
+                }>;
+                notes: string | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
@@ -12368,7 +12399,14 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             /**
              * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.
@@ -12400,7 +12438,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -43676,7 +43714,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 name: string;
                 code: string | null;
                 method: 'automatic' | 'code';
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 amount: number;
+                shippingAmount: number;
             }>;
             status: string;
             paymentStatus: string | null;

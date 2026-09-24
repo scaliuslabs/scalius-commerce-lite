@@ -31,9 +31,10 @@ function rate(overrides: Partial<TaxRateDefinition> = {}): TaxRateDefinition {
     };
 }
 
+// Minor-unit precision is exercised in USD; BDT cash rounding has its own tests.
 function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuoteInput {
     return {
-        currencyCode: "BDT",
+        currencyCode: "USD",
         decimalPlaces: 2,
         settings: {
             enabled: true,
@@ -74,6 +75,15 @@ describe("tax minor-unit money", () => {
         expect(Object.fromEntries(allocated)).toEqual({ b: 1, a: 1, c: 0 });
     });
 
+    it("allocates whole cash units over whole-unit weights", () => {
+        const allocated = allocateMinorAmount(300, [
+            { key: "a", weightMinor: 100 },
+            { key: "b", weightMinor: 100 },
+            { key: "c", weightMinor: 200 },
+        ], 100);
+        expect(Object.fromEntries(allocated)).toEqual({ a: 100, b: 100, c: 100 });
+    });
+
     it("rejects duplicate allocation identities before totals can diverge", () => {
         expect(() => allocateMinorAmount(1, [
             { key: "line", weightMinor: 1 },
@@ -102,6 +112,32 @@ describe("calculateTaxQuote", () => {
             totalMinor: 10_350,
         });
         expect(quote.totalMinor).toBe(10_350);
+    });
+
+    it("rounds BDT tax to whole taka so a COD total is whole taka", () => {
+        const bdt = (overrides: Partial<CalculateTaxQuoteInput>) => calculateTaxQuote(input({ currencyCode: "BDT", ...overrides }));
+        // 15% of ৳3,208.53 would be ৳481.28; it is ৳481.
+        const exclusive = bdt({ lines: [{ ...input().lines[0]!, unitPriceMinor: 320_853 }] });
+        expect(exclusive.taxMinor).toBe(48_100);
+        expect(exclusive.totalMinor % 100).toBe(53);
+        const whole = bdt({ lines: [{ ...input().lines[0]!, unitPriceMinor: 320_900 }] });
+        expect(whole.taxMinor % 100).toBe(0);
+        expect(whole.totalMinor % 100).toBe(0);
+        // Prices including 15% VAT: ৳1,000 contains ৳130.43, shown as ৳130.
+        const inclusive = bdt({
+            settings: { ...input().settings, pricesIncludeTax: true },
+            lines: [{ ...input().lines[0]!, unitPriceMinor: 100_000 }],
+        });
+        expect(inclusive.lines[0]).toMatchObject({ taxMinor: 13_000, taxableAmountMinor: 87_000, totalMinor: 100_000 });
+        expect(inclusive.totalMinor).toBe(100_000);
+        // An order discount spread over lines stays whole taka per line.
+        const lines = [
+            { ...input().lines[0]!, lineId: "a", unitPriceMinor: 25_000 },
+            { ...input().lines[0]!, lineId: "b", unitPriceMinor: 15_000 },
+        ];
+        const discounted = bdt({ lines, discountMinor: 3_300 });
+        expect(discounted.lines.map((line) => line.discountMinor)).toEqual([2_100, 1_200]);
+        expect(discounted.lines.every((line) => line.taxMinor % 100 === 0)).toBe(true);
     });
 
     it("extracts inclusive tax without inflating buyer totals", () => {
