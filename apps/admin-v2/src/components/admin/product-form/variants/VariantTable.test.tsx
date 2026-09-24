@@ -34,7 +34,11 @@ const variant = (id: string, size: string, color: string, price: number, extra: 
 const label = (key: ProductMessageKey, vars?: Record<string, string | number>) => translate(productMessages, key, vars);
 
 let latest: DraftVariant[] = [];
-function Harness({ initial, missing = [] }: { initial: DraftVariant[]; missing?: string[][] }) {
+function Harness({ initial, missing = [], reveal = null }: {
+  initial: DraftVariant[];
+  missing?: string[][];
+  reveal?: { variantId: string; nonce: number } | null;
+}) {
   const [variants, setVariants] = React.useState(initial);
   latest = variants;
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -47,7 +51,7 @@ function Harness({ initial, missing = [] }: { initial: DraftVariant[]; missing?:
       productName="Panjabi"
       nameOf={(row) => row.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}
       issue={null}
-      reveal={null}
+      reveal={reveal}
       expandedId={expandedId}
       onExpandedChange={setExpandedId}
       onChangeMany={(ids, patch) => setVariants((current) => current.map((row) => ids.has(row.id)
@@ -216,6 +220,17 @@ describe("VariantTable", () => {
     await act(async () => selectAll.click());
     // Selection covers the closed groups too.
     expect(host.textContent).toContain(translate(resourceMessages, "selected", { count: 32 }));
+  });
+
+  it("opens the closed group of a problem it reveals", async () => {
+    const many = Array.from({ length: 32 }, (_, index) =>
+      variant(`v${index}`, index % 2 ? "m" : "s", index % 4 < 2 ? "w" : "b", 2000 + index));
+    await render(many);
+    expect(host.querySelector('[data-variant-row="v3"]')).toBeNull();
+    await act(async () => root.render(<Harness initial={many} reveal={{ variantId: "v3", nonce: 1 }} />));
+    // v3 is an M variant: M opens, S stays closed.
+    expect(host.querySelector('[data-variant-row="v3"]')).not.toBeNull();
+    expect(host.querySelector('[data-variant-row="v0"]')).toBeNull();
   });
 });
 
