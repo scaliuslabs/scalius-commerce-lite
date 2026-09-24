@@ -1,4 +1,21 @@
-const STOREFRONT_THEME_COLOR_KEYS = new Set([
+// The storefront theme document (version 2): one versioned JSON document that
+// the dashboard Theme page and a future AI builder both write, and that the
+// storefront renders from in either mode. The contract is documented in
+// ./storefront-theme.md; `storefrontThemeDocumentSchema` is the only way in.
+import { z } from "zod";
+
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 2 as const;
+
+/**
+ * `configured`: built from the Theme page's curated choices.
+ * `custom`: owned by a builder; the Theme page shows its options disabled.
+ */
+export const STOREFRONT_THEME_MODES = ["configured", "custom"] as const;
+
+// ─── Tokens ───────────────────────────────────────────────────────────────
+
+/** Every colour token the storefront CSS reads; a document sets all of them. */
+export const STOREFRONT_THEME_COLOR_KEYS = [
   "background",
   "foreground",
   "card",
@@ -18,787 +35,648 @@ const STOREFRONT_THEME_COLOR_KEYS = new Set([
   "border",
   "input",
   "ring",
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-]);
+] as const;
 
-const HEX_COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-const COLOR_FUNCTION_RE =
-  /^(?:rgb|rgba|hsl|hsla|oklch|oklab|lch|lab)\(\s*[-+0-9.%\s,/]+\)$/i;
-const STYLE_BREAKOUT_CHARS = new Set([";", "{", "}", "<", ">", "\\"]);
-const UNSAFE_TOKEN_RE = /(?:\/\*|\*\/|@import|expression\s*\(|url\s*\(|javascript\s*:)/i;
-const NAMED_COLORS = new Set(["transparent", "currentcolor", "black", "white"]);
-
-export const STOREFRONT_THEME_HEADING_FONTS = [
-  "system",
-  "modern",
-  "editorial",
-] as const;
-export const STOREFRONT_THEME_BODY_FONTS = [
-  "system",
-  "modern",
-  "humanist",
-] as const;
-export const STOREFRONT_THEME_TYPE_SCALES = [
-  "compact",
-  "standard",
-  "generous",
-] as const;
-export const STOREFRONT_THEME_CORNER_STYLES = [
-  "square",
-  "subtle",
-  "rounded",
-] as const;
-export const STOREFRONT_THEME_DENSITIES = [
-  "compact",
-  "comfortable",
-  "airy",
-] as const;
-export const STOREFRONT_THEME_CONTAINER_WIDTHS = [
-  "focused",
-  "standard",
-  "wide",
-] as const;
-export const STOREFRONT_THEME_BUTTON_STYLES = [
-  "solid",
-  "soft",
-  "outline",
-] as const;
+export const STOREFRONT_THEME_HEADING_FONTS = ["system", "modern", "editorial"] as const;
+export const STOREFRONT_THEME_BODY_FONTS = ["system", "modern", "humanist"] as const;
+export const STOREFRONT_THEME_RADII = ["square", "subtle", "rounded"] as const;
+export const STOREFRONT_THEME_CONTAINER_WIDTHS = ["standard", "wide"] as const;
+export const STOREFRONT_THEME_BUTTON_STYLES = ["solid", "outline"] as const;
 export const STOREFRONT_THEME_INPUT_STYLES = ["outlined", "filled"] as const;
-export const STOREFRONT_THEME_CARD_STYLES = [
-  "bordered",
-  "elevated",
-  "flat",
-] as const;
+export const STOREFRONT_THEME_CARD_SURFACES = ["bordered", "elevated", "flat"] as const;
+
+export type StorefrontThemeColorKey = (typeof STOREFRONT_THEME_COLOR_KEYS)[number];
 
 /**
- * Curated storefront layouts. A small, fixed set of variants the storefront
- * renders server-side; they combine freely with colours and typography.
+ * Text/background token pairs the storefront renders. Every document must
+ * meet WCAG 1.4.3 AA (4.5:1) on each, so no colour choice can ship
+ * unreadable text.
  */
+export const STOREFRONT_THEME_TEXT_PAIRS = [
+  ["foreground", "background"],
+  ["card-foreground", "card"],
+  ["popover-foreground", "popover"],
+  ["primary-foreground", "primary"],
+  ["primary", "background"],
+  ["secondary-foreground", "secondary"],
+  ["muted-foreground", "background"],
+  ["muted-foreground", "muted"],
+  ["muted-foreground", "card"],
+  ["accent-foreground", "accent"],
+  ["destructive-foreground", "destructive"],
+  ["destructive", "background"],
+] as const satisfies ReadonlyArray<readonly [StorefrontThemeColorKey, StorefrontThemeColorKey]>;
+
+export const STOREFRONT_THEME_MIN_CONTRAST = 4.5;
+
+/**
+ * Helper text is not an error. Secondary ("muted") text stays near-neutral
+ * (Lab chroma at most this) so a brand accent never reads as a warning...
+ */
+export const STOREFRONT_THEME_MAX_MUTED_CHROMA = 25;
+/** ...and stays clearly apart from the error colour (CIE76 colour distance). */
+export const STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE = 40;
+
+// ─── Layout: five independent, curated choices ────────────────────────────
+
 export const STOREFRONT_HEADER_STYLES = ["classic", "centered", "marketplace"] as const;
 export const STOREFRONT_FOOTER_STYLES = ["columns", "compact", "contact"] as const;
-export const STOREFRONT_CARD_IMAGE_RATIOS = ["square", "portrait"] as const;
-export const STOREFRONT_CARD_BADGE_PLACEMENTS = ["image", "price"] as const;
-export const STOREFRONT_GRID_DESKTOP_COLUMNS = [2, 3, 4] as const;
-export const STOREFRONT_GRID_MOBILE_COLUMNS = [1, 2] as const;
-export const STOREFRONT_PRODUCT_GALLERY_LAYOUTS = ["beside", "stacked"] as const;
-export const STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS = ["beside", "below"] as const;
-/** The homepage sections a merchant can reorder (each appears exactly once). */
-export const STOREFRONT_HOMEPAGE_SECTIONS = ["hero", "collections", "categories", "delivery"] as const;
+/**
+ * Card styles bundle photo shape, hover photo, buy-now and badge placement
+ * into three combinations that each work at every density and preset.
+ */
+export const STOREFRONT_CARD_STYLES = ["standard", "portrait", "quick"] as const;
+/**
+ * Density: how much fits on screen. Grids are fluid (auto-fill columns with a
+ * minimum card width that steps up with the grid's own container width), so
+ * columns follow the space from 360px phones to ultra-wide screens. Density
+ * sets that minimum width, the gaps and the type/spacing scale. Both
+ * densities give two product columns on phones.
+ */
+export const STOREFRONT_DENSITIES = ["compact", "comfortable"] as const;
+/** Product page: gallery placement and thumbnails chosen together. */
+export const STOREFRONT_PRODUCT_PAGE_LAYOUTS = ["gallery", "filmstrip", "stacked"] as const;
 
 export type StorefrontHeaderStyle = (typeof STOREFRONT_HEADER_STYLES)[number];
 export type StorefrontFooterStyle = (typeof STOREFRONT_FOOTER_STYLES)[number];
-export type StorefrontCardImageRatio = (typeof STOREFRONT_CARD_IMAGE_RATIOS)[number];
-export type StorefrontCardBadgePlacement = (typeof STOREFRONT_CARD_BADGE_PLACEMENTS)[number];
-export type StorefrontGridDesktopColumns = (typeof STOREFRONT_GRID_DESKTOP_COLUMNS)[number];
-export type StorefrontGridMobileColumns = (typeof STOREFRONT_GRID_MOBILE_COLUMNS)[number];
-export type StorefrontProductGalleryLayout = (typeof STOREFRONT_PRODUCT_GALLERY_LAYOUTS)[number];
-export type StorefrontProductThumbnailPlacement = (typeof STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS)[number];
-export type StorefrontHomepageSection = (typeof STOREFRONT_HOMEPAGE_SECTIONS)[number];
+export type StorefrontCardStyle = (typeof STOREFRONT_CARD_STYLES)[number];
+export type StorefrontDensity = (typeof STOREFRONT_DENSITIES)[number];
+export type StorefrontProductPageLayout = (typeof STOREFRONT_PRODUCT_PAGE_LAYOUTS)[number];
 
-export interface StorefrontThemeLayout {
-  header: StorefrontHeaderStyle;
-  footer: StorefrontFooterStyle;
-  productCard: {
-    imageRatio: StorefrontCardImageRatio;
-    /** Show the product's second photo on hover (pointer devices only). */
-    hoverImage: boolean;
-    /** A "Buy now" button on cards of in-stock products without options. */
-    quickBuy: boolean;
-    badge: StorefrontCardBadgePlacement;
-  };
-  grid: {
-    desktop: StorefrontGridDesktopColumns;
-    mobile: StorefrontGridMobileColumns;
-  };
-  productPage: {
-    gallery: StorefrontProductGalleryLayout;
-    thumbnails: StorefrontProductThumbnailPlacement;
-  };
-  homepage: StorefrontHomepageSection[];
-}
-
-export type StorefrontThemeHeadingFont =
-  (typeof STOREFRONT_THEME_HEADING_FONTS)[number];
-export type StorefrontThemeBodyFont =
-  (typeof STOREFRONT_THEME_BODY_FONTS)[number];
-export type StorefrontThemeTypeScale =
-  (typeof STOREFRONT_THEME_TYPE_SCALES)[number];
-export type StorefrontThemeCornerStyle =
-  (typeof STOREFRONT_THEME_CORNER_STYLES)[number];
-export type StorefrontThemeDensity =
-  (typeof STOREFRONT_THEME_DENSITIES)[number];
-export type StorefrontThemeContainerWidth =
-  (typeof STOREFRONT_THEME_CONTAINER_WIDTHS)[number];
-export type StorefrontThemeButtonStyle =
-  (typeof STOREFRONT_THEME_BUTTON_STYLES)[number];
-export type StorefrontThemeInputStyle =
-  (typeof STOREFRONT_THEME_INPUT_STYLES)[number];
-export type StorefrontThemeCardStyle =
-  (typeof STOREFRONT_THEME_CARD_STYLES)[number];
-
-export interface StorefrontThemeSettings {
-  /** Explicit color overrides. Missing values use the shared storefront defaults. */
-  colors: Record<string, string>;
-  typography: {
-    heading: StorefrontThemeHeadingFont;
-    body: StorefrontThemeBodyFont;
-    scale: StorefrontThemeTypeScale;
-  };
-  cornerStyle: StorefrontThemeCornerStyle;
-  density: StorefrontThemeDensity;
-  containerWidth: StorefrontThemeContainerWidth;
-  components: {
-    buttons: StorefrontThemeButtonStyle;
-    inputs: StorefrontThemeInputStyle;
-    cards: StorefrontThemeCardStyle;
-  };
-  layout: StorefrontThemeLayout;
-}
-
-export const DEFAULT_STOREFRONT_THEME_LAYOUT: StorefrontThemeLayout = {
-  header: "classic",
-  footer: "columns",
-  productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
-  grid: { desktop: 4, mobile: 2 },
-  productPage: { gallery: "beside", thumbnails: "beside" },
-  homepage: [...STOREFRONT_HOMEPAGE_SECTIONS],
-};
+/** What each card style means for the storefront. */
+export const STOREFRONT_CARD_STYLE_SPECS = {
+  standard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
+  portrait: { imageRatio: "portrait", hoverImage: true, quickBuy: false, badge: "image" },
+  quick: { imageRatio: "square", hoverImage: false, quickBuy: true, badge: "price" },
+} as const satisfies Record<StorefrontCardStyle, {
+  imageRatio: "square" | "portrait";
+  hoverImage: boolean;
+  quickBuy: boolean;
+  badge: "image" | "price";
+}>;
 
 /**
- * These values mirror the buyer storefront before semantic theme settings.
- * Keeping them here makes an unedited or newly upgraded store visually stable.
+ * Fluid grid facts per density. `cardMin` is the minimum product card width
+ * for a grid container narrower than 36rem (phone), 36-60rem (tablet) and
+ * wider (desktop); `gap` is the grid gap at phone and desktop widths;
+ * `scale` multiplies the fluid type and spacing scale.
  */
-export const DEFAULT_STOREFRONT_THEME_SETTINGS: StorefrontThemeSettings = {
-  colors: {},
-  typography: {
-    heading: "system",
-    body: "system",
-    scale: "standard",
+export const STOREFRONT_DENSITY_SPECS = {
+  compact: {
+    cardMin: { phone: "9.25rem", tablet: "11rem", desktop: "12.5rem" },
+    gap: { phone: "0.5rem", desktop: "1rem" },
+    scale: "0.92",
   },
-  cornerStyle: "subtle",
-  density: "comfortable",
-  containerWidth: "wide",
-  components: {
-    buttons: "solid",
-    inputs: "outlined",
-    cards: "bordered",
+  comfortable: {
+    cardMin: { phone: "9.75rem", tablet: "13rem", desktop: "15rem" },
+    gap: { phone: "0.75rem", desktop: "1.5rem" },
+    scale: "1",
   },
-  layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
-};
+} as const satisfies Record<StorefrontDensity, {
+  cardMin: { phone: string; tablet: string; desktop: string };
+  gap: { phone: string; desktop: string };
+  scale: string;
+}>;
 
-export const DEFAULT_STOREFRONT_THEME_COLORS: Readonly<Record<string, string>> = {
-  background: "oklch(1 0 0)",
-  foreground: "oklch(0.21 0.006 285.885)",
-  card: "oklch(1 0 0)",
-  "card-foreground": "oklch(0.21 0.006 285.885)",
-  popover: "oklch(1 0 0)",
-  "popover-foreground": "oklch(0.21 0.006 285.885)",
-  primary: "oklch(0.53 0.14 150)",
-  "primary-foreground": "oklch(0.985 0 0)",
-  secondary: "oklch(0.967 0.001 286.375)",
-  "secondary-foreground": "oklch(0.274 0.006 286.033)",
-  muted: "oklch(0.967 0.001 286.375)",
-  "muted-foreground": "oklch(0.52 0.016 285.938)",
-  accent: "oklch(0.967 0.001 286.375)",
-  "accent-foreground": "oklch(0.21 0.006 285.885)",
-  destructive: "oklch(0.577 0.245 27.325)",
-  "destructive-foreground": "oklch(0.985 0 0)",
-  border: "oklch(0.92 0.004 286.32)",
-  input: "oklch(0.92 0.004 286.32)",
-  ring: "oklch(0.53 0.14 150 / 0.5)",
-  "chart-1": "oklch(0.646 0.222 41.116)",
-  "chart-2": "oklch(0.6 0.118 184.704)",
-  "chart-3": "oklch(0.398 0.07 227.392)",
-  "chart-4": "oklch(0.828 0.189 84.429)",
-  "chart-5": "oklch(0.769 0.188 70.08)",
-};
+/** Gallery placement and thumbnail strip per product page layout. */
+export const STOREFRONT_PRODUCT_PAGE_SPECS = {
+  gallery: { gallery: "beside", thumbnails: "beside" },
+  filmstrip: { gallery: "beside", thumbnails: "below" },
+  stacked: { gallery: "stacked", thumbnails: "below" },
+} as const satisfies Record<StorefrontProductPageLayout, {
+  gallery: "beside" | "stacked";
+  thumbnails: "beside" | "below";
+}>;
 
-export const STOREFRONT_THEME_COLOR_PALETTES: Readonly<
-  Record<string, { label: string; colors: Readonly<Record<string, string>> }>
-> = {
-  Current: {
-    label: "Store default",
-    colors: DEFAULT_STOREFRONT_THEME_COLORS,
-  },
-  Zinc: {
-    label: "Zinc",
-    colors: {
-      background: "#ffffff",
-      foreground: "#09090b",
-      card: "#ffffff",
-      "card-foreground": "#09090b",
-      popover: "#ffffff",
-      "popover-foreground": "#09090b",
-      primary: "#18181b",
-      "primary-foreground": "#fafafa",
-      secondary: "#f4f4f5",
-      "secondary-foreground": "#18181b",
-      muted: "#f4f4f5",
-      "muted-foreground": "#52525b",
-      accent: "#f4f4f5",
-      "accent-foreground": "#18181b",
-      destructive: "#dc2626",
-      "destructive-foreground": "#ffffff",
-      border: "#e4e4e7",
-      input: "#e4e4e7",
-      ring: "#09090b",
-    },
-  },
-  Ocean: {
-    label: "Ocean",
-    colors: {
-      background: "#ffffff",
-      foreground: "#0f172a",
-      card: "#ffffff",
-      "card-foreground": "#0f172a",
-      primary: "#1d4ed8",
-      "primary-foreground": "#ffffff",
-      secondary: "#e2e8f0",
-      "secondary-foreground": "#0f172a",
-      muted: "#f1f5f9",
-      "muted-foreground": "#475569",
-      accent: "#dbeafe",
-      "accent-foreground": "#1e3a8a",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#cbd5e1",
-      input: "#cbd5e1",
-      ring: "#1d4ed8",
-    },
-  },
-  Emerald: {
-    label: "Emerald",
-    colors: {
-      background: "#ffffff",
-      foreground: "#022c22",
-      card: "#ffffff",
-      "card-foreground": "#022c22",
-      primary: "#047857",
-      "primary-foreground": "#ffffff",
-      secondary: "#d1fae5",
-      "secondary-foreground": "#064e3b",
-      muted: "#ecfdf5",
-      "muted-foreground": "#065f46",
-      accent: "#a7f3d0",
-      "accent-foreground": "#064e3b",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#a7f3d0",
-      input: "#a7f3d0",
-      ring: "#047857",
-    },
-  },
-  Rose: {
-    label: "Rose",
-    colors: {
-      background: "#ffffff",
-      foreground: "#4c0519",
-      card: "#ffffff",
-      "card-foreground": "#4c0519",
-      primary: "#be123c",
-      "primary-foreground": "#ffffff",
-      secondary: "#ffe4e6",
-      "secondary-foreground": "#881337",
-      muted: "#fff1f2",
-      "muted-foreground": "#9f1239",
-      accent: "#fecdd3",
-      "accent-foreground": "#881337",
-      destructive: "#991b1b",
-      "destructive-foreground": "#ffffff",
-      border: "#fecdd3",
-      input: "#fecdd3",
-      ring: "#be123c",
-    },
-  },
-  Marketplace: {
-    label: "Marketplace",
-    colors: {
-      background: "#ffffff",
-      foreground: "#1c1917",
-      card: "#ffffff",
-      "card-foreground": "#1c1917",
-      popover: "#ffffff",
-      "popover-foreground": "#1c1917",
-      primary: "#c2410c",
-      "primary-foreground": "#ffffff",
-      secondary: "#fff7ed",
-      "secondary-foreground": "#7c2d12",
-      muted: "#f5f5f4",
-      "muted-foreground": "#57534e",
-      accent: "#ffedd5",
-      "accent-foreground": "#7c2d12",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#e7e5e4",
-      input: "#d6d3d1",
-      ring: "#c2410c",
-    },
-  },
-  Midnight: {
-    label: "Midnight",
-    colors: {
-      background: "#09090b",
-      foreground: "#fafafa",
-      card: "#18181b",
-      "card-foreground": "#fafafa",
-      popover: "#18181b",
-      "popover-foreground": "#fafafa",
-      primary: "#fafafa",
-      "primary-foreground": "#18181b",
-      secondary: "#27272a",
-      "secondary-foreground": "#fafafa",
-      muted: "#27272a",
-      "muted-foreground": "#d4d4d8",
-      accent: "#3f3f46",
-      "accent-foreground": "#fafafa",
-      // Error text sits on the dark background, so the red must be light.
-      destructive: "#f87171",
-      "destructive-foreground": "#09090b",
-      border: "#3f3f46",
-      input: "#3f3f46",
-      ring: "#d4d4d8",
-    },
-  },
-};
+// ─── Sections ─────────────────────────────────────────────────────────────
 
-const DOCUMENT_KEYS = new Set([
-  "layout",
-  "colors",
-  "typography",
-  "cornerStyle",
-  "density",
-  "containerWidth",
-  "components",
+const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
+
+/**
+ * The section registry. Each entry is a versioned section schema. `editor`
+ * says who edits it: `theme` sections are the fixed homepage blocks the
+ * Theme page reorders; `builder` sections are created and edited by the
+ * builder (the Theme page lists them as "Custom section"). Adding a section
+ * type means adding an entry here and a renderer on the storefront.
+ */
+export const STOREFRONT_SECTION_REGISTRY = {
+  hero: {
+    version: 1,
+    editor: "theme",
+    schema: z.object({
+      id: sectionIdSchema,
+      type: z.literal("hero"),
+      version: z.literal(1),
+      settings: z.object({}).strict(),
+    }).strict(),
+  },
+  collections: {
+    version: 1,
+    editor: "theme",
+    schema: z.object({
+      id: sectionIdSchema,
+      type: z.literal("collections"),
+      version: z.literal(1),
+      settings: z.object({}).strict(),
+    }).strict(),
+  },
+  categories: {
+    version: 1,
+    editor: "theme",
+    schema: z.object({
+      id: sectionIdSchema,
+      type: z.literal("categories"),
+      version: z.literal(1),
+      settings: z.object({}).strict(),
+    }).strict(),
+  },
+  delivery: {
+    version: 1,
+    editor: "theme",
+    schema: z.object({
+      id: sectionIdSchema,
+      type: z.literal("delivery"),
+      version: z.literal(1),
+      settings: z.object({}).strict(),
+    }).strict(),
+  },
+  rich_text: {
+    version: 1,
+    editor: "builder",
+    schema: z.object({
+      id: sectionIdSchema,
+      type: z.literal("rich_text"),
+      version: z.literal(1),
+      settings: z.object({
+        heading: z.string().trim().max(120),
+        body: z.string().trim().max(2000),
+      }).strict(),
+    }).strict(),
+  },
+} as const;
+
+export type StorefrontSectionType = keyof typeof STOREFRONT_SECTION_REGISTRY;
+export const STOREFRONT_SECTION_TYPES = Object.keys(STOREFRONT_SECTION_REGISTRY) as StorefrontSectionType[];
+/** The homepage blocks the Theme page owns; a configured document has each exactly once. */
+export const STOREFRONT_THEME_SECTION_TYPES = STOREFRONT_SECTION_TYPES.filter(
+  (type) => STOREFRONT_SECTION_REGISTRY[type].editor === "theme",
+);
+export const STOREFRONT_MAX_SECTIONS = 24;
+
+const sectionSchema = z.discriminatedUnion("type", [
+  STOREFRONT_SECTION_REGISTRY.hero.schema,
+  STOREFRONT_SECTION_REGISTRY.collections.schema,
+  STOREFRONT_SECTION_REGISTRY.categories.schema,
+  STOREFRONT_SECTION_REGISTRY.delivery.schema,
+  STOREFRONT_SECTION_REGISTRY.rich_text.schema,
 ]);
-const TYPOGRAPHY_KEYS = new Set(["heading", "body", "scale"]);
-const COMPONENT_KEYS = new Set(["buttons", "inputs", "cards"]);
-const LAYOUT_KEYS = new Set(["header", "footer", "productCard", "grid", "productPage", "homepage"]);
-const PRODUCT_CARD_KEYS = new Set(["imageRatio", "hoverImage", "quickBuy", "badge"]);
-const GRID_KEYS = new Set(["desktop", "mobile"]);
-const PRODUCT_PAGE_KEYS = new Set(["gallery", "thumbnails"]);
 
-/** A permutation of every homepage section; anything else falls back to the default order. */
-function sanitizeHomepageOrder(value: unknown): StorefrontHomepageSection[] {
-  if (!isHomepageOrder(value)) return [...DEFAULT_STOREFRONT_THEME_LAYOUT.homepage];
-  return [...value];
+export type StorefrontSection = z.infer<typeof sectionSchema>;
+
+// ─── Document ─────────────────────────────────────────────────────────────
+
+const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Use a #rrggbb colour.");
+
+export const storefrontThemeTokensSchema = z.object({
+  colors: z.object(
+    Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])) as Record<
+      StorefrontThemeColorKey,
+      typeof hexColorSchema
+    >,
+  ).strict(),
+  typography: z.object({
+    heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
+    body: z.enum(STOREFRONT_THEME_BODY_FONTS),
+  }).strict(),
+  radius: z.enum(STOREFRONT_THEME_RADII),
+  containerWidth: z.enum(STOREFRONT_THEME_CONTAINER_WIDTHS),
+  components: z.object({
+    buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
+    inputs: z.enum(STOREFRONT_THEME_INPUT_STYLES),
+    cards: z.enum(STOREFRONT_THEME_CARD_SURFACES),
+  }).strict(),
+}).strict();
+
+export const storefrontThemeLayoutSchema = z.object({
+  header: z.enum(STOREFRONT_HEADER_STYLES),
+  footer: z.enum(STOREFRONT_FOOTER_STYLES),
+  card: z.enum(STOREFRONT_CARD_STYLES),
+  density: z.enum(STOREFRONT_DENSITIES),
+  productPage: z.enum(STOREFRONT_PRODUCT_PAGE_LAYOUTS),
+}).strict();
+
+/** The complete, strict theme document schema. Writes and reads both use it. */
+export const storefrontThemeDocumentSchema = z.object({
+  version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
+  mode: z.enum(STOREFRONT_THEME_MODES),
+  tokens: storefrontThemeTokensSchema,
+  layout: storefrontThemeLayoutSchema,
+  sections: z.array(sectionSchema).max(STOREFRONT_MAX_SECTIONS),
+}).strict().superRefine((document, context) => {
+  for (const [text, surface] of STOREFRONT_THEME_TEXT_PAIRS) {
+    const ratio = storefrontThemeContrast(document.tokens.colors[text], document.tokens.colors[surface]);
+    if (ratio < STOREFRONT_THEME_MIN_CONTRAST) {
+      context.addIssue({
+        code: "custom",
+        path: ["tokens", "colors", text],
+        message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least ${STOREFRONT_THEME_MIN_CONTRAST}:1.`,
+      });
+    }
+  }
+  for (const problem of listStorefrontThemeSemanticColorProblems(document.tokens.colors)) {
+    context.addIssue({ code: "custom", path: ["tokens", "colors", "muted-foreground"], message: problem });
+  }
+  const ids = new Set<string>();
+  const counts = new Map<string, number>();
+  document.sections.forEach((section, index) => {
+    if (ids.has(section.id)) {
+      context.addIssue({ code: "custom", path: ["sections", index, "id"], message: "Section ids must be unique." });
+    }
+    ids.add(section.id);
+    counts.set(section.type, (counts.get(section.type) ?? 0) + 1);
+  });
+  for (const type of STOREFRONT_THEME_SECTION_TYPES) {
+    const count = counts.get(type) ?? 0;
+    if (count > 1 || (document.mode === "configured" && count !== 1)) {
+      context.addIssue({
+        code: "custom",
+        path: ["sections"],
+        message: document.mode === "configured"
+          ? `A configured theme has the ${type} section exactly once.`
+          : `The ${type} section can appear at most once.`,
+      });
+    }
+  }
+});
+
+export type StorefrontThemeDocument = z.infer<typeof storefrontThemeDocumentSchema>;
+export type StorefrontThemeMode = StorefrontThemeDocument["mode"];
+export type StorefrontThemeTokens = StorefrontThemeDocument["tokens"];
+export type StorefrontThemeLayout = StorefrontThemeDocument["layout"];
+
+/** JSON Schema of the document (structure only; contrast and section rules are in the Zod schema). */
+export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
 }
 
-function isHomepageOrder(value: unknown): value is StorefrontHomepageSection[] {
-  return Array.isArray(value) &&
-    value.length === STOREFRONT_HOMEPAGE_SECTIONS.length &&
-    new Set(value).size === value.length &&
-    value.every((section) => includes(STOREFRONT_HOMEPAGE_SECTIONS, section));
+/**
+ * Parses a stored document strictly. Returns null for anything that is not a
+ * valid current-version document; callers decide what that means (the
+ * dashboard fails closed, the storefront renders the default theme).
+ */
+export function parseStoredStorefrontThemeDocument(value: string | null | undefined): StorefrontThemeDocument | null {
+  if (!value) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  const result = storefrontThemeDocumentSchema.safeParse(parsed);
+  return result.success ? result.data : null;
 }
 
-function numberValue<const Values extends readonly number[]>(
-  value: unknown,
-  values: Values,
-  fallback: Values[number],
-): Values[number] {
-  return typeof value === "number" && values.includes(value) ? (value as Values[number]) : fallback;
+// ─── Resolved layout (what the storefront renders) ────────────────────────
+
+export interface ResolvedStorefrontThemeLayout {
+  header: StorefrontHeaderStyle;
+  footer: StorefrontFooterStyle;
+  productCard: (typeof STOREFRONT_CARD_STYLE_SPECS)[StorefrontCardStyle];
+  density: StorefrontDensity;
+  grid: (typeof STOREFRONT_DENSITY_SPECS)[StorefrontDensity];
+  productPage: (typeof STOREFRONT_PRODUCT_PAGE_SPECS)[StorefrontProductPageLayout];
 }
 
-export function sanitizeStorefrontThemeLayout(value: unknown): StorefrontThemeLayout {
-  const layout = asRecord(value);
-  const card = asRecord(layout.productCard);
-  const grid = asRecord(layout.grid);
-  const page = asRecord(layout.productPage);
-  const fallback = DEFAULT_STOREFRONT_THEME_LAYOUT;
+export function resolveStorefrontThemeLayout(layout: StorefrontThemeLayout): ResolvedStorefrontThemeLayout {
   return {
-    header: enumValue(layout.header, STOREFRONT_HEADER_STYLES, fallback.header),
-    footer: enumValue(layout.footer, STOREFRONT_FOOTER_STYLES, fallback.footer),
-    productCard: {
-      imageRatio: enumValue(card.imageRatio, STOREFRONT_CARD_IMAGE_RATIOS, fallback.productCard.imageRatio),
-      hoverImage: typeof card.hoverImage === "boolean" ? card.hoverImage : fallback.productCard.hoverImage,
-      quickBuy: typeof card.quickBuy === "boolean" ? card.quickBuy : fallback.productCard.quickBuy,
-      badge: enumValue(card.badge, STOREFRONT_CARD_BADGE_PLACEMENTS, fallback.productCard.badge),
-    },
-    grid: {
-      desktop: numberValue(grid.desktop, STOREFRONT_GRID_DESKTOP_COLUMNS, fallback.grid.desktop),
-      mobile: numberValue(grid.mobile, STOREFRONT_GRID_MOBILE_COLUMNS, fallback.grid.mobile),
-    },
-    productPage: {
-      gallery: enumValue(page.gallery, STOREFRONT_PRODUCT_GALLERY_LAYOUTS, fallback.productPage.gallery),
-      thumbnails: enumValue(page.thumbnails, STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS, fallback.productPage.thumbnails),
-    },
-    homepage: sanitizeHomepageOrder(layout.homepage),
+    header: layout.header,
+    footer: layout.footer,
+    productCard: STOREFRONT_CARD_STYLE_SPECS[layout.card],
+    density: layout.density,
+    grid: STOREFRONT_DENSITY_SPECS[layout.density],
+    productPage: STOREFRONT_PRODUCT_PAGE_SPECS[layout.productPage],
   };
 }
 
-function listInvalidStorefrontThemeLayoutEntries(value: unknown): string[] {
-  const layout = asRecord(value);
-  const invalid: string[] = [];
-  const unknownKeys = (record: Record<string, unknown>, keys: Set<string>, prefix: string) => {
-    for (const key of Object.keys(record)) if (!keys.has(key)) invalid.push(`${prefix}${key}`);
-  };
-  unknownKeys(layout, LAYOUT_KEYS, "layout.");
-  const card = asRecord(layout.productCard);
-  const grid = asRecord(layout.grid);
-  const page = asRecord(layout.productPage);
-  unknownKeys(card, PRODUCT_CARD_KEYS, "layout.productCard.");
-  unknownKeys(grid, GRID_KEYS, "layout.grid.");
-  unknownKeys(page, PRODUCT_PAGE_KEYS, "layout.productPage.");
-  if (!includes(STOREFRONT_HEADER_STYLES, layout.header)) invalid.push("layout.header");
-  if (!includes(STOREFRONT_FOOTER_STYLES, layout.footer)) invalid.push("layout.footer");
-  if (!includes(STOREFRONT_CARD_IMAGE_RATIOS, card.imageRatio)) invalid.push("layout.productCard.imageRatio");
-  if (typeof card.hoverImage !== "boolean") invalid.push("layout.productCard.hoverImage");
-  if (typeof card.quickBuy !== "boolean") invalid.push("layout.productCard.quickBuy");
-  if (!includes(STOREFRONT_CARD_BADGE_PLACEMENTS, card.badge)) invalid.push("layout.productCard.badge");
-  if (!(STOREFRONT_GRID_DESKTOP_COLUMNS as readonly unknown[]).includes(grid.desktop)) invalid.push("layout.grid.desktop");
-  if (!(STOREFRONT_GRID_MOBILE_COLUMNS as readonly unknown[]).includes(grid.mobile)) invalid.push("layout.grid.mobile");
-  if (!includes(STOREFRONT_PRODUCT_GALLERY_LAYOUTS, page.gallery)) invalid.push("layout.productPage.gallery");
-  if (!includes(STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS, page.thumbnails)) invalid.push("layout.productPage.thumbnails");
-  if (!isHomepageOrder(layout.homepage)) invalid.push("layout.homepage");
-  return invalid;
+// ─── Colour maths ─────────────────────────────────────────────────────────
+
+function relativeLuminance(hex: string): number {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
+
+/** WCAG contrast ratio of two `#rrggbb` colours. */
+export function storefrontThemeContrast(foreground: string, background: string): number {
+  const [light, dark] = [relativeLuminance(foreground), relativeLuminance(background)].sort((a, b) => b - a) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
+
+/** Text pairs below AA for a colour map (empty when every pair passes). */
+export function listStorefrontThemeContrastProblems(
+  colors: Record<StorefrontThemeColorKey, string>,
+): Array<{ text: StorefrontThemeColorKey; surface: StorefrontThemeColorKey; ratio: number }> {
+  return STOREFRONT_THEME_TEXT_PAIRS.flatMap(([text, surface]) => {
+    const ratio = storefrontThemeContrast(colors[text], colors[surface]);
+    return ratio < STOREFRONT_THEME_MIN_CONTRAST ? [{ text, surface, ratio }] : [];
+  });
+}
+
+function lab(hex: string): [number, number, number] {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+  const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+
+/** Lab chroma of a `#rrggbb` colour (0 is grey). */
+export function storefrontThemeChroma(hex: string): number {
+  const [, a, b] = lab(hex);
+  return Math.hypot(a, b);
+}
+
+/** CIE76 colour distance between two `#rrggbb` colours. */
+export function storefrontThemeColorDistance(first: string, second: string): number {
+  const [l1, a1, b1] = lab(first);
+  const [l2, a2, b2] = lab(second);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+
+/** Semantic-role problems: helper text that is tinted or looks like an error. */
+export function listStorefrontThemeSemanticColorProblems(
+  colors: Record<StorefrontThemeColorKey, string>,
+): string[] {
+  const problems: string[] = [];
+  const muted = colors["muted-foreground"];
+  if (storefrontThemeChroma(muted) > STOREFRONT_THEME_MAX_MUTED_CHROMA) {
+    problems.push("Secondary text must be a near-neutral colour, not a brand accent.");
+  }
+  if (storefrontThemeColorDistance(muted, colors.destructive) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE) {
+    problems.push("Secondary text looks too much like error text.");
+  }
+  return problems;
+}
+
+export function isStorefrontThemeHexColor(value: string): boolean {
+  return /^#[0-9a-f]{6}$/.test(value);
+}
+
+// ─── CSS tokens ───────────────────────────────────────────────────────────
 
 const FONT_FAMILIES = {
   heading: {
-    system:
-      'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     modern: '"Avenir Next", Avenir, "Segoe UI", ui-sans-serif, sans-serif',
     editorial: 'Georgia, "Times New Roman", ui-serif, serif',
   },
   body: {
-    system:
-      'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     modern: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
     humanist: 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
   },
 } as const;
 
-const TYPE_SCALE_TOKENS = { compact: "0.95", standard: "1", generous: "1.06" } as const;
 const RADIUS_TOKENS = { square: "0rem", subtle: "0.4rem", rounded: "0.75rem" } as const;
-const DENSITY_TOKENS = { compact: "0.88", comfortable: "1", airy: "1.12" } as const;
-const CONTAINER_TOKENS = { focused: "64rem", standard: "72rem", wide: "80rem" } as const;
+/** Content is capped so ultra-wide screens keep a readable measure. */
+const CONTAINER_TOKENS = { standard: "76rem", wide: "90rem" } as const;
 
-export function isStorefrontThemeColorKey(key: string): boolean {
-  return STOREFRONT_THEME_COLOR_KEYS.has(key);
-}
-
-export function isSafeStorefrontThemeColorValue(value: string): boolean {
-  const normalized = value.trim();
-  if (!normalized || normalized.length > 128) return false;
-  if (hasControlOrStyleBreakoutChar(normalized)) return false;
-  if (UNSAFE_TOKEN_RE.test(normalized)) return false;
-  if (HEX_COLOR_RE.test(normalized)) return true;
-  if (COLOR_FUNCTION_RE.test(normalized)) return true;
-  if (NAMED_COLORS.has(normalized.toLowerCase())) return true;
-  return isSafeStorefrontThemeVariableReference(normalized);
-}
-
-export function sanitizeStorefrontThemeColors(
-  colors: Record<string, unknown> | null | undefined,
-): Record<string, string> {
-  const sanitized: Record<string, string> = {};
-  if (!colors || typeof colors !== "object") return sanitized;
-
-  for (const [key, value] of Object.entries(colors)) {
-    if (!isStorefrontThemeColorKey(key)) continue;
-    if (typeof value !== "string") continue;
-    const normalized = value.trim();
-    if (!isSafeStorefrontThemeColorValue(normalized)) continue;
-    sanitized[key] = normalized;
-  }
-
-  return sanitized;
-}
-
-export function sanitizeStorefrontThemeSettings(
-  value: unknown,
-): StorefrontThemeSettings {
-  const record = asRecord(value);
-  const legacyColors = Object.keys(record).some((key) =>
-    isStorefrontThemeColorKey(key),
-  );
-  const colors = sanitizeStorefrontThemeColors(
-    legacyColors ? record : asRecord(record.colors),
-  );
-  const typography = asRecord(record.typography);
-  const components = asRecord(record.components);
-
+/** CSS custom properties for a document: only constants and validated hex colours. */
+export function buildStorefrontThemeTokens(document: StorefrontThemeDocument): Record<string, string> {
+  const { tokens } = document;
+  const density = STOREFRONT_DENSITY_SPECS[document.layout.density];
   return {
-    colors,
-    typography: {
-      heading: enumValue(
-        typography.heading,
-        STOREFRONT_THEME_HEADING_FONTS,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.typography.heading,
-      ),
-      body: enumValue(
-        typography.body,
-        STOREFRONT_THEME_BODY_FONTS,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.typography.body,
-      ),
-      scale: enumValue(
-        typography.scale,
-        STOREFRONT_THEME_TYPE_SCALES,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.typography.scale,
-      ),
-    },
-    cornerStyle: enumValue(
-      record.cornerStyle,
-      STOREFRONT_THEME_CORNER_STYLES,
-      DEFAULT_STOREFRONT_THEME_SETTINGS.cornerStyle,
-    ),
-    density: enumValue(
-      record.density,
-      STOREFRONT_THEME_DENSITIES,
-      DEFAULT_STOREFRONT_THEME_SETTINGS.density,
-    ),
-    containerWidth: enumValue(
-      record.containerWidth,
-      STOREFRONT_THEME_CONTAINER_WIDTHS,
-      DEFAULT_STOREFRONT_THEME_SETTINGS.containerWidth,
-    ),
-    components: {
-      buttons: enumValue(
-        components.buttons,
-        STOREFRONT_THEME_BUTTON_STYLES,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.components.buttons,
-      ),
-      inputs: enumValue(
-        components.inputs,
-        STOREFRONT_THEME_INPUT_STYLES,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.components.inputs,
-      ),
-      cards: enumValue(
-        components.cards,
-        STOREFRONT_THEME_CARD_STYLES,
-        DEFAULT_STOREFRONT_THEME_SETTINGS.components.cards,
-      ),
-    },
-    layout: sanitizeStorefrontThemeLayout(record.layout),
+    ...tokens.colors,
+    "theme-font-heading": FONT_FAMILIES.heading[tokens.typography.heading],
+    "theme-font-body": FONT_FAMILIES.body[tokens.typography.body],
+    "theme-type-scale": density.scale,
+    radius: RADIUS_TOKENS[tokens.radius],
+    "theme-density-scale": density.scale,
+    "theme-card-min-phone": density.cardMin.phone,
+    "theme-card-min-tablet": density.cardMin.tablet,
+    "theme-card-min-desktop": density.cardMin.desktop,
+    "theme-grid-gap-phone": density.gap.phone,
+    "theme-grid-gap-desktop": density.gap.desktop,
+    "theme-container-width": CONTAINER_TOKENS[tokens.containerWidth],
   };
 }
 
-export function parseStorefrontThemeSettings(
-  value: string | null | undefined,
-): StorefrontThemeSettings {
-  if (!value) return sanitizeStorefrontThemeSettings({});
-  try {
-    return sanitizeStorefrontThemeSettings(JSON.parse(value));
-  } catch {
-    return sanitizeStorefrontThemeSettings({});
-  }
-}
+// ─── Palettes and Style presets ───────────────────────────────────────────
 
-export function listInvalidStorefrontThemeColorEntries(
-  colors: Record<string, unknown> | null | undefined,
-): string[] {
-  if (!colors || typeof colors !== "object") return [];
+type Palette = Readonly<Record<StorefrontThemeColorKey, string>>;
 
-  const invalid: string[] = [];
-  for (const [key, value] of Object.entries(colors)) {
-    if (!isStorefrontThemeColorKey(key)) {
-      invalid.push(key);
-      continue;
-    }
-    if (typeof value !== "string" || !isSafeStorefrontThemeColorValue(value)) {
-      invalid.push(key);
-    }
-  }
-  return invalid;
-}
-
-export function listInvalidStorefrontThemeSettingsEntries(value: unknown): string[] {
-  const record = asRecord(value);
-  const invalid: string[] = [];
-
-  for (const key of Object.keys(record)) {
-    if (!DOCUMENT_KEYS.has(key)) invalid.push(key);
-  }
-  const colors = asRecord(record.colors);
-  invalid.push(
-    ...listInvalidStorefrontThemeColorEntries(colors).map((key) => `colors.${key}`),
-  );
-
-  const typography = asRecord(record.typography);
-  for (const key of Object.keys(typography)) {
-    if (!TYPOGRAPHY_KEYS.has(key)) invalid.push(`typography.${key}`);
-  }
-  if (!includes(STOREFRONT_THEME_HEADING_FONTS, typography.heading)) invalid.push("typography.heading");
-  if (!includes(STOREFRONT_THEME_BODY_FONTS, typography.body)) invalid.push("typography.body");
-  if (!includes(STOREFRONT_THEME_TYPE_SCALES, typography.scale)) invalid.push("typography.scale");
-  if (!includes(STOREFRONT_THEME_CORNER_STYLES, record.cornerStyle)) invalid.push("cornerStyle");
-  if (!includes(STOREFRONT_THEME_DENSITIES, record.density)) invalid.push("density");
-  if (!includes(STOREFRONT_THEME_CONTAINER_WIDTHS, record.containerWidth)) invalid.push("containerWidth");
-
-  const components = asRecord(record.components);
-  for (const key of Object.keys(components)) {
-    if (!COMPONENT_KEYS.has(key)) invalid.push(`components.${key}`);
-  }
-  if (!includes(STOREFRONT_THEME_BUTTON_STYLES, components.buttons)) invalid.push("components.buttons");
-  if (!includes(STOREFRONT_THEME_INPUT_STYLES, components.inputs)) invalid.push("components.inputs");
-  if (!includes(STOREFRONT_THEME_CARD_STYLES, components.cards)) invalid.push("components.cards");
-  invalid.push(...listInvalidStorefrontThemeLayoutEntries(record.layout));
-
-  return [...new Set(invalid)];
-}
-
-/** Generates only constants and sanitized colors; merchant text never enters CSS. */
-export function buildStorefrontThemeTokens(
-  value: unknown,
-): Record<string, string> {
-  const theme = sanitizeStorefrontThemeSettings(value);
+function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"> & Partial<Palette>): Palette {
   return {
-    ...theme.colors,
-    "theme-font-heading": FONT_FAMILIES.heading[theme.typography.heading],
-    "theme-font-body": FONT_FAMILIES.body[theme.typography.body],
-    "theme-type-scale": TYPE_SCALE_TOKENS[theme.typography.scale],
-    radius: RADIUS_TOKENS[theme.cornerStyle],
-    "theme-density-scale": DENSITY_TOKENS[theme.density],
-    "theme-container-width": CONTAINER_TOKENS[theme.containerWidth],
-  };
+    popover: colors.card,
+    "popover-foreground": colors["card-foreground"],
+    ring: colors.primary,
+    ...colors,
+  } as Palette;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
+/** Colour palettes behind the Style presets; each passes every AA text pair (tested). */
+export const STOREFRONT_THEME_PALETTES = {
+  everyday: palette({
+    background: "#ffffff", foreground: "#18181b", card: "#ffffff", "card-foreground": "#18181b",
+    primary: "#11813c", "primary-foreground": "#ffffff",
+    secondary: "#f4f4f5", "secondary-foreground": "#27272a",
+    muted: "#f4f4f5", "muted-foreground": "#5f5f69",
+    accent: "#f4f4f5", "accent-foreground": "#18181b",
+    destructive: "#c70009", "destructive-foreground": "#ffffff",
+    border: "#e4e4e7", input: "#d4d4d8",
+  }),
+  marketplace: palette({
+    background: "#ffffff", foreground: "#1c1917", card: "#ffffff", "card-foreground": "#1c1917",
+    primary: "#c2410c", "primary-foreground": "#ffffff",
+    secondary: "#fff7ed", "secondary-foreground": "#7c2d12",
+    muted: "#f5f5f4", "muted-foreground": "#57534e",
+    accent: "#ffedd5", "accent-foreground": "#7c2d12",
+    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
+    border: "#e7e5e4", input: "#d6d3d1",
+  }),
+  boutique: palette({
+    background: "#ffffff", foreground: "#09090b", card: "#ffffff", "card-foreground": "#09090b",
+    primary: "#18181b", "primary-foreground": "#fafafa",
+    secondary: "#f4f4f5", "secondary-foreground": "#18181b",
+    muted: "#f4f4f5", "muted-foreground": "#52525b",
+    accent: "#f4f4f5", "accent-foreground": "#18181b",
+    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
+    border: "#e4e4e7", input: "#d4d4d8", ring: "#09090b",
+  }),
+  fresh: palette({
+    background: "#ffffff", foreground: "#022c22", card: "#ffffff", "card-foreground": "#022c22",
+    primary: "#047857", "primary-foreground": "#ffffff",
+    secondary: "#d1fae5", "secondary-foreground": "#064e3b",
+    muted: "#ecfdf5", "muted-foreground": "#4a5b53",
+    accent: "#a7f3d0", "accent-foreground": "#064e3b",
+    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
+    border: "#a7f3d0", input: "#6ee7b7",
+  }),
+  beauty: palette({
+    background: "#fffafb", foreground: "#3b0a24", card: "#ffffff", "card-foreground": "#3b0a24",
+    primary: "#9d174d", "primary-foreground": "#ffffff",
+    secondary: "#fce7f3", "secondary-foreground": "#831843",
+    muted: "#fdf2f8", "muted-foreground": "#6b5a62",
+    accent: "#fbcfe8", "accent-foreground": "#831843",
+    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
+    border: "#fbcfe8", input: "#f9a8d4",
+  }),
+  heritage: palette({
+    background: "#fbf7f0", foreground: "#2b1d12", card: "#fffdf9", "card-foreground": "#2b1d12",
+    primary: "#9a3412", "primary-foreground": "#ffffff",
+    secondary: "#f3e8d7", "secondary-foreground": "#4a2c14",
+    muted: "#f3ebe0", "muted-foreground": "#6b5646",
+    accent: "#ecdcc4", "accent-foreground": "#4a2c14",
+    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
+    border: "#e5d5bd", input: "#d6c1a1",
+  }),
+  midnight: palette({
+    background: "#09090b", foreground: "#fafafa", card: "#18181b", "card-foreground": "#fafafa",
+    primary: "#fafafa", "primary-foreground": "#18181b",
+    secondary: "#27272a", "secondary-foreground": "#fafafa",
+    muted: "#27272a", "muted-foreground": "#d4d4d8",
+    accent: "#3f3f46", "accent-foreground": "#fafafa",
+    // Error text sits on the dark background, so the red must be light.
+    destructive: "#f87171", "destructive-foreground": "#09090b",
+    border: "#3f3f46", input: "#3f3f46", ring: "#d4d4d8",
+  }),
+} as const satisfies Record<string, Palette>;
 
-function enumValue<const Values extends readonly string[]>(
-  value: unknown,
-  values: Values,
-  fallback: Values[number],
-): Values[number] {
-  return includes(values, value) ? (value as Values[number]) : fallback;
-}
+export type StorefrontThemePaletteKey = keyof typeof STOREFRONT_THEME_PALETTES;
 
-function includes(values: readonly string[], value: unknown): value is string {
-  return typeof value === "string" && values.includes(value);
-}
+const DEFAULT_SECTIONS: StorefrontSection[] = STOREFRONT_THEME_SECTION_TYPES.map((type) => ({
+  id: type,
+  type,
+  version: 1,
+  settings: {},
+})) as StorefrontSection[];
 
-function isSafeStorefrontThemeVariableReference(value: string): boolean {
-  const match = /^var\(--([a-z0-9-]+)\)$/i.exec(value);
-  return Boolean(match?.[1] && STOREFRONT_THEME_COLOR_KEYS.has(match[1]));
-}
-
-function hasControlOrStyleBreakoutChar(value: string): boolean {
-  for (const char of value) {
-    const code = char.charCodeAt(0);
-    if (code <= 31 || code === 127 || STYLE_BREAKOUT_CHARS.has(char)) {
-      return true;
-    }
-  }
-  return false;
+function themeSections(order: readonly StorefrontSectionType[]): StorefrontSection[] {
+  return order.map((type) => DEFAULT_SECTIONS.find((section) => section.type === type)!);
 }
 
 /**
- * One-click "Style" starting points: every theme choice at once (colours,
- * fonts, shape and layout). Merchants fine-tune individual options after.
- * Patterned on Shopify Dawn/Horizon settings and the layouts Bangladeshi
- * shoppers know (Daraz/Othoba marketplaces, Chaldal daily needs, Aarong).
+ * Style presets: complete configured documents tuned for the verticals
+ * Bangladeshi stores sell in, with Shopify Dawn/Horizon and leading BD stores
+ * (Daraz, Chaldal, Aarong, Shajgoj, Star Tech) as the bar.
  */
 export const STOREFRONT_STYLE_PRESETS = [
   {
     key: "classic",
-    palette: "Current",
-    theme: {
-      typography: { heading: "system", body: "system", scale: "standard" },
-      cornerStyle: "subtle", density: "comfortable", containerWidth: "wide",
+    palette: "everyday",
+    tokens: {
+      typography: { heading: "system", body: "system" },
+      radius: "subtle", containerWidth: "wide",
       components: { buttons: "solid", inputs: "outlined", cards: "bordered" },
-      layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
     },
+    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery" },
+    sections: ["hero", "collections", "categories", "delivery"],
   },
   {
+    // Electronics and marketplaces: search first, compact grid, buy-now cards.
     key: "marketplace",
-    palette: "Marketplace",
-    theme: {
-      typography: { heading: "system", body: "system", scale: "compact" },
-      cornerStyle: "subtle", density: "compact", containerWidth: "wide",
+    palette: "marketplace",
+    tokens: {
+      typography: { heading: "system", body: "system" },
+      radius: "subtle", containerWidth: "wide",
       components: { buttons: "solid", inputs: "filled", cards: "elevated" },
-      layout: {
-        header: "marketplace", footer: "contact",
-        productCard: { imageRatio: "square", hoverImage: false, quickBuy: true, badge: "image" },
-        grid: { desktop: 4, mobile: 2 },
-        productPage: { gallery: "beside", thumbnails: "below" },
-        homepage: ["hero", "categories", "collections", "delivery"],
-      },
     },
+    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip" },
+    sections: ["hero", "categories", "collections", "delivery"],
   },
   {
+    // Fashion: tall photos, second photo on hover, quiet type.
     key: "boutique",
-    palette: "Zinc",
-    theme: {
-      typography: { heading: "editorial", body: "modern", scale: "standard" },
-      cornerStyle: "square", density: "airy", containerWidth: "standard",
-      components: { buttons: "outline", inputs: "outlined", cards: "flat" },
-      layout: {
-        header: "centered", footer: "compact",
-        productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: false, badge: "price" },
-        grid: { desktop: 3, mobile: 2 },
-        productPage: { gallery: "beside", thumbnails: "beside" },
-        homepage: ["hero", "collections", "categories", "delivery"],
-      },
-    },
-  },
-  {
-    key: "daily",
-    palette: "Emerald",
-    theme: {
-      typography: { heading: "modern", body: "humanist", scale: "standard" },
-      cornerStyle: "rounded", density: "compact", containerWidth: "wide",
-      components: { buttons: "solid", inputs: "filled", cards: "bordered" },
-      layout: {
-        header: "marketplace", footer: "contact",
-        productCard: { imageRatio: "square", hoverImage: false, quickBuy: true, badge: "price" },
-        grid: { desktop: 4, mobile: 2 },
-        productPage: { gallery: "beside", thumbnails: "below" },
-        homepage: ["categories", "hero", "collections", "delivery"],
-      },
-    },
-  },
-  {
-    key: "editorial",
-    palette: "Rose",
-    theme: {
-      typography: { heading: "editorial", body: "humanist", scale: "generous" },
-      cornerStyle: "square", density: "airy", containerWidth: "wide",
+    palette: "boutique",
+    tokens: {
+      typography: { heading: "editorial", body: "modern" },
+      radius: "square", containerWidth: "wide",
       components: { buttons: "solid", inputs: "outlined", cards: "flat" },
-      layout: {
-        header: "centered", footer: "columns",
-        productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: false, badge: "image" },
-        grid: { desktop: 3, mobile: 1 },
-        productPage: { gallery: "stacked", thumbnails: "below" },
-        homepage: ["hero", "collections", "delivery", "categories"],
-      },
     },
+    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "gallery" },
+    sections: ["hero", "collections", "categories", "delivery"],
   },
   {
-    key: "midnight",
-    palette: "Midnight",
-    theme: {
-      typography: { heading: "modern", body: "modern", scale: "standard" },
-      cornerStyle: "subtle", density: "comfortable", containerWidth: "wide",
-      components: { buttons: "solid", inputs: "filled", cards: "elevated" },
-      layout: {
-        header: "classic", footer: "columns",
-        productCard: { imageRatio: "square", hoverImage: true, quickBuy: false, badge: "image" },
-        grid: { desktop: 4, mobile: 2 },
-        productPage: { gallery: "beside", thumbnails: "beside" },
-        homepage: ["hero", "collections", "categories", "delivery"],
-      },
+    // Grocery and daily needs: categories first, delivery facts, buy-now.
+    key: "daily",
+    palette: "fresh",
+    tokens: {
+      typography: { heading: "modern", body: "system" },
+      radius: "rounded", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "bordered" },
     },
+    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip" },
+    sections: ["categories", "hero", "delivery", "collections"],
+  },
+  {
+    // Cosmetics and beauty: soft palette, portrait cards, comfortable grid.
+    key: "beauty",
+    palette: "beauty",
+    tokens: {
+      typography: { heading: "editorial", body: "system" },
+      radius: "rounded", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "outlined", cards: "flat" },
+    },
+    layout: { header: "classic", footer: "contact", card: "portrait", density: "comfortable", productPage: "filmstrip" },
+    sections: ["hero", "categories", "collections", "delivery"],
+  },
+  {
+    // Handicrafts and heritage: warm paper tones, large photos, story first.
+    key: "heritage",
+    palette: "heritage",
+    tokens: {
+      typography: { heading: "editorial", body: "humanist" },
+      radius: "square", containerWidth: "standard",
+      components: { buttons: "solid", inputs: "outlined", cards: "flat" },
+    },
+    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "stacked" },
+    sections: ["hero", "collections", "delivery", "categories"],
+  },
+  {
+    // A dark look for electronics and premium catalogues.
+    key: "midnight",
+    palette: "midnight",
+    tokens: {
+      typography: { heading: "modern", body: "modern" },
+      radius: "subtle", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "elevated" },
+    },
+    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery" },
+    sections: ["hero", "collections", "categories", "delivery"],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;
-  palette: keyof typeof STOREFRONT_THEME_COLOR_PALETTES;
-  theme: Omit<StorefrontThemeSettings, "colors">;
+  palette: StorefrontThemePaletteKey;
+  tokens: Omit<StorefrontThemeTokens, "colors">;
+  layout: StorefrontThemeLayout;
+  sections: readonly StorefrontSectionType[];
 }>;
 
 export type StorefrontStylePresetKey = (typeof STOREFRONT_STYLE_PRESETS)[number]["key"];
+export const STOREFRONT_STYLE_PRESET_KEYS = STOREFRONT_STYLE_PRESETS.map((preset) => preset.key);
 
-/** The complete theme document a Style preset stands for. */
-export function storefrontStylePresetTheme(key: StorefrontStylePresetKey): StorefrontThemeSettings {
+/** The complete configured document a Style preset stands for. */
+export function storefrontStylePresetTheme(key: StorefrontStylePresetKey): StorefrontThemeDocument {
   const preset = STOREFRONT_STYLE_PRESETS.find((candidate) => candidate.key === key)!;
-  const colors = preset.palette === "Current"
-    ? {}
-    : { ...STOREFRONT_THEME_COLOR_PALETTES[preset.palette]!.colors };
-  return sanitizeStorefrontThemeSettings({ ...structuredClone(preset.theme), colors });
+  return {
+    version: STOREFRONT_THEME_DOCUMENT_VERSION,
+    mode: "configured",
+    tokens: {
+      ...structuredClone(preset.tokens),
+      colors: { ...STOREFRONT_THEME_PALETTES[preset.palette] },
+    } as StorefrontThemeTokens,
+    layout: { ...preset.layout },
+    sections: structuredClone(themeSections(preset.sections)),
+  };
 }
+
+/** Every store without a saved theme renders this (the Classic preset). */
+export const DEFAULT_STOREFRONT_THEME: StorefrontThemeDocument = storefrontStylePresetTheme("classic");

@@ -16,7 +16,6 @@ import type {
   Category,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import type { HeroSlide } from "@scalius/shared/hero-slider";
 import type {
   StorefrontBusinessInfo,
@@ -85,7 +84,11 @@ export interface LayoutData {
   navigation: NavigationItem[];
   footer: FooterData;
   currency?: CurrencyData;
-  theme?: StorefrontThemeSettings;
+  /**
+   * The published theme document (v2). Untrusted until
+   * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
+   */
+  theme?: unknown;
   media?: {
     canonicalCdnUrl?: string;
     canonicalHostAliases?: string[];
@@ -135,7 +138,8 @@ export interface LayoutData {
 }
 
 export interface ThemePreviewData {
-  theme: StorefrontThemeSettings;
+  /** The draft theme document; validated like the published one. */
+  theme: unknown;
   draftRevision: number;
   basePublishedRevision: number;
   expiresAt: string | number;

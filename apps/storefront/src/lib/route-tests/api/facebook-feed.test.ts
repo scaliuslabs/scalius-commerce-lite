@@ -1088,8 +1088,24 @@ describe("Facebook product feed route", () => {
       pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
     };
     mocks.getFeedProducts.mockResolvedValue(products);
-    mocks.getShippingMethods.mockResolvedValue([rate("Standard", 110), rate("Pickup", 0, { kind: "pickup" })]);
+    // A paid pickup point is not a delivery rate: Merchant Center reads
+    // g:shipping as the cost to the buyer's address (R3-MOB-06).
+    mocks.getShippingMethods.mockResolvedValue([
+      rate("Standard", 110),
+      rate("Collection Point", 50, { kind: "pickup", pickupAddress: "Gulshan 1 kiosk" }),
+      rate("Express", 200),
+    ]);
 
+    for (const feedGet of [GET, GOOGLE_FEED_GET]) {
+      const feedItem = feedItemById(await (await feedGet(context())).text(), "prod_paid");
+      expect(feedItem.match(/<g:shipping>/g)).toHaveLength(2);
+      expect(feedItem).toContain("<g:service>Standard</g:service>");
+      expect(feedItem).toContain("<g:service>Express</g:service>");
+      expect(feedItem).not.toContain("Collection Point");
+      expect(feedItem).not.toContain("<g:price>50.00 BDT</g:price>");
+    }
+
+    mocks.getShippingMethods.mockResolvedValue([rate("Standard", 110), rate("Pickup", 0, { kind: "pickup" })]);
     let item = feedItemById(await (await GET(context())).text(), "prod_paid");
     expect(item.match(/<g:shipping>/g)).toHaveLength(1);
     expect(item).toContain("<g:service>Standard</g:service>");

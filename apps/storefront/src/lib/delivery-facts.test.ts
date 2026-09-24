@@ -35,19 +35,35 @@ describe("buildDeliveryFacts", () => {
     ]);
   });
 
-  it("leaves free delivery to the product's own badge instead of repeating it", () => {
-    const [fact] = buildDeliveryFacts({
-      shippingMethods: [method("Standard", 80, 0)],
-      checkoutConfig: null,
+  it("states free delivery instead of dropping the row (R3-SB-03: optioned products were all free-delivery)", () => {
+    const settings = {
+      shippingMethods: [method("Standard Delivery", 110, 0), method("Express Delivery", 200, 1)],
+      checkoutConfig: codConfig,
       returnPolicy: null,
       formatMoney,
-      freeDelivery: true,
+    };
+    // The product page builds its facts from product-level data only, so a
+    // product with options and a simple product with the same delivery
+    // setting show the same rows.
+    const optioned = { hasVariants: true, freeDelivery: true };
+    const simple = { hasVariants: false, freeDelivery: true };
+    const optionedFacts = buildDeliveryFacts({ ...settings, freeDelivery: optioned.freeDelivery });
+    expect(optionedFacts).toEqual(buildDeliveryFacts({ ...settings, freeDelivery: simple.freeDelivery }));
+    expect(optionedFacts.map((fact) => fact.kind)).toEqual(["delivery", "cod"]);
+    expect(optionedFacts[0]).toEqual({
+      kind: "delivery",
+      title: "Free delivery",
+      detail: "Delivery is free on any order with this item.",
     });
-    expect(fact).toBeUndefined();
+    expect(buildDeliveryFacts({ ...settings, freeDelivery: false })[0]).toEqual({
+      kind: "delivery",
+      title: "Delivery ৳110–৳200",
+      detail: "Standard Delivery ৳110 · Express Delivery ৳200",
+    });
   });
 
-  it("never states one range across delivery zones: lowest fee, depends on area, pickup", () => {
-    const [fact] = buildDeliveryFacts({
+  it("never states one range across delivery zones: lowest fee, depends on area", () => {
+    const facts = buildDeliveryFacts({
       shippingMethods: [
         zoneRate("Inside Dhaka", 60, 0, { freeOver: 2000 }),
         method("Outside Dhaka", 120, 1, true, { freeOver: 3000 }),
@@ -57,11 +73,10 @@ describe("buildDeliveryFacts", () => {
       returnPolicy: null,
       formatMoney,
     });
-    expect(fact).toEqual({
-      kind: "delivery",
-      title: "Delivery from ৳60",
-      detail: "Price depends on your area · Free over ৳3000 · Pickup available",
-    });
+    expect(facts).toEqual([
+      { kind: "delivery", title: "Delivery from ৳60", detail: "Price depends on your area · Free over ৳3000" },
+      { kind: "pickup", title: "Pickup available", detail: "House 1, Banani" },
+    ]);
   });
 
   it("omits a free-over claim that does not hold for every zone", () => {
@@ -76,7 +91,7 @@ describe("buildDeliveryFacts", () => {
 
   it("lists the store-wide rates with their free-over thresholds when there are no zones", () => {
     const [fact] = buildDeliveryFacts({
-      shippingMethods: [method("Standard", 80, 0, true, { freeOver: 2500 }), method("Express", 150, 1), pickupRate],
+      shippingMethods: [method("Standard", 80, 0, true, { freeOver: 2500 }), method("Express", 150, 1)],
       checkoutConfig: null,
       returnPolicy: null,
       formatMoney,
@@ -84,7 +99,7 @@ describe("buildDeliveryFacts", () => {
     expect(fact).toEqual({
       kind: "delivery",
       title: "Delivery ৳80–৳150",
-      detail: "Standard ৳80, free over ৳2500 · Express ৳150 · Pickup available",
+      detail: "Standard ৳80, free over ৳2500 · Express ৳150",
     });
   });
 
@@ -99,8 +114,27 @@ describe("buildDeliveryFacts", () => {
   });
 
   it("offers pickup alone when there is no delivery rate", () => {
-    const [fact] = buildDeliveryFacts({ shippingMethods: [pickupRate], checkoutConfig: null, returnPolicy: null, formatMoney });
-    expect(fact).toEqual({ kind: "delivery", title: "Pickup available", detail: "House 1, Banani" });
+    const facts = buildDeliveryFacts({ shippingMethods: [pickupRate], checkoutConfig: null, returnPolicy: null, formatMoney });
+    expect(facts).toEqual([{ kind: "pickup", title: "Pickup available", detail: "House 1, Banani" }]);
+  });
+
+  it("keeps a paid pickup out of the delivery price and states it on its own line (R3-MOB-06)", () => {
+    const collectionPoint = method("Collection Point", 50, 1, true, { kind: "pickup", pickupAddress: "Gulshan 1 kiosk" });
+    const shippingMethods = [method("Standard Delivery", 110, 0), collectionPoint, method("Express Delivery", 200, 2)];
+    expect(buildDeliveryFacts({ shippingMethods, checkoutConfig: null, returnPolicy: null, formatMoney })).toEqual([
+      { kind: "delivery", title: "Delivery ৳110–৳200", detail: "Standard Delivery ৳110 · Express Delivery ৳200" },
+      { kind: "pickup", title: "Pickup available · ৳50", detail: "Gulshan 1 kiosk" },
+    ]);
+    // A free-delivery product waives the pickup fee as well.
+    expect(buildDeliveryFacts({ shippingMethods, checkoutConfig: null, returnPolicy: null, formatMoney, freeDelivery: true })[1])
+      .toEqual({ kind: "pickup", title: "Pickup available", detail: "Gulshan 1 kiosk" });
+    // Several pickup points with different fees give the lowest.
+    expect(buildDeliveryFacts({
+      shippingMethods: [collectionPoint, method("Shop counter", 30, 3, true, { kind: "pickup", pickupAddress: "Banani" })],
+      checkoutConfig: null,
+      returnPolicy: null,
+      formatMoney,
+    })).toEqual([{ kind: "pickup", title: "Pickup available · from ৳30", detail: "2 pickup points" }]);
   });
 
   it("claims nothing it cannot prove", () => {

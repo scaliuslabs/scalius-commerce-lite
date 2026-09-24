@@ -42,7 +42,7 @@ export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /** Each image costs one R2 read, one Images info call and up to six transforms. */
-export const MEDIA_RENDITION_BACKFILL_LIMIT = 4;
+export const MEDIA_RENDITION_BACKFILL_LIMIT = 12;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;

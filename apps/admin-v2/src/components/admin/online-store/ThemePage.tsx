@@ -1,7 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Check } from "lucide-react";
+import { Info } from "lucide-react";
 import {
   postApiV1AdminSettingsFooter,
   postApiV1AdminSettingsHeader,
@@ -14,34 +14,22 @@ import {
   HEADER_LOGO_WIDTH_STEP,
 } from "@scalius/shared/brand-presentation";
 import {
-  DEFAULT_STOREFRONT_THEME_COLORS,
-  STOREFRONT_CARD_BADGE_PLACEMENTS,
-  STOREFRONT_CARD_IMAGE_RATIOS,
+  STOREFRONT_CARD_STYLES,
+  STOREFRONT_DENSITIES,
   STOREFRONT_FOOTER_STYLES,
-  STOREFRONT_GRID_DESKTOP_COLUMNS,
-  STOREFRONT_GRID_MOBILE_COLUMNS,
   STOREFRONT_HEADER_STYLES,
-  STOREFRONT_PRODUCT_GALLERY_LAYOUTS,
-  STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS,
-  STOREFRONT_THEME_BODY_FONTS,
-  STOREFRONT_THEME_BUTTON_STYLES,
-  STOREFRONT_THEME_CARD_STYLES,
-  STOREFRONT_THEME_CONTAINER_WIDTHS,
-  STOREFRONT_THEME_CORNER_STYLES,
-  STOREFRONT_THEME_DENSITIES,
-  STOREFRONT_THEME_HEADING_FONTS,
-  STOREFRONT_THEME_INPUT_STYLES,
-  STOREFRONT_THEME_TYPE_SCALES,
-  isSafeStorefrontThemeColorValue,
-  storefrontStylePresetTheme,
-  type StorefrontThemeSettings,
+  STOREFRONT_PRODUCT_PAGE_LAYOUTS,
+  STOREFRONT_THEME_MIN_CONTRAST,
+  isStorefrontThemeHexColor,
+  type StorefrontStylePresetKey,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { cn } from "@scalius/shared/utils";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { SaveBarProvider, useServerFieldError } from "~/components/admin/shared/SaveBar";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
 import {
   footerQueryOptions,
@@ -53,102 +41,96 @@ import { onlineStoreMessages } from "~/i18n/online-store";
 import { ImageField } from "./ImageField";
 import { OnlineStorePage, SectionCard, failSave, useDocumentDraft } from "./shared";
 import {
-  CardSketch,
+  CardStyleSketch,
+  DensitySketch,
   FooterSketch,
-  GallerySketch,
   HeaderRows,
   HeaderSketch,
   HomepageOrder,
+  ProductPageSketch,
   ProductTile,
-  SegmentedChoice,
   Sketch,
-  ThumbnailSketch,
   VisualChoice,
 } from "./ThemeChoices";
-import { STYLE_PRESET_THEMES, selectedStylePreset } from "./theme-settings";
+import {
+  COLOR_FIELD_IDS,
+  COLOR_ROLE_TOKEN,
+  STYLE_PRESET_THEMES,
+  applyStylePreset,
+  closestStylePreset,
+  colorFieldForPath,
+  selectedStylePreset,
+  setThemeColor,
+  themeContrastProblems,
+  themeDraftInvalid,
+  type ColorRole,
+  type ContrastProblem,
+} from "./theme-settings";
 
-type Theme = StorefrontThemeSettings;
+type Theme = StorefrontThemeDocument;
 type Layout = Theme["layout"];
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
-const COLOR_FIELD_IDS: Record<string, string> = {
-  background: "theme-color-background",
-  foreground: "theme-color-text",
-  primary: "theme-color-buttons",
-  "primary-foreground": "theme-color-button-text",
-};
-
-/** Each merchant colour writes the storefront tokens that share its role. */
-const COLOR_ROLES = {
-  background: ["background", "card", "popover"],
-  text: ["foreground", "card-foreground", "popover-foreground"],
-  buttons: ["primary", "ring"],
-  buttonText: ["primary-foreground"],
-} as const;
-
-function colorValue(theme: Theme, token: string): string {
-  return theme.colors[token] ?? DEFAULT_STOREFRONT_THEME_COLORS[token] ?? "";
-}
-
 /** A Style's whole look in its own colours: header shape and product cards. */
 function StylePreview({ theme }: { theme: Theme }) {
-  const { layout } = theme;
+  const { colors, radius } = theme.tokens;
   return (
     <Sketch
       palette={{
-        paper: colorValue(theme, "background"),
-        ink: colorValue(theme, "foreground"),
-        line: colorValue(theme, "muted-foreground"),
-        soft: colorValue(theme, "muted"),
-        edge: colorValue(theme, "border"),
-        accent: colorValue(theme, "primary"),
+        paper: colors.background,
+        ink: colors.foreground,
+        line: colors["muted-foreground"],
+        soft: colors.muted,
+        edge: colors.border,
+        accent: colors.primary,
       }}
       className="h-28"
     >
-      <HeaderRows kind={layout.header} />
+      <HeaderRows kind={theme.layout.header} />
       <span className="mt-1 flex justify-center gap-1.5">
         {[0, 1, 2].map((index) => (
-          <ProductTile
-            key={index}
-            ratio={layout.productCard.imageRatio}
-            badge={index === 0 ? layout.productCard.badge : undefined}
-            corners={theme.cornerStyle}
-            className="max-w-11"
-          />
+          <ProductTile key={index} card={theme.layout.card} radius={radius} badge={index === 0} className="max-w-11" />
         ))}
       </span>
     </Sketch>
   );
 }
 
-/** The browser resolves any CSS colour; read it back as #rrggbb. */
-function toHex(color: string): string {
-  const context = document.createElement("canvas").getContext("2d");
-  if (!context) return color;
-  context.fillStyle = color;
-  context.fillRect(0, 0, 1, 1);
-  const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
-  return `#${[red, green, blue].map((part) => (part ?? 0).toString(16).padStart(2, "0")).join("")}`;
-}
+/** Ratios round down, so "4.4:1" never reads as the 4.5:1 it misses. */
+const formatRatio = (ratio: number) =>
+  formatNumber(Math.floor(ratio * 10) / 10, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function ColorField({
-  id,
+  role,
   label,
   value,
+  problems,
   onChange,
 }: {
-  id: string;
+  role: ColorRole;
   label: string;
   value: string;
+  /** Text this colour leaves below AA, in plain words. */
+  problems: readonly ContrastProblem[];
   onChange: (value: string) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const valid = isSafeStorefrontThemeColorValue(value);
-  // Presets may store oklch()/rgb(); merchants see and pick hex.
-  const hex = value.startsWith("#") || !valid ? value : toHex(value);
+  const id = COLOR_FIELD_IDS[role];
+  const valid = isStorefrontThemeHexColor(value);
   const [left, setLeft] = useState(false);
   const server = useServerFieldError(id);
-  const error = server.error ?? (!valid && (left || server.revealed) ? t("colorInvalid") : undefined);
+  const errors = [
+    server.error ?? (!valid && (left || server.revealed) ? t("colorInvalid") : undefined),
+    ...problems.map((problem) => t(problem.message, {
+      ratio: formatRatio(problem.ratio),
+      min: formatRatio(STOREFRONT_THEME_MIN_CONTRAST),
+    })),
+  ].filter((error): error is string => Boolean(error));
+  const change = (next: string) => {
+    server.clear();
+    // The document stores lowercase #rrggbb.
+    onChange(next.trim().toLowerCase());
+  };
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -160,54 +142,28 @@ function ColorField({
           <span className="sr-only">{t("pickColor", { name: label })}</span>
           <input
             type="color"
-            value={/^#[0-9a-f]{6}$/i.test(hex) ? hex : "#000000"}
-            onChange={(event) => {
-              server.clear();
-              onChange(event.target.value);
-            }}
+            value={valid ? value : "#000000"}
+            onChange={(event) => change(event.target.value)}
             className="absolute inset-0 size-full cursor-pointer opacity-0"
           />
         </label>
         <Input
           id={id}
-          value={hex}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-note` : undefined}
+          value={value}
+          maxLength={7}
+          spellCheck={false}
+          autoComplete="off"
+          aria-invalid={errors.length > 0 ? true : undefined}
+          aria-describedby={errors.length > 0 ? `${id}-note` : undefined}
           onBlur={() => setLeft(true)}
-          onChange={(event) => {
-            server.clear();
-            onChange(event.target.value);
-          }}
+          onChange={(event) => change(event.target.value)}
         />
       </div>
-      {error ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{error}</p> : null}
-    </div>
-  );
-}
-
-function ChoiceField<Value extends string>({
-  id,
-  label,
-  value,
-  values,
-  labelFor,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: Value;
-  values: readonly Value[];
-  labelFor: (value: Value) => string;
-  onChange: (value: Value) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <NativeSelect id={id} value={value} onValueChange={(next) => onChange(next as Value)}>
-        {values.map((option) => (
-          <option key={option} value={option}>{labelFor(option)}</option>
-        ))}
-      </NativeSelect>
+      {errors.length > 0 ? (
+        <div id={`${id}-note`} role="alert" className="space-y-1">
+          {errors.map((error) => <p key={error} className="text-body text-destructive">{error}</p>)}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -275,7 +231,9 @@ function useSiteDrafts() {
   return { headerDraft, footerDraft };
 }
 
-function LogoCard({ headerDraft, footerDraft }: ReturnType<typeof useSiteDrafts>) {
+type SiteDrafts = ReturnType<typeof useSiteDrafts>;
+
+function LogoCard({ headerDraft, footerDraft }: SiteDrafts) {
   const t = useMessages(onlineStoreMessages);
   const logo = headerDraft.draft.logo;
   const logoWidth = logo.width ?? HEADER_LOGO_WIDTH_DEFAULT;
@@ -328,24 +286,38 @@ function LogoCard({ headerDraft, footerDraft }: ReturnType<typeof useSiteDrafts>
   );
 }
 
-function ThemeCards() {
+const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
+  { role: "background", label: "colorBackground" },
+  { role: "text", label: "colorText" },
+  { role: "buttons", label: "colorButtons" },
+  { role: "buttonText", label: "colorButtonText" },
+];
+
+/**
+ * The configured theme, card by card. Only this component registers the theme
+ * document with the save bar, so a custom design is never offered for saving.
+ */
+function ConfiguredThemeCards({ saved, revision, refetch, site }: {
+  saved: Theme;
+  revision: number;
+  refetch: () => unknown;
+  site: SiteDrafts;
+}) {
   const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
-  const { data, refetch } = useSuspenseQuery(themeQueryOptions());
-  const site = useSiteDrafts();
   const { draft: theme, setDraft } = useDocumentDraft<Theme>({
     label: t("themeTitle"),
-    saved: data.theme as Theme,
-    fields: (path) => COLOR_FIELD_IDS[path.replace(/^theme\.colors\./, "")],
-    invalid: (draft) => Object.values(draft.colors).some((value) => !isSafeStorefrontThemeColorValue(value)),
+    saved,
+    fields: (path) => colorFieldForPath(path),
+    invalid: themeDraftInvalid,
     save: async (next) => {
       try {
-        const saved = await apiData(postApiV1AdminSettingsTheme({
-          body: { expectedRevision: data.revision, theme: next },
+        const result = await apiData(postApiV1AdminSettingsTheme({
+          body: { expectedRevision: revision, theme: next },
         }));
         queryClient.setQueryData(themeQueryOptions().queryKey, {
-          theme: saved.theme,
-          revision: saved.revision,
+          theme: result.theme,
+          revision: result.revision,
         });
       } catch (error) {
         failSave(error, () => void refetch());
@@ -353,80 +325,83 @@ function ThemeCards() {
     },
   });
   const option = (key: string) => t(key as MessageKey);
-  const set = <K extends keyof Theme>(key: K, value: Theme[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-  const setLayout = (update: (layout: Layout) => Partial<Layout>) =>
-    setDraft((current) => ({ ...current, layout: { ...current.layout, ...update(current.layout) } }));
-  const setColor = (role: keyof typeof COLOR_ROLES, value: string) =>
-    setDraft((current) => {
-      const colors = { ...current.colors };
-      for (const token of COLOR_ROLES[role]) colors[token] = value;
-      return { ...current, colors };
-    });
+  const setLayout = (layout: Partial<Layout>) =>
+    setDraft((current) => ({ ...current, layout: { ...current.layout, ...layout } }));
   const { layout } = theme;
-  const selectedPreset = selectedStylePreset(theme);
+  const problems = themeContrastProblems(theme.tokens.colors);
   const { headerDraft } = site;
+  // A fine-tuned theme matches no Style: say which one it started from, and
+  // confirm before another Style replaces the merchant's changes.
+  const selectedPreset = selectedStylePreset(theme);
+  const basePreset = selectedPreset ?? closestStylePreset(theme);
+  const [pendingPreset, setPendingPreset] = useState<StorefrontStylePresetKey | null>(null);
+  const choosePreset = (key: StorefrontStylePresetKey) => {
+    if (selectedPreset === null) setPendingPreset(key);
+    else setDraft((current) => applyStylePreset(current, key));
+  };
 
   return (
     <>
       <SectionCard title={t("themeStyles")} description={t("themeStylesHelp")}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {STYLE_PRESET_THEMES.map((preset) => {
-            const selected = preset.key === selectedPreset;
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => setDraft(storefrontStylePresetTheme(preset.key))}
-                className={cn(
-                  "rounded-xl border p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-                  selected && "border-primary outline-1 outline-primary",
-                )}
-              >
-                <StylePreview theme={preset.theme} />
-                <span className="flex items-center justify-between gap-1 px-1 pt-1.5 text-body font-medium">
-                  {t(`preset_${preset.key}` as MessageKey)}
-                  {selected ? <Check className="size-4 shrink-0" aria-hidden /> : null}
-                </span>
-                <span className="block px-1 pb-0.5 text-body text-muted-foreground">
-                  {t(`preset_${preset.key}Help` as MessageKey)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {selectedPreset === null ? (
+          <p className="text-body text-muted-foreground" role="status">
+            {t("styleCustomBasedOn", { name: option(`preset_${basePreset}`) })}
+          </p>
+        ) : null}
+        <VisualChoice
+          label={t("themeStyles")}
+          value={selectedPreset}
+          className="grid-cols-2 sm:grid-cols-3"
+          options={STYLE_PRESET_THEMES.map((preset) => ({
+            value: preset.key,
+            label: option(`preset_${preset.key}`),
+            help: option(`preset_${preset.key}Help`),
+            sketch: <StylePreview theme={preset.theme} />,
+          }))}
+          onChange={choosePreset}
+        />
+        <ConfirmDialog
+          open={pendingPreset !== null}
+          onOpenChange={(open) => { if (!open) setPendingPreset(null); }}
+          title={t("styleReplaceTitle", { name: pendingPreset ? option(`preset_${pendingPreset}`) : "" })}
+          description={t("styleReplaceBody")}
+          confirmLabel={t("styleReplaceConfirm")}
+          variant="default"
+          onConfirm={() => {
+            const key = pendingPreset;
+            setPendingPreset(null);
+            if (key) setDraft((current) => applyStylePreset(current, key));
+          }}
+        />
       </SectionCard>
 
       <LogoCard {...site} />
 
       <SectionCard title={t("colors")}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <ColorField id="theme-color-background" label={t("colorBackground")} value={colorValue(theme, "background")} onChange={(value) => setColor("background", value)} />
-          <ColorField id="theme-color-text" label={t("colorText")} value={colorValue(theme, "foreground")} onChange={(value) => setColor("text", value)} />
-          <ColorField id="theme-color-buttons" label={t("colorButtons")} value={colorValue(theme, "primary")} onChange={(value) => setColor("buttons", value)} />
-          <ColorField id="theme-color-button-text" label={t("colorButtonText")} value={colorValue(theme, "primary-foreground")} onChange={(value) => setColor("buttonText", value)} />
-        </div>
-      </SectionCard>
-
-      <SectionCard title={t("fonts")}>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <ChoiceField id="theme-font-headings" label={t("fontHeadings")} value={theme.typography.heading} values={STOREFRONT_THEME_HEADING_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(heading) => set("typography", { ...theme.typography, heading })} />
-          <ChoiceField id="theme-font-body" label={t("fontBody")} value={theme.typography.body} values={STOREFRONT_THEME_BODY_FONTS} labelFor={(value) => option(`font_${value}`)} onChange={(body) => set("typography", { ...theme.typography, body })} />
-          <ChoiceField id="theme-text-size" label={t("textSize")} value={theme.typography.scale} values={STOREFRONT_THEME_TYPE_SCALES} labelFor={(value) => option(`scale_${value}`)} onChange={(scale) => set("typography", { ...theme.typography, scale })} />
+          {COLOR_FIELDS.map(({ role, label }) => (
+            <ColorField
+              key={role}
+              role={role}
+              label={t(label)}
+              value={theme.tokens.colors[COLOR_ROLE_TOKEN[role]]}
+              problems={problems.filter((problem) => problem.role === role)}
+              onChange={(value) => setDraft((current) => setThemeColor(current, role, value))}
+            />
+          ))}
         </div>
       </SectionCard>
 
       <SectionCard title={t("header")}>
         <VisualChoice
-          label={t("layout")}
+          label={t("header")}
           value={layout.header}
           options={STOREFRONT_HEADER_STYLES.map((value) => ({
             value,
             label: option(`header_${value}`),
             sketch: <HeaderSketch kind={value} />,
           }))}
-          onChange={(header) => setLayout(() => ({ header }))}
+          onChange={(header) => setLayout({ header })}
         />
         <SwitchField
           id="theme-announcement-bar"
@@ -447,122 +422,96 @@ function ThemeCards() {
 
       <SectionCard title={t("footer")} description={t("footerLayoutHelp")}>
         <VisualChoice
-          label={t("layout")}
+          label={t("footer")}
           value={layout.footer}
           options={STOREFRONT_FOOTER_STYLES.map((value) => ({
             value,
             label: option(`footer_${value}`),
             sketch: <FooterSketch kind={value} />,
           }))}
-          onChange={(footer) => setLayout(() => ({ footer }))}
+          onChange={(footer) => setLayout({ footer })}
+        />
+      </SectionCard>
+
+      <SectionCard title={t("productCards")}>
+        <VisualChoice
+          label={t("productCards")}
+          value={layout.card}
+          className="sm:grid-cols-3"
+          options={STOREFRONT_CARD_STYLES.map((value) => ({
+            value,
+            label: option(`cardStyle_${value}`),
+            help: option(`cardStyle_${value}Help`),
+            sketch: <CardStyleSketch card={value} />,
+          }))}
+          onChange={(card) => setLayout({ card })}
+        />
+      </SectionCard>
+
+      <SectionCard title={t("density")} description={t("densityHelp")}>
+        <VisualChoice
+          label={t("density")}
+          value={layout.density}
+          className="grid-cols-2"
+          options={STOREFRONT_DENSITIES.map((value) => ({
+            value,
+            label: option(`density_${value}`),
+            help: option(`density_${value}Help`),
+            sketch: <DensitySketch density={value} />,
+          }))}
+          onChange={(density) => setLayout({ density })}
+        />
+      </SectionCard>
+
+      <SectionCard title={t("productPage")}>
+        <VisualChoice
+          label={t("productPage")}
+          value={layout.productPage}
+          options={STOREFRONT_PRODUCT_PAGE_LAYOUTS.map((value) => ({
+            value,
+            label: option(`productPage_${value}`),
+            sketch: <ProductPageSketch layout={value} />,
+          }))}
+          onChange={(productPage) => setLayout({ productPage })}
         />
       </SectionCard>
 
       <SectionCard
         title={t("homepageSections")}
         description={t("homepageSectionsHelp")}
-        rows={<HomepageOrder order={layout.homepage} onChange={(homepage) => setLayout(() => ({ homepage }))} />}
+        rows={
+          <HomepageOrder
+            sections={theme.sections}
+            onChange={(sections) => setDraft((current) => ({ ...current, sections }))}
+          />
+        }
       />
-
-      <SectionCard title={t("productGrid")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SegmentedChoice
-            label={t("gridDesktop")}
-            value={layout.grid.desktop}
-            options={STOREFRONT_GRID_DESKTOP_COLUMNS.map((value) => ({ value, label: formatNumber(value) }))}
-            onChange={(desktop) => setLayout((current) => ({ grid: { ...current.grid, desktop } }))}
-          />
-          <SegmentedChoice
-            label={t("gridMobile")}
-            value={layout.grid.mobile}
-            options={STOREFRONT_GRID_MOBILE_COLUMNS.map((value) => ({ value, label: formatNumber(value) }))}
-            onChange={(mobile) => setLayout((current) => ({ grid: { ...current.grid, mobile } }))}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title={t("productCards")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <VisualChoice
-            label={t("imageRatio")}
-            value={layout.productCard.imageRatio}
-            options={STOREFRONT_CARD_IMAGE_RATIOS.map((value) => ({
-              value,
-              label: option(`ratio_${value}`),
-              sketch: <CardSketch ratio={value} />,
-            }))}
-            onChange={(imageRatio) => setLayout((current) => ({ productCard: { ...current.productCard, imageRatio } }))}
-          />
-          <VisualChoice
-            label={t("discountBadge")}
-            value={layout.productCard.badge}
-            options={STOREFRONT_CARD_BADGE_PLACEMENTS.map((value) => ({
-              value,
-              label: option(`badge_${value}`),
-              sketch: <CardSketch ratio={layout.productCard.imageRatio} badge={value} />,
-            }))}
-            onChange={(badge) => setLayout((current) => ({ productCard: { ...current.productCard, badge } }))}
-          />
-        </div>
-        <ChoiceField id="theme-cards" label={t("cardStyle")} value={theme.components.cards} values={STOREFRONT_THEME_CARD_STYLES} labelFor={(value) => option(`card_${value}`)} onChange={(cards) => set("components", { ...theme.components, cards })} />
-        <SwitchField
-          id="theme-card-hover-image"
-          label={t("hoverImage")}
-          help={t("hoverImageHelp")}
-          checked={layout.productCard.hoverImage}
-          onCheckedChange={(hoverImage) => setLayout((current) => ({ productCard: { ...current.productCard, hoverImage } }))}
-        />
-        <SwitchField
-          id="theme-card-quick-buy"
-          label={t("quickBuy")}
-          help={t("quickBuyHelp")}
-          checked={layout.productCard.quickBuy}
-          onCheckedChange={(quickBuy) => setLayout((current) => ({ productCard: { ...current.productCard, quickBuy } }))}
-        />
-      </SectionCard>
-
-      <SectionCard title={t("productPage")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <VisualChoice
-            label={t("gallery")}
-            value={layout.productPage.gallery}
-            options={STOREFRONT_PRODUCT_GALLERY_LAYOUTS.map((value) => ({
-              value,
-              label: option(`gallery_${value}`),
-              sketch: <GallerySketch layout={value} />,
-            }))}
-            onChange={(gallery) => setLayout((current) => ({ productPage: { ...current.productPage, gallery } }))}
-          />
-          <VisualChoice
-            label={t("thumbnails")}
-            value={layout.productPage.thumbnails}
-            options={STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS.map((value) => ({
-              value,
-              label: option(`thumbnails_${value}`),
-              sketch: <ThumbnailSketch placement={value} />,
-            }))}
-            onChange={(thumbnails) => setLayout((current) => ({ productPage: { ...current.productPage, thumbnails } }))}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title={t("shape")}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ChoiceField id="theme-corners" label={t("corners")} value={theme.cornerStyle} values={STOREFRONT_THEME_CORNER_STYLES} labelFor={(value) => option(`corner_${value}`)} onChange={(value) => set("cornerStyle", value)} />
-          <ChoiceField id="theme-buttons" label={t("buttonStyle")} value={theme.components.buttons} values={STOREFRONT_THEME_BUTTON_STYLES} labelFor={(value) => option(`button_${value}`)} onChange={(buttons) => set("components", { ...theme.components, buttons })} />
-          <ChoiceField id="theme-inputs" label={t("inputStyle")} value={theme.components.inputs} values={STOREFRONT_THEME_INPUT_STYLES} labelFor={(value) => option(`input_${value}`)} onChange={(inputs) => set("components", { ...theme.components, inputs })} />
-          <ChoiceField id="theme-spacing" label={t("spacing")} value={theme.density} values={STOREFRONT_THEME_DENSITIES} labelFor={(value) => option(`density_${value}`)} onChange={(value) => set("density", value)} />
-          <ChoiceField id="theme-page-width" label={t("pageWidth")} value={theme.containerWidth} values={STOREFRONT_THEME_CONTAINER_WIDTHS} labelFor={(value) => option(`width_${value}`)} onChange={(value) => set("containerWidth", value)} />
-        </div>
-      </SectionCard>
     </>
   );
+}
+
+function ThemeCards() {
+  const t = useMessages(onlineStoreMessages);
+  const { data, refetch } = useSuspenseQuery(themeQueryOptions());
+  const site = useSiteDrafts();
+  if (data.theme.mode === "custom") {
+    return (
+      <>
+        <Alert variant="info">
+          <Info aria-hidden="true" />
+          <AlertDescription>{t("customDesign")}</AlertDescription>
+        </Alert>
+        <LogoCard {...site} />
+      </>
+    );
+  }
+  return <ConfiguredThemeCards saved={data.theme} revision={data.revision} refetch={refetch} site={site} />;
 }
 
 export function ThemePage() {
   const t = useMessages(onlineStoreMessages);
   return (
-    <SaveBarProvider savedMessage={t("themeSaved")}>
+    <SaveBarProvider>
       <OnlineStorePage title={t("themeTitle")}>
         <ThemeCards />
       </OnlineStorePage>

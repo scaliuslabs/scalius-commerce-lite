@@ -6,6 +6,89 @@ export type ClientOptions = {
 
 export type NullableTimestamp = string | number | null;
 
+export type StorefrontThemeDocument = {
+    version: 2;
+    mode: 'configured' | 'custom';
+    tokens: {
+        colors: {
+            background: string;
+            foreground: string;
+            card: string;
+            'card-foreground': string;
+            popover: string;
+            'popover-foreground': string;
+            primary: string;
+            'primary-foreground': string;
+            secondary: string;
+            'secondary-foreground': string;
+            muted: string;
+            'muted-foreground': string;
+            accent: string;
+            'accent-foreground': string;
+            destructive: string;
+            'destructive-foreground': string;
+            border: string;
+            input: string;
+            ring: string;
+        };
+        typography: {
+            heading: 'system' | 'modern' | 'editorial';
+            body: 'system' | 'modern' | 'humanist';
+        };
+        radius: 'square' | 'subtle' | 'rounded';
+        containerWidth: 'standard' | 'wide';
+        components: {
+            buttons: 'solid' | 'outline';
+            inputs: 'outlined' | 'filled';
+            cards: 'bordered' | 'elevated' | 'flat';
+        };
+    };
+    layout: {
+        header: 'classic' | 'centered' | 'marketplace';
+        footer: 'columns' | 'compact' | 'contact';
+        card: 'standard' | 'portrait' | 'quick';
+        density: 'compact' | 'comfortable';
+        productPage: 'gallery' | 'filmstrip' | 'stacked';
+    };
+    sections: Array<{
+        id: string;
+        type: 'hero';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'collections';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'categories';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'delivery';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'rich_text';
+        version: 1;
+        settings: {
+            heading: string;
+            body: string;
+        };
+    }>;
+};
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -2899,43 +2982,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 symbol: string;
                 usdExchangeRate: number;
             };
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: number;
-                        mobile: number;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             media: {
                 canonicalCdnUrl: string;
                 canonicalHostAliases: Array<string>;
@@ -3054,9 +3101,7 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                [key: string]: unknown;
-            };
+            theme: StorefrontThemeDocument;
             draftRevision: number;
             basePublishedRevision: number;
             expiresAt?: unknown;
@@ -29756,43 +29801,7 @@ export type GetApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             [key: string]: unknown;
         };
@@ -29804,43 +29813,7 @@ export type GetApiV1AdminSettingsThemeResponse = GetApiV1AdminSettingsThemeRespo
 export type PostApiV1AdminSettingsThemeData = {
     body?: {
         expectedRevision: number;
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
     };
     path?: never;
     query?: never;
@@ -29925,43 +29898,7 @@ export type PostApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             message: string;
         };
@@ -30056,83 +29993,11 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;
@@ -30145,43 +30010,7 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsT
 
 export type PostApiV1AdminSettingsThemeDraftData = {
     body: {
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
         basePublishedRevision: number;
     };
@@ -30268,43 +30097,7 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             basePublishedRevision: number;
             updatedAt?: unknown;
@@ -30316,43 +30109,7 @@ export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThe
 
 export type PostApiV1AdminSettingsThemeDraftRebaseData = {
     body: {
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
         basePublishedRevision: number;
     };
@@ -30439,43 +30196,7 @@ export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             basePublishedRevision: number;
             updatedAt?: unknown;
@@ -30574,83 +30295,11 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;
@@ -30750,43 +30399,7 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
         data: {
             versions: Array<{
                 id: string;
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 source: 'publish' | 'rollback' | 'migration';
                 sourceRevision: number | null;
@@ -30889,83 +30502,11 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;

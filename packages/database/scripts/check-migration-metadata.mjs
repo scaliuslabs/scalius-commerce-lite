@@ -10,7 +10,7 @@ const firstProviderNeutralMigration = 50;
 
 // Trigger-only migrations do not alter Drizzle's table/index model and
 // therefore have no meaningful schema snapshot to generate.
-const allowedMissingSnapshots = new Set(["0049", "0059", "0065", "0066", "0068", "0070", "0071", "0072", "0075"]);
+const allowedMissingSnapshots = new Set(["0049", "0059", "0065", "0066", "0068", "0070", "0071", "0072", "0075", "0077", "0078"]);
 
 const sqlFiles = readdirSync(migrationsDir)
   .filter((file) => /^\d{4}_.+\.sql$/.test(file))

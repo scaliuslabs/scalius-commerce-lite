@@ -37,6 +37,20 @@ describe("phone buy bar", () => {
     expect(bar().inert).toBe(true);
   });
 
+  it("reserves room below the page only while it shows, so the footer stays reachable", () => {
+    const root = document.documentElement;
+    bindStickyBuyBar(bar(), document);
+    expect(root.hasAttribute("data-sticky-buy-visible")).toBe(false);
+    scrolledPast(true);
+    expect(root.hasAttribute("data-sticky-buy-visible")).toBe(true);
+    scrolledPast(false);
+    expect(root.hasAttribute("data-sticky-buy-visible")).toBe(false);
+    scrolledPast(true);
+    // Rebinding (a new page) drops the reservation along with the bar.
+    bindStickyBuyBar(bar(), document);
+    expect(root.hasAttribute("data-sticky-buy-visible")).toBe(false);
+  });
+
   it("mirrors the price and label and presses the real Add to cart", async () => {
     const main = document.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]')!;
     const clicks = vi.fn();
